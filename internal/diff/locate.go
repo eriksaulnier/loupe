@@ -40,12 +40,7 @@ func (d *Diff) Validate(path, side string, line, startLine int) error {
 func (d *Diff) HunkFor(path, side string, line int) (*File, *Hunk, error) {
 	f := d.File(path)
 	if f == nil {
-		paths := d.paths()
-		r := refusal.New(refusal.Location,
-			fmt.Sprintf("%s is not a file in the diff", path),
-			"use one of: "+strings.Join(paths, ", "))
-		r.Details = map[string]any{"paths": paths}
-		return nil, nil, r
+		return nil, nil, d.notAFile(path)
 	}
 	if side != "RIGHT" && side != "LEFT" {
 		return nil, nil, refusal.New(refusal.Location,
@@ -62,6 +57,15 @@ func (d *Diff) HunkFor(path, side string, line int) (*File, *Hunk, error) {
 		return nil, nil, f.notInDiff(path, side, line)
 	}
 	return f, h, nil
+}
+
+func (d *Diff) notAFile(path string) error {
+	paths := d.paths()
+	r := refusal.New(refusal.Location,
+		fmt.Sprintf("%s is not a file in the diff", path),
+		"use one of: "+strings.Join(paths, ", "))
+	r.Details = map[string]any{"paths": paths}
+	return r
 }
 
 func (d *Diff) paths() []string {
