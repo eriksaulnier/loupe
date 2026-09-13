@@ -127,6 +127,18 @@ func TestFetchPRWritesOnlyLoupeRefs(t *testing.T) {
 	}
 }
 
+func TestFetchPRIgnoresConfiguredFetchRefspecs(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 7)
+	setConfig(t, repo.Dir, "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*")
+	before := repo.Snapshot()
+	if err := FetchPR(repo.Dir, 7, repo.BaseSHA(), "refs/loupe/o/r/7/1/base", "refs/loupe/o/r/7/1/head"); err != nil {
+		t.Fatal(err)
+	}
+	if d := before.DiffIgnoringLoupeRefs(repo.Snapshot()); len(d) != 0 {
+		t.Fatalf("clone changed: %v", d)
+	}
+}
+
 func TestRevParseMissingRef(t *testing.T) {
 	repo := gitrepo.New(t, "o", "r", 1)
 	if _, err := RevParse(repo.Dir, "refs/loupe/missing"); err == nil {

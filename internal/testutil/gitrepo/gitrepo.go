@@ -92,6 +92,12 @@ func New(t *testing.T, owner, repo string, number int) *Repo {
 	return r
 }
 
+// Git runs git in the clone.
+func (r *Repo) Git(args ...string) string {
+	r.t.Helper()
+	return r.git(r.t, r.Dir, args...)
+}
+
 func (r *Repo) BaseSHA() string { return r.base }
 
 func (r *Repo) HeadSHA() string { return r.head }

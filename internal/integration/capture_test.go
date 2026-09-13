@@ -33,6 +33,7 @@ func readFile(t *testing.T, path string) []byte {
 
 func TestCaptureLeavesCloneUntouched(t *testing.T) {
 	h := newHarness(t)
+	h.Repo.Git("config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*")
 	before := h.Repo.Snapshot()
 	env := h.capture()
 	after := h.Repo.Snapshot()
