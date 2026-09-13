@@ -3,6 +3,8 @@ package run
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 func envOf(m map[string]string) func(string) string {
@@ -33,8 +35,10 @@ func TestDataRoot(t *testing.T) {
 }
 
 func TestDataRootWithoutHome(t *testing.T) {
-	if _, err := DataRoot(envOf(nil)); err == nil {
-		t.Fatal("expected an error when no variable is set")
+	_, err := DataRoot(envOf(nil))
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.Usage || r.Fix != "set LOUPE_HOME to a data directory" {
+		t.Fatalf("got %v", err)
 	}
 }
 

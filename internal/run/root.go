@@ -2,9 +2,10 @@
 package run
 
 import (
-	"errors"
 	"path/filepath"
 	"strconv"
+
+	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 func DataRoot(getenv func(string) string) (string, error) {
@@ -17,7 +18,8 @@ func DataRoot(getenv func(string) string) (string, error) {
 	if v := getenv("HOME"); v != "" {
 		return filepath.Join(v, ".local", "share", "loupe"), nil
 	}
-	return "", errors.New("cannot locate the loupe data root: LOUPE_HOME, XDG_DATA_HOME and HOME are all unset")
+	return "", refusal.New(refusal.Usage, "cannot locate the loupe data root: LOUPE_HOME, XDG_DATA_HOME and HOME are all unset",
+		"set LOUPE_HOME to a data directory")
 }
 
 func RunsDir(root string) string {
