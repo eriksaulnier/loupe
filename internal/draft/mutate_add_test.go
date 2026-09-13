@@ -1,0 +1,185 @@
+package draft
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/eriksaulnier/loupe/internal/diff"
+	"github.com/eriksaulnier/loupe/internal/refusal"
+)
+
+var addNow = time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+
+func multiHunk(t *testing.T) *diff.Diff {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "diffs", "multi-hunk.diff"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := diff.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func located(title string, line int) FindingInput {
+	return FindingInput{Title: title, Body: "Evidence.", Location: &Location{Path: "multi.txt", Line: line}}
+}
+
+func general(title string) FindingInput {
+	return FindingInput{Title: title, Body: "Evidence.", General: true}
+}
+
+func wantRefusal(t *testing.T, err error, code refusal.Code) *refusal.Error {
+	t.Helper()
+	r, ok := refusal.As(err)
+	if !ok {
+		t.Fatalf("got %v, want a %s refusal", err, code)
+	}
+	if r.Code != code {
+		t.Fatalf("code %q, want %q (message %q)", r.Code, code, r.Message)
+	}
+	return r
+}
+
+func TestAddOne(t *testing.T) {
+	d := NewEmpty()
+	added, err := Add(d, []FindingInput{located("First", 3)}, multiHunk(t), "", addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Finding{
+		ID: "f-001", Rev: 1, Title: "First", Body: "Evidence.",
+		Location: &Location{Path: "multi.txt", Side: SideRight, Line: 3},
+		By:       ByAgent, Included: true, CreatedAt: addNow, UpdatedAt: addNow, History: []HistoryEntry{},
+	}
+	if len(added) != 1 || !reflect.DeepEqual(added[0], want) || !reflect.DeepEqual(d.Findings, []Finding{want}) {
+		t.Fatalf("added %+v\nfindings %+v", added, d.Findings)
+	}
+}
+
+func TestAddBatchAssignsSequentialIDs(t *testing.T) {
+	d := NewEmpty()
+	in := FindingInput{
+		Title: "Second", Body: "Body.", Location: &Location{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33},
+		Label: "perf-nit", Blocking: true, Confidence: "low", Severity: "minor", SuggestedFix: "Do less.",
+	}
+	added, err := Add(d, []FindingInput{general("First"), in}, multiHunk(t), ByHuman, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Findings) != 2 || added[0].ID != "f-001" || added[1].ID != "f-002" {
+		t.Fatalf("findings %+v", d.Findings)
+	}
+	second := d.Findings[1]
+	if second.Rev != 1 || !second.Included || second.By != ByHuman || second.Label != "perf-nit" || !second.Blocking ||
+		second.Confidence != "low" || second.Severity != "minor" || second.SuggestedFix != "Do less." ||
+		*second.Location != (Location{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33}) {
+		t.Fatalf("second %+v", second)
+	}
+	if !d.Findings[0].General || d.Findings[0].Location != nil {
+		t.Fatalf("first %+v", d.Findings[0])
+	}
+
+	more, err := Add(d, []FindingInput{general("Third")}, multiHunk(t), "", addNow)
+	if err != nil || more[0].ID != "f-003" {
+		t.Fatalf("third %+v %v", more, err)
+	}
+}
+
+func TestAddBatchWithOffDiffEntryStoresNothing(t *testing.T) {
+	d := NewEmpty()
+	_, err := Add(d, []FindingInput{located("Good", 3), located("Off", 10)}, multiHunk(t), "", addNow)
+	r := wantRefusal(t, err, refusal.Location)
+	if r.Details["entry"] != 1 || r.Details["nearest"] == nil {
+		t.Fatalf("details %v", r.Details)
+	}
+	if len(d.Findings) != 0 {
+		t.Fatalf("stored %+v", d.Findings)
+	}
+}
+
+func TestAddRefusesInvalidInput(t *testing.T) {
+	cases := []struct {
+		name string
+		in   FindingInput
+	}{
+		{"missing title", FindingInput{Body: "b", General: true}},
+		{"blank title", FindingInput{Title: "  ", Body: "b", General: true}},
+		{"missing body", FindingInput{Title: "t", General: true}},
+		{"location and general", FindingInput{Title: "t", Body: "b", General: true, Location: &Location{Path: "multi.txt", Line: 3}}},
+		{"neither location nor general", FindingInput{Title: "t", Body: "b"}},
+		{"unknown confidence", FindingInput{Title: "t", Body: "b", General: true, Confidence: "certain"}},
+		{"unknown side", FindingInput{Title: "t", Body: "b", Location: &Location{Path: "multi.txt", Side: "MIDDLE", Line: 3}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := NewEmpty()
+			_, err := Add(d, []FindingInput{general("Good"), c.in}, multiHunk(t), "", addNow)
+			r := wantRefusal(t, err, refusal.Input)
+			if r.Details["entry"] != 1 || len(d.Findings) != 0 {
+				t.Fatalf("details %v findings %d", r.Details, len(d.Findings))
+			}
+		})
+	}
+}
+
+func TestAddRefusesBodyFailingAllowlist(t *testing.T) {
+	d := NewEmpty()
+	in := general("Bad body")
+	in.Body = "one<br>two"
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	r := wantRefusal(t, err, refusal.Markdown)
+	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
+		t.Fatalf("fix %q details %v", r.Fix, r.Details)
+	}
+}
+
+func TestSetSummaryCountMismatch(t *testing.T) {
+	d := NewEmpty()
+	if _, err := Add(d, []FindingInput{located("First", 3), general("Second")}, multiHunk(t), "", addNow); err != nil {
+		t.Fatal(err)
+	}
+	d.Summary = "before"
+	three := 3
+	r := wantRefusal(t, SetSummary(d, "after", &three, ByAgent), refusal.Count)
+	if r.Message != "2 findings are included, expected 3" {
+		t.Fatalf("message %q", r.Message)
+	}
+	want := []map[string]string{{"id": "f-001", "title": "First"}, {"id": "f-002", "title": "Second"}}
+	if !reflect.DeepEqual(r.Details["included"], want) {
+		t.Fatalf("included %v", r.Details["included"])
+	}
+	if d.Summary != "before" {
+		t.Fatalf("summary changed to %q", d.Summary)
+	}
+}
+
+func TestSetSummaryStores(t *testing.T) {
+	d := NewEmpty()
+	if _, err := Add(d, []FindingInput{general("First"), general("Second")}, multiHunk(t), "", addNow); err != nil {
+		t.Fatal(err)
+	}
+	two := 2
+	if err := SetSummary(d, "Two findings.", &two, ByAgent); err != nil {
+		t.Fatal(err)
+	}
+	if d.Summary != "Two findings." {
+		t.Fatalf("summary %q", d.Summary)
+	}
+	if err := SetSummary(d, "No count.", nil, ByHuman); err != nil || d.Summary != "No count." {
+		t.Fatalf("summary %q err %v", d.Summary, err)
+	}
+}
+
+func TestSetSummaryRefusesMarkdown(t *testing.T) {
+	d := NewEmpty()
+	r := wantRefusal(t, SetSummary(d, "<!-- hidden -->", nil, ByHuman), refusal.Markdown)
+	if r.Fix != "loupe summary --from -" || d.Summary != "" {
+		t.Fatalf("fix %q summary %q", r.Fix, d.Summary)
+	}
+}
