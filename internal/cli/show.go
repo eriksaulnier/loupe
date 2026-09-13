@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -81,11 +82,11 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 
 func printShow(w io.Writer, ref run.Ref, target run.Target, d *draft.Draft, dispositions map[string]string, readiness draft.Readiness) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s: %s (draft version %d)\n", ref, target.Title, d.Version)
+	fmt.Fprintf(&b, "%s: %s (draft version %d)\n", ref, render.ForDisplay(target.Title), d.Version)
 	if d.Summary == "" {
 		b.WriteString("Summary: (none)\n")
 	} else {
-		fmt.Fprintf(&b, "Summary:\n  %s\n", strings.ReplaceAll(strings.TrimRight(d.Summary, "\n"), "\n", "\n  "))
+		fmt.Fprintf(&b, "Summary:\n  %s\n", strings.ReplaceAll(strings.TrimRight(render.ForDisplay(d.Summary), "\n"), "\n", "\n  "))
 	}
 	if len(d.Findings) == 0 {
 		b.WriteString("Findings: (none)\n")
@@ -101,9 +102,9 @@ func printShow(w io.Writer, ref run.Ref, target run.Target, d *draft.Draft, disp
 		}
 		where := "general"
 		if f.Location != nil {
-			where = fmt.Sprintf("%s:%d", f.Location.Path, f.Location.Line)
+			where = fmt.Sprintf("%s:%d", render.ForDisplay(f.Location.Path), f.Location.Line)
 		}
-		fmt.Fprintf(&b, "%s  %-9s  %-8s  %s  %s  %s\n", f.ID, dispositions[f.ID], blocking, label, f.Title, where)
+		fmt.Fprintf(&b, "%s  %-9s  %-8s  %s  %s  %s\n", f.ID, dispositions[f.ID], blocking, render.ForDisplay(label), render.ForDisplay(f.Title), where)
 	}
 	ready := "not ready"
 	if readiness.Ready {
