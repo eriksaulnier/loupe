@@ -1,0 +1,113 @@
+package run
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"testing"
+	"time"
+
+	"github.com/eriksaulnier/loupe/internal/refusal"
+)
+
+func sampleTarget() Target {
+	return Target{
+		Schema: 1, Owner: "o", Repo: "r", Number: 12, URL: "https://github.com/o/r/pull/12", Title: "T", Author: "alice",
+		Viewer: "bob", BaseSHA: "b", HeadSHA: "h", Round: 2, PreviousRound: 1,
+		CapturedAt: time.Date(2026, 9, 13, 1, 2, 3, 0, time.UTC), ClonePath: "/src/r",
+		BaseRef: "refs/loupe/o/r/12/2/base", HeadRef: "refs/loupe/o/r/12/2/head", DiffSHA256: "abc",
+	}
+}
+
+func TestCreateRunAndLoadTarget(t *testing.T) {
+	root := t.TempDir()
+	dir := RunDir(root, "o", "r", 12, 2)
+	target := sampleTarget()
+	if err := CreateRun(dir, target, []byte("diff --git a/x b/x\n"), []byte("{\"schema\": 1}\n")); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"pr.diff": "diff --git a/x b/x\n", "draft.json": "{\"schema\": 1}\n"} {
+		got, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil || string(got) != want {
+			t.Fatalf("%s: %q, %v", name, got, err)
+		}
+	}
+	loaded, err := LoadTarget(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loaded, target) {
+		t.Fatalf("got %+v", loaded)
+	}
+	entries, err := os.ReadDir(filepath.Dir(dir))
+	if err != nil || len(entries) != 1 || entries[0].Name() != "2" {
+		t.Fatalf("leftover entries next to the run: %v, %v", entries, err)
+	}
+}
+
+func TestTargetJSONKeys(t *testing.T) {
+	data, err := json.Marshal(sampleTarget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"author", "baseRef", "baseSha", "capturedAt", "clonePath", "diffSha256", "headRef", "headSha", "number",
+		"owner", "previousRound", "repo", "round", "schema", "title", "url", "viewer"}
+	var got []string
+	for k := range m {
+		got = append(got, k)
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("keys %v", got)
+	}
+
+	first := sampleTarget()
+	first.Round, first.PreviousRound = 1, 0
+	data, err = json.Marshal(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var again map[string]any
+	if err := json.Unmarshal(data, &again); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := again["previousRound"]; ok {
+		t.Fatal("previousRound must be omitted for a first round")
+	}
+}
+
+func TestCreateRunRefusesExisting(t *testing.T) {
+	dir := RunDir(t.TempDir(), "o", "r", 12, 1)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := CreateRun(dir, sampleTarget(), nil, nil)
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.Internal {
+		t.Fatalf("got %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "target.json"))
+	if string(got) != "keep" {
+		t.Fatalf("existing run was modified: %q", got)
+	}
+	entries, _ := os.ReadDir(filepath.Dir(dir))
+	if len(entries) != 1 {
+		t.Fatalf("leftover entries: %v", entries)
+	}
+}
+
+func TestLoadTargetMissing(t *testing.T) {
+	_, err := LoadTarget(t.TempDir())
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record {
+		t.Fatalf("got %v", err)
+	}
+}
