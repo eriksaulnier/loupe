@@ -1,0 +1,16 @@
+diff --git a/rename-me.txt b/renamed.txt
+similarity index 91%
+rename from rename-me.txt
+rename to renamed.txt
+index 2aa0461..ed644d1 100644
+--- a/rename-me.txt
++++ b/renamed.txt
+@@ -3,7 +3,7 @@ beta
+ gamma
+ delta
+ epsilon
+-zeta
++ZETA
+ eta
+ theta
+ iota

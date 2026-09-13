@@ -1,0 +1,29 @@
+diff --git a/multi.txt b/multi.txt
+index bab081f..98185cc 100644
+--- a/multi.txt
++++ b/multi.txt
+@@ -1,6 +1,6 @@
+ line 1
+ line 2
+-line 3
++line three
+ line 4
+ line 5
+ line 6
+@@ -18,6 +18,7 @@ line 17
+ line 18
+ line 19
+ line 20
++inserted after 20
+ line 21
+ line 22
+ line 23
+@@ -33,7 +34,7 @@ line 32
+ line 33
+ line 34
+ line 35
+-line 36
++line thirty-six
+ line 37
+ line 38
+ line 39
