@@ -120,8 +120,8 @@ func TestReportInternalError(t *testing.T) {
 	if _, ok := e["details"]; ok {
 		t.Fatal("details must be omitted when unset")
 	}
-	if !strings.Contains(stderr.String(), "nil map write") || !strings.Contains(stderr.String(), "goroutine") {
-		t.Fatalf("stderr must carry the error and a stack: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "nil map write") || strings.Contains(stderr.String(), "goroutine") {
+		t.Fatalf("stderr must carry the error and no stack: %q", stderr.String())
 	}
 }
 

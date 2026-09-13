@@ -1,9 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"runtime/debug"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
@@ -22,7 +22,12 @@ func report(stdout, stderr io.Writer, jsonMode bool, command, run string, err er
 	r, ok := refusal.As(err)
 	if !ok {
 		r = refusal.New(refusal.Internal, err.Error(), "file an issue")
-		_, _ = fmt.Fprintf(stderr, "internal error: %v\n%s", err, debug.Stack())
+		var pe *panicError
+		if errors.As(err, &pe) {
+			_, _ = fmt.Fprintf(stderr, "internal error: %v\n%s", err, pe.stack)
+		} else {
+			_, _ = fmt.Fprintf(stderr, "internal error: %v\n", err)
+		}
 	}
 	if jsonMode {
 		if writeErr := writeRefusal(stdout, command, run, r); writeErr != nil {

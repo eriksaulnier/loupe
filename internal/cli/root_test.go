@@ -223,6 +223,31 @@ func TestRunErrorIsInternal(t *testing.T) {
 	if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "internal" {
 		t.Fatalf("got %v", e)
 	}
+	if !strings.Contains(s.stderr.String(), "boom") || strings.Contains(s.stderr.String(), "goroutine ") {
+		t.Fatalf("stderr must carry the error and no stack: %q", s.stderr.String())
+	}
+}
+
+func TestPanicIsInternal(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	root := NewRoot(deps)
+	root.AddCommand(&cobra.Command{
+		Use: "explode",
+		RunE: func(*cobra.Command, []string) error {
+			panic("kaboom")
+		},
+	})
+	if code := execute(root, deps, []string{"explode", "--json"}); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	m := decodeOne(t, s.stdout.Bytes())
+	e := m["error"].(map[string]any)
+	if m["command"] != "explode" || e["code"] != "internal" || !strings.Contains(e["message"].(string), "kaboom") {
+		t.Fatalf("got %v", m)
+	}
+	if !strings.Contains(s.stderr.String(), "kaboom") || !strings.Contains(s.stderr.String(), "root_test.go") {
+		t.Fatalf("stderr must carry the panic value and a stack reaching the panic site: %q", s.stderr.String())
+	}
 }
 
 func mkdirAll(t *testing.T, dirs ...string) {

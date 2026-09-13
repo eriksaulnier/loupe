@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -68,6 +70,14 @@ func (e *commandError) Error() string { return e.err.Error() }
 
 func (e *commandError) Unwrap() error { return e.err }
 
+// panicError keeps the stack taken inside recover, the last point where it still reaches the panic site.
+type panicError struct {
+	value any
+	stack []byte
+}
+
+func (e *panicError) Error() string { return fmt.Sprintf("panic: %v", e.value) }
+
 func execute(root *cobra.Command, deps Deps, args []string) int {
 	markCommandErrors(root)
 	jsonMode := argsWantJSON(args)
@@ -115,7 +125,12 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 
 func markCommandErrors(cmd *cobra.Command) {
 	if run := cmd.RunE; run != nil {
-		cmd.RunE = func(c *cobra.Command, args []string) error {
+		cmd.RunE = func(c *cobra.Command, args []string) (err error) {
+			defer func() {
+				if v := recover(); v != nil {
+					err = &commandError{err: &panicError{value: v, stack: debug.Stack()}}
+				}
+			}()
 			if err := run(c, args); err != nil {
 				return &commandError{err: err}
 			}
