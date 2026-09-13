@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -70,8 +71,16 @@ func (e *commandError) Unwrap() error { return e.err }
 func execute(root *cobra.Command, deps Deps, args []string) int {
 	markCommandErrors(root)
 	jsonMode := argsWantJSON(args)
+	// Under --json cobra's output is held back so help can become the one result object and nothing else reaches stdout.
+	var cobraOut bytes.Buffer
+	helpShown := false
 	if jsonMode {
-		root.SetOut(deps.Stderr)
+		root.SetOut(&cobraOut)
+		showHelp := root.HelpFunc()
+		root.SetHelpFunc(func(c *cobra.Command, a []string) {
+			helpShown = true
+			showHelp(c, a)
+		})
 	}
 	inv := &invocation{}
 	root.SetArgs(args)
@@ -91,6 +100,15 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 		err = cmdErr.err
 	} else if _, ok := refusal.As(err); err != nil && !ok {
 		err = refusal.New(refusal.Usage, err.Error(), "run "+cmd.CommandPath()+" --help")
+	}
+	if helpShown && err == nil {
+		if jsonMode {
+			err = writeSuccess(deps.Stdout, commandName(cmd), "", nil, map[string]any{"help": cobraOut.String()})
+		} else {
+			_, err = deps.Stdout.Write(cobraOut.Bytes())
+		}
+	} else {
+		_, _ = deps.Stderr.Write(cobraOut.Bytes())
 	}
 	return report(deps.Stdout, deps.Stderr, jsonMode, commandName(cmd), inv.run, err)
 }

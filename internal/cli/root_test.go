@@ -49,13 +49,32 @@ func TestHelpTouchesNothing(t *testing.T) {
 	}
 }
 
-func TestHelpWithJSONGoesToStderr(t *testing.T) {
-	deps, s := testDeps(t, nil)
-	if code := Execute(deps, []string{"--help", "--json"}); code != 0 {
-		t.Fatalf("exit %d", code)
+func TestHelpWithJSONIsOneEnvelope(t *testing.T) {
+	cases := []struct {
+		args    []string
+		command string
+		text    string
+	}{
+		{[]string{"--json"}, "loupe", "File pull request review findings"},
+		{[]string{"--json", "--help"}, "loupe", "File pull request review findings"},
+		{[]string{"probe", "--help", "--json"}, "probe", "loupe probe [<ref>]"},
+		{[]string{"help", "--json"}, "help", "File pull request review findings"},
 	}
-	if s.stdout.Len() != 0 || !strings.Contains(s.stderr.String(), "File pull request review findings") {
-		t.Fatalf("stdout %q stderr %q", s.stdout.String(), s.stderr.String())
+	for _, c := range cases {
+		t.Run(strings.Join(c.args, " "), func(t *testing.T) {
+			deps, s := testDeps(t, nil)
+			if code := execute(testRoot(deps, nil), deps, c.args); code != 0 {
+				t.Fatalf("exit %d, stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
+			}
+			if s.stderr.Len() != 0 {
+				t.Fatalf("stderr %q", s.stderr.String())
+			}
+			m := decodeOne(t, s.stdout.Bytes())
+			help, _ := m["help"].(string)
+			if len(m) != 4 || m["loupe"] != 1.0 || m["ok"] != true || m["command"] != c.command || !strings.Contains(help, c.text) {
+				t.Fatalf("got %v", m)
+			}
+		})
 	}
 }
 
