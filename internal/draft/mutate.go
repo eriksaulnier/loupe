@@ -141,3 +141,98 @@ func SetSummary(d *Draft, summary string, expectFindings *int, by string) error 
 	d.Summary = summary
 	return nil
 }
+
+const noteFix = "reword the note and send the finding back again"
+
+func findFinding(d *Draft, id string) (*Finding, error) {
+	for i := range d.Findings {
+		if d.Findings[i].ID == id {
+			return &d.Findings[i], nil
+		}
+	}
+	return nil, refusal.New(refusal.NotFound, fmt.Sprintf("finding %s does not exist", id), "loupe show")
+}
+
+func findNote(d *Draft, id string) (*Note, error) {
+	for i := range d.Notes {
+		if d.Notes[i].ID == id {
+			return &d.Notes[i], nil
+		}
+	}
+	return nil, refusal.New(refusal.NotFound, fmt.Sprintf("note %s does not exist", id), "loupe show")
+}
+
+// Accept records the decision at the finding's current rev, so any later edit puts the finding back to pending.
+func Accept(d *Draft, findingID string, now time.Time) error {
+	f, err := findFinding(d, findingID)
+	if err != nil {
+		return err
+	}
+	if !f.Included {
+		return refusal.New(refusal.Input, "accept is for included findings only",
+			fmt.Sprintf("exclude %s instead, or have the agent restore it with loupe edit %s --include", f.ID, f.ID))
+	}
+	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionAccepted, FindingRev: f.Rev, At: now}
+	return nil
+}
+
+func Exclude(d *Draft, findingID string, now time.Time) error {
+	f, err := findFinding(d, findingID)
+	if err != nil {
+		return err
+	}
+	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionExcluded, FindingRev: f.Rev, At: now}
+	return nil
+}
+
+// SendBack deletes the finding's decision so it stays pending until the human decides it again.
+func SendBack(d *Draft, findingID, body string, now time.Time) (Note, error) {
+	f, err := findFinding(d, findingID)
+	if err != nil {
+		return Note{}, err
+	}
+	if strings.TrimSpace(body) == "" {
+		return Note{}, refusal.New(refusal.Input, "a send-back note must not be empty", noteFix)
+	}
+	if err := markdown.Check(body, markdown.Body, noteFix); err != nil {
+		return Note{}, err
+	}
+	n := Note{ID: NextNoteID(d), FindingID: f.ID, Body: body, At: now, Status: NoteOpen}
+	d.Notes = append(d.Notes, n)
+	delete(d.Decisions, f.ID)
+	return n, nil
+}
+
+func Restore(d *Draft, findingID string) error {
+	f, err := findFinding(d, findingID)
+	if err != nil {
+		return err
+	}
+	if disposition(d, *f) != DispositionExcluded {
+		return refusal.New(refusal.Input, fmt.Sprintf("restore is for excluded findings only; %s is %s", f.ID, disposition(d, *f)),
+			"accept, exclude or send back the finding instead")
+	}
+	delete(d.Decisions, f.ID)
+	return nil
+}
+
+func ResolveNote(d *Draft, noteID string, now time.Time) error {
+	return closeNote(d, noteID, NoteResolved, now)
+}
+
+func DismissNote(d *Draft, noteID string, now time.Time) error {
+	return closeNote(d, noteID, NoteDismissed, now)
+}
+
+func closeNote(d *Draft, noteID, status string, now time.Time) error {
+	n, err := findNote(d, noteID)
+	if err != nil {
+		return err
+	}
+	if n.Status != NoteOpen {
+		return refusal.New(refusal.Input, fmt.Sprintf("note %s is already %s", n.ID, n.Status), "only an open note can be resolved or dismissed")
+	}
+	n.Status = status
+	n.ClosedAt = &now
+	return nil
+}
