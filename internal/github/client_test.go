@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
@@ -223,5 +224,25 @@ func TestUnauthorizedRefusesAuth(t *testing.T) {
 		if !ok || r.Code != refusal.Auth || r.Fix != "gh auth login --hostname github.com" {
 			t.Fatalf("got %#v", err)
 		}
+	}
+}
+
+func TestNewRESTSetsDefaultTimeout(t *testing.T) {
+	t.Setenv("GH_CONFIG_DIR", t.TempDir())
+	t.Setenv("GH_TOKEN", "test-token")
+	var deadline time.Time
+	var hasDeadline bool
+	capture := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		deadline, hasDeadline = r.Context().Deadline()
+		return nil, errors.New("stop")
+	})
+	c, err := NewREST(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	_, _ = c.Viewer(context.Background())
+	if !hasDeadline || deadline.Sub(start) < 29*time.Second || deadline.Sub(start) > 31*time.Second {
+		t.Fatalf("deadline %v after start, set %v", deadline.Sub(start), hasDeadline)
 	}
 }

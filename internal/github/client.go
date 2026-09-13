@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/auth"
@@ -85,18 +86,25 @@ type REST struct {
 	client *api.RESTClient
 }
 
+// defaultTimeout bounds each request so a stalled connection cannot hang a command that has no ctx deadline.
+const defaultTimeout = 30 * time.Second
+
 // NewREST uses gh's stored token for github.com. A nil transport means the default.
 func NewREST(transport http.RoundTripper) (*REST, error) {
 	token, _ := auth.TokenForHost(host)
-	return NewRESTWithToken(transport, token)
+	return newREST(transport, token, defaultTimeout)
 }
 
 // NewRESTWithToken skips gh's token lookup so tests never read the developer's credentials.
 func NewRESTWithToken(transport http.RoundTripper, token string) (*REST, error) {
+	return newREST(transport, token, 0)
+}
+
+func newREST(transport http.RoundTripper, token string, timeout time.Duration) (*REST, error) {
 	if token == "" {
 		return nil, refusal.New(refusal.Auth, "no GitHub token found for github.com", "gh auth login --hostname github.com")
 	}
-	client, err := api.NewRESTClient(api.ClientOptions{Host: host, AuthToken: token, Transport: transport})
+	client, err := api.NewRESTClient(api.ClientOptions{Host: host, AuthToken: token, Transport: transport, Timeout: timeout})
 	if err != nil {
 		return nil, fmt.Errorf("create GitHub client: %w", err)
 	}
