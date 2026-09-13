@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
+
+	"github.com/eriksaulnier/loupe/internal/findingid"
 )
 
 // PublishableSet is what the human could still publish: included findings that are not excluded.
@@ -59,7 +61,7 @@ func Digest(d *Draft) string {
 		}
 		doc.Findings = append(doc.Findings, df)
 	}
-	sort.Slice(doc.Findings, func(i, j int) bool { return doc.Findings[i].ID < doc.Findings[j].ID })
+	slices.SortFunc(doc.Findings, func(a, b digestFinding) int { return findingid.Compare(a.ID, b.ID) })
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)

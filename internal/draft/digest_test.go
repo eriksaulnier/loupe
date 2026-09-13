@@ -1,6 +1,8 @@
 package draft
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 	"time"
 )
@@ -150,5 +152,20 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDigestOrdersIDsNumerically(t *testing.T) {
+	d := NewEmpty()
+	d.Findings = []Finding{
+		{ID: "f-1000", Title: "b", Body: "b", General: true, Included: true},
+		{ID: "f-999", Title: "a", Body: "a", General: true, Included: true},
+	}
+	doc := `{"summary":"","findings":[` +
+		`{"id":"f-999","title":"a","body":"a","location":null,"general":true,"label":"","blocking":false,"confidence":"","severity":"","suggestedFix":""},` +
+		`{"id":"f-1000","title":"b","body":"b","location":null,"general":true,"label":"","blocking":false,"confidence":"","severity":"","suggestedFix":""}]}`
+	sum := sha256.Sum256([]byte(doc))
+	if got, want := Digest(d), hex.EncodeToString(sum[:]); got != want {
+		t.Fatalf("Digest = %s, want %s (f-999 before f-1000)", got, want)
 	}
 }
