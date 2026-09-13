@@ -49,7 +49,7 @@ Refusal or error (exit 1 or 2):
 | `version` | `--expect-version` mismatch | re-read with `loupe show` and retry |
 | `count` | `summary --expect-findings` mismatch | the included ids and titles |
 | `not-found` | Finding or note id does not exist | `loupe show` |
-| `lock` | Lock held or stale | the holder and the removal command to use after verifying no writer remains |
+| `lock` | Lock held or stale | the holder; wait for it or stop it |
 | `tty` | `review` or `publish` without an interactive terminal | run it in a terminal |
 | `head-moved` | Pull request head differs from the captured head | `loupe capture <url>` for a new round |
 | `own-pr` | approve or request-changes on the viewer's own pull request | `--action comment` |

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
@@ -76,7 +77,7 @@ func TestLockContention(t *testing.T) {
 		t.Fatalf("expected refusal, got %v", err)
 	}
 	wantMessage := "run is locked: " + path + " is held by pid " + pid + " (helper hold)"
-	wantFix := "after verifying pid " + pid + " is no longer running: rm " + path
+	wantFix := "wait for pid " + pid + " (helper hold) to finish, or stop it, then retry"
 	if r.Code != refusal.Lock || r.Message != wantMessage || r.Fix != wantFix {
 		t.Fatalf("got %+v", r)
 	}
@@ -124,5 +125,12 @@ func TestLockTimeoutValidation(t *testing.T) {
 		if err := held.Unlock(); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestHeldRefusalWithoutHolder(t *testing.T) {
+	r, ok := refusal.As(heldRefusal(filepath.Join(t.TempDir(), ".lock")))
+	if !ok || r.Code != refusal.Lock || strings.Contains(r.Fix, "rm ") {
+		t.Fatalf("got %+v", r)
 	}
 }

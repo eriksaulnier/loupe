@@ -95,9 +95,9 @@ func heldRefusal(path string) error {
 	if err != nil || !found || pid == "" {
 		return refusal.New(refusal.Lock,
 			fmt.Sprintf("run is locked: %s is held by an unknown process", path),
-			"after verifying no loupe process is still running: rm "+path)
+			"wait for the other loupe process to finish, or stop it, then retry")
 	}
 	return refusal.New(refusal.Lock,
 		fmt.Sprintf("run is locked: %s is held by pid %s (%s)", path, pid, command),
-		fmt.Sprintf("after verifying pid %s is no longer running: rm %s", pid, path))
+		fmt.Sprintf("wait for pid %s (%s) to finish, or stop it, then retry", pid, command))
 }
