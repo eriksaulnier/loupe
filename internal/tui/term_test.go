@@ -44,7 +44,9 @@ func TestGlyphs(t *testing.T) {
 		{"LANG UTF-8", map[string]string{"LANG": "en_US.UTF-8"}, utf8},
 		{"lowercase utf8", map[string]string{"LC_CTYPE": "C.utf8"}, utf8},
 		{"mixed case in LC_ALL", map[string]string{"LC_ALL": "de_DE.Utf-8", "LC_CTYPE": "C"}, utf8},
-		{"any of the three", map[string]string{"LC_ALL": "C", "LANG": "en_US.UTF-8"}, utf8},
+		{"LC_ALL overrides LANG", map[string]string{"LC_ALL": "C", "LANG": "en_US.UTF-8"}, ascii},
+		{"LC_CTYPE overrides LANG", map[string]string{"LC_CTYPE": "POSIX", "LANG": "en_US.UTF-8"}, ascii},
+		{"empty LC_ALL is unset", map[string]string{"LC_ALL": "", "LC_CTYPE": "en_US.UTF-8", "LANG": "C"}, utf8},
 		{"nothing set", nil, ascii},
 		{"C locale", map[string]string{"LANG": "C"}, ascii},
 	}

@@ -41,11 +41,17 @@ type GlyphSet struct {
 	Blocking  string
 }
 
+// Glyphs follows POSIX locale precedence: the first non-empty of LC_ALL, LC_CTYPE and LANG decides the character set.
 func Glyphs(getenv func(string) string) GlyphSet {
 	for _, name := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
-		if v := strings.ToLower(getenv(name)); strings.Contains(v, "utf-8") || strings.Contains(v, "utf8") {
+		v := strings.ToLower(getenv(name))
+		if v == "" {
+			continue
+		}
+		if strings.Contains(v, "utf-8") || strings.Contains(v, "utf8") {
 			return GlyphSet{Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●"}
 		}
+		break
 	}
 	return GlyphSet{Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!"}
 }
