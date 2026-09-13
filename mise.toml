@@ -1,0 +1,17 @@
+[tools]
+go = "1.25"
+golangci-lint = "2"
+goreleaser = "2"
+lefthook = "2"
+
+[tasks.lint]
+run = "golangci-lint run"
+
+[tasks.test]
+run = "go test ./..."
+
+[tasks.check]
+run = "go vet ./... && golangci-lint run && go test ./..."
+
+[tasks.build]
+run = "CGO_ENABLED=0 go build -o dist/loupe ./cmd/loupe"
