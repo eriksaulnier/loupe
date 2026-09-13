@@ -87,7 +87,7 @@ func parsePRURL(s string) (owner, repo string, number int, err error) {
 	return m[1], m[2], number, nil
 }
 
-func runCapture(cmd *cobra.Command, deps Deps, rawURL string) error {
+func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	owner, repo, number, err := parsePRURL(rawURL)
 	if err != nil {
 		return err
@@ -114,6 +114,24 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) error {
 	if err != nil {
 		return err
 	}
+	// Two captures choosing the same round would force-fetch into the same refs before either creates the run, so the
+	// winner's head ref could end up at the loser's sha.
+	prDir := filepath.Dir(run.RunDir(root, owner, repo, number, 1))
+	if err := os.MkdirAll(prDir, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", prDir, err)
+	}
+	held, err := run.Lock(prDir, "capture", deps.Getenv)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if held == nil {
+			return
+		}
+		if unlockErr := held.Unlock(); unlockErr != nil && err == nil {
+			err = unlockErr
+		}
+	}()
 	newest, err := run.Newest(root, owner, repo, number)
 	if err != nil {
 		return err
@@ -195,6 +213,11 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) error {
 	if err := createRound(dir, target, diffBytes, append(draftJSON, '\n'), canonical); err != nil {
 		return leftRefs(err)
 	}
+	unlockErr := held.Unlock()
+	held = nil
+	if unlockErr != nil {
+		return unlockErr
+	}
 	invocationOf(cmd).run = ref.String()
 
 	next := []string{
@@ -213,8 +236,8 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) error {
 	return printCapture(deps.Stdout, ref, target, cleanup, next)
 }
 
-// createRound reports a lost race as lock: the round number is chosen before the run directory exists, so two
-// captures of one pull request can choose the same round and only the first rename wins.
+// createRound reports a lost race for the round directory as lock. The capture lock should already rule that out;
+// this keeps the outcome a refusal if two captures still reach the same round.
 func createRound(dir string, target run.Target, diffBytes, draftJSON []byte, prURL string) error {
 	err := run.CreateRun(dir, target, diffBytes, draftJSON)
 	if r, ok := refusal.As(err); ok && r.Code == refusal.Internal {

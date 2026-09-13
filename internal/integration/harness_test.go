@@ -79,18 +79,26 @@ func (h *harness) getenv(key string) string {
 
 func (h *harness) Run(args ...string) (stdout, stderr string, exit int) {
 	h.t.Helper()
+	stdin := h.Stdin
+	h.Stdin = ""
+	return h.runWith(stdin, fixedNow, args...)
+}
+
+func fixedNow() time.Time { return time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC) }
+
+// runWith leaves the harness unchanged, so concurrent commands can share it.
+func (h *harness) runWith(stdin string, now func() time.Time, args ...string) (stdout, stderr string, exit int) {
 	var out, errOut bytes.Buffer
 	deps := cli.Deps{
-		Stdin:      strings.NewReader(h.Stdin),
+		Stdin:      strings.NewReader(stdin),
 		Stdout:     &out,
 		Stderr:     &errOut,
 		Getenv:     h.getenv,
-		Now:        func() time.Time { return time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC) },
+		Now:        now,
 		WorkDir:    h.WorkDir,
 		GitHub:     func() (github.Client, error) { return h.client, nil },
 		IsTerminal: func() bool { return h.IsTerminal },
 	}
-	h.Stdin = ""
 	exit = cli.Execute(deps, args)
 	return out.String(), errOut.String(), exit
 }

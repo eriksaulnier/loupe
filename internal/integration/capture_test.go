@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
 )
@@ -195,5 +197,81 @@ func TestCaptureRefusalAfterFetchNamesCleanup(t *testing.T) {
 	fixAt := strings.Index(stderr, "fix: ")
 	if exit != 1 || fixAt < 0 || strings.Index(stderr, wantCleanup[0].(string)) < fixAt || !strings.Contains(stderr, wantCleanup[1].(string)) {
 		t.Fatalf("exit %d stderr %q", exit, stderr)
+	}
+}
+
+// pausedNow stops a capture at its clock read, which comes after the fetch and verification and before the run is
+// created.
+func pausedNow() (now func() time.Time, reached chan struct{}, release chan struct{}) {
+	reached, release = make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	return func() time.Time {
+		once.Do(func() { close(reached) })
+		<-release
+		return fixedNow()
+	}, reached, release
+}
+
+// The first capture verifies head X; the head then moves to Y and a second capture of the same round would force-fetch
+// Y into the refs the first capture is about to record as X.
+func TestConcurrentCapturesOfOnePullRequest(t *testing.T) {
+	h := newHarness(t)
+	type result struct {
+		stdout, stderr string
+		exit           int
+	}
+	results := make([]result, 2)
+	start := func(i int, now func() time.Time) chan struct{} {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			stdout, stderr, exit := h.runWith("", now, "capture", prURL(), "--json")
+			results[i] = result{stdout, stderr, exit}
+		}()
+		return done
+	}
+
+	nowA, reachedA, releaseA := pausedNow()
+	doneA := start(0, nowA)
+	<-reachedA
+	h.GH.SetHead(owner, repo, number, h.Repo.PushHead(map[string]string{"src/app.go": "moved\n"}))
+	nowB, reachedB, releaseB := pausedNow()
+	doneB := start(1, nowB)
+	select {
+	case <-reachedB:
+	case <-time.After(time.Second):
+	}
+	close(releaseA)
+	<-doneA
+	close(releaseB)
+	<-doneB
+
+	refs := h.Repo.Snapshot().Refs
+	rounds := map[float64]bool{}
+	for _, r := range results {
+		var env map[string]any
+		if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+			t.Fatalf("stdout %q stderr %q: %v", r.stdout, r.stderr, err)
+		}
+		if r.exit != 0 {
+			errObj, _ := env["error"].(map[string]any)
+			if r.exit != 1 || errObj["code"] != "lock" {
+				t.Fatalf("exit %d envelope %v stderr %q", r.exit, env, r.stderr)
+			}
+			continue
+		}
+		target, _ := env["target"].(map[string]any)
+		round, _ := target["round"].(float64)
+		if rounds[round] {
+			t.Fatalf("both captures report round %v", round)
+		}
+		rounds[round] = true
+		headRef, _ := target["headRef"].(string)
+		if refs[headRef] != target["headSha"] {
+			t.Fatalf("%s is %s but round %v recorded head %v", headRef, refs[headRef], round, target["headSha"])
+		}
+	}
+	if len(rounds) == 0 {
+		t.Fatalf("no capture succeeded: %v", results)
 	}
 }

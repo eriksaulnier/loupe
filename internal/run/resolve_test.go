@@ -23,8 +23,10 @@ func TestRoundsAndNewest(t *testing.T) {
 	root := t.TempDir()
 	prDir := filepath.Dir(RunDir(root, "o", "r", 5, 1))
 	mkdirs(t, RunDir(root, "o", "r", 5, 2), RunDir(root, "o", "r", 5, 10), RunDir(root, "o", "r", 5, 1), filepath.Join(prDir, ".3.tmp-123"))
-	if err := os.WriteFile(filepath.Join(prDir, "7"), nil, 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"7", ".lock"} {
+		if err := os.WriteFile(filepath.Join(prDir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	rounds, err := Rounds(root, "o", "r", 5)
 	if err != nil {
