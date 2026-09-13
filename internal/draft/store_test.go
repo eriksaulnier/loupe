@@ -188,3 +188,30 @@ func TestConcurrentProcessesMutate(t *testing.T) {
 		seen[r.Body] = true
 	}
 }
+
+func TestLoadRefusesIncompleteDraft(t *testing.T) {
+	cases := map[string]string{
+		"null":           `null`,
+		"empty object":   `{}`,
+		"null decisions": `{"schema": 1, "findings": [], "decisions": null, "notes": [], "replies": []}`,
+		"missing notes":  `{"schema": 1, "findings": [], "decisions": {}, "replies": []}`,
+		"wrong schema":   `{"schema": 2, "findings": [], "decisions": {}, "notes": [], "replies": []}`,
+	}
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "draft.json")
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := Load(dir)
+			r, ok := refusal.As(err)
+			if !ok || r.Code != refusal.Record || !strings.HasPrefix(r.Message, "cannot read "+path+": ") || r.Fix != "inspect it with: cat "+path {
+				t.Fatalf("got %v", err)
+			}
+		})
+	}
+	if _, err := Load(newRunDir(t)); err != nil {
+		t.Fatalf("an empty draft must load: %v", err)
+	}
+}

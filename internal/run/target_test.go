@@ -111,3 +111,19 @@ func TestLoadTargetMissing(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestLoadTargetRefusesWrongSchema(t *testing.T) {
+	for name, content := range map[string]string{"null": `null`, "empty object": `{}`, "wrong schema": `{"schema": 2}`} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "target.json")
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := LoadTarget(dir)
+			if r, ok := refusal.As(err); !ok || r.Code != refusal.Record || r.Fix != "inspect it with: cat "+path {
+				t.Fatalf("got %v", err)
+			}
+		})
+	}
+}

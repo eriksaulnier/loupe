@@ -39,9 +39,13 @@ type Target struct {
 }
 
 func LoadTarget(dir string) (Target, error) {
+	path := filepath.Join(dir, "target.json")
 	var t Target
-	if err := ReadJSON(filepath.Join(dir, "target.json"), &t); err != nil {
+	if err := ReadJSON(path, &t); err != nil {
 		return Target{}, err
+	}
+	if t.Schema != TargetSchema {
+		return Target{}, recordRefusal(path, fmt.Errorf("schema is %d, expected %d", t.Schema, TargetSchema))
 	}
 	return t, nil
 }
