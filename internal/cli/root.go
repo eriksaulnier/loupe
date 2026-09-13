@@ -33,6 +33,7 @@ func NewRoot(deps Deps) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	root.CompletionOptions.DisableDefaultCmd = true
 	root.PersistentFlags().Bool("json", false, "print exactly one JSON result object on stdout")
 	root.SetIn(deps.Stdin)
 	root.SetOut(deps.Stdout)

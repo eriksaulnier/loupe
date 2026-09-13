@@ -214,3 +214,13 @@ func mkdirAll(t *testing.T, dirs ...string) {
 		}
 	}
 }
+
+func TestNoCompletionCommand(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	if code := execute(testRoot(deps, nil), deps, []string{"completion", "bash", "--json"}); code != 2 {
+		t.Fatalf("exit %d, stdout %q", code, s.stdout.String())
+	}
+	if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "usage" {
+		t.Fatalf("got %v", e)
+	}
+}
