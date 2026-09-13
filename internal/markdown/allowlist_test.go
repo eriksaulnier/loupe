@@ -41,6 +41,7 @@ func TestCheckAccepts(t *testing.T) {
 		{"details as entities", "&lt;details&gt;\n", Body},
 		{"nesting 15 in a body", nested(15), Body},
 		{"nesting 16 in a summary", nested(16), Summary},
+		{"fence after a blank line inside details", "<details>\n<summary>x</summary>\n\n```\n</details>\n```\n\n</details>\n", Body},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -76,6 +77,10 @@ func TestCheckRefuses(t *testing.T) {
 		{"unclosed details", "<details>\n<summary>x</summary>\nbody\n", Body, "depth", 1},
 		{"nesting 16 in a body", nested(16), Body, "depth", 46},
 		{"nesting 17 in a summary", nested(17), Summary, "depth", 49},
+		{"code span inside an html block", "<details>\n<summary>x</summary>\n`</details>`\n</details>\n", Body, "html", 3},
+		{"fence inside an html block", "<details>\n<summary>x</summary>\n```\n</details>\n```\n</details>\n", Body, "depth", 6},
+		{"escape inside an html block", "<details>\n<summary>x</summary>\n\\<br>\n</details>\n", Body, "html", 3},
+		{"code span in a summary line", "<details>\n<summary>`</details>`</summary>\n</details>\n", Body, "html", 2},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -64,6 +64,9 @@ type scanner struct {
 	awaitingSummary int
 	// summaryLine is the line of a <summary> whose </summary> has not appeared yet, or 0.
 	summaryLine int
+	// inHTMLBlock is set from an allowlisted tag line to the next blank line. CommonMark reads that span as a raw HTML
+	// block, so code spans, escapes and fences there hide nothing from GitHub.
+	inHTMLBlock bool
 }
 
 func (s *scanner) line(n int, line string) error {
@@ -75,17 +78,24 @@ func (s *scanner) line(n int, line string) error {
 		return nil
 	}
 	if trimmed == "" {
+		s.inHTMLBlock = false
 		return nil
 	}
-	if c, length, ok := opensFence(trimmed); ok {
-		if err := s.contentWhileOpen(n); err != nil {
-			return err
+	if opensHTMLBlock(trimmed) {
+		s.inHTMLBlock = true
+	}
+	visible := trimmed
+	if !s.inHTMLBlock {
+		if c, length, ok := opensFence(trimmed); ok {
+			if err := s.contentWhileOpen(n); err != nil {
+				return err
+			}
+			s.fenceChar, s.fenceLen, s.fenceLine = c, length, n
+			return nil
 		}
-		s.fenceChar, s.fenceLen, s.fenceLine = c, length, n
-		return nil
+		visible = strings.TrimSpace(textOnly(line))
 	}
 
-	visible := strings.TrimSpace(textOnly(line))
 	if s.awaitingSummary != 0 && !strings.HasPrefix(visible, "<summary>") {
 		return s.refuse(ruleHTML, n, fmt.Sprintf("<details> on line %d must be followed by <summary> on its next non-blank line", s.awaitingSummary))
 	}
@@ -113,7 +123,7 @@ func (s *scanner) line(n int, line string) error {
 		s.summaryLine = n
 		return s.summaryText(n, strings.TrimPrefix(visible, "<summary>"))
 	}
-	if reason, found := findHTML(visible); found {
+	if reason, found := s.findHTML(visible); found {
 		return s.refuse(ruleHTML, n, reason)
 	}
 	return nil
@@ -122,7 +132,7 @@ func (s *scanner) line(n int, line string) error {
 // summaryText checks text inside an open <summary>, which must reach </summary> before any tag or other structure.
 func (s *scanner) summaryText(n int, text string) error {
 	inner, closed := strings.CutSuffix(text, "</summary>")
-	if reason, found := findHTML(inner); found {
+	if reason, found := s.findHTML(inner); found {
 		return s.refuse(ruleHTML, n, fmt.Sprintf("<summary> opened on line %d is not closed by </summary> before %s", s.summaryLine, reason))
 	}
 	if closed {
@@ -159,6 +169,15 @@ func (s *scanner) refuse(rule string, line int, reason string) error {
 	r := refusal.New(refusal.Markdown, fmt.Sprintf("%s fails the Markdown allowlist (%s) at line %d: %s", s.name, rule, line, reason), s.fix)
 	r.Details = map[string]any{"rule": rule, "line": line}
 	return r
+}
+
+func opensHTMLBlock(trimmed string) bool {
+	for _, tag := range []string{"<details>", "<details open>", "</details>", "<summary>", "</summary>"} {
+		if strings.HasPrefix(trimmed, tag) {
+			return true
+		}
+	}
+	return false
 }
 
 func opensFence(trimmed string) (byte, int, bool) {
@@ -229,6 +248,19 @@ func closingRun(line string, from, length int) int {
 		i += run
 	}
 	return -1
+}
+
+func (s *scanner) findHTML(text string) (string, bool) {
+	if reason, found := findHTML(text); found || !s.inHTMLBlock {
+		return reason, found
+	}
+	// Inside an HTML block, anything that could start a tag is passed to GitHub's sanitizer as HTML, autolinks included.
+	for i := 0; i+1 < len(text); i++ {
+		if c := text[i+1]; text[i] == '<' && (isLetter(c) || strings.IndexByte("/!?", c) >= 0) {
+			return fmt.Sprintf("%s is raw HTML inside the HTML block started by a <details> or <summary> line; end the block with a blank line first", tagText(text[i:])), true
+		}
+	}
+	return "", false
 }
 
 func findHTML(text string) (string, bool) {
