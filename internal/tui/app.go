@@ -105,21 +105,29 @@ type Model struct {
 	file       viewport.Model
 }
 
-func New(cfg Config) (*Model, error) {
-	target, err := run.LoadTarget(cfg.Dir)
+func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
+	target, err := run.LoadTarget(dir)
 	if err != nil {
-		return nil, err
+		return run.Target{}, nil, nil, err
 	}
-	diffPath := filepath.Join(cfg.Dir, "pr.diff")
+	diffPath := filepath.Join(dir, "pr.diff")
 	diffBytes, err := os.ReadFile(diffPath)
 	if err != nil {
-		return nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", diffPath, err), "inspect it with: ls -l "+diffPath)
+		return run.Target{}, nil, nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", diffPath, err), "inspect it with: ls -l "+diffPath)
 	}
 	parsed, err := diff.Parse(diffBytes)
 	if err != nil {
-		return nil, refusal.New(refusal.Record, fmt.Sprintf("cannot parse %s: %v", diffPath, err), "inspect it with: less "+diffPath)
+		return run.Target{}, nil, nil, refusal.New(refusal.Record, fmt.Sprintf("cannot parse %s: %v", diffPath, err), "inspect it with: less "+diffPath)
 	}
-	d, err := draft.Load(cfg.Dir)
+	d, err := draft.Load(dir)
+	if err != nil {
+		return run.Target{}, nil, nil, err
+	}
+	return target, parsed, d, nil
+}
+
+func New(cfg Config) (*Model, error) {
+	target, parsed, d, err := loadRun(cfg.Dir)
 	if err != nil {
 		return nil, err
 	}
