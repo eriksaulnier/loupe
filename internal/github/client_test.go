@@ -211,3 +211,17 @@ func TestEmptyTokenRefuses(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestUnauthorizedRefusesAuth(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 401, `{"message": "Bad credentials"}`)
+	})
+	_, viewerErr := c.Viewer(context.Background())
+	_, listErr := c.ListReviews(context.Background(), "o", "r", 7)
+	for _, err := range []error{viewerErr, listErr} {
+		r, ok := refusal.As(err)
+		if !ok || r.Code != refusal.Auth || r.Fix != "gh auth login --hostname github.com" {
+			t.Fatalf("got %#v", err)
+		}
+	}
+}

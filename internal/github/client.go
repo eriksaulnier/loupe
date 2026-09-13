@@ -236,6 +236,9 @@ func (c *REST) request(ctx context.Context, method, path string, body []byte) (*
 	}
 	resp, err := c.client.RequestWithContext(ctx, method, path, reader)
 	var he *api.HTTPError
+	if errors.As(err, &he) && he.StatusCode == http.StatusUnauthorized {
+		return nil, refusal.New(refusal.Auth, "GitHub rejected the token for github.com: "+he.Message, "gh auth login --hostname github.com")
+	}
 	if errors.As(err, &he) {
 		return nil, &HTTPError{Status: he.StatusCode, Message: he.Message}
 	}
