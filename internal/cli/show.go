@@ -16,7 +16,8 @@ const showHelp = `Show the whole draft of a run: summary, findings with their hi
 notes and replies, plus the captured target, each finding's disposition and readiness.
 
 A disposition is accepted, pending, excluded or withdrawn. Readiness holds when no finding is
-pending and no note is open.
+pending and no note is open. The digest is the SHA-256 of the publishable set, the value that
+will appear in the published review's hidden marker.
 
 Result (--json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1", "version": 5,
@@ -32,7 +33,8 @@ Result (--json):
    "target": {"owner": "owner", "repo": "repo", "number": 123, "round": 1, "headSha": "...", "...": "as in capture"},
    "dispositions": {"f-001": "accepted"},
    "readiness": {"ready": true, "accepted": ["f-001"], "pending": [], "excluded": [],
-                 "withdrawn": [], "openNotes": []}}`
+                 "withdrawn": [], "openNotes": []},
+   "digest": "sha256 hex"}`
 
 func newShowCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -75,6 +77,7 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 			"target":       target,
 			"dispositions": dispositions,
 			"readiness":    readiness,
+			"digest":       draft.Digest(d),
 		})
 	}
 	return printShow(deps.Stdout, ref, target, d, dispositions, readiness)

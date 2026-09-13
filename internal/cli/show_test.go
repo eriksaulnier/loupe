@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -28,5 +29,32 @@ func TestPrintShowEscapesDraftAndTargetText(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("show output lacks %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestShowJSONCarriesDigest(t *testing.T) {
+	home := t.TempDir()
+	d := draft.NewEmpty()
+	d.Summary = "A summary"
+	d.Findings = []draft.Finding{{ID: "f-001", Rev: 1, Title: "T", Body: "B", General: true, By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}}}
+	draftJSON, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := run.RunDir(home, "o", "r", 1, 1)
+	target := run.Target{Schema: run.TargetSchema, Owner: "o", Repo: "r", Number: 1, Round: 1}
+	if err := run.CreateRun(dir, target, nil, draftJSON); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+	if code := Execute(deps, []string{"show", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if got, want := decodeOne(t, s.stdout.Bytes())["digest"], draft.Digest(stored); got != want {
+		t.Fatalf("digest %v, want %s", got, want)
 	}
 }
