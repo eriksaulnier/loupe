@@ -16,6 +16,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -31,6 +32,10 @@ const (
 	viewList view = iota
 	viewDetail
 	viewFileDiff
+	viewAction
+	viewInline
+	viewConfirm
+	viewPublishing
 )
 
 type Config struct {
@@ -39,6 +44,8 @@ type Config struct {
 	Now    func() time.Time
 	// Output is where the program draws; it decides which colors the terminal supports.
 	Output io.Writer
+	// GitHub is called only when the human publishes, so reviewing never needs credentials.
+	GitHub func() (github.Client, error)
 }
 
 type palette struct {
@@ -103,6 +110,12 @@ type Model struct {
 	fileLines  []diff.ViewLine
 	fileCursor int
 	file       viewport.Model
+
+	// pick is the cursor in the action and inline pickers.
+	pick    int
+	action  string
+	confirm confirmation
+	session *publishSession
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -165,9 +178,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		return m, m.fail(m.layout())
+	case previewMsg:
+		m.confirm, m.view = confirmation{preview: msg.preview}, viewConfirm
+		return m, nil
+	case publishDone:
+		return m, m.publishFinished(msg)
 	case tea.KeyMsg:
+		// The confirmation comes first so that ctrl+c, like every key but y and the toggles, declines.
+		if m.view == viewConfirm {
+			return m, m.updateConfirm(msg)
+		}
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
+		}
+		if m.view == viewPublishing {
+			return m, nil
 		}
 		if m.noting {
 			return m, m.updateNote(msg)
@@ -190,6 +215,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updateDetail(msg)
 		case viewFileDiff:
 			return m, m.updateFileDiff(msg)
+		case viewAction:
+			return m, m.updateAction(msg)
+		case viewInline:
+			return m, m.updateInline(msg)
 		}
 	}
 	return m, nil
@@ -204,6 +233,14 @@ func (m *Model) View() string {
 		return m.detailView()
 	case viewFileDiff:
 		return m.fileDiffView()
+	case viewAction:
+		return m.actionView()
+	case viewInline:
+		return m.inlineView()
+	case viewConfirm:
+		return m.confirmView(&m.confirm)
+	case viewPublishing:
+		return m.frame([]string{m.styles.bold.Render(m.header())}, "", "ctrl+c quit")
 	}
 	return m.listView()
 }
@@ -298,11 +335,13 @@ func (m *Model) helpView() string {
 	var keys []string
 	switch m.view {
 	case viewList:
-		keys = []string{"j/k, up/down  move", "enter         open the finding", "tab           collapse or expand the summary", "q             quit; every decision is already saved"}
+		keys = []string{"j/k, up/down  move", "enter         open the finding", "tab           collapse or expand the summary", "p             publish the review", "q             quit; every decision is already saved"}
 	case viewDetail:
 		keys = []string{"a    accept (included findings only)", "x    exclude", "s    send back with a note", "u    restore an excluded finding", "r/d  resolve or dismiss the finding's open note", "f    file diff", "n/N  next or previous finding", "j/k  scroll", "esc  back to the list"}
 	case viewFileDiff:
 		keys = []string{"j/k, up/down  move", "]/[           next or previous finding", "enter         open the finding on this line", "esc           back to the finding"}
+	case viewAction, viewInline:
+		keys = []string{"j/k, up/down  move", "enter         choose", "esc           back"}
 	}
 	keys = append(keys, "?             close this help", "ctrl+c        quit")
 	return m.frame([]string{m.styles.bold.Render("Keys")}, strings.Join(keys, "\n"), "? or esc closes help")

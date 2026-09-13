@@ -60,8 +60,11 @@ func headRefusal(target run.Target, pr github.PullRequest) error {
 // the same reason publish would give.
 func ActionRefusal(action, viewer, author string, d *draft.Draft) error {
 	if viewer == author && (action == "approve" || action == "request-changes") {
-		return refusal.New(refusal.OwnPR,
-			fmt.Sprintf("%s is the author of this pull request and cannot %s it", viewer, strings.ReplaceAll(action, "-", " ")),
+		verb := "approve it"
+		if action == "request-changes" {
+			verb = "request changes on it"
+		}
+		return refusal.New(refusal.OwnPR, fmt.Sprintf("%s is the author of this pull request and cannot %s", viewer, verb),
 			"use --action comment")
 	}
 	if action != "approve" {
