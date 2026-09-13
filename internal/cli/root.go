@@ -41,7 +41,7 @@ func NewRoot(deps Deps) *cobra.Command {
 	root.SetIn(deps.Stdin)
 	root.SetOut(deps.Stdout)
 	root.SetErr(deps.Stderr)
-	root.AddCommand(newCaptureCmd(deps), newAddCmd(deps))
+	root.AddCommand(newCaptureCmd(deps), newAddCmd(deps), newSummaryCmd(deps))
 	return root
 }
 
