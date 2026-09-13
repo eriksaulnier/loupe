@@ -6,7 +6,7 @@ These decisions were made with the product owner before this repository existed 
 
 ## Language and TUI stack
 
-**Decision**: Go 1.23+, single module `github.com/eriksaulnier/loupe`, one static binary. Terminal UI with `charmbracelet/bubbletea`, `charmbracelet/bubbles` and `charmbracelet/lipgloss`.
+**Decision**: Go 1.25+ (raised from 1.23 on 2026-09-13; see plan.md Complexity Tracking), single module `github.com/eriksaulnier/loupe`, one static binary. Terminal UI with `charmbracelet/bubbletea`, `charmbracelet/bubbles` and `charmbracelet/lipgloss`.
 
 **Rationale**: One static binary satisfies SC-005 with no runtime on the agent's machine. Bubble Tea is the most complete terminal UI ecosystem available and comes with a test harness (`teatest`) that drives models with injected key messages, which principle VII requires. Startup time supports SC-004.
 

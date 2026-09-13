@@ -21,7 +21,7 @@ description: "Task list for loupe v1"
 
 ## Conventions every task MUST follow
 
-- Module path `github.com/eriksaulnier/loupe`; `go.mod` declares `go 1.23`.
+- Module path `github.com/eriksaulnier/loupe`; `go.mod` declares `go 1.25` (plan.md Complexity Tracking). Build with `GOTOOLCHAIN=local`; a dependency that raises the directive is a stop-and-ask. `golang.org/x/term` stays at v0.45.0.
 - Add a dependency with `go get` in the task that first imports it. Runtime dependencies are limited to the list in plan.md; anything else requires a plan.md and research.md row first (constitution VI).
 - Domain errors are `*refusal.Error` values (T006) carrying `Code`, `Message`, `Fix`, `Details`; the codes are exactly the table in contracts/cli.md. `internal/cli` only maps them to envelopes and exit codes.
 - `draft`, `diff`, `render`, `publish`, `run`, `markdown`, `gitx`, `github` MUST NOT import `tui` or `cli`. `run` MUST NOT import `draft`.
@@ -39,11 +39,11 @@ Single Go module at repository root: `cmd/loupe/`, `internal/<package>/` with te
 
 **Purpose**: Module, toolchain, lint and hooks.
 
-- [ ] T001 Create `go.mod` with `go mod init github.com/eriksaulnier/loupe` and set the directive to `go 1.23`; create `.gitignore` containing `dist/`, `*.test`, `coverage.out`
-- [ ] T002 [P] Create `mise.toml` pinning `go` (1.25.x), `golangci-lint` (2.x) and `goreleaser` (2.x), with tasks `lint` (`golangci-lint run`), `test` (`go test ./...`), `check` (`go vet ./... && golangci-lint run && go test ./...`) and `build` (`CGO_ENABLED=0 go build -o dist/loupe ./cmd/loupe`)
-- [ ] T003 [P] Create `.golangci.yml` in golangci-lint v2 format (`version: "2"`) enabling `errcheck`, `govet`, `staticcheck`, `unused`, `ineffassign`, `misspell` with `locale: US`, and the `gofmt` and `goimports` formatters
-- [ ] T004 [P] Create `lefthook.yml` with a `pre-commit` command `mise run check` and a `commit-msg` command that rejects a subject not matching `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: [a-z]`, longer than 72 characters, or ending in a period
-- [ ] T005 Run `mise trust && mise install && mise exec -- lefthook install` and confirm `go version`, `golangci-lint version` and `goreleaser --version` print the pinned versions (depends on T002, T004)
+- [X] T001 Create `go.mod` with `go mod init github.com/eriksaulnier/loupe` and set the directive to `go 1.23`; create `.gitignore` containing `dist/`, `*.test`, `coverage.out`
+- [X] T002 [P] Create `mise.toml` pinning `go` (1.25.x), `golangci-lint` (2.x) and `goreleaser` (2.x), with tasks `lint` (`golangci-lint run`), `test` (`go test ./...`), `check` (`go vet ./... && golangci-lint run && go test ./...`) and `build` (`CGO_ENABLED=0 go build -o dist/loupe ./cmd/loupe`)
+- [X] T003 [P] Create `.golangci.yml` in golangci-lint v2 format (`version: "2"`) enabling `errcheck`, `govet`, `staticcheck`, `unused`, `ineffassign`, `misspell` with `locale: US`, and the `gofmt` and `goimports` formatters
+- [X] T004 [P] Create `lefthook.yml` with a `pre-commit` command `mise run check` and a `commit-msg` command that rejects a subject not matching `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: [a-z]`, longer than 72 characters, or ending in a period
+- [X] T005 Run `mise trust && mise install && mise exec -- lefthook install` and confirm `go version`, `golangci-lint version` and `goreleaser --version` print the pinned versions (depends on T002, T004)
 
 ---
 
@@ -53,7 +53,7 @@ Single Go module at repository root: `cmd/loupe/`, `internal/<package>/` with te
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T006 Create `internal/refusal/refusal.go` and `internal/refusal/refusal_test.go`: type `Error struct { Code, Message, Fix string; Details map[string]any }` implementing `error`; a `Code` constant for every row of the contracts/cli.md error table (`usage`, `no-run`, `record`, `origin`, `pr`, `same-head`, `auth`, `input`, `location`, `markdown`, `version`, `count`, `not-found`, `lock`, `tty`, `head-moved`, `own-pr`, `blocking`, `not-ready`, `empty`, `attempt`, `github`, `internal`); `New(code, message, fix string) *Error`; `As(err error) (*Error, bool)` using `errors.As`. This is a leaf package because `internal/cli` depends on every domain package, so the refusal type cannot live in `internal/cli/errors.go` without an import cycle
+- [X] T006 Create `internal/refusal/refusal.go` and `internal/refusal/refusal_test.go`: type `Error struct { Code, Message, Fix string; Details map[string]any }` implementing `error`; a `Code` constant for every row of the contracts/cli.md error table (`usage`, `no-run`, `record`, `origin`, `pr`, `same-head`, `auth`, `input`, `location`, `markdown`, `version`, `count`, `not-found`, `lock`, `tty`, `head-moved`, `own-pr`, `blocking`, `not-ready`, `empty`, `attempt`, `github`, `internal`); `New(code, message, fix string) *Error`; `As(err error) (*Error, bool)` using `errors.As`. This is a leaf package because `internal/cli` depends on every domain package, so the refusal type cannot live in `internal/cli/errors.go` without an import cycle
 - [ ] T007 [P] Create `internal/run/root.go` and `internal/run/root_test.go`: `DataRoot(getenv func(string) string) (string, error)` returning `$LOUPE_HOME`, else `$XDG_DATA_HOME/loupe`, else `$HOME/.local/share/loupe`; `RunsDir(root)` is `<root>/runs`; `RunDir(root, owner, repo string, number, round int)` is `<root>/runs/<owner>/<repo>/<number>/<round>`
 - [ ] T008 [P] Create `internal/run/ref.go` and `internal/run/ref_test.go`: `type Ref struct { Owner, Repo string; Number, Round int }` where `Round == 0` means newest; `ParseRef(s)` accepts `owner/repo#123` and `owner/repo#123@2` and refuses anything else with code `usage` and fix `use owner/repo#123 or owner/repo#123@2`; `Ref.String()` round-trips, printing `@N` only when `Round > 0`
 - [ ] T009 [P] Create `internal/run/atomic.go` and `internal/run/atomic_test.go`: `WriteFileAtomic(path string, data []byte)` writes a temp file in the same directory, fsyncs, renames over `path`, fsyncs the directory; `WriteJSONAtomic(path, v)` marshals with two-space indent and a trailing newline; `ReadJSON(path, v)` decodes with `DisallowUnknownFields` and returns code `record` naming the path, with fix `inspect it with: cat <path>`, when the file is missing, unreadable, malformed or has unknown fields. loupe MUST NOT repair or delete a damaged file
