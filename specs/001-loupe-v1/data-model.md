@@ -133,7 +133,8 @@ A reply never changes note status or any decision.
 | Disposition `pending` | `included` and no current decision |
 | Readiness | no finding is `pending` and no note is `open` |
 | Counts | accepted, pending, excluded, withdrawn, openNotes |
-| Publishable digest | hex SHA-256 over the summary and, sorted by id, each included finding's publishable fields in a canonical JSON encoding |
+| Publishable set | findings that are `included` and not human-excluded: disposition `accepted` or `pending` |
+| Publishable digest | hex SHA-256 over the summary and, sorted by id, each finding in the publishable set reduced to its id and publishable fields, in a canonical JSON encoding. Decisions do not affect it except exclusion, which removes a finding from the set. At publish, readiness means no finding is pending, so the set equals the findings published |
 | Included findings for publish | disposition `accepted` (an `excluded` finding is still `included: true` but is not published) |
 
 ## Attempt

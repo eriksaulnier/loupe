@@ -12,13 +12,13 @@ A single static Go binary, `loupe`, that captures a pull request into a per-run 
 
 **Language/Version**: Go 1.23+ (module `github.com/eriksaulnier/loupe`; the dev box has go1.25.8). `go.mod` declares `go 1.23` so `go install` works on the oldest supported toolchain.
 
-**Primary Dependencies**: `spf13/cobra` (command help is the agent contract), `charmbracelet/bubbletea` + `bubbles` + `lipgloss` (TUI), `charmbracelet/glamour` (Markdown body rendering in the detail view), `cli/go-gh/v2` (GitHub REST with `gh`'s auth), `bluekeyes/go-gitdiff` (unified diff parsing). Test-only: `charmbracelet/x/exp/teatest` (drives Bubble Tea models with injected keys). Each runtime dependency carries its reason in research.md. Git is shelled out to; there is no Go Git library.
+**Primary Dependencies**: `spf13/cobra` (command help is the agent contract), `charmbracelet/bubbletea` + `bubbles` + `lipgloss` (TUI), `charmbracelet/glamour` (Markdown body rendering in the detail view), `cli/go-gh/v2` (GitHub REST with `gh`'s auth), `bluekeyes/go-gitdiff` (unified diff parsing), `golang.org/x/term` (TTY detection and raw-mode probe). Test-only: `charmbracelet/x/exp/teatest` (drives Bubble Tea models with injected keys). Each runtime dependency carries its reason in research.md. Git is shelled out to; there is no Go Git library.
 
 **Storage**: Plain files, one directory per run at `$LOUPE_HOME|$XDG_DATA_HOME/loupe|~/.local/share/loupe/runs/<owner>/<repo>/<number>/<round>/`: `target.json`, `pr.diff`, `draft.json`, `.lock`, `attempt.json`, `receipt.json`. Writes are temp-file-plus-rename under an exclusive `flock`. See [data-model.md](data-model.md).
 
 **Testing**: `go test ./...` with `go vet ./...` and `golangci-lint run` as the repository check. Unit tests colocated per package; `teatest` for the TUI; an integration package with a local bare Git remote and an `httptest` fake GitHub. No real PTY, reviewer or GitHub write (constitution VII).
 
-**Target Platform**: Linux and macOS terminals, amd64 and arm64. Windows untested. Distribution by goreleaser to GitHub Releases plus a Homebrew tap; `go install` also works.
+**Target Platform**: Linux and macOS terminals, amd64 and arm64. Windows untested. Distribution by goreleaser to GitHub Releases; `go install` also works. A Homebrew tap is deferred.
 
 **Project Type**: Single CLI binary with an embedded TUI, plus a `plugin/` directory for the Claude Code host.
 
@@ -39,7 +39,7 @@ A single static Go binary, `loupe`, that captures a pull request into a per-run 
 | III. Local files, no service | Files per run, `flock` for exclusion, no background process, no index database | PASS. `list` walks the `runs/` tree; state is derived from which files exist. |
 | IV. Never touch the user's checkout | Capture writes only `refs/loupe/...` and objects; `git fetch` runs with hooks, maintenance, tag following, submodule recursion, pruning and `FETCH_HEAD` disabled; no worktree | PASS. Verified by an integration test that snapshots `git status --porcelain`, `HEAD`, the index checksum and `git for-each-ref` before and after capture. |
 | V. Machine contract first | `--help` without run state; `--from <file>|-`; `--json` prints exactly one versioned object; refusals carry `code`, `message`, `fix`; stdout machine, stderr diagnostics | PASS. One envelope type and one error type in `internal/cli`; cobra's usage output routed to stderr under `--json`. |
-| VI. Simplicity over ceremony | Six runtime dependencies, each justified in research.md; version numbers over hashes (`schema: 1`, `loupe: 1`, draft `version`, finding `rev`); refusals over recovery; stdlib for locking, JSON, subprocesses, SHA-256, UUID | PASS. The only hash is the publishable digest, which the reconciliation marker requires. |
+| VI. Simplicity over ceremony | Eight runtime modules, each justified in research.md; version numbers over hashes (`schema: 1`, `loupe: 1`, draft `version`, finding `rev`); refusals over recovery; stdlib for locking, JSON, subprocesses, SHA-256, UUID | PASS. The only hash is the publishable digest, which the reconciliation marker requires. |
 | VII. Verified means ran | Test plan uses a fake GitHub, local Git repositories and injected terminal input; the full capture-to-receipt flow runs in `go test` | PASS. See Testing in research.md and [quickstart.md](quickstart.md). |
 
 **Development workflow gates**: Conventional Commits, `go vet && golangci-lint run && go test` before every commit, no push or live run without an explicit request naming the pull request. No violations to justify; Complexity Tracking is empty.
@@ -72,10 +72,11 @@ lefthook.yml                       # pre-commit: check; commit-msg: conventional
 cmd/loupe/main.go                  # wires internal/cli and exits with its code
 
 internal/
+├── refusal/                       # leaf package: Error{Code, Message, Fix, Details} and the code table from contracts/cli.md
 ├── cli/                           # cobra root and subcommands, result envelope, error codes, --json/--from/--run handling
 │   ├── root.go                    # top-level help text (workflow, run refs, review/publish are human-only)
 │   ├── envelope.go                # {"loupe":1,"ok":...} success and refusal shapes, exit codes
-│   ├── errors.go                  # Refusal{Code, Message, Fix, Details} and the code table from contracts/cli.md
+│   ├── errors.go                  # maps *refusal.Error to exit codes and the refusal envelope
 │   ├── capture.go, add.go, edit.go, summary.go, show.go, feedback.go, reply.go, list.go, review.go, publish.go
 │   └── input.go                   # --from file|stdin decoding with DisallowUnknownFields and forbidden-field refusal
 ├── run/                           # data root resolution, run refs, directory layout, target.json, list, branch-to-PR resolution
@@ -89,7 +90,7 @@ internal/
 │   ├── store.go                   # load, mutate-under-lock, expect-version, temp-file rename
 │   ├── mutate.go                  # add batch, edit, withdraw/restore, summary-with-expected-count, decide, send back, resolve/dismiss, reply
 │   ├── derive.go                  # dispositions, readiness, counts
-│   └── digest.go                  # publishable digest (SHA-256 over summary and included findings' publishable fields, sorted by id)
+│   └── digest.go                  # publishable digest (SHA-256 over summary and the publishable set's publishable fields, sorted by id)
 ├── diff/                          # parsed pr.diff and location validation
 │   ├── parse.go                   # go-gitdiff wrapper into Files/Hunks/Lines with old and new numbers
 │   ├── locate.go                  # validate Location; nearest valid lines (3 below, 3 above); hunk containing an anchor
@@ -121,7 +122,7 @@ plugin/
 └── commands/loupe.md
 ```
 
-**Structure Decision**: One Go module, `internal/` packages split by responsibility so that `draft`, `diff`, `render` and `publish` have no import of `tui` or `cli`. That separation is what keeps the deferred browser feedback surface and MCP mode possible without restructuring (research.md, "Deferred, not rejected"). `cli` depends on everything; `tui` depends on `draft`, `diff`, `render`, `publish`; `publish` depends on `draft`, `render`, `github`, `run`. Tests live beside their packages; the integration package is the only one that wires the full stack.
+**Structure Decision**: One Go module, `internal/` packages split by responsibility so that `draft`, `diff`, `render` and `publish` have no import of `tui` or `cli`. That separation is what keeps the deferred browser feedback surface and MCP mode possible without restructuring (research.md, "Deferred, not rejected"). `cli` depends on everything; `tui` depends on `draft`, `diff`, `render`, `publish`; `publish` depends on `draft`, `render`, `github`, `run`. Refusals are `*refusal.Error` values from the leaf `internal/refusal` package, because `cli` imports every domain package and a refusal type in `cli` would be an import cycle. Tests live beside their packages; the integration package is the only one that wires the full stack.
 
 ## Design Notes
 
@@ -134,7 +135,8 @@ These are the decisions the plan makes on top of research.md and contracts/cli.m
 - **Locking**: `syscall.Flock` on the run's `.lock`, non-blocking with retry until `LOUPE_LOCK_TIMEOUT_MS`. The lock file holds the holder's pid and command. The kernel releases a flock when the holder dies, so a timeout means a live contender or a wedged process; the refusal names the pid from the file and the `rm` command to use after verifying that pid is gone. loupe never removes it.
 - **Decisions and the lock in the TUI**: each decision opens the lock, re-reads the draft, checks the displayed version, applies, writes, and releases; no lock is held while waiting for keys. The TUI re-reads the draft after every refused write and on returning to the list.
 - **Plain mode and TTY detection**: `term.IsTerminal` on both stdin and stdout for the `tty` refusal. Plain mode triggers on `--plain`, `TERM=dumb`, a failed raw-mode probe, or a size under 60 by 12. Plain mode reads answers line by line from stdin so it can be tested with an injected reader.
-- **Digest and stale-send check**: the publishable digest goes into the envelope and the hidden marker. After `y`, `publish` re-reads the draft under the lock and refuses if `version`, digest or readiness differ from what was displayed.
+- **Digest and stale-send check**: the publishable digest covers the publishable set (included and not human-excluded: dispositions accepted or pending), so accept decisions do not change it; at publish, readiness makes the set identical to the accepted findings. It goes into the envelope and the hidden marker. `publish` holds the lock only for the receipt and attempt check, releases it through the gates and confirmation, and after `y` retakes it and refuses if `receipt.json` or `attempt.json` appeared meanwhile (under `--retry-unknown`, if the attempt is not the same unknown one) or if `version`, digest or readiness differ from what was displayed. Without the receipt and attempt recheck, two publishers could both pass the first check, both confirm and both send.
+- **Origin check**: capture accepts a match on the configured origin URL or its `insteadOf` expansion, since `insteadOf` is the user's own config. The fetch always names the `origin` remote and never a URL built from the pull request.
 - **Escaping for display**: one function in `render` replaces C0/C1 controls and Unicode bidi overrides (U+202A to U+202E, U+2066 to U+2069) with visible escapes for the confirmation view and the TUI; the payload itself is sent verbatim, since GitHub rendering is the reader's concern and the human saw the escaped form.
 - **Toolchain**: `mise.toml` pins go, golangci-lint and goreleaser and defines `check` (vet, lint, test), `test`, `lint`, `build`. lefthook runs `check` pre-commit and a Conventional Commit subject check on commit-msg. `golangci-lint` is not installed on the dev box today; `mise install` provides it.
 

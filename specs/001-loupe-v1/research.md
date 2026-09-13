@@ -23,6 +23,7 @@ Each dependency and its one-line reason, per constitution VI. Nothing else at ru
 | `charmbracelet/glamour` | Renders finding bodies as Markdown in the detail view. |
 | `cli/go-gh/v2` | Reuses `gh`'s own token and host config and gives a typed REST client, so auth stays `gh`'s problem and no subprocess output is parsed. |
 | `bluekeyes/go-gitdiff` | Unified diff parsing with the edge cases (no newline at end of file, renames, binary, mode changes) that a hand parser gets wrong. |
+| `golang.org/x/term` | TTY detection and raw-mode probe for the `tty` refusal and plain-mode fallback. |
 
 Git operations shell out to `git`; there is no Go Git library.
 
@@ -59,7 +60,7 @@ State is derived, never stored: captured if `target.json` exists, ready if readi
 
 ## Capture mechanics
 
-**Decision**: Resolve the pull request through the API, refuse with `same-head` when the newest existing round is unpublished and already at the API's head sha (a published round at the same head gets a new round; clarified 2026-09-13), verify the clone's `origin` matches the pull request's repository after `insteadOf` expansion, then run one fetch of `refs/pull/N/head` and the base sha into `refs/loupe/<owner>/<repo>/<number>/<round>/{base,head}` with hooks, auto maintenance, tag following, submodule recursion, pruning and `FETCH_HEAD` writing disabled on the command line. Verify both refs resolve to the API's shas. Produce the diff with `git diff --no-ext-diff --no-color base..head` in the clone and store it with its SHA-256. Print the two `git update-ref -d` commands that remove the refs; loupe never removes them.
+**Decision**: Resolve the pull request through the API, refuse with `same-head` when the newest existing round is unpublished and already at the API's head sha (a published round at the same head gets a new round; clarified 2026-09-13), verify the clone's `origin` matches the pull request's repository, accepting a match on either the configured URL or its `insteadOf` expansion because `insteadOf` is the user's own config and not attacker input (ruled 2026-09-13), then run one fetch from the `origin` remote by name, never from a URL built from the pull request, of `refs/pull/N/head` and the base sha into `refs/loupe/<owner>/<repo>/<number>/<round>/{base,head}` with hooks, auto maintenance, tag following, submodule recursion, pruning and `FETCH_HEAD` writing disabled on the command line. Verify both refs resolve to the API's shas. Produce the diff with `git diff --no-ext-diff --no-color base..head` in the clone and store it with its SHA-256. Print the two `git update-ref -d` commands that remove the refs; loupe never removes them.
 
 **Rationale**: Objects stay reachable for `git show <headSha>:<path>` during review and for later rounds, without a worktree (constitution IV). Disabling submodule recursion and hooks keeps attacker-influenced input (the PR head) away from any program or credential the clone's config might name. Verifying the refs against the API's shas means the stored diff is the diff of exactly what GitHub shows.
 
@@ -89,7 +90,7 @@ reply:    { id "r-001", noteId, body, by, at }
 
 - `rev` on a finding increments on any change to a publishable field (title, body, location, label, blocking, confidence, severity, suggestedFix) or to `included`. A decision is current iff `decision.findingRev == finding.rev`. A send-back deletes the finding's decision.
 - Dispositions are derived: accepted (included, current accept), pending (included, no current accept), excluded (human excluded, current), withdrawn (not included, no current decision). Readiness: no pending finding and no open note.
-- The publishable digest is SHA-256 over the summary and the included findings' publishable fields, sorted by id. It goes into the hidden marker and is the freshness check at publish.
+- The publishable digest is SHA-256 over the summary and the publishable fields of the publishable set, sorted by id. The publishable set is every finding that is included and not human-excluded, that is, disposition accepted or pending. Accept decisions therefore do not change the digest, so `show` before review fingerprints what would be published; at publish, readiness makes the set identical to the accepted findings. It goes into the hidden marker and is the freshness check at publish (ruled 2026-09-13).
 - Every mutation: take the flock, read, validate, apply, bump `version`, write to a temp file, rename. `--expect-version N` refuses inside the lock when stale. Batches are all-or-nothing.
 - `by` is `agent` or `human`. Reporting commands default to `agent`; the TUI always writes `human`. `by` is an audit field only: a finding filed or edited with `--by human` is pending until accepted in the review interface like any other (clarified 2026-09-13).
 
@@ -128,12 +129,12 @@ reply:    { id "r-001", noteId, body, by, at }
 
 **Decision**: The state machine, in order.
 
-1. Take the publish lock (flock on `.lock`). If `receipt.json` exists, print the URL and exit 0.
+1. Take the lock (flock on `.lock`) for steps 1 and 2, then release it; no lock is held through the gates and the confirmation view, so agent commands do not time out while the human reads. If `receipt.json` exists, print the URL and exit 0.
 2. If `attempt.json` exists, list the pull request's reviews and look for one by the saved viewer at the saved commit whose body contains the saved marker. Found: write `receipt.json` from the saved envelope, delete the attempt, print the URL. Not found: refuse with the pull request URL until `--retry-unknown` is given. The attempt survives refusals and declined confirmations.
 3. Refuse without a TTY on stdin and stdout. Refetch the pull request; refuse if the head moved (fix: `loupe capture <url>`). Refuse approve or request-changes when the viewer is the author. Refuse approve when any included finding is blocking (code `blocking`; fix: `--action comment` or `request-changes`, or exclude or unblock the finding in `loupe review`; clarified 2026-09-13). Refuse unless ready (fix: `loupe review`).
 4. Build the envelope: target, viewer, action, commitId, draft version and digest, inline mode, a UUID publicationId, body and comments. The body follows `docs/comment-format.md`: verdict callout derived from the action, count chips, summary, sections Blocking, Issues, Suggestions, Questions, Other with a `<details>` block per finding, `---` dividers, the footer `` loupe · round N · reviewed `sha` ``, then the hidden `<!-- loupe digest=… publication=… -->` and `<!-- loupe-meta … -->` comments. Inline mode `none`, `blocking` (default) or `all` selects which located findings also become review comments; general findings are never inline.
 5. Confirmation view: the body and each inline comment rendered as they will read, control and bidirectional characters escaped, collapsed sections shown open. `v` or Tab toggles the exact JSON envelope. Only `y` sends; any other key, Esc, Ctrl-C or end of input cancels. Plain mode prints both blocks and asks `y/N` on the line.
-6. On `y`: recheck head and viewer, take the draft lock, re-read the draft, refuse if version, digest or readiness changed, write `attempt.json` with state `in-flight`, the envelope and the confirmed dispositions, then POST `/repos/{owner}/{repo}/pulls/{number}/reviews` with `commit_id`, `body`, `event` and `comments`. 2xx: write `receipt.json`, delete the attempt. 4xx: delete the attempt and report; a message mentioning a pending review gets the submit-or-discard fix line. Anything else: mark the attempt `unknown`, reconcile once as in step 2, otherwise keep it and refuse.
+6. On `y`: recheck head and viewer, retake the lock, and refuse if `receipt.json` or `attempt.json` appeared while the lock was released (under `--retry-unknown`, if the attempt is no longer the same unknown attempt seen in step 2), so two publishers cannot both pass step 1, both confirm and both send (ruled 2026-09-13); re-read the draft, refuse if version, digest or readiness changed, write `attempt.json` with state `in-flight`, the envelope and the confirmed dispositions, then POST `/repos/{owner}/{repo}/pulls/{number}/reviews` with `commit_id`, `body`, `event` and `comments`. 2xx: write `receipt.json`, delete the attempt. 4xx: delete the attempt and report; a message mentioning a pending review gets the submit-or-discard fix line. Anything else: mark the attempt `unknown`, reconcile once as in step 2, otherwise keep it and refuse.
 7. Hold the draft lock until the outcome is written. A failed publish never mutates the draft.
 
 **Rationale**: The owner kept this state machine from the previous version because GitHub review creation has no idempotency key and the ambiguous-outcome case is real. Everything before the send is a refusal, not a repair (constitution VI).
@@ -150,7 +151,7 @@ reply:    { id "r-001", noteId, body, by, at }
 
 ## Distribution
 
-**Decision**: goreleaser builds for linux and darwin, amd64 and arm64, published to GitHub Releases with a Homebrew tap; `go install` also works. Windows is untested in v1.
+**Decision**: goreleaser builds for linux and darwin, amd64 and arm64, published to GitHub Releases; `go install` also works. A Homebrew tap is deferred, not rejected (ruled 2026-09-13). Windows is untested in v1.
 
 **Alternatives considered**: `gh extension` as the only channel (prefixes every agent command with `gh`). Both from day one (deferred; the same binary renamed `gh-loupe` can be added later).
 
@@ -168,5 +169,6 @@ reply:    { id "r-001", noteId, body, by, at }
 - Browser feedback surface with Plannotator-style commenting: same draft, same decisions, no publish endpoint. The draft model and the review domain MUST stay separable from the TUI so this can be added.
 - MCP server mode wrapping the same commands.
 - `gh extension` alias.
+- Homebrew tap.
 - Syntax highlighting in the file diff view.
 - GitHub Enterprise hosts.

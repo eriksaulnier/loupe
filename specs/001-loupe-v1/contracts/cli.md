@@ -104,7 +104,7 @@ Result payload: `version`, `includedCount`.
 
 ### `loupe show [--previous] [--json]`
 
-Without `--previous`: the whole draft plus `target`, `dispositions` (`{id: disposition}`) and `readiness`. With `--previous`: the published findings of the newest earlier round that has a receipt, skipping unpublished rounds, as `{round, reviewUrl, findings: [{id, title, body, location, label, blocking}]}`; refuses with `not-found` when no earlier round was published.
+Without `--previous`: the whole draft plus `target`, `dispositions` (`{id: disposition}`), `readiness` and `digest` (SHA-256 of the publishable set, the value that will appear in the hidden marker). With `--previous`: the published findings of the newest earlier round that has a receipt, skipping unpublished rounds, as `{round, reviewUrl, findings: [{id, title, body, location, label, blocking}]}`; refuses with `not-found` when no earlier round was published.
 
 ### `loupe feedback [--json]`
 
