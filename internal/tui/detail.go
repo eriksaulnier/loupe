@@ -103,11 +103,11 @@ func (m *Model) renderMarkdown(md string) (string, error) {
 		}
 		m.glamour, m.wrapWidth = r, wrap
 	}
-	out, err := m.glamour.Render(md)
+	out, err := m.glamour.Render(render.ForDisplayMarkdown(md))
 	if err != nil {
 		return "", fmt.Errorf("render finding body: %w", err)
 	}
-	return strings.Trim(out, "\n"), nil
+	return strings.Trim(render.ForDisplayANSI(out), "\n"), nil
 }
 
 func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {

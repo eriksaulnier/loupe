@@ -285,7 +285,7 @@ func (m *Model) frame(header []string, body, keys string) string {
 	lines = append(lines, m.styles.notice.Render(m.notice), m.styles.dim.Render(keys))
 	clip := m.styles.r.NewStyle().MaxWidth(m.width)
 	for i, l := range lines {
-		lines[i] = clip.Render(l)
+		lines[i] = clip.Render(render.ForDisplayANSI(l))
 	}
 	return strings.Join(lines, "\n")
 }
