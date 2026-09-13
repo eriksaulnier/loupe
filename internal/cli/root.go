@@ -17,6 +17,53 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
+const rootHelp = `File pull request review findings for a human to decide and publish.
+
+An agent files findings into a local draft; the human decides each finding and posts exactly
+one confirmed GitHub review.
+
+Workflow: capture → add → summary → review → publish
+  1. loupe capture https://github.com/owner/repo/pull/123 --json
+       capture the pull request into a new round; prints the run reference
+  2. loupe add --run owner/repo#123 --from findings.json --json
+       file findings, one object or an array
+  3. loupe summary --run owner/repo#123 --from summary.json --expect-findings 2 --json
+       set the summary and confirm how many findings landed
+  4. loupe review owner/repo#123
+       the human decides each finding with the diff in view
+  5. loupe publish owner/repo#123 --action comment
+       the human confirms and posts one review
+
+review and publish are human-only and MUST NOT be run by an agent. An agent MUST NOT pipe
+confirmation into them or allocate a pseudo-terminal to reach them; it tells the human to run
+loupe review.
+
+Send-back loop, when the human sends findings back from review with notes:
+  loupe feedback --run owner/repo#123 --json               read notes, dispositions and readiness
+  loupe edit f-001 --run owner/repo#123 --from f.json      change the finding; clears its decision
+  loupe reply n-001 --run owner/repo#123 --body "Fixed."   answer the note
+
+Run references:
+  owner/repo#123      the newest round of pull request 123
+  owner/repo#123@2    round 2
+Run selection, in order: --run <ref> (or the <ref> argument of review and publish), then
+LOUPE_RUN, then the pull request of the current branch in the working directory at its newest
+round.
+
+Conventions:
+  --json                  print exactly one JSON result object on stdout; diagnostics go to stderr
+  --from <file>|-         read JSON input from a file, or from stdin with -
+  --expect-version <n>    refuse unless the draft is at version n (add, edit, summary, reply)
+  --by agent|human        who makes the change (default agent)
+  Exit 0 on success, 1 on refusal, 2 on usage error. Every refusal names a code and a fix.
+  Every command's --help shows its JSON input and result shapes.
+
+Environment:
+  LOUPE_HOME              data root (default $XDG_DATA_HOME/loupe, else ~/.local/share/loupe)
+  LOUPE_RUN               default run reference
+  LOUPE_LOCK_TIMEOUT_MS   how long to wait for the run lock (default 3000, max 60000)
+  NO_COLOR, TERM, LANG/LC_ALL   honored for color, plain-mode fallback and glyph selection`
+
 type Deps struct {
 	Stdin   io.Reader
 	Stdout  io.Writer
@@ -33,6 +80,7 @@ func NewRoot(deps Deps) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "loupe",
 		Short:         "File pull request review findings for a human to decide and publish",
+		Long:          rootHelp,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
