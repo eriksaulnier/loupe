@@ -1,0 +1,200 @@
+package cli
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/eriksaulnier/loupe/internal/diff"
+	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
+)
+
+const addHelp = `File one finding or a batch of findings into the run's draft.
+
+Input (--from <file>, or --from - for stdin): one finding object or an array of them.
+
+  {
+    "title": "Retry loop can double-publish",
+    "body": "Markdown. Evidence, impact, correction.",
+    "location": {"path": "src/publish.go", "line": 88, "side": "RIGHT", "startLine": 80},
+    "general": false,
+    "label": "issue",
+    "blocking": true,
+    "confidence": "high",
+    "severity": "major",
+    "suggestedFix": "Return the original error."
+  }
+
+title and body are required. Exactly one of location or "general": true is required.
+location must be in the captured diff: side RIGHT (the default) is the new file, LEFT the old
+file, and startLine and line must be in the same hunk. label is issue, suggestion, question or
+any other word, kept verbatim. blocking defaults to false. confidence is high, medium or low.
+body must pass the Markdown allowlist. A batch is stored entirely or not at all; a refusal
+names the zero-based details.entry. Input MUST NOT carry included, decision, status or
+findingRev.
+
+The flags build a single finding instead and cannot be combined with --from.
+
+Result (--json):
+  {"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1", "version": 4,
+   "findings": [{"id": "f-001", "rev": 1}]}`
+
+var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "general", "label", "blocking", "confidence", "severity", "suggested-fix"}
+
+func newAddCmd(deps Deps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "add",
+		Short:   "File findings into the draft",
+		Long:    addHelp,
+		Example: "  loupe add --run owner/repo#123 --from findings.json --json\n  loupe add --title \"Typo\" --body \"Fix the spelling.\" --path README.md --line 3 --label suggestion",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runAdd(cmd, deps)
+		},
+	}
+	f := cmd.Flags()
+	f.String("from", "", "read JSON input from a file, or from stdin with -")
+	f.String("title", "", "finding title")
+	f.String("body", "", "finding body (Markdown)")
+	f.String("path", "", "file path in the diff")
+	f.Int("line", 0, "line number on --side")
+	f.Int("start-line", 0, "first line of a multi-line range")
+	f.String("side", "", "RIGHT (new file, default) or LEFT (old file)")
+	f.Bool("general", false, "a general finding with no location")
+	f.String("label", "", "issue, suggestion, question or any other word")
+	f.Bool("blocking", false, "the finding blocks approval")
+	f.String("confidence", "", "high, medium or low")
+	f.String("severity", "", "free-text severity")
+	f.String("suggested-fix", "", "prose or code for the correction")
+	addMutationFlags(cmd)
+	return cmd
+}
+
+// addMutationFlags registers the flags every draft-changing command shares.
+func addMutationFlags(cmd *cobra.Command) {
+	cmd.Flags().String("by", draft.ByAgent, "who makes the change: agent or human")
+	cmd.Flags().Int("expect-version", 0, "refuse unless the draft is at this version")
+	cmd.Flags().String("run", "", "run reference, owner/repo#123 or owner/repo#123@2")
+}
+
+func mutationOptions(cmd *cobra.Command) (by string, expectVersion *int, err error) {
+	by, _ = cmd.Flags().GetString("by")
+	if by != draft.ByAgent && by != draft.ByHuman {
+		return "", nil, refusal.New(refusal.Usage, fmt.Sprintf("--by must be agent or human, not %q", by), "pass --by agent or --by human")
+	}
+	if cmd.Flags().Changed("expect-version") {
+		v, _ := cmd.Flags().GetInt("expect-version")
+		expectVersion = &v
+	}
+	return by, expectVersion, nil
+}
+
+func runAdd(cmd *cobra.Command, deps Deps) error {
+	if err := ConflictsWithFrom(cmd, addContentFlags...); err != nil {
+		return err
+	}
+	by, expectVersion, err := mutationOptions(cmd)
+	if err != nil {
+		return err
+	}
+	dir, ref, err := resolveRun(cmd, deps, "")
+	if err != nil {
+		return err
+	}
+	inputs, err := addInputs(cmd, deps)
+	if err != nil {
+		return err
+	}
+	dif, err := loadDiff(dir)
+	if err != nil {
+		return err
+	}
+	var added []draft.Finding
+	d, err := draft.Mutate(dir, "add", expectVersion, deps.Getenv, func(d *draft.Draft) error {
+		var addErr error
+		added, addErr = draft.Add(d, inputs, dif, by, deps.Now().UTC())
+		return addErr
+	})
+	if err != nil {
+		return err
+	}
+	results := make([]map[string]any, 0, len(added))
+	ids := make([]string, 0, len(added))
+	for _, f := range added {
+		results = append(results, map[string]any{"id": f.ID, "rev": f.Rev})
+		ids = append(ids, f.ID)
+	}
+	if wantJSON(cmd) {
+		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{"findings": results})
+	}
+	_, err = fmt.Fprintf(deps.Stdout, "Added %s to %s (draft version %d)\n", strings.Join(ids, ", "), ref, d.Version)
+	return err
+}
+
+func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, error) {
+	f := cmd.Flags()
+	if f.Changed("from") {
+		from, _ := f.GetString("from")
+		var raw json.RawMessage
+		if err := DecodeInput("add", from, deps.Stdin, &raw); err != nil {
+			return nil, err
+		}
+		// Decoding a second time from the validated bytes reuses DecodeInput's refusals for unknown fields and types.
+		trimmed := bytes.TrimSpace(raw)
+		if len(trimmed) > 0 && trimmed[0] == '[' {
+			var inputs []draft.FindingInput
+			if err := DecodeInput("add", "-", bytes.NewReader(trimmed), &inputs); err != nil {
+				return nil, err
+			}
+			if len(inputs) == 0 {
+				return nil, refusal.New(refusal.Input, "input is an empty array; it holds no findings", "see loupe add --help for the input shape")
+			}
+			return inputs, nil
+		}
+		var input draft.FindingInput
+		if err := DecodeInput("add", "-", bytes.NewReader(trimmed), &input); err != nil {
+			return nil, err
+		}
+		return []draft.FindingInput{input}, nil
+	}
+
+	in := draft.FindingInput{}
+	in.Title, _ = f.GetString("title")
+	in.Body, _ = f.GetString("body")
+	in.General, _ = f.GetBool("general")
+	in.Label, _ = f.GetString("label")
+	in.Blocking, _ = f.GetBool("blocking")
+	in.Confidence, _ = f.GetString("confidence")
+	in.Severity, _ = f.GetString("severity")
+	in.SuggestedFix, _ = f.GetString("suggested-fix")
+	if f.Changed("path") || f.Changed("line") || f.Changed("start-line") || f.Changed("side") {
+		loc := &draft.Location{}
+		loc.Path, _ = f.GetString("path")
+		loc.Line, _ = f.GetInt("line")
+		loc.StartLine, _ = f.GetInt("start-line")
+		loc.Side, _ = f.GetString("side")
+		in.Location = loc
+	}
+	return []draft.FindingInput{in}, nil
+}
+
+// loadDiff reads pr.diff once per command; the diff is the only authority for locations.
+func loadDiff(dir string) (*diff.Diff, error) {
+	path := filepath.Join(dir, "pr.diff")
+	fix := "inspect it with: cat " + path
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", path, err), fix)
+	}
+	d, err := diff.Parse(data)
+	if err != nil {
+		return nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", path, err), fix)
+	}
+	return d, nil
+}
