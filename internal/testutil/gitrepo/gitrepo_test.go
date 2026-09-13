@@ -81,3 +81,11 @@ func TestSnapshotDiff(t *testing.T) {
 		t.Fatalf("expected an index difference, got %v", diffs)
 	}
 }
+
+func TestNewIgnoresInheritedGitEnv(t *testing.T) {
+	t.Setenv("GIT_INDEX_FILE", filepath.Join(t.TempDir(), "missing", "index"))
+	r := New(t, "acme", "widgets", 42)
+	if len(r.HeadSHA()) != 40 {
+		t.Fatalf("head %q", r.HeadSHA())
+	}
+}
