@@ -172,3 +172,28 @@ func TestAddShowAndSummary(t *testing.T) {
 		t.Fatalf("show envelope %v", env)
 	}
 }
+
+func TestCaptureRefusalAfterFetchNamesCleanup(t *testing.T) {
+	h := newHarness(t)
+	h.GH.SetHead(owner, repo, number, h.Repo.BaseSHA())
+	baseRef, headRef := "refs/loupe/acme/widgets/42/1/base", "refs/loupe/acme/widgets/42/1/head"
+	wantCleanup := []any{
+		fmt.Sprintf("git -C %s update-ref -d %s", h.Repo.Dir, baseRef),
+		fmt.Sprintf("git -C %s update-ref -d %s", h.Repo.Dir, headRef),
+	}
+
+	errObj := h.mustRefuse("head-moved", "capture", prURL())
+	details, _ := errObj["details"].(map[string]any)
+	if !reflect.DeepEqual(details["cleanup"], wantCleanup) {
+		t.Fatalf("details %v", errObj["details"])
+	}
+	if refs := h.Repo.Snapshot().Refs; refs[baseRef] == "" || refs[headRef] == "" {
+		t.Fatalf("refusal removed the refs: %v", refs)
+	}
+
+	_, stderr, exit := h.Run("capture", prURL())
+	fixAt := strings.Index(stderr, "fix: ")
+	if exit != 1 || fixAt < 0 || strings.Index(stderr, wantCleanup[0].(string)) < fixAt || !strings.Contains(stderr, wantCleanup[1].(string)) {
+		t.Fatalf("exit %d stderr %q", exit, stderr)
+	}
+}

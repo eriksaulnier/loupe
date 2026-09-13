@@ -133,26 +133,31 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) error {
 
 	refBase := fmt.Sprintf("refs/loupe/%s/%s/%d/%d/", owner, repo, number, ref.Round)
 	baseRef, headRef := refBase+"base", refBase+"head"
+	cleanup := []string{
+		fmt.Sprintf("git -C %s update-ref -d %s", shellQuote(clone), baseRef),
+		fmt.Sprintf("git -C %s update-ref -d %s", shellQuote(clone), headRef),
+	}
 	if err := gitx.FetchPR(clone, number, pr.BaseSHA, baseRef, headRef); err != nil {
 		return err
 	}
+	leftRefs := func(err error) error { return &cleanupError{err: err, cleanup: cleanup} }
 	for _, check := range []struct{ ref, want string }{{baseRef, pr.BaseSHA}, {headRef, pr.HeadSHA}} {
 		got, err := gitx.RevParse(clone, check.ref)
 		if err != nil {
-			return err
+			return leftRefs(err)
 		}
 		if got != check.want {
-			return refusal.New(refusal.HeadMoved,
+			return leftRefs(refusal.New(refusal.HeadMoved,
 				fmt.Sprintf("%s fetched as %s but GitHub reports %s; the pull request changed during capture", check.ref, got, check.want),
-				"rerun loupe capture "+canonical)
+				"rerun loupe capture "+canonical))
 		}
 	}
 	diffBytes, err := gitx.Diff(clone, baseRef, headRef)
 	if err != nil {
-		return err
+		return leftRefs(err)
 	}
 	if _, err := diff.Parse(diffBytes); err != nil {
-		return fmt.Errorf("git diff of %s..%s does not parse: %w", baseRef, headRef, err)
+		return leftRefs(fmt.Errorf("git diff of %s..%s does not parse: %w", baseRef, headRef, err))
 	}
 	sum := sha256.Sum256(diffBytes)
 
@@ -184,18 +189,14 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) error {
 	empty := draft.NewEmpty()
 	draftJSON, err := json.MarshalIndent(empty, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode empty draft: %w", err)
+		return leftRefs(fmt.Errorf("encode empty draft: %w", err))
 	}
 	dir := run.RunDir(root, owner, repo, number, ref.Round)
 	if err := createRound(dir, target, diffBytes, append(draftJSON, '\n'), canonical); err != nil {
-		return err
+		return leftRefs(err)
 	}
 	invocationOf(cmd).run = ref.String()
 
-	cleanup := []string{
-		fmt.Sprintf("git -C %s update-ref -d %s", shellQuote(clone), baseRef),
-		fmt.Sprintf("git -C %s update-ref -d %s", shellQuote(clone), headRef),
-	}
 	next := []string{
 		fmt.Sprintf("loupe add --run %s --from <file> --json", ref),
 		fmt.Sprintf("loupe summary --run %s --expect-findings <n> --json", ref),
