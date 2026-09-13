@@ -100,14 +100,14 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	ctx := cmd.Context()
 	pr, err := client.PullRequest(ctx, owner, repo, number)
 	if err != nil {
-		return err
+		return githubReadRefusal(err, canonical)
 	}
 	if pr.State != "open" {
 		return refusal.New(refusal.PR, fmt.Sprintf("pull request %s/%s#%d is %s, not open", owner, repo, number, pr.State), prURLFix)
 	}
 	viewer, err := client.Viewer(ctx)
 	if err != nil {
-		return err
+		return githubReadRefusal(err, canonical)
 	}
 
 	root, err := run.DataRoot(deps.Getenv)
@@ -234,6 +234,15 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		})
 	}
 	return printCapture(deps.Stdout, ref, target, cleanup, next)
+}
+
+// githubReadRefusal keeps the client's own refusals (not found, auth) and reports any other failed read, a 5xx or a
+// transport error, as GitHub's problem rather than a loupe defect.
+func githubReadRefusal(err error, prURL string) error {
+	if _, ok := refusal.As(err); ok {
+		return err
+	}
+	return refusal.New(refusal.GitHub, err.Error(), fmt.Sprintf("retry loupe capture %s; check network access to api.github.com", prURL))
 }
 
 // createRound reports a lost race for the round directory as lock. The capture lock should already rule that out;

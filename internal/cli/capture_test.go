@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -37,5 +41,43 @@ func TestCreateRoundLostRaceIsLock(t *testing.T) {
 	}
 	if r.Message != "another capture created round 2 of o/r#7 at the same time" || r.Fix != "rerun loupe capture https://github.com/o/r/pull/7" {
 		t.Fatalf("message %q fix %q", r.Message, r.Fix)
+	}
+}
+
+type failingGitHub struct {
+	github.Client
+	prErr, viewerErr error
+}
+
+func (f failingGitHub) PullRequest(context.Context, string, string, int) (github.PullRequest, error) {
+	return github.PullRequest{Number: 7, State: "open"}, f.prErr
+}
+
+func (f failingGitHub) Viewer(context.Context) (string, error) { return "reviewer", f.viewerErr }
+
+func TestCaptureGitHubReadFailures(t *testing.T) {
+	cases := []struct {
+		name             string
+		prErr, viewerErr error
+		code             string
+		message, fix     string
+	}{
+		{"5xx", &github.HTTPError{Status: 502, Message: "Bad Gateway"}, nil, "github", "Bad Gateway", "retry loupe capture https://github.com/o/r/pull/7; check network access to api.github.com"},
+		{"transport", nil, errors.New("dial tcp: connection refused"), "github", "connection refused", "retry loupe capture https://github.com/o/r/pull/7; check network access to api.github.com"},
+		{"not found", refusal.New(refusal.PR, "pull request o/r#7 was not found on github.com", prURLFix), nil, "pr", "not found", prURLFix},
+		{"unauthorized", nil, refusal.New(refusal.Auth, "GitHub rejected the token", "gh auth login --hostname github.com"), "auth", "rejected", "gh auth login --hostname github.com"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			deps, s := testDeps(t, map[string]string{"LOUPE_HOME": t.TempDir()})
+			deps.GitHub = func() (github.Client, error) { return failingGitHub{prErr: c.prErr, viewerErr: c.viewerErr}, nil }
+			if code := Execute(deps, []string{"capture", "https://github.com/o/r/pull/7", "--json"}); code != 1 {
+				t.Fatalf("exit %d", code)
+			}
+			e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+			if e["code"] != c.code || !strings.Contains(e["message"].(string), c.message) || e["fix"] != c.fix {
+				t.Fatalf("got %v", e)
+			}
+		})
 	}
 }
