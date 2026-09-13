@@ -1,0 +1,319 @@
+package publish
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
+)
+
+type fixture struct {
+	t     *testing.T
+	dir   string
+	gh    *fakegh.Server
+	opts  Options
+	draft []byte
+	// previews holds what each Confirm call was shown.
+	previews []Preview
+}
+
+// newRun writes a ready run and returns options that confirm with y unless a test replaces Confirm.
+func newRun(t *testing.T, d *draft.Draft) *fixture {
+	t.Helper()
+	dir := t.TempDir()
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), fixtureTarget()); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	gh, client := newFake(t)
+	fx := &fixture{t: t, dir: dir, gh: gh}
+	fx.draft = fx.readDraft()
+	fx.opts = Options{
+		Dir: dir, Target: fixtureTarget(), GitHub: client, IsTerminal: true, Action: "comment", Inline: "all",
+		Now:    func() time.Time { return fixtureNow },
+		Getenv: func(string) string { return "" },
+	}
+	fx.opts.Confirm = fx.confirmWith(true, nil)
+	return fx
+}
+
+func (fx *fixture) confirmWith(answer bool, during func()) func(Preview) (bool, error) {
+	return func(p Preview) (bool, error) {
+		fx.previews = append(fx.previews, p)
+		if during != nil {
+			during()
+		}
+		return answer, nil
+	}
+}
+
+func (fx *fixture) readDraft() []byte {
+	fx.t.Helper()
+	data, err := os.ReadFile(filepath.Join(fx.dir, "draft.json"))
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	return data
+}
+
+func (fx *fixture) run() (Receipt, error) {
+	return Run(context.Background(), fx.opts)
+}
+
+func (fx *fixture) exists(name string) bool {
+	_, err := os.Stat(filepath.Join(fx.dir, name))
+	return err == nil
+}
+
+// check asserts the create count, the only-write rule, and that draft.json is byte-identical to when the run was
+// written.
+func (fx *fixture) check(creates int) {
+	fx.t.Helper()
+	if got := fx.gh.CreateCount(); got != creates {
+		fx.t.Errorf("CreateCount %d, want %d", got, creates)
+	}
+	assertOnlyCreateWrites(fx.t, fx.gh)
+	if !bytes.Equal(fx.readDraft(), fx.draft) {
+		fx.t.Error("draft.json changed")
+	}
+}
+
+func TestRunRefusesAtGatesWithoutConfirming(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.IsTerminal = false
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.TTY)
+	if len(fx.gh.Requests()) != 0 {
+		t.Fatalf("requests %+v", fx.gh.Requests())
+	}
+
+	fx.opts.IsTerminal = true
+	fx.gh.SetHead("acme", "widgets", 42, "3333333333333333333333333333333333333333")
+	_, err = fx.run()
+	wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)
+
+	if len(fx.previews) != 0 || fx.exists("attempt.json") || fx.exists("receipt.json") {
+		t.Fatalf("previews %d attempt %v receipt %v", len(fx.previews), fx.exists("attempt.json"), fx.exists("receipt.json"))
+	}
+	fx.check(0)
+}
+
+func TestRunRefusesMarkdownAndLimitBeforeConfirming(t *testing.T) {
+	d := readyDraft()
+	d.Findings[0].Body = "<script>x</script>"
+	fx := newRun(t, d)
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Markdown, "loupe edit f-001 --from -")
+
+	d = readyDraft()
+	long := strings.Repeat(strings.Repeat("a", 99)+"\n", 600)
+	d.Summary = long
+	for _, i := range []int{0, 1, 4} {
+		d.Findings[i].Body, d.Findings[i].SuggestedFix = long, long
+	}
+	limit := newRun(t, d)
+	_, err = limit.run()
+	wantRefusal(t, err, refusal.Markdown, "exclude a finding with loupe edit <id> --exclude or shorten bodies")
+
+	if len(fx.previews)+len(limit.previews) != 0 || fx.exists("attempt.json") || limit.exists("attempt.json") {
+		t.Fatal("confirmation shown or attempt written")
+	}
+	fx.check(0)
+	limit.check(0)
+}
+
+func TestRunDeclinedSendsAndWritesNothing(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.Confirm = fx.confirmWith(false, nil)
+	_, err := fx.run()
+	if !errors.Is(err, ErrDeclined) {
+		t.Fatalf("err %v", err)
+	}
+	if len(fx.previews) != 1 || fx.exists("attempt.json") || fx.exists("receipt.json") {
+		t.Fatalf("previews %d attempt %v receipt %v", len(fx.previews), fx.exists("attempt.json"), fx.exists("receipt.json"))
+	}
+	fx.check(0)
+}
+
+func TestRunConfirmErrorSendsNothing(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	boom := errors.New("terminal went away")
+	fx.opts.Confirm = func(Preview) (bool, error) { return true, boom }
+	if _, err := fx.run(); !errors.Is(err, boom) {
+		t.Fatalf("err %v", err)
+	}
+	fx.check(0)
+}
+
+func TestRunRefusesDraftChangedDuringConfirmation(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.Confirm = fx.confirmWith(true, func() {
+		if _, err := draft.Mutate(fx.dir, "reply", nil, fx.opts.Getenv, func(d *draft.Draft) error { return nil }); err != nil {
+			t.Error(err)
+		}
+	})
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Version, "loupe review")
+	if fx.exists("attempt.json") || fx.exists("receipt.json") {
+		t.Fatal("attempt or receipt written")
+	}
+	fx.draft = fx.readDraft()
+	fx.check(0)
+}
+
+func TestRunRefusesHeadMovedDuringConfirmation(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.Confirm = fx.confirmWith(true, func() { fx.gh.SetHead("acme", "widgets", 42, "3333333333333333333333333333333333333333") })
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.HeadMoved)
+	if fx.exists("attempt.json") {
+		t.Fatal("attempt written")
+	}
+	fx.check(0)
+}
+
+// A record written from inside Confirm stands in for a second publisher that passed the first check while the lock
+// was released.
+func TestRunRefusesRecordAppearedDuringConfirmation(t *testing.T) {
+	for _, name := range []string{"receipt.json", "attempt.json"} {
+		t.Run(name, func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			env, err := Build(fixtureTarget(), readyDraft(), "reviewer", "comment", "all")
+			if err != nil {
+				t.Fatal(err)
+			}
+			fx.opts.Confirm = fx.confirmWith(true, func() {
+				var err error
+				if name == "receipt.json" {
+					err = SaveReceipt(fx.dir, Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env})
+				} else {
+					err = SaveAttempt(fx.dir, Attempt{Schema: RecordSchema, State: StateInFlight, StartedAt: fixtureNow, UpdatedAt: fixtureNow, Envelope: env})
+				}
+				if err != nil {
+					t.Error(err)
+				}
+			})
+			_, err = fx.run()
+			wantRefusal(t, err, refusal.Attempt, "loupe publish")
+			if name == "receipt.json" {
+				if r, found, err := LoadReceipt(fx.dir); err != nil || !found || r.ReviewID != 1 {
+					t.Fatalf("receipt %+v found %v err %v", r, found, err)
+				}
+			} else if a, found, err := LoadAttempt(fx.dir); err != nil || !found || a.Confirmed.Version != 0 {
+				t.Fatalf("attempt was overwritten: %+v found %v err %v", a, found, err)
+			}
+			fx.check(0)
+		})
+	}
+}
+
+func TestRunPublishesOnceThenReplays(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.Action = "request-changes"
+	receipt, err := fx.run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.check(1)
+	if len(fx.previews) != 1 {
+		t.Fatalf("previews %d", len(fx.previews))
+	}
+	p := fx.previews[0]
+	d := readyDraft()
+	if p.Version != 7 || p.Digest != draft.Digest(d) || !reflect.DeepEqual(p.Dispositions, draft.Dispositions(d)) {
+		t.Fatalf("preview %+v", p)
+	}
+
+	var post *fakegh.Request
+	for _, r := range fx.gh.Requests() {
+		if r.Method == "POST" {
+			post = &r
+		}
+	}
+	body, _ := post.Body.(map[string]any)
+	comments, _ := body["comments"].([]any)
+	if body["commit_id"] != headSHA || body["event"] != "REQUEST_CHANGES" || body["body"] != p.Body || len(comments) != 2 {
+		t.Fatalf("POST body %v", body)
+	}
+	ranged, _ := comments[1].(map[string]any)
+	if ranged["path"] != "a.go" || ranged["line"] != float64(12) || ranged["start_line"] != float64(10) || ranged["side"] != "RIGHT" ||
+		ranged["start_side"] != "RIGHT" || ranged["body"] != p.Comments[1].Body {
+		t.Fatalf("comment %v", ranged)
+	}
+	assertOnlyAccepted(t, mustJSON(t, post.Body))
+	if !strings.Contains(p.EnvelopeJSON, `"publicationId": "`+receipt.Envelope.PublicationID+`"`) {
+		t.Fatalf("preview JSON is not the sent envelope:\n%s", p.EnvelopeJSON)
+	}
+
+	if fx.exists("attempt.json") {
+		t.Fatal("attempt.json remains")
+	}
+	saved, found, err := LoadReceipt(fx.dir)
+	if err != nil || !found || !reflect.DeepEqual(saved, receipt) {
+		t.Fatalf("receipt %+v found %v err %v", saved, found, err)
+	}
+	if receipt.ReviewID == 0 || !strings.HasPrefix(receipt.ReviewURL, prLink+"#pullrequestreview-") || receipt.Action != "request-changes" ||
+		!receipt.PostedAt.Equal(fixtureNow) || receipt.Envelope.Body != p.Body {
+		t.Fatalf("receipt %+v", receipt)
+	}
+	assertOnlyAccepted(t, mustJSON(t, receipt))
+
+	requests := len(fx.gh.Requests())
+	fx.opts.IsTerminal = false
+	again, err := fx.run()
+	if err != nil || !reflect.DeepEqual(again, receipt) {
+		t.Fatalf("replay %+v err %v", again, err)
+	}
+	if len(fx.gh.Requests()) != requests || len(fx.previews) != 1 {
+		t.Fatalf("replay contacted GitHub or confirmed: %d requests, %d previews", len(fx.gh.Requests())-requests, len(fx.previews))
+	}
+	fx.check(1)
+}
+
+func TestRunDefinite4xxRemovesAttempt(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.gh.QueueCreate(fakegh.Reject422("Unprocessable: line must be part of the diff"))
+	_, err := fx.run()
+	msg := wantRefusal(t, err, refusal.GitHub)
+	if !strings.Contains(msg, "line must be part of the diff") {
+		t.Fatalf("message %q", msg)
+	}
+	if fx.exists("attempt.json") || fx.exists("receipt.json") {
+		t.Fatal("attempt or receipt remains")
+	}
+	fx.check(1)
+}
+
+func TestRunAmbiguousOutcomeKeepsUnknownAttempt(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.gh.QueueCreate(fakegh.ServerErrorDrop())
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Attempt, prLink, "--retry-unknown")
+	a, found, loadErr := LoadAttempt(fx.dir)
+	if loadErr != nil || !found || a.State != StateUnknown || a.LastError == "" || a.Envelope.CommitID != headSHA ||
+		a.Confirmed.Version != 7 || a.Confirmed.Dispositions["f-003"] != draft.DispositionExcluded {
+		t.Fatalf("attempt %+v found %v err %v", a, found, loadErr)
+	}
+	if fx.exists("receipt.json") {
+		t.Fatal("receipt written")
+	}
+
+	_, err = fx.run()
+	wantRefusal(t, err, refusal.Attempt, prLink, "--retry-unknown")
+	if len(fx.previews) != 1 {
+		t.Fatalf("previews %d", len(fx.previews))
+	}
+	fx.check(1)
+}
