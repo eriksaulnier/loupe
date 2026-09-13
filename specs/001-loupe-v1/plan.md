@@ -10,7 +10,7 @@ A single static Go binary, `loupe`, that captures a pull request into a per-run 
 
 ## Technical Context
 
-**Language/Version**: Go 1.25+ (module `github.com/eriksaulnier/loupe`; the dev box has go1.25.8). `go.mod` declares `go 1.25`; see Complexity Tracking.
+**Language/Version**: Go 1.25+ (module `github.com/eriksaulnier/loupe`; the dev box has go1.25.8). `go.mod` declares `go 1.25.0`; see Complexity Tracking.
 
 **Primary Dependencies**: `spf13/cobra` (command help is the agent contract), `charmbracelet/bubbletea` + `bubbles` + `lipgloss` (TUI), `charmbracelet/glamour` (Markdown body rendering in the detail view), `cli/go-gh/v2` (GitHub REST with `gh`'s auth), `bluekeyes/go-gitdiff` (unified diff parsing), `golang.org/x/term` (TTY detection and raw-mode probe). Test-only: `charmbracelet/x/exp/teatest` (drives Bubble Tea models with injected keys). Each runtime dependency carries its reason in research.md. Git is shelled out to; there is no Go Git library.
 
@@ -146,4 +146,4 @@ No constitution violations.
 
 | Departure | From | Why |
 | :--- | :--- | :--- |
-| `go.mod` declares `go 1.25`, not `go 1.23` | research.md "Language and TUI stack", this plan's Technical Context | Current releases of the chosen dependencies require newer toolchains (go-gh v2.16 needs 1.25; bubbletea, bubbles, glamour and teatest need 1.24). Pinning every dependency to its last 1.23 release was rejected by the owner on 2026-09-13. `golang.org/x/term` is held at v0.45.0 because v0.46.0 requires go 1.26. Go 1.21+ fetches a newer toolchain on `go install`, so older installed toolchains still work. |
+| `go.mod` declares `go 1.25.0`, not `go 1.23` | research.md "Language and TUI stack", this plan's Technical Context | Current releases of the chosen dependencies require newer toolchains (go-gh v2.16 needs 1.25; bubbletea, bubbles, glamour and teatest need 1.24). Pinning every dependency to its last 1.23 release was rejected by the owner on 2026-09-13. `golang.org/x/term` is held at v0.45.0 because v0.46.0 requires go 1.26. Go 1.21+ fetches a newer toolchain on `go install`, so older installed toolchains still work. |
