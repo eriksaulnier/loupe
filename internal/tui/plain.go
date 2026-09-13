@@ -9,6 +9,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/render"
 )
 
@@ -158,4 +159,41 @@ func printFinding(p *printer, d *draft.Draft, dif *diff.Diff, i int) error {
 		p.printf("%s%s\n", prefix, diffLineText(l))
 	}
 	return nil
+}
+
+// ConfirmPlain shows the review and its exact payload, then reads one line; only a line that is exactly y confirms.
+func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (bool, error) {
+	return func(preview publish.Preview) (bool, error) {
+		p := &printer{w: out}
+		p.printf("Review body:\n\n%s\n", render.ForDisplay(openDetails(preview.Body)))
+		p.printf("\nInline comments: %d\n", len(preview.Comments))
+		for _, c := range preview.Comments {
+			p.printf("\n%s\n%s\n", render.ForDisplay(commentLocation(c)), render.ForDisplay(c.Body))
+		}
+		p.printf("\nEnvelope JSON:\n\n%s\n\nPublish this review? [y/N] ", render.ForDisplay(preview.EnvelopeJSON))
+		if p.err != nil {
+			return false, p.err
+		}
+		lines := bufio.NewScanner(in)
+		if !lines.Scan() {
+			return false, lines.Err()
+		}
+		return lines.Text() == "y", nil
+	}
+}
+
+// openDetails shows every collapsed section expanded, so nothing in the review is hidden from the confirmation.
+func openDetails(body string) string {
+	return strings.ReplaceAll(body, "<details>", "<details open>")
+}
+
+func commentLocation(c publish.Comment) string {
+	loc := fmt.Sprintf("%s:%d", c.Path, c.Line)
+	if c.StartLine != 0 && c.StartLine != c.Line {
+		loc = fmt.Sprintf("%s:%d-%d", c.Path, c.StartLine, c.Line)
+	}
+	if c.Side == draft.SideLeft {
+		loc += " (old)"
+	}
+	return loc
 }

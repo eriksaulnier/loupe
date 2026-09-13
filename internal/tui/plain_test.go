@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
 )
 
 const plainPrompt = "answer ["
@@ -116,5 +117,47 @@ func TestPlainEndOfInputQuits(t *testing.T) {
 	}
 	if dec := loadDraft(t, dir).Decisions["f-001"]; dec.Decision != draft.DecisionAccepted {
 		t.Fatalf("decision %+v", dec)
+	}
+}
+
+func confirmPreview() publish.Preview {
+	return publish.Preview{
+		Body:         "> [!NOTE]\n\nSummary \u202eevil\n\n<details>\n<summary>Title</summary>\n\nBody \x1b[31m\n\n</details>\n",
+		Comments:     []publish.Comment{{Path: "a.go", Line: 12, Side: "RIGHT", StartLine: 10, StartSide: "RIGHT", Body: "**Inline** \u2066body"}},
+		EnvelopeJSON: "{\n  \"event\": \"COMMENT\",\n  \"body\": \"x\\u202e\"\n}",
+	}
+}
+
+func TestConfirmPlainShowsPreview(t *testing.T) {
+	var out bytes.Buffer
+	ok, err := ConfirmPlain(strings.NewReader("y\n"), &out)(confirmPreview())
+	if err != nil || !ok {
+		t.Fatalf("ok %v err %v", ok, err)
+	}
+	text := out.String()
+	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
+		"\"event\": \"COMMENT\"", "Publish this review? [y/N] "} {
+		if !strings.Contains(text, want) {
+			t.Errorf("output lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "<details>") || strings.ContainsAny(text, "\u202e\u2066\x1b") {
+		t.Errorf("output has a closed <details> or a raw hidden character:\n%q", text)
+	}
+	if !strings.HasSuffix(text, "Publish this review? [y/N] ") {
+		t.Errorf("output does not end with the prompt:\n%s", text)
+	}
+}
+
+func TestConfirmPlainOnlyYConfirms(t *testing.T) {
+	for _, in := range []string{"y", "y\nn\n"} {
+		if ok, err := ConfirmPlain(strings.NewReader(in), io.Discard)(confirmPreview()); err != nil || !ok {
+			t.Errorf("input %q: ok %v err %v", in, ok, err)
+		}
+	}
+	for _, in := range []string{"", "\n", "n\n", "Y\n", "yes\n", " y\n", "y \n", "q\ny\n"} {
+		if ok, err := ConfirmPlain(strings.NewReader(in), io.Discard)(confirmPreview()); err != nil || ok {
+			t.Errorf("input %q: ok %v err %v", in, ok, err)
+		}
 	}
 }
