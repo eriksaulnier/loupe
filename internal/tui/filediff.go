@@ -12,7 +12,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-const fileDiffHeaderLines = 2
+const fileDiffHeaderLines = 1
 
 func (m *Model) openFileDiff(open draft.Finding) {
 	right, left := map[int][]string{}, map[int][]string{}
@@ -53,20 +53,27 @@ func markerLine(lines []diff.ViewLine, id string) int {
 }
 
 func (m *Model) refreshFileDiff() {
+	gutter := len(m.glyphs.Gutter)
+	for _, l := range m.fileLines {
+		for _, marker := range l.Markers {
+			gutter = max(gutter, len(marker))
+		}
+	}
 	rows := make([]string, len(m.fileLines))
 	for i, l := range m.fileLines {
-		cursor, marker := "  ", "  "
-		if i == m.fileCursor {
-			cursor = "> "
-		}
+		// A finding on the line puts its id where the gutter would be, so the diff shows what is filed against it.
+		mark := m.styles.Dim.Render(m.glyphs.Gutter)
 		if len(l.Markers) > 0 {
-			marker = "* "
+			mark = m.styles.Accent.Render(strings.Join(l.Markers[:1], ""))
 		}
-		text := diffLineText(l)
-		if i == m.fileCursor {
-			rows[i] = cursor + marker + m.styles.Bold.Render(text)
-		} else {
-			rows[i] = cursor + marker + m.styleDiffLine(l, text)
+		text := diffRow(l, mark, gutter)
+		switch {
+		case i == m.fileCursor && m.styles.Color:
+			rows[i] = m.styles.Selected.Render(style.Pad(" "+diffRow(l, markerText(m.glyphs, l), gutter), m.width))
+		case i == m.fileCursor:
+			rows[i] = m.glyphs.Cursor + diffRow(l, markerText(m.glyphs, l), gutter)
+		default:
+			rows[i] = " " + m.styleDiffLine(l, text)
 		}
 	}
 	m.file.Width = m.width
@@ -78,6 +85,33 @@ func (m *Model) refreshFileDiff() {
 	case m.fileCursor >= m.file.YOffset+m.file.Height:
 		m.file.SetYOffset(m.fileCursor - m.file.Height + 1)
 	}
+}
+
+// markerText is the gutter of a row drawn without color, where nothing inside a painted band may reset it.
+func markerText(g GlyphSet, l diff.ViewLine) string {
+	if len(l.Markers) > 0 {
+		return l.Markers[0]
+	}
+	return g.Gutter
+}
+
+// fileCounts is what the file's diff does: lines added, lines removed, and how many findings sit on it.
+func (m *Model) fileCounts() (added, removed, findings int) {
+	seen := map[string]bool{}
+	for _, l := range m.fileLines {
+		switch l.Kind {
+		case diff.Add:
+			added++
+		case diff.Delete:
+			removed++
+		}
+		for _, marker := range l.Markers {
+			if !seen[marker] {
+				seen[marker], findings = true, findings+1
+			}
+		}
+	}
+	return added, removed, findings
 }
 
 func (m *Model) updateFileDiff(msg tea.KeyMsg) tea.Cmd {
@@ -109,19 +143,28 @@ func (m *Model) updateFileDiff(msg tea.KeyMsg) tea.Cmd {
 
 func (m *Model) fileDiffView() string {
 	f, _ := m.openedFinding()
-	status := "no finding on this line"
-	if len(m.fileLines) > 0 {
-		if markers := m.fileLines[m.fileCursor].Markers; len(markers) > 0 {
-			status = "cursor on " + strings.Join(markers, ", ")
-		}
-	}
 	path := ""
 	if f.Location != nil {
 		path = render.ForDisplay(f.Location.Path)
 	}
-	header := []string{
-		m.styles.Bold.Render(fmt.Sprintf("%s  file diff  %s/%s#%d", path, m.target.Owner, m.target.Repo, m.target.Number)),
-		status,
+	added, removed, findings := m.fileCounts()
+	counts := fmt.Sprintf("+%d %s%d %s %d %s", added, m.minus(), removed, m.glyphs.Pending, findings, plural(findings, "finding"))
+	header := []string{m.band(path + " " + m.styles.Dim.Render(counts))}
+	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "]/[", Verb: "next/prev finding"}, {K: "enter", Verb: "open finding"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}})
+	return m.frame(header, m.file.View(), keys)
+}
+
+// minus is the sign the removed count carries; the typographic one only under a locale that can print it.
+func (m *Model) minus() string {
+	if m.glyphs.Gutter == "|" {
+		return "-"
 	}
-	return m.frame(header, m.file.View(), "j/k move  ]/[ next/prev finding  enter open  esc back  ? help")
+	return "\u2212"
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return word
+	}
+	return word + "s"
 }

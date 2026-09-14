@@ -115,7 +115,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	tm.Type("f")
 	waitFor(t, tm, "@@ -18,6 +18,7 @@", "inserted after 20")
 	tm.Type("]")
-	waitFor(t, tm, "cursor on f-002")
+	waitFor(t, tm, "f-002  +inserted after 20")
 	key(tm, tea.KeyEnter)
 	waitFor(t, tm, "Body two suggests a helper.")
 
@@ -136,7 +136,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	tm.Type("nn")
 	waitFor(t, tm, "Body three asks about tests.", "general finding")
 	tm.Type("s")
-	waitFor(t, tm, "note:")
+	waitFor(t, tm, "send back f-003")
 	tm.Type("Needs a test.")
 	key(tm, tea.KeyEnter)
 	waitFor(t, tm, "f-003 sent back as n-001")

@@ -291,6 +291,15 @@ func decide(dir string, displayed int, getenv func(string) string, fn func(*draf
 // frame is the one layout every view renders through: header lines, a body clipped or padded to the rows left, the
 // notice and the key line, each clipped to the window width.
 func (m *Model) frame(header []string, body, keys string) string {
+	notice := ""
+	if m.notice != "" {
+		notice = " " + m.styles.Of(m.noticeKind).Render(m.notice)
+	}
+	return m.frameWith(header, body, notice, keys)
+}
+
+// frameWith is frame with the notice line spelled out, for a view that puts an input there instead.
+func (m *Model) frameWith(header []string, body, notice, keys string) string {
 	bodyHeight := max(0, m.height-len(header)-2)
 	bodyLines := strings.Split(body, "\n")
 	if len(bodyLines) > bodyHeight {
@@ -302,10 +311,6 @@ func (m *Model) frame(header []string, body, keys string) string {
 	lines := make([]string, 0, m.height)
 	lines = append(lines, header...)
 	lines = append(lines, bodyLines...)
-	notice := ""
-	if m.notice != "" {
-		notice = " " + m.styles.Of(m.noticeKind).Render(m.notice)
-	}
 	lines = append(lines, notice, " "+keys)
 	clip := m.styles.R.NewStyle().MaxWidth(m.width)
 	for i, l := range lines {
@@ -395,21 +400,38 @@ func formatLocation(path string, line, startLine int, side string) string {
 	return loc
 }
 
-func chips(f draft.Finding, disposition string) []string {
-	out := []string{disposition}
+// chip is one state of a finding: a glyph, the word that names it and the color both carry.
+type chip struct {
+	glyph, text string
+	kind        style.Kind
+}
+
+// chips are the states a finding is in, in reading order. A field that is not set has no chip, so nothing is a
+// placeholder.
+func chips(s style.Style, f draft.Finding, disposition string) []chip {
+	glyph, word, kind := s.Disposition(disposition)
+	out := []chip{{glyph, word, kind}}
 	if f.Blocking {
-		out = append(out, "blocking")
+		out = append(out, chip{s.Glyphs.Blocking, "blocking", style.Bad})
 	}
 	if f.Label != "" {
-		out = append(out, render.ForDisplay(render.OneLine(f.Label)))
+		out = append(out, chip{"", render.ForDisplay(render.OneLine(f.Label)), style.Plain})
 	}
 	if f.Confidence != "" {
-		out = append(out, "confidence "+render.ForDisplay(f.Confidence))
+		out = append(out, chip{"", "confidence " + render.ForDisplay(f.Confidence), style.Faint})
 	}
 	if f.Severity != "" {
-		out = append(out, "severity "+render.ForDisplay(render.OneLine(f.Severity)))
+		out = append(out, chip{"", "severity " + render.ForDisplay(render.OneLine(f.Severity)), style.Faint})
 	}
 	return out
+}
+
+func chipRow(s style.Style, cs []chip) string {
+	out := make([]string, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, s.Chip(c.kind, c.glyph, c.text))
+	}
+	return strings.Join(out, "   ")
 }
 
 func findingIndex(d *draft.Draft, id string) int {
@@ -456,6 +478,30 @@ func diffLineText(l diff.ViewLine) string {
 		sign = "-"
 	}
 	return fmt.Sprintf("%4s %4s %s%s", num(l.OldNum), num(l.NewNum), sign, render.ForDisplay(l.Text))
+}
+
+// diffRow is one line of a diff: its number on the new side, a gutter wide enough for the widest marker, and the
+// line as the diff carries it. A deleted line has no new-side number, so it keeps the old one.
+func diffRow(l diff.ViewLine, gutter string, gutterWidth int) string {
+	if l.Separator {
+		return render.ForDisplay(l.Text)
+	}
+	num := l.NewNum
+	if num == 0 {
+		num = l.OldNum
+	}
+	number := ""
+	if num > 0 {
+		number = fmt.Sprint(num)
+	}
+	sign := " "
+	switch l.Kind {
+	case diff.Add:
+		sign = "+"
+	case diff.Delete:
+		sign = "-"
+	}
+	return fmt.Sprintf("%5s  %s  %s%s", number, style.Pad(gutter, gutterWidth), sign, render.ForDisplay(l.Text))
 }
 
 func (m *Model) styleDiffLine(l diff.ViewLine, text string) string {

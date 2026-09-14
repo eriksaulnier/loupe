@@ -60,7 +60,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		if notice != "" {
 			p.printf("\n%s\n", notice)
 		}
-		if err := printFinding(p, d, dif, i); err != nil {
+		if err := printFinding(p, s, d, dif, i); err != nil {
 			return err
 		}
 		p.printf("%s", plainAnswers)
@@ -134,9 +134,9 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 	}
 }
 
-func printFinding(p *printer, d *draft.Draft, dif *diff.Diff, i int) error {
+func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i int) error {
 	f := d.Findings[i]
-	p.printf("\n[%d/%d] %s  %s  %s\n", i+1, len(d.Findings), f.ID, strings.Join(chips(f, draft.Dispositions(d)[f.ID]), "  "), locationText(f))
+	p.printf("\n[%d/%d] %s  %s  %s\n", i+1, len(d.Findings), f.ID, chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID])), locationText(f))
 	p.printf("%s\n\n%s\n", render.ForDisplay(render.OneLine(f.Title)), render.ForDisplay(f.Body))
 	if f.SuggestedFix != "" {
 		p.printf("\nSuggested fix:\n%s\n", render.ForDisplay(f.SuggestedFix))

@@ -140,7 +140,7 @@ func TestDetailHunkScrollsAndMarksHiddenLines(t *testing.T) {
 	}
 	view := m.View()
 	anchored := func(view string, n int) bool {
-		return regexp.MustCompile(fmt.Sprintf(`(?m)^>\s+%d \+big line %d$`, n, n)).MatchString(view)
+		return regexp.MustCompile(fmt.Sprintf(`(?m)^\s+%d\s+>\s+\+big line %d$`, n, n)).MatchString(view)
 	}
 	if !anchored(view, 5) || strings.Contains(view, "big line 30") || !strings.Contains(view, "lines below") {
 		t.Fatalf("first view does not mark the hidden anchored lines:\n%s", view)
@@ -157,5 +157,58 @@ func TestDetailHunkScrollsAndMarksHiddenLines(t *testing.T) {
 	}
 	if view = m.View(); !anchored(view, 5) || strings.Contains(view, "lines above") {
 		t.Fatalf("scrolling back does not return to the top:\n%s", view)
+	}
+}
+
+func TestDetailShowsChipsRuleAndNumberedHunk(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	if err := m.openFinding("f-002"); err != nil {
+		t.Fatal(err)
+	}
+	view := m.View()
+	for _, want := range []string{
+		"f-002 \u00b7 2 of 3",
+		"\u00b7 pending   suggestion",
+		"\u2500\u2500 multi.txt:21 ",
+		" f whole file \u2500\u2500",
+		"Suggested fix",
+		"\u2503 extract insertAfter",
+		"   20  \u2502   line 20",
+		"   21  \u258e  +inserted after 20",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("detail view lacks %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "confidence ]") || strings.Contains(view, "[]") {
+		t.Errorf("detail view shows an empty chip:\n%s", view)
+	}
+}
+
+func TestDetailNoteInputNamesTheFinding(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	view := m.View()
+	if !strings.Contains(view, "\u270e send back f-001 \u203a") || !strings.Contains(view, "enter send") ||
+		!strings.Contains(view, "esc cancel") || !strings.Contains(view, "ctrl+u clear") {
+		t.Fatalf("the send-back input is not labeled with its keys:\n%s", view)
+	}
+}
+
+func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := m.openedFinding()
+	m.openFileDiff(f)
+	view := m.View()
+	for _, want := range []string{"multi.txt +3 \u22122 \u00b7 2 findings", "    3  f-001  +line three", "   21  f-002  +inserted after 20", "@@ -18,6 +18,7 @@"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("file diff lacks %q:\n%s", want, view)
+		}
 	}
 }

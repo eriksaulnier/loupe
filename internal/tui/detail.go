@@ -42,35 +42,28 @@ func (m *Model) refreshDetail() error {
 	}
 	m.hunk = m.hunk[:0]
 	if f.Location == nil {
-		m.hunk = append(m.hunk, m.styles.Dim.Render("general finding"))
+		m.hunk = append(m.hunk, m.styles.Dim.Render(" general finding"))
 	}
 	for _, l := range lines {
-		text := diffLineText(l)
 		if l.Anchored {
-			m.hunk = append(m.hunk, m.styles.Anchor.Render("> "+text))
-		} else {
-			m.hunk = append(m.hunk, "  "+m.styleDiffLine(l, text))
+			m.hunk = append(m.hunk, m.styles.Anchor.Render(" "+diffRow(l, m.glyphs.Anchor, 1)))
+			continue
 		}
+		m.hunk = append(m.hunk, " "+m.styleDiffLine(l, diffRow(l, m.styles.Dim.Render(m.glyphs.Gutter), 1)))
 	}
 
-	body, err := m.renderMarkdown(findingMarkdown(f))
+	body, err := m.renderMarkdown(render.ForDisplay(f.Body))
 	if err != nil {
 		return err
 	}
-	var top []string
-	top = append(top, m.styles.Bold.Render(render.ForDisplay(render.OneLine(f.Title))))
-	top = append(top, "["+strings.Join(chips(f, draft.Dispositions(m.draft)[f.ID]), "] [")+"]  "+locationText(f))
-	top = append(top, strings.Split(body, "\n")...)
-	for _, n := range m.draft.Notes {
-		if n.FindingID == f.ID {
-			top = append(top, fmt.Sprintf("%s %s: %s", n.ID, n.Status, render.ForDisplay(render.OneLine(n.Body))))
-			for _, r := range m.draft.Replies {
-				if r.NoteID == n.ID {
-					top = append(top, fmt.Sprintf("  %s by %s: %s", render.ForDisplay(r.ID), render.ForDisplay(r.By), render.ForDisplay(render.OneLine(r.Body))))
-				}
-			}
-		}
+	top := []string{""}
+	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), m.width-1, " "), "\n") {
+		top = append(top, m.styles.Bold.Render(line))
 	}
+	top = append(top, " "+chipRow(m.styles, chips(m.styles, f, draft.Dispositions(m.draft)[f.ID])))
+	top = append(top, strings.Split(body, "\n")...)
+	top = append(top, m.suggestedFix(f)...)
+	top = append(top, m.noteThread(f)...)
 
 	available := m.bodyHeight(detailHeaderLines)
 	hunkHeight := min(len(m.hunk)+1, available/2)
@@ -80,14 +73,37 @@ func (m *Model) refreshDetail() error {
 	return nil
 }
 
-// findingMarkdown puts the suggested fix in a fence longer than any backtick run inside it, so the fix cannot close it.
-func findingMarkdown(f draft.Finding) string {
-	md := render.ForDisplay(f.Body)
-	if f.SuggestedFix != "" {
-		fence := render.Fence(f.SuggestedFix)
-		md += "\n\nSuggested fix:\n\n" + fence + "\n" + render.ForDisplay(f.SuggestedFix) + "\n" + fence + "\n"
+// suggestedFix is shown under a gutter rather than as Markdown, so a fix that is not code still reads as a quotation
+// and cannot close a fence.
+func (m *Model) suggestedFix(f draft.Finding) []string {
+	if f.SuggestedFix == "" {
+		return nil
 	}
-	return md
+	out := []string{"", " " + m.styles.Bold.Render("Suggested fix")}
+	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), m.width-3, ""), "\n") {
+		out = append(out, " "+m.styles.Dim.Render(m.glyphs.Quote)+" "+line)
+	}
+	return out
+}
+
+// noteThread lists the finding's notes with their replies indented under them, so a send-back reads as a conversation.
+func (m *Model) noteThread(f draft.Finding) []string {
+	var out []string
+	for _, n := range m.draft.Notes {
+		if n.FindingID != f.ID {
+			continue
+		}
+		head := m.styles.Note.Render(m.glyphs.Note+" "+n.ID) + " " + m.styles.Dim.Render(n.Status) + ": "
+		out = append(out, "", " "+head+render.ForDisplay(render.OneLine(n.Body)))
+		for _, r := range m.draft.Replies {
+			if r.NoteID != n.ID {
+				continue
+			}
+			reply := m.styles.Dim.Render(m.glyphs.Reply+" "+render.ForDisplay(r.ID)+" by "+render.ForDisplay(r.By)) + ": "
+			out = append(out, "   "+reply+render.ForDisplay(render.OneLine(r.Body)))
+		}
+	}
+	return out
 }
 
 func (m *Model) renderMarkdown(md string) (string, error) {
@@ -117,11 +133,11 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 	f, i := m.openedFinding()
 	switch msg.String() {
 	case "a":
-		return m.decideAndShow(func(d *draft.Draft) error { return draft.Accept(d, f.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s accepted", f.ID) })
+		return m.decideAndShow(func(d *draft.Draft) error { return draft.Accept(d, f.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s accepted", m.glyphs.Accepted, f.ID) })
 	case "x":
-		return m.decideAndShow(func(d *draft.Draft) error { return draft.Exclude(d, f.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s excluded", f.ID) })
+		return m.decideAndShow(func(d *draft.Draft) error { return draft.Exclude(d, f.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s excluded", m.glyphs.Excluded, f.ID) })
 	case "u":
-		return m.decideAndShow(func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, func() string { return fmt.Sprintf("%s restored to pending", f.ID) })
+		return m.decideAndShow(func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, func() string { return fmt.Sprintf("%s %s restored to pending", m.glyphs.Pending, f.ID) })
 	case "r", "d":
 		n, ok := firstOpenNote(m.draft, f.ID)
 		if !ok {
@@ -129,11 +145,12 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if msg.String() == "r" {
-			return m.decideAndShow(func(d *draft.Draft) error { return draft.ResolveNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s resolved", n.ID) })
+			return m.decideAndShow(func(d *draft.Draft) error { return draft.ResolveNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s resolved", m.glyphs.Accepted, n.ID) })
 		}
-		return m.decideAndShow(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s dismissed", n.ID) })
+		return m.decideAndShow(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
 		m.noting, m.notice = true, ""
+		m.note.Prompt = m.styles.Note.Render(m.glyphs.Note+" send back "+f.ID) + " " + m.glyphs.Cursor + " "
 		m.note.Reset()
 		m.note.Cursor.SetMode(cursor.CursorStatic)
 		return m.note.Focus()
@@ -192,7 +209,7 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 			n, err := draft.SendBack(d, id, body, m.cfg.Now())
 			noteID = n.ID
 			return err
-		}, func() string { return fmt.Sprintf("%s sent back as %s", id, noteID) })
+		}, func() string { return fmt.Sprintf("%s %s sent back as %s", m.glyphs.Note, id, noteID) })
 	}
 	var cmd tea.Cmd
 	m.note, cmd = m.note.Update(msg)
@@ -214,15 +231,27 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 
 func (m *Model) detailView() string {
 	f, i := m.openedFinding()
-	header := []string{m.styles.Bold.Render(fmt.Sprintf("%s/%s#%d  round %d  %s (%d of %d)",
-		m.target.Owner, m.target.Repo, m.target.Number, m.target.Round, f.ID, i+1, len(m.draft.Findings)))}
-	separator := m.styles.Dim.Render(strings.Repeat("-", m.width))
-	body := m.body.View() + "\n" + separator + "\n" + strings.Join(m.hunkWindow(), "\n")
-	keys := "a accept  x exclude  s send back  u restore  r/d resolve/dismiss note  f file diff  J/K hunk  n/N next/prev  esc back  ? help"
+	position := fmt.Sprintf("%s %d of %d", m.glyphs.Pending, i+1, len(m.draft.Findings))
+	header := []string{m.band(m.styles.Accent.Render(f.ID) + " " + m.styles.Dim.Render(position))}
+	body := m.body.View() + "\n" + m.hunkRule(f) + "\n" + strings.Join(m.hunkWindow(), "\n")
+
 	if m.noting {
-		keys = m.note.View()
+		keys := m.styles.Keys([]style.Key{{K: "enter", Verb: "send"}, {K: "esc", Verb: "cancel"}, {K: "ctrl+u", Verb: "clear"}})
+		return m.frameWith(header, body, " "+m.note.View(), keys)
 	}
+	keys := m.styles.Keys(
+		[]style.Key{{K: "a", Verb: "accept"}, {K: "x", Verb: "exclude"}, {K: "s", Verb: "send back"}, {K: "u", Verb: "restore"}, {K: "r/d", Verb: "note"}},
+		[]style.Key{{K: "n/N", Verb: "next/prev"}, {K: "f", Verb: "file"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}},
+	)
 	return m.frame(header, body, keys)
+}
+
+// hunkRule names the file the hunk comes from, so its origin is never in doubt, and offers the whole-file diff.
+func (m *Model) hunkRule(f draft.Finding) string {
+	if f.Location == nil {
+		return " " + m.styles.Rule(m.width-1, m.styles.Dim.Render("general finding"), "")
+	}
+	return " " + m.styles.Rule(m.width-1, m.styles.Accent.Render(locationText(f)), m.styles.Bold.Render("f")+m.styles.Dim.Render(" whole file"))
 }
 
 // hunkRows is the height of the region under the separator.
@@ -251,13 +280,13 @@ func (m *Model) hunkWindow() []string {
 	top := min(m.hunkTop, maxHunkTop(len(m.hunk), rows))
 	var above, below string
 	if top > 0 {
-		above = m.styles.Dim.Render(fmt.Sprintf("  ... %d lines above; K scrolls up", top))
+		above = m.styles.Dim.Render(fmt.Sprintf(" %s %d lines above  K scroll up", m.glyphs.Ellipsis, top))
 		rows--
 	}
 	end := min(len(m.hunk), top+rows)
 	if end < len(m.hunk) && rows > 0 {
 		end--
-		below = m.styles.Dim.Render(fmt.Sprintf("  ... %d lines below; J scrolls down", len(m.hunk)-max(end, top)))
+		below = m.styles.Dim.Render(fmt.Sprintf(" %s %d lines below  J scroll down", m.glyphs.Ellipsis, len(m.hunk)-max(end, top)))
 	}
 	var out []string
 	if above != "" {
