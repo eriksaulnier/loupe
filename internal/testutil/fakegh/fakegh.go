@@ -38,6 +38,7 @@ const (
 type Outcome struct {
 	kind    outcomeKind
 	message string
+	errors  []string
 }
 
 // OK stores the review and returns it.
@@ -45,6 +46,11 @@ func OK() Outcome { return Outcome{kind: outcomeOK} }
 
 // Reject422 stores nothing and returns 422 with message.
 func Reject422(message string) Outcome { return Outcome{kind: outcomeReject422, message: message} }
+
+// Reject422Errors stores nothing and returns 422 in GitHub's shape with a generic message and the reasons in errors.
+func Reject422Errors(message string, errors ...string) Outcome {
+	return Outcome{kind: outcomeReject422, message: message, errors: errors}
+}
 
 // ServerErrorAfterRecord stores the review and still returns 500, as when GitHub's response is lost.
 func ServerErrorAfterRecord() Outcome { return Outcome{kind: outcomeErrorAfterRecord} }
@@ -358,7 +364,11 @@ func (s *Server) createReview(w http.ResponseWriter, r *http.Request) {
 	case outcomeOK:
 		writeJSON(w, http.StatusOK, wireReview(s.storeReview(key, review)))
 	case outcomeReject422:
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": outcome.message})
+		body := map[string]any{"message": outcome.message}
+		if outcome.errors != nil {
+			body["errors"] = outcome.errors
+		}
+		writeJSON(w, http.StatusUnprocessableEntity, body)
 	case outcomeErrorAfterRecord:
 		s.storeReview(key, review)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})

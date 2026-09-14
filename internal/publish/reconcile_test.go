@@ -119,6 +119,17 @@ func TestRunPendingReviewRejection(t *testing.T) {
 	fx.check(1)
 }
 
+func TestRunPendingReviewRejectionInGitHubErrorShape(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.gh.QueueCreate(fakegh.Reject422Errors("Unprocessable Entity", "User can only have one pending review per pull request"))
+	_, err := fx.run()
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.GitHub || r.Fix != "submit or discard your pending review on "+prLink+" first" {
+		t.Fatalf("got %#v", err)
+	}
+	fx.check(1)
+}
+
 func TestRunReconcilesReviewOnSecondPage(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	a := fx.saveMarkedAttempt(StateUnknown)
