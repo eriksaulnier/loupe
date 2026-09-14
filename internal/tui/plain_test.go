@@ -10,7 +10,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/publish"
 )
 
-const plainPrompt = "answer ["
+// plainPrompt is the answer legend, which is printed once before every prompt.
+const plainPrompt = "a accept  x exclude"
 
 // lineReader hands out one line per Read and runs before[i] just before line i is read, standing in for an agent
 // acting while the human reads.
@@ -56,7 +57,7 @@ func TestPlainDecidesLikeFullScreen(t *testing.T) {
 	}
 	segments := strings.Split(text, plainPrompt)
 	want := []struct{ title, body, hunk string }{
-		{"Title one", "Body one explains the rename.", "> "},
+		{"Title one", "Body one explains the rename.", "    3  >  +line three"},
 		{"Title two", "Body two suggests a helper.", "inserted after 20"},
 		{"Title three", "Body three asks about tests.", "general finding"},
 	}
@@ -70,12 +71,36 @@ func TestPlainDecidesLikeFullScreen(t *testing.T) {
 		}
 	}
 	for _, line := range strings.Split(segments[0], "\n") {
-		if strings.HasSuffix(line, "line three") && !strings.HasPrefix(line, ">") {
-			t.Errorf("anchored line of f-001 is not prefixed with >: %q", line)
+		if strings.HasSuffix(line, "line three") && !strings.Contains(line, "  >  ") {
+			t.Errorf("anchored line of f-001 is not marked in the gutter: %q", line)
 		}
-		if strings.HasSuffix(line, "line 2") && strings.HasPrefix(line, ">") {
-			t.Errorf("context line is prefixed with >: %q", line)
+		if strings.HasSuffix(line, "line 2") && !strings.Contains(line, "  |  ") {
+			t.Errorf("context line is not in the plain gutter: %q", line)
 		}
+	}
+	for _, want := range []string{"loupe acme/widgets#42", "SUMMARY", "-- 1 of 3 --", ". pending   ! blocking   issue", "f-001 > "} {
+		if !strings.Contains(text, want) {
+			t.Errorf("output lacks %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestPlainUnderNoColorAndCLocale(t *testing.T) {
+	var out bytes.Buffer
+	env := map[string]string{"NO_COLOR": "1", "LANG": "C"}
+	if err := RunPlain(newFixture(t), &lineReader{lines: []string{"q"}}, &out, envOf(env)); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if strings.ContainsRune(text, '\x1b') {
+		t.Errorf("plain mode emits an escape sequence under NO_COLOR:\n%q", text)
+	}
+	if strings.ContainsAny(text, "\u2713\u00b7\u2717\u21a9\u25cf\u203a\u258e\u2502\u2026\u2500\u2503") {
+		t.Errorf("plain mode uses a non-ASCII glyph under LANG=C:\n%s", text)
+	}
+	// The pill carries the word when nothing may be painted.
+	if !strings.Contains(text, "[NOT READY]") {
+		t.Errorf("plain mode does not name the readiness in words:\n%s", text)
 	}
 }
 

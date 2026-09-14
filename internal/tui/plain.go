@@ -15,7 +15,15 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-const plainAnswers = "answer [a]ccept e[x]clude [s]end back [u]restore [r]esolve note [d]ismiss note [n]ext [b]ack [q]uit: "
+// plainWidth is what plain mode wraps to. Plain mode is what a window under 60 columns and every pipe gets, so it
+// stays inside the narrowest window that can still ask for it.
+const plainWidth = minWidth
+
+// plainAnswers are the letters an answer may be, in the order the legend shows them.
+var plainAnswers = []style.Key{
+	{K: "a", Verb: "accept"}, {K: "x", Verb: "exclude"}, {K: "s", Verb: "send back"}, {K: "u", Verb: "restore"},
+	{K: "r/d", Verb: "note"}, {K: "n", Verb: "next"}, {K: "b", Verb: "back"}, {K: "q", Verb: "quit"},
+}
 
 // printer keeps the first write error so the loop can check once per finding instead of after every line.
 type printer struct {
@@ -39,9 +47,12 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 
 	s := style.New(out, getenv)
 	p := &printer{w: out}
-	p.printf("%s/%s#%d  round %d  %s\n%s\n", target.Owner, target.Repo, target.Number, target.Round, render.ForDisplay(render.OneLine(target.Title)), countsLine(d, s))
+	r := draft.ReadinessOf(d)
+	p.printf("%s %s %s  %s\n", s.Brand(), s.Accent.Render(fmt.Sprintf("%s/%s#%d", target.Owner, target.Repo, target.Number)),
+		s.Dim.Render(fmt.Sprintf("round %d", target.Round)), render.ForDisplay(render.OneLine(target.Title)))
+	p.printf("%s  %s\n", countsLine(d, s), s.ReadinessPill(r.Ready, len(r.Pending), len(r.OpenNotes)))
 	if strings.TrimSpace(d.Summary) != "" {
-		p.printf("\nSummary:\n%s\n", render.ForDisplay(d.Summary))
+		p.printf("\n%s\n%s\n", s.Heading("summary"), s.Wrap(render.ForDisplay(d.Summary), plainWidth, ""))
 	}
 	if len(d.Findings) == 0 {
 		p.printf("\nNo findings.\n")
@@ -63,7 +74,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		if err := printFinding(p, s, d, dif, i); err != nil {
 			return err
 		}
-		p.printf("%s", plainAnswers)
+		p.printf("\n%s\n%s %s ", s.Keys(plainAnswers), s.Accent.Render(d.Findings[i].ID), s.Glyphs.Cursor)
 		if p.err != nil {
 			return p.err
 		}
@@ -77,11 +88,11 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		now := time.Now()
 		switch answer {
 		case "a":
-			fn, success = func(d *draft.Draft) error { return draft.Accept(d, f.ID, now) }, f.ID+" accepted"
+			fn, success = func(d *draft.Draft) error { return draft.Accept(d, f.ID, now) }, s.Glyphs.Accepted+" "+f.ID+" accepted"
 		case "x":
-			fn, success = func(d *draft.Draft) error { return draft.Exclude(d, f.ID, now) }, f.ID+" excluded"
+			fn, success = func(d *draft.Draft) error { return draft.Exclude(d, f.ID, now) }, s.Glyphs.Excluded+" "+f.ID+" excluded"
 		case "u":
-			fn, success = func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, f.ID+" restored to pending"
+			fn, success = func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, s.Glyphs.Pending+" "+f.ID+" restored to pending"
 		case "r", "d":
 			n, open := firstOpenNote(d, f.ID)
 			if !open {
@@ -89,19 +100,19 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 				continue
 			}
 			if answer == "r" {
-				fn, success = func(d *draft.Draft) error { return draft.ResolveNote(d, n.ID, now) }, n.ID+" resolved"
+				fn, success = func(d *draft.Draft) error { return draft.ResolveNote(d, n.ID, now) }, s.Glyphs.Accepted+" "+n.ID+" resolved"
 			} else {
-				fn, success = func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, now) }, n.ID+" dismissed"
+				fn, success = func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, now) }, s.Glyphs.Excluded+" "+n.ID+" dismissed"
 			}
 		case "s":
-			p.printf("note: ")
+			p.printf("%s %s ", s.Note.Render(s.Glyphs.Note+" send back "+f.ID), s.Glyphs.Cursor)
 			body, ok := readLine()
 			if !ok {
 				return lines.Err()
 			}
 			fn = func(d *draft.Draft) error {
 				n, err := draft.SendBack(d, f.ID, body, now)
-				success = fmt.Sprintf("%s sent back as %s", f.ID, n.ID)
+				success = fmt.Sprintf("%s %s sent back as %s", s.Glyphs.Note, f.ID, n.ID)
 				return err
 			}
 		case "n":
@@ -136,18 +147,24 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 
 func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i int) error {
 	f := d.Findings[i]
-	p.printf("\n[%d/%d] %s  %s  %s\n", i+1, len(d.Findings), f.ID, chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID])), locationText(f))
-	p.printf("%s\n\n%s\n", render.ForDisplay(render.OneLine(f.Title)), render.ForDisplay(f.Body))
+	p.printf("\n%s\n", s.Rule(plainWidth, "", fmt.Sprintf("%d of %d", i+1, len(d.Findings))))
+	p.printf("%s  %s\n", s.Accent.Render(f.ID), s.Bold.Render(render.ForDisplay(render.OneLine(f.Title))))
+	p.printf("%s  %s\n", chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID])), s.Dim.Render(locationText(f)))
+	p.printf("\n%s\n", s.Wrap(render.ForDisplay(f.Body), plainWidth, ""))
 	if f.SuggestedFix != "" {
-		p.printf("\nSuggested fix:\n%s\n", render.ForDisplay(f.SuggestedFix))
+		p.printf("\n%s\n", s.Bold.Render("Suggested fix"))
+		for _, line := range strings.Split(s.Wrap(render.ForDisplay(f.SuggestedFix), plainWidth-2, ""), "\n") {
+			p.printf("%s %s\n", s.Dim.Render(s.Glyphs.Quote), line)
+		}
 	}
 	for _, n := range d.Notes {
-		if n.FindingID == f.ID {
-			p.printf("\nNote %s (%s): %s\n", n.ID, n.Status, render.ForDisplay(n.Body))
-			for _, r := range d.Replies {
-				if r.NoteID == n.ID {
-					p.printf("  Reply %s by %s: %s\n", render.ForDisplay(r.ID), render.ForDisplay(r.By), render.ForDisplay(r.Body))
-				}
+		if n.FindingID != f.ID {
+			continue
+		}
+		p.printf("\n%s %s: %s\n", s.Note.Render(s.Glyphs.Note+" "+n.ID), s.Dim.Render(n.Status), render.ForDisplay(render.OneLine(n.Body)))
+		for _, r := range d.Replies {
+			if r.NoteID == n.ID {
+				p.printf("  %s: %s\n", s.Dim.Render(s.Glyphs.Reply+" "+render.ForDisplay(r.ID)+" by "+render.ForDisplay(r.By)), render.ForDisplay(render.OneLine(r.Body)))
 			}
 		}
 	}
@@ -155,16 +172,16 @@ func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i i
 	if err != nil {
 		return err
 	}
-	p.printf("\n")
+	p.printf("\n%s\n", s.Rule(plainWidth, s.Accent.Render(locationText(f)), ""))
 	if f.Location == nil {
-		p.printf("general finding\n")
+		p.printf("%s\n", s.Dim.Render("general finding"))
 	}
 	for _, l := range lines {
-		prefix := "  "
+		gutter := s.Dim.Render(s.Glyphs.Gutter)
 		if l.Anchored {
-			prefix = "> "
+			gutter = s.Glyphs.Anchor
 		}
-		p.printf("%s%s\n", prefix, diffLineText(l))
+		p.printf("%s\n", diffRow(l, gutter, 1))
 	}
 	return nil
 }

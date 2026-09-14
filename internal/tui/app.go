@@ -554,26 +554,6 @@ func hunkView(dif *diff.Diff, f draft.Finding) ([]diff.ViewLine, error) {
 	return dif.HunkView(f.Location.Path, f.Location.Side, f.Location.Line, f.Location.StartLine, hunkContext)
 }
 
-func diffLineText(l diff.ViewLine) string {
-	if l.Separator {
-		return l.Text
-	}
-	num := func(n int) string {
-		if n == 0 {
-			return ""
-		}
-		return fmt.Sprint(n)
-	}
-	sign := " "
-	switch l.Kind {
-	case diff.Add:
-		sign = "+"
-	case diff.Delete:
-		sign = "-"
-	}
-	return fmt.Sprintf("%4s %4s %s%s", num(l.OldNum), num(l.NewNum), sign, render.ForDisplay(l.Text))
-}
-
 // diffRow is one line of a diff: its number on the new side, a gutter wide enough for the widest marker, and the
 // line as the diff carries it. A deleted line has no new-side number, so it keeps the old one.
 func diffRow(l diff.ViewLine, gutter string, gutterWidth int) string {
