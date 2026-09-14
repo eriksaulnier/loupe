@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -237,5 +238,34 @@ func TestDecisionOpensTheNextFinding(t *testing.T) {
 		if d.Decisions[id].Decision != draft.DecisionAccepted {
 			t.Errorf("%s was not accepted by three presses of a: %+v", id, d.Decisions[id])
 		}
+	}
+}
+
+// Decision keys settle instantly in tests; TestTypeaheadDoesNotDecideAnUnseenFinding raises the delay on purpose.
+func TestMain(m *testing.M) {
+	settleAfterDecision = 0
+	os.Exit(m.Run())
+}
+
+func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
+	settleAfterDecision = time.Second
+	defer func() { settleAfterDecision = 0 }()
+	dir := newFixture(t)
+	tm := startApp(t, dir)
+	waitFor(t, tm, "Title one")
+	key(tm, tea.KeyEnter)
+	waitFor(t, tm, "Body one explains the rename.")
+
+	// Both keys are queued before the first decision has been on screen; the second lands on a finding never seen.
+	tm.Type("aa")
+	waitFor(t, tm, "f-001 accepted", "Body two suggests a helper.")
+	tm.Type("q")
+	finalView(t, tm)
+	d := loadDraft(t, dir)
+	if d.Decisions["f-001"].Decision != draft.DecisionAccepted {
+		t.Fatalf("the first key did not accept f-001: %+v", d.Decisions["f-001"])
+	}
+	if _, decided := d.Decisions["f-002"]; decided {
+		t.Fatalf("a typeahead key decided f-002 before it was shown: %+v", d.Decisions["f-002"])
 	}
 }

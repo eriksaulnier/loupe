@@ -38,8 +38,6 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.view, m.pick = viewAction, 0
-	case "q":
-		return tea.Quit
 	}
 	return nil
 }

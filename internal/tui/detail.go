@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,7 +18,7 @@ import (
 const detailHeaderLines = 1
 
 func (m *Model) openFinding(id string) error {
-	m.view, m.openID, m.noting, m.hunkTop = viewDetail, id, false, 0
+	m.view, m.openID, m.noting, m.hunkTop, m.settling = viewDetail, id, false, 0, false
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -131,13 +132,18 @@ func (m *Model) renderMarkdown(md string) (string, error) {
 
 func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 	f, i := m.openedFinding()
+	if m.settling && strings.Contains("axsurd", msg.String()) && len(msg.String()) == 1 {
+		// The finding under this key was never on screen: it arrived through typeahead or key repeat right after a
+		// decision moved the view. Per-finding sign-off is the product, so the key is dropped, not applied.
+		return nil
+	}
 	switch msg.String() {
 	case "a":
 		return m.decideAndShow(func(d *draft.Draft) error { return draft.Accept(d, f.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s accepted", m.glyphs.Accepted, f.ID) })
 	case "x":
 		return m.decideAndShow(func(d *draft.Draft) error { return draft.Exclude(d, f.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s excluded", m.glyphs.Excluded, f.ID) })
 	case "u":
-		return m.decideAndShow(func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, func() string { return fmt.Sprintf("%s %s restored to pending", m.glyphs.Pending, f.ID) })
+		return m.decideAndStay(func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, func() string { return fmt.Sprintf("%s %s restored to pending", m.glyphs.Pending, f.ID) })
 	case "r", "d":
 		n, ok := firstOpenNote(m.draft, f.ID)
 		if !ok {
@@ -145,9 +151,9 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if msg.String() == "r" {
-			return m.decideAndShow(func(d *draft.Draft) error { return draft.ResolveNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s resolved", m.glyphs.Accepted, n.ID) })
+			return m.decideAndStay(func(d *draft.Draft) error { return draft.ResolveNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s resolved", m.glyphs.Accepted, n.ID) })
 		}
-		return m.decideAndShow(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
+		return m.decideAndStay(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
 		m.noting, m.notice = true, ""
 		m.note.Prompt = m.styles.Note.Render(m.glyphs.Note+" send back "+f.ID) + " " + m.glyphs.Cursor + " "
@@ -219,6 +225,26 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 // decideAndShow records a decision and redraws the finding from the draft the decision left behind. success builds
 // the notice after fn has run, so it can name what fn created. A recorded decision opens the next finding, the way n
 // does, so a run of decisions needs no key between them; the last finding stays on screen.
+// decideAndStay records a change that leaves the finding undecided (a restore, a note resolved or dismissed), so
+// the view stays where the result can be seen.
+func (m *Model) decideAndStay(fn func(*draft.Draft) error, success func() string) tea.Cmd {
+	recorded, err := m.Decide(fn)
+	if err != nil {
+		return m.fail(err)
+	}
+	if recorded {
+		m.say(style.Good, success())
+	}
+	return m.fail(m.refreshDetail())
+}
+
+// settleAfterDecision is how long decision keys are dropped after the view moves to the next finding: longer than a
+// key-repeat interval, shorter than reading a title. Tests set it to zero.
+var settleAfterDecision = 250 * time.Millisecond
+
+type settledMsg struct{}
+
+// decideAndShow records a decision that settles the finding and moves on to the next one.
 func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string) tea.Cmd {
 	recorded, err := m.Decide(fn)
 	if err != nil {
@@ -236,7 +262,8 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 	cmd := m.fail(m.openFinding(m.draft.Findings[i+1].ID))
 	// The notice names what was just recorded, so it survives the move to the finding after it.
 	m.notice, m.noticeKind = notice, kind
-	return cmd
+	m.settling = true
+	return tea.Batch(cmd, tea.Tick(settleAfterDecision, func(time.Time) tea.Msg { return settledMsg{} }))
 }
 
 func (m *Model) detailView() string {

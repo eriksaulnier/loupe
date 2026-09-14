@@ -97,6 +97,9 @@ type Model struct {
 	session *publishSession
 	// sending is true from y until the outcome arrives; no key, not even ctrl+c, is acted on meanwhile.
 	sending bool
+	// settling is true right after a decision moved the view; decision keys are dropped until the new finding has
+	// had time to be seen.
+	settling bool
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -161,6 +164,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case publishDone:
 		return m, m.publishFinished(msg)
+	case settledMsg:
+		m.settling = false
+		return m, nil
 	case tea.KeyMsg:
 		// The confirmation comes first so that ctrl+c, like every key but y and the toggles, declines.
 		if m.view == viewConfirm {
@@ -188,6 +194,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "?" {
 			m.help = true
 			return m, nil
+		}
+		// The help overlay promises q everywhere; the pickers and the confirmation keep their own keys because esc
+		// there means back, not out.
+		if msg.String() == "q" && (m.view == viewList || m.view == viewDetail || m.view == viewFileDiff) {
+			return m, tea.Quit
 		}
 		switch m.view {
 		case viewList:
@@ -296,19 +307,25 @@ const maxNoticeLines = 3
 // frame is the one layout every view renders through: header lines, a body clipped or padded to the rows left, the
 // notice and the key line, each clipped to the window width.
 func (m *Model) frame(header []string, body, keys string) string {
-	notice := ""
-	if m.notice != "" {
-		// A refusal names two SHAs and a fix; on one clipped line the fix is the part that vanishes.
-		wrapped := strings.Split(m.styles.Wrap(m.notice, max(20, m.width-1), " "), "\n")
-		if len(wrapped) > maxNoticeLines {
-			wrapped = wrapped[:maxNoticeLines]
-		}
-		for i, l := range wrapped {
-			wrapped[i] = m.styles.Of(m.noticeKind).Render(l)
-		}
-		notice = strings.Join(wrapped, "\n")
+	wrapped := m.noticeLines()
+	for i, l := range wrapped {
+		wrapped[i] = m.styles.Of(m.noticeKind).Render(l)
 	}
-	return m.frameWith(header, body, notice, keys)
+	return m.frameWith(header, body, strings.Join(wrapped, "\n"), keys)
+}
+
+// noticeLines is the notice as the frame will print it: wrapped, capped, one empty line when there is none. Every
+// body is sized against it, so a notice that wraps takes rows from the body rather than hiding its last rows.
+func (m *Model) noticeLines() []string {
+	if m.notice == "" {
+		return []string{""}
+	}
+	// A refusal names two SHAs and a fix; on one clipped line the fix is the part that vanishes.
+	wrapped := strings.Split(m.styles.Wrap(m.notice, max(20, m.width-1), " "), "\n")
+	if len(wrapped) > maxNoticeLines {
+		wrapped = wrapped[:maxNoticeLines]
+	}
+	return wrapped
 }
 
 // frameWith is frame with the notice line spelled out, for a view that puts an input there instead.
@@ -335,7 +352,7 @@ func (m *Model) frameWith(header []string, body, notice, keys string) string {
 }
 
 func (m *Model) bodyHeight(headerLines int) int {
-	return max(1, m.height-headerLines-2)
+	return max(1, m.height-headerLines-len(m.noticeLines())-1)
 }
 
 // helpSection is one view's keys under the name of the view they belong to.
