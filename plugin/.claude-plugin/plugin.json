@@ -1,6 +1,6 @@
 {
   "name": "loupe",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Review a GitHub pull request with loupe: capture it, investigate, and file findings for the human to decide and publish.",
   "author": {
     "name": "Erik Saulnier"

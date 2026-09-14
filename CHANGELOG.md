@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/eriksaulnier/loupe/compare/v0.1.0...v0.2.0) (2026-09-14)
+
+
+### Features
+
+* **wait:** block until the human hands notes back or publishes ([666aa25](https://github.com/eriksaulnier/loupe/commit/666aa25223d3efe09c0d4db8b1108be58dd87bb4))
+
 ## 0.1.0 (2026-09-14)
 
 
