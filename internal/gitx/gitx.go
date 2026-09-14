@@ -3,6 +3,7 @@ package gitx
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -111,6 +112,46 @@ func FetchPR(clone string, number int, baseSHA, baseRef, headRef string) error {
 		fmt.Sprintf("+%s:%s", baseSHA, baseRef),
 	)
 	return err
+}
+
+const noBranchFix = "loupe capture <url> or --run <ref>"
+
+// CurrentBranch treats any fatal git failure, such as clone not being a repository, as no run being selectable rather
+// than a defect, because the branch is only consulted when nothing else named a run.
+func CurrentBranch(clone string) (string, error) {
+	out, err := git(clone, "symbolic-ref", "--short", "-q", "HEAD")
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		switch exitErr.ExitCode() {
+		case 1:
+			return "", refusal.New(refusal.NoRun,
+				fmt.Sprintf("no run selected, and %s has a detached HEAD, so there is no branch to look up", clone), noBranchFix)
+		case 128:
+			return "", refusal.New(refusal.NoRun,
+				fmt.Sprintf("no run selected, and the current branch of %s cannot be read: %v", clone, err), noBranchFix)
+		}
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// OriginURLs returns the configured origin URL and its insteadOf expansion, or nothing when there is no origin.
+func OriginURLs(clone string) ([]string, error) {
+	raw, err := git(clone, "config", "--get", "remote.origin.url")
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	expanded, err := git(clone, "ls-remote", "--get-url", "origin")
+	if err != nil {
+		return nil, err
+	}
+	return []string{strings.TrimSpace(string(raw)), strings.TrimSpace(string(expanded))}, nil
 }
 
 func RevParse(clone, ref string) (string, error) {
