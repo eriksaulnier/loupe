@@ -113,6 +113,18 @@ func (r *Repo) PushHead(files map[string]string) string {
 	return r.head
 }
 
+// PushBase commits files on top of the current base, off the pull request's history, and moves main to it, so the
+// base is no longer the merge base.
+func (r *Repo) PushBase(files map[string]string) string {
+	r.t.Helper()
+	r.git(r.t, r.workDir, "checkout", "--quiet", "--detach", r.base)
+	r.writeFiles(files)
+	r.commit("move base")
+	r.base = r.git(r.t, r.workDir, "rev-parse", "HEAD")
+	r.git(r.t, r.workDir, "push", "--quiet", r.RemoteDir, r.base+":refs/heads/main")
+	return r.base
+}
+
 // AddPull publishes the current head as another pull request's head, for tests with several pull requests.
 func (r *Repo) AddPull(number int) {
 	r.t.Helper()

@@ -1,6 +1,7 @@
 package gitx
 
 import (
+	"bytes"
 	"errors"
 	"io/fs"
 	"os"
@@ -124,6 +125,74 @@ func TestFetchPRWritesOnlyLoupeRefs(t *testing.T) {
 	}
 	if parsed.File("src/app.go") == nil || parsed.File("src/added.go") == nil || parsed.File("remove-me.txt") == nil || parsed.File("docs/new-name.md") == nil {
 		t.Fatalf("diff files: %s", out)
+	}
+}
+
+func TestDiffIgnoresUserDiffConfigAndEnvironment(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 7)
+	baseRef, headRef := "refs/loupe/o/r/7/1/base", "refs/loupe/o/r/7/1/head"
+	if err := FetchPR(repo.Dir, 7, repo.BaseSHA(), baseRef, headRef); err != nil {
+		t.Fatal(err)
+	}
+	want, err := Diff(repo.Dir, baseRef, headRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(want, []byte("@@ -1,6 +1,6 @@")) {
+		t.Fatalf("default diff lacks the three-line context hunk:\n%s", want)
+	}
+
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	config := "[diff]\n\tcontext = 10\n\tinterHunkContext = 30\n\talgorithm = histogram\n\trelative = true\n" +
+		"\tnoprefix = true\n\tmnemonicPrefix = true\n\tsuppressBlankEmpty = true\n\trenames = false\n"
+	if err := os.WriteFile(global, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_DIFF_OPTS", "-u8")
+	got, err := Diff(repo.Dir, baseRef, headRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("user config changed the diff:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestFetchPRIgnoresGitNamespace(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 7)
+	t.Setenv("GIT_NAMESPACE", "elsewhere")
+	baseRef, headRef := "refs/loupe/o/r/7/1/base", "refs/loupe/o/r/7/1/head"
+	if err := FetchPR(repo.Dir, 7, repo.BaseSHA(), baseRef, headRef); err != nil {
+		t.Fatal(err)
+	}
+	if after := repo.Snapshot(); after.Refs[baseRef] != repo.BaseSHA() || after.Refs[headRef] != repo.HeadSHA() {
+		t.Fatalf("refs after fetch %v", after.Refs)
+	}
+}
+
+func TestDiffIsAgainstTheMergeBase(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 7)
+	mergeBase := repo.BaseSHA()
+	base := repo.PushBase(map[string]string{"README.md": "# widgets, moved on\n"})
+	baseRef, headRef := "refs/loupe/o/r/7/1/base", "refs/loupe/o/r/7/1/head"
+	if err := FetchPR(repo.Dir, 7, base, baseRef, headRef); err != nil {
+		t.Fatal(err)
+	}
+	got, err := MergeBase(repo.Dir, baseRef, headRef)
+	if err != nil || got != mergeBase {
+		t.Fatalf("MergeBase = %q, %v; want %s", got, err, mergeBase)
+	}
+	out, err := Diff(repo.Dir, baseRef, headRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := diff.Parse(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.File("README.md") != nil || parsed.File("src/app.go") == nil {
+		t.Fatalf("diff is not against the merge base:\n%s", out)
 	}
 }
 

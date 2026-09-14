@@ -75,7 +75,7 @@ func TestCaptureLeavesCloneUntouched(t *testing.T) {
 	if err := json.Unmarshal(readFile(t, filepath.Join(dir, "target.json")), &target); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"schema", "owner", "repo", "number", "url", "title", "author", "viewer", "baseSha", "headSha", "round", "capturedAt", "clonePath", "baseRef", "headRef", "diffSha256"} {
+	for _, key := range []string{"schema", "owner", "repo", "number", "url", "title", "author", "viewer", "baseSha", "headSha", "round", "capturedAt", "clonePath", "baseRef", "headRef", "mergeBaseSha", "diffSha256"} {
 		if _, ok := target[key]; !ok {
 			t.Errorf("target.json lacks %q", key)
 		}
@@ -85,7 +85,7 @@ func TestCaptureLeavesCloneUntouched(t *testing.T) {
 	}
 	sum := sha256.Sum256(readFile(t, filepath.Join(dir, "pr.diff")))
 	if target["round"] != float64(1) || target["diffSha256"] != hex.EncodeToString(sum[:]) ||
-		target["headSha"] != h.Repo.HeadSHA() || target["baseSha"] != h.Repo.BaseSHA() ||
+		target["headSha"] != h.Repo.HeadSHA() || target["baseSha"] != h.Repo.BaseSHA() || target["mergeBaseSha"] != h.Repo.BaseSHA() ||
 		target["viewer"] != "reviewer" || target["author"] != "author" || target["clonePath"] != h.Repo.Dir ||
 		target["baseRef"] != baseRef || target["headRef"] != headRef {
 		t.Fatalf("target.json %v", target)

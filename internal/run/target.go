@@ -33,9 +33,11 @@ type Target struct {
 	CapturedAt    time.Time `json:"capturedAt"`
 	ClonePath     string    `json:"clonePath"`
 	// BaseRef and HeadRef are refs/loupe/<owner>/<repo>/<number>/<round>/{base,head}.
-	BaseRef    string `json:"baseRef"`
-	HeadRef    string `json:"headRef"`
-	DiffSHA256 string `json:"diffSha256"`
+	BaseRef string `json:"baseRef"`
+	HeadRef string `json:"headRef"`
+	// MergeBaseSHA is the merge base of BaseRef and HeadRef, the commit pr.diff compares the head against.
+	MergeBaseSHA string `json:"mergeBaseSha"`
+	DiffSHA256   string `json:"diffSha256"`
 }
 
 func LoadTarget(dir string) (Target, error) {

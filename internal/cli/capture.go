@@ -38,7 +38,7 @@ Result (--json):
               "viewer": "...", "baseSha": "...", "headSha": "...", "round": 1,
               "capturedAt": "2026-09-13T12:00:00Z", "clonePath": "/path/to/clone",
               "baseRef": "refs/loupe/owner/repo/123/1/base", "headRef": "refs/loupe/owner/repo/123/1/head",
-              "diffSha256": "..."},
+              "mergeBaseSha": "...", "diffSha256": "..."},
    "refs": {"base": "refs/loupe/owner/repo/123/1/base", "head": "refs/loupe/owner/repo/123/1/head"},
    "cleanup": ["git -C /path/to/clone update-ref -d refs/loupe/owner/repo/123/1/base",
                "git -C /path/to/clone update-ref -d refs/loupe/owner/repo/123/1/head"],
@@ -175,12 +175,16 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 				"rerun loupe capture "+canonical))
 		}
 	}
+	mergeBase, err := gitx.MergeBase(clone, baseRef, headRef)
+	if err != nil {
+		return leftRefs(err)
+	}
 	diffBytes, err := gitx.Diff(clone, baseRef, headRef)
 	if err != nil {
 		return leftRefs(err)
 	}
 	if _, err := diff.Parse(diffBytes); err != nil {
-		return leftRefs(fmt.Errorf("git diff of %s..%s does not parse: %w", baseRef, headRef, err))
+		return leftRefs(fmt.Errorf("git diff of %s...%s does not parse: %w", baseRef, headRef, err))
 	}
 	sum := sha256.Sum256(diffBytes)
 
@@ -189,22 +193,23 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		prURL = canonical
 	}
 	target := run.Target{
-		Schema:     run.TargetSchema,
-		Owner:      owner,
-		Repo:       repo,
-		Number:     number,
-		URL:        prURL,
-		Title:      pr.Title,
-		Author:     pr.Author,
-		Viewer:     viewer,
-		BaseSHA:    pr.BaseSHA,
-		HeadSHA:    pr.HeadSHA,
-		Round:      ref.Round,
-		CapturedAt: deps.Now().UTC(),
-		ClonePath:  clone,
-		BaseRef:    baseRef,
-		HeadRef:    headRef,
-		DiffSHA256: hex.EncodeToString(sum[:]),
+		Schema:       run.TargetSchema,
+		Owner:        owner,
+		Repo:         repo,
+		Number:       number,
+		URL:          prURL,
+		Title:        pr.Title,
+		Author:       pr.Author,
+		Viewer:       viewer,
+		BaseSHA:      pr.BaseSHA,
+		HeadSHA:      pr.HeadSHA,
+		Round:        ref.Round,
+		CapturedAt:   deps.Now().UTC(),
+		ClonePath:    clone,
+		BaseRef:      baseRef,
+		HeadRef:      headRef,
+		MergeBaseSHA: mergeBase,
+		DiffSHA256:   hex.EncodeToString(sum[:]),
 	}
 	if newest > 0 {
 		target.PreviousRound = newest

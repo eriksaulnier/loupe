@@ -15,7 +15,7 @@ Every command below MUST be run with `--json`. Each prints exactly one result ob
 - You MUST NOT allocate a pseudo-terminal to reach them: no `script`, `expect`, `unbuffer`, or `pty` libraries.
 - You MUST NOT pipe or script confirmation into any loupe command.
 - You MUST NOT create GitHub reviews or review comments by any other route, including `gh pr review`, `gh api`, and the GitHub MCP.
-- You MUST NOT check out the pull request branch or modify the working tree. Investigate only with `git show <headSha>:<path>` and `git diff <baseRef> <headRef>`, using the values from the capture result.
+- You MUST NOT check out the pull request branch or modify the working tree. Investigate only with `git show <headSha>:<path>` and `git diff <baseRef>...<headRef>`, using the values from the capture result.
 - When a command refuses, the result has `"ok": false` and an `error` object. You SHOULD read `error.code` and follow `error.fix`, which names the corrective command. You MUST NOT work around a refusal by editing loupe's files.
 
 ## 1. Capture
@@ -34,7 +34,7 @@ When `target.previousRound` is set, run `loupe show --previous --run <ref> --jso
 
 ## 3. Investigate
 
-Read the change with `git diff <baseRef> <headRef>` and read whole files at the head with `git show <headSha>:<path>`. You MAY read other files the same way. You MUST NOT run the pull request's code, check out its branch, or write to the working tree.
+Read the change with `git diff <baseRef>...<headRef>` and read whole files at the head with `git show <headSha>:<path>`. You MAY read other files the same way. You MUST NOT run the pull request's code, check out its branch, or write to the working tree.
 
 ## 4. File findings
 

@@ -21,11 +21,14 @@ var repoEnv = []string{
 	"GIT_COMMON_DIR", "GIT_PREFIX",
 }
 
+// GIT_DIFF_OPTS outranks -U on the command line, and GIT_NAMESPACE hides refs/pull from an upload-pack that inherits it.
+var outputEnv = []string{"GIT_DIFF_OPTS", "GIT_NAMESPACE", "GIT_TERMINAL_PROMPT"}
+
 func cleanEnv() []string {
 	env := make([]string, 0, len(os.Environ())+1)
 	for _, kv := range os.Environ() {
 		name, _, _ := strings.Cut(kv, "=")
-		if !slices.Contains(repoEnv, name) && name != "GIT_TERMINAL_PROMPT" {
+		if !slices.Contains(repoEnv, name) && !slices.Contains(outputEnv, name) {
 			env = append(env, kv)
 		}
 	}
@@ -186,9 +189,20 @@ func RevParse(clone, ref string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// Diff passes explicit flags so the user's diff config (drivers, textconv, color, prefixes, renames) cannot change
-// the stored bytes.
+// MergeBase returns the commit Diff compares the head against.
+func MergeBase(clone, baseRef, headRef string) (string, error) {
+	out, err := git(clone, "merge-base", baseRef, headRef)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Diff compares the head against its merge base with the base, as GitHub's pull request diff does, so lines the base
+// gained after the branch point are not offered for comments. Explicit flags keep the user's diff config (context,
+// hunk merging, algorithm, drivers, textconv, color, prefixes, renames) from changing the stored bytes.
 func Diff(clone, baseRef, headRef string) ([]byte, error) {
-	return git(clone, "diff", "--no-ext-diff", "--no-color", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/",
-		"--find-renames", baseRef+".."+headRef)
+	return git(clone, "-c", "diff.interHunkContext=0", "diff", "-U3", "--diff-algorithm=myers", "--no-relative",
+		"--no-ext-diff", "--no-color", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--find-renames",
+		baseRef+"..."+headRef)
 }

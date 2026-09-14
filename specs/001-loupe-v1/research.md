@@ -43,8 +43,8 @@ Files per run:
 
 | File | Contents |
 | :--- | :--- |
-| `target.json` | owner, repo, number, url, author, viewer, baseSha, headSha, round, previousRound (optional), capturedAt, clonePath, baseRef, headRef, diffSha256 |
-| `pr.diff` | exact `git diff base..head` output |
+| `target.json` | owner, repo, number, url, author, viewer, baseSha, headSha, round, previousRound (optional), capturedAt, clonePath, baseRef, headRef, mergeBaseSha, diffSha256 |
+| `pr.diff` | exact `git diff base...head` output (head against the merge base) |
 | `draft.json` | the draft, see below |
 | `.lock` | flock target for every mutation and for publish |
 | `attempt.json` | in-flight or unknown publication with the embedded envelope and what was confirmed |
@@ -60,7 +60,7 @@ State is derived, never stored: captured if `target.json` exists, ready if readi
 
 ## Capture mechanics
 
-**Decision**: Resolve the pull request through the API, refuse with `same-head` when the newest existing round is unpublished and already at the API's head sha (a published round at the same head gets a new round; clarified 2026-09-13), verify the clone's `origin` matches the pull request's repository, accepting a match on either the configured URL or its `insteadOf` expansion because `insteadOf` is the user's own config and not attacker input (ruled 2026-09-13), then run one fetch from the `origin` remote by name, never from a URL built from the pull request, of `refs/pull/N/head` and the base sha into `refs/loupe/<owner>/<repo>/<number>/<round>/{base,head}` with hooks, auto maintenance, tag following, submodule recursion, pruning and `FETCH_HEAD` writing disabled on the command line. Verify both refs resolve to the API's shas. Produce the diff with `git diff --no-ext-diff --no-color base..head` in the clone and store it with its SHA-256. Print the two `git update-ref -d` commands that remove the refs; loupe never removes them.
+**Decision**: Resolve the pull request through the API, refuse with `same-head` when the newest existing round is unpublished and already at the API's head sha (a published round at the same head gets a new round; clarified 2026-09-13), verify the clone's `origin` matches the pull request's repository, accepting a match on either the configured URL or its `insteadOf` expansion because `insteadOf` is the user's own config and not attacker input (ruled 2026-09-13), then run one fetch from the `origin` remote by name, never from a URL built from the pull request, of `refs/pull/N/head` and the base sha into `refs/loupe/<owner>/<repo>/<number>/<round>/{base,head}` with hooks, auto maintenance, tag following, submodule recursion, pruning and `FETCH_HEAD` writing disabled on the command line. Verify both refs resolve to the API's shas. Record `git merge-base base head` and produce the diff with `git diff -U3 --no-ext-diff --no-color base...head` in the clone, with `diff.interHunkContext=0` and `GIT_DIFF_OPTS` removed so the user's diff config cannot change it, and store it with its SHA-256 (three-dot ruled 2026-09-13: GitHub diffs the head against the merge base, so once the base branch moves a two-dot diff carries lines GitHub will not accept for comments). Print the two `git update-ref -d` commands that remove the refs; loupe never removes them.
 
 **Rationale**: Objects stay reachable for `git show <headSha>:<path>` during review and for later rounds, without a worktree (constitution IV). Disabling submodule recursion and hooks keeps attacker-influenced input (the PR head) away from any program or credential the clone's config might name. Verifying the refs against the API's shas means the stored diff is the diff of exactly what GitHub shows.
 
