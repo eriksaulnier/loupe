@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -351,4 +352,45 @@ func TestRunWritesInFlightAttemptBeforeSending(t *testing.T) {
 		t.Fatal("the create hook did not run")
 	}
 	fx.check(1)
+}
+
+func TestRunReceiptWriteFailureKeepsReviewIdentity(t *testing.T) {
+	for _, attemptFails := range []bool{false, true} {
+		t.Run(fmt.Sprintf("attempt update fails %v", attemptFails), func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			fx.gh.OnCreate(func(*http.Request) {
+				// A directory in place of a record makes the rename onto it fail.
+				names := []string{"receipt.json"}
+				if attemptFails {
+					if err := os.Remove(filepath.Join(fx.dir, "attempt.json")); err != nil {
+						t.Error(err)
+					}
+					names = append(names, "attempt.json")
+				}
+				for _, name := range names {
+					if err := os.Mkdir(filepath.Join(fx.dir, name), 0o755); err != nil {
+						t.Error(err)
+					}
+				}
+			})
+			_, err := fx.run()
+			reviewURL := prLink + "#pullrequestreview-1001"
+			msg := wantRefusal(t, err, refusal.Record, "inspect "+reviewURL+"; the review was posted")
+			want := "review 1001 was created at " + reviewURL + " but receipt.json could not be written: "
+			if !strings.HasPrefix(msg, want) {
+				t.Fatalf("message %q, want prefix %q", msg, want)
+			}
+			if attemptFails {
+				if !strings.Contains(msg, "attempt.json") {
+					t.Fatalf("message lacks the attempt error: %q", msg)
+				}
+			} else {
+				a, found, loadErr := LoadAttempt(fx.dir)
+				if loadErr != nil || !found || a.LastError != msg {
+					t.Fatalf("attempt %+v found %v err %v, want lastError %q", a, found, loadErr, msg)
+				}
+			}
+			fx.check(1)
+		})
+	}
 }

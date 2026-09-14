@@ -187,7 +187,7 @@ func send(ctx context.Context, opts Options, env Envelope, preview Preview) (rec
 	case sendErr == nil:
 		receipt = Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: env.Action, PostedAt: opts.Now(), Envelope: env}
 		if err := SaveReceipt(opts.Dir, receipt); err != nil {
-			return Receipt{}, err
+			return Receipt{}, receiptLost(opts, attempt, review, err)
 		}
 		if err := DeleteAttempt(opts.Dir); err != nil {
 			return Receipt{}, err
@@ -213,4 +213,15 @@ func send(ctx context.Context, opts Options, env Envelope, preview Preview) (rec
 		return Receipt{}, unknownAttemptRefusal(opts.Target,
 			fmt.Sprintf("the review may or may not have been posted on %s: %v", opts.Target.URL, sendErr))
 	}
+}
+
+// receiptLost keeps the posted review's id and URL somewhere the human can find them once receipt.json cannot be
+// written, because GitHub cannot be asked to post it again.
+func receiptLost(opts Options, attempt Attempt, review github.Review, saveErr error) error {
+	message := fmt.Sprintf("review %d was created at %s but receipt.json could not be written: %v", review.ID, review.HTMLURL, saveErr)
+	attempt.UpdatedAt, attempt.LastError = opts.Now(), message
+	if err := SaveAttempt(opts.Dir, attempt); err != nil {
+		message += fmt.Sprintf("; attempt.json could not be updated either: %v", err)
+	}
+	return refusal.New(refusal.Record, message, fmt.Sprintf("inspect %s; the review was posted", review.HTMLURL))
 }
