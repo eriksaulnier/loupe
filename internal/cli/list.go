@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const listHelp = `List every captured run, newest capture first, with its state and finding counts.
@@ -105,41 +105,107 @@ func runList(cmd *cobra.Command, deps Deps) error {
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), "", nil, map[string]any{"runs": rows})
 	}
-	return printList(deps.Stdout, rows)
+	return printList(deps, rows)
 }
 
-func printList(w io.Writer, rows []listRow) error {
+func printList(deps Deps, rows []listRow) error {
+	s, width := deps.outStyle(), deps.width()
+	var b strings.Builder
 	if len(rows) == 0 {
-		_, err := io.WriteString(w, "No runs.\n")
+		fmt.Fprintf(&b, "%s\n", next(s, width, "No runs yet.", "loupe capture <pr-url>"))
+		_, err := io.WriteString(deps.Stdout, b.String())
 		return err
 	}
-	header := []string{"RUN", "STATE", "ACCEPTED", "PENDING", "EXCLUDED", "WITHDRAWN", "OPEN NOTES", "CAPTURED", "TITLE"}
-	table := [][]string{header}
-	for _, r := range rows {
-		table = append(table, []string{
-			render.ForDisplay(r.Ref), render.ForDisplay(r.State),
-			fmt.Sprint(r.Counts.Accepted), fmt.Sprint(r.Counts.Pending), fmt.Sprint(r.Counts.Excluded),
-			fmt.Sprint(r.Counts.Withdrawn), fmt.Sprint(r.Counts.OpenNotes),
-			r.CapturedAt.UTC().Format(time.RFC3339), render.ForDisplay(r.Title),
-		})
+	refs := make([]string, len(rows))
+	counts := make([]string, len(rows))
+	when := make([]string, len(rows))
+	columns := []int{0, len("published"), 0, len("captured")}
+	for i, r := range rows {
+		refs[i], counts[i], when[i] = oneLine(r.Ref), listCountsCell(s, r.Counts), style.Relative(r.CapturedAt, deps.Now())
+		columns[0] = max(columns[0], style.Width(refs[i]))
+		columns[2] = max(columns[2], style.Width(counts[i]))
+		columns[3] = max(columns[3], style.Width(when[i]))
 	}
-	widths := make([]int, len(header))
-	for _, cells := range table {
-		for i, c := range cells {
-			widths[i] = max(widths[i], len([]rune(c)))
-		}
+	fmt.Fprintf(&b, "%s\n", s.Dim.Render(strings.TrimRight(strings.Join([]string{
+		style.Pad("RUN", columns[0]), style.Pad("STATE", columns[1]),
+		style.Pad("FINDINGS", columns[2]), style.Pad("CAPTURED", columns[3]), "TITLE",
+	}, "  "), " ")))
+	title := max(10, width-columns[0]-columns[1]-columns[2]-columns[3]-8)
+	for i, r := range rows {
+		fmt.Fprintf(&b, "%s  %s  %s  %s  %s\n",
+			style.Pad(listRefCell(s, refs[i]), columns[0]),
+			style.Pad(s.Of(listStateKind(r.State)).Render(oneLine(r.State)), columns[1]),
+			style.Pad(counts[i], columns[2]),
+			style.Pad(s.Dim.Render(when[i]), columns[3]),
+			s.TruncRight(oneLine(r.Title), title))
 	}
-	var b strings.Builder
-	for _, cells := range table {
-		for i, c := range cells {
-			if i == len(cells)-1 {
-				b.WriteString(c)
-				break
-			}
-			fmt.Fprintf(&b, "%-*s  ", widths[i], c)
-		}
-		b.WriteString("\n")
-	}
-	_, err := io.WriteString(w, b.String())
+	fmt.Fprintf(&b, "\n%s\n", listFooter(s, width, rows))
+	_, err := io.WriteString(deps.Stdout, b.String())
 	return err
+}
+
+// listRefCell dims the round so the pull request, the part a reader scans for, stands out from it.
+func listRefCell(s style.Style, ref string) string {
+	base, round, ok := strings.Cut(ref, "@")
+	if !ok {
+		return s.Accent.Render(ref)
+	}
+	return s.Accent.Render(base) + s.Dim.Render("@"+round)
+}
+
+// listStateKind colors a state by what it waits on: the human, nobody, or the agent that files the findings.
+func listStateKind(state string) style.Kind {
+	switch state {
+	case "ready":
+		return style.Accent
+	case "published":
+		return style.Good
+	}
+	return style.Faint
+}
+
+// listCountsCell is the five counts as glyph pairs; a zero fades so the live numbers are what the eye lands on.
+func listCountsCell(s style.Style, c listCounts) string {
+	if c == (listCounts{}) {
+		return s.Dim.Render("no findings yet")
+	}
+	g := s.Glyphs
+	pairs := []struct {
+		kind  style.Kind
+		glyph string
+		n     int
+	}{
+		{style.Good, g.Accepted, c.Accepted},
+		{style.Warn, g.Pending, c.Pending},
+		{style.Faint, g.Excluded, c.Excluded},
+		{style.Faint, g.Withdrawn, c.Withdrawn},
+		{style.Note, g.Note, c.OpenNotes},
+	}
+	cells := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		cell := fmt.Sprintf("%s%d", p.glyph, p.n)
+		if p.n == 0 {
+			cells = append(cells, s.Dim.Render(cell))
+			continue
+		}
+		cells = append(cells, s.Of(p.kind).Render(cell))
+	}
+	return strings.Join(cells, " ")
+}
+
+// listFooter names the run with the most findings still waiting on the human, which is what the list is read for.
+func listFooter(s style.Style, width int, rows []listRow) string {
+	sentence := fmt.Sprintf("%d %s.", len(rows), plural(len(rows), "run"))
+	waiting := listRow{}
+	for _, r := range rows {
+		if r.Counts.Pending > waiting.Counts.Pending {
+			waiting = r
+		}
+	}
+	if waiting.Counts.Pending == 0 {
+		return s.Dim.Render(sentence)
+	}
+	ref, _, _ := strings.Cut(waiting.Ref, "@")
+	return next(s, width, sentence+" ", "loupe review "+oneLine(ref)) +
+		s.Dim.Render(fmt.Sprintf(" has %d %s waiting for you.", waiting.Counts.Pending, plural(waiting.Counts.Pending, "finding")))
 }

@@ -85,6 +85,6 @@ func runReply(cmd *cobra.Command, deps Deps, noteID string) error {
 			"reply": map[string]any{"id": reply.ID, "noteId": reply.NoteID},
 		})
 	}
-	_, err = fmt.Fprintf(deps.Stdout, "Replied %s to %s on %s (draft version %d)\n", reply.ID, reply.NoteID, ref, d.Version)
-	return err
+	s := deps.outStyle()
+	return printDone(deps, fmt.Sprintf("Replied %s to %s on %s", ids(s, reply.ID), ids(s, reply.NoteID), s.Accent.Render(ref.String())), d.Version)
 }

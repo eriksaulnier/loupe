@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -124,16 +123,16 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 		return err
 	}
 	results := make([]map[string]any, 0, len(added))
-	ids := make([]string, 0, len(added))
+	ordered := make([]string, 0, len(added))
 	for _, f := range added {
 		results = append(results, map[string]any{"id": f.ID, "rev": f.Rev})
-		ids = append(ids, f.ID)
+		ordered = append(ordered, f.ID)
 	}
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{"findings": results})
 	}
-	_, err = fmt.Fprintf(deps.Stdout, "Added %s to %s (draft version %d)\n", strings.Join(ids, ", "), ref, d.Version)
-	return err
+	s := deps.outStyle()
+	return printDone(deps, fmt.Sprintf("Added %s to %s", ids(s, ordered...), s.Accent.Render(ref.String())), d.Version)
 }
 
 func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, error) {

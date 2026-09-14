@@ -121,7 +121,8 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		Stderr: deps.Stderr,
 	})
 	if errors.Is(err, publish.ErrDeclined) {
-		if _, err := fmt.Fprintln(deps.Stderr, "Publish canceled; nothing was sent."); err != nil {
+		es := deps.errStyle()
+		if _, err := fmt.Fprintf(deps.Stderr, "%s  %s\n", es.Warn.Bold(true).Render(es.Glyphs.Withdrawn+" canceled"), es.Dim.Render("nothing was sent or written")); err != nil {
 			return err
 		}
 		if jsonMode {
@@ -139,6 +140,24 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		}
 		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, payload)
 	}
-	_, err = fmt.Fprintln(deps.Stdout, receipt.ReviewURL)
+	return printPublished(deps, ref, receipt, replayed)
+}
+
+// printPublished is the one place a publish ends up: what was posted, or that it already was, then the review URL,
+// which every earlier version printed on its own line and scripts read from the last line.
+func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bool) error {
+	s := deps.outStyle()
+	outcome := s.Good.Bold(true).Render(s.Glyphs.Accepted + " published")
+	detail := fmt.Sprintf("%s round %d", ref.String(), ref.Round)
+	if inline := len(receipt.Envelope.Comments); inline > 0 {
+		detail += fmt.Sprintf("  %s %d inline %s", s.Dim.Render("action "+receipt.Action), inline, plural(inline, "comment"))
+	} else {
+		detail += "  " + s.Dim.Render("action "+receipt.Action)
+	}
+	if replayed {
+		outcome = s.Good.Bold(true).Render(s.Glyphs.Accepted + " already published")
+		detail = s.Dim.Render(fmt.Sprintf("round %d was posted on %s", ref.Round, receipt.PostedAt.UTC().Format("2006-01-02 at 15:04 UTC")))
+	}
+	_, err := fmt.Fprintf(deps.Stdout, "%s  %s\n  %s\n", outcome, detail, s.Accent.Render(oneLine(receipt.ReviewURL)))
 	return err
 }

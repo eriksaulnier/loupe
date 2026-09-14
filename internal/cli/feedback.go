@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const feedbackHelp = `Read what the human sent back: notes with their replies, dispositions and readiness.
@@ -51,7 +51,7 @@ func runFeedback(cmd *cobra.Command, deps Deps) error {
 		return err
 	}
 	if !wantJSON(cmd) {
-		return printFeedback(deps.Stdout, ref.String(), d)
+		return printFeedback(deps, ref.String(), d)
 	}
 	notes := make([]map[string]any, 0, len(d.Notes))
 	for _, n := range d.Notes {
@@ -80,45 +80,73 @@ func repliesTo(d *draft.Draft, noteID string) []draft.Reply {
 	return out
 }
 
-func printFeedback(w io.Writer, ref string, d *draft.Draft) error {
-	var b strings.Builder
+func printFeedback(deps Deps, ref string, d *draft.Draft) error {
+	s, width := deps.outStyle(), deps.width()
 	readiness := draft.ReadinessOf(d)
-	ready := "not ready"
-	if readiness.Ready {
-		ready = "ready"
+	var b strings.Builder
+	line := fmt.Sprintf("%s  %s  %s", header(s, width, ref, ""), s.Dim.Render(fmt.Sprintf("draft version %d", d.Version)),
+		s.ReadinessPill(readiness.Ready, len(readiness.Pending), len(readiness.OpenNotes)))
+	// The tally spells out what the pill only names, so it is the part that gives way when the line does not fit.
+	tally := s.Dim.Render(fmt.Sprintf("%d pending, %d open %s", len(readiness.Pending), len(readiness.OpenNotes), plural(len(readiness.OpenNotes), "note")))
+	if style.Width(line)+style.Width(tally)+2 <= width {
+		line += "  " + tally
 	}
-	fmt.Fprintf(&b, "%s (draft version %d): %s (%d pending, %d open notes)\n", ref, d.Version, ready, len(readiness.Pending), len(readiness.OpenNotes))
-	indent := func(s string) string {
-		return strings.ReplaceAll(strings.TrimRight(render.ForDisplay(s), "\n"), "\n", "\n      ")
+	fmt.Fprintf(&b, "%s\n", line)
+	if len(d.Notes) == 0 {
+		fmt.Fprintf(&b, "\n%s\n%s\n", s.Heading("notes"), s.Dim.Render("  (none)"))
 	}
 	for _, open := range []bool{true, false} {
-		heading := "Open notes:"
-		if !open {
-			heading = "Closed notes:"
-		}
-		wroteHeading := false
-		for _, n := range d.Notes {
-			if (n.Status == draft.NoteOpen) != open {
-				continue
-			}
-			if !wroteHeading {
-				fmt.Fprintf(&b, "%s\n", heading)
-				wroteHeading = true
-			}
-			fmt.Fprintf(&b, "  %s on %s (%s): %s\n", render.ForDisplay(n.ID), render.ForDisplay(n.FindingID), render.ForDisplay(n.Status), indent(n.Body))
-			for _, r := range repliesTo(d, n.ID) {
-				fmt.Fprintf(&b, "    %s by %s: %s\n", render.ForDisplay(r.ID), render.ForDisplay(r.By), indent(r.Body))
-			}
-		}
+		writeNotes(&b, s, width, d, open)
 	}
-	if len(d.Notes) == 0 {
-		b.WriteString("Notes: (none)\n")
-	}
+	fmt.Fprintf(&b, "\n%s\n", s.Heading("findings"))
 	dispositions := draft.Dispositions(d)
-	b.WriteString("Findings:\n")
 	for _, f := range d.Findings {
-		fmt.Fprintf(&b, "  %s  %-9s  rev %d  %s\n", render.ForDisplay(f.ID), dispositions[f.ID], f.Rev, render.ForDisplay(f.Title))
+		glyph, word, kind := s.Disposition(dispositions[f.ID])
+		meta := s.Dim.Render(fmt.Sprintf("%s rev %d", style.Pad(word, 10), f.Rev))
+		if kind == style.Warn {
+			meta = s.Warn.Render(style.Pad(word, 10)) + " " + s.Dim.Render(fmt.Sprintf("rev %d", f.Rev))
+		}
+		title := oneLine(f.Title)
+		if f.Blocking {
+			title = s.Bad.Render(s.Glyphs.Blocking) + " " + title
+		}
+		line := fmt.Sprintf("%s %s  %s  %s", s.Of(kind).Render(glyph), s.Accent.Render(oneLine(f.ID)), meta, title)
+		if kind == style.Faint {
+			line = s.Dim.Render(fmt.Sprintf("%s %s  %s rev %d  %s", glyph, oneLine(f.ID), style.Pad(word, 10), f.Rev, oneLine(f.Title)))
+		}
+		fmt.Fprintf(&b, "%s\n", s.TruncRight(line, width))
 	}
-	_, err := io.WriteString(w, b.String())
+	fmt.Fprintf(&b, "\n%s\n", next(s, width, "Replies never resolve a note or accept a finding; the human decides in", "loupe review "+oneLine(ref)))
+	_, err := io.WriteString(deps.Stdout, b.String())
 	return err
+}
+
+// writeNotes prints one thread per note, the replies under the note they answer, open notes before closed ones
+// because an open note is what the agent has to act on.
+func writeNotes(b *strings.Builder, s style.Style, width int, d *draft.Draft, open bool) {
+	heading := "open notes"
+	if !open {
+		heading = "closed notes"
+	}
+	wroteHeading := false
+	for _, n := range d.Notes {
+		if (n.Status == draft.NoteOpen) != open {
+			continue
+		}
+		if !wroteHeading {
+			fmt.Fprintf(b, "\n%s\n", s.Heading(heading))
+			wroteHeading = true
+		}
+		id := fmt.Sprintf("%s %s", s.Glyphs.Note, oneLine(n.ID))
+		if !open {
+			fmt.Fprintf(b, "%s\n", s.Dim.Render(fmt.Sprintf("%s on %s  %s  %s", id, oneLine(n.FindingID), oneLine(n.Status), oneLine(n.Body))))
+			continue
+		}
+		fmt.Fprintf(b, "%s on %s  %s\n", s.Note.Render(id), s.Accent.Render(oneLine(n.FindingID)), s.Dim.Render(oneLine(n.Status)))
+		fmt.Fprintf(b, "%s\n", s.Wrap(text(n.Body), width, "  "))
+		for _, r := range repliesTo(d, n.ID) {
+			lead := fmt.Sprintf("  %s %s by %s  ", s.Glyphs.Reply, oneLine(r.ID), oneLine(r.By))
+			fmt.Fprintf(b, "%s%s\n", s.Dim.Render(lead), strings.TrimLeft(s.Wrap(text(r.Body), width, strings.Repeat(" ", style.Width(lead))), " "))
+		}
+	}
 }

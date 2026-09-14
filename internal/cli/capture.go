@@ -240,7 +240,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 			"next":    next,
 		})
 	}
-	return printCapture(deps.Stdout, ref, target, cleanup, next)
+	return printCapture(deps, ref, target, cleanup, next)
 }
 
 // refuseSameHead runs under the capture lock so two captures at an unchanged head cannot both pass it. A published
@@ -287,13 +287,24 @@ func createRound(dir string, target run.Target, diffBytes, draftJSON []byte, prU
 	return err
 }
 
-func printCapture(w io.Writer, ref run.Ref, target run.Target, cleanup, next []string) error {
+func printCapture(deps Deps, ref run.Ref, target run.Target, cleanup, steps []string) error {
+	s, width := deps.outStyle(), deps.width()
 	var b strings.Builder
-	fmt.Fprintf(&b, "Captured %s: %s\n", ref, target.Title)
-	fmt.Fprintf(&b, "Refs written to %s:\n  %s\n  %s\n", target.ClonePath, target.BaseRef, target.HeadRef)
-	fmt.Fprintf(&b, "Remove them when done with:\n  %s\n", strings.Join(cleanup, "\n  "))
-	fmt.Fprintf(&b, "Next:\n  %s\n", strings.Join(next, "\n  "))
-	_, err := io.WriteString(w, b.String())
+	fmt.Fprintf(&b, "%s %s %s  %s\n", s.Good.Bold(true).Render(s.Glyphs.Accepted), s.Good.Bold(true).Render("captured"),
+		s.Accent.Render(ref.String()), s.TruncRight(oneLine(target.Title), max(20, width-len(ref.String())-14)))
+	fmt.Fprintf(&b, "%s\n", s.Dim.Render(fmt.Sprintf("  refs written to %s", oneLine(target.ClonePath))))
+	for _, r := range []string{target.BaseRef, target.HeadRef} {
+		fmt.Fprintf(&b, "  %s\n", s.Dim.Render(oneLine(r)))
+	}
+	fmt.Fprintf(&b, "\n%s\n", s.Heading("remove them when done with"))
+	for _, c := range cleanup {
+		fmt.Fprintf(&b, "  %s\n", s.Accent.Render(oneLine(c)))
+	}
+	fmt.Fprintf(&b, "\n%s\n", s.Heading("next"))
+	for _, step := range steps {
+		fmt.Fprintf(&b, "  %s\n", paintCommand(s, oneLine(step)))
+	}
+	_, err := io.WriteString(deps.Stdout, b.String())
 	return err
 }
 

@@ -1,0 +1,27 @@
+loupe eriksaulnier/dev-loadout#2@1  chore: canonical review skills, gh doctor check, plannotator bu…
+draft version 11  ✓1 ·1 ✗1 ↩0 ✎1  [NOT READY]
+
+SUMMARY
+  This is a large documentation and contract change (canonical `review-*` skills plus `gadfly-review-
+  *` compatibility shims, an `unable` verifier verdict, evidence-preservation rules, publication
+  moved wholly into `post-review`) around one small code change.
+
+FINDINGS
+✓ f-001  Alias metadata removed from three skills, still live in four others
+         accepted · issue · confidence medium · adapters/pi/skills/post-review/SKILL.md:10
+         This change removes `metadata.aliases` from three skills and justifies it in both READMEs.
+         By that premise, the four skills that still declare it are dead configuration whose
+         advertised names never resolve.
+
+· f-002  ● A packaged gh build reports as "unavailable" rather than as a version
+         pending · blocking · suggestion · confidence low · severity major · src/cli.ts:598
+         The regex requires whitespace or end-of-line immediately after the patch number, so a
+         packaged build with a suffix is reported as unavailable.
+         Suggested fix
+         ┃ const m = /^gh version (\d+\.\d+\.\d+)/.exec(line);
+
+✗ f-003  Authority clause quotes a README phrase to satisfy a substring test
+         excluded · general
+         The clause exists to pass the test, not to state a rule.
+
+3 findings, 1 pending.  Decide them with loupe review eriksaulnier/dev-loadout#2@1

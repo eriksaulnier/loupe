@@ -9,8 +9,8 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
-	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const showHelp = `Show the whole draft of a run: summary, findings with their history, human decisions,
@@ -95,7 +95,7 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 			"digest":       draft.Digest(d),
 		})
 	}
-	return printShow(deps.Stdout, ref, target, d, dispositions, readiness)
+	return printShow(deps, ref, target, d, dispositions, readiness)
 }
 
 func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
@@ -125,62 +125,141 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 			"findings":  findings,
 		})
 	}
+	s, width := deps.outStyle(), deps.width()
 	var b strings.Builder
-	fmt.Fprintf(&b, "Round %d was published: %s\n", round, render.ForDisplay(receipt.ReviewURL))
+	fmt.Fprintf(&b, "%s  %s\n", header(s, width, ref.String(), ""), s.Dim.Render(fmt.Sprintf("round %d, published", round)))
+	fmt.Fprintf(&b, "%s\n\n", s.Accent.Render(oneLine(receipt.ReviewURL)))
+	fmt.Fprintf(&b, "%s\n", s.Heading("findings"))
 	if len(findings) == 0 {
-		b.WriteString("Findings: (none)\n")
+		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  (none)"))
 	}
 	for _, f := range findings {
-		blocking := "-"
+		meta := []string{}
 		if f.Blocking {
-			blocking = "blocking"
+			meta = append(meta, "blocking")
 		}
-		label := f.Label
-		if label == "" {
-			label = "-"
+		if f.Label != "" {
+			meta = append(meta, oneLine(f.Label))
 		}
-		where := "general"
-		if f.Location != nil {
-			where = fmt.Sprintf("%s:%d", render.ForDisplay(f.Location.Path), f.Location.Line)
-		}
-		fmt.Fprintf(&b, "%s  %-8s  %s  %s  %s\n", render.ForDisplay(f.ID), blocking, render.ForDisplay(label), render.ForDisplay(f.Title), where)
-		fmt.Fprintf(&b, "  %s\n", strings.ReplaceAll(strings.TrimRight(render.ForDisplay(f.Body), "\n"), "\n", "\n  "))
+		meta = append(meta, locationOf(f.Location))
+		writeFinding(&b, s, width, findingBlock{
+			glyph: s.Glyphs.Accepted, kind: style.Good, id: f.ID, blocking: f.Blocking,
+			title: f.Title, meta: meta, body: f.Body,
+		})
 	}
+	fmt.Fprintf(&b, "%s\n", next(s, width, fmt.Sprintf("Round %d is on GitHub. The current round is", round), "loupe show --run "+ref.String()))
 	_, err = io.WriteString(deps.Stdout, b.String())
 	return err
 }
 
-func printShow(w io.Writer, ref run.Ref, target run.Target, d *draft.Draft, dispositions map[string]string, readiness draft.Readiness) error {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s: %s (draft version %d)\n", ref, render.ForDisplay(target.Title), d.Version)
-	if d.Summary == "" {
-		b.WriteString("Summary: (none)\n")
-	} else {
-		fmt.Fprintf(&b, "Summary:\n  %s\n", strings.ReplaceAll(strings.TrimRight(render.ForDisplay(d.Summary), "\n"), "\n", "\n  "))
+// findingBlock is one finding as every view prints it: a state glyph, its id, the title, the fields that are set and
+// the body under them.
+type findingBlock struct {
+	glyph    string
+	kind     style.Kind
+	id       string
+	blocking bool
+	title    string
+	meta     []string
+	body     string
+	fix      string
+}
+
+const findingIndent = "         "
+
+func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) {
+	title := s.Bold.Render(oneLine(f.title))
+	if f.blocking {
+		title = s.Bad.Render(s.Glyphs.Blocking) + " " + title
 	}
+	fmt.Fprintf(b, "%s %s  %s\n", s.Of(f.kind).Render(f.glyph), s.Accent.Render(oneLine(f.id)), title)
+	if len(f.meta) > 0 {
+		for _, line := range strings.Split(s.Wrap(strings.Join(f.meta, metaSep(s)), width, findingIndent), "\n") {
+			fmt.Fprintf(b, "%s\n", s.Dim.Render(line))
+		}
+	}
+	if body := text(f.body); body != "" {
+		fmt.Fprintf(b, "%s\n", s.Wrap(body, width, findingIndent))
+	}
+	if fix := text(f.fix); fix != "" {
+		fmt.Fprintf(b, "%s\n", s.Dim.Render(findingIndent+"Suggested fix"))
+		for _, line := range strings.Split(fix, "\n") {
+			fmt.Fprintf(b, "%s%s %s\n", findingIndent, s.Dim.Render(s.Glyphs.Quote), line)
+		}
+	}
+	b.WriteString("\n")
+}
+
+// locationOf names where a finding sits, or that it is about the pull request as a whole.
+func locationOf(l *draft.Location) string {
+	if l == nil {
+		return "general"
+	}
+	return fmt.Sprintf("%s:%d", oneLine(l.Path), l.Line)
+}
+
+func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispositions map[string]string, readiness draft.Readiness) error {
+	s, width := deps.outStyle(), deps.width()
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n", header(s, width, ref.String(), target.Title))
+	version := s.Dim.Render(fmt.Sprintf("draft version %d", d.Version))
+	pill := s.ReadinessPill(readiness.Ready, len(readiness.Pending), len(readiness.OpenNotes))
+	tally := listCounts{len(readiness.Accepted), len(readiness.Pending), len(readiness.Excluded), len(readiness.Withdrawn), len(readiness.OpenNotes)}
+	counts := s.Counts(tally.Accepted, tally.Pending, tally.Excluded, tally.Withdrawn, tally.OpenNotes)
+	if style.Width(version)+style.Width(counts)+style.Width(pill)+4 > width {
+		// Under about a hundred columns the words push the readiness pill off the line, so the counts keep their
+		// glyphs and numbers and drop the words the glyphs already carry.
+		counts = listCountsCell(s, tally)
+	}
+	fmt.Fprintf(&b, "%s  %s  %s\n\n", version, counts, pill)
+
+	fmt.Fprintf(&b, "%s\n", s.Heading("summary"))
+	if summary := text(d.Summary); summary == "" {
+		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  (none)"))
+	} else {
+		fmt.Fprintf(&b, "%s\n", s.Wrap(summary, width, "  "))
+	}
+
+	fmt.Fprintf(&b, "\n%s\n", s.Heading("findings"))
 	if len(d.Findings) == 0 {
-		b.WriteString("Findings: (none)\n")
+		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  (none)"))
 	}
 	for _, f := range d.Findings {
-		blocking := "-"
+		glyph, word, kind := s.Disposition(dispositions[f.ID])
+		meta := []string{word}
 		if f.Blocking {
-			blocking = "blocking"
+			meta = append(meta, "blocking")
 		}
-		label := f.Label
-		if label == "" {
-			label = "-"
+		if f.Label != "" {
+			meta = append(meta, oneLine(f.Label))
 		}
-		where := "general"
-		if f.Location != nil {
-			where = fmt.Sprintf("%s:%d", render.ForDisplay(f.Location.Path), f.Location.Line)
+		if f.Confidence != "" {
+			meta = append(meta, "confidence "+oneLine(f.Confidence))
 		}
-		fmt.Fprintf(&b, "%s  %-9s  %-8s  %s  %s  %s\n", f.ID, dispositions[f.ID], blocking, render.ForDisplay(label), render.ForDisplay(f.Title), where)
+		if f.Severity != "" {
+			meta = append(meta, "severity "+oneLine(f.Severity))
+		}
+		meta = append(meta, locationOf(f.Location))
+		writeFinding(&b, s, width, findingBlock{
+			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
+			title: f.Title, meta: meta, body: f.Body, fix: f.SuggestedFix,
+		})
 	}
-	ready := "not ready"
-	if readiness.Ready {
-		ready = "ready"
-	}
-	fmt.Fprintf(&b, "Readiness: %s (%d pending, %d open notes)\n", ready, len(readiness.Pending), len(readiness.OpenNotes))
-	_, err := io.WriteString(w, b.String())
+	fmt.Fprintf(&b, "%s\n", showFooter(s, width, ref, d, readiness))
+	_, err := io.WriteString(deps.Stdout, b.String())
 	return err
+}
+
+// showFooter says what is left to do with this run, in the words of the command that does it.
+func showFooter(s style.Style, width int, ref run.Ref, d *draft.Draft, readiness draft.Readiness) string {
+	count := fmt.Sprintf("%d %s", len(d.Findings), plural(len(d.Findings), "finding"))
+	switch {
+	case len(d.Findings) == 0:
+		return next(s, width, "No findings yet. File them with", "loupe add --run "+ref.String()+" --from <file> --json")
+	case len(readiness.Pending) > 0:
+		return next(s, width, fmt.Sprintf("%s, %d pending.  Decide them with", count, len(readiness.Pending)), "loupe review "+ref.String())
+	case len(readiness.OpenNotes) > 0:
+		return next(s, width, fmt.Sprintf("%s, %d open %s.  Answer with", count, len(readiness.OpenNotes), plural(len(readiness.OpenNotes), "note")), "loupe reply <note-id> --run "+ref.String())
+	}
+	return next(s, width, count+", all decided.  Publish with", "loupe publish "+ref.String()+" --action comment")
 }

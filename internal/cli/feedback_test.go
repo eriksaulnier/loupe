@@ -41,8 +41,8 @@ func TestPrintFeedbackEscapesDraftText(t *testing.T) {
 		{ID: "n-002", FindingID: "f-001", Body: "open\x1b]52;c;x\a", Status: draft.NoteOpen},
 	}
 	d.Replies = []draft.Reply{{ID: "r-001", NoteID: "n-002", Body: "re\u2066ply", By: "agent"}}
-	var out strings.Builder
-	if err := printFeedback(&out, "o/r#1@1", d); err != nil {
+	deps, out := printDeps(t)
+	if err := printFeedback(deps, "o/r#1@1", d); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()

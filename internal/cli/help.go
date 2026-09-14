@@ -102,7 +102,7 @@ func rootHelpText(s style.Style, root *cobra.Command) string {
 
 	fmt.Fprintf(&b, "%s  %s\n", s.Heading("workflow"), rootFlow)
 	for i, step := range workflowSteps {
-		line := command(s, step.command)
+		line := paintCommand(s, step.command)
 		if step.human {
 			line = style.Pad(line, stepTagColumn) + "  " + s.Accent.Render(groupHuman)
 		}
@@ -131,7 +131,7 @@ func rootHelpText(s style.Style, root *cobra.Command) string {
 		column = max(column, style.Width(l[0]))
 	}
 	for _, l := range sendBackLoop {
-		fmt.Fprintf(&b, "  %s  %s\n", style.Pad(command(s, l[0]), column), s.Dim.Render(l[1]))
+		fmt.Fprintf(&b, "  %s  %s\n", style.Pad(paintCommand(s, l[0]), column), s.Dim.Render(l[1]))
 	}
 
 	fmt.Fprintf(&b, "\n%s\n%s\n%s\n", s.Heading("run references"), table(s, runReferences, 18), indent(runSelect, "  "))
@@ -140,8 +140,8 @@ func rootHelpText(s style.Style, root *cobra.Command) string {
 	return b.String()
 }
 
-// command paints a `loupe …` line: the program and the subcommand carry the weight, the arguments do not.
-func command(s style.Style, line string) string {
+// paintCommand paints a `loupe …` line: the program and the subcommand carry the weight, the arguments do not.
+func paintCommand(s style.Style, line string) string {
 	parts := strings.SplitN(line, " ", 3)
 	if len(parts) < 2 || parts[0] != "loupe" {
 		return line
@@ -198,7 +198,7 @@ func commandHelp(s style.Style, c *cobra.Command) string {
 	if c.Example != "" {
 		fmt.Fprintf(&b, "\n%s\n", s.Heading("examples"))
 		for _, line := range strings.Split(strings.TrimRight(c.Example, "\n"), "\n") {
-			fmt.Fprintf(&b, "  %s\n", command(s, strings.TrimSpace(line)))
+			fmt.Fprintf(&b, "  %s\n", paintCommand(s, strings.TrimSpace(line)))
 		}
 	}
 	return b.String()

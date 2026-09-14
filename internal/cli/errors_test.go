@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/muesli/termenv"
 
@@ -14,6 +15,16 @@ import (
 
 func reportDeps(stdout, stderr io.Writer) Deps {
 	return Deps{Stdout: stdout, Stderr: stderr, Getenv: func(string) string { return "" }}
+}
+
+// printDeps is what a print function needs and nothing else: a buffer to write to, a fixed clock and a width.
+func printDeps(t *testing.T) (Deps, *bytes.Buffer) {
+	t.Helper()
+	var out bytes.Buffer
+	deps := reportDeps(&out, io.Discard)
+	deps.Now = func() time.Time { return time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC) }
+	deps.TermWidth = func() int { return 100 }
+	return deps, &out
 }
 
 // colorStyle forces the palette on; no test writer is a terminal, so color is never detected.

@@ -157,8 +157,8 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 	if cleared {
 		clearedText = "; its decision was cleared"
 	}
-	_, err = fmt.Fprintf(deps.Stdout, "Edited %s on %s: rev %d, %s%s (draft version %d)\n", edited.ID, ref, edited.Rev, state, clearedText, d.Version)
-	return err
+	s := deps.outStyle()
+	return printDone(deps, fmt.Sprintf("Edited %s on %s: rev %d, %s%s", ids(s, edited.ID), s.Accent.Render(ref.String()), edited.Rev, state, clearedText), d.Version)
 }
 
 // editFields is comparable so an empty edit can be detected; each field is raw JSON as in draft.EditInput.

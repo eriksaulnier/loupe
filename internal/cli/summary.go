@@ -94,6 +94,6 @@ func runSummary(cmd *cobra.Command, deps Deps) error {
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{"includedCount": included})
 	}
-	_, err = fmt.Fprintf(deps.Stdout, "Summary set on %s with %d included findings (draft version %d)\n", ref, included, d.Version)
-	return err
+	s := deps.outStyle()
+	return printDone(deps, fmt.Sprintf("Summary set on %s with %d included %s", s.Accent.Render(ref.String()), included, plural(included, "finding")), d.Version)
 }

@@ -78,7 +78,7 @@ func TestUnknownOutcomeReconcilesOnNextPublish(t *testing.T) {
 		t.Fatalf("exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
 	url, envelope := h.receipt()
-	if stdout != url+"\n" || !strings.Contains(url, "#pullrequestreview-") {
+	if !strings.HasSuffix(stdout, url+"\n") || !strings.Contains(stdout, "already published") || !strings.Contains(url, "#pullrequestreview-") {
 		t.Fatalf("stdout %q receipt URL %q", stdout, url)
 	}
 	if !reflect.DeepEqual(envelope, saved.Envelope) {
