@@ -67,41 +67,53 @@ type scanner struct {
 	// inHTMLBlock is set from an allowlisted tag line to the next blank line. CommonMark reads that span as a raw HTML
 	// block, so code spans, escapes and fences there hide nothing from GitHub.
 	inHTMLBlock bool
+	// openSpan is set from a line with a backtick run that does not close on that line to the next blank line. CommonMark
+	// may close that span on a later line, which pairs every later run differently, so later code spans hide nothing.
+	openSpan bool
 }
 
 func (s *scanner) line(n int, line string) error {
 	trimmed := strings.TrimSpace(line)
+	// CommonMark reads a line indented four or more columns as code or paragraph text, never as a fence or the start of
+	// an HTML block. Inside an HTML block every line is HTML whatever its indentation.
+	structural := s.inHTMLBlock || !indented(line)
 	if s.fenceChar != 0 {
-		if closesFence(trimmed, s.fenceChar, s.fenceLen) {
+		if structural && closesFence(trimmed, s.fenceChar, s.fenceLen) {
 			s.fenceChar = 0
 		}
 		return nil
 	}
 	if trimmed == "" {
 		s.inHTMLBlock = false
+		s.openSpan = false
 		return nil
 	}
-	if opensHTMLBlock(trimmed) {
+	if structural && opensHTMLBlock(trimmed) {
 		s.inHTMLBlock = true
+		s.openSpan = false
 	}
 	visible := trimmed
 	if !s.inHTMLBlock {
-		if c, length, ok := opensFence(trimmed); ok {
+		if c, length, ok := opensFence(trimmed); ok && structural {
 			if err := s.contentWhileOpen(n); err != nil {
 				return err
 			}
 			s.fenceChar, s.fenceLen, s.fenceLine = c, length, n
+			s.openSpan = false
 			return nil
 		}
-		visible = strings.TrimSpace(textOnly(line))
+		text, unclosed := textOnly(line, !s.openSpan)
+		s.openSpan = s.openSpan || unclosed
+		visible = strings.TrimSpace(text)
 	}
 
-	if s.awaitingSummary != 0 && !strings.HasPrefix(visible, "<summary>") {
+	if s.awaitingSummary != 0 && (!structural || !strings.HasPrefix(visible, "<summary>")) {
 		return s.refuse(ruleHTML, n, fmt.Sprintf("<details> on line %d must be followed by <summary> on its next non-blank line", s.awaitingSummary))
 	}
 	switch {
 	case s.summaryLine != 0:
-		return s.summaryText(n, visible)
+		return s.summaryText(n, visible, structural)
+	case !structural:
 	case visible == "<details>" || visible == "<details open>":
 		if len(s.openers) == s.maxDepth {
 			return s.refuse(ruleDepth, n, fmt.Sprintf("<details> nests more than %d levels deep in a %s", s.maxDepth, s.name))
@@ -121,7 +133,7 @@ func (s *scanner) line(n int, line string) error {
 		}
 		s.awaitingSummary = 0
 		s.summaryLine = n
-		return s.summaryText(n, strings.TrimPrefix(visible, "<summary>"))
+		return s.summaryText(n, strings.TrimPrefix(visible, "<summary>"), structural)
 	}
 	if reason, found := s.findHTML(visible); found {
 		return s.refuse(ruleHTML, n, reason)
@@ -130,8 +142,11 @@ func (s *scanner) line(n int, line string) error {
 }
 
 // summaryText checks text inside an open <summary>, which must reach </summary> before any tag or other structure.
-func (s *scanner) summaryText(n int, text string) error {
-	inner, closed := strings.CutSuffix(text, "</summary>")
+func (s *scanner) summaryText(n int, text string, structural bool) error {
+	inner, closed := text, false
+	if structural {
+		inner, closed = strings.CutSuffix(text, "</summary>")
+	}
 	if reason, found := s.findHTML(inner); found {
 		return s.refuse(ruleHTML, n, fmt.Sprintf("<summary> opened on line %d is not closed by </summary> before %s", s.summaryLine, reason))
 	}
@@ -200,6 +215,23 @@ func closesFence(trimmed string, c byte, length int) bool {
 	return len(trimmed) >= length && runLength(trimmed, 0) == len(trimmed) && trimmed[0] == c
 }
 
+// indented reports whether line starts with four or more columns of whitespace, counting a tab to the next multiple of
+// four as CommonMark does.
+func indented(line string) bool {
+	col := 0
+	for i := 0; i < len(line) && col < 4; i++ {
+		switch line[i] {
+		case ' ':
+			col++
+		case '\t':
+			col += 4 - col%4
+		default:
+			return false
+		}
+	}
+	return col >= 4
+}
+
 func runLength(s string, i int) int {
 	j := i
 	for j < len(s) && s[j] == s[i] {
@@ -208,9 +240,9 @@ func runLength(s string, i int) int {
 	return j - i
 }
 
-// textOnly blanks code spans and backslash escapes, where tags are text rather than HTML. Entities need no handling:
-// &lt;details&gt; contains no '<'.
-func textOnly(line string) string {
+// textOnly blanks backslash escapes and, when spans is set, code spans, where tags are text rather than HTML. Entities
+// need no handling: &lt;details&gt; contains no '<'. unclosed reports a backtick run with no closing run on the line.
+func textOnly(line string, spans bool) (text string, unclosed bool) {
 	out := []byte(line)
 	for i := 0; i < len(line); {
 		switch {
@@ -219,8 +251,13 @@ func textOnly(line string) string {
 			i += 2
 		case line[i] == '`':
 			run := runLength(line, i)
+			if !spans {
+				i += run
+				continue
+			}
 			end := closingRun(line, i+run, run)
 			if end < 0 {
+				unclosed = true
 				i += run
 				continue
 			}
@@ -232,7 +269,7 @@ func textOnly(line string) string {
 			i++
 		}
 	}
-	return string(out)
+	return string(out), unclosed
 }
 
 func closingRun(line string, from, length int) int {

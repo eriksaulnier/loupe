@@ -212,13 +212,13 @@ A body or summary is accepted when all of the following hold. The check runs at 
 | Rule | Code |
 | :--- | :--- |
 | At most 64 KiB of UTF-8 | `limit` |
-| Every fence opened with three or more backticks or tildes is closed by a fence of the same character and at least the same length; fence content is literal and exempt from the rules below | `fence` |
-| Outside fences and code spans, the only raw HTML is `<details>`, `<details open>`, `<summary>`, `</summary>` and `</details>`, each alone on its line (surrounding whitespace allowed) | `html` |
+| Every fence opened with three or more backticks or tildes, indented at most three spaces, is closed by a fence of the same character and at least the same length; fence content is literal and exempt from the rules below | `fence` |
+| Outside fences and code spans, the only raw HTML is `<details>`, `<details open>`, `<summary>`, `</summary>` and `</details>`, each alone on its line (trailing whitespace and up to three spaces of indentation allowed) | `html` |
 | No HTML comments, declarations, CDATA or processing instructions outside fences | `html` |
 | Every `<details>` is followed, after optional blank lines, by `<summary>` on the next content line, and `</summary>` closes it on the same line or a later one before any other content | `html` |
 | `<details>` nesting is balanced and at most 15 levels deep in a body, 16 in a summary | `depth` |
 
-A refusal names the code, the one-based line of the first violation (line 1 for `limit`), the reason and the correction command. Tags inside code spans, fences, backslash escapes or entities are text, not HTML. Ordinary Markdown (prose, headings, emphasis, links, autolinks, entities, tables, task lists, lists, quotes, hard breaks) is accepted without inspection.
+A refusal names the code, the one-based line of the first violation (line 1 for `limit`), the reason and the correction command. Tags inside code spans, fences, backslash escapes or entities are text, not HTML. A code span that does not close on its own line hides nothing on the later lines of its paragraph, and a line indented four or more columns is never a fence or a tag line, because CommonMark may read either differently from a line scanner. Ordinary Markdown (prose, headings, emphasis, links, autolinks, entities, tables, task lists, lists, quotes, hard breaks) is accepted without inspection.
 
 This is deliberately a line scanner, not a parser. It refuses more than GitHub would (for example `<br>`, `<img>`, `<sub>` outside a summary) in exchange for being small and predictable. GitHub matches `<details>` anywhere in a line and an unterminated `<!--` swallows the rest of the review, which is why comments are refused outright and disclosure tags must stand alone.
 

@@ -41,6 +41,10 @@ func TestCheckAccepts(t *testing.T) {
 		{"details as entities", "&lt;details&gt;\n", Body},
 		{"nesting 15 in a body", nested(15), Body},
 		{"nesting 16 in a summary", nested(16), Summary},
+		{"code span across lines in one paragraph", "use `a\nb` here\n", Body},
+		{"fence content indented four spaces is not a closing fence", "```\n    ```\n</details>\n```\n", Body},
+		{"fence indented three spaces", "   ```\n<br>\n   ```\n", Body},
+		{"code span on the line after a paragraph ends", "`a\n\nuse `<br>` here\n", Body},
 		{"fence after a blank line inside details", "<details>\n<summary>x</summary>\n\n```\n</details>\n```\n\n</details>\n", Body},
 	}
 	for _, c := range cases {
@@ -81,6 +85,12 @@ func TestCheckRefuses(t *testing.T) {
 		{"fence inside an html block", "<details>\n<summary>x</summary>\n```\n</details>\n```\n</details>\n", Body, "depth", 6},
 		{"escape inside an html block", "<details>\n<summary>x</summary>\n\\<br>\n</details>\n", Body, "html", 3},
 		{"code span in a summary line", "<details>\n<summary>`</details>`</summary>\n</details>\n", Body, "html", 2},
+		{"code span across lines hides a closing details", "`a\n` </details> `\n", Body, "html", 2},
+		{"code span across lines hides a comment", "`a\n` <!-- hidden -->`\n", Body, "html", 2},
+		{"fence indented four spaces in a paragraph", "para\n    ```\n</details>\n    ```\n", Body, "depth", 3},
+		{"fence indented with a tab", "para\n\t```\n<br>\n\t```\n", Body, "html", 3},
+		{"details indented four spaces", "    <details>\n    <summary>x</summary>\n\n</details>\n", Body, "html", 1},
+		{"summary closed by an indented line", "<details>\n<summary>x\n\n    </summary>\n</details>\n", Body, "html", 4},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
