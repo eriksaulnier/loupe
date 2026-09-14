@@ -18,6 +18,12 @@ loupe --version
 
 The repository is private, so mise needs a GitHub token to download the release asset. On macOS `gh` keeps its token in the keychain, where mise cannot read it, so export it in the shell profile as above.
 
+mise hides releases younger than its `minimum_release_age` window, so a release cut today fails with `no versions found for github:eriksaulnier/loupe matching date filter`. Wait the window out, or exempt loupe and keep the guard everywhere else:
+
+```sh
+mise settings add minimum_release_age_excludes "github:eriksaulnier/loupe"
+```
+
 The Claude Code plugin ships from the same repository:
 
 ```sh
