@@ -9,6 +9,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/render"
 )
@@ -170,7 +171,7 @@ func printFinding(p *printer, d *draft.Draft, dif *diff.Diff, i int) error {
 func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (bool, error) {
 	return func(preview publish.Preview) (bool, error) {
 		p := &printer{w: out}
-		p.printf("Review body:\n\n%s\n", render.ForDisplay(openDetails(preview.Body)))
+		p.printf("Review body:\n\n%s\n", render.ForDisplay(markdown.OpenDetails(preview.Body)))
 		p.printf("\nInline comments: %d\n", len(preview.Comments))
 		for _, c := range preview.Comments {
 			p.printf("\n%s\n%s\n", render.ForDisplay(commentLocation(c)), render.ForDisplay(c.Body))
@@ -185,11 +186,6 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (bool, erro
 		}
 		return lines.Text() == "y", nil
 	}
-}
-
-// openDetails shows every collapsed section expanded, so nothing in the review is hidden from the confirmation.
-func openDetails(body string) string {
-	return strings.ReplaceAll(body, "<details>", "<details open>")
 }
 
 func commentLocation(c publish.Comment) string {

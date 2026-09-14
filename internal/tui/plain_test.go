@@ -149,6 +149,18 @@ func TestConfirmPlainShowsPreview(t *testing.T) {
 	}
 }
 
+func TestConfirmPlainKeepsDetailsInsideFences(t *testing.T) {
+	preview := confirmPreview()
+	preview.Body = "<details>\n<summary>Title</summary>\n\n```html\n<details>\n```\n\n</details>\n"
+	var out bytes.Buffer
+	if _, err := ConfirmPlain(strings.NewReader("n\n"), &out)(preview); err != nil {
+		t.Fatal(err)
+	}
+	if text := out.String(); !strings.Contains(text, "<details open>\n<summary>Title</summary>") || !strings.Contains(text, "```html\n<details>\n```") {
+		t.Fatalf("preview rewrote the fence or missed the section:\n%s", text)
+	}
+}
+
 func TestConfirmPlainOnlyYConfirms(t *testing.T) {
 	for _, in := range []string{"y", "y\nn\n"} {
 		if ok, err := ConfirmPlain(strings.NewReader(in), io.Discard)(confirmPreview()); err != nil || !ok {

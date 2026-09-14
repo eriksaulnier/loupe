@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
@@ -82,7 +83,7 @@ func (c *confirmation) header() string {
 func (c *confirmation) content(m *Model) string {
 	text := render.ForDisplay(c.preview.EnvelopeJSON)
 	if !c.showJSON {
-		parts := []string{render.ForDisplay(openDetails(c.preview.Body)), fmt.Sprintf("Inline comments: %d", len(c.preview.Comments))}
+		parts := []string{render.ForDisplay(markdown.OpenDetails(c.preview.Body)), fmt.Sprintf("Inline comments: %d", len(c.preview.Comments))}
 		for _, comment := range c.preview.Comments {
 			parts = append(parts, m.styles.bold.Render(render.ForDisplay(commentLocation(comment)))+"\n"+render.ForDisplay(comment.Body))
 		}

@@ -34,7 +34,7 @@ func hidden(r rune) bool {
 		return false
 	case r < 0x20, r == 0x7f, r >= 0x80 && r <= 0x9f:
 		return true
-	case r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069:
+	case r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069, r == 0x200e, r == 0x200f, r == 0x061c:
 		return true
 	}
 	return false

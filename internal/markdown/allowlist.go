@@ -349,3 +349,38 @@ func tagText(s string) string {
 func isLetter(c byte) bool { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') }
 
 func isPunct(c byte) bool { return strings.IndexByte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", c) >= 0 }
+
+// OpenDetails rewrites each <details> tag line to <details open>, reading fences and HTML blocks as Check does, so a
+// <details> that is fence content stays as written.
+func OpenDetails(text string) string {
+	lines := strings.Split(text, "\n")
+	var fenceChar byte
+	var fenceLen int
+	inHTMLBlock := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		structural := inHTMLBlock || !indented(line)
+		switch {
+		case fenceChar != 0:
+			if structural && closesFence(trimmed, fenceChar, fenceLen) {
+				fenceChar = 0
+			}
+			continue
+		case trimmed == "":
+			inHTMLBlock = false
+			continue
+		case !structural:
+			continue
+		}
+		if opensHTMLBlock(trimmed) {
+			inHTMLBlock = true
+		} else if c, length, ok := opensFence(trimmed); ok && !inHTMLBlock {
+			fenceChar, fenceLen = c, length
+			continue
+		}
+		if trimmed == "<details>" {
+			lines[i] = strings.Replace(line, "<details>", "<details open>", 1)
+		}
+	}
+	return strings.Join(lines, "\n")
+}

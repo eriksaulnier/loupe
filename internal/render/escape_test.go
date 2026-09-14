@@ -17,6 +17,8 @@ func TestForDisplay(t *testing.T) {
 		{"right-to-left override", "a\u202eb", `a\u202Eb`},
 		{"embeddings and overrides", "\u202a\u202b\u202c\u202d", `\u202A\u202B\u202C\u202D`},
 		{"isolates", "\u2066\u2067\u2068\u2069", `\u2066\u2067\u2068\u2069`},
+		{"implicit marks", "a\u200eb\u200fc\u061cd", `a\u200Eb\u200Fc\u061Cd`},
+		{"neighbors of the marks kept", "\u200d\u2010\u061b\u061d", "\u200d\u2010\u061b\u061d"},
 		{"neighbors of the bidi ranges kept", "\u00a0\u2029\u202f\u2065\u206a", "\u00a0\u2029\u202f\u2065\u206a"},
 	}
 	for _, c := range cases {

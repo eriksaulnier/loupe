@@ -111,3 +111,23 @@ func TestCheckRefuses(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenDetails(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"tag line", "<details>\n<summary>x</summary>\n</details>", "<details open>\n<summary>x</summary>\n</details>"},
+		{"indented up to three spaces", "   <details>", "   <details open>"},
+		{"already open", "<details open>", "<details open>"},
+		{"inside a backtick fence", "```\n<details>\n```\n\n<details>", "```\n<details>\n```\n\n<details open>"},
+		{"inside a longer tilde fence", "~~~~\n~~~\n<details>\n~~~~", "~~~~\n~~~\n<details>\n~~~~"},
+		{"indented four spaces is code", "text\n\n    <details>", "text\n\n    <details>"},
+		{"inline, not a tag line", "see <details> here", "see <details> here"},
+		{"fence line inside an html block is not a fence", "<details>\n```\n<details>", "<details open>\n```\n<details open>"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := OpenDetails(c.in); got != c.want {
+				t.Fatalf("OpenDetails(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
