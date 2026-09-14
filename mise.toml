@@ -11,7 +11,7 @@ run = "golangci-lint run"
 run = "go test ./..."
 
 [tasks.check]
-run = "go vet ./... && golangci-lint run && go test ./..."
+run = "go vet ./... && golangci-lint run && ./scripts/check-tests.sh && go test ./..."
 
 [tasks.build]
 run = "CGO_ENABLED=0 go build -o dist/loupe ./cmd/loupe"
