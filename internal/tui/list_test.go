@@ -96,6 +96,7 @@ func TestNoColorEmitsNoEscapes(t *testing.T) {
 	// Without NO_COLOR the same views do paint, so the check above is not passing on a writer that never had color.
 	colored := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
 	colored.styles.R.SetColorProfile(termenv.ANSI)
+	colored.styles.Color = true
 	for name, view := range everyView(t, colored) {
 		if !strings.ContainsRune(view, '\x1b') {
 			t.Errorf("%s view paints nothing when color is available:\n%s", name, view)

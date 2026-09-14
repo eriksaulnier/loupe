@@ -95,3 +95,13 @@ func TestRootHelpDescribesWorkflow(t *testing.T) {
 		}
 	}
 }
+
+func TestSubcommandHelpKeepsTheGlobalJSONFlag(t *testing.T) {
+	deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+	if exit := Execute(deps, []string{"list", "--help"}); exit != 0 {
+		t.Fatalf("exit %d: %s", exit, s.stderr.String())
+	}
+	if !strings.Contains(s.stdout.String(), "--json   print exactly one JSON result object on stdout") {
+		t.Fatalf("list --help lost the --json line:\n%s", s.stdout.String())
+	}
+}

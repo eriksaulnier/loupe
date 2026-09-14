@@ -143,10 +143,10 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	return printPublished(deps, ref, receipt, replayed)
 }
 
-// printPublished is the one place a publish ends up: what was posted, or that it already was, then the review URL,
-// which every earlier version printed on its own line and scripts read from the last line.
+// printPublished is the one place a publish ends up: what was posted, or that it already was, on stderr, then the
+// review URL alone on stdout, which is all that every earlier version printed and what a script reads.
 func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bool) error {
-	s := deps.outStyle()
+	s := deps.errStyle()
 	outcome := s.Good.Bold(true).Render(s.Glyphs.Accepted + " published")
 	detail := fmt.Sprintf("%s round %d", ref.String(), ref.Round)
 	if inline := len(receipt.Envelope.Comments); inline > 0 {
@@ -158,6 +158,9 @@ func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bo
 		outcome = s.Good.Bold(true).Render(s.Glyphs.Accepted + " already published")
 		detail = s.Dim.Render(fmt.Sprintf("round %d was posted on %s", ref.Round, receipt.PostedAt.UTC().Format("2006-01-02 at 15:04 UTC")))
 	}
-	_, err := fmt.Fprintf(deps.Stdout, "%s  %s\n  %s\n", outcome, detail, s.Accent.Render(oneLine(receipt.ReviewURL)))
+	if _, err := fmt.Fprintf(deps.Stderr, "%s  %s\n", outcome, detail); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(deps.Stdout, "%s\n", oneLine(receipt.ReviewURL))
 	return err
 }

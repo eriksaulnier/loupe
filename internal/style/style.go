@@ -247,9 +247,20 @@ func (s Style) Boxed(title string, lines []string, inner int) []string {
 // from the wrapper, which would otherwise split paths and identifiers such as gadfly-review-local at every dash.
 func (s Style) Wrap(text string, width int, indent string) string {
 	limit := max(10, width-ansi.StringWidth(indent))
-	const hyphen = "\u2011"
-	wrapped := ansi.Wordwrap(strings.ReplaceAll(strings.TrimRight(text, "\n"), "-", hyphen), limit, "")
-	wrapped = strings.ReplaceAll(wrapped, hyphen, "-")
+	text = strings.TrimRight(text, "\n")
+	// The stand-in is private-use, so it cannot be confused with a character the text carries; text that does carry
+	// it is wrapped without the protection rather than have the stand-in swapped for a dash on the way back.
+	const sentinel = "\uE000"
+	protect := !strings.Contains(text, sentinel)
+	if protect {
+		text = strings.ReplaceAll(text, "-", sentinel)
+	}
+	wrapped := ansi.Wordwrap(text, limit, "")
+	if protect {
+		wrapped = strings.ReplaceAll(wrapped, sentinel, "-")
+	}
+	// A token wider than the limit (a URL with a 64-hex anchor) is not a word to keep whole; unbroken it is clipped.
+	wrapped = ansi.Hardwrap(wrapped, limit, true)
 	lines := strings.Split(wrapped, "\n")
 	for i, l := range lines {
 		lines[i] = indent + l

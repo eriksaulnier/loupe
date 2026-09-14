@@ -153,3 +153,16 @@ func TestRelative(t *testing.T) {
 		t.Errorf("old: %q", got)
 	}
 }
+
+func TestWrapBreaksTokensWiderThanTheLimit(t *testing.T) {
+	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1"}))
+	url := "https://github.com/o/r/pull/1/files#diff-" + strings.Repeat("ab", 40)
+	for _, l := range strings.Split(s.Wrap("see "+url+" now", 40, ""), "\n") {
+		if Width(l) > 40 {
+			t.Fatalf("line wider than 40: %q", l)
+		}
+	}
+	if got := s.Wrap("keep  as is", 40, ""); got != "keep  as is" {
+		t.Fatalf("private-use character altered: %q", got)
+	}
+}

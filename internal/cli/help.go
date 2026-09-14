@@ -192,7 +192,7 @@ func commandHelp(s style.Style, c *cobra.Command) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n  %s\n\n", s.Heading("usage"), c.UseLine())
 	fmt.Fprintf(&b, "%s\n", longHelp(s, c.Long))
-	if flags := c.NonInheritedFlags().FlagUsages(); strings.TrimSpace(flags) != "" {
+	if flags := c.NonInheritedFlags().FlagUsages() + c.InheritedFlags().FlagUsages(); strings.TrimSpace(flags) != "" {
 		fmt.Fprintf(&b, "\n%s\n%s\n", s.Heading("flags"), strings.TrimRight(flags, "\n"))
 	}
 	if c.Example != "" {
