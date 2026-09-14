@@ -100,6 +100,26 @@ func TestMutateErrorWritesNothing(t *testing.T) {
 	}
 }
 
+func TestMutateNoChangeWritesNothing(t *testing.T) {
+	dir := newRunDir(t)
+	path := filepath.Join(dir, "draft.json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := Mutate(dir, "edit", nil, noEnv, func(d *Draft) error { return ErrNoChange })
+	if err != nil || d == nil || d.Version != 0 {
+		t.Fatalf("draft %+v err %v", d, err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("draft changed:\n%s\n%s", before, after)
+	}
+}
+
 func TestMutateStaleExpectVersion(t *testing.T) {
 	dir := newRunDir(t)
 	stale := 3

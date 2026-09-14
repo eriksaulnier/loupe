@@ -1,12 +1,17 @@
 package draft
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
+
+// ErrNoChange is returned by a mutation fn that left the draft as it was, so Mutate writes nothing and keeps the version;
+// a bumped version would refuse the next decision made against the unchanged draft as stale.
+var ErrNoChange = errors.New("draft unchanged")
 
 func Load(dir string) (*Draft, error) {
 	path := filepath.Join(dir, "draft.json")
@@ -55,7 +60,9 @@ func Mutate(dir, command string, expectVersion *int, getenv func(string) string,
 			fmt.Sprintf("draft is at version %d, expected %d", d.Version, *expectVersion),
 			"re-read with loupe show --json and retry")
 	}
-	if err := fn(d); err != nil {
+	if err := fn(d); errors.Is(err, ErrNoChange) {
+		return d, nil
+	} else if err != nil {
 		return nil, err
 	}
 	d.Version++

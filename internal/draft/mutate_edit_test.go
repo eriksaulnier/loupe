@@ -2,6 +2,7 @@ package draft
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -78,8 +79,8 @@ func TestEditToCurrentValuesChangesNothing(t *testing.T) {
 	d := editable()
 	in := editInput(t, `{"title": "One", "body": "Body one.", "location": {"path": "multi.txt", "line": 3}, "label": "issue", "blocking": true}`)
 	f, cleared, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, editNow)
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrNoChange) {
+		t.Fatalf("got %v, want ErrNoChange", err)
 	}
 	if cleared || f.Rev != 1 || len(f.History) != 0 || !f.UpdatedAt.Equal(addNow) || !reflect.DeepEqual(d.Findings[0], editable().Findings[0]) {
 		t.Fatalf("finding %+v cleared %v", f, cleared)
@@ -198,7 +199,7 @@ func TestWithdrawAndInclude(t *testing.T) {
 	}
 
 	f, _, err = Include(d, "f-001", ByAgent, editNow)
-	if err != nil || f.Rev != 3 {
+	if !errors.Is(err, ErrNoChange) || f.Rev != 3 {
 		t.Fatalf("including an included finding changed it: %+v err %v", f, err)
 	}
 }

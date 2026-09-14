@@ -117,3 +117,51 @@ func TestEditRefusals(t *testing.T) {
 		})
 	}
 }
+
+func TestEditToCurrentValuesKeepsVersionAndBytes(t *testing.T) {
+	home, dir := sendBackRun(t)
+	path := filepath.Join(dir, "draft.json")
+	for _, args := range [][]string{{"edit", "f-001", "--from", "-"}, {"edit", "f-001", "--include"}} {
+		if code, env, _ := execIn(t, home, `{"title": "Edited"}`, "edit", "f-001", "--from", "-"); code != 0 {
+			t.Fatalf("exit %d envelope %v", code, env)
+		}
+		before, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		code, env, s := execIn(t, home, `{"title": "Edited"}`, args...)
+		if code != 0 {
+			t.Fatalf("%v: exit %d stdout %s stderr %s", args, code, s.stdout.String(), s.stderr.String())
+		}
+		after, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(before) != string(after) {
+			t.Fatalf("%v rewrote draft.json:\n%s\n%s", args, before, after)
+		}
+		finding, _ := env["finding"].(map[string]any)
+		if finding["id"] != "f-001" || finding["rev"] != float64(2) || finding["included"] != true || env["clearedDecision"] != false || env["version"] != float64(1) {
+			t.Fatalf("%v envelope %v", args, env)
+		}
+	}
+}
+
+func TestExcludeWithdrawnKeepsVersion(t *testing.T) {
+	home, dir := sendBackRun(t)
+	if code, env, _ := execIn(t, home, "", "edit", "f-002", "--exclude"); code != 0 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, env, _ := execIn(t, home, "", "edit", "f-002", "--exclude")
+	after, err := os.ReadFile(filepath.Join(dir, "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 || env["version"] != float64(1) || env["clearedDecision"] != false || string(before) != string(after) {
+		t.Fatalf("exit %d envelope %v changed %v", code, env, string(before) != string(after))
+	}
+}

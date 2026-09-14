@@ -278,7 +278,7 @@ const editFix = "see loupe edit --help for the input shape"
 
 // Edit applies in and, when included is not nil, sets Included. A change to a publishable field or to Included bumps
 // rev, deletes the decision and appends one history entry; cleared reports whether a decision was deleted. dif is
-// needed only when in changes a publishable field.
+// needed only when in changes a publishable field. An edit that changes nothing returns the finding with ErrNoChange.
 func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Diff, by string, now time.Time) (f Finding, cleared bool, err error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
@@ -313,7 +313,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 	publishable := len(changed) > 0
 	note("included", next.Included != stored.Included, stored.Included)
 	if len(changed) == 0 {
-		return *stored, false, nil
+		return *stored, false, ErrNoChange
 	}
 	if publishable {
 		err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: next.Location, General: next.General, Label: next.Label,
