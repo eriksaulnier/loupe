@@ -16,6 +16,7 @@ var contractResultKeys = map[string][]string{
 	"add":      {"findings", "version"},
 	"edit":     {"finding", "version", "clearedDecision"},
 	"summary":  {"version", "includedCount"},
+	"wait":     {"reason", "awaiting", "readiness", "notes", "findings"},
 	"show":     {"summary", "findings", "decisions", "notes", "replies", "target", "dispositions", "readiness", "digest"},
 	"feedback": {"readiness", "notes", "findings"},
 	"reply":    {"reply", "version"},

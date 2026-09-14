@@ -51,16 +51,21 @@ The input MUST NOT carry `included`, `decision`, `status` or `findingRev`. A bat
 
 Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findings <n> --from <file> --run <ref> --json`, where `<n>` is the number of findings you filed. On a `count` refusal, `error.details.included` lists the findings that landed; file the missing ones and run `summary` again.
 
-## 6. Hand off
+## 6. Hand off and wait
 
-Tell the user to run `loupe review <ref>` in their own terminal. Stop there.
+Tell the user to run `loupe review <ref>` in their own terminal, then block on `loupe wait --run <ref> --json`. It returns when the human quits review leaving notes for you, or when the run is published.
+
+- In Claude Code, when the Monitor tool is available, run it under a persistent Monitor so the session wakes when it prints.
+- Otherwise run it in the foreground with `--timeout` under the shell's limit, and run it again on a `timeout` refusal.
+- `"reason": "notes"`: answer only the notes listed in `awaiting`, following the Send-back notes section.
+- `"reason": "published"`: the review is on GitHub. Stop.
 
 ## Send-back notes
 
-When the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
+When `loupe wait` returns with notes, or when the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
 
 - To revise a finding, write the changed fields to a file and run `loupe edit <finding-id> --from <file> --run <ref> --json`. An absent key leaves a field unchanged. `null` clears `location`, `label`, `confidence`, `severity` or `suggestedFix`; it is refused for `title`, `body`, `general` and `blocking`. Any change clears the human's decision, so they decide the finding again.
 - To withdraw a finding, run `loupe edit <finding-id> --exclude --run <ref> --json`.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.
 
-Only the human resolves or dismisses a note. When every note has a reply, tell the user to run `loupe review <ref>` in their own terminal.
+Only the human resolves or dismisses a note. When every note has a reply, tell the user the revisions are ready and to run `loupe review <ref>` in their own terminal, then block on `loupe wait --run <ref> --json` again.

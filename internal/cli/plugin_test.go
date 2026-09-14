@@ -106,7 +106,7 @@ func TestPluginSkill(t *testing.T) {
 
 	for _, phrase := range []string{
 		"loupe capture", "loupe show --previous", "git show", "loupe add --from", "loupe summary --expect-findings",
-		"loupe feedback", "loupe reply", "loupe review",
+		"loupe feedback", "loupe reply", "loupe review", "loupe wait --run", "`awaiting`", "`timeout`",
 		"MUST NOT run `loupe review`", "`loupe publish`", "pseudo-terminal", "pipe or script confirmation",
 		"`gh pr review`", "`gh api`", "GitHub MCP",
 	} {

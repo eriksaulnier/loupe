@@ -31,8 +31,8 @@ func TestAsUnwrapsWrappedRefusal(t *testing.T) {
 }
 
 func TestCodesMatchContractTable(t *testing.T) {
-	want := []string{"usage", "no-run", "record", "origin", "pr", "same-head", "auth", "input", "location", "markdown", "version", "count", "not-found", "lock", "tty", "head-moved", "own-pr", "blocking", "not-ready", "empty", "attempt", "changed", "viewer", "github", "internal"}
-	got := []Code{Usage, NoRun, Record, Origin, PR, SameHead, Auth, Input, Location, Markdown, Version, Count, NotFound, Lock, TTY, HeadMoved, OwnPR, Blocking, NotReady, Empty, Attempt, Changed, Viewer, GitHub, Internal}
+	want := []string{"usage", "no-run", "record", "origin", "pr", "same-head", "auth", "input", "location", "markdown", "version", "count", "not-found", "lock", "tty", "head-moved", "own-pr", "blocking", "not-ready", "empty", "attempt", "changed", "viewer", "timeout", "github", "internal"}
+	got := []Code{Usage, NoRun, Record, Origin, PR, SameHead, Auth, Input, Location, Markdown, Version, Count, NotFound, Lock, TTY, HeadMoved, OwnPR, Blocking, NotReady, Empty, Attempt, Changed, Viewer, Timeout, GitHub, Internal}
 	if len(got) != len(want) {
 		t.Fatalf("got %d codes, want %d", len(got), len(want))
 	}

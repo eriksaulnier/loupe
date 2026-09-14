@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/tui"
 )
@@ -72,7 +73,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 		if err := tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width); err != nil {
 			return err
 		}
-		return reviewDone(cmd, deps, ref.String(), jsonMode)
+		return reviewDone(cmd, deps, dir, ref.String(), jsonMode, ui)
 	}
 	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub})
 	if err != nil {
@@ -91,10 +92,26 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if err := finalModel.Err(); err != nil {
 		return err
 	}
-	return reviewDone(cmd, deps, ref.String(), jsonMode)
+	return reviewDone(cmd, deps, dir, ref.String(), jsonMode, ui)
 }
 
-func reviewDone(cmd *cobra.Command, deps Deps, run string, jsonMode bool) error {
+// reviewDone records the notes the human left open and unanswered so a blocked loupe wait picks them up. Only a
+// clean exit gets here; a crash mid-session records nothing until the next clean exit.
+func reviewDone(cmd *cobra.Command, deps Deps, dir, run string, jsonMode bool, ui io.Writer) error {
+	handed, err := draft.RecordHandBack(dir, deps.Getenv)
+	if err != nil {
+		return err
+	}
+	if handed > 0 {
+		s := deps.outStyle()
+		if jsonMode {
+			s = deps.errStyle()
+		}
+		sentence := fmt.Sprintf("%d %s sent back; a waiting agent picks them up with", handed, plural(handed, "note"))
+		if _, err := fmt.Fprintf(ui, "%s %s\n", s.Note.Render(s.Glyphs.Note), next(s, deps.width(), sentence, "loupe feedback")); err != nil {
+			return err
+		}
+	}
 	if !jsonMode {
 		return nil
 	}

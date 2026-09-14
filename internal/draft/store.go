@@ -9,8 +9,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
-// ErrNoChange is returned by a mutation fn that left the draft as it was, so Mutate writes nothing and keeps the version;
-// a bumped version would refuse the next decision made against the unchanged draft as stale.
+// ErrNoChange is returned by a mutation fn that left the draft as it was, so Mutate writes nothing and keeps the
+// version; a bumped version would refuse the next decision made against the unchanged draft as stale.
 var ErrNoChange = errors.New("draft unchanged")
 
 func Load(dir string) (*Draft, error) {
@@ -41,33 +41,47 @@ func Load(dir string) (*Draft, error) {
 
 // Mutate is the only way a draft changes: read, check the expected version and apply fn all under the run lock, so
 // concurrent writers serialize and a failed fn leaves the file untouched.
-func Mutate(dir, command string, expectVersion *int, getenv func(string) string, fn func(*Draft) error) (d *Draft, err error) {
-	held, err := run.Lock(dir, command, getenv)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if unlockErr := held.Unlock(); unlockErr != nil && err == nil {
-			d, err = nil, unlockErr
+func Mutate(dir, command string, expectVersion *int, getenv func(string) string, fn func(*Draft) error) (*Draft, error) {
+	var d *Draft
+	err := underLock(dir, command, getenv, func(loaded *Draft) error {
+		if expectVersion != nil && *expectVersion != loaded.Version {
+			return refusal.New(refusal.Version,
+				fmt.Sprintf("draft is at version %d, expected %d", loaded.Version, *expectVersion),
+				"re-read with loupe show --json and retry")
 		}
-	}()
-	d, err = Load(dir)
+		if err := fn(loaded); errors.Is(err, ErrNoChange) {
+			d = loaded
+			return nil
+		} else if err != nil {
+			return err
+		}
+		loaded.Version++
+		if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), loaded); err != nil {
+			return err
+		}
+		d = loaded
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	if expectVersion != nil && *expectVersion != d.Version {
-		return nil, refusal.New(refusal.Version,
-			fmt.Sprintf("draft is at version %d, expected %d", d.Version, *expectVersion),
-			"re-read with loupe show --json and retry")
-	}
-	if err := fn(d); errors.Is(err, ErrNoChange) {
-		return d, nil
-	} else if err != nil {
-		return nil, err
-	}
-	d.Version++
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
 		return nil, err
 	}
 	return d, nil
+}
+
+// underLock loads the draft under the run lock and holds the lock until fn returns.
+func underLock(dir, command string, getenv func(string) string, fn func(*Draft) error) (err error) {
+	held, err := run.Lock(dir, command, getenv)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if unlockErr := held.Unlock(); unlockErr != nil && err == nil {
+			err = unlockErr
+		}
+	}()
+	d, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	return fn(d)
 }

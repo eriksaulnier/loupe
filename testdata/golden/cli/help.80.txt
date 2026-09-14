@@ -10,19 +10,23 @@ WORKFLOW  capture → add → summary → review → publish
      file findings, one object or an array
   3  loupe summary --run owner/repo#123 --from summary.json --expect-findings 2 --json
      set the summary and confirm how many findings landed
-  4  loupe review owner/repo#123                     human
+  4  loupe wait --run owner/repo#123 --json
+     block until the human hands notes back or publishes
+  5  loupe review owner/repo#123                     human
      the human decides each finding with the diff in view
-  5  loupe publish owner/repo#123 --action comment   human
+  6  loupe publish owner/repo#123 --action comment   human
      the human confirms and posts one review
 
   review and publish are human-only and MUST NOT be run by an agent. An agent MUST NOT pipe
   confirmation into them or allocate a pseudo-terminal to reach them; it tells the human to run
-  loupe review.
+  loupe review. An agent MAY block on loupe wait for the human's notes and MUST pass --run to
+  it; it still MUST NOT run review.
 
 COMMANDS
   agent   capture   Capture a pull request into a new review round
           add       File findings into the draft
           summary   Set the review summary
+          wait      Block until the human hands notes back or publishes
           edit      Change, withdraw or restore a finding
           reply     Answer a send-back note
           feedback  Read the human's notes, dispositions and readiness

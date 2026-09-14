@@ -53,6 +53,10 @@ func runFeedback(cmd *cobra.Command, deps Deps) error {
 	if !wantJSON(cmd) {
 		return printFeedback(deps, ref.String(), d)
 	}
+	return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, feedbackPayload(d))
+}
+
+func feedbackPayload(d *draft.Draft) map[string]any {
 	notes := make([]map[string]any, 0, len(d.Notes))
 	for _, n := range d.Notes {
 		notes = append(notes, map[string]any{"id": n.ID, "findingId": n.FindingID, "status": n.Status, "body": n.Body, "at": n.At,
@@ -63,11 +67,11 @@ func runFeedback(cmd *cobra.Command, deps Deps) error {
 	for _, f := range d.Findings {
 		findings = append(findings, map[string]any{"id": f.ID, "title": f.Title, "disposition": dispositions[f.ID], "rev": f.Rev})
 	}
-	return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{
+	return map[string]any{
 		"readiness": draft.ReadinessOf(d),
 		"notes":     notes,
 		"findings":  findings,
-	})
+	}
 }
 
 func repliesTo(d *draft.Draft, noteID string) []draft.Reply {

@@ -30,6 +30,7 @@ const (
 	Attempt   Code = "attempt"
 	Changed   Code = "changed"
 	Viewer    Code = "viewer"
+	Timeout   Code = "timeout"
 	GitHub    Code = "github"
 	Internal  Code = "internal"
 )

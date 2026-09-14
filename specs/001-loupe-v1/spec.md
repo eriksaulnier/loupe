@@ -243,6 +243,8 @@ General
 - **FR-036**: Run state MUST be plain files in one directory per run under a user-level data directory, and no run directory MAY be deleted automatically.
 - **FR-037**: A run MUST be addressable by pull request (owner, repository, number, optional round), and commands MUST default to the newest round of the current branch's pull request when no run is named.
 - **FR-038**: Concurrent mutations of one draft MUST be serialized by an exclusive lock that is never stolen automatically.
+- **FR-039**: On every clean exit, including plain-mode end of input, review MUST record which open, unanswered notes it handed back, without changing the draft version.
+- **FR-040**: An agent-facing command MUST block until a handed-back note awaits a reply or the run is published, MUST honor a timeout and cancellation, and MUST refuse with `timeout` when the timeout elapses.
 
 ### Key Entities
 

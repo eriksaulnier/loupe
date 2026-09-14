@@ -59,6 +59,7 @@ Refusal or error (exit 1 or 2):
 | `attempt` | Unknown attempt not reconciled | inspect the pull request URL, then `--retry-unknown` |
 | `changed` | The draft's version, content or readiness changed while publish was confirming | `loupe review`, then `loupe publish` again |
 | `viewer` | The GitHub login changed between showing the confirmation and sending | `loupe publish` again to confirm as the current login |
+| `timeout` | `wait --timeout` elapsed with no note handed back and no receipt | `loupe wait` again |
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
 | `internal` | A defect | file an issue; stack on stderr |
 
@@ -103,6 +104,14 @@ Result payload: `finding` (`{id, rev, included}`), `version`, `clearedDecision` 
 Input: `{"summary": "Markdown"}`. `--expect-findings` is required for `--by agent` and compares `n` with the number of included findings inside the same lock; a mismatch leaves the summary unchanged and returns `details.included` as `[{id, title}]`.
 
 Result payload: `version`, `includedCount`.
+
+### `loupe wait [--timeout <duration>] [--json]`
+
+Blocks until there is something for the agent to do: `review` exited leaving a note open and unanswered (`reason: notes`), or the run has a receipt (`reason: published`). Re-reads the run files once a second and once before the first wait, so an already-handed-back run returns at once. A note stays awaiting until it has a reply, whatever else changed in the draft. `--timeout` absent or `0` waits without a deadline; a negative value is `usage`; once it elapses the command refuses with `timeout`. Ctrl-C or SIGTERM ends the wait with an error (exit 1). With `--run` it makes no network call; an agent MUST pass `--run`.
+
+Turn-taking is cooperative: a return proves the human quit `review` with those notes, not that no review session is open now. The draft's version check already refuses a decision made against a draft the agent changed in between.
+
+Result payload: `reason` (`notes` or `published`), `awaiting` (note ids to answer, empty when published), plus the `feedback` payload (`readiness`, `notes`, `findings`).
 
 ### `loupe show [--previous] [--json]`
 

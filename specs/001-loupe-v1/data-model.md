@@ -14,12 +14,21 @@ Every record is a JSON file in one run directory. Field names are camelCase in J
 | `pr.diff` | capture, once | the run exists |
 | `draft.json` | capture (empty), every mutation | the run exists |
 | `.lock` | any mutating command, publish | first mutation; content is `<pid> <command>` of the current holder |
+| `handback.json` | review, on a clean exit | the human quit review at least once leaving a note open and unanswered |
 | `attempt.json` | publish | a send is in flight or its outcome is unknown |
 | `receipt.json` | publish | the review landed |
 
 Run reference: `owner/repo#123` names the newest round; `owner/repo#123@2` names round 2.
 
 Derived run state: `published` if `receipt.json` exists, else `ready` if readiness holds, else `captured`.
+
+## Hand-back set
+
+`handback.json` is `{"schema": 1, "notes": ["n-001", "n-003"]}`: the append-only set of note ids the human handed back. `review` adds every note that is open, has no reply and is not yet listed, under the run lock and only when something was added, so the draft version never moves. A downgraded binary never reads it.
+
+Derived: a note is awaiting the agent while it is in the set, open and without a reply. `wait` returns on any awaiting note or on a receipt; a reply to one of two handed-back notes leaves the other awaiting.
+
+Only a clean exit records: `q`, Ctrl-C in the full-screen program, and `q` or end of input in plain mode. A crash mid-session records nothing until the next clean exit.
 
 ## Target (immutable)
 

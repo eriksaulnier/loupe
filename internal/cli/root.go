@@ -19,6 +19,8 @@ import (
 )
 
 type Deps struct {
+	// Context ends a command that waits; nil means Background.
+	Context context.Context
 	Stdin   io.Reader
 	Stdout  io.Writer
 	Stderr  io.Writer
@@ -89,7 +91,7 @@ func NewRoot(deps Deps) *cobra.Command {
 		id       string
 		commands []*cobra.Command
 	}{
-		{groupAgent, []*cobra.Command{newCaptureCmd(deps), newAddCmd(deps), newSummaryCmd(deps), newEditCmd(deps), newReplyCmd(deps), newFeedbackCmd(deps)}},
+		{groupAgent, []*cobra.Command{newCaptureCmd(deps), newAddCmd(deps), newSummaryCmd(deps), newWaitCmd(deps), newEditCmd(deps), newReplyCmd(deps), newFeedbackCmd(deps)}},
 		{groupAnyone, []*cobra.Command{newShowCmd(deps), newListCmd(deps)}},
 		{groupHuman, []*cobra.Command{newReviewCmd(deps), newPublishCmd(deps)}},
 	} {
@@ -164,7 +166,11 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 	}
 	inv := &invocation{}
 	root.SetArgs(args)
-	cmd, err := root.ExecuteContextC(context.WithValue(context.Background(), invocationKey{}, inv))
+	ctx := deps.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cmd, err := root.ExecuteContextC(context.WithValue(ctx, invocationKey{}, inv))
 	if cmd == nil {
 		cmd = root
 	}

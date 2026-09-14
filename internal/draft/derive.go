@@ -74,3 +74,25 @@ func IncludedCount(d *Draft) int {
 	}
 	return n
 }
+
+// Awaiting is the handed-back notes the agent still has to answer: in the set, open and without a reply.
+func Awaiting(d *Draft, h *HandBack) []string {
+	out := []string{}
+	for _, id := range h.Notes {
+		for _, n := range d.Notes {
+			if n.ID == id && n.Status == NoteOpen && !hasReply(d, id) {
+				out = append(out, id)
+			}
+		}
+	}
+	return out
+}
+
+func hasReply(d *Draft, noteID string) bool {
+	for _, r := range d.Replies {
+		if r.NoteID == noteID {
+			return true
+		}
+	}
+	return false
+}

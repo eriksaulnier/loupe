@@ -28,6 +28,8 @@ Task T104. Each row of the quickstart "Automated validation" table is listed wit
 | Goldens reproduce `docs/comment-format.md`; escaping in previews only | `render.TestExampleGoldenMatchesDoc`, `render.TestBodyGoldens`, `render.TestInlineGoldens`, `render.TestForDisplay*`, `tui.TestDetailViewNeutralizesCharacterReferences` |
 | Markdown allowlist refusals with code and line | `markdown.TestCheckRefuses`, `markdown.TestCheckAccepts` |
 | Two processes mutate one draft; timeout names the holder | `draft.TestConcurrentProcessesMutate`, `run.TestLockContention` |
+| Review records handed-back notes on quit and on plain-mode end of input; nothing without a send-back | `cli.TestReviewRecordsHandBackOnQuit`, `cli.TestReviewHandBackLineGoesToStderrUnderJSON`, `cli.TestReviewWithoutSendBackRecordsNothing`, `draft.TestRecordHandBack*`, `draft.TestAwaitingDropsAnsweredAndClosedNotes` |
+| `wait` returns on a hand-back or a receipt, times out, refuses a negative timeout, ends on cancellation | `cli.TestWait*`, `integration.TestWaitFollowsTheSendBackLoop` |
 | Plugin files parse; SKILL.md has the workflow and prohibitions | `cli.TestPluginManifest`, `cli.TestPluginMarketplace`, `cli.TestPluginSkill`, `cli.TestPluginCommand` |
 | No PTY library, non-loopback address or stray `CreateReview` in tests | `scripts/check-tests.sh` in `mise run check`; each rule was shown to fail on a staged violating file |
 
@@ -55,5 +57,6 @@ These cannot be checked in this repository and remain for the owner:
 - A live capture and publish against a named pull request with `--inline all`, a second publish that is a no-op, and a head move that makes publish refuse. The walk SHOULD also confirm GitHub's 65,536-character body limit, the files-view anchor format, and whether review bodies come back with CRLF line endings.
 - Installing a release binary on a clean machine.
 - Loading the plugin in Claude Code.
+- A multi-hour `loupe wait` under a persistent Claude Code Monitor, and the session waking when it prints.
 
 Also untested: a real SIGINT, SIGTERM or SIGHUP during a send (the hold is tested through an injected hook), end of input in the full-screen confirmation, and a CLI-level test of `--retry-unknown` finding the earlier review (covered by the publish unit test).
