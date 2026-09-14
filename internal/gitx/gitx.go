@@ -101,7 +101,12 @@ func OriginMatches(clone, owner, repo string) error {
 // maintenance, submodules, tags, pruning and FETCH_HEAD so the pull request head cannot run anything or touch other
 // refs.
 func FetchPR(clone string, number int, baseSHA, baseRef, headRef string) error {
-	_, err := git(clone,
+	_, err := git(clone, fetchArgs(number, baseSHA, baseRef, headRef)...)
+	return err
+}
+
+func fetchArgs(number int, baseSHA, baseRef, headRef string) []string {
+	return []string{
 		"-c", "core.hooksPath=/dev/null",
 		"-c", "maintenance.auto=false",
 		"-c", "gc.auto=0",
@@ -113,8 +118,7 @@ func FetchPR(clone string, number int, baseSHA, baseRef, headRef string) error {
 		"origin",
 		fmt.Sprintf("+refs/pull/%d/head:%s", number, headRef),
 		fmt.Sprintf("+%s:%s", baseSHA, baseRef),
-	)
-	return err
+	}
 }
 
 const noBranchFix = "loupe capture <url> or --run <ref>"

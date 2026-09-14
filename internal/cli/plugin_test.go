@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -37,8 +38,9 @@ func readRepoFile(t *testing.T, rel string) string {
 
 func TestPluginManifest(t *testing.T) {
 	var manifest struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
+		Name        string `json:"name"`
+		Version     string `json:"version"`
+		Description string `json:"description"`
 	}
 	if err := json.Unmarshal([]byte(readRepoFile(t, "plugin/.claude-plugin/plugin.json")), &manifest); err != nil {
 		t.Fatalf("plugin.json: %v", err)
@@ -48,6 +50,9 @@ func TestPluginManifest(t *testing.T) {
 	}
 	if manifest.Version == "" {
 		t.Error("plugin.json has no version")
+	}
+	if manifest.Description == "" {
+		t.Error("plugin.json has no description")
 	}
 }
 
@@ -107,6 +112,22 @@ func TestPluginSkill(t *testing.T) {
 	} {
 		if !strings.Contains(body, phrase) {
 			t.Errorf("SKILL.md body does not contain %q", phrase)
+		}
+	}
+}
+
+// The prohibitions are pinned as whole lines, so weakening MUST NOT or dropping a route fails.
+func TestPluginSkillProhibitions(t *testing.T) {
+	skill := readRepoFile(t, "plugin/skills/loupe/SKILL.md")
+	lines := strings.Split(skill, "\n")
+	for _, want := range []string{
+		"- You MUST NOT run `loupe review` or `loupe publish`. Both are human-only.",
+		"- You MUST NOT allocate a pseudo-terminal to reach them: no `script`, `expect`, `unbuffer`, or `pty` libraries.",
+		"- You MUST NOT pipe or script confirmation into any loupe command.",
+		"- You MUST NOT create GitHub reviews or review comments by any other route, including `gh pr review`, `gh api`, and the GitHub MCP.",
+	} {
+		if !slices.Contains(lines, want) {
+			t.Errorf("SKILL.md lacks the line %q", want)
 		}
 	}
 }

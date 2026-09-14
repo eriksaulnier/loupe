@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
@@ -132,5 +133,12 @@ func TestHeldRefusalWithoutHolder(t *testing.T) {
 	r, ok := refusal.As(heldRefusal(filepath.Join(t.TempDir(), ".lock")))
 	if !ok || r.Code != refusal.Lock || strings.Contains(r.Fix, "rm ") {
 		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestLockTimeoutDefault(t *testing.T) {
+	got, err := lockTimeout(timeoutEnv(""))
+	if err != nil || got != 3*time.Second {
+		t.Fatalf("default lock timeout = %v, %v; want 3s", got, err)
 	}
 }

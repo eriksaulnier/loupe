@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
@@ -125,6 +126,50 @@ func TestFetchPRWritesOnlyLoupeRefs(t *testing.T) {
 	}
 	if parsed.File("src/app.go") == nil || parsed.File("src/added.go") == nil || parsed.File("remove-me.txt") == nil || parsed.File("docs/new-name.md") == nil {
 		t.Fatalf("diff files: %s", out)
+	}
+}
+
+func TestFetchArgsCarryEveryGuard(t *testing.T) {
+	want := []string{
+		"-c", "core.hooksPath=/dev/null", "-c", "maintenance.auto=false", "-c", "gc.auto=0",
+		"-c", "fetch.recurseSubmodules=false", "-c", "submodule.recurse=false",
+		"fetch", "--no-tags", "--no-recurse-submodules", "--no-prune", "--no-write-fetch-head", "--no-auto-maintenance", "--refmap=",
+		"origin", "+refs/pull/7/head:refs/loupe/o/r/7/1/head", "+abc:refs/loupe/o/r/7/1/base",
+	}
+	if got := fetchArgs(7, "abc", "refs/loupe/o/r/7/1/base", "refs/loupe/o/r/7/1/head"); !slices.Equal(got, want) {
+		t.Fatalf("fetch argv\n got %q\nwant %q", got, want)
+	}
+}
+
+// The clone's own config asks for hooks, every tag and pruning; the fetch must honor none of them. With --refmap= there
+// is nothing for pruning to remove, so only the argv test notices a missing --no-prune.
+func TestFetchPRIgnoresHooksTagsAndPruneConfig(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 7)
+	hooks := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "hook-ran")
+	hook := "#!/bin/sh\ntouch " + marker + "\n"
+	if err := os.WriteFile(filepath.Join(hooks, "reference-transaction"), []byte(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	repo.Git("update-ref", "refs/remotes/origin/gone", "HEAD")
+	setConfig(t, repo.Dir, "core.hooksPath", hooks)
+	setConfig(t, repo.Dir, "remote.origin.tagOpt", "--tags")
+	setConfig(t, repo.Dir, "fetch.prune", "true")
+	cmd := exec.Command("git", "-C", repo.RemoteDir, "tag", "v-remote", repo.HeadSHA())
+	cmd.Env = cleanEnv()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("tag remote: %v\n%s", err, out)
+	}
+
+	before := repo.Snapshot()
+	if err := FetchPR(repo.Dir, 7, repo.BaseSHA(), "refs/loupe/o/r/7/1/base", "refs/loupe/o/r/7/1/head"); err != nil {
+		t.Fatal(err)
+	}
+	if d := before.DiffIgnoringLoupeRefs(repo.Snapshot()); len(d) != 0 {
+		t.Fatalf("clone changed: %v", d)
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("a hook ran or its marker cannot be checked: %v", err)
 	}
 }
 

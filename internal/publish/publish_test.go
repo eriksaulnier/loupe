@@ -191,6 +191,38 @@ func TestRunRefusesDraftChangedDuringConfirmation(t *testing.T) {
 	fx.check(0)
 }
 
+// Each change is written without advancing the version, so only the digest or the readiness check can notice it.
+func TestRunRefusesDigestOrReadinessChangedDuringConfirmation(t *testing.T) {
+	cases := map[string]func(d *draft.Draft){
+		"digest": func(d *draft.Draft) { d.Findings[0].Body = "Rewritten while confirming." },
+		"readiness": func(d *draft.Draft) {
+			d.Notes = append(d.Notes, draft.Note{ID: "n-001", FindingID: "f-001", Body: "why?", At: fixtureNow, Status: draft.NoteOpen})
+		},
+	}
+	for name, change := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			fx.opts.Confirm = fx.confirmWith(true, func() {
+				d, err := draft.Load(fx.dir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				change(d)
+				if err := run.WriteJSONAtomic(filepath.Join(fx.dir, "draft.json"), d); err != nil {
+					t.Fatal(err)
+				}
+			})
+			_, err := fx.run()
+			wantRefusal(t, err, refusal.Changed, "loupe review")
+			if fx.exists("attempt.json") || fx.exists("receipt.json") {
+				t.Fatal("attempt or receipt written")
+			}
+			fx.draft = fx.readDraft()
+			fx.check(0)
+		})
+	}
+}
+
 func TestRunRefusesViewerChangedDuringConfirmation(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.Confirm = fx.confirmWith(true, func() { fx.gh.SetViewer("someone-else") })
