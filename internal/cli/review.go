@@ -62,7 +62,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if mode == tui.Plain {
 		return tui.RunPlain(dir, deps.Stdin, deps.Stdout, deps.Getenv)
 	}
-	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: deps.Stdout})
+	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: deps.Stdout, GitHub: deps.GitHub})
 	if err != nil {
 		return err
 	}
