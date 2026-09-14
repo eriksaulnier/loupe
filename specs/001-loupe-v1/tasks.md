@@ -397,7 +397,7 @@ The spec marks US1, US2 and US3 all P1, and none delivers the product alone: fil
 
 ## Phase 12: Convergence
 
-Fix rounds after T104, from the owner's reviews in the vault under `Engineering/_unscoped/loupe-go/`. Checked tasks landed in the named commit; unchecked tasks are gaps the convergence assessment found.
+Fix rounds after T104, from the owner's reviews in the vault under `Engineering/loupe/`. Checked tasks landed in the named commit; unchecked tasks are gaps the convergence assessment found.
 
 ### From the whole-tree review (`2026-09-13-research-loupe-v1-whole-tree-review.md`)
 
