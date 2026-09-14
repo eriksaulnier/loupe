@@ -9,6 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/muesli/termenv"
+
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 func modelOf(t *testing.T, dir string, env map[string]string, width, height int) *Model {
@@ -133,5 +135,27 @@ func TestHelpLeadsWithTheCurrentView(t *testing.T) {
 	}
 	if !strings.Contains(view, "Decisions are recorded against the draft version on screen.") {
 		t.Errorf("help lost the sentence about the version on screen:\n%s", view)
+	}
+}
+
+func TestLongNoticeWrapsInsteadOfClipping(t *testing.T) {
+	dir := newFixture(t)
+	m, err := New(Config{Dir: dir, Getenv: func(string) string { return "" }, Output: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.width, m.height = 100, 20
+	m.say(style.Warn, "the pull request head moved from 7f1c2ab0000000000000000000000000000beef to 29b3d00d372175bffc5fa5acfdef48eb4b7f67a1 since this round was captured; loupe capture starts a new round")
+	view := m.View()
+	if !strings.Contains(strings.ReplaceAll(view, "\n ", " "), "starts a new round") {
+		t.Fatalf("notice tail clipped:\n%s", view)
+	}
+	if n := strings.Count(view, "\n") + 1; n != 20 {
+		t.Fatalf("frame is %d lines, want 20", n)
+	}
+	for _, l := range strings.Split(view, "\n") {
+		if style.Width(l) > 100 {
+			t.Fatalf("line wider than 100: %q", l)
+		}
 	}
 }

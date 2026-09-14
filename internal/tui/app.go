@@ -290,19 +290,31 @@ func decide(dir string, displayed int, getenv func(string) string, fn func(*draf
 	return reloaded, refusalNotice(r), nil
 }
 
+// maxNoticeLines bounds how far a wrapped refusal may push the body up; longer ones are clipped.
+const maxNoticeLines = 3
+
 // frame is the one layout every view renders through: header lines, a body clipped or padded to the rows left, the
 // notice and the key line, each clipped to the window width.
 func (m *Model) frame(header []string, body, keys string) string {
 	notice := ""
 	if m.notice != "" {
-		notice = " " + m.styles.Of(m.noticeKind).Render(m.notice)
+		// A refusal names two SHAs and a fix; on one clipped line the fix is the part that vanishes.
+		wrapped := strings.Split(m.styles.Wrap(m.notice, max(20, m.width-1), " "), "\n")
+		if len(wrapped) > maxNoticeLines {
+			wrapped = wrapped[:maxNoticeLines]
+		}
+		for i, l := range wrapped {
+			wrapped[i] = m.styles.Of(m.noticeKind).Render(l)
+		}
+		notice = strings.Join(wrapped, "\n")
 	}
 	return m.frameWith(header, body, notice, keys)
 }
 
 // frameWith is frame with the notice line spelled out, for a view that puts an input there instead.
 func (m *Model) frameWith(header []string, body, notice, keys string) string {
-	bodyHeight := max(0, m.height-len(header)-2)
+	noticeLines := strings.Split(notice, "\n")
+	bodyHeight := max(0, m.height-len(header)-len(noticeLines)-1)
 	bodyLines := strings.Split(body, "\n")
 	if len(bodyLines) > bodyHeight {
 		bodyLines = bodyLines[:bodyHeight]
@@ -313,7 +325,8 @@ func (m *Model) frameWith(header []string, body, notice, keys string) string {
 	lines := make([]string, 0, m.height)
 	lines = append(lines, header...)
 	lines = append(lines, bodyLines...)
-	lines = append(lines, notice, " "+keys)
+	lines = append(lines, noticeLines...)
+	lines = append(lines, " "+keys)
 	clip := m.styles.R.NewStyle().MaxWidth(m.width)
 	for i, l := range lines {
 		lines[i] = clip.Render(render.ForDisplayANSI(l))
