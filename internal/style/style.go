@@ -300,6 +300,9 @@ func (s Style) Brand() string {
 	return s.segBrand.Render(s.brandText())
 }
 
+// BrandWidth is the cells the brand takes on a band, which is wider than Brand() prints without color.
+func (s Style) BrandWidth() int { return ansi.StringWidth(s.brandText()) }
+
 func (s Style) brandText() string {
 	if s.Glyphs.Brand != "" {
 		return " " + s.Glyphs.Brand + " loupe "

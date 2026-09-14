@@ -142,6 +142,13 @@ func (m *Model) updateFileDiff(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) fileDiffView() string {
+	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "]/[", Verb: "next/prev finding"}, {K: "enter", Verb: "open finding"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}})
+	return m.frame([]string{m.fileDiffBand()}, m.file.View(), keys)
+}
+
+// fileDiffBand drops the run from the band: what the stats say about this file is what the view is for, and the
+// path gives up its directories before they do.
+func (m *Model) fileDiffBand() string {
 	f, _ := m.openedFinding()
 	path := ""
 	if f.Location != nil {
@@ -150,16 +157,13 @@ func (m *Model) fileDiffView() string {
 	added, removed, findings := m.fileCounts()
 	counts := fmt.Sprintf("+%d %s%d %s %d %s", added, m.sign("\u2212", "-"), removed, m.glyphs.Pending, findings, plural(findings, "finding"))
 	pill := m.readinessPill()
-	// The file diff drops the run from the band: what the stats say about this file is what the view is for, and the
-	// path gives up its directories before they do.
 	icon := ""
 	if m.glyphs.File != "" {
 		icon = m.glyphs.File + " "
 	}
-	room := m.width - style.Width(m.styles.Brand()) - style.Width(icon) - style.Width(counts) - style.Width(pill) - 6
-	header := []string{m.styles.Band(style.BandParts{Title: icon + m.styles.TruncLeft(path, max(10, room)) + "  " + counts, Right: pill}, m.width)}
-	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "]/[", Verb: "next/prev finding"}, {K: "enter", Verb: "open finding"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}})
-	return m.frame(header, m.file.View(), keys)
+	// The band keeps a divider cell and two of padding around the title, and the title two more before the counts.
+	room := m.width - m.styles.BrandWidth() - style.Width(pill) - 5 - style.Width(icon) - style.Width(counts)
+	return m.styles.Band(style.BandParts{Title: icon + m.styles.TruncLeft(path, max(10, room)) + "  " + counts, Right: pill}, m.width)
 }
 
 func plural(n int, word string) string {

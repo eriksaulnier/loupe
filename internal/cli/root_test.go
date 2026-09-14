@@ -118,6 +118,27 @@ func TestUnknownFlagIsUsage(t *testing.T) {
 	}
 }
 
+func TestUnknownIconsTierIsUsage(t *testing.T) {
+	deps, s := testDeps(t, map[string]string{style.IconsEnv: "emoji"})
+	if code := Execute(deps, []string{"list", "--json"}); code != 2 {
+		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
+	}
+	m := decodeOne(t, s.stdout.Bytes())
+	e := m["error"].(map[string]any)
+	if m["command"] != "list" || e["code"] != "usage" || !strings.Contains(e["message"].(string), "emoji") {
+		t.Fatalf("got %v", m)
+	}
+
+	deps, s = testDeps(t, map[string]string{style.IconsEnv: "emoji", "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"list"}); code != 2 {
+		t.Fatalf("exit %d", code)
+	}
+	want := "error: LOUPE_ICONS=\"emoji\" is not one of ascii, unicode, nerd\nfix: set LOUPE_ICONS to ascii, unicode or nerd, or unset it\n"
+	if s.stdout.Len() != 0 || s.stderr.String() != want {
+		t.Fatalf("stdout %q stderr %q", s.stdout.String(), s.stderr.String())
+	}
+}
+
 // testRoot adds a run-scoped subcommand so argument handling and run selection are exercised apart from any real
 // command.
 func testRoot(deps Deps, runErr error) *cobra.Command {

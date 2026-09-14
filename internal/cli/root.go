@@ -144,7 +144,12 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 		deps.palettes.out = style.New(io.Discard, deps.Getenv)
 	}
 	if err := style.ValidateEnv(deps.Getenv); err != nil {
-		return report(deps, jsonMode, root.Name(), "", refusal.New(refusal.Usage, err.Error(), "set "+style.IconsEnv+" to ascii, unicode or nerd, or unset it"))
+		// The refusal names the subcommand the way every other usage refusal does.
+		named := root
+		if found, _, findErr := root.Find(args); findErr == nil && found != nil {
+			named = found
+		}
+		return report(deps, jsonMode, commandName(named), "", refusal.New(refusal.Usage, err.Error(), "set "+style.IconsEnv+" to ascii, unicode or nerd, or unset it"))
 	}
 	// Under --json cobra's output is held back so help can become the one result object and nothing else hits stdout.
 	var cobraOut bytes.Buffer

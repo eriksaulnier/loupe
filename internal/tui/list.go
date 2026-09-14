@@ -329,7 +329,8 @@ func (m *Model) locationColumn(f draft.Finding, cols listColumns) string {
 	if f.Location == nil {
 		icon = m.glyphs.General
 	}
-	if icon == "" {
+	// A column too narrow for the icon and a few cells of path shows the path alone.
+	if icon == "" || cols.location < 4 {
 		return m.styles.TruncLeft(text, cols.location)
 	}
 	return icon + " " + m.styles.TruncLeft(text, cols.location-2)
