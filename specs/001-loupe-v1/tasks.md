@@ -392,3 +392,41 @@ The spec marks US1, US2 and US3 all P1, and none delivers the product alone: fil
 - Each task ends with `mise run check` passing and one Conventional Commit.
 - A task is not done until the quickstart.md row it implements is green (quickstart.md "Automated validation").
 - Stop and ask the owner when a task's instruction conflicts with the spec, research, contract or `docs/comment-format.md`; the constitution outranks all of them.
+
+---
+
+## Phase 12: Convergence
+
+Fix rounds after T104, from the owner's reviews in the vault under `Engineering/_unscoped/loupe-go/`. Checked tasks landed in the named commit; unchecked tasks are gaps the convergence assessment found.
+
+### From the whole-tree review (`2026-09-13-research-loupe-v1-whole-tree-review.md`)
+
+- [X] T105 Close allowlist bypasses through multi-line code spans, HTML comments and indented fences per FR-009 (contradicts) — `d1bb5d1`
+- [X] T106 Make `pr.diff` independent of the user's diff config and `GIT_DIFF_OPTS`, and diff against the merge base (`base...head`), recording `mergeBaseSha` per FR-003, FR-008 (contradicts) — `8f9d03a`
+- [X] T107 Count accepted-or-pending findings in the `empty` and `blocking` gates per FR-025 (contradicts) — `fd1367b`
+- [X] T108 Refuse `tty` before the draft and credentials are read, and require stderr to be a terminal under `--json` per FR-025, US3/AC7, Constitution II (contradicts) — `2a8f668`
+- [X] T109 Add `changed` and `viewer` codes for confirmation races instead of reusing `version` and `auth` per contracts/cli.md error codes (contradicts) — `cc23481`
+- [X] T110 Keep both diff entries of a type change so each side validates per FR-008 (partial) — `6d53fc8`
+- [X] T111 Escape the implicit bidi marks U+200E, U+200F, U+061C and keep fenced `<details>` closed in the confirmation per FR-027, Constitution II (partial) — `092bf22`
+- [X] T112 Scroll a tall hunk in the detail view and cancel the full-screen confirmation at end of input per FR-022, US2/AC2, research.md step 5 (partial) — `514da75`
+- [X] T113 Name the entry in batch refusals, give `no-run` a fix each command accepts, and print a capture summary step that runs per FR-010, FR-006, FR-035 (partial) — `91f6ede`
+- [X] T114 Catch split pseudo-terminal calls and pseudo-terminal modules in the test guard per Constitution VII (partial) — `f4f1a7e`
+- [X] T115 Pin behavior the mutation sweep left unpinned per Constitution VII (partial) — `d296326`
+- [X] T116 Refuse a `pr.diff` that no longer matches `diffSha256` on every load per FR-008 (missing) — `3eb64f9`
+- [X] T117 Record the rulings on no-op edit versions, `show --previous` versions and the lock timeout variable per FR-014, contracts/cli.md (partial) — `858773b`
+- [X] T118 Delete dead code and collapse duplicated helpers per plan: project structure (unrequested) — `5ad9db0`, `d4c4465`
+
+### From the round 2 review (`2026-09-14-research-loupe-v1-round-2-review.md`)
+
+- [X] T119 Pin `diff.indentHeuristic=true` and the file order (`-O /dev/null`) on the diff per FR-003, FR-008 (partial) — `4f167d9`
+- [X] T120 Name the included, publishable and published sets apart in data-model.md, contracts/cli.md and the publish help, and say `tty` is checked after receipt replay per FR-025, contracts/cli.md publish (contradicts) — `7d1cc5b`
+- [X] T121 List `GIT_NAMESPACE` and the new diff pins in research.md's capture decision per plan: capture mechanics (partial) — `139cf55`
+- [X] T122 State in `scripts/check-tests.sh` that its greps guard against honest mistakes, not an adversary, and that `go list -deps` is the strong check per Constitution VII (partial) — `ee26c58`
+
+### Remaining gaps
+
+- [ ] T123 Reword FR-019 readiness to "no finding pending and no note open", since an excluded finding stays `included: true` and does not block (`internal/draft/derive.go:66`) per FR-019 (contradicts)
+- [ ] T124 Replace "included" with "publishable" (gates) or "published" (body contents) in FR-025, FR-026, the US3 intro and scenarios 2 and 9, clarification Q3 and the blocking edge case per FR-025, FR-026 (contradicts)
+- [ ] T125 Replace "included finding(s)" with "published finding(s)" in `docs/comment-format.md` lines 30, 94, 102, 179, 188-189, 210 and 229, through the spec amendment the constitution requires for that contract per docs/comment-format.md (contradicts)
+- [ ] T126 Say "publishable" in the `empty` and `blocking` refusal texts and replace the `included()` helper in `internal/publish/gates.go` with `draft.PublishableSet` per data-model.md publishable set (contradicts)
+- [ ] T127 Amend the spec's dead-lock-holder edge case to match plan: locking, where flock is released when its holder dies and the refusal says to wait for or stop the holder (`internal/run/lock.go:100-102`) per spec edge cases, plan: locking (contradicts)
