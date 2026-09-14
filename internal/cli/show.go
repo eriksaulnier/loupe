@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -34,20 +35,31 @@ Result (--json):
    "dispositions": {"f-001": "accepted"},
    "readiness": {"ready": true, "accepted": ["f-001"], "pending": [], "excluded": [],
                  "withdrawn": [], "openNotes": []},
-   "digest": "sha256 hex"}`
+   "digest": "sha256 hex"}
+
+--previous shows instead the findings published by the newest earlier round that has a receipt,
+skipping unpublished rounds, and refuses with not-found when no earlier round was published.
+
+Result (--previous --json):
+  {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@2",
+   "round": 1, "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
+   "findings": [{"id": "f-001", "title": "...", "body": "...",
+                 "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
+                 "label": "issue", "blocking": true}]}`
 
 func newShowCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "show",
 		Short:   "Show the draft, dispositions and readiness",
 		Long:    showHelp,
-		Example: "  loupe show --run owner/repo#123 --json",
+		Example: "  loupe show --run owner/repo#123 --json\n  loupe show --previous --run owner/repo#123@2 --json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runShow(cmd, deps)
 		},
 	}
 	cmd.Flags().String("run", "", "run reference, owner/repo#123 or owner/repo#123@2")
+	cmd.Flags().Bool("previous", false, "show the findings published by the newest earlier published round")
 	return cmd
 }
 
@@ -55,6 +67,9 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 	dir, ref, err := resolveRun(cmd, deps, "")
 	if err != nil {
 		return err
+	}
+	if previous, _ := cmd.Flags().GetBool("previous"); previous {
+		return runShowPrevious(cmd, deps, ref)
 	}
 	target, err := run.LoadTarget(dir)
 	if err != nil {
@@ -81,6 +96,58 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 		})
 	}
 	return printShow(deps.Stdout, ref, target, d, dispositions, readiness)
+}
+
+func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		return err
+	}
+	round, dir, err := run.PreviousPublished(root, ref)
+	if err != nil {
+		return err
+	}
+	receipt, found, err := publish.LoadReceipt(dir)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("receipt.json in %s disappeared while it was being read", dir)
+	}
+	findings := receipt.Envelope.Findings
+	if findings == nil {
+		findings = []publish.EnvelopeFinding{}
+	}
+	if wantJSON(cmd) {
+		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, map[string]any{
+			"round":     round,
+			"reviewUrl": receipt.ReviewURL,
+			"findings":  findings,
+		})
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Round %d was published: %s\n", round, render.ForDisplay(receipt.ReviewURL))
+	if len(findings) == 0 {
+		b.WriteString("Findings: (none)\n")
+	}
+	for _, f := range findings {
+		blocking := "-"
+		if f.Blocking {
+			blocking = "blocking"
+		}
+		label := f.Label
+		if label == "" {
+			label = "-"
+		}
+		where := "general"
+		if f.Location != nil {
+			where = fmt.Sprintf("%s:%d", render.ForDisplay(f.Location.Path), f.Location.Line)
+		}
+		fmt.Fprintf(&b, "%s  %-8s  %s  %s  %s\n", render.ForDisplay(f.ID), blocking, render.ForDisplay(label), render.ForDisplay(f.Title), where)
+		fmt.Fprintf(&b, "  %s\n", strings.ReplaceAll(strings.TrimRight(render.ForDisplay(f.Body), "\n"), "\n", "\n  "))
+	}
+	_, err = io.WriteString(deps.Stdout, b.String())
+	return err
 }
 
 func printShow(w io.Writer, ref run.Ref, target run.Target, d *draft.Draft, dispositions map[string]string, readiness draft.Readiness) error {

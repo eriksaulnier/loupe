@@ -136,6 +136,11 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if err != nil {
 		return err
 	}
+	if newest > 0 {
+		if err := refuseSameHead(root, run.Ref{Owner: owner, Repo: repo, Number: number, Round: newest}, pr.HeadSHA); err != nil {
+			return err
+		}
+	}
 	ref := run.Ref{Owner: owner, Repo: repo, Number: number, Round: newest + 1}
 
 	clone, _ := cmd.Flags().GetString("repo")
@@ -234,6 +239,26 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		})
 	}
 	return printCapture(deps.Stdout, ref, target, cleanup, next)
+}
+
+// refuseSameHead runs under the capture lock so two captures at an unchanged head cannot both pass it. A published
+// round at the same head may be followed by a new one.
+func refuseSameHead(root string, newest run.Ref, headSHA string) error {
+	dir := run.RunDir(root, newest.Owner, newest.Repo, newest.Number, newest.Round)
+	target, err := run.LoadTarget(dir)
+	if err != nil {
+		return err
+	}
+	if target.HeadSHA != headSHA {
+		return nil
+	}
+	published, err := run.HasReceipt(dir)
+	if err != nil || published {
+		return err
+	}
+	return refusal.New(refusal.SameHead,
+		fmt.Sprintf("%s is unpublished and already at the pull request's head %s", newest, headSHA),
+		"--run "+newest.String())
 }
 
 // githubReadRefusal keeps the client's own refusals (not found, auth) and reports any other failed read, a 5xx or a
