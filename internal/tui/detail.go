@@ -11,6 +11,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const detailHeaderLines = 1
@@ -41,12 +42,12 @@ func (m *Model) refreshDetail() error {
 	}
 	m.hunk = m.hunk[:0]
 	if f.Location == nil {
-		m.hunk = append(m.hunk, m.styles.dim.Render("general finding"))
+		m.hunk = append(m.hunk, m.styles.Dim.Render("general finding"))
 	}
 	for _, l := range lines {
 		text := diffLineText(l)
 		if l.Anchored {
-			m.hunk = append(m.hunk, m.styles.anchored.Render("> "+text))
+			m.hunk = append(m.hunk, m.styles.Anchor.Render("> "+text))
 		} else {
 			m.hunk = append(m.hunk, "  "+m.styleDiffLine(l, text))
 		}
@@ -57,7 +58,7 @@ func (m *Model) refreshDetail() error {
 		return err
 	}
 	var top []string
-	top = append(top, m.styles.bold.Render(render.ForDisplay(render.OneLine(f.Title))))
+	top = append(top, m.styles.Bold.Render(render.ForDisplay(render.OneLine(f.Title))))
 	top = append(top, "["+strings.Join(chips(f, draft.Dispositions(m.draft)[f.ID]), "] [")+"]  "+locationText(f))
 	top = append(top, strings.Split(body, "\n")...)
 	for _, n := range m.draft.Notes {
@@ -92,14 +93,14 @@ func findingMarkdown(f draft.Finding) string {
 func (m *Model) renderMarkdown(md string) (string, error) {
 	wrap := max(20, m.width-4)
 	if m.glamour == nil || m.wrapWidth != wrap {
-		style := glamourstyles.NoTTYStyle
-		if m.color {
-			style = glamourstyles.LightStyle
+		theme := glamourstyles.NoTTYStyle
+		if m.styles.Color {
+			theme = glamourstyles.LightStyle
 			if m.darkBackground {
-				style = glamourstyles.DarkStyle
+				theme = glamourstyles.DarkStyle
 			}
 		}
-		r, err := glamour.NewTermRenderer(glamour.WithStandardStyle(style), glamour.WithWordWrap(wrap))
+		r, err := glamour.NewTermRenderer(glamour.WithStandardStyle(theme), glamour.WithWordWrap(wrap))
 		if err != nil {
 			return "", fmt.Errorf("create Markdown renderer: %w", err)
 		}
@@ -124,7 +125,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 	case "r", "d":
 		n, ok := firstOpenNote(m.draft, f.ID)
 		if !ok {
-			m.notice = fmt.Sprintf("%s has no open note", f.ID)
+			m.say(style.Warn, fmt.Sprintf("%s has no open note", f.ID))
 			return nil
 		}
 		if msg.String() == "r" {
@@ -138,7 +139,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		return m.note.Focus()
 	case "f":
 		if f.Location == nil {
-			m.notice = "a general finding has no file diff"
+			m.say(style.Warn, "a general finding has no file diff")
 			return nil
 		}
 		m.notice = ""
@@ -206,16 +207,16 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 		return m.fail(err)
 	}
 	if recorded {
-		m.notice = success()
+		m.say(style.Good, success())
 	}
 	return m.fail(m.refreshDetail())
 }
 
 func (m *Model) detailView() string {
 	f, i := m.openedFinding()
-	header := []string{m.styles.bold.Render(fmt.Sprintf("%s/%s#%d  round %d  %s (%d of %d)",
+	header := []string{m.styles.Bold.Render(fmt.Sprintf("%s/%s#%d  round %d  %s (%d of %d)",
 		m.target.Owner, m.target.Repo, m.target.Number, m.target.Round, f.ID, i+1, len(m.draft.Findings)))}
-	separator := m.styles.dim.Render(strings.Repeat("-", m.width))
+	separator := m.styles.Dim.Render(strings.Repeat("-", m.width))
 	body := m.body.View() + "\n" + separator + "\n" + strings.Join(m.hunkWindow(), "\n")
 	keys := "a accept  x exclude  s send back  u restore  r/d resolve/dismiss note  f file diff  J/K hunk  n/N next/prev  esc back  ? help"
 	if m.noting {
@@ -250,13 +251,13 @@ func (m *Model) hunkWindow() []string {
 	top := min(m.hunkTop, maxHunkTop(len(m.hunk), rows))
 	var above, below string
 	if top > 0 {
-		above = m.styles.dim.Render(fmt.Sprintf("  ... %d lines above; K scrolls up", top))
+		above = m.styles.Dim.Render(fmt.Sprintf("  ... %d lines above; K scrolls up", top))
 		rows--
 	}
 	end := min(len(m.hunk), top+rows)
 	if end < len(m.hunk) && rows > 0 {
 		end--
-		below = m.styles.dim.Render(fmt.Sprintf("  ... %d lines below; J scrolls down", len(m.hunk)-max(end, top)))
+		below = m.styles.Dim.Render(fmt.Sprintf("  ... %d lines below; J scrolls down", len(m.hunk)-max(end, top)))
 	}
 	var out []string
 	if above != "" {

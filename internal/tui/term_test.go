@@ -34,7 +34,7 @@ func TestChooseMode(t *testing.T) {
 }
 
 func TestGlyphs(t *testing.T) {
-	utf8 := GlyphSet{Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●"}
+	utf8 := GlyphSet{Accepted: "\u2713", Pending: "\u00b7", Excluded: "\u2717", Withdrawn: "\u21a9", Blocking: "\u25cf"}
 	ascii := GlyphSet{Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!"}
 	cases := []struct {
 		name string
@@ -52,8 +52,11 @@ func TestGlyphs(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := Glyphs(envOf(c.env)); got != c.want {
-				t.Fatalf("Glyphs = %+v, want %+v", got, c.want)
+			// The dispositions stand for the whole set; the style package pins the rest of it.
+			got := Glyphs(envOf(c.env))
+			if got.Accepted != c.want.Accepted || got.Pending != c.want.Pending || got.Excluded != c.want.Excluded ||
+				got.Withdrawn != c.want.Withdrawn || got.Blocking != c.want.Blocking {
+				t.Fatalf("Glyphs = %+v, want the dispositions of %+v", got, c.want)
 			}
 		})
 	}

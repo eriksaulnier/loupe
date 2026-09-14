@@ -12,6 +12,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const plainAnswers = "answer [a]ccept e[x]clude [s]end back [u]restore [r]esolve note [d]ismiss note [n]ext [b]ack [q]uit: "
@@ -36,8 +37,9 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		return err
 	}
 
+	s := style.New(out, getenv)
 	p := &printer{w: out}
-	p.printf("%s/%s#%d  round %d  %s\n%s\n", target.Owner, target.Repo, target.Number, target.Round, render.ForDisplay(render.OneLine(target.Title)), countsLine(d))
+	p.printf("%s/%s#%d  round %d  %s\n%s\n", target.Owner, target.Repo, target.Number, target.Round, render.ForDisplay(render.OneLine(target.Title)), countsLine(d, s))
 	if strings.TrimSpace(d.Summary) != "" {
 		p.printf("\nSummary:\n%s\n", render.ForDisplay(d.Summary))
 	}

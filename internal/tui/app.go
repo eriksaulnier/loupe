@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -18,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const staleNotice = "finding changed since it was displayed; nothing was recorded"
@@ -46,34 +46,11 @@ type Config struct {
 	GitHub func() (github.Client, error)
 }
 
-type palette struct {
-	r         *lipgloss.Renderer
-	bold      lipgloss.Style
-	dim       lipgloss.Style
-	anchored  lipgloss.Style
-	added     lipgloss.Style
-	removed   lipgloss.Style
-	separator lipgloss.Style
-	notice    lipgloss.Style
-}
-
-func newPalette(out io.Writer, color bool) palette {
-	// A renderer on a writer that is not a terminal detects no color support and emits no escapes at all.
-	if !color {
-		out = io.Discard
-	}
-	r := lipgloss.NewRenderer(out)
-	return palette{
-		r:         r,
-		bold:      r.NewStyle().Bold(true),
-		dim:       r.NewStyle().Faint(true),
-		anchored:  r.NewStyle().Bold(true).Background(lipgloss.AdaptiveColor{Light: "#FFF3B0", Dark: "#4A4000"}),
-		added:     r.NewStyle().Foreground(lipgloss.Color("2")),
-		removed:   r.NewStyle().Foreground(lipgloss.Color("1")),
-		separator: r.NewStyle().Foreground(lipgloss.Color("6")),
-		notice:    r.NewStyle().Foreground(lipgloss.Color("3")),
-	}
-}
+// Width tiers: the label column goes first, then the location shrinks to a filename.
+const (
+	wideWidth = 100
+	midWidth  = 80
+)
 
 // Model is the review program. It holds no lock: every decision goes through draft.Mutate at the displayed version.
 type Model struct {
@@ -83,14 +60,15 @@ type Model struct {
 	diff    *diff.Diff
 	version int
 	glyphs  GlyphSet
-	color   bool
-	styles  palette
+	styles  style.Style
 	view    view
 	help    bool
 	width   int
 	height  int
 	notice  string
-	err     error
+	// noticeKind colors the notice: a recorded decision reads as success, a refusal as a warning.
+	noticeKind style.Kind
+	err        error
 
 	cursor           int
 	summaryCollapsed bool
@@ -141,7 +119,7 @@ func New(cfg Config) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	color := cfg.Getenv("NO_COLOR") == ""
+	st := style.New(cfg.Output, cfg.Getenv)
 	note := textinput.New()
 	note.Prompt = "note: "
 	m := &Model{
@@ -150,17 +128,18 @@ func New(cfg Config) (*Model, error) {
 		draft:   d,
 		diff:    parsed,
 		version: d.Version,
-		glyphs:  Glyphs(cfg.Getenv),
-		color:   color,
-		styles:  newPalette(cfg.Output, color),
+		glyphs:  st.Glyphs,
+		styles:  st,
 		width:   80,
 		height:  24,
 		note:    note,
 		body:    viewport.New(80, 10),
 		file:    viewport.New(80, 10),
+		// The summary starts collapsed so the findings, not the prose, fill the first screen.
+		summaryCollapsed: true,
 	}
-	if color {
-		m.darkBackground = m.styles.r.HasDarkBackground()
+	if st.Color {
+		m.darkBackground = st.R.HasDarkBackground()
 	}
 	return m, nil
 }
@@ -244,7 +223,7 @@ func (m *Model) View() string {
 		if m.sending {
 			keys = "keys are ignored until the outcome is recorded"
 		}
-		return m.frame([]string{m.styles.bold.Render(m.header())}, "", keys)
+		return m.frame([]string{m.styles.Bold.Render(m.header())}, "", keys)
 	}
 	return m.listView()
 }
@@ -285,7 +264,7 @@ func (m *Model) Decide(fn func(*draft.Draft) error) (bool, error) {
 		return false, err
 	}
 	m.draft, m.version = d, d.Version
-	m.notice = notice
+	m.say(style.Warn, notice)
 	return notice == "", nil
 }
 
@@ -323,8 +302,12 @@ func (m *Model) frame(header []string, body, keys string) string {
 	lines := make([]string, 0, m.height)
 	lines = append(lines, header...)
 	lines = append(lines, bodyLines...)
-	lines = append(lines, m.styles.notice.Render(m.notice), m.styles.dim.Render(keys))
-	clip := m.styles.r.NewStyle().MaxWidth(m.width)
+	notice := ""
+	if m.notice != "" {
+		notice = " " + m.styles.Of(m.noticeKind).Render(m.notice)
+	}
+	lines = append(lines, notice, " "+keys)
+	clip := m.styles.R.NewStyle().MaxWidth(m.width)
 	for i, l := range lines {
 		lines[i] = clip.Render(render.ForDisplayANSI(l))
 	}
@@ -348,29 +331,49 @@ func (m *Model) helpView() string {
 		keys = []string{"j/k, up/down  move", "enter         choose", "esc           back"}
 	}
 	keys = append(keys, "?             close this help", "ctrl+c        quit")
-	return m.frame([]string{m.styles.bold.Render("Keys")}, strings.Join(keys, "\n"), "? or esc closes help")
+	return m.frame([]string{m.styles.Bold.Render("Keys")}, strings.Join(keys, "\n"), "? or esc closes help")
 }
 
 func (m *Model) header() string {
 	return fmt.Sprintf("%s/%s#%d  round %d  %s", m.target.Owner, m.target.Repo, m.target.Number, m.target.Round, render.ForDisplay(render.OneLine(m.target.Title)))
 }
 
-func countsLine(d *draft.Draft) string {
-	r := draft.ReadinessOf(d)
-	return fmt.Sprintf("accepted %d  pending %d  excluded %d  withdrawn %d  open notes %d",
-		len(r.Accepted), len(r.Pending), len(r.Excluded), len(r.Withdrawn), len(r.OpenNotes))
+// band is the header line of every view: the program, the run it is reviewing, what the view is showing, and the
+// readiness pill at the right edge, which never truncates.
+func (m *Model) band(middle string) string {
+	round := fmt.Sprintf("round %d", m.target.Round)
+	if m.width < wideWidth {
+		round = fmt.Sprintf("r%d", m.target.Round)
+	}
+	left := m.styles.Brand() + " " + m.styles.Accent.Render(m.ref()) + " " + m.styles.Dim.Render(round)
+	if middle != "" {
+		left += "  " + middle
+	}
+	return m.styles.Band(left, m.readinessPill(), m.width)
 }
 
-func (g GlyphSet) forDisposition(disposition string) string {
-	switch disposition {
-	case draft.DispositionAccepted:
-		return g.Accepted
-	case draft.DispositionExcluded:
-		return g.Excluded
-	case draft.DispositionWithdrawn:
-		return g.Withdrawn
-	}
-	return g.Pending
+func (m *Model) ref() string {
+	return fmt.Sprintf("%s/%s#%d", m.target.Owner, m.target.Repo, m.target.Number)
+}
+
+func (m *Model) readinessPill() string {
+	r := draft.ReadinessOf(m.draft)
+	return m.styles.ReadinessPill(r.Ready, len(r.Pending), len(r.OpenNotes))
+}
+
+// titleBand is the run title, which is the first thing the band gives up when the window narrows.
+func (m *Model) titleBand() string {
+	return render.ForDisplay(render.OneLine(m.target.Title))
+}
+
+func (m *Model) countsLine() string { return countsLine(m.draft, m.styles) }
+
+// say sets the notice and how it reads: Good for something recorded, Warn for a refusal or a dead end.
+func (m *Model) say(kind style.Kind, text string) { m.notice, m.noticeKind = text, kind }
+
+func countsLine(d *draft.Draft, s style.Style) string {
+	r := draft.ReadinessOf(d)
+	return s.Counts(len(r.Accepted), len(r.Pending), len(r.Excluded), len(r.Withdrawn), len(r.OpenNotes))
 }
 
 func locationText(f draft.Finding) string {
@@ -458,11 +461,11 @@ func diffLineText(l diff.ViewLine) string {
 func (m *Model) styleDiffLine(l diff.ViewLine, text string) string {
 	switch {
 	case l.Separator:
-		return m.styles.separator.Render(text)
+		return m.styles.Accent.Render(text)
 	case l.Kind == diff.Add:
-		return m.styles.added.Render(text)
+		return m.styles.Added.Render(text)
 	case l.Kind == diff.Delete:
-		return m.styles.removed.Render(text)
+		return m.styles.Removed.Render(text)
 	}
 	return text
 }

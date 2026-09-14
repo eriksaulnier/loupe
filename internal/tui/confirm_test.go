@@ -188,7 +188,7 @@ func TestPublishKeyRefusedWhenNotReady(t *testing.T) {
 
 func TestActionPickerDisablesBlockedApprove(t *testing.T) {
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), nil)
-	waitFor(t, tm, "accepted 3")
+	waitFor(t, tm, "+ 3 accepted")
 	tm.Type("p")
 	waitFor(t, tm, "> comment", "  approve", "disabled: cannot approve while included findings are blocking: f-001")
 	tm.Type("j")
@@ -202,7 +202,7 @@ func TestActionPickerDisablesBlockedApprove(t *testing.T) {
 
 func TestActionPickerOffersOnlyCommentOnOwnPullRequest(t *testing.T) {
 	tm := startPublishApp(t, readyFixture(t, "author", "author"), nil)
-	waitFor(t, tm, "accepted 3")
+	waitFor(t, tm, "+ 3 accepted")
 	tm.Type("p")
 	waitFor(t, tm, "> comment",
 		"disabled: author is the author of this pull request and cannot approve it",
@@ -241,7 +241,7 @@ func TestPublishFlowDeclineSendsNothing(t *testing.T) {
 	gh := newPublishFake(t)
 	dir := readyFixture(t, "reviewer", "author")
 	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "accepted 3")
+	waitFor(t, tm, "+ 3 accepted")
 	tm.Type("p")
 	waitFor(t, tm, "> comment")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
@@ -261,7 +261,7 @@ func TestPublishFlowSendsAndShowsURL(t *testing.T) {
 	gh := newPublishFake(t)
 	dir := readyFixture(t, "reviewer", "author")
 	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "accepted 3")
+	waitFor(t, tm, "+ 3 accepted")
 	tm.Type("p")
 	waitFor(t, tm, "> comment")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
@@ -286,7 +286,7 @@ func TestPublishFlowShowsRefusalAndReturnsToList(t *testing.T) {
 	gh := newPublishFake(t)
 	gh.SetHead("acme", "widgets", 42, "3333333333333333333333333333333333333333")
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
-	waitFor(t, tm, "accepted 3")
+	waitFor(t, tm, "+ 3 accepted")
 	tm.Type("p")
 	waitFor(t, tm, "> comment")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
@@ -308,7 +308,7 @@ func TestPublishingViewIgnoresKeysWhileSending(t *testing.T) {
 		<-release
 	})
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
-	waitFor(t, tm, "accepted 3")
+	waitFor(t, tm, "+ 3 accepted")
 	tm.Type("p")
 	waitFor(t, tm, "> comment")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})

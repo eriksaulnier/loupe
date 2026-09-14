@@ -105,9 +105,9 @@ func finalView(t *testing.T, tm *teatest.TestModel) string {
 func TestAppDecidesAndPersists(t *testing.T) {
 	dir := newFixture(t)
 	tm := startApp(t, dir)
-	waitFor(t, tm, "acme/widgets#42", "round 1", "Two issues to look at.",
-		"accepted 0", "pending 3", "excluded 0", "withdrawn 0", "open notes 0",
-		". f-001 ! issue", "Title one", "multi.txt:3", ". f-002", "suggestion", "multi.txt:21", ". f-003", "general")
+	waitFor(t, tm, "acme/widgets#42", "round 1", "Two issues to look at.", "tab expands",
+		"+ 0 accepted", ". 3 pending", "x 0 excluded", "- 0 withdrawn", "~ 0 open notes",
+		"> . f-001  ! Title one", "issue", "multi.txt:3", ". f-002  Title two", "suggestion", "multi.txt:21", ". f-003  Title three", "general")
 
 	key(tm, tea.KeyEnter)
 	waitFor(t, tm, "Body one explains the rename.", "> ", "line three")
@@ -146,12 +146,12 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	}
 
 	key(tm, tea.KeyEsc)
-	waitFor(t, tm, "accepted 1")
+	waitFor(t, tm, "+ 1 accepted")
 	tm.Type("q")
 	finalView(t, tm)
 
 	again := startApp(t, dir)
-	waitFor(t, again, "accepted 1", "pending 1", "excluded 1", "open notes 1", "+ f-001", "x f-002", ". f-003")
+	waitFor(t, again, "+ 1 accepted", ". 1 pending", "x 1 excluded", "~ 1 open notes", "+ f-001", "x f-002", ". f-003")
 	again.Type("q")
 	view := finalView(t, again)
 	for _, want := range []string{"+ f-001", "x f-002", ". f-003"} {

@@ -49,7 +49,7 @@ func TestPlainDecidesLikeFullScreen(t *testing.T) {
 	}
 
 	text := out.String()
-	for _, want := range []string{"acme/widgets#42", "Two issues to look at.", "pending 3", "open notes 0"} {
+	for _, want := range []string{"acme/widgets#42", "Two issues to look at.", ". 3 pending", "~ 0 open notes"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("output lacks %q:\n%s", want, text)
 		}

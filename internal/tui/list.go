@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
@@ -32,7 +34,7 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 			return m.fail(err)
 		}
 		if err := publish.ReadinessRefusal(m.draft); err != nil {
-			m.notice = refusalNotice(err)
+			m.say(style.Warn, refusalNotice(err))
 			return nil
 		}
 		m.view, m.pick = viewAction, 0
@@ -66,7 +68,7 @@ func (m *Model) updateAction(msg tea.KeyMsg) tea.Cmd {
 	case "enter":
 		action := publish.Actions[m.pick]
 		if err := m.actionRefusal(action); err != nil {
-			m.notice = refusalNotice(err)
+			m.say(style.Warn, refusalNotice(err))
 			return nil
 		}
 		m.action, m.view, m.pick = action, viewInline, slices.Index(publish.InlineModes, "blocking")
@@ -94,12 +96,12 @@ func (m *Model) actionView() string {
 	for i, action := range publish.Actions {
 		row := pickerRow(i == m.pick, action)
 		if r, ok := refusal.As(m.actionRefusal(action)); ok {
-			rows = append(rows, m.styles.dim.Render(fmt.Sprintf("%-18s disabled: %s", row, r.Message)))
+			rows = append(rows, m.styles.Dim.Render(fmt.Sprintf("%-18s disabled: %s", row, r.Message)))
 			continue
 		}
 		rows = append(rows, row)
 	}
-	return m.frame([]string{m.styles.bold.Render(m.header()), "Publish: choose the review action"}, strings.Join(rows, "\n"), "j/k move  enter choose  esc back")
+	return m.frame([]string{m.styles.Bold.Render(m.header()), "Publish: choose the review action"}, strings.Join(rows, "\n"), "j/k move  enter choose  esc back")
 }
 
 var inlineDescriptions = map[string]string{
@@ -113,7 +115,7 @@ func (m *Model) inlineView() string {
 	for i, mode := range publish.InlineModes {
 		rows = append(rows, fmt.Sprintf("%-18s %s", pickerRow(i == m.pick, mode), inlineDescriptions[mode]))
 	}
-	header := []string{m.styles.bold.Render(m.header()), fmt.Sprintf("Publish with --action %s: choose inline comments", m.action)}
+	header := []string{m.styles.Bold.Render(m.header()), fmt.Sprintf("Publish with --action %s: choose inline comments", m.action)}
 	return m.frame(header, strings.Join(rows, "\n"), "j/k move  enter compose the review  esc back")
 }
 
@@ -124,52 +126,143 @@ func pickerRow(selected bool, text string) string {
 	return "  " + text
 }
 
-func (m *Model) listView() string {
-	header := []string{m.styles.bold.Render(m.header()), countsLine(m.draft)}
-
-	var summary []string
-	switch {
-	case m.summaryCollapsed:
-		summary = []string{m.styles.dim.Render("Summary (tab expands)")}
-	case strings.TrimSpace(m.draft.Summary) == "":
-		summary = []string{m.styles.dim.Render("No summary")}
-	default:
-		wrapped := m.styles.r.NewStyle().Width(m.width).Render(render.ForDisplay(m.draft.Summary))
-		summary = append([]string{m.styles.dim.Render("Summary (tab collapses)")}, strings.Split(wrapped, "\n")...)
-	}
-	summary = append(summary, "")
-
-	rowsHeight := max(1, m.bodyHeight(len(header))-len(summary))
-	offset := max(0, m.cursor-rowsHeight+1)
-	dispositions := draft.Dispositions(m.draft)
-	rows := make([]string, 0, rowsHeight)
-	if len(m.draft.Findings) == 0 {
-		rows = append(rows, "No findings")
-	}
-	for i := offset; i < len(m.draft.Findings) && i < offset+rowsHeight; i++ {
-		rows = append(rows, m.row(m.draft.Findings[i], dispositions[m.draft.Findings[i].ID], i == m.cursor))
-	}
-	body := strings.Join(append(summary, rows...), "\n")
-	return m.frame(header, body, "j/k move  enter open  tab summary  p publish  ? help  q quit")
+// listColumns is the row layout for the current width: the title takes whatever the fixed columns leave. The label
+// goes first when the window narrows, then the location shrinks to a filename.
+type listColumns struct {
+	title, label, location int
+	// shortLocation drops the directories instead of truncating the path from the left.
+	shortLocation bool
 }
 
-func (m *Model) row(f draft.Finding, disposition string, selected bool) string {
+// listFixed is the lead space, cursor, glyph and id columns with the gaps between them.
+const listFixed = 1 + 1 + 1 + 1 + 1 + listIDWidth + 2
+
+const listIDWidth = 5
+
+func (m *Model) listColumns() listColumns {
+	c := listColumns{label: 12, location: 28}
+	switch {
+	case m.width >= wideWidth:
+	case m.width >= midWidth:
+		c.label = 0
+	default:
+		c.label, c.location, c.shortLocation = 0, 18, true
+	}
+	gaps := 2
+	if c.label > 0 {
+		gaps += 2
+	}
+	c.title = m.width - listFixed - c.label - c.location - gaps
+	if c.title < 20 {
+		// Below the point where a title is readable, the location gives up the rest of its width.
+		c.location = max(0, c.location+c.title-20)
+		c.title = 20
+	}
+	return c
+}
+
+func (m *Model) listView() string {
+	header := []string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), " " + m.countsLine()}
+	cols := m.listColumns()
+
+	summary := m.summaryBlock(cols)
+	rowsHeight := max(1, m.bodyHeight(len(header))-len(summary)-1)
+	offset := max(0, m.cursor-rowsHeight+1)
+	dispositions := draft.Dispositions(m.draft)
+	rows := []string{m.columnHeads(cols)}
+	if len(m.draft.Findings) == 0 {
+		rows = append(rows, m.styles.Dim.Render(" No findings"))
+	}
+	for i := offset; i < len(m.draft.Findings) && i < offset+rowsHeight; i++ {
+		rows = append(rows, m.row(m.draft.Findings[i], dispositions[m.draft.Findings[i].ID], i == m.cursor, cols))
+	}
+	body := strings.Join(append(summary, rows...), "\n")
+
+	keys := []style.Key{{K: "j/k", Verb: "move"}, {K: "enter", Verb: "open"}}
+	if m.width >= wideWidth {
+		keys = append(keys, style.Key{K: "tab", Verb: "summary"})
+	}
+	keys = append(keys, style.Key{K: "p", Verb: "publish"}, style.Key{K: "?", Verb: "help"}, style.Key{K: "q", Verb: "quit"})
+	return m.frame(header, body, m.styles.Keys(keys))
+}
+
+// summaryBlock is the draft summary beside its label, two lines by default so the findings stay on screen.
+func (m *Model) summaryBlock(cols listColumns) []string {
+	const label = " Summary  "
+	indent := strings.Repeat(" ", len(label))
+	hint := "tab expands"
+	if !m.summaryCollapsed {
+		hint = "tab collapses"
+	}
+	if strings.TrimSpace(m.draft.Summary) == "" {
+		return []string{"", m.styles.Dim.Render(label + "none"), ""}
+	}
+	width := max(20, m.width-1-style.Width(hint)-2)
+	lines := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(m.draft.Summary)), width, indent), "\n")
+	if m.summaryCollapsed && len(lines) > 2 {
+		lines = lines[:2]
+		lines[1] = m.styles.TruncRight(lines[1], style.Width(lines[1])-1) + m.glyphs.Ellipsis
+	}
+	lines[0] = label + strings.TrimPrefix(lines[0], indent)
+	last := len(lines) - 1
+	lines[last] = style.Pad(lines[last], m.width-style.Width(hint)-1) + m.styles.Dim.Render(hint)
+	return append(append([]string{""}, lines...), "")
+}
+
+func (m *Model) columnHeads(cols listColumns) string {
+	head := strings.Repeat(" ", listFixed-listIDWidth-2) + style.Pad("ID", listIDWidth+2) + style.Pad("TITLE", cols.title+2)
+	if cols.label > 0 {
+		head += style.Pad("LABEL", cols.label+2)
+	}
+	if cols.location > 0 {
+		head += "LOCATION"
+	}
+	return m.styles.Dim.Render(m.styles.TruncRight(head, m.width))
+}
+
+func (m *Model) row(f draft.Finding, disposition string, selected bool, cols listColumns) string {
 	cursor := " "
 	if selected {
-		cursor = ">"
+		cursor = m.glyphs.Cursor
 	}
-	blocking := " "
+	glyph, _, kind := m.styles.Disposition(disposition)
+	title := render.ForDisplay(render.OneLine(f.Title))
+	blocking := ""
 	if f.Blocking {
 		blocking = m.glyphs.Blocking
+		title = blocking + " " + title
 	}
-	parts := []string{cursor, m.glyphs.forDisposition(disposition), f.ID, blocking}
-	if f.Label != "" {
-		parts = append(parts, render.ForDisplay(render.OneLine(f.Label)))
+	title = style.Pad(m.styles.TruncRight(title, cols.title), cols.title)
+	label := ""
+	if cols.label > 0 {
+		label = "  " + style.Pad(m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Label)), cols.label), cols.label)
 	}
-	parts = append(parts, render.ForDisplay(render.OneLine(f.Title)), " "+locationText(f))
-	line := strings.Join(parts, " ")
+	location := ""
+	if cols.location > 0 {
+		location = "  " + m.locationColumn(f, cols)
+	}
+	lead := " " + cursor + " "
+
 	if selected {
-		return m.styles.bold.Render(line)
+		// A selected row is one painted band, so nothing inside it may reset the background.
+		line := lead + glyph + " " + style.Pad(f.ID, listIDWidth) + "  " + title + label + location
+		if !m.styles.Color {
+			return strings.TrimRight(line, " ")
+		}
+		return m.styles.Selected.Render(style.Pad(line, m.width))
 	}
-	return line
+	if blocking != "" {
+		title = strings.Replace(title, blocking, m.styles.Bad.Render(blocking), 1)
+	}
+	return lead + m.styles.Of(kind).Render(glyph) + " " + m.styles.Accent.Render(style.Pad(f.ID, listIDWidth)) + "  " +
+		title + m.styles.Dim.Render(label) + m.styles.Dim.Render(location)
+}
+
+// locationColumn keeps the end of the path, which is the part that identifies the file.
+func (m *Model) locationColumn(f draft.Finding, cols listColumns) string {
+	text := locationText(f)
+	if cols.shortLocation && f.Location != nil {
+		text = render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
+	}
+	return m.styles.TruncLeft(text, cols.location)
 }

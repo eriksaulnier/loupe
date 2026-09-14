@@ -17,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const confirmKeys = "j/k pgup/pgdn home/end scroll  y publish  v/tab toggle exact JSON  any other key cancels"
@@ -88,16 +89,16 @@ func (c *confirmation) content(m *Model) string {
 	if !c.showJSON {
 		parts := []string{render.ForDisplay(markdown.OpenDetails(c.preview.Body)), fmt.Sprintf("Inline comments: %d", len(c.preview.Comments))}
 		for _, comment := range c.preview.Comments {
-			parts = append(parts, m.styles.bold.Render(render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side)))+"\n"+render.ForDisplay(comment.Body))
+			parts = append(parts, m.styles.Bold.Render(render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side)))+"\n"+render.ForDisplay(comment.Body))
 		}
 		text = strings.Join(parts, "\n\n")
 	}
-	return m.styles.r.NewStyle().Width(m.width).Render(text)
+	return m.styles.R.NewStyle().Width(m.width).Render(text)
 }
 
 func (m *Model) confirmView(c *confirmation) string {
 	c.sync(m)
-	return m.frame([]string{m.styles.bold.Render(c.header()), c.position()}, c.scroll.View(), confirmKeys)
+	return m.frame([]string{m.styles.Bold.Render(c.header()), c.position()}, c.scroll.View(), confirmKeys)
 }
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
@@ -107,9 +108,8 @@ type ConfirmModel struct {
 }
 
 func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer) *ConfirmModel {
-	color := getenv("NO_COLOR") == ""
 	return &ConfirmModel{
-		shell:   &Model{styles: newPalette(output, color), width: 80, height: 24},
+		shell:   &Model{styles: style.New(output, getenv), width: 80, height: 24},
 		confirm: newConfirmation(preview),
 	}
 }
@@ -204,7 +204,8 @@ func (s *publishSession) wait() tea.Msg {
 
 func (m *Model) startPublish() tea.Cmd {
 	s := &publishSession{previews: make(chan publish.Preview), answers: make(chan bool, 1), done: make(chan publishDone, 1), finished: make(chan struct{})}
-	m.session, m.view, m.notice = s, viewPublishing, "checking the pull request and composing the review..."
+	m.session, m.view = s, viewPublishing
+	m.say(style.Faint, "checking the pull request and composing the review...")
 	opts := publish.Options{
 		Dir: m.cfg.Dir, Target: m.target, GitHub: m.cfg.GitHub, IsTerminal: true, Action: m.action, Inline: publish.InlineModes[m.pick],
 		Confirm: func(p publish.Preview) (bool, error) {
@@ -228,9 +229,11 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	m.session.answers <- m.confirm.yes
-	m.view, m.notice = viewPublishing, "nothing was sent"
+	m.view = viewPublishing
+	m.say(style.Faint, "nothing was sent")
 	if m.confirm.yes {
-		m.sending, m.notice = true, "sending the review..."
+		m.sending = true
+		m.say(style.Faint, "sending the review...")
 	}
 	return m.session.wait
 }
@@ -250,11 +253,11 @@ func (m *Model) publishFinished(done publishDone) tea.Cmd {
 	var r *refusal.Error
 	switch {
 	case done.err == nil:
-		m.notice = "published: " + done.receipt.ReviewURL
+		m.say(style.Good, "published: "+done.receipt.ReviewURL)
 	case errors.Is(done.err, publish.ErrDeclined):
-		m.notice = "publish canceled; nothing was sent"
+		m.say(style.Faint, "publish canceled; nothing was sent")
 	case errors.As(done.err, &r):
-		m.notice = refusalNotice(r)
+		m.say(style.Warn, refusalNotice(r))
 	default:
 		return m.fail(done.err)
 	}

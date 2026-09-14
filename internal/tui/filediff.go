@@ -9,6 +9,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const fileDiffHeaderLines = 2
@@ -27,11 +28,11 @@ func (m *Model) openFileDiff(open draft.Finding) {
 	}
 	lines, err := m.diff.FileView(open.Location.Path, right, left)
 	if err != nil {
-		m.notice = err.Error()
+		m.say(style.Warn, err.Error())
 		return
 	}
 	if len(lines) == 0 {
-		m.notice = "this file has no diff lines to show"
+		m.say(style.Warn, "this file has no diff lines to show")
 		return
 	}
 	m.view, m.fileLines = viewFileDiff, lines
@@ -63,7 +64,7 @@ func (m *Model) refreshFileDiff() {
 		}
 		text := diffLineText(l)
 		if i == m.fileCursor {
-			rows[i] = cursor + marker + m.styles.bold.Render(text)
+			rows[i] = cursor + marker + m.styles.Bold.Render(text)
 		} else {
 			rows[i] = cursor + marker + m.styleDiffLine(l, text)
 		}
@@ -98,7 +99,7 @@ func (m *Model) updateFileDiff(msg tea.KeyMsg) tea.Cmd {
 		if markers := m.fileLines[m.fileCursor].Markers; len(markers) > 0 {
 			return m.fail(m.openFinding(markers[0]))
 		}
-		m.notice = "no finding on this line"
+		m.say(style.Warn, "no finding on this line")
 	case "esc":
 		return m.fail(m.openFinding(m.openID))
 	}
@@ -119,7 +120,7 @@ func (m *Model) fileDiffView() string {
 		path = render.ForDisplay(f.Location.Path)
 	}
 	header := []string{
-		m.styles.bold.Render(fmt.Sprintf("%s  file diff  %s/%s#%d", path, m.target.Owner, m.target.Repo, m.target.Number)),
+		m.styles.Bold.Render(fmt.Sprintf("%s  file diff  %s/%s#%d", path, m.target.Owner, m.target.Repo, m.target.Number)),
 		status,
 	}
 	return m.frame(header, m.file.View(), "j/k move  ]/[ next/prev finding  enter open  esc back  ? help")

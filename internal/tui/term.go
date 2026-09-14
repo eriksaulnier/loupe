@@ -1,7 +1,7 @@
 // Package tui is the human review interface: a full-screen Bubble Tea program and a line-by-line plain mode.
 package tui
 
-import "strings"
+import "github.com/eriksaulnier/loupe/internal/style"
 
 type Mode int
 
@@ -33,25 +33,7 @@ func ChooseMode(opts Options) Mode {
 	return FullScreen
 }
 
-type GlyphSet struct {
-	Accepted  string
-	Pending   string
-	Excluded  string
-	Withdrawn string
-	Blocking  string
-}
+// GlyphSet and Glyphs are the style package's, so both surfaces draw the same characters.
+type GlyphSet = style.GlyphSet
 
-// Glyphs follows POSIX locale precedence: the first non-empty of LC_ALL, LC_CTYPE and LANG decides the character set.
-func Glyphs(getenv func(string) string) GlyphSet {
-	for _, name := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
-		v := strings.ToLower(getenv(name))
-		if v == "" {
-			continue
-		}
-		if strings.Contains(v, "utf-8") || strings.Contains(v, "utf8") {
-			return GlyphSet{Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●"}
-		}
-		break
-	}
-	return GlyphSet{Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!"}
-}
+func Glyphs(getenv func(string) string) GlyphSet { return style.Glyphs(getenv) }
