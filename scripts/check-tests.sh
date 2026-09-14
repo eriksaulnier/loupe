@@ -3,9 +3,11 @@
 # that records an attempt first. git grep sees only tracked and staged files, so a new file must be added to be checked.
 #
 # Test files are *_test.go and everything under internal/testutil/. URL literals in them MUST be one of:
-#   - http://127.0.0.1 or http://localhost, with any port and path (httptest servers)
+#   - http://127.0.0.1 or http://localhost, optionally with a numeric port and a path (httptest servers)
 #   - https://github.com/<owner>/<repo>..., which names a repository and is never fetched: Git reaches a local bare
-#     remote through insteadOf, and the GitHub client talks to fakegh
+#     remote through insteadOf, and the GitHub client talks to fakegh. Owners that are GitHub site paths and repo
+#     paths that download content (archive, raw, releases, ...) are not allowed
+# Matching ignores case and refuses any URL with userinfo, since http://localhost:x@host/ reaches host.
 #   - https://api.github.com..., only under internal/github/ and internal/testutil/fakegh/, where the fake's transport
 #     rewrites it to the local server
 # and these exact literals, which are inputs to parsers and never fetched:
@@ -43,19 +45,32 @@ if [ -n "$pty" ]; then
 	violation "tests MUST NOT use a pseudo-terminal:" "$pty"
 fi
 
-urls=$(tracked_grep -noE "https?://[^[:space:]\"'\`)<>]*" -- "${tests[@]}")
+urls=$(tracked_grep -noiE "https?://[^[:space:]\"'\`)<>]*" -- "${tests[@]}")
 bad_urls=""
 while IFS= read -r hit; do
 	[ -n "$hit" ] || continue
 	file=${hit%%:*}
 	url=${hit#*:*:}
-	case "$url" in
-	http://127.0.0.1 | http://127.0.0.1[:/]* | http://localhost | http://localhost[:/]*) continue ;;
-	https://github.com/?*/?*) continue ;;
-	https://api.github.com*)
-		case "$file" in internal/github/* | internal/testutil/fakegh/*) continue ;; esac
-		;;
-	esac
+	lower=$(printf '%s' "$url" | tr '[:upper:]' '[:lower:]')
+	if [[ $lower != *@* ]]; then
+		if [[ $lower =~ ^http://(127\.0\.0\.1|localhost)(:[0-9]+)?(/.*)?$ ]]; then
+			continue
+		fi
+		if [[ $lower =~ ^https://github\.com/([a-z0-9%._-]+)/([a-z0-9%._-]+)(/([^/]*).*)?$ ]]; then
+			case "${BASH_REMATCH[1]}" in
+			login | logout | orgs | settings | apps | marketplace | sponsors | features | site | sessions | api) ;;
+			*)
+				case "${BASH_REMATCH[4]}" in
+				archive | raw | releases | blob | tarball | zipball | info | git-upload-pack) ;;
+				*) continue ;;
+				esac
+				;;
+			esac
+		fi
+		if [[ $lower == https://api.github.com* ]]; then
+			case "$file" in internal/github/* | internal/testutil/fakegh/*) continue ;; esac
+		fi
+	fi
 	case "$file $url" in
 	"internal/cli/capture_test.go http://github.com/o/r/pull/12" | \
 		"internal/cli/capture_test.go https://gitlab.com/o/r/pull/12" | \
@@ -79,10 +94,18 @@ if [ -n "$api" ]; then
 	violation "api.github.com MUST appear in tests only under internal/github/ and internal/testutil/fakegh/:" "$api"
 fi
 
-creates=$(tracked_grep -n 'CreateReview(' -- '*.go' ':(exclude)internal/publish/publish.go' ':(exclude)internal/github/' \
-	':(exclude)internal/testutil/fakegh/')
+# A word match also catches method values (post := c.CreateReview) and unformatted calls. The client declares it, and
+# only the client's and the fake's own tests call it directly.
+creates=$(tracked_grep -nw 'CreateReview' -- '*.go' ':(exclude)internal/publish/publish.go' \
+	':(exclude)internal/github/client.go' ':(exclude)internal/github/client_test.go' \
+	':(exclude)internal/testutil/fakegh/fakegh_test.go')
 if [ -n "$creates" ]; then
 	violation "CreateReview MUST be called only from internal/publish/publish.go:" "$creates"
+fi
+sends=$(tracked_grep -cw 'CreateReview' -- internal/publish/publish.go)
+sends=${sends##*:}
+if [ "${sends:-0}" != 1 ]; then
+	violation "internal/publish/publish.go MUST reference CreateReview exactly once:" "found ${sends:-0}"
 fi
 
 exit "$failed"
