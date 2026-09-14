@@ -53,9 +53,9 @@ Refusal or error (exit 1 or 2):
 | `tty` | `review` or `publish` without an interactive terminal | run it in a terminal |
 | `head-moved` | Pull request head differs from the captured head | `loupe capture <url>` for a new round |
 | `own-pr` | approve or request-changes on the viewer's own pull request | `--action comment` |
-| `blocking` | approve while an included finding is blocking | `--action comment` or `request-changes`, or exclude or unblock the finding in `loupe review` |
+| `blocking` | approve while a finding in the publishable set is blocking | `--action comment` or `request-changes`, or exclude or unblock the finding in `loupe review` |
 | `not-ready` | Pending findings or open notes | `loupe review` |
-| `empty` | Draft has no summary and no included findings | `loupe add` / `loupe summary` |
+| `empty` | Draft has no summary and an empty publishable set | `loupe add` / `loupe summary` |
 | `attempt` | Unknown attempt not reconciled | inspect the pull request URL, then `--retry-unknown` |
 | `changed` | The draft's version, content or readiness changed while publish was confirming | `loupe review`, then `loupe publish` again |
 | `viewer` | The GitHub login changed between showing the confirmation and sending | `loupe publish` again to confirm as the current login |

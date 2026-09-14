@@ -19,12 +19,13 @@ const publishHelp = `Publish the run's review: exactly one GitHub review, sent o
 This command is human-only. An agent MUST NOT run it, pipe a confirmation into it, or allocate a
 pseudo-terminal to reach it; it tells the human to run loupe publish.
 
-Only accepted findings are published. Before anything is shown, publish refuses, in this order:
+Only accepted findings are published. Receipt replay and unknown-attempt recovery (below) run first,
+with or without a terminal. Then, before anything is shown, publish refuses, in this order:
   tty          stdin or stdout, or stderr under --json, is not an interactive terminal
   head-moved   the pull request head moved since capture; loupe capture <url> starts a new round
   own-pr       approve or request-changes on your own pull request; use --action comment
-  blocking     approve while an included (accepted or pending) finding is blocking
-  empty        no summary and no included findings
+  blocking     approve while a publishable (accepted or pending) finding is blocking
+  empty        no summary and no publishable findings
   not-ready    pending findings or open notes; finish in loupe review
 
 The confirmation shows the review body with every collapsed section open and each inline

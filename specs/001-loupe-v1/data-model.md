@@ -135,8 +135,8 @@ A reply never changes note status or any decision.
 | Readiness | no finding is `pending` and no note is `open` |
 | Counts | accepted, pending, excluded, withdrawn, openNotes |
 | Publishable set | findings that are `included` and not human-excluded: disposition `accepted` or `pending` |
-| Publishable digest | hex SHA-256 over the summary and, sorted by id, each finding in the publishable set reduced to its id and publishable fields, in a canonical JSON encoding. Decisions do not affect it except exclusion, which removes a finding from the set. At publish, readiness means no finding is pending, so the set equals the findings published |
-| Included findings for publish | disposition `accepted` (an `excluded` finding is still `included: true` but is not published) |
+| Publishable digest | hex SHA-256 over the summary and, sorted by id, each finding in the publishable set reduced to its id and publishable fields, in a canonical JSON encoding. Decisions do not affect it except exclusion, which removes a finding from the set. At publish, readiness means no finding is pending, so the publishable set equals the published set |
+| Published set | findings with disposition `accepted` when publish sends (an `excluded` finding is still `included: true` but is in neither the publishable nor the published set) |
 
 ## Attempt
 
@@ -184,7 +184,7 @@ A receipt is never deleted by loupe. Its existence makes every later `publish` a
 ## State transitions
 
 ```text
-Run:      (none) --capture--> captured --all included accepted, no open note--> ready --receipt--> published
+Run:      (none) --capture--> captured --publishable set all accepted, no open note--> ready --receipt--> published
 Finding:  pending --accept--> accepted --edit/withdraw/send-back--> pending
           pending --exclude--> excluded --edit--> pending ; excluded --restore(u)--> pending
           included --edit --exclude--> withdrawn --edit --include--> pending
