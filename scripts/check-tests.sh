@@ -40,9 +40,27 @@ violation() {
 
 tests=('*_test.go' 'internal/testutil/')
 
-pty=$(tracked_grep -nE '"[^"]*creack/pty[^"]*"|"github\.com/[^"]+/pty(/[^"]*)?"|exec\.Command(Context)?\([^)]*"script"' -- "${tests[@]}")
+# Go splits a call across lines freely, so each test file is flattened to one line before matching. A match names the
+# file and the matched text.
+pty=""
+while IFS= read -r -d '' file; do
+	hits=$(tr '\n\t' '  ' <"$file" | tr -s ' ' | grep -oE \
+		'"[^"]*(creack/pty|/x?pty)(/[^"]*)?"|"/dev/(ptmx|pts)[^"]*"|exec\.Command(Context)?\( ?([A-Za-z_][A-Za-z0-9_.]* ?, ?)?"([^"]*/)?(script|unbuffer|expect|socat)"' ||
+		true)
+	if [ -n "$hits" ]; then
+		pty+="$file: $hits"$'\n'
+	fi
+done < <(git ls-files -z -- "${tests[@]}")
 if [ -n "$pty" ]; then
-	violation "tests MUST NOT use a pseudo-terminal:" "$pty"
+	violation "tests MUST NOT use a pseudo-terminal:" "${pty%$'\n'}"
+fi
+
+# An import outside the test files reaches tests too, so the whole test build graph is checked for pseudo-terminal
+# modules. A graph go list cannot load is a failure, not a pass.
+if ! deps=$(go list -deps -test -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./... 2>&1); then
+	violation "go list cannot load the test build graph:" "$deps"
+elif pty_deps=$(printf '%s\n' "$deps" | grep -iE '(^|/)[^/]*(pty|expect|termtest)[^/]*(/|$)'); then
+	violation "the test build MUST NOT depend on a pseudo-terminal module:" "$pty_deps"
 fi
 
 urls=$(tracked_grep -noiE "https?://[^[:space:]\"'\`)<>]*" -- "${tests[@]}")
