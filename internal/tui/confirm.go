@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,10 +21,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-const confirmKeys = "j/k pgup/pgdn home/end scroll  y publish  v/tab toggle exact JSON  any other key cancels"
-
-// confirmHeaderLines is the title and the position line.
-const confirmHeaderLines = 2
+// confirmHeaderLines is the band, which carries what will be sent and where in the review the window sits.
+const confirmHeaderLines = 1
 
 // confirmation is the last look at a review before it is sent, shared by the review program and loupe publish.
 type confirmation struct {
@@ -72,33 +71,73 @@ func (c *confirmation) sync(m *Model) {
 	c.scroll.SetContent(c.content(m))
 }
 
-func (c *confirmation) position() string {
+func (c *confirmation) position(m *Model) string {
 	total := c.scroll.TotalLineCount()
-	return fmt.Sprintf("lines %d-%d of %d", min(c.scroll.YOffset+1, total), min(c.scroll.YOffset+c.scroll.Height, total), total)
+	return fmt.Sprintf("lines %d%s%d of %d", min(c.scroll.YOffset+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset+c.scroll.Height, total), total)
 }
 
-func (c *confirmation) header() string {
-	if c.showJSON {
-		return "Publish review: exact request payload (v or tab shows the review)"
+// action is the review action as the payload states it, so the band names what will actually be sent even when the
+// program was started by loupe publish and knows nothing else about the run.
+func (c *confirmation) action() string {
+	var envelope struct {
+		Event string `json:"event"`
 	}
-	return fmt.Sprintf("Publish review: body and %d inline comments as sent (v or tab shows the exact JSON)", len(c.preview.Comments))
+	if err := json.Unmarshal([]byte(c.preview.EnvelopeJSON), &envelope); err != nil {
+		return ""
+	}
+	for action, event := range events {
+		if event == envelope.Event {
+			return action
+		}
+	}
+	return ""
+}
+
+var events = map[string]string{"comment": "COMMENT", "approve": "APPROVE", "request-changes": "REQUEST_CHANGES"}
+
+// band names the two things a wrong keypress could change, the action and the inline comments, and where the window
+// sits in the review.
+func (c *confirmation) band(m *Model) string {
+	where := "Publish this review"
+	if m.target.Owner != "" {
+		where = "Publish to " + m.ref()
+	}
+	left := m.styles.Brand() + " " + where
+	if action := c.action(); action != "" {
+		left += m.styles.Dim.Render("  action ") + action
+	}
+	inline := fmt.Sprintf(" (%d)", len(c.preview.Comments))
+	if m.action != "" {
+		inline = " " + publish.InlineModes[m.pick] + inline
+	}
+	left += m.styles.Dim.Render("  inline") + inline
+	return m.styles.Band(left, m.styles.Dim.Render(c.position(m)), m.width)
 }
 
 func (c *confirmation) content(m *Model) string {
-	text := render.ForDisplay(c.preview.EnvelopeJSON)
-	if !c.showJSON {
-		parts := []string{render.ForDisplay(markdown.OpenDetails(c.preview.Body)), fmt.Sprintf("Inline comments: %d", len(c.preview.Comments))}
-		for _, comment := range c.preview.Comments {
-			parts = append(parts, m.styles.Bold.Render(render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side)))+"\n"+render.ForDisplay(comment.Body))
-		}
-		text = strings.Join(parts, "\n\n")
+	if c.showJSON {
+		return " " + m.styles.Rule(m.width-1, "exact request payload", "") + "\n" +
+			m.styles.Wrap(render.ForDisplay(c.preview.EnvelopeJSON), m.width-1, " ")
 	}
-	return m.styles.R.NewStyle().Width(m.width).Render(text)
+	parts := []string{
+		" " + m.styles.Rule(m.width-1, "review body", ""),
+		m.styles.Wrap(render.ForDisplay(markdown.OpenDetails(c.preview.Body)), m.width-1, " "),
+		"",
+		" " + m.styles.Rule(m.width-1, fmt.Sprintf("inline comments (%d)", len(c.preview.Comments)), ""),
+	}
+	for _, comment := range c.preview.Comments {
+		location := m.styles.Accent.Render(render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side)))
+		parts = append(parts, " "+location, m.styles.Wrap(render.ForDisplay(comment.Body), m.width-1, " "), "")
+	}
+	return strings.Join(parts, "\n")
 }
 
 func (m *Model) confirmView(c *confirmation) string {
 	c.sync(m)
-	return m.frame([]string{m.styles.Bold.Render(c.header()), c.position()}, c.scroll.View(), confirmKeys)
+	keys := m.styles.Good.Bold(true).Render("y") + " " + m.styles.Good.Render("publish this review") + "  " +
+		m.styles.Keys([]style.Key{{K: "v", Verb: "exact JSON payload"}, {K: "j/k", Verb: "scroll"}}) + "  " +
+		m.styles.Dim.Render("any other key cancels, nothing is sent")
+	return m.frameWith([]string{c.band(m)}, c.scroll.View(), "", keys)
 }
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
@@ -108,8 +147,9 @@ type ConfirmModel struct {
 }
 
 func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer) *ConfirmModel {
+	st := style.New(output, getenv)
 	return &ConfirmModel{
-		shell:   &Model{styles: style.New(output, getenv), width: 80, height: 24},
+		shell:   &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24},
 		confirm: newConfirmation(preview),
 	}
 }

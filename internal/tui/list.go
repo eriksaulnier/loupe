@@ -91,17 +91,24 @@ func (m *Model) updateInline(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+var actionDescriptions = map[string]string{
+	"comment":         "post the findings without a verdict",
+	"approve":         "post the findings and approve the pull request",
+	"request-changes": "post the findings and request changes",
+}
+
 func (m *Model) actionView() string {
 	rows := make([]string, 0, len(publish.Actions))
 	for i, action := range publish.Actions {
-		row := pickerRow(i == m.pick, action)
+		description := actionDescriptions[action]
 		if r, ok := refusal.As(m.actionRefusal(action)); ok {
-			rows = append(rows, m.styles.Dim.Render(fmt.Sprintf("%-18s disabled: %s", row, r.Message)))
+			rows = append(rows, m.styles.Dim.Render(m.pickerRow(false, action)+"disabled: "+r.Message))
 			continue
 		}
-		rows = append(rows, row)
+		rows = append(rows, m.pickerRow(i == m.pick, action)+m.styles.Dim.Render(description))
 	}
-	return m.frame([]string{m.styles.Bold.Render(m.header()), "Publish: choose the review action"}, strings.Join(rows, "\n"), "j/k move  enter choose  esc back")
+	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "enter", Verb: "next: inline comments"}, {K: "esc", Verb: "back"}})
+	return m.chooser("Publish: review action", rows, keys)
 }
 
 var inlineDescriptions = map[string]string{
@@ -113,17 +120,41 @@ var inlineDescriptions = map[string]string{
 func (m *Model) inlineView() string {
 	rows := make([]string, 0, len(publish.InlineModes))
 	for i, mode := range publish.InlineModes {
-		rows = append(rows, fmt.Sprintf("%-18s %s", pickerRow(i == m.pick, mode), inlineDescriptions[mode]))
+		rows = append(rows, m.pickerRow(i == m.pick, mode)+m.styles.Dim.Render(inlineDescriptions[mode]))
 	}
-	header := []string{m.styles.Bold.Render(m.header()), fmt.Sprintf("Publish with --action %s: choose inline comments", m.action)}
-	return m.frame(header, strings.Join(rows, "\n"), "j/k move  enter compose the review  esc back")
+	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "enter", Verb: "compose the review"}, {K: "esc", Verb: "back"}})
+	return m.chooser("Publish as "+m.action+": inline comments", rows, keys)
 }
 
-func pickerRow(selected bool, text string) string {
-	if selected {
-		return "> " + text
+// chooser draws one step of the publish choice as a box over the list, centered while there is room for margins.
+func (m *Model) chooser(title string, rows []string, keys string) string {
+	lines := append([]string{""}, rows...)
+	lines = append(lines, "", " "+keys)
+	// The box is as wide as the widest row, since a disabled row carries the refusal that explains itself.
+	inner := style.Width(title) + 4
+	for _, l := range lines {
+		inner = max(inner, style.Width(l)+1)
 	}
-	return "  " + text
+	inner = min(inner, m.width-4)
+	indent := ""
+	if m.width >= midWidth {
+		indent = strings.Repeat(" ", (m.width-inner-4)/2)
+	}
+	box := m.styles.Boxed(title, lines, inner)
+	for i, l := range box {
+		box[i] = indent + l
+	}
+	header := []string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), " " + m.countsLine()}
+	return m.frame(header, "\n"+strings.Join(box, "\n"), "")
+}
+
+// pickerRow is the cursor and the name, in one column so the descriptions line up.
+func (m *Model) pickerRow(selected bool, text string) string {
+	cursor := " "
+	if selected {
+		cursor = m.glyphs.Cursor
+	}
+	return " " + cursor + " " + style.Pad(text, 17)
 }
 
 // listColumns is the row layout for the current width: the title takes whatever the fixed columns leave. The label

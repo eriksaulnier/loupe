@@ -23,7 +23,8 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	view := m.View()
-	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body", "1 inline comments"} {
+	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
+		"action comment", "inline (1)", "review body", "inline comments (1)", "y publish this review"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("review view lacks %q:\n%s", want, view)
 		}
@@ -61,7 +62,7 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 	m := NewConfirmModel(preview, envOf(testEnv), io.Discard)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := m.View()
-	if !strings.Contains(view, "row 001") || strings.Contains(view, "Inline comments: 0") || !strings.Contains(view, "lines 1-20 of 202") {
+	if !strings.Contains(view, "row 001") || strings.Contains(view, "inline comments (0)") || !strings.Contains(view, "lines 1-21 of 203") {
 		t.Fatalf("top of a long review:\n%s", view)
 	}
 
@@ -73,7 +74,7 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 		}
 	}
 	view = m.View()
-	if !strings.Contains(view, "Inline comments: 0") || strings.Contains(view, "row 001") || !strings.Contains(view, "lines 183-202 of 202") {
+	if !strings.Contains(view, "inline comments (0)") || strings.Contains(view, "row 001") || !strings.Contains(view, "lines 183-203 of 203") {
 		t.Fatalf("after end:\n%s", view)
 	}
 	if m.Confirmed() {
@@ -267,7 +268,7 @@ func TestPublishFlowSendsAndShowsURL(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-	waitFor(t, tm, "<details open>", "1 inline comments")
+	waitFor(t, tm, "<details open>", "inline blocking (1)")
 	tm.Type("y")
 	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
 	tm.Type("q")

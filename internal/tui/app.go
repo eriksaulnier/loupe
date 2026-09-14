@@ -323,20 +323,106 @@ func (m *Model) bodyHeight(headerLines int) int {
 	return max(1, m.height-headerLines-2)
 }
 
-func (m *Model) helpView() string {
-	var keys []string
-	switch m.view {
-	case viewList:
-		keys = []string{"j/k, up/down  move", "enter         open the finding", "tab           collapse or expand the summary", "p             publish the review", "q             quit; every decision is already saved"}
-	case viewDetail:
-		keys = []string{"a    accept (included findings only)", "x    exclude", "s    send back with a note", "u    restore an excluded finding", "r/d  resolve or dismiss the finding's open note", "f    file diff", "n/N  next or previous finding", "j/k  scroll the finding", "J/K  scroll the hunk", "esc  back to the list"}
-	case viewFileDiff:
-		keys = []string{"j/k, up/down  move", "]/[           next or previous finding", "enter         open the finding on this line", "esc           back to the finding"}
-	case viewAction, viewInline:
-		keys = []string{"j/k, up/down  move", "enter         choose", "esc           back"}
+// helpSection is one view's keys under the name of the view they belong to.
+type helpSection struct {
+	title string
+	keys  []style.Key
+}
+
+func helpSections() map[view]helpSection {
+	return map[view]helpSection{
+		viewList: {"list", []style.Key{
+			{K: "j / k", Verb: "move"},
+			{K: "enter", Verb: "open the finding"},
+			{K: "tab", Verb: "expand or collapse the summary"},
+			{K: "p", Verb: "publish, once every included finding is accepted"},
+		}},
+		viewDetail: {"detail", []style.Key{
+			{K: "a", Verb: "accept the finding as shown"},
+			{K: "x", Verb: "exclude it from the review"},
+			{K: "s", Verb: "send it back with a one-line note"},
+			{K: "u", Verb: "restore an excluded finding"},
+			{K: "r / d", Verb: "resolve / dismiss its open note"},
+			{K: "f", Verb: "whole-file diff"},
+			{K: "n / N", Verb: "next / previous finding"},
+			{K: "j / k", Verb: "scroll the finding"},
+			{K: "J / K", Verb: "scroll the hunk"},
+			{K: "esc", Verb: "back to the list"},
+		}},
+		viewFileDiff: {"file diff", []style.Key{
+			{K: "j / k", Verb: "move"},
+			{K: "] / [", Verb: "next / previous finding"},
+			{K: "enter", Verb: "open the finding on this line"},
+			{K: "esc", Verb: "back to the finding"},
+		}},
 	}
-	keys = append(keys, "?             close this help", "ctrl+c        quit")
-	return m.frame([]string{m.styles.Bold.Render("Keys")}, strings.Join(keys, "\n"), "? or esc closes help")
+}
+
+var everywhere = helpSection{"everywhere", []style.Key{
+	{K: "?", Verb: "toggle this help"},
+	{K: "q", Verb: "quit; decisions are already saved"},
+	{K: "ctrl+c", Verb: "quit"},
+}}
+
+// helpView is a two-column table: the keys of the view it was opened from first, then the ones that work everywhere
+// and the other views.
+func (m *Model) helpView() string {
+	sections := helpSections()
+	current := m.view
+	if _, ok := sections[current]; !ok {
+		// The pickers and the confirmation carry their keys on screen, so their help opens on the list.
+		current = viewList
+	}
+	order := []view{viewList, viewDetail, viewFileDiff}
+	left := []helpSection{sections[current]}
+	right := []helpSection{everywhere}
+	for _, v := range order {
+		if v != current {
+			right = append(right, sections[v])
+		}
+	}
+
+	column := max(30, m.width/2-1)
+	lines := make([]string, 0, m.height)
+	leftLines, rightLines := m.helpColumn(left, column), m.helpColumn(right, column)
+	for i := range max(len(leftLines), len(rightLines)) {
+		row := " "
+		if i < len(leftLines) {
+			row += style.Pad(leftLines[i], column)
+		} else {
+			row += strings.Repeat(" ", column)
+		}
+		if i < len(rightLines) {
+			row += " " + rightLines[i]
+		}
+		lines = append(lines, strings.TrimRight(row, " "))
+	}
+	lines = append(lines, "", m.styles.Wrap("Decisions are recorded against the draft version on screen. If the draft changed meanwhile, "+
+		"nothing is recorded and the current version is shown instead.", m.width-1, " "))
+
+	keys := m.styles.Keys([]style.Key{{K: "? or esc", Verb: "closes help"}})
+	return m.frame([]string{m.styles.Band(m.styles.Brand()+" keys", "", m.width)}, strings.Join(lines, "\n"), keys)
+}
+
+// helpColumn lays one column out: every section's keys aligned under its heading.
+func (m *Model) helpColumn(sections []helpSection, width int) []string {
+	keyWidth := 0
+	for _, section := range sections {
+		for _, k := range section.keys {
+			keyWidth = max(keyWidth, style.Width(k.K))
+		}
+	}
+	var out []string
+	for i, section := range sections {
+		if i > 0 {
+			out = append(out, "")
+		}
+		out = append(out, m.styles.Heading(section.title))
+		for _, k := range section.keys {
+			out = append(out, m.styles.TruncRight(m.styles.Bold.Render(style.Pad(k.K, keyWidth))+"  "+m.styles.Dim.Render(k.Verb), width))
+		}
+	}
+	return out
 }
 
 func (m *Model) header() string {
@@ -372,6 +458,14 @@ func (m *Model) titleBand() string {
 }
 
 func (m *Model) countsLine() string { return countsLine(m.draft, m.styles) }
+
+// sign is a character that has a typographic form and an ASCII one; the glyph set decides which the locale can print.
+func (m *Model) sign(unicode, ascii string) string {
+	if m.glyphs.Ellipsis == "\u2026" {
+		return unicode
+	}
+	return ascii
+}
 
 // say sets the notice and how it reads: Good for something recorded, Warn for a refusal or a dead end.
 func (m *Model) say(kind style.Kind, text string) { m.notice, m.noticeKind = text, kind }

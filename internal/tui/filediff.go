@@ -148,18 +148,10 @@ func (m *Model) fileDiffView() string {
 		path = render.ForDisplay(f.Location.Path)
 	}
 	added, removed, findings := m.fileCounts()
-	counts := fmt.Sprintf("+%d %s%d %s %d %s", added, m.minus(), removed, m.glyphs.Pending, findings, plural(findings, "finding"))
+	counts := fmt.Sprintf("+%d %s%d %s %d %s", added, m.sign("\u2212", "-"), removed, m.glyphs.Pending, findings, plural(findings, "finding"))
 	header := []string{m.band(path + " " + m.styles.Dim.Render(counts))}
 	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "]/[", Verb: "next/prev finding"}, {K: "enter", Verb: "open finding"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}})
 	return m.frame(header, m.file.View(), keys)
-}
-
-// minus is the sign the removed count carries; the typographic one only under a locale that can print it.
-func (m *Model) minus() string {
-	if m.glyphs.Gutter == "|" {
-		return "-"
-	}
-	return "\u2212"
 }
 
 func plural(n int, word string) string {

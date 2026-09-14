@@ -100,3 +100,38 @@ func TestNoColorEmitsNoEscapes(t *testing.T) {
 		}
 	}
 }
+
+func TestPickerBoxIsASCIIUnderCLocale(t *testing.T) {
+	dir := readyFixture(t, "author", "author")
+	ascii := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, 24)
+	ascii.view, ascii.pick = viewAction, 0
+	view := ascii.View()
+	if !strings.Contains(view, "+- Publish: review action -") || strings.ContainsAny(view, "\u256d\u2500\u2502\u2570") {
+		t.Errorf("the chooser is not drawn with ASCII box characters:\n%s", view)
+	}
+	if !strings.Contains(view, "> comment") || !strings.Contains(view, "disabled: author is the author of this pull request and cannot approve it") {
+		t.Errorf("the chooser lost its cursor or a disabled reason:\n%s", view)
+	}
+
+	unicode := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 24)
+	unicode.view, unicode.action, unicode.pick = viewInline, "comment", 1
+	if view := unicode.View(); !strings.Contains(view, "\u256d\u2500 Publish as comment: inline comments ") || !strings.Contains(view, "\u203a blocking") {
+		t.Errorf("the second step is not titled after the action it follows:\n%s", view)
+	}
+}
+
+func TestHelpLeadsWithTheCurrentView(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 34)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.help = true
+	view := m.View()
+	detail, everywhere, list := strings.Index(view, "DETAIL"), strings.Index(view, "EVERYWHERE"), strings.Index(view, "LIST")
+	if detail < 0 || everywhere < detail || list < everywhere {
+		t.Fatalf("help does not lead with the current view:\n%s", view)
+	}
+	if !strings.Contains(view, "Decisions are recorded against the draft version on screen.") {
+		t.Errorf("help lost the sentence about the version on screen:\n%s", view)
+	}
+}
