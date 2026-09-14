@@ -101,7 +101,8 @@ func TestUnknownFlagIsUsage(t *testing.T) {
 	}
 }
 
-// testRoot adds a run-scoped subcommand so argument handling and run selection can be exercised before real commands exist.
+// testRoot adds a run-scoped subcommand so argument handling and run selection are exercised apart from any real
+// command.
 func testRoot(deps Deps, runErr error) *cobra.Command {
 	root := NewRoot(deps)
 	cmd := &cobra.Command{

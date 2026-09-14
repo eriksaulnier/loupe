@@ -50,10 +50,9 @@ type Preview struct {
 	Dispositions map[string]string
 }
 
-// Run publishes at most one review, or reports replayed with the existing receipt. The lock is released through the
-// gates and the confirmation so agent commands are not blocked while the human reads; after y it is retaken and
-// everything that could have changed is rechecked.
-// A receipt found through reconciliation also reports replayed, since this call sent nothing.
+// Run publishes at most one review, or reports replayed when a receipt exists or reconciliation found the review. The
+// lock is released through the gates and the confirmation so agent commands are not blocked while the human reads;
+// after y it is retaken and everything that could have changed is rechecked.
 func Run(ctx context.Context, opts Options) (receipt Receipt, replayed bool, err error) {
 	receipt, replay, retryID, err := firstCheck(ctx, opts)
 	if err != nil || replay {
@@ -207,7 +206,8 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 			"loupe publish to see its state")
 	}
 	if retryID != "" {
-		// The unknown attempt's review can reach GitHub's listing while the human confirms, and sending then would post it twice.
+		// The unknown attempt's review can reach GitHub's listing while the human confirms, and sending then would post
+		// it twice.
 		matched, err := Reconcile(ctx, client, existing)
 		if err != nil {
 			return Receipt{}, false, err

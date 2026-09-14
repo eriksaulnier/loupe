@@ -96,8 +96,7 @@ func OriginMatches(clone, owner, repo string) error {
 
 // FetchPR fetches from origin by name, never from a URL built from the pull request, and disables hooks,
 // maintenance, submodules, tags, pruning and FETCH_HEAD so the pull request head cannot run anything or touch other
-// refs. The empty --refmap stops git from also applying remote.origin.fetch to the fetched refs, which would update
-// refs such as refs/remotes/origin/pr/N.
+// refs.
 func FetchPR(clone string, number int, baseSHA, baseRef, headRef string) error {
 	_, err := git(clone,
 		"-c", "core.hooksPath=/dev/null",
@@ -106,6 +105,7 @@ func FetchPR(clone string, number int, baseSHA, baseRef, headRef string) error {
 		"-c", "fetch.recurseSubmodules=false",
 		"-c", "submodule.recurse=false",
 		"fetch", "--no-tags", "--no-recurse-submodules", "--no-prune", "--no-write-fetch-head", "--no-auto-maintenance",
+		// Without an empty refmap git also applies remote.origin.fetch, updating refs such as refs/remotes/origin/pr/N.
 		"--refmap=",
 		"origin",
 		fmt.Sprintf("+refs/pull/%d/head:%s", number, headRef),
