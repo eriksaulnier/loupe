@@ -13,5 +13,6 @@ run = "go test ./..."
 [tasks.check]
 run = "go vet ./... && golangci-lint run && ./scripts/check-tests.sh && go test ./..."
 
+# The version is stamped in so a build reports what it came from rather than "dev".
 [tasks.build]
-run = "CGO_ENABLED=0 go build -o dist/loupe ./cmd/loupe"
+run = 'CGO_ENABLED=0 go build -ldflags "-X github.com/eriksaulnier/loupe/internal/cli.version=$(git describe --tags --always --dirty)" -o dist/loupe ./cmd/loupe'

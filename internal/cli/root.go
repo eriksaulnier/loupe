@@ -18,53 +18,6 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-const rootHelp = `File pull request review findings for a human to decide and publish.
-
-An agent files findings into a local draft; the human decides each finding and posts exactly
-one confirmed GitHub review.
-
-Workflow: capture → add → summary → review → publish
-  1. loupe capture https://github.com/owner/repo/pull/123 --json
-       capture the pull request into a new round; prints the run reference
-  2. loupe add --run owner/repo#123 --from findings.json --json
-       file findings, one object or an array
-  3. loupe summary --run owner/repo#123 --from summary.json --expect-findings 2 --json
-       set the summary and confirm how many findings landed
-  4. loupe review owner/repo#123
-       the human decides each finding with the diff in view
-  5. loupe publish owner/repo#123 --action comment
-       the human confirms and posts one review
-
-review and publish are human-only and MUST NOT be run by an agent. An agent MUST NOT pipe
-confirmation into them or allocate a pseudo-terminal to reach them; it tells the human to run
-loupe review.
-
-Send-back loop, when the human sends findings back from review with notes:
-  loupe feedback --run owner/repo#123 --json               read notes, dispositions and readiness
-  loupe edit f-001 --run owner/repo#123 --from f.json      change the finding; clears its decision
-  loupe reply n-001 --run owner/repo#123 --body "Fixed."   answer the note
-
-Run references:
-  owner/repo#123      the newest round of pull request 123
-  owner/repo#123@2    round 2
-Run selection, in order: --run <ref> (or the <ref> argument of review and publish), then
-LOUPE_RUN, then the pull request of the current branch in the working directory at its newest
-round.
-
-Conventions:
-  --json                  print exactly one JSON result object on stdout; diagnostics go to stderr
-  --from <file>|-         read JSON input from a file, or from stdin with -
-  --expect-version <n>    refuse unless the draft is at version n (add, edit, summary, reply)
-  --by agent|human        who makes the change (default agent)
-  Exit 0 on success, 1 on refusal, 2 on usage error. Every refusal names a code and a fix.
-  Every command's --help shows its JSON input and result shapes.
-
-Environment:
-  LOUPE_HOME              data root (default $XDG_DATA_HOME/loupe, else ~/.local/share/loupe)
-  LOUPE_RUN               default run reference
-  LOUPE_LOCK_TIMEOUT_MS   how long to wait for the run lock (default 3000, max 60000)
-  NO_COLOR, TERM, LANG/LC_ALL   honored for color, plain-mode fallback and glyph selection`
-
 type Deps struct {
 	Stdin   io.Reader
 	Stdout  io.Writer
@@ -86,8 +39,15 @@ type Deps struct {
 
 type palettes struct{ out, err style.Style }
 
-// errStyle paints every refusal on stderr, outStyle everything a command prints on stdout; the two are separate
+// outStyle paints everything a command prints on stdout, errStyle every refusal on stderr; the two are separate
 // because one output can be a terminal while the other is a pipe.
+func (d Deps) outStyle() style.Style {
+	if d.palettes != nil {
+		return d.palettes.out
+	}
+	return style.New(d.Stdout, d.Getenv)
+}
+
 func (d Deps) errStyle() style.Style {
 	if d.palettes != nil {
 		return d.palettes.err
@@ -111,16 +71,32 @@ func NewRoot(deps Deps) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "loupe",
 		Short:         "File pull request review findings for a human to decide and publish",
-		Long:          rootHelp,
+		Long:          rootTagline + "\n\n" + rootLead,
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 	root.CompletionOptions.DisableDefaultCmd = true
+	setHelp(root, deps)
 	root.PersistentFlags().Bool("json", false, "print exactly one JSON result object on stdout")
 	root.SetIn(deps.Stdin)
 	root.SetOut(deps.Stdout)
 	root.SetErr(deps.Stderr)
-	root.AddCommand(newCaptureCmd(deps), newAddCmd(deps), newEditCmd(deps), newSummaryCmd(deps), newShowCmd(deps), newFeedbackCmd(deps), newReplyCmd(deps), newReviewCmd(deps), newPublishCmd(deps), newListCmd(deps))
+	// The commands list in workflow order, not alphabetically, because help reads as the order they are run in.
+	cobra.EnableCommandSorting = false
+	for _, g := range []struct {
+		id       string
+		commands []*cobra.Command
+	}{
+		{groupAgent, []*cobra.Command{newCaptureCmd(deps), newAddCmd(deps), newSummaryCmd(deps), newEditCmd(deps), newReplyCmd(deps), newFeedbackCmd(deps)}},
+		{groupAnyone, []*cobra.Command{newShowCmd(deps), newListCmd(deps)}},
+		{groupHuman, []*cobra.Command{newReviewCmd(deps), newPublishCmd(deps)}},
+	} {
+		for _, c := range g.commands {
+			c.GroupID = g.id
+			root.AddCommand(c)
+		}
+	}
 	return root
 }
 
@@ -162,6 +138,10 @@ func (e *panicError) Error() string { return fmt.Sprintf("panic: %v", e.value) }
 func execute(root *cobra.Command, deps Deps, args []string) int {
 	markCommandErrors(root)
 	jsonMode := argsWantJSON(args)
+	if jsonMode && deps.palettes != nil {
+		// Under --json stdout carries the result object alone, so nothing printed there may carry an escape sequence.
+		deps.palettes.out = style.New(io.Discard, deps.Getenv)
+	}
 	// Under --json cobra's output is held back so help can become the one result object and nothing else reaches stdout.
 	var cobraOut bytes.Buffer
 	helpShown := false
@@ -198,6 +178,9 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 		} else {
 			_, err = deps.Stdout.Write(cobraOut.Bytes())
 		}
+	} else if jsonMode && err == nil && root.Flags().Changed("version") {
+		// --version answers with the version alone, so under --json it is a result object like any other.
+		err = writeSuccess(deps.Stdout, commandName(cmd), "", nil, map[string]any{"loupeVersion": version})
 	} else {
 		_, _ = deps.Stderr.Write(cobraOut.Bytes())
 	}
