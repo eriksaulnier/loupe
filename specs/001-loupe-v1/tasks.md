@@ -229,12 +229,12 @@ Single Go module at repository root: `cmd/loupe/`, `internal/<package>/` with te
 
 ### Tests for User Story 6 ⚠️
 
-- [ ] T087 [P] [US6] Write `internal/run/previous_test.go`: `PreviousPublished(root, ref)` for round 3 returns round 1 when round 2 has no `receipt.json` and round 1 does (clarification 2); returns round 2 when both are published; refuses `not-found` with message `no earlier round of owner/repo#N was published` when none is
+- [X] T087 [P] [US6] Write `internal/run/previous_test.go`: `PreviousPublished(root, ref)` for round 3 returns round 1 when round 2 has no `receipt.json` and round 1 does (clarification 2); returns round 2 when both are published; refuses `not-found` with message `no earlier round of owner/repo#N was published` when none is
 - [ ] T088 [US6] Write `internal/integration/rounds_test.go`: publish round 1; `PushHead` and `SetHead`; capture creates round 2 with `previousRound` 1 (US6 AS1); `show --previous --json` returns `{round: 1, reviewUrl, findings: [{id, title, body, location, label, blocking}]}` matching round 1's receipt (AS2); publishing round 2 produces a footer `loupe · round 2 · reviewed` (AS3); with round 2 unpublished, a new push and capture creates round 3 and round 2 stays readable with `show --run owner/repo#N@2` (AS4); capturing again at round 3's head while it is unpublished refuses `same-head` naming `owner/repo#N@3` and creates no directory or ref (AS5); after publishing round 3, capturing at the same head creates round 4 (AS6); `show --previous` on round 1 refuses `not-found`
 
 ### Implementation for User Story 6
 
-- [ ] T089 [US6] Implement `internal/run/previous.go`: `PreviousPublished(root string, ref Ref) (round int, dir string, err error)` walking rounds downward from `round - 1` to the first with `receipt.json` (makes T087 pass)
+- [X] T089 [US6] Implement `internal/run/previous.go`: `PreviousPublished(root string, ref Ref) (round int, dir string, err error)` walking rounds downward from `round - 1` to the first with `receipt.json` (makes T087 pass)
 - [ ] T090 [US6] Add the same-head check to `internal/cli/capture.go` before `OriginMatches` and before any fetch (depends on T089): when the newest round's `headSha` equals the API's head sha and that round has no `receipt.json`, refuse `same-head` with message naming the run reference and fix `--run <ref>`; a published round at the same head proceeds (FR-005)
 - [ ] T091 [US6] Implement `--previous` in `internal/cli/show.go` (depends on T089, T066): load the found round's `receipt.json` and return `{round, reviewUrl, findings}` from `envelope.findings` (makes T088 pass)
 
