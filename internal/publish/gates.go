@@ -57,7 +57,7 @@ type HeadMoved struct {
 	Live     string
 	AheadBy  int
 	// Commits is the last maxMovedCommits GitHub listed, oldest first, each with a short sha and its subject line. The
-	// newest are kept because after a base-branch merge the oldest are the base branch's own.
+	// newest are kept because a merge from the base branch can fill the list with the base branch's older commits.
 	Commits []MovedCommit
 	// Touched is the ids of included located findings on a file the commits changed.
 	Touched []string
@@ -88,7 +88,13 @@ func checkHead(ctx context.Context, client github.Client, target run.Target, pr 
 	if pr.HeadSHA == target.HeadSHA {
 		return nil, nil
 	}
-	cmp, err := client.Compare(ctx, target.Owner, target.Repo, target.HeadSHA, pr.HeadSHA)
+	// GitHub answers bare shas that exist only in a fork with 404, so both refs name the repository the head lives in.
+	headOwner, headRepo := pr.HeadOwner, pr.HeadRepo
+	if headOwner == "" {
+		headOwner, headRepo = target.Owner, target.Repo
+	}
+	qualifier := headOwner + ":" + headRepo + ":"
+	cmp, err := client.Compare(ctx, target.Owner, target.Repo, qualifier+target.HeadSHA, qualifier+pr.HeadSHA)
 	var httpErr *github.HTTPError
 	notFound := errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound
 	if err != nil && !notFound {

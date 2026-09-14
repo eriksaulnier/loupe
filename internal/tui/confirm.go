@@ -103,7 +103,8 @@ func headMovedLines(moved *publish.HeadMoved) []string {
 	lines := []string{
 		fmt.Sprintf("Head moved %d %s since capture (%s to %s).", moved.AheadBy, plural(moved.AheadBy, "commit"), shortSHA(moved.Captured), shortSHA(moved.Live)),
 		fmt.Sprintf("This review posts pinned to the captured commit %s.", shortSHA(moved.Captured)),
-		"GitHub marks comments on lines the new commits changed as outdated.",
+		"GitHub will not mark its comments outdated for these commits.",
+		"A comment on a line they changed shows beside the new code.",
 		"",
 		"Commits since capture:",
 	}

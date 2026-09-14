@@ -59,6 +59,10 @@ type PullRequest struct {
 	BaseRef string
 	BaseSHA string
 	HeadSHA string
+	// HeadOwner and HeadRepo name the repository the head lives in, a fork for a cross-repository pull request. Both are
+	// empty once that fork is deleted.
+	HeadOwner string
+	HeadRepo  string
 }
 
 type Review struct {
@@ -146,20 +150,30 @@ type wirePullRequest struct {
 		SHA string `json:"sha"`
 	} `json:"base"`
 	Head struct {
-		SHA string `json:"sha"`
+		SHA  string `json:"sha"`
+		Repo *struct {
+			Name  string   `json:"name"`
+			Owner wireUser `json:"owner"`
+		} `json:"repo"`
 	} `json:"head"`
 }
 
 func (w wirePullRequest) pullRequest() PullRequest {
+	var headOwner, headRepo string
+	if w.Head.Repo != nil {
+		headOwner, headRepo = w.Head.Repo.Owner.Login, w.Head.Repo.Name
+	}
 	return PullRequest{
-		Number:  w.Number,
-		URL:     w.HTMLURL,
-		Title:   w.Title,
-		State:   w.State,
-		Author:  w.User.Login,
-		BaseRef: w.Base.Ref,
-		BaseSHA: w.Base.SHA,
-		HeadSHA: w.Head.SHA,
+		Number:    w.Number,
+		URL:       w.HTMLURL,
+		Title:     w.Title,
+		State:     w.State,
+		Author:    w.User.Login,
+		BaseRef:   w.Base.Ref,
+		BaseSHA:   w.Base.SHA,
+		HeadSHA:   w.Head.SHA,
+		HeadOwner: headOwner,
+		HeadRepo:  headRepo,
 	}
 }
 

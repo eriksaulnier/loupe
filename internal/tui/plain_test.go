@@ -217,7 +217,7 @@ func movedPreview() publish.Preview {
 
 // movedHeadLines is what both confirmations must show for movedPreview.
 var movedHeadLines = []string{"Head moved 23 commits since capture (1111111 to 4444444)", "pinned to the captured commit 1111111",
-	"marks comments on lines the new commits changed as outdated", "0100000 fix \\u001B[31mred", "0200000 second", "and 21 earlier",
+	"GitHub will not mark its comments outdated for these commits.", "A comment on a line they changed shows beside the new code.", "0100000 fix \\u001B[31mred", "0200000 second", "and 21 earlier",
 	"Findings on changed files: f-001, f-002"}
 
 func TestConfirmPlainShowsMovedHead(t *testing.T) {

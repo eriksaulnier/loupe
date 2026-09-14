@@ -30,9 +30,9 @@ with or without a terminal. Then, before anything is shown, publish refuses, in 
   not-ready    pending findings or open notes; finish in loupe review
 
 A head that only gained commits since capture is not refused. The confirmation lists those
-commits and the findings on files they changed, and the review is sent at the captured commit,
-where GitHub marks comments on lines the new commits changed as outdated. If the head moves
-again before y, nothing is sent.
+commits and the findings on files they changed, and the review is sent at the captured commit.
+GitHub does not mark its comments outdated for those commits, so a comment on a line they
+changed shows beside the new code. If the head moves again before y, nothing is sent.
 
 The confirmation shows the review body with every collapsed section open and each inline
 comment; j/k, up/down, pgup/pgdown and home/end scroll, and v or tab switches to the exact JSON

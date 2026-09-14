@@ -226,7 +226,8 @@ func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
 	h.reviewed("a\na\nx\nq\n")
 	captured := h.Repo.HeadSHA()
 	live := h.pushHead("src/app.go")
-	h.GH.SetComparison(owner, repo, captured, live, github.Comparison{Status: "ahead", AheadBy: 1,
+	qualifier := owner + ":" + repo + ":"
+	h.GH.SetComparison(owner, repo, qualifier+captured, qualifier+live, github.Comparison{Status: "ahead", AheadBy: 1,
 		Commits: []github.Commit{{SHA: live, Message: "move head"}}, Files: []github.ComparedFile{{Filename: "src/app.go"}}})
 
 	h.Stdin = "y\n"

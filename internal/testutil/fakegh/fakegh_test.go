@@ -14,7 +14,8 @@ import (
 var ctx = context.Background()
 
 func samplePR() github.PullRequest {
-	return github.PullRequest{Number: 3, URL: "https://github.com/o/r/pull/3", Title: "T", State: "open", Author: "alice", BaseRef: "main", BaseSHA: "b1", HeadSHA: "h1"}
+	return github.PullRequest{Number: 3, URL: "https://github.com/o/r/pull/3", Title: "T", State: "open", Author: "alice", BaseRef: "main", BaseSHA: "b1", HeadSHA: "h1",
+		HeadOwner: "forker", HeadRepo: "r-fork"}
 }
 
 func TestCompare(t *testing.T) {

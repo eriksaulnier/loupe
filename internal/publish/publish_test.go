@@ -263,14 +263,20 @@ const (
 	laterSHA = "5555555555555555555555555555555555555555"
 )
 
-// moveHead makes head the live head, which GitHub compares as the captured head plus commits changing files.
+// moveHead makes head the live head, which GitHub compares as the captured head plus commits changing files. The
+// fake answers only refs qualified with the head repository, because GitHub answers bare fork shas with 404.
 func (fx *fixture) moveHead(head string, commits int, files ...github.ComparedFile) {
+	fx.t.Helper()
+	fx.moveHeadIn("acme:widgets:", head, commits, files...)
+}
+
+func (fx *fixture) moveHeadIn(qualifier, head string, commits int, files ...github.ComparedFile) {
 	fx.t.Helper()
 	cmp := github.Comparison{Status: "ahead", AheadBy: commits, Files: files}
 	for i := range commits {
 		cmp.Commits = append(cmp.Commits, github.Commit{SHA: fmt.Sprintf("%02d%038d", i+1, 0), Message: fmt.Sprintf("commit %d\n\nbody", i+1)})
 	}
-	fx.gh.SetComparison("acme", "widgets", headSHA, head, cmp)
+	fx.gh.SetComparison("acme", "widgets", qualifier+headSHA, qualifier+head, cmp)
 	fx.gh.SetHead("acme", "widgets", 42, head)
 }
 
@@ -287,7 +293,7 @@ func TestRunPublishesAtCapturedHeadWhenHeadMovedForward(t *testing.T) {
 	if moved.Captured != headSHA || moved.Live != movedSHA || moved.AheadBy != 23 || moved.FilesTruncated {
 		t.Errorf("moved %+v", moved)
 	}
-	// The newest commits are kept, since after a base merge the oldest are the base branch's.
+	// The newest commits are kept, since a base-branch merge can fill the list with older base commits.
 	if len(moved.Commits) != 20 || moved.Commits[0] != (MovedCommit{SHA: "0400000", Subject: "commit 4"}) ||
 		moved.Commits[19] != (MovedCommit{SHA: "2300000", Subject: "commit 23"}) {
 		t.Errorf("commits %+v", moved.Commits)
@@ -302,6 +308,21 @@ func TestRunPublishesAtCapturedHeadWhenHeadMovedForward(t *testing.T) {
 			t.Errorf("review sent at %v, want the captured head", r.Body)
 		}
 	}
+}
+
+func TestRunComparesForkHeadInItsOwnRepository(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	pr := github.PullRequest{Number: 42, URL: prLink, Title: "Add widgets", State: "open", Author: "author", BaseRef: "main",
+		BaseSHA: "2222222222222222222222222222222222222222", HeadSHA: headSHA, HeadOwner: "forker", HeadRepo: "widgets-fork"}
+	fx.gh.SetPR("acme", "widgets", pr)
+	fx.moveHeadIn("forker:widgets-fork:", movedSHA, 1, github.ComparedFile{Filename: "a.go"})
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
+	}
+	if moved := fx.previews[0].HeadMoved; moved == nil || moved.Live != movedSHA {
+		t.Fatalf("moved %+v", moved)
+	}
+	fx.check(1)
 }
 
 func TestRunHeadMovedMarksTruncatedFileList(t *testing.T) {
@@ -326,7 +347,7 @@ func TestRunRefusesWhenCapturedHeadLeftHistory(t *testing.T) {
 			fx := newRun(t, readyDraft())
 			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
 			if status != "not found" {
-				fx.gh.SetComparison("acme", "widgets", headSHA, movedSHA, github.Comparison{Status: status, AheadBy: 1})
+				fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: status, AheadBy: 1})
 			}
 			_, err := fx.run()
 			msg := wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)

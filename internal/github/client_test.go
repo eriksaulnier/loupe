@@ -62,19 +62,32 @@ func writeJSON(w http.ResponseWriter, status int, body string) {
 func TestPullRequest(t *testing.T) {
 	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, `{"number": 7, "html_url": "https://github.com/o/r/pull/7", "title": "T", "state": "open",
-			"user": {"login": "alice"}, "base": {"ref": "main", "sha": "b1"}, "head": {"ref": "feat", "sha": "h1"}}`)
+			"user": {"login": "alice"}, "base": {"ref": "main", "sha": "b1"},
+			"head": {"ref": "feat", "sha": "h1", "repo": {"name": "r-fork", "owner": {"login": "forker"}}}}`)
 	})
 	pr, err := c.PullRequest(context.Background(), "o", "r", 7)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := PullRequest{Number: 7, URL: "https://github.com/o/r/pull/7", Title: "T", State: "open", Author: "alice", BaseRef: "main", BaseSHA: "b1", HeadSHA: "h1"}
+	want := PullRequest{Number: 7, URL: "https://github.com/o/r/pull/7", Title: "T", State: "open", Author: "alice", BaseRef: "main", BaseSHA: "b1", HeadSHA: "h1",
+		HeadOwner: "forker", HeadRepo: "r-fork"}
 	if pr != want {
 		t.Fatalf("got %+v", pr)
 	}
 	got := (*reqs)[0]
 	if got.Method != "GET" || got.Path != "/repos/o/r/pulls/7" || got.Auth != "token test-token" {
 		t.Fatalf("request %+v", got)
+	}
+}
+
+// GitHub sends head.repo as null once the fork is deleted.
+func TestPullRequestWithDeletedFork(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, `{"number": 7, "user": {"login": "alice"}, "base": {"ref": "main", "sha": "b1"}, "head": {"ref": "feat", "sha": "h1", "repo": null}}`)
+	})
+	pr, err := c.PullRequest(context.Background(), "o", "r", 7)
+	if err != nil || pr.HeadOwner != "" || pr.HeadRepo != "" {
+		t.Fatalf("got %+v, %v", pr, err)
 	}
 }
 
@@ -123,7 +136,7 @@ func TestCompare(t *testing.T) {
 			"commits": [{"sha": "c1", "commit": {"message": "first\n\nbody"}}, {"sha": "c2", "commit": {"message": "second"}}],
 			"files": [{"filename": "a.go", "status": "modified"}, {"filename": "new.go", "previous_filename": "old.go", "status": "renamed"}]}`)
 	})
-	got, err := c.Compare(context.Background(), "o", "r", "b1", "h1")
+	got, err := c.Compare(context.Background(), "o", "r", "f:r2:b1", "f:r2:h1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +146,7 @@ func TestCompare(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
 	}
-	if (*reqs)[0].Method != "GET" || (*reqs)[0].Path != "/repos/o/r/compare/b1...h1" {
+	if (*reqs)[0].Method != "GET" || (*reqs)[0].Path != "/repos/o/r/compare/f:r2:b1...f:r2:h1" {
 		t.Fatalf("request %+v", (*reqs)[0])
 	}
 }

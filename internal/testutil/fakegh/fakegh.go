@@ -429,6 +429,10 @@ func reviewState(event string) string {
 }
 
 func wirePR(pr github.PullRequest, branch string) map[string]any {
+	var headRepo any
+	if pr.HeadOwner != "" {
+		headRepo = map[string]any{"name": pr.HeadRepo, "owner": map[string]any{"login": pr.HeadOwner}}
+	}
 	return map[string]any{
 		"number":   pr.Number,
 		"html_url": pr.URL,
@@ -436,7 +440,7 @@ func wirePR(pr github.PullRequest, branch string) map[string]any {
 		"state":    pr.State,
 		"user":     map[string]any{"login": pr.Author},
 		"base":     map[string]any{"ref": pr.BaseRef, "sha": pr.BaseSHA},
-		"head":     map[string]any{"ref": branch, "sha": pr.HeadSHA},
+		"head":     map[string]any{"ref": branch, "sha": pr.HeadSHA, "repo": headRepo},
 	}
 }
 
