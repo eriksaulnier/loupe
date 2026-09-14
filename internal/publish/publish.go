@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -221,8 +222,12 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 		if err := DeleteAttempt(opts.Dir); err != nil {
 			return Receipt{}, err
 		}
-		return Receipt{}, refusal.New(refusal.GitHub, fmt.Sprintf("GitHub rejected the review with HTTP %d: %s", httpErr.Status, httpErr.Message),
-			fmt.Sprintf("fix what GitHub reported, then loupe publish; the pull request is %s", opts.Target.URL))
+		fix := fmt.Sprintf("fix what GitHub reported, then loupe publish; the pull request is %s", opts.Target.URL)
+		// GitHub refuses a submitted review while the viewer has a pending one, and loupe does not manage pending reviews.
+		if strings.Contains(strings.ToLower(httpErr.Message), "pending review") {
+			fix = fmt.Sprintf("submit or discard your pending review on %s first", opts.Target.URL)
+		}
+		return Receipt{}, refusal.New(refusal.GitHub, fmt.Sprintf("GitHub rejected the review with HTTP %d: %s", httpErr.Status, httpErr.Message), fix)
 	case isRefusal && r.Code == refusal.Auth:
 		// The client turns a 401 into an auth refusal; like any 4xx it recorded nothing.
 		if err := DeleteAttempt(opts.Dir); err != nil {
