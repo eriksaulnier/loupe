@@ -1,6 +1,9 @@
 # Observed GitHub behavior
 
-Evidence gathered while building the previous version of loupe, recorded so the rebuild does not rediscover it. These are observations of github.com at the time noted, not documented guarantees; the code MUST surface unexpected responses rather than assume they cannot happen.
+Evidence gathered while building v0, recorded so the rebuild does not rediscover it.
+
+- These are observations of github.com at the time noted, not documented guarantees.
+- The code MUST surface unexpected responses rather than assume they cannot happen.
 
 ## Review creation
 
