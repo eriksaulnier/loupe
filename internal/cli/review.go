@@ -17,7 +17,7 @@ import (
 const reviewHelp = `Open the review interface for a run: the human decides each finding with its diff in view.
 
 This command is human-only. An agent MUST NOT run it; it refuses without an interactive
-terminal on stdin and stdout.
+terminal on stdin and stdout, and on stderr under --json.
 
 The list shows the summary, readiness counts and every finding. Opening a finding shows its
 body above the diff hunk it points at; f shows the whole file's diff. In a finding, a accepts,
@@ -50,8 +50,10 @@ func newReviewCmd(deps Deps) *cobra.Command {
 }
 
 func runReview(cmd *cobra.Command, deps Deps, args []string) error {
-	if !deps.IsTerminal() {
-		return refusal.New(refusal.TTY, "loupe review needs an interactive terminal on stdin and stdout", "run loupe review in an interactive terminal")
+	jsonMode := wantJSON(cmd)
+	if !interactive(deps, jsonMode) {
+		return refusal.New(refusal.TTY, "loupe review needs an interactive terminal on stdin and stdout, and on stderr under --json",
+			"run loupe review in an interactive terminal")
 	}
 	positional := ""
 	if len(args) == 1 {
@@ -61,7 +63,6 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
-	jsonMode := wantJSON(cmd)
 	ui := interactiveOutput(deps, jsonMode)
 	plain, _ := cmd.Flags().GetBool("plain")
 	width, height := terminalSize(deps)
@@ -97,6 +98,11 @@ func reviewDone(cmd *cobra.Command, deps Deps, run string, jsonMode bool) error 
 		return nil
 	}
 	return writeSuccess(deps.Stdout, commandName(cmd), run, nil, map[string]any{})
+}
+
+// interactive requires stdin and stdout to be terminals, and stderr too under --json, where interactiveOutput draws.
+func interactive(deps Deps, jsonMode bool) bool {
+	return deps.IsTerminal() && (!jsonMode || deps.StderrIsTerminal())
 }
 
 // interactiveOutput is where a human-only command draws. Under --json stdout carries only the result object, so the

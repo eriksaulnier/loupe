@@ -35,7 +35,9 @@ type harness struct {
 	// Stdin is fed to the next Run.
 	Stdin      string
 	IsTerminal bool
-	Env        map[string]string
+	// StderrNotTerminal makes stderr a redirect while IsTerminal still holds for stdin and stdout.
+	StderrNotTerminal bool
+	Env               map[string]string
 	// GitHubErr, when set, is what building the GitHub client fails with.
 	GitHubErr error
 	client    github.Client
@@ -104,7 +106,8 @@ func (h *harness) runWith(stdin string, now func() time.Time, args ...string) (s
 			}
 			return h.client, nil
 		},
-		IsTerminal: func() bool { return h.IsTerminal },
+		IsTerminal:       func() bool { return h.IsTerminal },
+		StderrIsTerminal: func() bool { return h.IsTerminal && !h.StderrNotTerminal },
 	}
 	exit = cli.Execute(deps, args)
 	return out.String(), errOut.String(), exit

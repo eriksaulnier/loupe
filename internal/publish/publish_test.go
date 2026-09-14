@@ -97,6 +97,17 @@ func (fx *fixture) check(creates int) {
 	}
 }
 
+func TestRunRefusesTTYBeforeReadingDraftOrCredentials(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.IsTerminal = false
+	fx.opts.GitHub = func() (github.Client, error) { return nil, errors.New("no GitHub token found") }
+	if err := os.WriteFile(filepath.Join(fx.dir, "draft.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.TTY)
+}
+
 func TestRunRefusesAtGatesWithoutConfirming(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.IsTerminal = false

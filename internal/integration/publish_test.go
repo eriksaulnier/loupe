@@ -135,6 +135,39 @@ func TestPublishRefusesWithoutTerminalBeforePrinting(t *testing.T) {
 	h.checkSends(0)
 }
 
+func TestPublishRefusesTTYBeforeCredentialsAndRecords(t *testing.T) {
+	h := newHarness(t)
+	h.reviewed("a\na\nx\nq\n")
+	h.IsTerminal = false
+	h.GitHubErr = errors.New("no GitHub token found for github.com")
+	h.mustRefuse("tty", "publish", runRef, "--action", "comment")
+
+	h.GitHubErr = nil
+	if err := os.WriteFile(filepath.Join(h.RunDir(1), "draft.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.mustRefuse("tty", "publish", runRef, "--action", "comment")
+	h.checkSends(0)
+}
+
+func TestInteractiveJSONNeedsStderrTerminal(t *testing.T) {
+	h := newHarness(t)
+	h.reviewed("a\na\nx\nq\n")
+	h.StderrNotTerminal = true
+	errObj := h.mustRefuse("tty", "publish", runRef, "--action", "comment", "--plain")
+	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "stderr") {
+		t.Fatalf("tty message %q does not name stderr", msg)
+	}
+	h.mustRefuse("tty", "review", runRef, "--plain")
+
+	// Without --json the interface draws on stdout, so a redirected stderr is fine.
+	h.Stdin = "n\n"
+	if _, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 || !strings.Contains(stderr, "canceled") {
+		t.Fatalf("exit %d stderr %q", exit, stderr)
+	}
+	h.checkSends(0)
+}
+
 func TestPublishGateRefusals(t *testing.T) {
 	cases := []struct {
 		name    string

@@ -23,8 +23,7 @@ type GateInput struct {
 // comes before any GitHub call.
 func Gates(ctx context.Context, in GateInput) error {
 	if !in.IsTerminal {
-		return refusal.New(refusal.TTY, "loupe publish needs an interactive terminal on stdin and stdout",
-			"run loupe publish in an interactive terminal")
+		return ttyRefusal()
 	}
 	pr, err := in.GitHub.PullRequest(ctx, in.Target.Owner, in.Target.Repo, in.Target.Number)
 	if err != nil {
@@ -45,6 +44,11 @@ func Gates(ctx context.Context, in GateInput) error {
 			"file findings with loupe add or write a summary with loupe summary")
 	}
 	return ReadinessRefusal(in.Draft)
+}
+
+func ttyRefusal() error {
+	return refusal.New(refusal.TTY, "loupe publish needs an interactive terminal on stdin and stdout, and on stderr under --json",
+		"run loupe publish in an interactive terminal")
 }
 
 func headRefusal(target run.Target, pr github.PullRequest) error {

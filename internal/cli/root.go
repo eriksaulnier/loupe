@@ -74,6 +74,8 @@ type Deps struct {
 	// GitHub is a func so commands that never talk to GitHub never build a client or read credentials.
 	GitHub     func() (github.Client, error)
 	IsTerminal func() bool
+	// StderrIsTerminal is consulted only under --json, where human-only commands draw on stderr.
+	StderrIsTerminal func() bool
 }
 
 func NewRoot(deps Deps) *cobra.Command {

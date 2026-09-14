@@ -25,7 +25,8 @@ type Options struct {
 	Dir    string
 	Target run.Target
 	// GitHub is called only once no receipt is found, so a replay never needs credentials.
-	GitHub     func() (github.Client, error)
+	GitHub func() (github.Client, error)
+	// IsTerminal holds when stdin, stdout and, under --json, stderr are terminals.
 	IsTerminal bool
 	Action     string
 	Inline     string
@@ -63,6 +64,10 @@ func Run(ctx context.Context, opts Options) (receipt Receipt, replayed bool, err
 
 // retryID is the publicationId of the unknown attempt being retried, or empty.
 func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, bool, error) {
+	// Checked again in Gates; here it keeps a draft or credential problem from hiding that the command is human-only.
+	if !opts.IsTerminal {
+		return Receipt{}, false, ttyRefusal()
+	}
 	d, err := draft.Load(opts.Dir)
 	if err != nil {
 		return Receipt{}, false, err

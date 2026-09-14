@@ -122,11 +122,11 @@ All runs, newest capture first, as an array under `runs`: `ref`, `url`, `title`,
 
 ### `loupe review [<ref>] [--plain]` (human only)
 
-Refuses with `tty` before reading the draft when stdin or stdout is not a terminal. Opens the review interface described in research.md. `--plain` forces line mode.
+Refuses with `tty` before reading the draft when stdin or stdout is not a terminal, or under `--json` when stderr, where the interface then draws, is not. Opens the review interface described in research.md. `--plain` forces line mode.
 
 ### `loupe publish [<ref>] --action comment|approve|request-changes [--inline none|blocking|all] [--retry-unknown] [--plain]` (human only)
 
-Runs the publication state machine in research.md. `--inline` defaults to `blocking`. Prints the review URL on success and on receipt replay.
+Runs the publication state machine in research.md. After a receipt replay or reconciliation, refuses with `tty` before reading the draft or GitHub credentials, with the same terminal rule as `review`. `--inline` defaults to `blocking`. Prints the review URL on success and on receipt replay.
 
 ## Environment
 

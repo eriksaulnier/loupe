@@ -34,6 +34,7 @@ func main() {
 		IsTerminal: func() bool {
 			return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 		},
+		StderrIsTerminal: func() bool { return term.IsTerminal(int(os.Stderr.Fd())) },
 	}
 	os.Exit(cli.Execute(deps, os.Args[1:]))
 }

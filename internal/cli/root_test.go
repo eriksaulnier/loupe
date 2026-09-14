@@ -31,7 +31,8 @@ func testDeps(t *testing.T, env map[string]string) (Deps, *streams) {
 			t.Error("GitHub must not be built")
 			return nil, errors.New("unexpected GitHub client")
 		},
-		IsTerminal: func() bool { return false },
+		IsTerminal:       func() bool { return false },
+		StderrIsTerminal: func() bool { return false },
 	}, s
 }
 

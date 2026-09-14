@@ -20,7 +20,7 @@ This command is human-only. An agent MUST NOT run it, pipe a confirmation into i
 pseudo-terminal to reach it; it tells the human to run loupe publish.
 
 Only accepted findings are published. Before anything is shown, publish refuses, in this order:
-  tty          stdin or stdout is not an interactive terminal
+  tty          stdin or stdout, or stderr under --json, is not an interactive terminal
   head-moved   the pull request head moved since capture; loupe capture <url> starts a new round
   own-pr       approve or request-changes on your own pull request; use --action comment
   blocking     approve while an included (accepted or pending) finding is blocking
@@ -105,7 +105,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	jsonMode := wantJSON(cmd)
 	ui := interactiveOutput(deps, jsonMode)
 	receipt, replayed, err := publish.Run(cmd.Context(), publish.Options{
-		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: deps.IsTerminal(), Action: action, Inline: inline, RetryUnknown: retryUnknown,
+		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, RetryUnknown: retryUnknown,
 		Confirm: func(preview publish.Preview) (bool, error) {
 			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
 			width, height := terminalSize(deps)
