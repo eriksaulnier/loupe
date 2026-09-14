@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -273,5 +274,76 @@ func TestConcurrentCapturesOfOnePullRequest(t *testing.T) {
 	}
 	if len(rounds) == 0 {
 		t.Fatalf("no capture succeeded: %v", results)
+	}
+}
+
+func TestConcurrentCapturesAtUnchangedHead(t *testing.T) {
+	h := newHarness(t)
+	h.Env["LOUPE_LOCK_TIMEOUT_MS"] = "60000"
+	type result struct {
+		stdout, stderr string
+		exit           int
+	}
+	results := make([]result, 2)
+	start := func(i int, now func() time.Time) chan struct{} {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			stdout, stderr, exit := h.runWith("", now, "capture", prURL(), "--json")
+			results[i] = result{stdout, stderr, exit}
+		}()
+		return done
+	}
+
+	nowA, reachedA, releaseA := pausedNow()
+	doneA := start(0, nowA)
+	<-reachedA
+	doneB := start(1, fixedNow)
+	time.Sleep(200 * time.Millisecond)
+	close(releaseA)
+	<-doneA
+	<-doneB
+
+	succeeded := 0
+	for _, r := range results {
+		var env map[string]any
+		if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+			t.Fatalf("stdout %q stderr %q: %v", r.stdout, r.stderr, err)
+		}
+		if r.exit == 0 {
+			succeeded++
+			continue
+		}
+		if errObj, _ := env["error"].(map[string]any); r.exit != 1 || errObj["code"] != "same-head" {
+			t.Fatalf("exit %d envelope %v", r.exit, env)
+		}
+	}
+	if succeeded != 1 {
+		t.Fatalf("%d captures succeeded: %v", succeeded, results)
+	}
+	prDir := filepath.Dir(h.RunDir(1))
+	entries, err := os.ReadDir(prDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dirs []string
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, e.Name())
+		}
+	}
+	if !reflect.DeepEqual(dirs, []string{"1"}) {
+		t.Fatalf("run directories %v", dirs)
+	}
+	var loupeRefs []string
+	for ref := range h.Repo.Snapshot().Refs {
+		if strings.HasPrefix(ref, "refs/loupe/") {
+			loupeRefs = append(loupeRefs, ref)
+		}
+	}
+	sort.Strings(loupeRefs)
+	want := []string{"refs/loupe/acme/widgets/42/1/base", "refs/loupe/acme/widgets/42/1/head"}
+	if !reflect.DeepEqual(loupeRefs, want) {
+		t.Fatalf("loupe refs %v", loupeRefs)
 	}
 }
