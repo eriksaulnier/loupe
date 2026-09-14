@@ -40,7 +40,8 @@ ends with an unknown outcome, publish refuses with the pull request URL until it
 --plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 prints the
 review and asks Publish this review? [y/N] on one line instead.
 
-The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN.
+The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
+of the current branch in the working directory at its newest round.
 
 Result (--json), alone on stdout while the confirmation draws on stderr:
   {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1", "reviewId": 123,

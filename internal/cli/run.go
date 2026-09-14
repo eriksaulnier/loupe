@@ -7,7 +7,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
-// resolveRun selects the run from --run or the positional reference, then LOUPE_RUN.
+// resolveRun selects the run from --run or the positional reference, then LOUPE_RUN, then the pull request of the
+// working directory's current branch.
 func resolveRun(cmd *cobra.Command, deps Deps, positional string) (string, run.Ref, error) {
 	selected := positional
 	if flag := cmd.Flags().Lookup("run"); flag != nil && flag.Changed {
@@ -21,17 +22,22 @@ func resolveRun(cmd *cobra.Command, deps Deps, positional string) (string, run.R
 	if selected == "" {
 		selected = deps.Getenv("LOUPE_RUN")
 	}
-	if selected == "" {
-		return "", run.Ref{}, refusal.New(refusal.NoRun, "no run selected",
-			"loupe capture <pr-url>, or pass --run owner/repo#123")
-	}
-	ref, err := run.ParseRef(selected)
-	if err != nil {
-		return "", run.Ref{}, err
+	var ref run.Ref
+	if selected != "" {
+		parsed, err := run.ParseRef(selected)
+		if err != nil {
+			return "", run.Ref{}, err
+		}
+		ref = parsed
 	}
 	root, err := run.DataRoot(deps.Getenv)
 	if err != nil {
 		return "", run.Ref{}, err
+	}
+	if selected == "" {
+		if ref, err = run.ResolveBranch(cmd.Context(), root, deps.WorkDir, deps.GitHub); err != nil {
+			return "", run.Ref{}, err
+		}
 	}
 	dir, resolved, err := run.ResolveRef(root, ref)
 	if err != nil {

@@ -187,6 +187,7 @@ func TestResolveRunRefusals(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			deps, s := testDeps(t, c.env)
+			deps.WorkDir = t.TempDir()
 			if code := execute(testRoot(deps, nil), deps, append(c.args, "--json")); code != c.exit {
 				t.Fatalf("exit %d, want %d: %s", code, c.exit, s.stdout.String())
 			}

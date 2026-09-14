@@ -113,6 +113,12 @@ func (r *Repo) PushHead(files map[string]string) string {
 	return r.head
 }
 
+// AddPull publishes the current head as another pull request's head, for tests with several pull requests.
+func (r *Repo) AddPull(number int) {
+	r.t.Helper()
+	r.git(r.t, r.workDir, "push", "--quiet", r.RemoteDir, fmt.Sprintf("%s:refs/pull/%d/head", r.head, number))
+}
+
 func (r *Repo) Snapshot() Snapshot {
 	r.t.Helper()
 	index, err := os.ReadFile(filepath.Join(r.Dir, ".git", "index"))

@@ -28,7 +28,8 @@ immediately and is refused if the finding changed since it was shown.
 --plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 selects
 plain mode: one finding at a time with single-letter answers.
 
-The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN.
+The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
+of the current branch in the working directory at its newest round.
 
 Result (--json), alone on stdout while the interface draws on stderr:
   {"loupe": 1, "ok": true, "command": "review", "run": "owner/repo#123@1"}`
