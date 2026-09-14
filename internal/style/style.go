@@ -243,10 +243,13 @@ func (s Style) Boxed(title string, lines []string, inner int) []string {
 	return out
 }
 
-// Wrap word-wraps prose to width and prefixes every line with indent. Existing newlines are kept.
+// Wrap word-wraps prose to width and prefixes every line with indent. Existing newlines are kept. Hyphens are hidden
+// from the wrapper, which would otherwise split paths and identifiers such as gadfly-review-local at every dash.
 func (s Style) Wrap(text string, width int, indent string) string {
 	limit := max(10, width-ansi.StringWidth(indent))
-	wrapped := ansi.Wordwrap(strings.TrimRight(text, "\n"), limit, "")
+	const hyphen = "\u2011"
+	wrapped := ansi.Wordwrap(strings.ReplaceAll(strings.TrimRight(text, "\n"), "-", hyphen), limit, "")
+	wrapped = strings.ReplaceAll(wrapped, hyphen, "-")
 	lines := strings.Split(wrapped, "\n")
 	for i, l := range lines {
 		lines[i] = indent + l

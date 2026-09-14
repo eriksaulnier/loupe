@@ -103,6 +103,13 @@ func TestWrapIndentsEveryLine(t *testing.T) {
 	if !strings.Contains(s.Wrap("a\n\nb", 20, ""), "\n\n") {
 		t.Fatal("paragraph break lost")
 	}
+	got = s.Wrap("see adapters/pi/skills/post-review/SKILL.md:10 and gadfly-review-local now", 44, "")
+	if strings.Contains(got, "-\n") {
+		t.Fatalf("wrapped at a hyphen:\n%s", got)
+	}
+	if strings.Contains(got, "\u2011") {
+		t.Fatal("placeholder leaked")
+	}
 }
 
 func TestBoxedIsRectangular(t *testing.T) {
