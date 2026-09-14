@@ -117,6 +117,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		},
 		Now:    deps.Now,
 		Getenv: deps.Getenv,
+		Stderr: deps.Stderr,
 	})
 	if errors.Is(err, publish.ErrDeclined) {
 		if _, err := fmt.Fprintln(deps.Stderr, "Publish canceled; nothing was sent."); err != nil {

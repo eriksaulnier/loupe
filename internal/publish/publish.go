@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -34,6 +35,7 @@ type Options struct {
 	Confirm func(Preview) (bool, error)
 	Now     func() time.Time
 	Getenv  func(string) string
+	Stderr  io.Writer
 	// HoldSignals is called just before attempt.json is written and the func it returns once the outcome is recorded.
 	// Nil holds the signals for real.
 	HoldSignals func(signals []os.Signal) (release func())
@@ -57,47 +59,46 @@ func Run(ctx context.Context, opts Options) (receipt Receipt, replayed bool, err
 	if err != nil || replay {
 		return receipt, replay && err == nil, err
 	}
-	receipt, err = publishNew(ctx, opts, retryID)
-	return receipt, false, err
+	return publishNew(ctx, opts, retryID)
 }
 
 // retryID is the publicationId of the unknown attempt being retried, or empty.
-func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, error) {
+func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, bool, error) {
 	d, err := draft.Load(opts.Dir)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	client, err := opts.GitHub()
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	if err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d}); err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	viewer, err := client.Viewer(ctx)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	env, err := Build(opts.Target, d, viewer, opts.Action, opts.Inline)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	envJSON, err := json.MarshalIndent(env, "", "  ")
 	if err != nil {
-		return Receipt{}, fmt.Errorf("encode envelope: %w", err)
+		return Receipt{}, false, fmt.Errorf("encode envelope: %w", err)
 	}
 	preview := Preview{Body: env.Body, Comments: env.Comments, EnvelopeJSON: string(envJSON), Version: d.Version, Digest: env.Digest,
 		Dispositions: draft.Dispositions(d)}
 
 	confirmed, err := opts.Confirm(preview)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	if !confirmed {
-		return Receipt{}, ErrDeclined
+		return Receipt{}, false, ErrDeclined
 	}
 	if err := recheckLive(ctx, opts, client, viewer); err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	return send(ctx, opts, client, env, preview, retryID)
 }
@@ -179,38 +180,57 @@ func recheckLive(ctx context.Context, opts Options, client github.Client, viewer
 }
 
 // send holds the lock from the recheck until the outcome is recorded, so a second publisher cannot also send.
-func send(ctx context.Context, opts Options, client github.Client, env Envelope, preview Preview, retryID string) (receipt Receipt, err error) {
+func send(ctx context.Context, opts Options, client github.Client, env Envelope, preview Preview, retryID string) (receipt Receipt, replayed bool, err error) {
 	held, err := run.Lock(opts.Dir, "publish", opts.Getenv)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	defer func() {
 		if unlockErr := held.Unlock(); unlockErr != nil && err == nil {
-			receipt, err = Receipt{}, unlockErr
+			receipt, replayed, err = Receipt{}, false, unlockErr
 		}
 	}()
 
 	_, receiptFound, err := LoadReceipt(opts.Dir)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	existing, attemptFound, err := LoadAttempt(opts.Dir)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	// A retry may replace only the unknown attempt it reconciled; anything else means another publish acted meanwhile.
 	sameUnknown := attemptFound && existing.State == StateUnknown && existing.Envelope.PublicationID == retryID
 	if receiptFound || (retryID == "" && attemptFound) || (retryID != "" && !sameUnknown) {
-		return Receipt{}, refusal.New(refusal.Attempt,
+		return Receipt{}, false, refusal.New(refusal.Attempt,
 			"another publish recorded an attempt or a receipt for this run while this one was being confirmed; nothing was sent",
 			"loupe publish to see its state")
 	}
+	if retryID != "" {
+		// The unknown attempt's review can reach GitHub's listing while the human confirms, and sending then would post it twice.
+		matched, err := Reconcile(ctx, client, existing)
+		if err != nil {
+			return Receipt{}, false, err
+		}
+		if matched != nil {
+			if err := SaveReceipt(opts.Dir, *matched); err != nil {
+				return Receipt{}, false, err
+			}
+			if err := DeleteAttempt(opts.Dir); err != nil {
+				return Receipt{}, false, err
+			}
+			if _, err := fmt.Fprintln(opts.Stderr, "the earlier attempt's review was found on GitHub; nothing was sent"); err != nil {
+				return Receipt{}, false, err
+			}
+			return *matched, true, nil
+		}
+	}
 	d, err := draft.Load(opts.Dir)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	if d.Version != preview.Version || draft.Digest(d) != preview.Digest || !draft.ReadinessOf(d).Ready {
-		return Receipt{}, refusal.New(refusal.Version,
+		return Receipt{}, false, refusal.New(refusal.Version,
 			fmt.Sprintf("the draft changed from version %d to %d while the review was being confirmed; nothing was sent", preview.Version, d.Version),
 			"loupe review")
 	}
@@ -226,7 +246,7 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	attempt := Attempt{Schema: RecordSchema, State: StateInFlight, StartedAt: started, UpdatedAt: started, Envelope: env,
 		Confirmed: Confirmed{Version: preview.Version, Digest: preview.Digest, Dispositions: preview.Dispositions}}
 	if err := SaveAttempt(opts.Dir, attempt); err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 
 	comments := make([]github.ReviewComment, 0, len(env.Comments))
@@ -245,49 +265,49 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	case sendErr == nil:
 		receipt = Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: env.Action, PostedAt: opts.Now(), Envelope: env}
 		if err := SaveReceipt(opts.Dir, receipt); err != nil {
-			return Receipt{}, receiptLost(opts, attempt, review, err)
+			return Receipt{}, false, receiptLost(opts, attempt, review, err)
 		}
 		if err := DeleteAttempt(opts.Dir); err != nil {
-			return Receipt{}, err
+			return Receipt{}, false, err
 		}
-		return receipt, nil
+		return receipt, false, nil
 	case errors.As(sendErr, &httpErr) && httpErr.Definite():
 		if err := DeleteAttempt(opts.Dir); err != nil {
-			return Receipt{}, err
+			return Receipt{}, false, err
 		}
 		fix := fmt.Sprintf("fix what GitHub reported, then loupe publish; the pull request is %s", opts.Target.URL)
 		// GitHub refuses a submitted review while the viewer has a pending one, and loupe does not manage pending reviews.
 		if strings.Contains(strings.ToLower(httpErr.Message), "pending review") {
 			fix = fmt.Sprintf("submit or discard your pending review on %s first", opts.Target.URL)
 		}
-		return Receipt{}, refusal.New(refusal.GitHub, fmt.Sprintf("GitHub rejected the review with HTTP %d: %s", httpErr.Status, httpErr.Message), fix)
+		return Receipt{}, false, refusal.New(refusal.GitHub, fmt.Sprintf("GitHub rejected the review with HTTP %d: %s", httpErr.Status, httpErr.Message), fix)
 	case isRefusal && r.Code == refusal.Auth:
 		// The client turns a 401 into an auth refusal; like any 4xx it recorded nothing.
 		if err := DeleteAttempt(opts.Dir); err != nil {
-			return Receipt{}, err
+			return Receipt{}, false, err
 		}
-		return Receipt{}, r
+		return Receipt{}, false, r
 	default:
 		attempt.State, attempt.UpdatedAt, attempt.LastError = StateUnknown, opts.Now(), sendErr.Error()
 		if err := SaveAttempt(opts.Dir, attempt); err != nil {
-			return Receipt{}, err
+			return Receipt{}, false, err
 		}
 		matched, reconcileErr := Reconcile(ctx, client, attempt)
 		if reconcileErr != nil {
-			return Receipt{}, unknownAttemptRefusal(opts.Target,
+			return Receipt{}, false, unknownAttemptRefusal(opts.Target,
 				fmt.Sprintf("the review may or may not have been posted on %s: %v; checking its reviews failed: %v", opts.Target.URL, sendErr, reconcileErr))
 		}
 		if matched == nil {
-			return Receipt{}, unknownAttemptRefusal(opts.Target,
+			return Receipt{}, false, unknownAttemptRefusal(opts.Target,
 				fmt.Sprintf("the review may or may not have been posted on %s, and no review there matches it yet: %v", opts.Target.URL, sendErr))
 		}
 		if err := SaveReceipt(opts.Dir, *matched); err != nil {
-			return Receipt{}, receiptLost(opts, attempt, github.Review{ID: matched.ReviewID, HTMLURL: matched.ReviewURL}, err)
+			return Receipt{}, false, receiptLost(opts, attempt, github.Review{ID: matched.ReviewID, HTMLURL: matched.ReviewURL}, err)
 		}
 		if err := DeleteAttempt(opts.Dir); err != nil {
-			return Receipt{}, err
+			return Receipt{}, false, err
 		}
-		return *matched, nil
+		return *matched, false, nil
 	}
 }
 

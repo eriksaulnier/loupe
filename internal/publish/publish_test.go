@@ -554,3 +554,46 @@ func TestRunRetryUnknownSendsNewPublication(t *testing.T) {
 	}
 	fx.check(1)
 }
+
+func TestRunRetryUnknownRechecksForReviewUnderLock(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	old := fx.saveMarkedAttempt(StateUnknown)
+	fx.opts.RetryUnknown = true
+	var stderr bytes.Buffer
+	fx.opts.Stderr = &stderr
+	fx.opts.Confirm = fx.confirmWith(true, func() {
+		fx.gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED", Body: old.Envelope.Body})
+	})
+	receipt, replayed, err := Run(context.Background(), fx.opts)
+	if err != nil || !replayed || receipt.ReviewID != 1001 || !reflect.DeepEqual(receipt.Envelope, old.Envelope) {
+		t.Fatalf("receipt %+v replayed %v err %v", receipt, replayed, err)
+	}
+	if saved, found, err := LoadReceipt(fx.dir); err != nil || !found || !reflect.DeepEqual(saved, receipt) {
+		t.Fatalf("saved %+v found %v err %v", saved, found, err)
+	}
+	if fx.exists("attempt.json") {
+		t.Fatal("attempt remains")
+	}
+	if got := stderr.String(); got != "the earlier attempt's review was found on GitHub; nothing was sent\n" {
+		t.Fatalf("stderr %q", got)
+	}
+	fx.check(0)
+}
+
+func TestRunRetryUnknownRecheckListFailureKeepsAttempt(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	old := fx.saveMarkedAttempt(StateUnknown)
+	fx.opts.RetryUnknown = true
+	fx.opts.Confirm = fx.confirmWith(true, func() {
+		fx.gh.Fail("GET", "/repos/acme/widgets/pulls/42/reviews", 503)
+	})
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.GitHub)
+	if saved, found, err := LoadAttempt(fx.dir); err != nil || !found || !reflect.DeepEqual(saved, old) {
+		t.Fatalf("attempt %+v found %v err %v", saved, found, err)
+	}
+	if fx.exists("receipt.json") {
+		t.Fatal("receipt written")
+	}
+	fx.check(0)
+}
