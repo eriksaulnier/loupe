@@ -155,10 +155,14 @@ func (s *Server) SetForkBranch(owner, repo string, number int, headOwner, branch
 	s.headOwners[prKey{owner, repo, number}] = headOwner
 }
 
-// Fail answers every later request with method and exact path with status, after recording it.
+// Fail answers every later request with method and exact path with status, after recording it; status 0 stops.
 func (s *Server) Fail(method, path string, status int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if status == 0 {
+		delete(s.failures, method+" "+path)
+		return
+	}
 	s.failures[method+" "+path] = status
 }
 

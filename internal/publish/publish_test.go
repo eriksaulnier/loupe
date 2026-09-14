@@ -435,3 +435,122 @@ func TestRunHoldsSignalsFromAttemptToOutcome(t *testing.T) {
 	}
 	fx.check(1)
 }
+
+// saveMarkedAttempt stores an attempt in state for the ready draft, and returns it.
+func (fx *fixture) saveMarkedAttempt(state string) Attempt {
+	fx.t.Helper()
+	env, err := Build(fixtureTarget(), readyDraft(), "reviewer", "comment", "all")
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	a := Attempt{Schema: RecordSchema, State: state, StartedAt: fixtureNow, UpdatedAt: fixtureNow, Envelope: env}
+	if err := SaveAttempt(fx.dir, a); err != nil {
+		fx.t.Fatal(err)
+	}
+	return a
+}
+
+func TestRunReconcilesInFlightAttemptWithoutTerminal(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	a := fx.saveMarkedAttempt(StateInFlight)
+	fx.gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED", Body: a.Envelope.Body})
+	fx.opts.IsTerminal = false
+	receipt, replayed, err := Run(context.Background(), fx.opts)
+	if err != nil || !replayed || receipt.ReviewID != 1001 || !reflect.DeepEqual(receipt.Envelope, a.Envelope) {
+		t.Fatalf("receipt %+v replayed %v err %v", receipt, replayed, err)
+	}
+	if saved, found, err := LoadReceipt(fx.dir); err != nil || !found || !reflect.DeepEqual(saved, receipt) {
+		t.Fatalf("saved %+v found %v err %v", saved, found, err)
+	}
+	if fx.exists("attempt.json") || len(fx.previews) != 0 {
+		t.Fatal("attempt remains or confirmation shown")
+	}
+	fx.check(0)
+}
+
+func TestRunReconcileListFailureKeepsAttempt(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	a := fx.saveMarkedAttempt(StateUnknown)
+	fx.gh.Fail("GET", "/repos/acme/widgets/pulls/42/reviews", 503)
+	fx.opts.RetryUnknown = true
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.GitHub)
+	if saved, found, err := LoadAttempt(fx.dir); err != nil || !found || !reflect.DeepEqual(saved, a) {
+		t.Fatalf("attempt %+v found %v err %v", saved, found, err)
+	}
+	if len(fx.previews) != 0 {
+		t.Fatal("confirmation shown")
+	}
+	fx.check(0)
+}
+
+func TestRunNoMatchMarksInFlightUnknown(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.saveMarkedAttempt(StateInFlight)
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Attempt, prLink, "--retry-unknown")
+	if a, found, err := LoadAttempt(fx.dir); err != nil || !found || a.State != StateUnknown {
+		t.Fatalf("attempt %+v found %v err %v", a, found, err)
+	}
+	fx.check(0)
+}
+
+func TestRunRetryUnknownRefusesWhenRecordsChangeDuringConfirmation(t *testing.T) {
+	changes := map[string]func(fx *fixture){
+		"receipt appeared": func(fx *fixture) {
+			env, _ := Build(fixtureTarget(), readyDraft(), "reviewer", "comment", "all")
+			if err := SaveReceipt(fx.dir, Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env}); err != nil {
+				fx.t.Error(err)
+			}
+		},
+		"attempt replaced": func(fx *fixture) { fx.saveMarkedAttempt(StateUnknown) },
+		"attempt in flight": func(fx *fixture) {
+			a, _, _ := LoadAttempt(fx.dir)
+			a.State = StateInFlight
+			if err := SaveAttempt(fx.dir, a); err != nil {
+				fx.t.Error(err)
+			}
+		},
+		"attempt removed": func(fx *fixture) {
+			if err := DeleteAttempt(fx.dir); err != nil {
+				fx.t.Error(err)
+			}
+		},
+	}
+	for name, change := range changes {
+		t.Run(name, func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			fx.saveMarkedAttempt(StateUnknown)
+			fx.opts.RetryUnknown = true
+			fx.opts.Confirm = fx.confirmWith(true, func() { change(fx) })
+			_, err := fx.run()
+			wantRefusal(t, err, refusal.Attempt, "loupe publish")
+			if len(fx.previews) != 1 {
+				t.Fatalf("previews %d", len(fx.previews))
+			}
+			fx.check(0)
+		})
+	}
+}
+
+func TestRunRetryUnknownSendsNewPublication(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	old := fx.saveMarkedAttempt(StateUnknown)
+	fx.opts.RetryUnknown = true
+	var atSend Attempt
+	fx.gh.OnCreate(func(*http.Request) {
+		atSend, _, _ = LoadAttempt(fx.dir)
+	})
+	receipt, replayed, err := Run(context.Background(), fx.opts)
+	if err != nil || replayed {
+		t.Fatalf("replayed %v err %v", replayed, err)
+	}
+	if atSend.State != StateInFlight || atSend.Envelope.PublicationID == old.Envelope.PublicationID ||
+		receipt.Envelope.PublicationID != atSend.Envelope.PublicationID || len(fx.previews) != 1 {
+		t.Fatalf("attempt at send %+v receipt %+v", atSend, receipt)
+	}
+	if fx.exists("attempt.json") {
+		t.Fatal("attempt remains")
+	}
+	fx.check(1)
+}

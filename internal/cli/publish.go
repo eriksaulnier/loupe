@@ -35,7 +35,12 @@ the outcome is recorded.
 
 Once the review is posted, receipt.json records it and publish prints the review URL; every later
 publish prints that URL again without contacting GitHub, with or without a terminal. If a send
-ends with an unknown outcome, publish refuses with the pull request URL until it is inspected.
+ends with an unknown outcome, attempt.json keeps the exact payload, and the next publish first
+looks on GitHub for a submitted review carrying its hidden marker. A match writes the receipt and
+prints the URL without sending, with or without a terminal. Without a match publish refuses with
+the pull request URL; after inspecting it, --retry-unknown passes every check above again, shows
+a new confirmation and sends once. A rejection because you have a pending review on the pull
+request asks you to submit or discard it on GitHub first.
 
 --plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 prints the
 review and asks Publish this review? [y/N] on one line instead.
@@ -63,7 +68,7 @@ func newPublishCmd(deps Deps) *cobra.Command {
 	}
 	cmd.Flags().String("action", "", "review action: comment, approve or request-changes")
 	cmd.Flags().String("inline", "blocking", "located findings that also become inline comments: none, blocking or all")
-	cmd.Flags().Bool("retry-unknown", false, "reserved for sending again after an unknown outcome; an unknown attempt still refuses")
+	cmd.Flags().Bool("retry-unknown", false, "send again after an unknown outcome that matches no review on the pull request")
 	cmd.Flags().Bool("plain", false, "confirm on one line instead of the full-screen view")
 	return cmd
 }
