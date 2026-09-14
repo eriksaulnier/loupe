@@ -12,6 +12,8 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
+
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files under testdata/golden/cli from the renderers")
@@ -102,6 +104,21 @@ func TestHumanOutputGoldens(t *testing.T) {
 	}
 }
 
+// TestNerdTierGolden pins the list under the default tier: the icons as escapes, one space after each, no segment
+// joints without color.
+func TestNerdTierGolden(t *testing.T) {
+	home := goldenRuns(t)
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1", "LANG": "en_US.UTF-8", style.IconsEnv: "nerd"})
+	deps.TermWidth = func() int { return 100 }
+	deps.Now = func() time.Time { return time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC) }
+	Execute(deps, []string{"list"})
+	got := s.stdout.String() + s.stderr.String()
+	if !strings.Contains(got, "\uf407 eriksaulnier/dev-loadout#2") || !strings.Contains(got, "\uf00c 1 \uf10c 1") || strings.Contains(got, "\ue0b0") {
+		t.Fatalf("nerd list:\n%s", got)
+	}
+	checkCLIGolden(t, "list.nerd.txt", got)
+}
+
 func checkCLIGolden(t *testing.T, name, got string) {
 	t.Helper()
 	path := filepath.Join("..", "..", "testdata", "golden", "cli", name)
@@ -122,7 +139,6 @@ func checkCLIGolden(t *testing.T, name, got string) {
 	}
 }
 
-// TestASCIIGlyphsUnderANonUTF8Locale pins that no view reaches for a character the terminal cannot print.
 func TestASCIIGlyphsUnderANonUTF8Locale(t *testing.T) {
 	home := goldenRuns(t)
 	for _, args := range [][]string{{"list"}, {"show", "--run", "eriksaulnier/dev-loadout#2"}, {"feedback", "--run", "eriksaulnier/dev-loadout#2"}} {

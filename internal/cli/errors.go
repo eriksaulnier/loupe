@@ -68,9 +68,8 @@ func report(deps Deps, jsonMode bool, command, run string, err error) int {
 // refusalIndent is the column the message and the fix start at, past the widest of the three line-start words.
 const refusalIndent = "        "
 
-// writeRefusalText prints the refusal on stderr. Without color the shape is the one every earlier version printed,
-// `error: <message>` and `fix: <fix>`; color buys the refusal code, wrapping and the commands of the fix on their own
-// lines, none of which may move the line-start words the contract fixes.
+// writeRefusalText prints the refusal on stderr. The no-color shape, `error: <message>` and `fix: <fix>`, is the
+// contract; color adds the code, wrapping and one line per command but never moves the line-start words.
 func writeRefusalText(w io.Writer, s style.Style, width int, r *refusal.Error, ce *cleanupError) {
 	if !s.Color {
 		_, _ = fmt.Fprintf(w, "error: %s\nfix: %s\n", r.Message, r.Fix)
@@ -79,13 +78,18 @@ func writeRefusalText(w io.Writer, s style.Style, width int, r *refusal.Error, c
 		}
 		return
 	}
+	// The icons of the Nerd tier sit before the words and push the column they share two cells right.
+	indent, errorWord, fixWord := refusalIndent, "error", "fix"
+	if s.Glyphs.Error != "" {
+		indent, errorWord, fixWord = refusalIndent+"  ", s.Glyphs.Error+" error", s.Glyphs.Fix+" fix"
+	}
 	label := func(st func(...string) string, word string) string {
-		return st(word+":") + strings.Repeat(" ", len(refusalIndent)-len(word)-1)
+		return st(word+":") + strings.Repeat(" ", max(1, len(indent)-style.Width(word)-1))
 	}
 	code := string(r.Code)
-	_, _ = fmt.Fprintf(w, "%s%s  %s\n", label(s.Bad.Bold(true).Render, "error"), s.Dim.Render(code),
-		hanging(s, r.Message, width, refusalIndent+strings.Repeat(" ", len(code)+2)))
-	_, _ = fmt.Fprintf(w, "%s%s\n", label(s.Good.Bold(true).Render, "fix"), fixLines(s, r.Fix, width))
+	_, _ = fmt.Fprintf(w, "%s%s  %s\n", label(s.Bad.Bold(true).Render, errorWord), s.Dim.Render(code),
+		hanging(s, r.Message, width, indent+strings.Repeat(" ", len(code)+2)))
+	_, _ = fmt.Fprintf(w, "%s%s\n", label(s.Good.Bold(true).Render, fixWord), fixLines(s, r.Fix, width, indent))
 	if ce != nil {
 		_, _ = fmt.Fprintf(w, "%s\n", s.Bad.Bold(true).Render("cleanup:"))
 		for _, c := range ce.cleanup {
@@ -100,8 +104,8 @@ func hanging(s style.Style, text string, width int, indent string) string {
 }
 
 // fixLines puts every `loupe …` command of a fix on its own indented line so it can be copied whole; only the prose
-// between the commands is wrapped. The first line starts where the caller's label ends.
-func fixLines(s style.Style, fix string, width int) string {
+// between the commands is wrapped. The first line starts where the caller's label ends, at indent.
+func fixLines(s style.Style, fix string, width int, indent string) string {
 	// "run loupe show --help" is one short instruction; split, the verb hangs alone on its line.
 	if at := strings.Index(fix, "loupe "); at >= 0 && len(strings.Fields(fix[:at])) <= 2 && commandEnd(fix[at:]) < 0 {
 		return strings.TrimSpace(fix[:at]+" ") + " " + s.Accent.Render(strings.TrimSpace(fix[at:]))
@@ -109,7 +113,7 @@ func fixLines(s style.Style, fix string, width int) string {
 	var lines []string
 	prose := func(text string) {
 		if text = strings.Trim(text, " ,"); text != "" {
-			lines = append(lines, s.Wrap(text, width, refusalIndent))
+			lines = append(lines, s.Wrap(text, width, indent))
 		}
 	}
 	rest := fix
@@ -122,13 +126,13 @@ func fixLines(s style.Style, fix string, width int) string {
 		} else {
 			rest = ""
 		}
-		lines = append(lines, refusalIndent+"  "+s.Accent.Render(strings.Trim(command, " ,")))
+		lines = append(lines, indent+"  "+s.Accent.Render(strings.Trim(command, " ,")))
 	}
 	prose(rest)
 	if len(lines) == 0 {
 		return fix
 	}
-	return strings.TrimPrefix(strings.Join(lines, "\n"), refusalIndent)
+	return strings.TrimPrefix(strings.Join(lines, "\n"), indent)
 }
 
 // commandEnd is where a command inside a fix sentence stops and prose starts again.

@@ -57,12 +57,13 @@ func (d Deps) errStyle() style.Style {
 
 const defaultWidth = 80
 
+// width is the content width: the terminal's, capped where a line stops being readable.
 func (d Deps) width() int {
 	if d.TermWidth == nil {
 		return defaultWidth
 	}
 	if w := d.TermWidth(); w > 0 {
-		return w
+		return style.Content(w)
 	}
 	return defaultWidth
 }
@@ -142,7 +143,10 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 		// Under --json stdout carries the result object alone, so nothing printed there may carry an escape sequence.
 		deps.palettes.out = style.New(io.Discard, deps.Getenv)
 	}
-	// Under --json cobra's output is held back so help can become the one result object and nothing else reaches stdout.
+	if err := style.ValidateEnv(deps.Getenv); err != nil {
+		return report(deps, jsonMode, root.Name(), "", refusal.New(refusal.Usage, err.Error(), "set "+style.IconsEnv+" to ascii, unicode or nerd, or unset it"))
+	}
+	// Under --json cobra's output is held back so help can become the one result object and nothing else hits stdout.
 	var cobraOut bytes.Buffer
 	helpShown := false
 	if jsonMode {

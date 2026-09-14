@@ -121,8 +121,7 @@ func printFeedback(deps Deps, ref string, d *draft.Draft) error {
 	return err
 }
 
-// writeNotes prints one thread per note, the replies under the note they answer, open notes before closed ones
-// because an open note is what the agent has to act on.
+// writeNotes puts open notes before closed ones because an open note is what the agent has to act on.
 func writeNotes(b *strings.Builder, s style.Style, width int, d *draft.Draft, open bool) {
 	heading := "open notes"
 	if !open {
@@ -139,14 +138,27 @@ func writeNotes(b *strings.Builder, s style.Style, width int, d *draft.Draft, op
 		}
 		id := fmt.Sprintf("%s %s", s.Glyphs.Note, oneLine(n.ID))
 		if !open {
-			fmt.Fprintf(b, "%s\n", s.Dim.Render(fmt.Sprintf("%s on %s  %s  %s", id, oneLine(n.FindingID), oneLine(n.Status), oneLine(n.Body))))
+			fmt.Fprintf(b, "%s\n", s.Dim.Render(fmt.Sprintf("%s on %s  %s  %s", id, oneLine(n.FindingID), noteStatusCell(s, n.Status), oneLine(n.Body))))
 			continue
 		}
 		fmt.Fprintf(b, "%s on %s  %s\n", s.Note.Render(id), s.Accent.Render(oneLine(n.FindingID)), s.Dim.Render(oneLine(n.Status)))
 		fmt.Fprintf(b, "%s\n", s.Wrap(text(n.Body), width, "  "))
 		for _, r := range repliesTo(d, n.ID) {
-			lead := fmt.Sprintf("  %s %s by %s  ", s.Glyphs.Reply, oneLine(r.ID), oneLine(r.By))
-			fmt.Fprintf(b, "%s%s\n", s.Dim.Render(lead), strings.TrimLeft(s.Wrap(text(r.Body), width, strings.Repeat(" ", style.Width(lead))), " "))
+			id, by := oneLine(r.ID), oneLine(r.By)
+			lead := fmt.Sprintf("  %s %s by %s  ", s.Glyphs.Reply, id, by)
+			painted := "  " + s.Note.Render(s.Glyphs.Reply+" "+id) + " " + s.Dim.Render("by "+by) + "  "
+			fmt.Fprintf(b, "%s%s\n", painted, strings.TrimLeft(s.Wrap(text(r.Body), width, strings.Repeat(" ", style.Width(lead))), " "))
 		}
 	}
+}
+
+// noteStatusCell is how a note closed, behind the glyph of the decision that closed it.
+func noteStatusCell(s style.Style, status string) string {
+	switch status {
+	case draft.NoteResolved:
+		return s.Glyphs.Accepted + " " + status
+	case draft.NoteDismissed:
+		return s.Glyphs.Excluded + " " + status
+	}
+	return oneLine(status)
 }

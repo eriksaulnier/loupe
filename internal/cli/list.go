@@ -121,7 +121,7 @@ func printList(deps Deps, rows []listRow) error {
 	when := make([]string, len(rows))
 	columns := []int{0, len("published"), 0, len("captured")}
 	for i, r := range rows {
-		refs[i], counts[i], when[i] = oneLine(r.Ref), listCountsCell(s, r.Counts), style.Relative(r.CapturedAt, deps.Now())
+		refs[i], counts[i], when[i] = strings.TrimSpace(s.Glyphs.PR+" "+oneLine(r.Ref)), listCountsCell(s, r.Counts), style.Relative(r.CapturedAt, deps.Now())
 		columns[0] = max(columns[0], style.Width(refs[i]))
 		columns[2] = max(columns[2], style.Width(counts[i]))
 		columns[3] = max(columns[3], style.Width(when[i]))
@@ -183,7 +183,7 @@ func listCountsCell(s style.Style, c listCounts) string {
 	}
 	cells := make([]string, 0, len(pairs))
 	for _, p := range pairs {
-		cell := fmt.Sprintf("%s%d", p.glyph, p.n)
+		cell := fmt.Sprintf("%s %d", p.glyph, p.n)
 		if p.n == 0 {
 			cells = append(cells, s.Dim.Render(cell))
 			continue

@@ -17,7 +17,6 @@ func reportDeps(stdout, stderr io.Writer) Deps {
 	return Deps{Stdout: stdout, Stderr: stderr, Getenv: func(string) string { return "" }}
 }
 
-// printDeps is what a print function needs and nothing else: a buffer to write to, a fixed clock and a width.
 func printDeps(t *testing.T) (Deps, *bytes.Buffer) {
 	t.Helper()
 	var out bytes.Buffer
@@ -31,8 +30,11 @@ func printDeps(t *testing.T) (Deps, *bytes.Buffer) {
 func colorStyle(t *testing.T, w io.Writer) style.Style {
 	t.Helper()
 	s := style.New(w, func(k string) string {
-		if k == "LANG" {
+		switch k {
+		case "LANG":
 			return "en_US.UTF-8"
+		case style.IconsEnv:
+			return "unicode"
 		}
 		return ""
 	})
@@ -77,6 +79,28 @@ func TestRefusalTextWithColorNamesTheCodeAndIsolatesCommands(t *testing.T) {
 	for i, w := range want {
 		if lines[i] != w {
 			t.Errorf("line %d is %q, want %q", i, lines[i], w)
+		}
+	}
+
+	// The Nerd tier puts an icon before each word and moves the shared column two cells right with it.
+	out.Reset()
+	nerd := colorStyle(t, &out)
+	nerd.Glyphs = style.Glyphs(func(k string) string { return map[string]string{"LANG": "en_US.UTF-8"}[k] })
+	writeRefusalText(&out, nerd, 100, r, nil)
+	lines = strings.Split(strings.TrimRight(stripANSI(out.String()), "\n"), "\n")
+	want = []string{
+		"\uf057 error:  not-ready  o/r#1 is not ready to publish: 6 findings pending",
+		"\uf0ad fix:    finish deciding in",
+		"            loupe review o/r#1",
+		"          then rerun",
+		"            loupe publish o/r#1 --action comment",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("nerd: got %d lines:\n%s", len(lines), strings.Join(lines, "\n"))
+	}
+	for i, w := range want {
+		if lines[i] != w {
+			t.Errorf("nerd line %d is %q, want %q", i, lines[i], w)
 		}
 	}
 }

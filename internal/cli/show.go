@@ -139,9 +139,9 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 			meta = append(meta, "blocking")
 		}
 		if f.Label != "" {
-			meta = append(meta, oneLine(f.Label))
+			meta = append(meta, labelCell(s, f.Label))
 		}
-		meta = append(meta, locationOf(f.Location))
+		meta = append(meta, locationCell(s, f.Location))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: s.Glyphs.Accepted, kind: style.Good, id: f.ID, blocking: f.Blocking,
 			title: f.Title, meta: meta, body: f.Body,
@@ -152,8 +152,7 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 	return err
 }
 
-// findingBlock is one finding as every view prints it: a state glyph, its id, the title, the fields that are set and
-// the body under them.
+// findingBlock is one finding as every view prints it.
 type findingBlock struct {
 	glyph    string
 	kind     style.Kind
@@ -182,7 +181,7 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 		fmt.Fprintf(b, "%s\n", s.Wrap(body, width, findingIndent))
 	}
 	if fix := text(f.fix); fix != "" {
-		fmt.Fprintf(b, "%s\n", s.Dim.Render(findingIndent+"Suggested fix"))
+		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render(strings.TrimSpace(s.Glyphs.Fix+" Suggested fix")))
 		for _, line := range strings.Split(fix, "\n") {
 			fmt.Fprintf(b, "%s%s %s\n", findingIndent, s.Dim.Render(s.Glyphs.Quote), line)
 		}
@@ -190,12 +189,23 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 	b.WriteString("\n")
 }
 
-// locationOf names where a finding sits, or that it is about the pull request as a whole.
 func locationOf(l *draft.Location) string {
 	if l == nil {
 		return "general"
 	}
 	return fmt.Sprintf("%s:%d", oneLine(l.Path), l.Line)
+}
+
+func locationCell(s style.Style, l *draft.Location) string {
+	icon := s.Glyphs.File
+	if l == nil {
+		icon = s.Glyphs.General
+	}
+	return strings.TrimSpace(icon + " " + locationOf(l))
+}
+
+func labelCell(s style.Style, label string) string {
+	return strings.TrimSpace(s.Glyphs.Label(label) + " " + oneLine(label))
 }
 
 func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispositions map[string]string, readiness draft.Readiness) error {
@@ -207,8 +217,7 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 	tally := listCounts{len(readiness.Accepted), len(readiness.Pending), len(readiness.Excluded), len(readiness.Withdrawn), len(readiness.OpenNotes)}
 	counts := s.Counts(tally.Accepted, tally.Pending, tally.Excluded, tally.Withdrawn, tally.OpenNotes)
 	if style.Width(version)+style.Width(counts)+style.Width(pill)+4 > width {
-		// Under about a hundred columns the words push the readiness pill off the line, so the counts keep their
-		// glyphs and numbers and drop the words the glyphs already carry.
+		// When the words would push the pill off the line, the counts drop the words the glyphs already carry.
 		counts = listCountsCell(s, tally)
 	}
 	fmt.Fprintf(&b, "%s  %s  %s\n\n", version, counts, pill)
@@ -231,7 +240,7 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 			meta = append(meta, "blocking")
 		}
 		if f.Label != "" {
-			meta = append(meta, oneLine(f.Label))
+			meta = append(meta, labelCell(s, f.Label))
 		}
 		if f.Confidence != "" {
 			meta = append(meta, "confidence "+oneLine(f.Confidence))
@@ -239,7 +248,7 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 		if f.Severity != "" {
 			meta = append(meta, "severity "+oneLine(f.Severity))
 		}
-		meta = append(meta, locationOf(f.Location))
+		meta = append(meta, locationCell(s, f.Location))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
 			title: f.Title, meta: meta, body: f.Body, fix: f.SuggestedFix,

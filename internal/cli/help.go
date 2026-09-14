@@ -22,7 +22,6 @@ const (
 	groupHuman  = "human"
 )
 
-// rootTagline and rootLead open the help; the workflow, its steps and the rule about who may run what follow.
 const (
 	rootTagline = "File pull request review findings for a human to decide and publish."
 	rootLead    = "An agent files findings into a local draft; the human decides each finding and posts exactly\none confirmed GitHub review."
@@ -72,6 +71,7 @@ var environment = [][2]string{
 	{"LOUPE_RUN", "default run reference"},
 	{"LOUPE_LOCK_TIMEOUT_MS", "how long to wait for the run lock (default 3000, max 60000)"},
 	{"NO_COLOR, TERM, LANG/LC_ALL", "honored for color, plain-mode fallback and glyph selection"},
+	{"LOUPE_ICONS", "ascii, unicode or nerd; the default nerd needs a Nerd Font"},
 }
 
 // setHelp replaces cobra's help and usage output for the whole command tree, so the commands are listed once, under
@@ -186,8 +186,6 @@ func indent(text, prefix string) string {
 	return prefix + strings.ReplaceAll(text, "\n", "\n"+prefix)
 }
 
-// commandHelp gives every subcommand the same headed shape: what to type, what the command does, what it prints and
-// what it refuses, then its flags and examples.
 func commandHelp(s style.Style, c *cobra.Command) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n  %s\n\n", s.Heading("usage"), c.UseLine())
@@ -204,8 +202,7 @@ func commandHelp(s style.Style, c *cobra.Command) string {
 	return b.String()
 }
 
-// longHelp heads the sections a command's prose already names and lines up the two-column lists inside it; the words
-// are the command's own.
+// longHelp adds headings and column alignment to a command's Long; the words stay the command's own.
 func longHelp(s style.Style, long string) string {
 	var b strings.Builder
 	inTable := false
@@ -240,9 +237,8 @@ func longHelp(s style.Style, long string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// headingOf splits a line that reads like "Result (--json), alone on stdout …:" into the label that becomes the
-// heading, the parenthetical that names the flags it holds for, and the rest of the sentence. A sentence that merely
-// ends in a colon yields no label, so its words are printed as they were written.
+// headingOf splits "Result (--json), alone on stdout …:" into the heading label, the flag parenthetical and the rest.
+// A sentence that merely ends in a colon yields no label, so its words are printed as they were written.
 func headingOf(line string) (label, detail, rest string) {
 	if !strings.HasSuffix(line, ":") || line != strings.TrimLeft(line, " ") {
 		return "", "", ""

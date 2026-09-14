@@ -1,5 +1,5 @@
 loupe eriksaulnier/dev-loadout#2@1  chore: canonical review skills, gh doctor c…
-draft version 11  ✓1 ·1 ✗1 ↩0 ✎1  [NOT READY]
+draft version 11  ✓ 1 · 1 ✗ 1 ↩ 0 ✎ 1  [NOT READY]
 
 SUMMARY
   This is a large documentation and contract change (canonical `review-*` skills
