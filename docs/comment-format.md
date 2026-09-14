@@ -42,7 +42,7 @@ Tests were not executed in this read-only review.
 ### Blocking
 
 <details>
-<summary>🔴 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary>🟡 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
 > **Confidence:** high
@@ -102,9 +102,9 @@ The body opens with a callout only when blocking findings are included. Otherwis
 ### Chips
 
 - One inline code span per non-zero count, zeros omitted, pluralized except `other` and `blocking`.
-- Each is led by a dot: ⛔ blocking, 🔴 issue, 🟡 suggestion, 🔵 question, ⚪ other.
+- Each is led by a dot: ⛔ blocking, 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other.
 - Counts are derived from the final included findings at publish time, never from the summary prose.
-- **One chip per section that exists below, in the order the sections appear.** Blocking leads the row and is counted only there: a finding sits in exactly one section, so a blocking issue is `⛔ 1 blocking`, never also `🔴 1 issue`.
+- **One chip per section that exists below, in the order the sections appear.** Blocking leads the row and is counted only there: a finding sits in exactly one section, so a blocking issue is `⛔ 1 blocking`, never also `🟡 1 issue`.
 - A reader who scans the row and finds no chip for a kind will find no heading for it either. The blocking callout states the blocking count again; that is the one repetition kept on purpose.
 - No external badge images. They are a network dependency and route through GitHub's camo proxy.
 
@@ -113,7 +113,7 @@ The body opens with a callout only when blocking findings are included. Otherwis
 `<summary>` carries the title, and a dot and label word only where they distinguish one row from another:
 
 ```
-<summary>🔴 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary>🟡 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
 <summary>Redundant sort on every read</summary>
 ```
 

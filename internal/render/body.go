@@ -66,7 +66,7 @@ func group(label string) int {
 	return groupOther
 }
 
-var dots = [...]string{groupIssue: "🔴", groupSuggestion: "🟡", groupQuestion: "🔵", groupOther: "⚪"}
+var dots = [...]string{groupIssue: "🟡", groupSuggestion: "🟣", groupQuestion: "🔵", groupOther: "⚪"}
 
 var sectionTitles = [...]string{groupIssue: "Issues", groupSuggestion: "Suggestions", groupQuestion: "Questions", groupOther: "Other"}
 

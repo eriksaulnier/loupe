@@ -11,7 +11,7 @@ Tests were not executed in this read-only review.
 ### Blocking
 
 <details>
-<summary>🔴 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary>🟡 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-ce7057dc498c6d64ab8893ac812c640bfd801aa1e0dff85792a9ee9e6a294aebR88)\
 > **Confidence:** high

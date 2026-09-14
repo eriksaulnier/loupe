@@ -3,7 +3,7 @@
     "path": "internal/b.go",
     "line": 24,
     "side": "LEFT",
-    "body": "🟡 <b>suggestion (blocking):</b> Removed guard\n\n> `internal/b.go:24 (LEFT)`\\\n> severity `major`\n\nBody f-002."
+    "body": "🟣 <b>suggestion (blocking):</b> Removed guard\n\n> `internal/b.go:24 (LEFT)`\\\n> severity `major`\n\nBody f-002."
   },
   {
     "path": "c.go",
@@ -17,6 +17,6 @@
     "side": "RIGHT",
     "start_line": 10,
     "start_side": "RIGHT",
-    "body": "🔴 <b>issue (blocking):</b> Range finding\n\n> `internal/a.go:10–14`\\\n> **Confidence:** high\n\nBody f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```"
+    "body": "🟡 <b>issue (blocking):</b> Range finding\n\n> `internal/a.go:10–14`\\\n> **Confidence:** high\n\nBody f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```"
   }
 ]

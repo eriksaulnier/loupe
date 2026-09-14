@@ -84,7 +84,7 @@ func TestInlineBodyShape(t *testing.T) {
 		}
 	}
 	got := Comments(inlineInput("blocking"))
-	want := "🔴 <b>issue (blocking):</b> Range finding\n\n> `internal/a.go:10–14`\\\n> **Confidence:** high\n\nBody f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```"
+	want := "🟡 <b>issue (blocking):</b> Range finding\n\n> `internal/a.go:10–14`\\\n> **Confidence:** high\n\nBody f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```"
 	if last := got[len(got)-1]; last.Body != want {
 		t.Fatalf("got\n%s\nwant\n%s", last.Body, want)
 	}

@@ -1,4 +1,4 @@
-`🔴 1 issue`
+`🟡 1 issue`
 
 Summary.
 

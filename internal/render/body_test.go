@@ -172,7 +172,7 @@ func TestBodySortsIDsNumerically(t *testing.T) {
 
 func TestBodyChipsAndMeta(t *testing.T) {
 	body := Body(mixedInput())
-	if !strings.Contains(body, "\n\n`⛔ 6 blocking` `🔴 1 issue` `🟡 1 suggestion` `🔵 2 questions` `⚪ 2 other`\n\n") {
+	if !strings.Contains(body, "\n\n`⛔ 6 blocking` `🟡 1 issue` `🟣 1 suggestion` `🔵 2 questions` `⚪ 2 other`\n\n") {
 		t.Fatalf("chips row wrong\n%s", body)
 	}
 	if !strings.HasSuffix(body, "<!-- loupe-meta v=1 round=2 inline=blocking blocking=6 issues=3 suggestions=2 questions=3 other=4 -->\n") {

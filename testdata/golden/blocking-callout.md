@@ -10,7 +10,7 @@ Summary.
 ### Blocking
 
 <details>
-<summary>🟡 <b>suggestion (blocking):</b> Title f-001</summary>
+<summary>🟣 <b>suggestion (blocking):</b> Title f-001</summary>
 
 Body f-001.
 

@@ -3,7 +3,7 @@
     "path": "a.go",
     "line": 3,
     "side": "RIGHT",
-    "body": "🔴 <b>issue:</b> use \\`x\\` \\*now\\* \\[a\\]\\(b\\)\n\n> `a.go:3`\n\nBody f-001."
+    "body": "🟡 <b>issue:</b> use \\`x\\` \\*now\\* \\[a\\]\\(b\\)\n\n> `a.go:3`\n\nBody f-001."
   },
   {
     "path": "a.go",
