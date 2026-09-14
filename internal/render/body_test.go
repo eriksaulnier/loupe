@@ -71,11 +71,12 @@ func TestBodyGoldens(t *testing.T) {
 	sourced := base(general("f-001", "issue", false))
 	sourced.Source = "gadfly-review-pr@2.2.0"
 	cases := map[string]Input{
-		"example.md":            exampleInput(),
-		"blocking-callout.md":   base(general("f-001", "suggestion", true)),
-		"no-callout.md":         base(general("f-001", "question", false)),
-		"summary-only.md":       base(),
-		"unlabeled-blocking.md": base(general("f-001", "", true)),
+		"example.md":                 exampleInput(),
+		"blocking-callout.md":        base(general("f-001", "suggestion", true)),
+		"blocking-callout-plural.md": base(general("f-001", "issue", true), general("f-002", "question", true)),
+		"no-callout.md":              base(general("f-001", "question", false)),
+		"summary-only.md":            base(),
+		"unlabeled-blocking.md":      base(general("f-001", "", true)),
 		"left-side.md": base(Finding{ID: "f-001", Title: "Removed guard", Body: "Body.", Label: "issue",
 			Location: &Location{Path: "a.go", Side: "LEFT", Line: 24, StartLine: 21}}),
 		"hostile.md": hostile,
