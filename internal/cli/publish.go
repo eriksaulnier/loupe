@@ -23,8 +23,8 @@ Only accepted findings are published. Before anything is shown, publish refuses,
   tty          stdin or stdout is not an interactive terminal
   head-moved   the pull request head moved since capture; loupe capture <url> starts a new round
   own-pr       approve or request-changes on your own pull request; use --action comment
-  blocking     approve while an accepted finding is blocking
-  empty        no summary and no accepted findings
+  blocking     approve while an included (accepted or pending) finding is blocking
+  empty        no summary and no included findings
   not-ready    pending findings or open notes; finish in loupe review
 
 The confirmation shows the review body with every collapsed section open and each inline

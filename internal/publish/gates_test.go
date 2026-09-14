@@ -78,8 +78,13 @@ func TestGatesRunInOrder(t *testing.T) {
 	in.Action = "comment"
 	empty := draft.NewEmpty()
 	empty.Findings = []draft.Finding{finding("f-001", "issue", false, nil)}
+	empty.Decisions["f-001"] = draft.Decision{FindingID: "f-001", Decision: draft.DecisionExcluded, FindingRev: 1, At: fixtureNow}
 	in.Draft = empty
 	wantRefusal(t, Gates(ctx, in), refusal.Empty, "loupe add", "loupe summary")
+
+	// A pending finding is included, so the draft is not empty, only not ready.
+	delete(empty.Decisions, "f-001")
+	wantRefusal(t, Gates(ctx, in), refusal.NotReady, "loupe review")
 
 	empty.Summary = "Summary only."
 	wantRefusal(t, Gates(ctx, in), refusal.NotReady, "loupe review")
@@ -116,6 +121,23 @@ func TestGatesSummaryOnlyDraftIsNotEmpty(t *testing.T) {
 	d.Summary = "Nothing else to say."
 	if err := Gates(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestGatesBlockingCountsPendingFindings(t *testing.T) {
+	_, client := newFake(t)
+	d := draft.NewEmpty()
+	d.Findings = []draft.Finding{finding("f-001", "issue", true, nil)}
+	msg := wantRefusal(t, Gates(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}),
+		refusal.Blocking, "--action comment")
+	if !strings.Contains(msg, "f-001") {
+		t.Fatalf("blocking message %q", msg)
+	}
+
+	d.Decisions["f-001"] = draft.Decision{FindingID: "f-001", Decision: draft.DecisionExcluded, FindingRev: 1, At: fixtureNow}
+	d.Summary = "Excluded the blocker."
+	if err := Gates(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}); err != nil {
+		t.Fatalf("excluded blocking finding: %v", err)
 	}
 }
 

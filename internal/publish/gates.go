@@ -40,8 +40,8 @@ func Gates(ctx context.Context, in GateInput) error {
 	if err := ActionRefusal(in.Action, viewer, pr.Author, in.Draft); err != nil {
 		return err
 	}
-	if strings.TrimSpace(in.Draft.Summary) == "" && len(accepted(in.Draft)) == 0 {
-		return refusal.New(refusal.Empty, "the draft has no summary and no accepted findings; there is nothing to publish",
+	if strings.TrimSpace(in.Draft.Summary) == "" && len(included(in.Draft)) == 0 {
+		return refusal.New(refusal.Empty, "the draft has no summary and no included findings; there is nothing to publish",
 			"file findings with loupe add or write a summary with loupe summary")
 	}
 	return ReadinessRefusal(in.Draft)
@@ -71,7 +71,7 @@ func ActionRefusal(action, viewer, author string, d *draft.Draft) error {
 		return nil
 	}
 	var blocking []string
-	for _, f := range accepted(d) {
+	for _, f := range included(d) {
 		if f.Blocking {
 			blocking = append(blocking, f.ID)
 		}
@@ -80,8 +80,20 @@ func ActionRefusal(action, viewer, author string, d *draft.Draft) error {
 		return nil
 	}
 	return refusal.New(refusal.Blocking,
-		fmt.Sprintf("cannot approve while accepted findings are blocking: %s", strings.Join(blocking, ", ")),
+		fmt.Sprintf("cannot approve while included findings are blocking: %s", strings.Join(blocking, ", ")),
 		"use --action comment or --action request-changes, or exclude or unblock the finding in loupe review")
+}
+
+// included is every finding the human has neither excluded nor seen withdrawn: accepted or still pending.
+func included(d *draft.Draft) []draft.Finding {
+	dispositions := draft.Dispositions(d)
+	var out []draft.Finding
+	for _, f := range d.Findings {
+		if disp := dispositions[f.ID]; disp == draft.DispositionAccepted || disp == draft.DispositionPending {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func ReadinessRefusal(d *draft.Draft) error {

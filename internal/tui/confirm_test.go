@@ -162,7 +162,7 @@ func TestActionPickerDisablesBlockedApprove(t *testing.T) {
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), nil)
 	waitFor(t, tm, "accepted 3")
 	tm.Type("p")
-	waitFor(t, tm, "> comment", "  approve", "disabled: cannot approve while accepted findings are blocking: f-001")
+	waitFor(t, tm, "> comment", "  approve", "disabled: cannot approve while included findings are blocking: f-001")
 	tm.Type("j")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "or exclude or unblock the finding in loupe review")
