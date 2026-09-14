@@ -209,7 +209,7 @@ Reporting
 - **FR-011**: Every finding MUST have a stable sequential identifier that never changes or is reused within a run.
 - **FR-012**: The system MUST let an agent edit any publishable field of a finding, clear any optional field, withdraw a finding and restore it, recording who changed what and the previous value.
 - **FR-013**: The system MUST let an agent set the summary and, in the same operation, refuse when the number of included findings differs from the count the agent states, listing the included identifiers and titles.
-- **FR-014**: Every mutation MUST advance a draft version, and a caller MAY require that the version still equals a value it read; a mismatch MUST refuse without changing anything.
+- **FR-014**: Every change MUST advance a draft version (a request that changes nothing, such as an edit to the current values, keeps the version; ruled 2026-09-13), and a caller MAY require that the version still equals a value it read; a mismatch MUST refuse without changing anything.
 - **FR-015**: Reporting input MUST refuse unknown fields and MUST NOT be able to set inclusion by field, decisions, or note status.
 - **FR-016**: The system MUST expose the draft, including history, and the previous published findings, in a structured form. The previous published findings are those of the newest earlier round that has a receipt, skipping unpublished rounds; the request MUST refuse when no earlier round was published.
 

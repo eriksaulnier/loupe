@@ -30,13 +30,13 @@ Refusal or error (exit 1 or 2):
 {"loupe": 1, "ok": false, "command": "add", "run": "owner/repo#123@1", "error": {"code": "location", "message": "src/a.ts:88 is not in the diff on side RIGHT", "fix": "use one of: src/a.ts:80-86, 90-97", "details": {"entry": 1, "nearest": [80, 81, 86, 90, 91, 97]}}}
 ```
 
-`run` is omitted when no run was resolved. `details` is optional and command-specific.
+`run` is omitted when no run was resolved. `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback` and `show`. `list`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
 
 ## Error codes
 
 | Code | Meaning | `fix` names |
 | :--- | :--- | :--- |
-| `usage` | Bad flags or arguments | the correct invocation |
+| `usage` | Bad flags or arguments, or an invalid `LOUPE_LOCK_TIMEOUT_MS` | the correct invocation, or the valid range |
 | `no-run` | No run resolved | `loupe capture <url>` or `--run <ref>` (for `review` and `publish`, the `<ref>` argument) |
 | `record` | A run file is missing or unreadable, or `pr.diff` no longer matches `target.diffSha256` | the file and an inspection command; never repaired |
 | `origin` | Clone origin is not the pull request's repository | `loupe capture <url> --repo <path>` |
@@ -136,5 +136,5 @@ Runs the publication state machine in research.md. After a receipt replay or rec
 | :--- | :--- |
 | `LOUPE_HOME` | Data root |
 | `LOUPE_RUN` | Default run reference |
-| `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for the lock, default 3000, max 60000 |
+| `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for the lock, default 3000, max 60000; a value that is not an integer from 0 to 60000 refuses with `usage` (exit 2) (ruled 2026-09-13) |
 | `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Honored for color, plain-mode fallback and glyph selection |
