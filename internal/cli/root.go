@@ -89,7 +89,7 @@ func NewRoot(deps Deps) *cobra.Command {
 	root.SetIn(deps.Stdin)
 	root.SetOut(deps.Stdout)
 	root.SetErr(deps.Stderr)
-	root.AddCommand(newCaptureCmd(deps), newAddCmd(deps), newSummaryCmd(deps), newShowCmd(deps), newReviewCmd(deps), newPublishCmd(deps))
+	root.AddCommand(newCaptureCmd(deps), newAddCmd(deps), newEditCmd(deps), newSummaryCmd(deps), newShowCmd(deps), newReplyCmd(deps), newReviewCmd(deps), newPublishCmd(deps))
 	return root
 }
 
