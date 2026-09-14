@@ -17,6 +17,10 @@
 - Q: Should publish refuse the approve action when an accepted, included finding is marked blocking? → A: Yes. Refuse and name the fixes: choose comment or request changes, or exclude or unblock the finding in review.
 - Q: When a human files or edits a finding through the command line, does it still need an explicit accept in the review interface before publish? → A: Yes. Readiness is one rule for every included finding regardless of author; the author flag is an audit record only.
 
+### Session 2026-09-14
+
+- Q: Should a published review name what filed its findings? → A: Yes, when the agent names it at capture. An optional `name[@version]` source is shown after the reviewed commit in the footer and recorded as `src=` in `loupe-meta`. Without one, the review is unchanged.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Agent files findings against a captured pull request (Priority: P1)
@@ -245,6 +249,7 @@ General
 - **FR-038**: Concurrent mutations of one draft MUST be serialized by an exclusive lock that is never stolen automatically.
 - **FR-039**: On every clean exit, including plain-mode end of input, review MUST record which open, unanswered notes it handed back, without changing the draft version.
 - **FR-040**: An agent-facing command MUST block until a handed-back note awaits a reply or the run is published, MUST honor a timeout and cancellation, and MUST refuse with `timeout` when the timeout elapses.
+- **FR-041**: Capture MUST accept an optional source naming what filed the findings and MUST refuse one that could close a marker, as MUST loading a run that records one; publish MUST show a source in the footer and `loupe-meta` only when capture recorded one.
 
 ### Key Entities
 

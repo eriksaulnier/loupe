@@ -68,6 +68,8 @@ func TestBodyGoldens(t *testing.T) {
 		ID: "f-001", Title: "Closes\n</summary> & <b>early</b>", Body: "Body.", General: true, Label: "issue",
 		Severity: "major`` ``\nsecond line", SuggestedFix: "```go\nx := 1\n```",
 	})
+	sourced := base("comment", general("f-001", "issue", false))
+	sourced.Source = "gadfly-review-pr@2.2.0"
 	cases := map[string]Input{
 		"example.md":            exampleInput(),
 		"approve.md":            base("approve", general("f-001", "suggestion", false)),
@@ -78,6 +80,7 @@ func TestBodyGoldens(t *testing.T) {
 		"left-side.md": base("request-changes", Finding{ID: "f-001", Title: "Removed guard", Body: "Body.", Label: "issue",
 			Location: &Location{Path: "a.go", Side: "LEFT", Line: 24, StartLine: 21}}),
 		"hostile.md": hostile,
+		"sourced.md": sourced,
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -181,6 +184,21 @@ func TestBodyChipsAndMeta(t *testing.T) {
 	body = Body(in)
 	if !strings.Contains(body, "\n\n`⛔ 1 blocking`\n\n") || !strings.Contains(body, "blocking=1 issues=1 suggestions=0") {
 		t.Fatalf("a blocking issue must count only in the blocking chip and in both census keys\n%s", body)
+	}
+}
+
+func TestBodyFooterNamesSource(t *testing.T) {
+	in := exampleInput()
+	in.Source = "gadfly-review-pr@2.2.0"
+	body := Body(in)
+	if !strings.Contains(body, "loupe · round 2 · reviewed `d23632e` · via `gadfly-review-pr 2.2.0`\n\n") ||
+		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=blocking ") {
+		t.Fatalf("versioned source wrong\n%s", body)
+	}
+	in.Source = "loupe"
+	body = Body(in)
+	if !strings.Contains(body, "reviewed `d23632e` · via `loupe`\n\n") || !strings.Contains(body, "round=2 src=loupe inline=") {
+		t.Fatalf("unversioned source wrong\n%s", body)
 	}
 }
 

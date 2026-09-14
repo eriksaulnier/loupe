@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +81,35 @@ func TestTargetJSONKeys(t *testing.T) {
 	}
 	if _, ok := again["previousRound"]; ok {
 		t.Fatal("previousRound must be omitted for a first round")
+	}
+	if _, ok := again["source"]; ok {
+		t.Fatal("source must be omitted when capture recorded none")
+	}
+}
+
+func TestLoadTargetRefusesBadSource(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.json")
+	if err := os.WriteFile(path, []byte(`{"schema": 1, "source": "a-->b"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadTarget(dir)
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record || r.Fix != "inspect it with: cat "+path {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateSource(t *testing.T) {
+	for _, ok := range []string{"", "loupe", "gadfly-review-pr@2.2.0", "tool_x@1.0.0-rc.1+build.5", strings.Repeat("a", 64)} {
+		if err := ValidateSource(ok); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"a-->b", "a>b", "a--b", "Gadfly", "a@", "@1.0", "a@v1", "a b", "-a", "a@1@2", strings.Repeat("a", 65)} {
+		err := ValidateSource(bad)
+		if r, ok := refusal.As(err); !ok || r.Code != refusal.Input || r.Fix == "" {
+			t.Errorf("%q: got %v", bad, err)
+		}
 	}
 }
 

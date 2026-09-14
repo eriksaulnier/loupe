@@ -164,10 +164,12 @@ A blockquote at the top of the disclosure body, present only when at least one p
 
 ```text
 loupe · round N · reviewed `SHA`
+loupe · round N · reviewed `SHA` · via `NAME VERSION`
 ```
 
 - `N` is the run's round and `SHA` is the abbreviated captured head commit, a generated code span subject to the backtick rule.
-- Nothing else: no run reference, no local paths, no agent name, none of which a PR reader can resolve. Machine-readable provenance belongs in `loupe-meta`.
+- The ` · via ` suffix MUST appear only when capture recorded a source, and is otherwise absent, leaving the first form byte for byte. `NAME VERSION` is that source with its `@` rendered as a space, or `NAME` alone when it has no version, in a generated code span.
+- Nothing else: no run reference, no local paths, and no agent name beyond the source capture was given, none of which a PR reader can resolve. Machine-readable provenance belongs in `loupe-meta`.
 
 ### Markers
 
@@ -180,6 +182,7 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 
 - The first is the reconciliation marker: an unknown publication is resolved by finding a review whose body contains this exact comment. Its format MUST NOT change between versions that may need to reconcile each other's attempts.
 - **`loupe-meta`'s per-label counts are a census, not the chips row.** They count every included finding, blocking ones included, so a review whose only issue blocks records `blocking=1 issues=1` while the visible chips show no issue. The chips are an index of the headings a reader can scroll to; the marker is an inventory of what the review held.
+- **`src=` follows `round=` only when capture recorded a source**, as given (`src=gadfly-review-pr@2.2.0`). It is never escaped, so capture refuses a source that does not match `^[a-z0-9][a-z0-9._-]*(@[0-9][0-9A-Za-z.+-]*)?$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. None of those can close the comment.
 - New keys MAY be added to `loupe-meta`; existing keys MUST keep their meaning.
 
 ## Inline modes

@@ -65,11 +65,11 @@ Refusal or error (exit 1 or 2):
 
 ## Commands
 
-### `loupe capture <pr-url> [--repo <path>] [--json]`
+### `loupe capture <pr-url> [--repo <path>] [--source <name>[@<version>]] [--json]`
 
-Resolves the pull request, verifies the clone (`--repo` or the working directory), fetches base and head into private refs, stores the diff and its SHA-256, creates an empty draft, links the previous round.
+Resolves the pull request, verifies the clone (`--repo` or the working directory), fetches base and head into private refs, stores the diff and its SHA-256, creates an empty draft, links the previous round. `--source` names the tool filing the findings; the published footer and `loupe-meta` carry it, and a value outside the `src=` rule in `docs/comment-format.md` is refused with `input`.
 
-Result payload: `target` (as in `target.json`), `refs` (`base`, `head`), `cleanup` (the two `git update-ref -d` commands), `next` (suggested commands).
+Result payload: `target` (as in `target.json`, with `source` when given), `refs` (`base`, `head`), `cleanup` (the two `git update-ref -d` commands), `next` (suggested commands).
 
 ### `loupe add [--from <path>|-] [flags] [--by a] [--expect-version n] [--json]`
 

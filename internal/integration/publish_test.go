@@ -19,9 +19,9 @@ const threeFindings = `[
 ]`
 
 // reviewed captures, files threeFindings with a summary, and answers the plain review with answers.
-func (h *harness) reviewed(answers string) {
+func (h *harness) reviewed(answers string, captureFlags ...string) {
 	h.t.Helper()
-	h.capture()
+	h.capture(captureFlags...)
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
 	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
 	h.IsTerminal = true
@@ -41,6 +41,28 @@ func (h *harness) checkSends(want int) {
 		if r.Method != "GET" && (r.Method != "POST" || r.Path != "/repos/acme/widgets/pulls/42/reviews") {
 			h.t.Errorf("unexpected write %s %s", r.Method, r.Path)
 		}
+	}
+}
+
+func TestPublishSendsCapturedSource(t *testing.T) {
+	h := newHarness(t)
+	h.reviewed("a\na\nx\nq\n", "--source", "gadfly-review-pr@2.2.0")
+	h.Stdin = "y\n"
+	if _, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 {
+		t.Fatalf("publish exit %d stderr %q", exit, stderr)
+	}
+	h.checkSends(1)
+	var receipt struct {
+		Envelope struct {
+			Body string `json:"body"`
+		} `json:"envelope"`
+	}
+	if err := json.Unmarshal(readFile(t, filepath.Join(h.RunDir(1), "receipt.json")), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if body := receipt.Envelope.Body; !strings.Contains(body, " · via `gadfly-review-pr 2.2.0`\n") ||
+		!strings.Contains(body, "<!-- loupe-meta v=1 round=1 src=gadfly-review-pr@2.2.0 inline=blocking ") {
+		t.Fatalf("sent body lacks the source:\n%s", body)
 	}
 }
 

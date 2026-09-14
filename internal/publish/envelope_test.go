@@ -115,6 +115,15 @@ func TestBuildRechecksMarkdown(t *testing.T) {
 	}
 }
 
+func TestBuildCarriesSource(t *testing.T) {
+	target := fixtureTarget()
+	target.Source = "gadfly-review-pr@2.2.0"
+	env, err := Build(target, readyDraft(), "reviewer", "comment", "none")
+	if err != nil || !strings.Contains(env.Body, " · via `gadfly-review-pr 2.2.0`") || !strings.Contains(env.Body, " src=gadfly-review-pr@2.2.0 ") {
+		t.Fatalf("source not rendered: %v\n%s", err, env.Body)
+	}
+}
+
 func TestBuildRefusesBodyOverLimit(t *testing.T) {
 	d := readyDraft()
 	long := strings.Repeat(strings.Repeat("a", 99)+"\n", 600)

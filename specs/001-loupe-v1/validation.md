@@ -20,6 +20,7 @@ Task T104. Each row of the quickstart "Automated validation" table is listed wit
 | Send-back loop; reply carrying a decision field refused | `integration.TestSendBackLoop`, `cli.TestReplyRefusesStatusAndDecision` |
 | `review` with no argument resolves the branch; `list` shows runs | `integration.TestResumeFromBranch`, `run.TestResolveBranch*` |
 | Round two linked, `show --previous`, footer names round two | `integration.TestFollowUpRoundReadsPreviousAndPublishesItsRound` |
+| Capture records an optional source; footer and `loupe-meta` carry it; a source that could close a marker is refused at capture and on load | `integration.TestCaptureRecordsSource`, `integration.TestPublishSendsCapturedSource`, `run.TestValidateSource`, `run.TestLoadTargetRefusesBadSource`, `render.TestBodyFooterNamesSource`, `render.TestBodyGoldens`, `publish.TestBuildCarriesSource` |
 | Same head refused when unpublished, new round when published | `integration.TestRoundsAndSameHead`, `integration.TestConcurrentCapturesAtUnchangedHead` |
 | `show --previous` skips an unpublished round | `run.TestPreviousPublishedSkipsUnpublishedRounds`, `run.TestPreviousPublishedRefusesWhenNoneWas` |
 | Recorded then 500: next publish reconciles without sending | `integration.TestUnknownOutcomeReconcilesOnNextPublish`, `integration.TestAmbiguousSendReconcilesAtOnce` |

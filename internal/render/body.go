@@ -21,6 +21,8 @@ type Input struct {
 	Summary       string
 	Digest        string
 	PublicationID string
+	// Source is name[@version], already validated; empty omits it from the footer and loupe-meta.
+	Source string
 	// Findings are the included findings to publish; render does no filtering.
 	Findings []Finding
 }
@@ -121,10 +123,16 @@ func Body(in Input) string {
 	for _, f := range in.Findings {
 		census[group(f.Label)]++
 	}
-	blocks = append(blocks, fmt.Sprintf("loupe · round %d · reviewed %s\n\n<!-- loupe digest=%s publication=%s -->\n"+
-		"<!-- loupe-meta v=1 round=%d inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d -->\n",
-		in.Round, CodeSpan(OneLine(shortSHA(in.HeadSHA))), in.Digest, in.PublicationID,
-		in.Round, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther]))
+	footer := fmt.Sprintf("loupe · round %d · reviewed %s", in.Round, CodeSpan(OneLine(shortSHA(in.HeadSHA))))
+	meta := fmt.Sprintf("v=1 round=%d", in.Round)
+	if in.Source != "" {
+		footer += " · via " + CodeSpan(OneLine(strings.Replace(in.Source, "@", " ", 1)))
+		meta += " src=" + in.Source
+	}
+	blocks = append(blocks, fmt.Sprintf("%s\n\n<!-- loupe digest=%s publication=%s -->\n"+
+		"<!-- loupe-meta %s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d -->\n",
+		footer, in.Digest, in.PublicationID,
+		meta, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther]))
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
 	return strings.Join(blocks, "\n\n---\n\n")

@@ -20,9 +20,9 @@ import (
 
 const runRef = owner + "/" + repo + "#42@1"
 
-func (h *harness) capture() map[string]any {
+func (h *harness) capture(flags ...string) map[string]any {
 	h.t.Helper()
-	return h.mustOK("capture", prURL())
+	return h.mustOK(append([]string{"capture", prURL()}, flags...)...)
 }
 
 func readFile(t *testing.T, path string) []byte {
@@ -108,6 +108,28 @@ func TestCaptureLeavesCloneUntouched(t *testing.T) {
 	envTarget, _ := env["target"].(map[string]any)
 	if envTarget["diffSha256"] != target["diffSha256"] {
 		t.Fatalf("envelope target %v", envTarget)
+	}
+}
+
+func TestCaptureRecordsSource(t *testing.T) {
+	h := newHarness(t)
+	h.mustRefuse("input", "capture", prURL(), "--source", "a-->b")
+	if _, err := os.Stat(h.RunDir(1)); !os.IsNotExist(err) {
+		t.Fatalf("refused capture left a run: %v", err)
+	}
+
+	h.mustOK("capture", prURL(), "--source", "gadfly-review-pr@2.2.0")
+	var target map[string]any
+	if err := json.Unmarshal(readFile(t, filepath.Join(h.RunDir(1), "target.json")), &target); err != nil {
+		t.Fatal(err)
+	}
+	if target["source"] != "gadfly-review-pr@2.2.0" {
+		t.Fatalf("target.json source %v", target["source"])
+	}
+	h.Env["LOUPE_RUN"] = runRef
+	shown, _ := h.mustOK("show")["target"].(map[string]any)
+	if shown["source"] != "gadfly-review-pr@2.2.0" {
+		t.Fatalf("show target %v", shown)
 	}
 }
 

@@ -26,6 +26,8 @@ Run `loupe capture <pr-url> --json` from a clone of the pull request's repositor
 - `target.headSha`, `target.baseRef` and `target.headRef`: the refs you investigate with.
 - `target.previousRound`: present from round 2 on.
 
+To name what filed the findings in the published footer, add `--source <name>[@<version>]`, such as `--source my-reviewer@1.0.0`. It is optional.
+
 If capture refuses with `same-head`, an unpublished round already exists at this head. Follow `error.fix` and continue with that run instead of capturing again.
 
 ## 2. Check the previous round

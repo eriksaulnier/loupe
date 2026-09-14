@@ -37,7 +37,7 @@ claude plugin install loupe@loupe
 
 | Who | Command | What it does |
 | :--- | :--- | :--- |
-| agent | `capture` | Capture a pull request into a new review round |
+| agent | `capture` | Capture a pull request into a new review round, optionally naming its `--source` |
 | agent | `add` | File findings into the draft |
 | agent | `summary` | Set the review summary |
 | agent | `wait` | Block until the human hands notes back or publishes |

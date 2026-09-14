@@ -8,6 +8,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
@@ -41,6 +43,27 @@ type Target struct {
 	// MergeBaseSHA is the merge base of BaseRef and HeadRef, the commit pr.diff compares the head against.
 	MergeBaseSHA string `json:"mergeBaseSha"`
 	DiffSHA256   string `json:"diffSha256"`
+	// Source names what filed the findings, as name[@version]; empty when capture was given none.
+	Source string `json:"source,omitempty"`
+}
+
+// SourcePattern keeps a source to one token without > because loupe-meta carries it unescaped inside an HTML comment.
+// ValidateSource also refuses --, which RE2 cannot express, for the same reason. LoadTarget applies it to stored runs,
+// so tightening it would refuse runs captured under the looser rule.
+const SourcePattern = `^[a-z0-9][a-z0-9._-]*(@[0-9][0-9A-Za-z.+-]*)?$`
+
+const maxSourceChars = 64
+
+var sourceRE = regexp.MustCompile(SourcePattern)
+
+// ValidateSource accepts the empty source, which means none.
+func ValidateSource(source string) error {
+	if source == "" || (sourceRE.MatchString(source) && len(source) <= maxSourceChars && !strings.Contains(source, "--")) {
+		return nil
+	}
+	return refusal.New(refusal.Input,
+		fmt.Sprintf("source %q must match %s, contain no --, and be at most %d characters", source, SourcePattern, maxSourceChars),
+		"loupe capture <pr-url> --source <name>[@<version>]")
 }
 
 func LoadTarget(dir string) (Target, error) {
@@ -51,6 +74,9 @@ func LoadTarget(dir string) (Target, error) {
 	}
 	if t.Schema != TargetSchema {
 		return Target{}, RecordRefusal(path, fmt.Errorf("schema is %d, expected %d", t.Schema, TargetSchema))
+	}
+	if err := ValidateSource(t.Source); err != nil {
+		return Target{}, RecordRefusal(path, err)
 	}
 	return t, nil
 }
