@@ -69,6 +69,7 @@ type Server struct {
 	requests    []Request
 	createCount int
 	nextID      int64
+	onCreate    func(*http.Request)
 }
 
 func New(t *testing.T) *Server {
@@ -155,6 +156,14 @@ func (s *Server) AddReview(owner, repo string, number int, review github.Review)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.storeReview(prKey{owner, repo, number}, review)
+}
+
+// OnCreate runs fn on every review creation request before the server stores or responds to anything. fn may read
+// the request body.
+func (s *Server) OnCreate(fn func(*http.Request)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onCreate = fn
 }
 
 // QueueCreate sets the outcomes of the next review creations in order; once empty, creations succeed.
@@ -280,6 +289,19 @@ func (s *Server) listReviews(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createReview(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	hook := s.onCreate
+	s.mu.Unlock()
+	if hook != nil {
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(data))
+		hook(r)
+		r.Body = io.NopCloser(bytes.NewReader(data))
+	}
 	key, ok := keyOf(r)
 	s.mu.Lock()
 	defer s.mu.Unlock()

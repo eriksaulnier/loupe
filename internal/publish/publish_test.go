@@ -3,10 +3,13 @@ package publish
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -314,6 +317,38 @@ func TestRunAmbiguousOutcomeKeepsUnknownAttempt(t *testing.T) {
 	wantRefusal(t, err, refusal.Attempt, prLink, "--retry-unknown")
 	if len(fx.previews) != 1 {
 		t.Fatalf("previews %d", len(fx.previews))
+	}
+	fx.check(1)
+}
+
+func TestRunWritesInFlightAttemptBeforeSending(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	marker := regexp.MustCompile(`<!-- loupe digest=[0-9a-f]+ publication=([0-9a-f-]+) -->`)
+	seen := false
+	fx.gh.OnCreate(func(r *http.Request) {
+		seen = true
+		var body struct {
+			Body string `json:"body"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		m := marker.FindStringSubmatch(body.Body)
+		if m == nil {
+			t.Errorf("request body has no publication marker:\n%s", body.Body)
+			return
+		}
+		a, found, err := LoadAttempt(fx.dir)
+		if err != nil || !found || a.State != StateInFlight || a.Envelope.PublicationID != m[1] {
+			t.Errorf("attempt at send time %+v found %v err %v, marker publication %s", a, found, err, m[1])
+		}
+	})
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
+	}
+	if !seen {
+		t.Fatal("the create hook did not run")
 	}
 	fx.check(1)
 }
