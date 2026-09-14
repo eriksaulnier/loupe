@@ -2,6 +2,10 @@
 # Fails when tests could reach a real terminal or network, or when a review could be posted from outside the one path
 # that records an attempt first. git grep sees only tracked and staged files, so a new file must be added to be checked.
 #
+# The greps guard against honest mistakes in tests, not an adversary: a pseudo-terminal reached through an
+# interpreter (python3 -c, sh -c) or a command name that is not a literal passes them. The go list -deps check of the
+# test build graph is the strong check, for imported pseudo-terminal modules; no check here sees a shell-out.
+#
 # Test files are *_test.go and everything under internal/testutil/. URL literals in them MUST be one of:
 #   - http://127.0.0.1 or http://localhost, optionally with a numeric port and a path (httptest servers)
 #   - https://github.com/<owner>/<repo>..., which names a repository and is never fetched: Git reaches a local bare
