@@ -30,7 +30,7 @@ Refusal or error (exit 1 or 2):
 {"loupe": 1, "ok": false, "command": "add", "run": "owner/repo#123@1", "error": {"code": "location", "message": "src/a.ts:88 is not in the diff on side RIGHT", "fix": "use one of: src/a.ts:80-86, 90-97", "details": {"entry": 1, "nearest": [80, 81, 86, 90, 91, 97]}}}
 ```
 
-`run` is omitted when no run was resolved. `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback` and `show`. `list`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
+`run` is omitted when no run was resolved. `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait` and `show`. `list`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
 
 ## Error codes
 

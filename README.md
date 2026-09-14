@@ -40,6 +40,7 @@ claude plugin install loupe@loupe
 | agent | `capture` | Capture a pull request into a new review round |
 | agent | `add` | File findings into the draft |
 | agent | `summary` | Set the review summary |
+| agent | `wait` | Block until the human hands notes back or publishes |
 | agent | `edit` | Change, withdraw or restore a finding |
 | agent | `reply` | Answer a send-back note |
 | agent | `feedback` | Read the human's notes, dispositions and readiness |

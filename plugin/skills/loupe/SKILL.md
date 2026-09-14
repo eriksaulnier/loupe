@@ -57,15 +57,15 @@ Tell the user to run `loupe review <ref>` in their own terminal, then block on `
 
 - In Claude Code, when the Monitor tool is available, run it under a persistent Monitor so the session wakes when it prints.
 - Otherwise run it in the foreground with `--timeout` under the shell's limit, and run it again on a `timeout` refusal.
-- `"reason": "notes"`: answer only the notes listed in `awaiting`, following the Send-back notes section.
+- `"reason": "notes"`: answer only the notes listed in `awaiting`, following the Send-back notes section. The result already carries the `feedback` payload, so do not run `loupe feedback` again.
 - `"reason": "published"`: the review is on GitHub. Stop.
 
 ## Send-back notes
 
-When `loupe wait` returns with notes, or when the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
+When the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`; after `loupe wait` returns, read its result instead. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
 
 - To revise a finding, write the changed fields to a file and run `loupe edit <finding-id> --from <file> --run <ref> --json`. An absent key leaves a field unchanged. `null` clears `location`, `label`, `confidence`, `severity` or `suggestedFix`; it is refused for `title`, `body`, `general` and `blocking`. Any change clears the human's decision, so they decide the finding again.
 - To withdraw a finding, run `loupe edit <finding-id> --exclude --run <ref> --json`.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.
 
-Only the human resolves or dismisses a note. When every note has a reply, tell the user the revisions are ready and to run `loupe review <ref>` in their own terminal, then block on `loupe wait --run <ref> --json` again.
+Only the human resolves or dismisses a note. When every note you were asked to answer has a reply, tell the user the revisions are ready and to run `loupe review <ref>` in their own terminal, then block on `loupe wait --run <ref> --json` again. An open note that was not handed to you is the human's to hand back; the next wait returns it.
