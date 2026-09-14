@@ -20,6 +20,7 @@ This repository was initialized with Spec Kit and seeded with a constitution, a 
 - A previous TypeScript implementation exists elsewhere. You MUST NOT read it, ask for it, or reproduce its structure. Everything you need is in this repository; if something is missing, ask the owner.
 - The constitution outranks every other document. Research and contracts outrank your preferences; departing from them requires a line in the plan's Complexity Tracking.
 - Never push, release, open a pull request, create a GitHub review or run against a live pull request unless the owner asks, naming the pull request.
+- `origin` is `github.com/eriksaulnier/loupe`; `main` is its default branch. Releases are cut from `main` by release-please and goreleaser (see `README.md`). An agent MUST NOT tag, create a release or edit the release manifest by hand.
 
 ## Next steps, in order
 

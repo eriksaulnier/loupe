@@ -8,6 +8,9 @@ builds:
     binary: loupe
     env:
       - CGO_ENABLED=0
+    # The tag is the version loupe --version prints; a build without it says "dev".
+    ldflags:
+      - -s -w -X github.com/eriksaulnier/loupe/internal/cli.version={{.Version}}
     goos:
       - linux
       - darwin
@@ -27,7 +30,12 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+# release-please owns the changelog and creates the release; goreleaser only attaches the archives to it.
+changelog:
+  disable: true
+
 release:
+  mode: keep-existing
   github:
     owner: eriksaulnier
     name: loupe
