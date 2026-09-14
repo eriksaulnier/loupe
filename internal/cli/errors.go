@@ -102,6 +102,10 @@ func hanging(s style.Style, text string, width int, indent string) string {
 // fixLines puts every `loupe …` command of a fix on its own indented line so it can be copied whole; only the prose
 // between the commands is wrapped. The first line starts where the caller's label ends.
 func fixLines(s style.Style, fix string, width int) string {
+	// "run loupe show --help" is one short instruction; split, the verb hangs alone on its line.
+	if at := strings.Index(fix, "loupe "); at >= 0 && len(strings.Fields(fix[:at])) <= 2 && commandEnd(fix[at:]) < 0 {
+		return strings.TrimSpace(fix[:at]+" ") + " " + s.Accent.Render(strings.TrimSpace(fix[at:]))
+	}
 	var lines []string
 	prose := func(text string) {
 		if text = strings.Trim(text, " ,"); text != "" {

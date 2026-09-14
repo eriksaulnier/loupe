@@ -296,7 +296,7 @@ func printCapture(deps Deps, ref run.Ref, target run.Target, cleanup, steps []st
 	for _, r := range []string{target.BaseRef, target.HeadRef} {
 		fmt.Fprintf(&b, "  %s\n", s.Dim.Render(oneLine(r)))
 	}
-	fmt.Fprintf(&b, "\n%s\n", s.Heading("remove them when done with"))
+	fmt.Fprintf(&b, "\n%s  %s\n", s.Heading("cleanup"), s.Dim.Render("remove the refs when done with"))
 	for _, c := range cleanup {
 		fmt.Fprintf(&b, "  %s\n", s.Accent.Render(oneLine(c)))
 	}
