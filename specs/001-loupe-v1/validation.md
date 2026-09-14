@@ -49,7 +49,7 @@ Each is recorded where it applies.
 
 ## Unverified
 
-These cannot be checked in this repository and remain for the owner (HANDOFF.md):
+These cannot be checked in this repository and remain for the owner:
 
 - The feel of the review interface in a real terminal, including a small terminal and a non-UTF-8 locale.
 - A live capture and publish against a named pull request with `--inline all`, a second publish that is a no-op, and a head move that makes publish refuse. The walk SHOULD also confirm GitHub's 65,536-character body limit, the files-view anchor format, and whether review bodies come back with CRLF line endings.

@@ -290,7 +290,7 @@ Single Go module at repository root: `cmd/loupe/`, `internal/<package>/` with te
 - [X] T101 [P] Add `BenchmarkParseAndLocate` in `internal/diff/perf_test.go` generating a 500-file synthetic diff in the test, and `TestOpenUnder100ms` in `internal/tui/perf_test.go` that builds a 500-file draft and diff in a temp run and asserts the model's first render of the first finding's detail and hunk completes under 100 ms, skipped under `-short` (SC-004)
 - [X] T102 [P] Create `.goreleaser.yaml` building `./cmd/loupe` with `CGO_ENABLED=0` for linux and darwin on amd64 and arm64, archives with checksums, and a GitHub Releases publisher; no `brews` entry, since the Homebrew tap is deferred (research.md "Distribution"); the file MUST pass `goreleaser check`. No release is run (constitution, Development Workflow)
 - [X] T103 Run the `cleanup-comments` skill over the whole tree and fix what it reports in the affected `internal/**` files
-- [X] T104 Walk every row of the "Automated validation" table in `specs/001-loupe-v1/quickstart.md`, name the passing test for each, and run `mise run check` showing its output; any row without a passing test is reported as unverified, together with the owner's manual checks listed in `HANDOFF.md`
+- [X] T104 Walk every row of the "Automated validation" table in `specs/001-loupe-v1/quickstart.md`, name the passing test for each, and run `mise run check` showing its output; any row without a passing test is reported as unverified, together with the owner's manual checks listed in `specs/001-loupe-v1/validation.md`
 
 ---
 
@@ -382,7 +382,7 @@ The spec marks US1, US2 and US3 all P1, and none delivers the product alone: fil
 4. US6: second and third rounds.
 5. US7: ambiguous-outcome recovery.
 6. US8: Claude Code plugin.
-7. Polish, then the owner's manual checks from `HANDOFF.md`.
+7. Polish, then the owner's manual checks from `specs/001-loupe-v1/validation.md`.
 
 ---
 
