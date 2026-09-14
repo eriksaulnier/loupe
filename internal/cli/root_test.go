@@ -36,10 +36,15 @@ func testDeps(t *testing.T, env map[string]string) (Deps, *streams) {
 	}, s
 }
 
-func TestHelpTouchesNothing(t *testing.T) {
+// paletteEnv are the variables the palette reads on every invocation to decide color and the glyph set.
+var paletteEnv = map[string]bool{"NO_COLOR": true, "TERM": true, "LC_ALL": true, "LC_CTYPE": true, "LANG": true}
+
+func TestHelpTouchesNothingButThePalette(t *testing.T) {
 	deps, s := testDeps(t, nil)
 	deps.Getenv = func(k string) string {
-		t.Errorf("--help read environment variable %s", k)
+		if !paletteEnv[k] {
+			t.Errorf("--help read environment variable %s", k)
+		}
 		return ""
 	}
 	if code := Execute(deps, []string{"--help"}); code != 0 {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const rootHelp = `File pull request review findings for a human to decide and publish.
@@ -76,6 +77,34 @@ type Deps struct {
 	IsTerminal func() bool
 	// StderrIsTerminal is consulted only under --json, where human-only commands draw on stderr.
 	StderrIsTerminal func() bool
+	// TermWidth is the terminal width human output wraps to; nil means the default of 80 columns.
+	TermWidth func() int
+	// palettes is built once per invocation so color is detected once; a Deps built by a test has none and each
+	// caller builds its own.
+	palettes *palettes
+}
+
+type palettes struct{ out, err style.Style }
+
+// errStyle paints every refusal on stderr, outStyle everything a command prints on stdout; the two are separate
+// because one output can be a terminal while the other is a pipe.
+func (d Deps) errStyle() style.Style {
+	if d.palettes != nil {
+		return d.palettes.err
+	}
+	return style.New(d.Stderr, d.Getenv)
+}
+
+const defaultWidth = 80
+
+func (d Deps) width() int {
+	if d.TermWidth == nil {
+		return defaultWidth
+	}
+	if w := d.TermWidth(); w > 0 {
+		return w
+	}
+	return defaultWidth
 }
 
 func NewRoot(deps Deps) *cobra.Command {
@@ -96,6 +125,7 @@ func NewRoot(deps Deps) *cobra.Command {
 }
 
 func Execute(deps Deps, args []string) int {
+	deps.palettes = &palettes{out: style.New(deps.Stdout, deps.Getenv), err: style.New(deps.Stderr, deps.Getenv)}
 	return execute(NewRoot(deps), deps, args)
 }
 
@@ -171,7 +201,7 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 	} else {
 		_, _ = deps.Stderr.Write(cobraOut.Bytes())
 	}
-	return report(deps.Stdout, deps.Stderr, jsonMode, commandName(cmd), inv.run, err)
+	return report(deps, jsonMode, commandName(cmd), inv.run, err)
 }
 
 func markCommandErrors(cmd *cobra.Command) {

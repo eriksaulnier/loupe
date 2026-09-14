@@ -108,6 +108,7 @@ func (h *harness) runWith(stdin string, now func() time.Time, args ...string) (s
 		},
 		IsTerminal:       func() bool { return h.IsTerminal },
 		StderrIsTerminal: func() bool { return h.IsTerminal && !h.StderrNotTerminal },
+		TermWidth:        func() int { return 100 },
 	}
 	exit = cli.Execute(deps, args)
 	return out.String(), errOut.String(), exit

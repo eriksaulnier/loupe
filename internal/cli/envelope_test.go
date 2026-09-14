@@ -72,7 +72,7 @@ func TestReportRefusalJSON(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	r := refusal.New(refusal.Location, "src/a.ts:88 is not in the diff on side RIGHT", "use one of: src/a.ts:80-86")
 	r.Details = map[string]any{"entry": 1}
-	code := report(&stdout, &stderr, true, "add", "o/r#1@1", fmt.Errorf("wrapped: %w", r))
+	code := report(reportDeps(&stdout, &stderr), true, "add", "o/r#1@1", fmt.Errorf("wrapped: %w", r))
 	if code != 1 {
 		t.Fatalf("exit %d", code)
 	}
@@ -97,7 +97,7 @@ func TestReportExitCodes(t *testing.T) {
 		{errors.New("boom"), 1},
 	}
 	for _, c := range cases {
-		if got := report(&bytes.Buffer{}, &bytes.Buffer{}, true, "add", "", c.err); got != c.code {
+		if got := report(reportDeps(&bytes.Buffer{}, &bytes.Buffer{}), true, "add", "", c.err); got != c.code {
 			t.Fatalf("%v: exit %d, want %d", c.err, got, c.code)
 		}
 	}
@@ -105,7 +105,7 @@ func TestReportExitCodes(t *testing.T) {
 
 func TestReportInternalError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	code := report(&stdout, &stderr, true, "show", "", errors.New("nil map write"))
+	code := report(reportDeps(&stdout, &stderr), true, "show", "", errors.New("nil map write"))
 	if code != 1 {
 		t.Fatalf("exit %d", code)
 	}
@@ -127,7 +127,7 @@ func TestReportInternalError(t *testing.T) {
 
 func TestReportHuman(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	code := report(&stdout, &stderr, false, "add", "", refusal.New(refusal.Version, "draft is at version 3, expected 2", "re-read with loupe show --json and retry"))
+	code := report(reportDeps(&stdout, &stderr), false, "add", "", refusal.New(refusal.Version, "draft is at version 3, expected 2", "re-read with loupe show --json and retry"))
 	if code != 1 {
 		t.Fatalf("exit %d", code)
 	}
