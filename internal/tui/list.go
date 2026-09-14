@@ -232,7 +232,11 @@ func (m *Model) summaryBlock(cols listColumns) []string {
 	width := max(20, content-1-style.Width(hint)-2)
 	lines := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(m.draft.Summary)), width, indent), "\n")
 	if m.summaryCollapsed && len(lines) > 2 {
-		// The rest of the summary is truncated once, by the helper that ends it with the ellipsis itself.
+		// The rest of the summary is truncated once, by the helper that ends it with the ellipsis itself. Every
+		// wrapped line carries the indent, which would otherwise become a run of spaces inside the text.
+		for i := 1; i < len(lines); i++ {
+			lines[i] = strings.TrimPrefix(lines[i], indent)
+		}
 		rest := strings.TrimSpace(strings.Join(lines[1:], " "))
 		lines = []string{lines[0], indent + m.styles.TruncRight(rest, width-len(indent))}
 	}

@@ -160,3 +160,20 @@ func TestLongNoticeWrapsInsteadOfClipping(t *testing.T) {
 		}
 	}
 }
+
+// A collapsed summary joins its wrapped lines; the indent each carries must not become a run of spaces in the text.
+func TestCollapsedSummaryHasNoSpaceRuns(t *testing.T) {
+	dir := newFixture(t)
+	m := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 80, 24)
+	// Uneven words leave the second wrapped line short, so the truncation lands where a joined indent would sit.
+	m.draft.Summary = strings.Repeat("a", 50) + " " + strings.Repeat("b", 20) + " " + strings.Repeat("c", 50) + " " + strings.Repeat("d", 50)
+	lines := m.summaryBlock(m.listColumns())
+	if len(lines) < 2 {
+		t.Fatalf("summary block %q", lines)
+	}
+	rest, _, ok := strings.Cut(lines[1], "tab expands")
+	rest = strings.TrimSpace(rest)
+	if !ok || !strings.HasSuffix(rest, "\u2026") || strings.Contains(rest, "  ") {
+		t.Errorf("second summary line must end with the ellipsis and carry no space run: %q", lines[1])
+	}
+}
