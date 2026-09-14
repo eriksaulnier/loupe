@@ -73,7 +73,7 @@ func TestResolveBranchForkCheckoutUsesPullRef(t *testing.T) {
 	gh.SetPR("o", "r", openPR(5, "main"))
 	gh.SetBranch("o", "r", 5, "x")
 	r.Git("checkout", "--quiet", "-b", "x")
-	r.Git("config", "branch.x.remote", "https://github.com/forker/r.git")
+	r.Git("config", "branch.x.remote", "https://github.com/o/r.git")
 	r.Git("config", "branch.x.merge", "refs/pull/9/head")
 	root := t.TempDir()
 	mkdirs(t, RunDir(root, "o", "r", 9, 1))
@@ -93,11 +93,91 @@ func TestResolveBranchForkCheckoutUsesPullRef(t *testing.T) {
 func TestResolveBranchForkCheckoutMissingPullRequest(t *testing.T) {
 	r, _, client := branchSetup(t)
 	r.Git("checkout", "--quiet", "-b", "x")
+	r.Git("config", "branch.x.remote", "origin")
 	r.Git("config", "branch.x.merge", "refs/pull/9/head")
 
 	_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, client)
 	if rr, ok := refusal.As(err); !ok || rr.Code != refusal.PR {
 		t.Fatalf("got %v, want refusal pr", err)
+	}
+}
+
+// gh pr checkout of a fork's pull request records the parent as the branch's remote, and the fork can have its own
+// pull request with the same number.
+func TestResolveBranchForkCloneCheckoutUsesUpstreamRepository(t *testing.T) {
+	r := gitrepo.New(t, "forker", "r", 5)
+	gh := fakegh.New(t)
+	c := gh.Client(t)
+	client := func() (github.Client, error) { return c, nil }
+	gh.SetPR("o", "r", openPR(123, "main"))
+	gh.SetPR("forker", "r", openPR(123, "main"))
+	r.Git("config", "remote.upstream.url", "https://github.com/o/r.git")
+	r.Git("checkout", "--quiet", "-b", "pr-123")
+	r.Git("config", "branch.pr-123.remote", "upstream")
+	r.Git("config", "branch.pr-123.merge", "refs/pull/123/head")
+	root := t.TempDir()
+	mkdirs(t, RunDir(root, "o", "r", 123, 1), RunDir(root, "forker", "r", 123, 1))
+
+	ref, err := ResolveBranch(context.Background(), root, r.Dir, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != (Ref{Owner: "o", Repo: "r", Number: 123, Round: 1}) {
+		t.Fatalf("got %+v", ref)
+	}
+	if reqs := gh.Requests(); len(reqs) != 1 || reqs[0].Path != "/repos/o/r/pulls/123" {
+		t.Fatalf("requests %+v", reqs)
+	}
+}
+
+func TestResolveBranchPullRefOnNonGitHubRemoteRefuses(t *testing.T) {
+	r, gh, client := branchSetup(t)
+	r.Git("config", "remote.mirror.url", "../mirror.git")
+	r.Git("checkout", "--quiet", "-b", "x")
+	r.Git("config", "branch.x.remote", "mirror")
+	r.Git("config", "branch.x.merge", "refs/pull/9/head")
+
+	_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, client)
+	wantRefusal(t, err, refusal.NoRun, "", "loupe capture <url> or --run <ref>")
+	if n := len(gh.Requests()); n != 0 {
+		t.Fatalf("%d GitHub requests", n)
+	}
+}
+
+func TestResolveBranchTrackingBranchFindsPullRequestOnUpstream(t *testing.T) {
+	r := gitrepo.New(t, "forker", "r", 5)
+	gh := fakegh.New(t)
+	c := gh.Client(t)
+	client := func() (github.Client, error) { return c, nil }
+	gh.SetPR("o", "r", openPR(7, "main"))
+	gh.SetForkBranch("o", "r", 7, "forker", "feature")
+	r.Git("config", "remote.upstream.url", "git@github.com:o/r.git")
+	r.Git("checkout", "--quiet", "-b", "feature")
+	r.Git("config", "branch.feature.remote", "origin")
+	r.Git("config", "branch.feature.merge", "refs/heads/feature")
+	root := t.TempDir()
+	mkdirs(t, RunDir(root, "o", "r", 7, 1))
+
+	ref, err := ResolveBranch(context.Background(), root, r.Dir, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != (Ref{Owner: "o", Repo: "r", Number: 7, Round: 1}) {
+		t.Fatalf("got %+v", ref)
+	}
+	reqs := gh.Requests()
+	if len(reqs) != 2 || reqs[0].Path != "/repos/forker/r/pulls" || reqs[1].Path != "/repos/o/r/pulls" ||
+		reqs[0].RawQuery != "head=forker%3Afeature&state=open" || reqs[1].RawQuery != "head=forker%3Afeature&state=open" {
+		t.Fatalf("requests %+v", reqs)
+	}
+
+	gh.SetPR("forker", "r", openPR(2, "main"))
+	gh.SetBranch("forker", "r", 2, "feature")
+	_, err = ResolveBranch(context.Background(), root, r.Dir, client)
+	got := wantRefusal(t, err, refusal.NoRun, "", "--run <ref>")
+	want := []map[string]any{{"repo": "forker/r", "number": 2, "base": "main"}, {"repo": "o/r", "number": 7, "base": "main"}}
+	if !reflect.DeepEqual(got["pullRequests"], want) {
+		t.Fatalf("details %v", got)
 	}
 }
 
@@ -163,7 +243,7 @@ func TestResolveBranchSeveralPullRequests(t *testing.T) {
 
 	_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, client)
 	got := wantRefusal(t, err, refusal.NoRun, "", "--run <ref>")
-	want := []map[string]any{{"number": 5, "base": "main"}, {"number": 6, "base": "release"}}
+	want := []map[string]any{{"repo": "o/r", "number": 5, "base": "main"}, {"repo": "o/r", "number": 6, "base": "release"}}
 	if !reflect.DeepEqual(got["pullRequests"], want) {
 		t.Fatalf("details %v", got)
 	}

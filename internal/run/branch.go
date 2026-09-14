@@ -46,67 +46,111 @@ func ResolveBranch(ctx context.Context, root, clone string, gh func() (github.Cl
 	if err != nil {
 		return Ref{}, err
 	}
-	number, err := branchPullRequest(ctx, client, clone, owner, repo, branch, remote, merge)
+	ref, err := branchPullRequest(ctx, client, clone, owner, repo, branch, remote, merge)
 	if err != nil {
 		return Ref{}, err
 	}
-	ref := Ref{Owner: owner, Repo: repo, Number: number}
-	newest, err := Newest(root, owner, repo, ref.Number)
+	newest, err := Newest(root, ref.Owner, ref.Repo, ref.Number)
 	if err != nil {
 		return Ref{}, err
 	}
 	if newest == 0 {
 		return Ref{}, refusal.New(refusal.NoRun, fmt.Sprintf("%s has no captured run", ref),
-			fmt.Sprintf("loupe capture https://github.com/%s/%s/pull/%d", owner, repo, ref.Number))
+			fmt.Sprintf("loupe capture https://github.com/%s/%s/pull/%d", ref.Owner, ref.Repo, ref.Number))
 	}
 	ref.Round = newest
 	return ref, nil
 }
 
 // branchPullRequest trusts the clone's upstream config over the local branch name: gh pr checkout records a fork pull
-// request as refs/pull/<n>/head, and a branch tracking a fork lives under the fork owner and possibly another name.
-func branchPullRequest(ctx context.Context, client github.Client, clone, owner, repo, branch, remote, merge string) (int, error) {
+// request as refs/pull/<n>/head on the parent's remote, and a branch tracking a fork lives under the fork owner and
+// possibly another name. In a fork clone origin is the fork, so a remote named upstream is also asked.
+func branchPullRequest(ctx context.Context, client github.Client, clone, owner, repo, branch, remote, merge string) (Ref, error) {
 	if n, ok := pullRefNumber(merge); ok {
-		pr, err := client.PullRequest(ctx, owner, repo, n)
+		baseOwner, baseRepo, found, err := remoteRepository(clone, remote)
 		if err != nil {
-			return 0, lookupRefusal(err, fmt.Sprintf("look up pull request #%d of %s/%s for branch %s", n, owner, repo, branch))
+			return Ref{}, err
 		}
-		return pr.Number, nil
+		if !found {
+			return Ref{}, refusal.New(refusal.NoRun,
+				fmt.Sprintf("no run selected, and the remote %q of branch %s is not a github.com repository", remote, branch), branchFix)
+		}
+		pr, err := client.PullRequest(ctx, baseOwner, baseRepo, n)
+		if err != nil {
+			return Ref{}, lookupRefusal(err, fmt.Sprintf("look up pull request #%d of %s/%s for branch %s", n, baseOwner, baseRepo, branch))
+		}
+		return Ref{Owner: baseOwner, Repo: baseRepo, Number: pr.Number}, nil
 	}
 	headOwner, headBranch := owner, branch
-	if name, ok := strings.CutPrefix(merge, "refs/heads/"); ok && remote != "" {
-		urls, err := gitx.RemoteURLs(clone, remote)
+	bases := []Ref{{Owner: owner, Repo: repo}}
+	if name, ok := strings.CutPrefix(merge, "refs/heads/"); ok {
+		o, _, found, err := remoteRepository(clone, remote)
 		if err != nil {
-			return 0, err
+			return Ref{}, err
 		}
-		for _, u := range urls {
-			if o, _, found := gitx.ParseGitHubURL(u); found {
-				headOwner, headBranch = o, name
-				break
+		if found {
+			headOwner, headBranch = o, name
+			upOwner, upRepo, upFound, err := remoteRepository(clone, "upstream")
+			if err != nil {
+				return Ref{}, err
+			}
+			if upFound && (upOwner != owner || upRepo != repo) {
+				bases = append(bases, Ref{Owner: upOwner, Repo: upRepo})
 			}
 		}
 	}
-	prs, err := client.PullRequestsForBranch(ctx, owner, repo, headOwner, headBranch)
-	if err != nil {
-		return 0, lookupRefusal(err, fmt.Sprintf("look up the pull request for branch %s of %s/%s", branch, owner, repo))
+	var found []Ref
+	var prs []github.PullRequest
+	names := make([]string, 0, len(bases))
+	for _, base := range bases {
+		names = append(names, base.Owner+"/"+base.Repo)
+		got, err := client.PullRequestsForBranch(ctx, base.Owner, base.Repo, headOwner, headBranch)
+		if err != nil {
+			return Ref{}, lookupRefusal(err, fmt.Sprintf("look up the pull request for branch %s of %s/%s", branch, base.Owner, base.Repo))
+		}
+		for _, pr := range got {
+			found = append(found, Ref{Owner: base.Owner, Repo: base.Repo, Number: pr.Number})
+			prs = append(prs, pr)
+		}
 	}
-	switch len(prs) {
+	switch len(found) {
 	case 0:
-		return 0, refusal.New(refusal.NoRun,
-			fmt.Sprintf("no run selected, and branch %s has no open pull request on %s/%s", branch, owner, repo), branchFix)
+		return Ref{}, refusal.New(refusal.NoRun,
+			fmt.Sprintf("no run selected, and branch %s has no open pull request on %s", branch, strings.Join(names, " or ")), branchFix)
 	case 1:
-		return prs[0].Number, nil
+		return found[0], nil
 	default:
-		listed := make([]map[string]any, 0, len(prs))
-		for _, pr := range prs {
-			listed = append(listed, map[string]any{"number": pr.Number, "base": pr.BaseRef})
+		listed := make([]map[string]any, 0, len(found))
+		for i, pr := range prs {
+			listed = append(listed, map[string]any{"repo": found[i].Owner + "/" + found[i].Repo, "number": pr.Number, "base": pr.BaseRef})
 		}
 		r := refusal.New(refusal.NoRun,
-			fmt.Sprintf("no run selected, and branch %s has %d open pull requests on %s/%s", branch, len(prs), owner, repo),
+			fmt.Sprintf("no run selected, and branch %s has %d open pull requests on %s", branch, len(found), strings.Join(names, " or ")),
 			"--run <ref>")
 		r.Details = map[string]any{"pullRequests": listed}
-		return 0, r
+		return Ref{}, r
 	}
+}
+
+// remoteRepository parses remote, a remote name or a URL written directly into branch config, as a github.com
+// repository.
+func remoteRepository(clone, remote string) (owner, repo string, found bool, err error) {
+	if remote == "" {
+		return "", "", false, nil
+	}
+	urls, err := gitx.RemoteURLs(clone, remote)
+	if err != nil {
+		return "", "", false, err
+	}
+	if len(urls) == 0 {
+		urls = []string{remote}
+	}
+	for _, u := range urls {
+		if owner, repo, found = gitx.ParseGitHubURL(u); found {
+			return owner, repo, true, nil
+		}
+	}
+	return "", "", false, nil
 }
 
 func pullRefNumber(merge string) (int, bool) {
