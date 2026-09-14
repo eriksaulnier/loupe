@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/eriksaulnier/loupe/compare/v0.2.0...v0.3.0) (2026-09-14)
+
+
+### Features
+
+* **capture:** record an optional source in the footer and loupe-meta ([e503b30](https://github.com/eriksaulnier/loupe/commit/e503b30cee1caf78104582de4f6b4ca2e0ea21ec))
+* **publish:** publish at the captured head when the head moved forward ([c203444](https://github.com/eriksaulnier/loupe/commit/c20344496b622dcd5cce3e9c5f75b4e1d2881cbc))
+* **render:** recolor issue and suggestion dots ([3f5750a](https://github.com/eriksaulnier/loupe/commit/3f5750a22672aac39e805dff54278b91322d6acf))
+* **render:** show the callout only when findings block ([6c22d8c](https://github.com/eriksaulnier/loupe/commit/6c22d8cafa0a9dd3641cd83e9537721d4dea5b37))
+
+
+### Bug Fixes
+
+* **publish:** correct the moved-head publish against live GitHub ([2d41922](https://github.com/eriksaulnier/loupe/commit/2d41922d3ee2c44424d71bcb01a017cd3a56067b))
+* **publish:** drop the capture round from the published report ([029df1b](https://github.com/eriksaulnier/loupe/commit/029df1ba1610a25f6da18ba77aea03252ec0f374))
+* **publish:** number the published round by publications ([72fcda3](https://github.com/eriksaulnier/loupe/commit/72fcda375c627f98c1ff054a765c6c466b01bd0c))
+
 ## [0.2.0](https://github.com/eriksaulnier/loupe/compare/v0.1.0...v0.2.0) (2026-09-14)
 
 
