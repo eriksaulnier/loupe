@@ -63,6 +63,11 @@ func (m *Model) refreshDetail() error {
 	for _, n := range m.draft.Notes {
 		if n.FindingID == f.ID {
 			top = append(top, fmt.Sprintf("%s %s: %s", n.ID, n.Status, render.ForDisplay(oneLine(n.Body))))
+			for _, r := range m.draft.Replies {
+				if r.NoteID == n.ID {
+					top = append(top, fmt.Sprintf("  %s by %s: %s", render.ForDisplay(r.ID), render.ForDisplay(r.By), render.ForDisplay(oneLine(r.Body))))
+				}
+			}
 		}
 	}
 

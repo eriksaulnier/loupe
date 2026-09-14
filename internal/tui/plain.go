@@ -141,6 +141,11 @@ func printFinding(p *printer, d *draft.Draft, dif *diff.Diff, i int) error {
 	for _, n := range d.Notes {
 		if n.FindingID == f.ID {
 			p.printf("\nNote %s (%s): %s\n", n.ID, n.Status, render.ForDisplay(n.Body))
+			for _, r := range d.Replies {
+				if r.NoteID == n.ID {
+					p.printf("  Reply %s by %s: %s\n", render.ForDisplay(r.ID), render.ForDisplay(r.By), render.ForDisplay(r.Body))
+				}
+			}
 		}
 	}
 	lines, err := hunkView(dif, f)
