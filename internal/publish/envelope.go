@@ -64,7 +64,7 @@ func Build(target run.Target, d *draft.Draft, viewer, action, inline string) (En
 		Findings:      []EnvelopeFinding{},
 	}
 	in := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: target.Round, HeadSHA: target.HeadSHA,
-		Action: action, Inline: inline, Summary: d.Summary, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source}
+		Inline: inline, Summary: d.Summary, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source}
 	for _, f := range included {
 		rf := render.Finding{ID: f.ID, Title: f.Title, Body: f.Body, General: f.General, Label: f.Label, Blocking: f.Blocking,
 			Confidence: f.Confidence, Severity: f.Severity, SuggestedFix: f.SuggestedFix}

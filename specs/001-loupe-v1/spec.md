@@ -20,6 +20,7 @@
 ### Session 2026-09-14
 
 - Q: Should a published review name what filed its findings? → A: Yes, when the agent names it at capture. An optional `name[@version]` source is shown after the reviewed commit in the footer and recorded as `src=` in `loupe-meta`. Without one, the review is unchanged.
+- Q: Should the review body open with a callout naming the action? → A: No. GitHub's review header already shows the event. The body opens with an `IMPORTANT` callout stating only the blocking count, and only when blocking findings are included; otherwise the chips row leads the body.
 
 ## User Scenarios & Testing *(mandatory)*
 

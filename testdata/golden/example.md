@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> **Changes requested** — 1 blocking finding.
+> **1 blocking finding**
 
 `⛔ 1 blocking` `⚪ 1 other`
 

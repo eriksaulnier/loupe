@@ -31,7 +31,7 @@ func TestBuildComposesEnvelope(t *testing.T) {
 		}
 		fs = append(fs, rf)
 	}
-	in := render.Input{Owner: "acme", Repo: "widgets", Number: 42, Round: 1, HeadSHA: headSHA, Action: "request-changes", Inline: "all",
+	in := render.Input{Owner: "acme", Repo: "widgets", Number: 42, Round: 1, HeadSHA: headSHA, Inline: "all",
 		Summary: d.Summary, Digest: draft.Digest(d), PublicationID: env.PublicationID, Findings: fs}
 	if env.Body != render.Body(in) {
 		t.Fatalf("body differs from render.Body:\n%s", env.Body)

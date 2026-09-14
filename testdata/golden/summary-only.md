@@ -1,6 +1,3 @@
-> [!NOTE]
-> **Comment**
-
 Summary.
 
 ---

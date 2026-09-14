@@ -16,7 +16,6 @@ type Input struct {
 	Owner, Repo   string
 	Number, Round int
 	HeadSHA       string
-	Action        string
 	Inline        string
 	Summary       string
 	Digest        string
@@ -95,7 +94,10 @@ func Body(in Input) string {
 		return cmp.Or(cmp.Compare(group(a.Label), group(b.Label)), findingid.Compare(a.ID, b.ID))
 	})
 
-	head := []string{verdict(in.Action, len(blocking))}
+	var head []string
+	if callout := blockingCallout(len(blocking)); callout != "" {
+		head = append(head, callout)
+	}
 	if chips := chipsRow(len(blocking), sections); chips != "" {
 		head = append(head, chips)
 	}
@@ -138,26 +140,11 @@ func Body(in Input) string {
 	return strings.Join(blocks, "\n\n---\n\n")
 }
 
-func verdict(action string, blocking int) string {
-	var alert, title string
-	switch action {
-	case "request-changes":
-		alert, title = "IMPORTANT", "Changes requested"
-	case "approve":
-		alert, title = "NOTE", "Approved"
-	case "comment":
-		alert, title = "NOTE", "Comment"
-		if blocking > 0 {
-			alert = "IMPORTANT"
-		}
-	default:
-		panic(fmt.Sprintf("render: unknown action %q", action))
+func blockingCallout(blocking int) string {
+	if blocking == 0 {
+		return ""
 	}
-	line := "> **" + title + "**"
-	if blocking > 0 {
-		line += fmt.Sprintf(" — %d blocking %s.", blocking, plural(blocking, "finding", "findings"))
-	}
-	return "> [!" + alert + "]\n" + line
+	return fmt.Sprintf("> [!IMPORTANT]\n> **%d blocking %s**", blocking, plural(blocking, "finding", "findings"))
 }
 
 func chipsRow(blocking int, sections [4][]Finding) string {

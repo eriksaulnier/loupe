@@ -1,6 +1,3 @@
-> [!NOTE]
-> **Comment**
-
 `🔵 1 question`
 
 Summary.

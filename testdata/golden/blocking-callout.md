@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> **Comment** — 1 blocking finding.
+> **1 blocking finding**
 
 `⛔ 1 blocking`
 

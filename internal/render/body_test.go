@@ -38,7 +38,7 @@ func checkGolden(t *testing.T, name, got string) {
 func exampleInput() Input {
 	return Input{
 		Owner: "o", Repo: "r", Number: 7, Round: 2,
-		HeadSHA: "d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2", Action: "request-changes", Inline: "blocking",
+		HeadSHA: "d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2", Inline: "blocking",
 		Summary: "The retry path can publish twice and the digest is not verified on reconcile.\nTests were not executed in this read-only review.",
 		Digest:  "<sha256>", PublicationID: "<uuid>",
 		Findings: []Finding{
@@ -58,26 +58,25 @@ func general(id, label string, blocking bool) Finding {
 }
 
 func TestBodyGoldens(t *testing.T) {
-	base := func(action string, findings ...Finding) Input {
+	base := func(findings ...Finding) Input {
 		in := exampleInput()
-		in.Action, in.Summary, in.Findings = action, "Summary.", findings
+		in.Summary, in.Findings = "Summary.", findings
 		in.Digest, in.PublicationID = "0000000000000000000000000000000000000000000000000000000000000000", "00000000-0000-4000-8000-000000000000"
 		return in
 	}
-	hostile := base("comment", Finding{
+	hostile := base(Finding{
 		ID: "f-001", Title: "Closes\n</summary> & <b>early</b>", Body: "Body.", General: true, Label: "issue",
 		Severity: "major`` ``\nsecond line", SuggestedFix: "```go\nx := 1\n```",
 	})
-	sourced := base("comment", general("f-001", "issue", false))
+	sourced := base(general("f-001", "issue", false))
 	sourced.Source = "gadfly-review-pr@2.2.0"
 	cases := map[string]Input{
 		"example.md":            exampleInput(),
-		"approve.md":            base("approve", general("f-001", "suggestion", false)),
-		"comment-blocking.md":   base("comment", general("f-001", "suggestion", true)),
-		"comment-plain.md":      base("comment", general("f-001", "question", false)),
-		"summary-only.md":       base("comment"),
-		"unlabeled-blocking.md": base("request-changes", general("f-001", "", true)),
-		"left-side.md": base("request-changes", Finding{ID: "f-001", Title: "Removed guard", Body: "Body.", Label: "issue",
+		"blocking-callout.md":   base(general("f-001", "suggestion", true)),
+		"no-callout.md":         base(general("f-001", "question", false)),
+		"summary-only.md":       base(),
+		"unlabeled-blocking.md": base(general("f-001", "", true)),
+		"left-side.md": base(Finding{ID: "f-001", Title: "Removed guard", Body: "Body.", Label: "issue",
 			Location: &Location{Path: "a.go", Side: "LEFT", Line: 24, StartLine: 21}}),
 		"hostile.md": hostile,
 		"sourced.md": sourced,

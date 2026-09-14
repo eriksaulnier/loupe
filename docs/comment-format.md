@@ -30,7 +30,7 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 
 ````markdown
 > [!IMPORTANT]
-> **Changes requested** — 1 blocking finding.
+> **1 blocking finding**
 
 `⛔ 1 blocking` `⚪ 1 other`
 
@@ -80,25 +80,24 @@ loupe · round 2 · reviewed `d23632e`
 <!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 -->
 ````
 
-### Verdict
+### Blocking callout
 
-Derived from `--action` at publish time, never authored, so the text cannot disagree with the GitHub event.
+The body opens with a callout only when blocking findings are included. Otherwise the chips row leads the body.
 
-| Action | Callout |
-| :--- | :--- |
-| `request-changes` | `> [!IMPORTANT]` **Changes requested** |
-| `approve` | `> [!NOTE]` **Approved** |
-| `comment` | `> [!NOTE]` **Comment**, or `> [!IMPORTANT]` when blocking findings are included |
+```
+> [!IMPORTANT]
+> **N blocking finding(s)**
+```
 
-The blocking count MUST be appended when non-zero, as ` — N blocking finding(s).` It also appears once in the leading blocking chip and in `loupe-meta`; label chips MUST NOT count blocking findings again.
+- The count is derived from the final included findings at publish time, never authored. It also appears once in the leading blocking chip and in `loupe-meta`; label chips MUST NOT count blocking findings again.
+- The callout MUST NOT name the action. GitHub's review header already shows the event (approved, changes requested, commented), so a verdict word would only repeat it, and a plain comment would open with a callout that says nothing.
 
-`WARNING`, `CAUTION` and `TIP` are deliberately unused. Alert titles are GitHub's and cannot be customized.
+`WARNING` and `CAUTION` are deliberately unused. Alert titles are GitHub's and cannot be customized.
 
 - "Warning" labels a routine request as a hazard.
-- `CAUTION` is GitHub's register for negative outcomes and a review verdict is an ordinary outcome.
-- `TIP` announces an approval as advice.
+- `CAUTION` is GitHub's register for negative outcomes and a blocking finding is an ordinary outcome of review.
 
-`IMPORTANT` says the review needs action and `NOTE` carries a verdict without retitling it.
+`IMPORTANT` is the only alert loupe emits, because `NOTE` titles the callout "Note".
 
 ### Chips
 
@@ -106,7 +105,7 @@ The blocking count MUST be appended when non-zero, as ` — N blocking finding(s
 - Each is led by a dot: ⛔ blocking, 🔴 issue, 🟡 suggestion, 🔵 question, ⚪ other.
 - Counts are derived from the final included findings at publish time, never from the summary prose.
 - **One chip per section that exists below, in the order the sections appear.** Blocking leads the row and is counted only there: a finding sits in exactly one section, so a blocking issue is `⛔ 1 blocking`, never also `🔴 1 issue`.
-- A reader who scans the row and finds no chip for a kind will find no heading for it either. The verdict callout states the blocking count again; that is the one repetition kept on purpose.
+- A reader who scans the row and finds no chip for a kind will find no heading for it either. The blocking callout states the blocking count again; that is the one repetition kept on purpose.
 - No external badge images. They are a network dependency and route through GitHub's camo proxy.
 
 ### The summary line
