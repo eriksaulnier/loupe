@@ -27,12 +27,12 @@ loupe files pull request review findings for a human to decide and publish. `REA
 | `specs/001-loupe-v1/` | `spec.md`, `research.md`, `plan.md`, `data-model.md`, `contracts/cli.md`, `validation.md` |
 | `docs/` | `comment-format.md` (the published review format, a contract) and `github-facts.md` (observed GitHub behavior) |
 | `testdata/` | Diff fixtures and goldens |
-| `.specify/memory/constitution.md` | The seven principles |
+| `.specify/memory/constitution.md` | The seven principles. Read first |
 
 ## Rules
 
-- The constitution outranks every other document. Research and contracts outrank your preferences.
-- A previous TypeScript implementation exists elsewhere. You MUST NOT read it, ask for it, or reproduce its structure.
+- The constitution outranks every other document. Research and contracts outrank your preferences; departing from them requires a line in the plan's Complexity Tracking. Adopt `contracts/cli.md`, do not redesign it.
+- A previous TypeScript implementation exists elsewhere. You MUST NOT read it, ask for it, or reproduce its structure. Everything you need is in this repository; if something is missing, ask the owner.
 - Never push, release, open a pull request, create a GitHub review or run against a live pull request unless the owner asks, naming the pull request.
 - `origin` is `github.com/eriksaulnier/loupe`; `main` is its default branch. Releases are cut from `main` by release-please and goreleaser. An agent MUST NOT tag, create a release or edit the release manifest by hand.
 

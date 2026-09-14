@@ -44,7 +44,9 @@ claude plugin install loupe@loupe
 | `LOUPE_HOME` | data root (default `$XDG_DATA_HOME/loupe`, else `~/.local/share/loupe`) |
 | `LOUPE_RUN` | default run reference |
 | `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; the default `nerd` needs a Nerd Font |
-| `NO_COLOR` | honored for color, plain-mode fallback and glyph selection |
+| `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | honored for color, plain-mode fallback and glyph selection |
+
+A non-UTF-8 locale always gets ASCII.
 
 ## Develop
 
