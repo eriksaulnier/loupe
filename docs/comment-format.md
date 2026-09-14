@@ -82,7 +82,7 @@ loupe · round 2 · reviewed `d23632e`
 
 ### Blocking callout
 
-The body opens with a callout only when blocking findings are included. Otherwise the chips row leads the body.
+The body opens with a callout only when blocking findings are included. Otherwise the chips row leads the body, or the summary when there are no findings.
 
 ```
 > [!IMPORTANT]
