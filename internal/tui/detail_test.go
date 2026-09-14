@@ -206,9 +206,36 @@ func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
 	f, _ := m.openedFinding()
 	m.openFileDiff(f)
 	view := m.View()
-	for _, want := range []string{"multi.txt +3 \u22122 \u00b7 2 findings", "    3  f-001  +line three", "   21  f-002  +inserted after 20", "@@ -18,6 +18,7 @@"} {
+	for _, want := range []string{"multi.txt  +3 \u22122 \u00b7 2 findings", "    3  f-001  +line three", "   21  f-002  +inserted after 20", "@@ -18,6 +18,7 @@"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("file diff lacks %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestDecisionOpensTheNextFinding(t *testing.T) {
+	dir := newFixture(t)
+	tm := startApp(t, dir)
+	waitFor(t, tm, "Title one")
+	key(tm, tea.KeyEnter)
+	waitFor(t, tm, "Body one explains the rename.")
+
+	tm.Type("a")
+	// The notice names the finding just decided while the screen already shows the next one.
+	waitFor(t, tm, "f-001 accepted", "Body two suggests a helper.")
+	tm.Type("a")
+	waitFor(t, tm, "f-002 accepted", "Body three asks about tests.")
+	tm.Type("a")
+	waitFor(t, tm, "f-003 accepted")
+
+	view := viewOf(t, tm)
+	if !strings.Contains(view, "Body three asks about tests.") {
+		t.Errorf("the last finding did not stay on screen:\n%s", view)
+	}
+	d := loadDraft(t, dir)
+	for _, id := range []string{"f-001", "f-002", "f-003"} {
+		if d.Decisions[id].Decision != draft.DecisionAccepted {
+			t.Errorf("%s was not accepted by three presses of a: %+v", id, d.Decisions[id])
 		}
 	}
 }

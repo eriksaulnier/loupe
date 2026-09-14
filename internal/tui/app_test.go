@@ -120,12 +120,13 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	waitFor(t, tm, "Body two suggests a helper.")
 
 	tm.Type("x")
-	waitFor(t, tm, "f-002 excluded")
+	// A recorded decision opens the next finding and keeps the notice about the one just decided.
+	waitFor(t, tm, "f-002 excluded", "Body three asks about tests.")
 	if dec := loadDraft(t, dir).Decisions["f-002"]; dec.Decision != draft.DecisionExcluded {
 		t.Fatalf("f-002 decision %+v", dec)
 	}
 
-	tm.Type("N")
+	tm.Type("NN")
 	waitFor(t, tm, "Body one explains the rename.")
 	tm.Type("a")
 	waitFor(t, tm, "f-001 accepted")
@@ -133,7 +134,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 		t.Fatalf("f-001 decision %+v", dec)
 	}
 
-	tm.Type("nn")
+	tm.Type("n")
 	waitFor(t, tm, "Body three asks about tests.", "general finding")
 	tm.Type("s")
 	waitFor(t, tm, "send back f-003")

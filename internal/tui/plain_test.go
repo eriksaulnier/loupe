@@ -3,11 +3,13 @@ package tui
 import (
 	"bytes"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 // plainPrompt is the answer legend, which is printed once before every prompt.
@@ -37,7 +39,7 @@ func TestPlainDecidesLikeFullScreen(t *testing.T) {
 	dir := newFixture(t)
 	var out bytes.Buffer
 	in := &lineReader{lines: []string{"a", "x", "s", "Needs a test.", "q"}}
-	if err := RunPlain(dir, in, &out, envOf(testEnv)); err != nil {
+	if err := RunPlain(dir, in, &out, envOf(testEnv), 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -88,7 +90,7 @@ func TestPlainDecidesLikeFullScreen(t *testing.T) {
 func TestPlainUnderNoColorAndCLocale(t *testing.T) {
 	var out bytes.Buffer
 	env := map[string]string{"NO_COLOR": "1", "LANG": "C"}
-	if err := RunPlain(newFixture(t), &lineReader{lines: []string{"q"}}, &out, envOf(env)); err != nil {
+	if err := RunPlain(newFixture(t), &lineReader{lines: []string{"q"}}, &out, envOf(env), 0); err != nil {
 		t.Fatal(err)
 	}
 	text := out.String()
@@ -101,6 +103,33 @@ func TestPlainUnderNoColorAndCLocale(t *testing.T) {
 	// The pill carries the word when nothing may be painted.
 	if !strings.Contains(text, "[NOT READY]") {
 		t.Errorf("plain mode does not name the readiness in words:\n%s", text)
+	}
+}
+
+func TestPlainWrapsToTheWindow(t *testing.T) {
+	dir := newFixture(t)
+	d := loadDraft(t, dir)
+	d.Findings[0].Body = strings.TrimSpace(strings.Repeat("a long sentence about the rename that has to wrap somewhere ", 8))
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := RunPlain(dir, &lineReader{lines: []string{"q"}}, &out, envOf(testEnv), 100); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	widest, wrapped := 0, 0
+	for _, line := range strings.Split(text, "\n") {
+		widest = max(widest, len([]rune(line)))
+		if strings.HasPrefix(line, "a long sentence") || strings.Contains(line, "that has to wrap") {
+			wrapped++
+		}
+	}
+	if widest > 100 || widest < 80 {
+		t.Errorf("plain mode at 100 columns drew its widest line at %d columns:\n%s", widest, text)
+	}
+	if wrapped < 2 {
+		t.Errorf("the body was not wrapped at all:\n%s", text)
 	}
 }
 
@@ -119,7 +148,7 @@ func TestPlainRefusesStaleDecisionAndReprints(t *testing.T) {
 			}
 		}},
 	}
-	if err := RunPlain(dir, in, &out, envOf(testEnv)); err != nil {
+	if err := RunPlain(dir, in, &out, envOf(testEnv), 0); err != nil {
 		t.Fatal(err)
 	}
 	segments := strings.Split(out.String(), plainPrompt)
@@ -137,7 +166,7 @@ func TestPlainRefusesStaleDecisionAndReprints(t *testing.T) {
 func TestPlainEndOfInputQuits(t *testing.T) {
 	dir := newFixture(t)
 	var out bytes.Buffer
-	if err := RunPlain(dir, strings.NewReader("a\n"), &out, envOf(testEnv)); err != nil {
+	if err := RunPlain(dir, strings.NewReader("a\n"), &out, envOf(testEnv), 0); err != nil {
 		t.Fatal(err)
 	}
 	if dec := loadDraft(t, dir).Decisions["f-001"]; dec.Decision != draft.DecisionAccepted {

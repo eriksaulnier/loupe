@@ -231,8 +231,9 @@ func (m *Model) summaryBlock(cols listColumns) []string {
 	width := max(20, m.width-1-style.Width(hint)-2)
 	lines := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(m.draft.Summary)), width, indent), "\n")
 	if m.summaryCollapsed && len(lines) > 2 {
-		lines = lines[:2]
-		lines[1] = m.styles.TruncRight(lines[1], style.Width(lines[1])-1) + m.glyphs.Ellipsis
+		// The rest of the summary is truncated once, by the helper that ends it with the ellipsis itself.
+		rest := strings.TrimSpace(strings.Join(lines[1:], " "))
+		lines = []string{lines[0], indent + m.styles.TruncRight(rest, width-len(indent))}
 	}
 	lines[0] = label + strings.TrimPrefix(lines[0], indent)
 	last := len(lines) - 1

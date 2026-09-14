@@ -54,21 +54,34 @@ func TestDetailKeysSendBackResolveDismissRestore(t *testing.T) {
 	if loadDraft(t, dir).Decisions["f-001"].Decision != draft.DecisionAccepted {
 		t.Fatal("a did not accept f-001")
 	}
+	// Every recorded decision opens the next finding, so each step below starts by going back to f-001.
+	reopen := func() {
+		t.Helper()
+		if err := m.openFinding("f-001"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reopen()
 	press(m, "s", "why?", "enter")
 	d := loadDraft(t, dir)
 	if _, ok := d.Decisions["f-001"]; ok || draft.Dispositions(d)["f-001"] != draft.DispositionPending {
 		t.Fatalf("send-back kept the acceptance: %v", d.Decisions)
 	}
+	reopen()
 	press(m, "r")
+	reopen()
 	press(m, "s", "again", "enter")
+	reopen()
 	press(m, "d")
 	if got := strings.Join(noteStatuses(loadDraft(t, dir)), ", "); got != "n-001 resolved, n-002 dismissed" {
 		t.Fatalf("notes after r and d: %s (notice %q)", got, m.notice)
 	}
+	reopen()
 	press(m, "x")
 	if loadDraft(t, dir).Decisions["f-001"].Decision != draft.DecisionExcluded {
 		t.Fatal("x did not exclude f-001")
 	}
+	reopen()
 	press(m, "u")
 	if d := loadDraft(t, dir); draft.Dispositions(d)["f-001"] != draft.DispositionPending {
 		t.Fatalf("u did not restore f-001: %v", d.Decisions)
@@ -97,7 +110,7 @@ func TestPlainKeysSendBackResolveDismissRestore(t *testing.T) {
 		},
 	}
 	in.lines = append(in.lines, "u", "q")
-	if err := RunPlain(dir, in, &out, envOf(testEnv)); err != nil {
+	if err := RunPlain(dir, in, &out, envOf(testEnv), 0); err != nil {
 		t.Fatal(err)
 	}
 	d := loadDraft(t, dir)
@@ -142,7 +155,7 @@ func TestListRowsEscapeTitles(t *testing.T) {
 
 func TestPlainModeEscapesFindings(t *testing.T) {
 	var out bytes.Buffer
-	if err := RunPlain(hostileFixture(t), &lineReader{lines: []string{"q"}}, &out, envOf(testEnv)); err != nil {
+	if err := RunPlain(hostileFixture(t), &lineReader{lines: []string{"q"}}, &out, envOf(testEnv), 0); err != nil {
 		t.Fatal(err)
 	}
 	assertEscaped(t, "plain output", out.String(), `Title \u202Eeno \u001B[31mred`, `Body \u2066hidden \u001B]52;c;x\u0007`, `fix \u200Fmark`)

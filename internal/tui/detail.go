@@ -217,16 +217,26 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 }
 
 // decideAndShow records a decision and redraws the finding from the draft the decision left behind. success builds
-// the notice after fn has run, so it can name what fn created.
+// the notice after fn has run, so it can name what fn created. A recorded decision opens the next finding, the way n
+// does, so a run of decisions needs no key between them; the last finding stays on screen.
 func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string) tea.Cmd {
 	recorded, err := m.Decide(fn)
 	if err != nil {
 		return m.fail(err)
 	}
-	if recorded {
-		m.say(style.Good, success())
+	if !recorded {
+		return m.fail(m.refreshDetail())
 	}
-	return m.fail(m.refreshDetail())
+	m.say(style.Good, success())
+	i := findingIndex(m.draft, m.openID)
+	if i < 0 || i+1 >= len(m.draft.Findings) {
+		return m.fail(m.refreshDetail())
+	}
+	notice, kind := m.notice, m.noticeKind
+	cmd := m.fail(m.openFinding(m.draft.Findings[i+1].ID))
+	// The notice names what was just recorded, so it survives the move to the finding after it.
+	m.notice, m.noticeKind = notice, kind
+	return cmd
 }
 
 func (m *Model) detailView() string {

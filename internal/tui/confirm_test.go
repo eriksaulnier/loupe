@@ -20,11 +20,11 @@ import (
 )
 
 func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
-	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard)
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	view := m.View()
 	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
-		"action comment", "inline (1)", "review body", "inline comments (1)", "y publish this review"} {
+		"Publish to acme/widgets#42  action comment  inline blocking (1)", "review body", "inline comments (1)", "y publish this review"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("review view lacks %q:\n%s", want, view)
 		}
@@ -59,7 +59,7 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 		rows[i] = fmt.Sprintf("row %03d", i+1)
 	}
 	preview := publish.Preview{Body: strings.Join(rows, "\n"), EnvelopeJSON: "{}"}
-	m := NewConfirmModel(preview, envOf(testEnv), io.Discard)
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := m.View()
 	if !strings.Contains(view, "row 001") || strings.Contains(view, "inline comments (0)") || !strings.Contains(view, "lines 1-21 of 203") {
@@ -98,7 +98,8 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			tm := teatest.NewTestModel(t, NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard), teatest.WithInitialTermSize(100, 40))
+			tm := teatest.NewTestModel(t, NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1)),
+				teatest.WithInitialTermSize(100, 40))
 			waitFor(t, tm, "<details open>")
 			tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 			waitFor(t, tm, `"event": "COMMENT"`)
@@ -124,7 +125,7 @@ func TestConfirmEndsAtEndOfInput(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				ok, err := Confirm(strings.NewReader(c.input), io.Discard, envOf(testEnv))(confirmPreview())
+				ok, err := Confirm(strings.NewReader(c.input), io.Discard, envOf(testEnv), "Publish to acme/widgets#42")(confirmPreview())
 				done <- result{ok, err}
 			}()
 			select {

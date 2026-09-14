@@ -69,7 +69,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	width, height := terminalSize(deps)
 	mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, Width: width, Height: height, RawProbe: func() error { return rawProbe(deps) }})
 	if mode == tui.Plain {
-		if err := tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv); err != nil {
+		if err := tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width); err != nil {
 			return err
 		}
 		return reviewDone(cmd, deps, ref.String(), jsonMode)

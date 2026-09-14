@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,14 +25,22 @@ const confirmHeaderLines = 1
 
 // confirmation is the last look at a review before it is sent, shared by the review program and loupe publish.
 type confirmation struct {
-	preview  publish.Preview
+	preview publish.Preview
+	// title is the band's left text: what is about to be sent, and where. Its caller knows the run; the preview does
+	// not carry it.
+	title    string
 	showJSON bool
 	yes      bool
 	scroll   viewport.Model
 }
 
-func newConfirmation(preview publish.Preview) confirmation {
-	return confirmation{preview: preview, scroll: viewport.New(80, 10)}
+func newConfirmation(preview publish.Preview, title string) confirmation {
+	return confirmation{preview: preview, title: title, scroll: viewport.New(80, 10)}
+}
+
+// ConfirmTitle is the band text of the confirmation: the two things a wrong keypress could change, and where they go.
+func ConfirmTitle(ref, action, inline string, comments int) string {
+	return fmt.Sprintf("Publish to %s  action %s  inline %s (%d)", ref, action, inline, comments)
 }
 
 // key reports whether the human answered. Only y confirms, and every key other than scrolling and the toggles is an
@@ -76,42 +83,9 @@ func (c *confirmation) position(m *Model) string {
 	return fmt.Sprintf("lines %d%s%d of %d", min(c.scroll.YOffset+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset+c.scroll.Height, total), total)
 }
 
-// action is the review action as the payload states it, so the band names what will actually be sent even when the
-// program was started by loupe publish and knows nothing else about the run.
-func (c *confirmation) action() string {
-	var envelope struct {
-		Event string `json:"event"`
-	}
-	if err := json.Unmarshal([]byte(c.preview.EnvelopeJSON), &envelope); err != nil {
-		return ""
-	}
-	for action, event := range events {
-		if event == envelope.Event {
-			return action
-		}
-	}
-	return ""
-}
-
-var events = map[string]string{"comment": "COMMENT", "approve": "APPROVE", "request-changes": "REQUEST_CHANGES"}
-
-// band names the two things a wrong keypress could change, the action and the inline comments, and where the window
-// sits in the review.
+// band carries what will be sent; the position tells the reader how much of the review is still below.
 func (c *confirmation) band(m *Model) string {
-	where := "Publish this review"
-	if m.target.Owner != "" {
-		where = "Publish to " + m.ref()
-	}
-	left := m.styles.Brand() + " " + where
-	if action := c.action(); action != "" {
-		left += m.styles.Dim.Render("  action ") + action
-	}
-	inline := fmt.Sprintf(" (%d)", len(c.preview.Comments))
-	if m.action != "" {
-		inline = " " + publish.InlineModes[m.pick] + inline
-	}
-	left += m.styles.Dim.Render("  inline") + inline
-	return m.styles.Band(left, m.styles.Dim.Render(c.position(m)), m.width)
+	return m.styles.Band(m.styles.Brand()+" "+c.title, m.styles.Dim.Render(c.position(m)), m.width)
 }
 
 func (c *confirmation) content(m *Model) string {
@@ -146,11 +120,11 @@ type ConfirmModel struct {
 	confirm confirmation
 }
 
-func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer) *ConfirmModel {
+func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer, title string) *ConfirmModel {
 	st := style.New(output, getenv)
 	return &ConfirmModel{
 		shell:   &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24},
-		confirm: newConfirmation(preview),
+		confirm: newConfirmation(preview, title),
 	}
 }
 
@@ -195,8 +169,9 @@ func (c *ConfirmModel) View() string {
 	return c.shell.confirmView(&c.confirm)
 }
 
-// Confirm runs the confirmation view full screen for loupe publish.
-func Confirm(in io.Reader, out io.Writer, getenv func(string) string) func(publish.Preview) (bool, error) {
+// Confirm runs the confirmation view full screen for loupe publish. title is the band text, which loupe publish
+// builds from the run and the flags it was given.
+func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title string) func(publish.Preview) (bool, error) {
 	return func(preview publish.Preview) (bool, error) {
 		var program *tea.Program
 		input := in
@@ -204,7 +179,7 @@ func Confirm(in io.Reader, out io.Writer, getenv func(string) string) func(publi
 		if f, ok := in.(*os.File); !ok || !term.IsTerminal(int(f.Fd())) {
 			input = &eofReader{r: in, send: func() { program.Send(endOfInput{}) }}
 		}
-		program = tea.NewProgram(NewConfirmModel(preview, getenv, out), tea.WithInput(input), tea.WithOutput(out), tea.WithAltScreen())
+		program = tea.NewProgram(NewConfirmModel(preview, getenv, out, title), tea.WithInput(input), tea.WithOutput(out), tea.WithAltScreen())
 		final, err := program.Run()
 		if err != nil {
 			return false, fmt.Errorf("confirmation view: %w", err)

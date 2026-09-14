@@ -15,9 +15,16 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-// plainWidth is what plain mode wraps to. Plain mode is what a window under 60 columns and every pipe gets, so it
-// stays inside the narrowest window that can still ask for it.
-const plainWidth = minWidth
+// defaultPlainWidth is what plain mode wraps to when nothing knows the window: a pipe, a file, TERM=dumb.
+const defaultPlainWidth = 80
+
+// plainWidth keeps the text inside the window without letting a very narrow one squeeze prose to nothing.
+func plainWidth(width int) int {
+	if width <= 0 {
+		return defaultPlainWidth
+	}
+	return max(40, width)
+}
 
 // plainAnswers are the letters an answer may be, in the order the legend shows them.
 var plainAnswers = []style.Key{
@@ -38,21 +45,23 @@ func (p *printer) printf(format string, args ...any) {
 }
 
 // RunPlain reviews one finding at a time with single-letter answers read line by line from in. Decisions carry the
-// displayed version exactly as in the full-screen program.
-func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) string) error {
+// displayed version exactly as in the full-screen program. width is the window plain mode writes into, 0 when the
+// output is not a terminal.
+func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) string, width int) error {
 	target, dif, d, err := loadRun(dir)
 	if err != nil {
 		return err
 	}
 
 	s := style.New(out, getenv)
+	w := plainWidth(width)
 	p := &printer{w: out}
 	r := draft.ReadinessOf(d)
 	p.printf("%s %s %s  %s\n", s.Brand(), s.Accent.Render(fmt.Sprintf("%s/%s#%d", target.Owner, target.Repo, target.Number)),
 		s.Dim.Render(fmt.Sprintf("round %d", target.Round)), render.ForDisplay(render.OneLine(target.Title)))
 	p.printf("%s  %s\n", countsLine(d, s), s.ReadinessPill(r.Ready, len(r.Pending), len(r.OpenNotes)))
 	if strings.TrimSpace(d.Summary) != "" {
-		p.printf("\n%s\n%s\n", s.Heading("summary"), s.Wrap(render.ForDisplay(d.Summary), plainWidth, ""))
+		p.printf("\n%s\n%s\n", s.Heading("summary"), s.Wrap(render.ForDisplay(d.Summary), w, ""))
 	}
 	if len(d.Findings) == 0 {
 		p.printf("\nNo findings.\n")
@@ -71,7 +80,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		if notice != "" {
 			p.printf("\n%s\n", notice)
 		}
-		if err := printFinding(p, s, d, dif, i); err != nil {
+		if err := printFinding(p, s, d, dif, i, w); err != nil {
 			return err
 		}
 		p.printf("\n%s\n%s %s ", s.Keys(plainAnswers), s.Accent.Render(d.Findings[i].ID), s.Glyphs.Cursor)
@@ -145,15 +154,15 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 	}
 }
 
-func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i int) error {
+func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i, width int) error {
 	f := d.Findings[i]
-	p.printf("\n%s\n", s.Rule(plainWidth, "", fmt.Sprintf("%d of %d", i+1, len(d.Findings))))
+	p.printf("\n%s\n", s.Rule(width, "", fmt.Sprintf("%d of %d", i+1, len(d.Findings))))
 	p.printf("%s  %s\n", s.Accent.Render(f.ID), s.Bold.Render(render.ForDisplay(render.OneLine(f.Title))))
 	p.printf("%s  %s\n", chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID])), s.Dim.Render(locationText(f)))
-	p.printf("\n%s\n", s.Wrap(render.ForDisplay(f.Body), plainWidth, ""))
+	p.printf("\n%s\n", s.Wrap(render.ForDisplay(f.Body), width, ""))
 	if f.SuggestedFix != "" {
 		p.printf("\n%s\n", s.Bold.Render("Suggested fix"))
-		for _, line := range strings.Split(s.Wrap(render.ForDisplay(f.SuggestedFix), plainWidth-2, ""), "\n") {
+		for _, line := range strings.Split(s.Wrap(render.ForDisplay(f.SuggestedFix), width-2, ""), "\n") {
 			p.printf("%s %s\n", s.Dim.Render(s.Glyphs.Quote), line)
 		}
 	}
@@ -172,7 +181,7 @@ func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i i
 	if err != nil {
 		return err
 	}
-	p.printf("\n%s\n", s.Rule(plainWidth, s.Accent.Render(locationText(f)), ""))
+	p.printf("\n%s\n", s.Rule(width, s.Accent.Render(locationText(f)), ""))
 	if f.Location == nil {
 		p.printf("%s\n", s.Dim.Render("general finding"))
 	}

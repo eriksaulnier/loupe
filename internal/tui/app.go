@@ -14,6 +14,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -155,7 +156,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, m.fail(m.layout())
 	case previewMsg:
-		m.confirm, m.view = newConfirmation(msg.preview), viewConfirm
+		title := ConfirmTitle(m.ref(), m.action, publish.InlineModes[m.pick], len(msg.preview.Comments))
+		m.confirm, m.view = newConfirmation(msg.preview, title), viewConfirm
 		return m, nil
 	case publishDone:
 		return m, m.publishFinished(msg)
@@ -335,7 +337,7 @@ func helpSections() map[view]helpSection {
 			{K: "j / k", Verb: "move"},
 			{K: "enter", Verb: "open the finding"},
 			{K: "tab", Verb: "expand or collapse the summary"},
-			{K: "p", Verb: "publish, once every included finding is accepted"},
+			{K: "p", Verb: "publish the review once it is ready"},
 		}},
 		viewDetail: {"detail", []style.Key{
 			{K: "a", Verb: "accept the finding as shown"},

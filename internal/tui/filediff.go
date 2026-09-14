@@ -149,7 +149,12 @@ func (m *Model) fileDiffView() string {
 	}
 	added, removed, findings := m.fileCounts()
 	counts := fmt.Sprintf("+%d %s%d %s %d %s", added, m.sign("\u2212", "-"), removed, m.glyphs.Pending, findings, plural(findings, "finding"))
-	header := []string{m.band(path + " " + m.styles.Dim.Render(counts))}
+	pill := m.readinessPill()
+	// The file diff drops the run from the band: what the stats say about this file is what the view is for, and the
+	// path gives up its directories before they do.
+	room := m.width - style.Width(m.styles.Brand()) - style.Width(counts) - style.Width(pill) - 6
+	left := m.styles.Brand() + " " + m.styles.TruncLeft(path, max(10, room)) + "  " + m.styles.Dim.Render(counts)
+	header := []string{m.styles.Band(left, pill, m.width)}
 	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "]/[", Verb: "next/prev finding"}, {K: "enter", Verb: "open finding"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}})
 	return m.frame(header, m.file.View(), keys)
 }
