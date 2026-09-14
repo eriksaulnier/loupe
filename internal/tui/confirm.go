@@ -151,6 +151,8 @@ type publishSession struct {
 	previews chan publish.Preview
 	answers  chan bool
 	done     chan publishDone
+	// finished is closed when publish.Run returns, whoever reads done.
+	finished chan struct{}
 }
 
 type previewMsg struct{ preview publish.Preview }
@@ -174,7 +176,7 @@ func (m *Model) startPublish() tea.Cmd {
 	if err != nil {
 		return m.publishFinished(publishDone{err: err})
 	}
-	s := &publishSession{previews: make(chan publish.Preview), answers: make(chan bool, 1), done: make(chan publishDone, 1)}
+	s := &publishSession{previews: make(chan publish.Preview), answers: make(chan bool, 1), done: make(chan publishDone, 1), finished: make(chan struct{})}
 	m.session, m.view, m.notice = s, viewPublishing, "checking the pull request and composing the review..."
 	opts := publish.Options{
 		Dir: m.cfg.Dir, Target: m.target, GitHub: client, IsTerminal: true, Action: m.action, Inline: publish.InlineModes[m.pick],
@@ -188,6 +190,7 @@ func (m *Model) startPublish() tea.Cmd {
 		go func() {
 			receipt, err := publish.Run(context.Background(), opts)
 			s.done <- publishDone{receipt, err}
+			close(s.finished)
 		}()
 		return s.wait()
 	}
@@ -200,15 +203,23 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) tea.Cmd {
 	m.session.answers <- m.confirm.yes
 	m.view, m.notice = viewPublishing, "nothing was sent"
 	if m.confirm.yes {
-		m.notice = "sending the review..."
+		m.sending, m.notice = true, "sending the review..."
 	}
 	return m.session.wait
+}
+
+// WaitForSend blocks until a review the human confirmed has its outcome recorded, for when the program ended before
+// that, as on a signal.
+func (m *Model) WaitForSend() {
+	if m.sending && m.session != nil {
+		<-m.session.finished
+	}
 }
 
 // publishFinished returns to the list with the outcome as the notice; only an error that is not a refusal ends the
 // program.
 func (m *Model) publishFinished(done publishDone) tea.Cmd {
-	m.session, m.view = nil, viewList
+	m.session, m.view, m.sending = nil, viewList, false
 	var r *refusal.Error
 	switch {
 	case done.err == nil:

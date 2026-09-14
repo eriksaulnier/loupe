@@ -30,7 +30,8 @@ Only accepted findings are published. Before anything is shown, publish refuses,
 The confirmation shows the review body with every collapsed section open and each inline
 comment; j/k, up/down, pgup/pgdown and home/end scroll, and v or tab switches to the exact JSON
 payload. Only y sends. Any other key, Esc, Ctrl-C or end of input cancels and nothing is sent
-or written.
+or written. Once the review is being sent, keys, Ctrl-C and SIGTERM do not stop loupe until
+the outcome is recorded.
 
 Once the review is posted, receipt.json records it and publish prints the review URL; every later
 publish prints that URL again without contacting GitHub, with or without a terminal. If a send

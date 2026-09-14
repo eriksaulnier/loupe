@@ -67,6 +67,8 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 		return err
 	}
 	final, err := tea.NewProgram(m, tea.WithInput(deps.Stdin), tea.WithOutput(deps.Stdout), tea.WithAltScreen()).Run()
+	// A signal ends the program even while a confirmed review is being sent; the send still finishes and is recorded.
+	m.WaitForSend()
 	if err != nil {
 		return fmt.Errorf("review interface: %w", err)
 	}

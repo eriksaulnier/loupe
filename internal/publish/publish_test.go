@@ -394,3 +394,37 @@ func TestRunReceiptWriteFailureKeepsReviewIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestRunHoldsSignalsFromAttemptToOutcome(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	holds, releases := 0, 0
+	fx.opts.HoldSignals = func() func() {
+		holds++
+		if fx.exists("attempt.json") || fx.gh.CreateCount() != 0 {
+			t.Error("signals were held after the attempt was written or the review was sent")
+		}
+		return func() {
+			releases++
+			if !fx.exists("receipt.json") || fx.exists("attempt.json") {
+				t.Error("signals were released before the outcome was recorded")
+			}
+		}
+	}
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
+	}
+	if holds != 1 || releases != 1 {
+		t.Fatalf("holds %d releases %d", holds, releases)
+	}
+
+	declined := newRun(t, readyDraft())
+	declined.opts.Confirm = declined.confirmWith(false, nil)
+	declined.opts.HoldSignals = func() func() {
+		t.Error("signals were held for a declined publish")
+		return func() {}
+	}
+	if _, err := declined.run(); !errors.Is(err, ErrDeclined) {
+		t.Fatalf("err %v", err)
+	}
+	fx.check(1)
+}

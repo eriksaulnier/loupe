@@ -116,6 +116,8 @@ type Model struct {
 	action  string
 	confirm confirmation
 	session *publishSession
+	// sending is true from y until the outcome arrives; no key, not even ctrl+c, is acted on meanwhile.
+	sending bool
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -188,6 +190,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewConfirm {
 			return m, m.updateConfirm(msg)
 		}
+		if m.sending {
+			return m, nil
+		}
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
 		}
@@ -240,7 +245,11 @@ func (m *Model) View() string {
 	case viewConfirm:
 		return m.confirmView(&m.confirm)
 	case viewPublishing:
-		return m.frame([]string{m.styles.bold.Render(m.header())}, "", "ctrl+c quit")
+		keys := "ctrl+c quit"
+		if m.sending {
+			keys = "keys are ignored until the outcome is recorded"
+		}
+		return m.frame([]string{m.styles.bold.Render(m.header())}, "", keys)
 	}
 	return m.listView()
 }

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -268,5 +269,52 @@ func TestPublishFlowShowsRefusalAndReturnsToList(t *testing.T) {
 	finalView(t, tm)
 	if gh.CreateCount() != 0 {
 		t.Fatalf("CreateCount %d", gh.CreateCount())
+	}
+}
+
+func TestPublishingViewIgnoresKeysWhileSending(t *testing.T) {
+	gh := newPublishFake(t)
+	entered, release := make(chan struct{}), make(chan struct{})
+	gh.OnCreate(func(*http.Request) {
+		close(entered)
+		<-release
+	})
+	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
+	waitFor(t, tm, "accepted 3")
+	tm.Type("p")
+	waitFor(t, tm, "> comment")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	waitFor(t, tm, "> blocking")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	waitFor(t, tm, "<details open>")
+	tm.Type("y")
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the review was not sent")
+	}
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Type("q")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	close(release)
+	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
+	tm.Type("q")
+	finalView(t, tm)
+	if gh.CreateCount() != 1 {
+		t.Fatalf("CreateCount %d", gh.CreateCount())
+	}
+}
+
+func TestSendingFooterDoesNotOfferQuit(t *testing.T) {
+	m, err := New(Config{Dir: readyFixture(t, "reviewer", "author"), Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.view, m.sending = viewPublishing, true
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC}); cmd != nil {
+		t.Fatal("ctrl+c returned a command while sending")
+	}
+	if view := m.View(); strings.Contains(view, "quit") {
+		t.Fatalf("the sending view offers to quit:\n%s", view)
 	}
 }

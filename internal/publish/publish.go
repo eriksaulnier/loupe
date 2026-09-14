@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -29,6 +32,9 @@ type Options struct {
 	Confirm func(Preview) (bool, error)
 	Now     func() time.Time
 	Getenv  func(string) string
+	// HoldSignals is called just before attempt.json is written and the func it returns once the outcome is recorded.
+	// Nil holds SIGINT and SIGTERM for real.
+	HoldSignals func() (release func())
 }
 
 type Preview struct {
@@ -164,6 +170,13 @@ func send(ctx context.Context, opts Options, env Envelope, preview Preview) (rec
 			"loupe review")
 	}
 
+	hold := opts.HoldSignals
+	if hold == nil {
+		hold = holdSignals
+	}
+	release := hold()
+	defer release()
+
 	started := opts.Now()
 	attempt := Attempt{Schema: RecordSchema, State: StateInFlight, StartedAt: started, UpdatedAt: started, Envelope: env,
 		Confirmed: Confirmed{Version: preview.Version, Digest: preview.Digest, Dispositions: preview.Dispositions}}
@@ -213,6 +226,15 @@ func send(ctx context.Context, opts Options, env Envelope, preview Preview) (rec
 		return Receipt{}, unknownAttemptRefusal(opts.Target,
 			fmt.Sprintf("the review may or may not have been posted on %s: %v", opts.Target.URL, sendErr))
 	}
+}
+
+// holdSignals keeps SIGINT and SIGTERM from killing the process while a review may be on its way to GitHub, which
+// would leave an in-flight attempt that only a human can resolve. A signal that arrives meanwhile is dropped; the
+// command ends on its own once the outcome is recorded.
+func holdSignals() func() {
+	caught := make(chan os.Signal, 1)
+	signal.Notify(caught, os.Interrupt, syscall.SIGTERM)
+	return func() { signal.Stop(caught) }
 }
 
 // receiptLost keeps the posted review's id and URL somewhere the human can find them once receipt.json cannot be
