@@ -38,7 +38,7 @@ func (d *Diff) Validate(path, side string, line, startLine int) error {
 
 // HunkFor finds the file and the hunk holding line on side, refusing like Validate when there is none.
 func (d *Diff) HunkFor(path, side string, line int) (*File, *Hunk, error) {
-	f := d.File(path)
+	f := d.fileOn(path, side)
 	if f == nil {
 		return nil, nil, d.notAFile(path)
 	}
@@ -71,10 +71,8 @@ func (d *Diff) notAFile(path string) error {
 func (d *Diff) paths() []string {
 	paths := make([]string, 0, len(d.Files))
 	for _, f := range d.Files {
-		if f.IsDelete {
-			paths = append(paths, f.OldName)
-		} else {
-			paths = append(paths, f.NewName)
+		if name := f.path(); len(paths) == 0 || paths[len(paths)-1] != name {
+			paths = append(paths, name)
 		}
 	}
 	return paths

@@ -18,8 +18,9 @@ const (
 )
 
 type Diff struct {
-	Files  []*File
-	byPath map[string]*File
+	Files []*File
+	// byPath holds every entry for a path in diff order; a type change, such as a symlink becoming a file, has two.
+	byPath map[string][]*File
 }
 
 type File struct {
@@ -111,17 +112,40 @@ func convertHunk(frag *gitdiff.TextFragment) *Hunk {
 
 // File finds a file by its new name, or by its old name when the file was deleted.
 func (d *Diff) File(path string) *File {
+	return d.fileOn(path, "RIGHT")
+}
+
+// fileOn picks the entry holding side of path: under a type change the old side is in the deletion and the new side
+// in the addition.
+func (d *Diff) fileOn(path, side string) *File {
+	entries := d.entries(path)
+	for _, f := range entries {
+		if (side == "LEFT" && !f.IsNew) || (side != "LEFT" && !f.IsDelete) {
+			return f
+		}
+	}
+	if len(entries) > 0 {
+		return entries[0]
+	}
+	return nil
+}
+
+func (d *Diff) entries(path string) []*File {
 	if d.byPath == nil {
-		d.byPath = make(map[string]*File, len(d.Files))
+		d.byPath = make(map[string][]*File, len(d.Files))
 		for _, f := range d.Files {
-			if f.IsDelete {
-				d.byPath[f.OldName] = f
-			} else {
-				d.byPath[f.NewName] = f
-			}
+			name := f.path()
+			d.byPath[name] = append(d.byPath[name], f)
 		}
 	}
 	return d.byPath[path]
+}
+
+func (f *File) path() string {
+	if f.IsDelete {
+		return f.OldName
+	}
+	return f.NewName
 }
 
 // LineAt finds the line numbered n on side RIGHT (new file) or LEFT (old file). Indexes are built on first use

@@ -44,12 +44,12 @@ func (d *Diff) HunkView(path, side string, line, startLine, context int) ([]View
 // FileView returns every hunk of the file, each preceded by a separator. right and left map line numbers on each side
 // to the finding ids anchored there; a context line exists on both sides and collects from both.
 func (d *Diff) FileView(path string, right, left map[int][]string) ([]ViewLine, error) {
-	f := d.File(path)
-	if f == nil {
+	entries := d.entries(path)
+	if len(entries) == 0 {
 		return nil, d.notAFile(path)
 	}
 	var out []ViewLine
-	for _, h := range f.Hunks {
+	for _, h := range hunks(entries) {
 		out = append(out, ViewLine{Separator: true, Line: Line{Text: fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldLines, h.NewStart, h.NewLines)}})
 		for _, l := range h.Lines {
 			var markers []string
@@ -63,6 +63,14 @@ func (d *Diff) FileView(path string, right, left map[int][]string) ([]ViewLine, 
 		}
 	}
 	return out, nil
+}
+
+func hunks(entries []*File) []*Hunk {
+	var out []*Hunk
+	for _, f := range entries {
+		out = append(out, f.Hunks...)
+	}
+	return out
 }
 
 // NextMarker returns the index of the first marked line after from, wrapping to the start, or -1 when none is marked.

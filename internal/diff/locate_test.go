@@ -140,3 +140,36 @@ func TestHunkFor(t *testing.T) {
 		_ = locationRefusal(t, err)
 	}
 }
+
+// Git writes a symlink that became a regular file as a deletion and an addition under one path.
+func TestTypeChangeKeepsBothSides(t *testing.T) {
+	d := parseFixture(t, "type-change.diff")
+	if len(d.Files) != 2 {
+		t.Fatalf("files %d, want the deletion and the addition", len(d.Files))
+	}
+	if err := d.Validate("l", "LEFT", 1, 0); err != nil {
+		t.Fatalf("old side: %v", err)
+	}
+	if err := d.Validate("l", "RIGHT", 2, 1); err != nil {
+		t.Fatalf("new side: %v", err)
+	}
+	r := locationRefusal(t, d.Validate("m", "RIGHT", 1, 0))
+	if !reflect.DeepEqual(r.Details["paths"], []string{"l"}) {
+		t.Fatalf("paths %v", r.Details["paths"])
+	}
+	lines, err := d.FileView("l", map[int][]string{2: {"f-002"}}, map[int][]string{1: {"f-001"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var separators int
+	var markers []string
+	for _, l := range lines {
+		if l.Separator {
+			separators++
+		}
+		markers = append(markers, l.Markers...)
+	}
+	if separators != 2 || !reflect.DeepEqual(markers, []string{"f-001", "f-002"}) {
+		t.Fatalf("file view separators %d markers %v", separators, markers)
+	}
+}
