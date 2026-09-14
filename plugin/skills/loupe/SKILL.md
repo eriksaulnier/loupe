@@ -5,7 +5,7 @@ description: Use when reviewing a GitHub pull request with loupe, or when filing
 
 # Review a pull request with loupe
 
-loupe files your review findings into a local draft. The human decides each finding in `loupe review` and posts exactly one GitHub review. Your job ends at a complete draft; the human's job starts there.
+loupe files your review findings into a local draft. The human decides each finding in `loupe review` and posts exactly one GitHub review.
 
 Every command below MUST be run with `--json`. Each prints exactly one result object on stdout. Run `loupe <command> --help` when you need an input or result shape that this file does not spell out.
 
@@ -45,7 +45,7 @@ Write the findings to a JSON file, one object or an array, then run `loupe add -
 - Optional `label`: `issue`, `suggestion`, `question`, or any other word of letters, digits, `_`, `.` or `-`, at most 40 characters.
 - Optional `blocking` (default `false`), `confidence` (`high`, `medium` or `low`), `severity` (free text), and `suggestedFix`.
 
-The input MUST NOT carry `included`, `decision`, `status` or `findingRev`. A batch is stored entirely or not at all; a refusal names the failing entry in `error.details.entry`. The result lists each new finding's `id` and `rev`.
+The input MUST NOT carry `included`, `decision`, `status` or `findingRev`. A batch is stored entirely or not at all; a refusal names the failing entry in `error.details.entry`.
 
 ## 5. Set the summary
 
