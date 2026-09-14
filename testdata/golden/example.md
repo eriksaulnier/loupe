@@ -8,7 +8,7 @@ Tests were not executed in this read-only review.
 
 ---
 
-### Blocking
+### ⛔ Blocking
 
 <details>
 <summary>🟡 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
@@ -29,7 +29,7 @@ Return the original write error.
 
 ---
 
-### Other
+### ⚪ Other
 
 <details>
 <summary><b>perf-nit:</b> Redundant sort on every read</summary>

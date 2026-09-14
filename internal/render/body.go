@@ -107,7 +107,7 @@ func Body(in Input) string {
 	blocks := []string{strings.Join(head, "\n\n")}
 
 	if len(blocking) > 0 {
-		blocks = append(blocks, section("Blocking", blocking, inBlocking, in))
+		blocks = append(blocks, section("⛔ Blocking", blocking, inBlocking, in))
 	}
 	for g, fs := range sections {
 		if len(fs) == 0 {
@@ -118,7 +118,7 @@ func Body(in Input) string {
 		if g == groupOther {
 			ctx = inOther
 		}
-		blocks = append(blocks, section(sectionTitles[g], fs, ctx, in))
+		blocks = append(blocks, section(dots[g]+" "+sectionTitles[g], fs, ctx, in))
 	}
 
 	census := [4]int{}

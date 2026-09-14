@@ -4,7 +4,7 @@ Summary.
 
 ---
 
-### Issues
+### 🟡 Issues
 
 <details>
 <summary>Title f-001</summary>

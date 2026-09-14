@@ -4,7 +4,7 @@ Summary.
 
 ---
 
-### Issues
+### 🟡 Issues
 
 <details>
 <summary>Removed guard</summary>

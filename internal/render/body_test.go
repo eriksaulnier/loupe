@@ -146,7 +146,7 @@ func indexes(t *testing.T, body string, needles ...string) []int {
 }
 
 func TestBodySectionOrder(t *testing.T) {
-	got := indexes(t, Body(mixedInput()), "### Blocking\n", "### Issues\n", "### Suggestions\n", "### Questions\n", "### Other\n")
+	got := indexes(t, Body(mixedInput()), "### ⛔ Blocking\n", "### 🟡 Issues\n", "### 🟣 Suggestions\n", "### 🔵 Questions\n", "### ⚪ Other\n")
 	if !slices.IsSorted(got) {
 		t.Fatalf("section offsets %v not in order", got)
 	}
@@ -154,7 +154,7 @@ func TestBodySectionOrder(t *testing.T) {
 
 func TestBodyBlockingSortedByLabelGroupThenID(t *testing.T) {
 	body := Body(mixedInput())
-	got := indexes(t, body, "Title f-007<", "Title f-011<", "Title f-008<", "Title f-009<", "Title f-006<", "Title f-010<", "### Issues")
+	got := indexes(t, body, "Title f-007<", "Title f-011<", "Title f-008<", "Title f-009<", "Title f-006<", "Title f-010<", "### 🟡 Issues")
 	if !slices.IsSorted(got) {
 		t.Fatalf("blocking offsets %v not in label-group then id order\n%s", got, body)
 	}
@@ -162,7 +162,7 @@ func TestBodyBlockingSortedByLabelGroupThenID(t *testing.T) {
 
 func TestBodySortsIDsNumerically(t *testing.T) {
 	body := Body(mixedInput())
-	got := indexes(t, body, "### Questions", "Title f-999<", "Title f-1000<", "### Other")
+	got := indexes(t, body, "### 🔵 Questions", "Title f-999<", "Title f-1000<", "### ⚪ Other")
 	if !slices.IsSorted(got) {
 		t.Fatalf("f-999 must precede f-1000 in Questions: offsets %v\n%s", got, body)
 	}

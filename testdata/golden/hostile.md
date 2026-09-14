@@ -4,7 +4,7 @@ Summary.
 
 ---
 
-### Issues
+### 🟡 Issues
 
 <details>
 <summary>Closes &lt;/summary&gt; &amp; &lt;b&gt;early&lt;/b&gt;</summary>

@@ -25,6 +25,7 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 ## Body composition
 
 - Section order is fixed: `Blocking`, `Issues`, `Suggestions`, `Questions`, `Other`. Empty sections are omitted.
+- Each heading is led by its chip's dot: `### ⛔ Blocking`, `### 🟡 Issues`, `### 🟣 Suggestions`, `### 🔵 Questions`, `### ⚪ Other`. A reader matches a chip to its section by the dot.
 - **Every included finding has exactly one home in the body.** A blocking finding lives in `Blocking` and nowhere else, regardless of its label. `--inline` decides only what additionally anchors to a line; it never changes what the body contains.
 - Within `Blocking`, findings sort by label in section order (`issue`, `suggestion`, `question`, then every unknown label as one group) and by finding id within each group. Within a label section and within `Other`, findings sort by id.
 
@@ -39,7 +40,7 @@ Tests were not executed in this read-only review.
 
 ---
 
-### Blocking
+### ⛔ Blocking
 
 <details>
 <summary>🟡 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
@@ -60,7 +61,7 @@ Return the original write error.
 
 ---
 
-### Other
+### ⚪ Other
 
 <details>
 <summary><b>perf-nit:</b> Redundant sort on every read</summary>
@@ -120,8 +121,8 @@ The body opens with a callout only when blocking findings are included. Otherwis
 | Where | Dot | Label word | Why |
 | :--- | :--- | :--- | :--- |
 | `Blocking` | yes | yes | Labels mix here, so both tell the rows apart |
-| `Issues` · `Suggestions` · `Questions` | no | no | The heading names the label; every row would repeat it |
-| `Other` | no | yes | Constant dot, but the heading does not name the actual label |
+| `Issues` · `Suggestions` · `Questions` | no | no | The heading carries the dot and names the label; every row would repeat both |
+| `Other` | no | yes | The heading carries the constant dot but does not name the actual label |
 | Inline comment | yes | yes | No heading to lean on |
 
 - The label is followed by ` (blocking)` when the finding blocks. That happens only in `Blocking` and on the inline surface, because a blocking finding is never placed in a label section. Inside `Blocking` it is redundant against the heading and kept anyway so the inline surface, which has no heading, keeps the signal.

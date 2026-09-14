@@ -7,7 +7,7 @@ Summary.
 
 ---
 
-### Blocking
+### ⛔ Blocking
 
 <details>
 <summary>🟣 <b>suggestion (blocking):</b> Title f-001</summary>
