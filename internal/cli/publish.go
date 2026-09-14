@@ -147,7 +147,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bool) error {
 	s := deps.errStyle()
 	outcome := s.Good.Bold(true).Render(s.Glyphs.Published + " published")
-	detail := fmt.Sprintf("%s round %d", ref.String(), ref.Round)
+	detail := ref.String()
 	if inline := len(receipt.Envelope.Comments); inline > 0 {
 		detail += fmt.Sprintf("  %s %d inline %s", s.Dim.Render("action "+receipt.Action), inline, plural(inline, "comment"))
 	} else {
@@ -155,7 +155,7 @@ func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bo
 	}
 	if replayed {
 		outcome = s.Good.Bold(true).Render(s.Glyphs.Published + " already published")
-		detail = s.Dim.Render(fmt.Sprintf("round %d was posted on %s", ref.Round, receipt.PostedAt.UTC().Format("2006-01-02 at 15:04 UTC")))
+		detail = s.Dim.Render(fmt.Sprintf("%s was posted on %s", ref.String(), receipt.PostedAt.UTC().Format("2006-01-02 at 15:04 UTC")))
 	}
 	if _, err := fmt.Fprintf(deps.Stderr, "%s  %s\n", outcome, detail); err != nil {
 		return err
