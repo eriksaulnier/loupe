@@ -89,14 +89,10 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
-	client, err := deps.GitHub()
-	if err != nil {
-		return err
-	}
 	plain, _ := cmd.Flags().GetBool("plain")
 	retryUnknown, _ := cmd.Flags().GetBool("retry-unknown")
 	receipt, err := publish.Run(cmd.Context(), publish.Options{
-		Dir: dir, Target: target, GitHub: client, IsTerminal: deps.IsTerminal(), Action: action, Inline: inline, RetryUnknown: retryUnknown,
+		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: deps.IsTerminal(), Action: action, Inline: inline, RetryUnknown: retryUnknown,
 		Confirm: func(preview publish.Preview) (bool, error) {
 			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
 			width, height := terminalSize(deps)

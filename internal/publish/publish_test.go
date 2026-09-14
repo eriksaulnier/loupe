@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
@@ -45,7 +46,7 @@ func newRun(t *testing.T, d *draft.Draft) *fixture {
 	fx := &fixture{t: t, dir: dir, gh: gh}
 	fx.draft = fx.readDraft()
 	fx.opts = Options{
-		Dir: dir, Target: fixtureTarget(), GitHub: client, IsTerminal: true, Action: "comment", Inline: "all",
+		Dir: dir, Target: fixtureTarget(), GitHub: func() (github.Client, error) { return client, nil }, IsTerminal: true, Action: "comment", Inline: "all",
 		Now:    func() time.Time { return fixtureNow },
 		Getenv: func(string) string { return "" },
 	}
@@ -276,6 +277,7 @@ func TestRunPublishesOnceThenReplays(t *testing.T) {
 
 	requests := len(fx.gh.Requests())
 	fx.opts.IsTerminal = false
+	fx.opts.GitHub = func() (github.Client, error) { return nil, errors.New("no GitHub credentials") }
 	again, err := fx.run()
 	if err != nil || !reflect.DeepEqual(again, receipt) {
 		t.Fatalf("replay %+v err %v", again, err)

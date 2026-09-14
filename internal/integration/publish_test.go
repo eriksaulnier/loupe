@@ -111,6 +111,7 @@ func TestPublishEndToEnd(t *testing.T) {
 
 	requests := len(h.GH.Requests())
 	h.IsTerminal = false
+	h.GitHubErr = errors.New("no GitHub credentials")
 	again, stderr, exit := h.Run("publish", runRef, "--action", "comment")
 	if exit != 0 || again != receipt.ReviewURL+"\n" {
 		t.Fatalf("replay exit %d stdout %q stderr %q", exit, again, stderr)

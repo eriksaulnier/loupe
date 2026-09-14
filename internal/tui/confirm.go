@@ -172,14 +172,10 @@ func (s *publishSession) wait() tea.Msg {
 }
 
 func (m *Model) startPublish() tea.Cmd {
-	client, err := m.cfg.GitHub()
-	if err != nil {
-		return m.publishFinished(publishDone{err: err})
-	}
 	s := &publishSession{previews: make(chan publish.Preview), answers: make(chan bool, 1), done: make(chan publishDone, 1), finished: make(chan struct{})}
 	m.session, m.view, m.notice = s, viewPublishing, "checking the pull request and composing the review..."
 	opts := publish.Options{
-		Dir: m.cfg.Dir, Target: m.target, GitHub: client, IsTerminal: true, Action: m.action, Inline: publish.InlineModes[m.pick],
+		Dir: m.cfg.Dir, Target: m.target, GitHub: m.cfg.GitHub, IsTerminal: true, Action: m.action, Inline: publish.InlineModes[m.pick],
 		Confirm: func(p publish.Preview) (bool, error) {
 			s.previews <- p
 			return <-s.answers, nil

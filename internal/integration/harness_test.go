@@ -36,7 +36,9 @@ type harness struct {
 	Stdin      string
 	IsTerminal bool
 	Env        map[string]string
-	client     github.Client
+	// GitHubErr, when set, is what building the GitHub client fails with.
+	GitHubErr error
+	client    github.Client
 }
 
 func newHarness(t *testing.T) *harness {
@@ -90,13 +92,18 @@ func fixedNow() time.Time { return time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 func (h *harness) runWith(stdin string, now func() time.Time, args ...string) (stdout, stderr string, exit int) {
 	var out, errOut bytes.Buffer
 	deps := cli.Deps{
-		Stdin:      strings.NewReader(stdin),
-		Stdout:     &out,
-		Stderr:     &errOut,
-		Getenv:     h.getenv,
-		Now:        now,
-		WorkDir:    h.WorkDir,
-		GitHub:     func() (github.Client, error) { return h.client, nil },
+		Stdin:   strings.NewReader(stdin),
+		Stdout:  &out,
+		Stderr:  &errOut,
+		Getenv:  h.getenv,
+		Now:     now,
+		WorkDir: h.WorkDir,
+		GitHub: func() (github.Client, error) {
+			if h.GitHubErr != nil {
+				return nil, h.GitHubErr
+			}
+			return h.client, nil
+		},
 		IsTerminal: func() bool { return h.IsTerminal },
 	}
 	exit = cli.Execute(deps, args)

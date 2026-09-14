@@ -20,9 +20,10 @@ import (
 var ErrDeclined = errors.New("publish declined; nothing was sent")
 
 type Options struct {
-	Dir        string
-	Target     run.Target
-	GitHub     github.Client
+	Dir    string
+	Target run.Target
+	// GitHub is called only once no receipt is found, so a replay never needs credentials.
+	GitHub     func() (github.Client, error)
 	IsTerminal bool
 	Action     string
 	Inline     string
@@ -56,10 +57,14 @@ func Run(ctx context.Context, opts Options) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
-	if err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: opts.GitHub, Target: opts.Target, Action: opts.Action, Draft: d}); err != nil {
+	client, err := opts.GitHub()
+	if err != nil {
 		return Receipt{}, err
 	}
-	viewer, err := opts.GitHub.Viewer(ctx)
+	if err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d}); err != nil {
+		return Receipt{}, err
+	}
+	viewer, err := client.Viewer(ctx)
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -81,10 +86,10 @@ func Run(ctx context.Context, opts Options) (Receipt, error) {
 	if !confirmed {
 		return Receipt{}, ErrDeclined
 	}
-	if err := recheckLive(ctx, opts, viewer); err != nil {
+	if err := recheckLive(ctx, opts, client, viewer); err != nil {
 		return Receipt{}, err
 	}
-	return send(ctx, opts, env, preview)
+	return send(ctx, opts, client, env, preview)
 }
 
 func firstCheck(opts Options) (receipt Receipt, replay bool, err error) {
@@ -115,15 +120,15 @@ func unknownAttemptRefusal(target run.Target, message string) error {
 		fmt.Sprintf("inspect %s, then loupe publish --retry-unknown", target.URL))
 }
 
-func recheckLive(ctx context.Context, opts Options, viewer string) error {
-	pr, err := opts.GitHub.PullRequest(ctx, opts.Target.Owner, opts.Target.Repo, opts.Target.Number)
+func recheckLive(ctx context.Context, opts Options, client github.Client, viewer string) error {
+	pr, err := client.PullRequest(ctx, opts.Target.Owner, opts.Target.Repo, opts.Target.Number)
 	if err != nil {
 		return err
 	}
 	if err := headRefusal(opts.Target, pr); err != nil {
 		return err
 	}
-	now, err := opts.GitHub.Viewer(ctx)
+	now, err := client.Viewer(ctx)
 	if err != nil {
 		return err
 	}
@@ -136,7 +141,7 @@ func recheckLive(ctx context.Context, opts Options, viewer string) error {
 }
 
 // send holds the lock from the recheck until the outcome is recorded, so a second publisher cannot also send.
-func send(ctx context.Context, opts Options, env Envelope, preview Preview) (receipt Receipt, err error) {
+func send(ctx context.Context, opts Options, client github.Client, env Envelope, preview Preview) (receipt Receipt, err error) {
 	held, err := run.Lock(opts.Dir, "publish", opts.Getenv)
 	if err != nil {
 		return Receipt{}, err
@@ -188,7 +193,7 @@ func send(ctx context.Context, opts Options, env Envelope, preview Preview) (rec
 	for _, c := range env.Comments {
 		comments = append(comments, github.ReviewComment{Path: c.Path, Line: c.Line, Side: c.Side, StartLine: c.StartLine, StartSide: c.StartSide, Body: c.Body})
 	}
-	review, sendErr := opts.GitHub.CreateReview(ctx, env.Target.Owner, env.Target.Repo, env.Target.Number,
+	review, sendErr := client.CreateReview(ctx, env.Target.Owner, env.Target.Repo, env.Target.Number,
 		github.ReviewRequest{CommitID: env.CommitID, Body: env.Body, Event: env.Event, Comments: comments})
 	if sendErr == nil && (review.ID == 0 || review.HTMLURL == "") {
 		sendErr = fmt.Errorf("GitHub accepted the review but its response has no id or html_url (id %d, html_url %q)", review.ID, review.HTMLURL)
