@@ -148,12 +148,19 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, error) {
 		// Decoding a second time from the validated bytes reuses DecodeInput's refusals for unknown fields and types.
 		trimmed := bytes.TrimSpace(raw)
 		if len(trimmed) > 0 && trimmed[0] == '[' {
-			var inputs []draft.FindingInput
-			if err := DecodeInput("add", "-", bytes.NewReader(trimmed), &inputs); err != nil {
+			var entries []json.RawMessage
+			if err := DecodeInput("add", "-", bytes.NewReader(trimmed), &entries); err != nil {
 				return nil, err
 			}
-			if len(inputs) == 0 {
+			if len(entries) == 0 {
 				return nil, refusal.New(refusal.Input, "input is an empty array; it holds no findings", "see loupe add --help for the input shape")
+			}
+			// Each entry decodes on its own so an unknown field or a wrong type names the entry it is in.
+			inputs := make([]draft.FindingInput, len(entries))
+			for i, entry := range entries {
+				if err := DecodeInput("add", "-", bytes.NewReader(entry), &inputs[i]); err != nil {
+					return nil, inEntry(err, i)
+				}
 			}
 			return inputs, nil
 		}
@@ -182,6 +189,22 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, error) {
 		in.Location = loc
 	}
 	return []draft.FindingInput{in}, nil
+}
+
+func inEntry(err error, entry int) error {
+	r, ok := refusal.As(err)
+	if !ok {
+		return err
+	}
+	if _, named := r.Details["entry"]; named {
+		return r
+	}
+	if r.Details == nil {
+		r.Details = map[string]any{}
+	}
+	r.Details["entry"] = entry
+	r.Message = fmt.Sprintf("input entry %d: %s", entry, r.Message)
+	return r
 }
 
 // loadDiff reads pr.diff once per command; the diff is the only authority for locations.

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
@@ -36,13 +38,23 @@ func resolveRun(cmd *cobra.Command, deps Deps, positional string) (string, run.R
 	}
 	if selected == "" {
 		if ref, err = run.ResolveBranch(cmd.Context(), root, deps.WorkDir, deps.GitHub); err != nil {
-			return "", run.Ref{}, err
+			return "", run.Ref{}, positionalFix(cmd, err)
 		}
 	}
 	dir, resolved, err := run.ResolveRef(root, ref)
 	if err != nil {
-		return "", run.Ref{}, err
+		return "", run.Ref{}, positionalFix(cmd, err)
 	}
 	invocationOf(cmd).run = resolved.String()
 	return dir, resolved, nil
+}
+
+// positionalFix rewrites a fix naming --run for review and publish, which take the run reference as their argument.
+func positionalFix(cmd *cobra.Command, err error) error {
+	r, ok := refusal.As(err)
+	if !ok || cmd.Flags().Lookup("run") != nil {
+		return err
+	}
+	r.Fix = strings.ReplaceAll(r.Fix, "--run <ref>", cmd.CommandPath()+" <ref>")
+	return r
 }

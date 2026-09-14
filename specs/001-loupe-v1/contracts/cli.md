@@ -37,7 +37,7 @@ Refusal or error (exit 1 or 2):
 | Code | Meaning | `fix` names |
 | :--- | :--- | :--- |
 | `usage` | Bad flags or arguments | the correct invocation |
-| `no-run` | No run resolved | `loupe capture <url>` or `--run <ref>` |
+| `no-run` | No run resolved | `loupe capture <url>` or `--run <ref>` (for `review` and `publish`, the `<ref>` argument) |
 | `record` | A run file is missing or unreadable | the file and an inspection command; never repaired |
 | `origin` | Clone origin is not the pull request's repository | `loupe capture <url> --repo <path>` |
 | `pr` | Pull request not found, closed, or not on github.com | the capture syntax for an open pull request |

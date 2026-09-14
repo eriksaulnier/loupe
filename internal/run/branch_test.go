@@ -212,7 +212,7 @@ func TestResolveBranchServerErrorRefusesGitHub(t *testing.T) {
 	r.Git("checkout", "--quiet", "-b", "feature")
 
 	_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, client)
-	wantRefusal(t, err, refusal.GitHub, "", "retry, or pass --run <ref>; check network access to api.github.com")
+	wantRefusal(t, err, refusal.GitHub, "", "retry, or select the run: --run <ref>; check network access to api.github.com")
 }
 
 func TestResolveBranchPullRequestWithoutRun(t *testing.T) {

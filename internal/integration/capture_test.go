@@ -69,6 +69,21 @@ func TestCaptureLeavesCloneUntouched(t *testing.T) {
 			t.Errorf("next %v lacks %q", next, want)
 		}
 	}
+	// The agent steps run as printed once their placeholders are filled.
+	steps := strings.NewReplacer("<n>", "1")
+	for i, file := range []string{
+		h.WriteFile("findings.json", `[{"title": "t", "body": "b", "general": true}]`),
+		h.WriteFile("summary.json", `{"summary": "One finding."}`),
+	} {
+		step, _ := next[i].(string)
+		args := strings.Fields(strings.ReplaceAll(steps.Replace(step), "<file>", file))
+		if len(args) == 0 || args[0] != "loupe" {
+			t.Fatalf("next step %q", step)
+		}
+		if stdout, stderr, exit := h.Run(args[1:]...); exit != 0 {
+			t.Fatalf("printed step %q exit %d stdout %q stderr %q", step, exit, stdout, stderr)
+		}
+	}
 
 	dir := h.RunDir(1)
 	var target map[string]any
@@ -153,6 +168,13 @@ func TestAddShowAndSummary(t *testing.T) {
 	}
 	if !bytes.Equal(before, readFile(t, draftPath)) {
 		t.Fatal("refused batch changed draft.json")
+	}
+	for _, bad := range []string{`"bogus": 1`, `"general": "yes"`} {
+		h.Stdin = `[{"title": "Good", "body": "b", "general": true}, {"title": "Bad", "body": "b", ` + bad + `}]`
+		errObj = h.mustRefuse("input", "add", "--run", runRef, "--from", "-")
+		if details, _ := errObj["details"].(map[string]any); details["entry"] != json.Number("1") {
+			t.Fatalf("%s: error %v", bad, errObj)
+		}
 	}
 
 	errObj = h.mustRefuse("count", "summary", "--run", runRef, "--body", "Two findings.", "--expect-findings", "3")

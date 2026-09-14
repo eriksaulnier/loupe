@@ -43,7 +43,7 @@ Result (--json):
    "cleanup": ["git -C /path/to/clone update-ref -d refs/loupe/owner/repo/123/1/base",
                "git -C /path/to/clone update-ref -d refs/loupe/owner/repo/123/1/head"],
    "next": ["loupe add --run owner/repo#123@1 --from <file> --json",
-            "loupe summary --run owner/repo#123@1 --expect-findings <n> --json",
+            "loupe summary --run owner/repo#123@1 --from <file> --expect-findings <n> --json",
             "then the human runs: loupe review owner/repo#123@1"]}
   target.previousRound is present from round 2 on.`
 
@@ -232,7 +232,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 
 	next := []string{
 		fmt.Sprintf("loupe add --run %s --from <file> --json", ref),
-		fmt.Sprintf("loupe summary --run %s --expect-findings <n> --json", ref),
+		fmt.Sprintf("loupe summary --run %s --from <file> --expect-findings <n> --json", ref),
 		fmt.Sprintf("then the human runs: loupe review %s", ref),
 	}
 	if wantJSON(cmd) {

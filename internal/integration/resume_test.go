@@ -115,8 +115,17 @@ func TestResumeFromBranch(t *testing.T) {
 	}
 
 	h.Repo.Git("checkout", "--quiet", "-b", "lonely")
-	h.mustRefuse("no-run", "review")
-	h.mustRefuse("no-run", "show")
+	errObj := h.mustRefuse("no-run", "review")
+	if fix, _ := errObj["fix"].(string); strings.Contains(fix, "--run") || !strings.Contains(fix, "loupe review <ref>") {
+		t.Fatalf("review no-run fix %q", fix)
+	}
+	errObj = h.mustRefuse("no-run", "publish", "acme/widgets#99", "--action", "comment")
+	if fix, _ := errObj["fix"].(string); strings.Contains(fix, "--run") || !strings.Contains(fix, "loupe publish <ref>") {
+		t.Fatalf("publish no-run fix %q", fix)
+	}
+	if fix, _ := h.mustRefuse("no-run", "show")["fix"].(string); !strings.Contains(fix, "--run <ref>") {
+		t.Fatalf("show no-run fix %q", fix)
+	}
 
 	h.GitHubErr = errors.New("no GitHub credentials")
 	h.mustOK("show", "--run", "acme/widgets#7")
@@ -131,7 +140,7 @@ func TestResumeFromBranch(t *testing.T) {
 	if err := os.WriteFile(draftPath, []byte("{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	errObj := h.mustRefuse("record", "list")
+	errObj = h.mustRefuse("record", "list")
 	if msg, _ := errObj["message"].(string); !strings.Contains(msg, draftPath) {
 		t.Fatalf("record refusal does not name %s: %v", draftPath, errObj)
 	}

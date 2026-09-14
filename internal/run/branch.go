@@ -171,7 +171,7 @@ func lookupRefusal(err error, what string) error {
 		return err
 	}
 	return refusal.New(refusal.GitHub, fmt.Sprintf("%s: %v", what, err),
-		"retry, or pass --run <ref>; check network access to api.github.com")
+		"retry, or select the run: --run <ref>; check network access to api.github.com")
 }
 
 type Entry struct {
