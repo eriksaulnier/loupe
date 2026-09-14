@@ -16,7 +16,7 @@ import (
 const detailHeaderLines = 1
 
 func (m *Model) openFinding(id string) error {
-	m.view, m.openID, m.noting = viewDetail, id, false
+	m.view, m.openID, m.noting, m.hunkTop = viewDetail, id, false, 0
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -157,6 +157,10 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 			m.notice = ""
 			return m.fail(m.openFinding(m.draft.Findings[i-1].ID))
 		}
+	case "J":
+		m.hunkTop = min(m.hunkTop+1, maxHunkTop(len(m.hunk), m.hunkRows()))
+	case "K":
+		m.hunkTop = max(m.hunkTop-1, 0)
 	case "j", "down":
 		m.body.ScrollDown(1)
 	case "k", "up":
@@ -215,15 +219,55 @@ func (m *Model) detailView() string {
 	header := []string{m.styles.bold.Render(fmt.Sprintf("%s/%s#%d  round %d  %s (%d of %d)",
 		m.target.Owner, m.target.Repo, m.target.Number, m.target.Round, f.ID, i+1, len(m.draft.Findings)))}
 	separator := m.styles.dim.Render(strings.Repeat("-", m.width))
-	hunkHeight := m.bodyHeight(detailHeaderLines) - m.body.Height
-	hunk := m.hunk
-	if len(hunk) > max(0, hunkHeight-1) {
-		hunk = hunk[:max(0, hunkHeight-1)]
-	}
-	body := m.body.View() + "\n" + separator + "\n" + strings.Join(hunk, "\n")
-	keys := "a accept  x exclude  s send back  u restore  r/d resolve/dismiss note  f file diff  n/N next/prev  esc back  ? help"
+	body := m.body.View() + "\n" + separator + "\n" + strings.Join(m.hunkWindow(), "\n")
+	keys := "a accept  x exclude  s send back  u restore  r/d resolve/dismiss note  f file diff  J/K hunk  n/N next/prev  esc back  ? help"
 	if m.noting {
 		keys = m.note.View()
 	}
 	return m.frame(header, body, keys)
+}
+
+// hunkRows is the height of the region under the separator.
+func (m *Model) hunkRows() int {
+	return max(0, m.bodyHeight(detailHeaderLines)-m.body.Height-1)
+}
+
+// maxHunkTop leaves the last page full: its rows less the line that counts the rows above.
+func maxHunkTop(lines, rows int) int {
+	if lines <= rows {
+		return 0
+	}
+	return max(0, lines-max(1, rows-1))
+}
+
+// hunkWindow is the part of the hunk that fits, with a line counting the rows hidden above or below so an anchored
+// line is never cut off without a trace.
+func (m *Model) hunkWindow() []string {
+	rows := m.hunkRows()
+	if len(m.hunk) <= rows {
+		return m.hunk
+	}
+	if rows == 0 {
+		return nil
+	}
+	top := min(m.hunkTop, maxHunkTop(len(m.hunk), rows))
+	var above, below string
+	if top > 0 {
+		above = m.styles.dim.Render(fmt.Sprintf("  ... %d lines above; K scrolls up", top))
+		rows--
+	}
+	end := min(len(m.hunk), top+rows)
+	if end < len(m.hunk) && rows > 0 {
+		end--
+		below = m.styles.dim.Render(fmt.Sprintf("  ... %d lines below; J scrolls down", len(m.hunk)-max(end, top)))
+	}
+	var out []string
+	if above != "" {
+		out = append(out, above)
+	}
+	out = append(out, m.hunk[top:max(end, top)]...)
+	if below != "" {
+		out = append(out, below)
+	}
+	return out
 }

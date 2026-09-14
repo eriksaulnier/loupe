@@ -97,9 +97,11 @@ type Model struct {
 	cursor           int
 	summaryCollapsed bool
 
-	openID    string
-	body      viewport.Model
-	hunk      []string
+	openID string
+	body   viewport.Model
+	hunk   []string
+	// hunkTop is the first hunk row shown when the hunk is taller than its region.
+	hunkTop   int
 	noting    bool
 	note      textinput.Model
 	glamour   *glamour.TermRenderer
@@ -346,7 +348,7 @@ func (m *Model) helpView() string {
 	case viewList:
 		keys = []string{"j/k, up/down  move", "enter         open the finding", "tab           collapse or expand the summary", "p             publish the review", "q             quit; every decision is already saved"}
 	case viewDetail:
-		keys = []string{"a    accept (included findings only)", "x    exclude", "s    send back with a note", "u    restore an excluded finding", "r/d  resolve or dismiss the finding's open note", "f    file diff", "n/N  next or previous finding", "j/k  scroll", "esc  back to the list"}
+		keys = []string{"a    accept (included findings only)", "x    exclude", "s    send back with a note", "u    restore an excluded finding", "r/d  resolve or dismiss the finding's open note", "f    file diff", "n/N  next or previous finding", "j/k  scroll the finding", "J/K  scroll the hunk", "esc  back to the list"}
 	case viewFileDiff:
 		keys = []string{"j/k, up/down  move", "]/[           next or previous finding", "enter         open the finding on this line", "esc           back to the finding"}
 	case viewAction, viewInline:

@@ -110,6 +110,34 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 	}
 }
 
+func TestConfirmEndsAtEndOfInput(t *testing.T) {
+	cases := []struct {
+		input string
+		want  bool
+	}{{"", false}, {"n", false}, {"y", true}}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%q", c.input), func(t *testing.T) {
+			type result struct {
+				ok  bool
+				err error
+			}
+			done := make(chan result, 1)
+			go func() {
+				ok, err := Confirm(strings.NewReader(c.input), io.Discard, envOf(testEnv))(confirmPreview())
+				done <- result{ok, err}
+			}()
+			select {
+			case r := <-done:
+				if r.err != nil || r.ok != c.want {
+					t.Fatalf("confirmed %v err %v, want %v", r.ok, r.err, c.want)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("confirmation still running after its input ended")
+			}
+		})
+	}
+}
+
 // readyFixture accepts every finding, so f-001 is an accepted blocking finding, and records viewer and author.
 func readyFixture(t *testing.T, viewer, author string) string {
 	t.Helper()

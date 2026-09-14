@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/term"
 
 	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/publish"
@@ -124,8 +127,28 @@ func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if c.confirm.key(c.shell, msg) {
 			return c, tea.Quit
 		}
+	case endOfInput:
+		return c, tea.Quit
 	}
 	return c, nil
+}
+
+// endOfInput cancels a confirmation whose input ran out, since no y can follow.
+type endOfInput struct{}
+
+// eofReader tells the program its input ended, because bubbletea drops io.EOF and would wait for a key forever.
+type eofReader struct {
+	r    io.Reader
+	once sync.Once
+	send func()
+}
+
+func (e *eofReader) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if errors.Is(err, io.EOF) {
+		e.once.Do(e.send)
+	}
+	return n, err
 }
 
 func (c *ConfirmModel) View() string {
@@ -135,7 +158,14 @@ func (c *ConfirmModel) View() string {
 // Confirm runs the confirmation view full screen for loupe publish.
 func Confirm(in io.Reader, out io.Writer, getenv func(string) string) func(publish.Preview) (bool, error) {
 	return func(preview publish.Preview) (bool, error) {
-		final, err := tea.NewProgram(NewConfirmModel(preview, getenv, out), tea.WithInput(in), tea.WithOutput(out), tea.WithAltScreen()).Run()
+		var program *tea.Program
+		input := in
+		// A terminal is passed through as a file so bubbletea can make it raw; a terminal that hangs up gets SIGHUP.
+		if f, ok := in.(*os.File); !ok || !term.IsTerminal(int(f.Fd())) {
+			input = &eofReader{r: in, send: func() { program.Send(endOfInput{}) }}
+		}
+		program = tea.NewProgram(NewConfirmModel(preview, getenv, out), tea.WithInput(input), tea.WithOutput(out), tea.WithAltScreen())
+		final, err := program.Run()
 		if err != nil {
 			return false, fmt.Errorf("confirmation view: %w", err)
 		}

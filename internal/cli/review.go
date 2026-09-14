@@ -20,7 +20,8 @@ This command is human-only. An agent MUST NOT run it; it refuses without an inte
 terminal on stdin and stdout, and on stderr under --json.
 
 The list shows the summary, readiness counts and every finding. Opening a finding shows its
-body above the diff hunk it points at; f shows the whole file's diff. In a finding, a accepts,
+body above the diff hunk it points at; J and K scroll a hunk taller than its region, and f
+shows the whole file's diff. In a finding, a accepts,
 x excludes, s sends it back with a note, u restores an excluded finding, and r or d resolves
 or dismisses its open note. ? lists the keys for the current view. Every decision is saved
 immediately and is refused if the finding changed since it was shown.
