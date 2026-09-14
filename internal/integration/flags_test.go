@@ -2,7 +2,9 @@ package integration
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +57,28 @@ func (h *harness) mustRefuseUsage(args ...string) {
 	env, exit := h.RunJSON(args...)
 	if errObj, _ := env["error"].(map[string]any); exit != 2 || errObj["code"] != "usage" {
 		h.t.Fatalf("loupe %v: exit %d envelope %v, want usage", args, exit, env)
+	}
+}
+
+func TestChangedDiffIsRefusedOnEveryLoad(t *testing.T) {
+	h := newHarness(t)
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--title", "t", "--body", "b", "--general")
+	diffPath := filepath.Join(h.RunDir(1), "pr.diff")
+	// The edit still parses, so only the fingerprint can tell the stored diff changed.
+	edited := bytes.Replace(readFile(t, diffPath), []byte("app line 3 changed"), []byte("app line 3 edited"), 1)
+	if err := os.WriteFile(diffPath, edited, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"add", "--run", runRef, "--title", "t", "--body", "b", "--general"},
+		{"edit", "f-001", "--run", runRef, "--title", "u"},
+		{"review", runRef, "--plain"},
+	} {
+		h.IsTerminal = args[0] == "review"
+		errObj := h.mustRefuse("record", args...)
+		if msg, _ := errObj["message"].(string); !strings.Contains(msg, diffPath) || !strings.Contains(msg, "diffSha256") {
+			t.Fatalf("%s: record refusal %v does not name the file and the fingerprint", args[0], errObj)
+		}
 	}
 }

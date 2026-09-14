@@ -1,6 +1,8 @@
 package run
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -50,6 +52,26 @@ func LoadTarget(dir string) (Target, error) {
 		return Target{}, recordRefusal(path, fmt.Errorf("schema is %d, expected %d", t.Schema, TargetSchema))
 	}
 	return t, nil
+}
+
+// DiffSHA256 is the fingerprint target.json records for pr.diff.
+func DiffSHA256(diff []byte) string {
+	sum := sha256.Sum256(diff)
+	return hex.EncodeToString(sum[:])
+}
+
+// ReadDiff returns pr.diff only when it still matches the fingerprint capture recorded, so a truncated or edited diff
+// cannot silently change which locations are valid or what the review shows.
+func ReadDiff(dir string, target Target) ([]byte, error) {
+	path := filepath.Join(dir, "pr.diff")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, recordRefusal(path, err)
+	}
+	if got := DiffSHA256(data); got != target.DiffSHA256 {
+		return nil, recordRefusal(path, fmt.Errorf("its SHA-256 is %s but target.json records diffSha256 %s", got, target.DiffSHA256))
+	}
+	return data, nil
 }
 
 // CreateRun takes the draft as bytes because run must not import draft. The run appears complete or not at all:

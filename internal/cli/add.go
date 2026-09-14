@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 const addHelp = `File one finding or a batch of findings into the run's draft.
@@ -209,12 +209,16 @@ func inEntry(err error, entry int) error {
 
 // loadDiff reads pr.diff once per command; the diff is the only authority for locations.
 func loadDiff(dir string) (*diff.Diff, error) {
+	target, err := run.LoadTarget(dir)
+	if err != nil {
+		return nil, err
+	}
+	data, err := run.ReadDiff(dir, target)
+	if err != nil {
+		return nil, err
+	}
 	path := filepath.Join(dir, "pr.diff")
 	fix := "inspect it with: cat " + path
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", path, err), fix)
-	}
 	d, err := diff.Parse(data)
 	if err != nil {
 		return nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", path, err), fix)

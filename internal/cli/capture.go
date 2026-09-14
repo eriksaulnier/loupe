@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -186,7 +184,6 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if _, err := diff.Parse(diffBytes); err != nil {
 		return leftRefs(fmt.Errorf("git diff of %s...%s does not parse: %w", baseRef, headRef, err))
 	}
-	sum := sha256.Sum256(diffBytes)
 
 	prURL := pr.URL
 	if prURL == "" {
@@ -209,7 +206,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		BaseRef:      baseRef,
 		HeadRef:      headRef,
 		MergeBaseSHA: mergeBase,
-		DiffSHA256:   hex.EncodeToString(sum[:]),
+		DiffSHA256:   run.DiffSHA256(diffBytes),
 	}
 	if newest > 0 {
 		target.PreviousRound = newest

@@ -39,7 +39,7 @@ Derived run state: `published` if `receipt.json` exists, else `ready` if readine
 | `clonePath` | string | absolute path of the clone used |
 | `baseRef`, `headRef` | string | `refs/loupe/<owner>/<repo>/<number>/<round>/{base,head}` |
 | `mergeBaseSha` | string | `git merge-base baseRef headRef`, the commit `pr.diff` compares the head against |
-| `diffSha256` | string | hex SHA-256 of `pr.diff` |
+| `diffSha256` | string | hex SHA-256 of `pr.diff`; every load of `pr.diff` compares it and refuses `record` on a mismatch (ruled 2026-09-13) |
 
 Validation: capture refuses (`same-head`) when the newest existing round has the same `headSha` and no receipt. `previousRound` is lineage; the previous published findings are found by walking rounds downward from `round - 1` to the first with a receipt.
 

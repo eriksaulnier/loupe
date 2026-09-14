@@ -52,7 +52,7 @@ func TestOpenUnder100ms(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, Title: "Add widgets"}
+	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, Title: "Add widgets", DiffSHA256: run.DiffSHA256(diffBytes)}
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), target); err != nil {
 		t.Fatal(err)
 	}

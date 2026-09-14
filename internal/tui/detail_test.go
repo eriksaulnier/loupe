@@ -116,7 +116,7 @@ func bigHunkRun(t *testing.T) string {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1}
+	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, DiffSHA256: run.DiffSHA256(diffBytes)}
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), target); err != nil {
 		t.Fatal(err)
 	}

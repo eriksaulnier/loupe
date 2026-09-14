@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -128,9 +127,9 @@ func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
 		return run.Target{}, nil, nil, err
 	}
 	diffPath := filepath.Join(dir, "pr.diff")
-	diffBytes, err := os.ReadFile(diffPath)
+	diffBytes, err := run.ReadDiff(dir, target)
 	if err != nil {
-		return run.Target{}, nil, nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", diffPath, err), "inspect it with: ls -l "+diffPath)
+		return run.Target{}, nil, nil, err
 	}
 	parsed, err := diff.Parse(diffBytes)
 	if err != nil {

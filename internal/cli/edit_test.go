@@ -39,7 +39,7 @@ func sendBackRun(t *testing.T) (home, dir string) {
 		t.Fatal(err)
 	}
 	dir = run.RunDir(home, "o", "r", 1, 1)
-	if err := run.CreateRun(dir, run.Target{Schema: run.TargetSchema, Owner: "o", Repo: "r", Number: 1, Round: 1}, diffBytes, draftJSON); err != nil {
+	if err := run.CreateRun(dir, run.Target{Schema: run.TargetSchema, Owner: "o", Repo: "r", Number: 1, Round: 1, DiffSHA256: run.DiffSHA256(diffBytes)}, diffBytes, draftJSON); err != nil {
 		t.Fatal(err)
 	}
 	return home, dir
