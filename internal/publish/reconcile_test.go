@@ -118,3 +118,26 @@ func TestRunPendingReviewRejection(t *testing.T) {
 	}
 	fx.check(1)
 }
+
+func TestRunReconcilesReviewOnSecondPage(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	a := fx.saveMarkedAttempt(StateUnknown)
+	for range 100 {
+		fx.gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED", Body: "unrelated"})
+	}
+	fx.gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED", Body: a.Envelope.Body})
+	receipt, replayed, err := Run(context.Background(), fx.opts)
+	if err != nil || !replayed || receipt.ReviewID != 1101 {
+		t.Fatalf("receipt %+v replayed %v err %v", receipt, replayed, err)
+	}
+	var pages []string
+	for _, r := range fx.gh.Requests() {
+		if r.Path == "/repos/acme/widgets/pulls/42/reviews" {
+			pages = append(pages, r.RawQuery)
+		}
+	}
+	if !reflect.DeepEqual(pages, []string{"per_page=100", "per_page=100&page=2"}) {
+		t.Fatalf("review listings %v", pages)
+	}
+	fx.check(0)
+}
