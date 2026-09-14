@@ -10,7 +10,8 @@ import (
 )
 
 // Match finds the submitted review an attempt created. The marker must be a whole line so a review that quotes it,
-// such as a reply pasting loupe's body, is not taken for the original; a PENDING review was never submitted.
+// such as a reply pasting loupe's body, is not taken for the original; a PENDING review was never submitted. A body
+// edited on GitHub can come back with CRLF line endings.
 func Match(reviews []github.Review, attempt Attempt) (github.Review, bool) {
 	env := attempt.Envelope
 	marker := fmt.Sprintf("<!-- loupe digest=%s publication=%s -->", env.Digest, env.PublicationID)
@@ -19,7 +20,7 @@ func Match(reviews []github.Review, attempt Attempt) (github.Review, bool) {
 			continue
 		}
 		for _, line := range strings.Split(r.Body, "\n") {
-			if line == marker {
+			if strings.TrimSuffix(line, "\r") == marker {
 				return r, true
 			}
 		}

@@ -3,6 +3,7 @@ package publish
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -43,6 +44,12 @@ func TestMatch(t *testing.T) {
 		{"marker as the last line", with(func(r *github.Review) {
 			r.Body = "x\n<!-- loupe digest=" + testDigest + " publication=" + testPublication + " -->"
 		}), true},
+		{"CRLF line endings", with(func(r *github.Review) {
+			r.Body = strings.ReplaceAll(markedBody(testDigest, testPublication), "\n", "\r\n")
+		}), true},
+		{"marker followed by two carriage returns", with(func(r *github.Review) {
+			r.Body = "x\n<!-- loupe digest=" + testDigest + " publication=" + testPublication + " -->\r\r\n"
+		}), false},
 		{"pending review", with(func(r *github.Review) { r.State = "PENDING" }), false},
 		{"another user", with(func(r *github.Review) { r.User = "someone" }), false},
 		{"another commit", with(func(r *github.Review) { r.CommitID = "3333333333333333333333333333333333333333" }), false},
