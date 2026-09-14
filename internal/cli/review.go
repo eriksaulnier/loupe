@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -27,7 +28,10 @@ immediately and is refused if the finding changed since it was shown.
 --plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 selects
 plain mode: one finding at a time with single-letter answers.
 
-The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN.`
+The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN.
+
+Result (--json), alone on stdout while the interface draws on stderr:
+  {"loupe": 1, "ok": true, "command": "review", "run": "owner/repo#123@1"}`
 
 func newReviewCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -52,21 +56,26 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if len(args) == 1 {
 		positional = args[0]
 	}
-	dir, _, err := resolveRun(cmd, deps, positional)
+	dir, ref, err := resolveRun(cmd, deps, positional)
 	if err != nil {
 		return err
 	}
+	jsonMode := wantJSON(cmd)
+	ui := interactiveOutput(deps, jsonMode)
 	plain, _ := cmd.Flags().GetBool("plain")
 	width, height := terminalSize(deps)
 	mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, Width: width, Height: height, RawProbe: func() error { return rawProbe(deps) }})
 	if mode == tui.Plain {
-		return tui.RunPlain(dir, deps.Stdin, deps.Stdout, deps.Getenv)
+		if err := tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv); err != nil {
+			return err
+		}
+		return reviewDone(cmd, deps, ref.String(), jsonMode)
 	}
-	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: deps.Stdout, GitHub: deps.GitHub})
+	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub})
 	if err != nil {
 		return err
 	}
-	final, err := tea.NewProgram(m, tea.WithInput(deps.Stdin), tea.WithOutput(deps.Stdout), tea.WithAltScreen()).Run()
+	final, err := tea.NewProgram(m, tea.WithInput(deps.Stdin), tea.WithOutput(ui), tea.WithAltScreen()).Run()
 	// A signal ends the program even while a confirmed review is being sent; the send still finishes and is recorded.
 	m.WaitForSend()
 	if err != nil {
@@ -76,7 +85,26 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if !ok {
 		return fmt.Errorf("review interface ended with an unexpected model %T", final)
 	}
-	return finalModel.Err()
+	if err := finalModel.Err(); err != nil {
+		return err
+	}
+	return reviewDone(cmd, deps, ref.String(), jsonMode)
+}
+
+func reviewDone(cmd *cobra.Command, deps Deps, run string, jsonMode bool) error {
+	if !jsonMode {
+		return nil
+	}
+	return writeSuccess(deps.Stdout, commandName(cmd), run, nil, map[string]any{})
+}
+
+// interactiveOutput is where a human-only command draws. Under --json stdout carries only the result object, so the
+// interface goes to stderr; the terminal check still requires stdout to be a terminal.
+func interactiveOutput(deps Deps, jsonMode bool) io.Writer {
+	if jsonMode {
+		return deps.Stderr
+	}
+	return deps.Stdout
 }
 
 // terminalSize is 0x0 when stdout is not a terminal file, which ChooseMode treats as too small.

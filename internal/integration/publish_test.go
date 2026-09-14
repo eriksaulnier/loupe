@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -191,5 +192,55 @@ func TestPublishRefusesBadFlagsFirst(t *testing.T) {
 	h.checkSends(0)
 	if n := len(h.GH.Requests()); n != 0 {
 		t.Fatalf("requests %d", n)
+	}
+}
+
+func TestPublishJSONPrintsOneObject(t *testing.T) {
+	h := newHarness(t)
+	h.reviewed("a\na\nx\nq\n")
+
+	h.Stdin = "n\n"
+	env, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
+	if exit != 0 || env["ok"] != true || env["sent"] != false || env["reviewUrl"] != nil || env["replayed"] != nil {
+		t.Fatalf("declined: exit %d envelope %v", exit, env)
+	}
+	h.checkSends(0)
+
+	h.Stdin = "y\n"
+	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain", "--json")
+	if exit != 0 || !strings.Contains(stderr, "Publish this review? [y/N]") || strings.Contains(stdout, "Publish this review?") {
+		t.Fatalf("the confirmation did not go to stderr: exit %d stdout %q stderr %q", exit, stdout, stderr)
+	}
+	h.Stdin = "y\n"
+	h.GitHubErr = errors.New("no GitHub credentials")
+	replay, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
+	h.GitHubErr = nil
+	if exit != 0 || replay["sent"] != false || replay["replayed"] != true || replay["reviewUrl"] == nil || replay["reviewId"] == nil {
+		t.Fatalf("replay: exit %d envelope %v", exit, replay)
+	}
+	h.checkSends(1)
+
+	var sent map[string]any
+	if err := json.Unmarshal([]byte(stdout), &sent); err != nil {
+		t.Fatalf("stdout is not one JSON object: %v\n%q", err, stdout)
+	}
+	if sent["sent"] != true || sent["reviewUrl"] != replay["reviewUrl"] || fmt.Sprint(sent["reviewId"]) != fmt.Sprint(replay["reviewId"]) || sent["replayed"] != nil {
+		t.Fatalf("sent %v, replay %v", sent, replay)
+	}
+}
+
+func TestReviewJSONPrintsOneObject(t *testing.T) {
+	h := newHarness(t)
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.IsTerminal = true
+	h.Stdin = "a\nq\n"
+	stdout, stderr, exit := h.Run("review", runRef, "--plain", "--json")
+	var env map[string]any
+	if err := json.Unmarshal([]byte(stdout), &env); err != nil || exit != 0 || env["ok"] != true || env["command"] != "review" || len(env) != 4 {
+		t.Fatalf("exit %d err %v stdout %q", exit, err, stdout)
+	}
+	if !strings.Contains(stderr, "Changed line") {
+		t.Fatalf("the review did not go to stderr: %q", stderr)
 	}
 }

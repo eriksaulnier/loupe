@@ -74,7 +74,8 @@ func (fx *fixture) readDraft() []byte {
 }
 
 func (fx *fixture) run() (Receipt, error) {
-	return Run(context.Background(), fx.opts)
+	receipt, _, err := Run(context.Background(), fx.opts)
+	return receipt, err
 }
 
 func (fx *fixture) exists(name string) bool {
@@ -227,9 +228,9 @@ func TestRunRefusesRecordAppearedDuringConfirmation(t *testing.T) {
 func TestRunPublishesOnceThenReplays(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.Action = "request-changes"
-	receipt, err := fx.run()
-	if err != nil {
-		t.Fatal(err)
+	receipt, replayed, err := Run(context.Background(), fx.opts)
+	if err != nil || replayed {
+		t.Fatalf("replayed %v err %v", replayed, err)
 	}
 	fx.check(1)
 	if len(fx.previews) != 1 {
@@ -278,9 +279,9 @@ func TestRunPublishesOnceThenReplays(t *testing.T) {
 	requests := len(fx.gh.Requests())
 	fx.opts.IsTerminal = false
 	fx.opts.GitHub = func() (github.Client, error) { return nil, errors.New("no GitHub credentials") }
-	again, err := fx.run()
-	if err != nil || !reflect.DeepEqual(again, receipt) {
-		t.Fatalf("replay %+v err %v", again, err)
+	again, replayed, err := Run(context.Background(), fx.opts)
+	if err != nil || !replayed || !reflect.DeepEqual(again, receipt) {
+		t.Fatalf("replay %+v replayed %v err %v", again, replayed, err)
 	}
 	if len(fx.gh.Requests()) != requests || len(fx.previews) != 1 {
 		t.Fatalf("replay contacted GitHub or confirmed: %d requests, %d previews", len(fx.gh.Requests())-requests, len(fx.previews))

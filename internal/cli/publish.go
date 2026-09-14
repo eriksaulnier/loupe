@@ -40,7 +40,12 @@ ends with an unknown outcome, publish refuses with the pull request URL until it
 --plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 prints the
 review and asks Publish this review? [y/N] on one line instead.
 
-The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN.`
+The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN.
+
+Result (--json), alone on stdout while the confirmation draws on stderr:
+  {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1", "reviewId": 123,
+   "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true}
+A receipt replay has "sent": false and "replayed": true; a canceled publish has only "sent": false.`
 
 const publishUsage = "loupe publish <ref> --action comment|approve|request-changes [--inline none|blocking|all]"
 
@@ -81,7 +86,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	if len(args) == 1 {
 		positional = args[0]
 	}
-	dir, _, err := resolveRun(cmd, deps, positional)
+	dir, ref, err := resolveRun(cmd, deps, positional)
 	if err != nil {
 		return err
 	}
@@ -91,26 +96,40 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	}
 	plain, _ := cmd.Flags().GetBool("plain")
 	retryUnknown, _ := cmd.Flags().GetBool("retry-unknown")
-	receipt, err := publish.Run(cmd.Context(), publish.Options{
+	jsonMode := wantJSON(cmd)
+	ui := interactiveOutput(deps, jsonMode)
+	receipt, replayed, err := publish.Run(cmd.Context(), publish.Options{
 		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: deps.IsTerminal(), Action: action, Inline: inline, RetryUnknown: retryUnknown,
 		Confirm: func(preview publish.Preview) (bool, error) {
 			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
 			width, height := terminalSize(deps)
 			mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, Width: width, Height: height, RawProbe: func() error { return rawProbe(deps) }})
 			if mode == tui.Plain {
-				return tui.ConfirmPlain(deps.Stdin, deps.Stdout)(preview)
+				return tui.ConfirmPlain(deps.Stdin, ui)(preview)
 			}
-			return tui.Confirm(deps.Stdin, deps.Stdout, deps.Getenv)(preview)
+			return tui.Confirm(deps.Stdin, ui, deps.Getenv)(preview)
 		},
 		Now:    deps.Now,
 		Getenv: deps.Getenv,
 	})
 	if errors.Is(err, publish.ErrDeclined) {
-		_, err = fmt.Fprintln(deps.Stderr, "Publish canceled; nothing was sent.")
-		return err
+		if _, err := fmt.Fprintln(deps.Stderr, "Publish canceled; nothing was sent."); err != nil {
+			return err
+		}
+		if jsonMode {
+			return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, map[string]any{"sent": false})
+		}
+		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if jsonMode {
+		payload := map[string]any{"sent": !replayed, "reviewUrl": receipt.ReviewURL, "reviewId": receipt.ReviewID}
+		if replayed {
+			payload["replayed"] = true
+		}
+		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, payload)
 	}
 	_, err = fmt.Fprintln(deps.Stdout, receipt.ReviewURL)
 	return err

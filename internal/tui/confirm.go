@@ -184,7 +184,7 @@ func (m *Model) startPublish() tea.Cmd {
 	}
 	return func() tea.Msg {
 		go func() {
-			receipt, err := publish.Run(context.Background(), opts)
+			receipt, _, err := publish.Run(context.Background(), opts)
 			s.done <- publishDone{receipt, err}
 			close(s.finished)
 		}()
