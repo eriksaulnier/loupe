@@ -63,6 +63,8 @@ type Server struct {
 	mu          sync.Mutex
 	prs         map[prKey]github.PullRequest
 	branches    map[prKey]string
+	headOwners  map[prKey]string
+	failures    map[string]int
 	reviews     map[prKey][]github.Review
 	viewer      string
 	outcomes    []Outcome
@@ -75,10 +77,12 @@ type Server struct {
 func New(t *testing.T) *Server {
 	t.Helper()
 	s := &Server{
-		prs:      map[prKey]github.PullRequest{},
-		branches: map[prKey]string{},
-		reviews:  map[prKey][]github.Review{},
-		nextID:   1000,
+		prs:        map[prKey]github.PullRequest{},
+		branches:   map[prKey]string{},
+		headOwners: map[prKey]string{},
+		failures:   map[string]int{},
+		reviews:    map[prKey][]github.Review{},
+		nextID:     1000,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}", s.getPullRequest)
@@ -89,6 +93,13 @@ func New(t *testing.T) *Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := s.record(r); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
+			return
+		}
+		s.mu.Lock()
+		status, failing := s.failures[r.Method+" "+r.URL.Path]
+		s.mu.Unlock()
+		if failing {
+			writeJSON(w, status, map[string]any{"message": "Server Error"})
 			return
 		}
 		mux.ServeHTTP(w, r)
@@ -134,6 +145,21 @@ func (s *Server) SetBranch(owner, repo string, number int, branch string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.branches[prKey{owner, repo, number}] = branch
+}
+
+// SetForkBranch names a head branch that lives in headOwner's fork.
+func (s *Server) SetForkBranch(owner, repo string, number int, headOwner, branch string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.branches[prKey{owner, repo, number}] = branch
+	s.headOwners[prKey{owner, repo, number}] = headOwner
+}
+
+// Fail answers every later request with method and exact path with status, after recording it.
+func (s *Server) Fail(method, path string, status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failures[method+" "+path] = status
 }
 
 func (s *Server) SetHead(owner, repo string, number int, sha string) {
@@ -241,7 +267,11 @@ func (s *Server) listPullRequests(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	var matches []prKey
 	for key, pr := range s.prs {
-		if key.owner == owner && key.repo == repo && pr.State == query.Get("state") && owner+":"+s.branches[key] == query.Get("head") {
+		headOwner := s.headOwners[key]
+		if headOwner == "" {
+			headOwner = owner
+		}
+		if key.owner == owner && key.repo == repo && pr.State == query.Get("state") && headOwner+":"+s.branches[key] == query.Get("head") {
 			matches = append(matches, key)
 		}
 	}

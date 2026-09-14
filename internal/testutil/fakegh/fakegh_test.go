@@ -39,11 +39,11 @@ func TestPullRequestLookups(t *testing.T) {
 	if login, err := c.Viewer(ctx); err != nil || login != "bob" {
 		t.Fatalf("viewer %q, %v", login, err)
 	}
-	prs, err := c.PullRequestsForBranch(ctx, "o", "r", "feat")
+	prs, err := c.PullRequestsForBranch(ctx, "o", "r", "o", "feat")
 	if err != nil || len(prs) != 1 || prs[0].Number != 3 {
 		t.Fatalf("branch lookup %+v, %v", prs, err)
 	}
-	if prs, err := c.PullRequestsForBranch(ctx, "o", "r", "other"); err != nil || len(prs) != 0 {
+	if prs, err := c.PullRequestsForBranch(ctx, "o", "r", "o", "other"); err != nil || len(prs) != 0 {
 		t.Fatalf("other branch %+v, %v", prs, err)
 	}
 

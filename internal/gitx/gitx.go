@@ -139,19 +139,43 @@ func CurrentBranch(clone string) (string, error) {
 
 // OriginURLs returns the configured origin URL and its insteadOf expansion, or nothing when there is no origin.
 func OriginURLs(clone string) ([]string, error) {
-	raw, err := git(clone, "config", "--get", "remote.origin.url")
+	return RemoteURLs(clone, "origin")
+}
+
+// RemoteURLs returns the configured URL of remote and its insteadOf expansion, or nothing when it has no URL.
+func RemoteURLs(clone, remote string) ([]string, error) {
+	raw, found, err := configValue(clone, "remote."+remote+".url")
+	if err != nil || !found {
+		return nil, err
+	}
+	expanded, err := git(clone, "ls-remote", "--get-url", remote)
+	if err != nil {
+		return nil, err
+	}
+	return []string{raw, strings.TrimSpace(string(expanded))}, nil
+}
+
+// BranchUpstream returns branch.<branch>.remote and branch.<branch>.merge, each empty when unset.
+func BranchUpstream(clone, branch string) (remote, merge string, err error) {
+	if remote, _, err = configValue(clone, "branch."+branch+".remote"); err != nil {
+		return "", "", err
+	}
+	if merge, _, err = configValue(clone, "branch."+branch+".merge"); err != nil {
+		return "", "", err
+	}
+	return remote, merge, nil
+}
+
+func configValue(clone, key string) (string, bool, error) {
+	out, err := git(clone, "config", "--get", key)
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-		return nil, nil
+		return "", false, nil
 	}
 	if err != nil {
-		return nil, err
+		return "", false, err
 	}
-	expanded, err := git(clone, "ls-remote", "--get-url", "origin")
-	if err != nil {
-		return nil, err
-	}
-	return []string{strings.TrimSpace(string(raw)), strings.TrimSpace(string(expanded))}, nil
+	return strings.TrimSpace(string(out)), true, nil
 }
 
 func RevParse(clone, ref string) (string, error) {

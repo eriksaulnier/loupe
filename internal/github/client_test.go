@@ -93,7 +93,7 @@ func TestPullRequestsForBranch(t *testing.T) {
 		writeJSON(w, 200, `[{"number": 1, "base": {"ref": "main"}, "head": {"sha": "a"}, "user": {"login": "x"}},
 			{"number": 2, "base": {"ref": "release"}, "head": {"sha": "a"}, "user": {"login": "x"}}]`)
 	})
-	prs, err := c.PullRequestsForBranch(context.Background(), "o", "r", "feat/x")
+	prs, err := c.PullRequestsForBranch(context.Background(), "o", "r", "forker", "feat/x")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestPullRequestsForBranch(t *testing.T) {
 		t.Fatalf("got %+v", prs)
 	}
 	q := (*reqs)[0].Query
-	if (*reqs)[0].Path != "/repos/o/r/pulls" || q.Get("state") != "open" || q.Get("head") != "o:feat/x" {
+	if (*reqs)[0].Path != "/repos/o/r/pulls" || q.Get("state") != "open" || q.Get("head") != "forker:feat/x" {
 		t.Fatalf("request %+v", (*reqs)[0])
 	}
 }

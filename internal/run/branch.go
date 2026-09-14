@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/gitx"
@@ -37,36 +38,19 @@ func ResolveBranch(ctx context.Context, root, clone string, gh func() (github.Cl
 		return Ref{}, refusal.New(refusal.NoRun,
 			fmt.Sprintf("no run selected, and the origin of %s is not a github.com repository", clone), branchFix)
 	}
+	remote, merge, err := gitx.BranchUpstream(clone, branch)
+	if err != nil {
+		return Ref{}, err
+	}
 	client, err := gh()
 	if err != nil {
 		return Ref{}, err
 	}
-	prs, err := client.PullRequestsForBranch(ctx, owner, repo, branch)
+	number, err := branchPullRequest(ctx, client, clone, owner, repo, branch, remote, merge)
 	if err != nil {
-		if _, ok := refusal.As(err); ok {
-			return Ref{}, err
-		}
-		return Ref{}, refusal.New(refusal.GitHub,
-			fmt.Sprintf("look up the pull request for branch %s of %s/%s: %v", branch, owner, repo, err),
-			"retry, or pass --run <ref>; check network access to api.github.com")
+		return Ref{}, err
 	}
-	switch len(prs) {
-	case 0:
-		return Ref{}, refusal.New(refusal.NoRun,
-			fmt.Sprintf("no run selected, and branch %s has no open pull request on %s/%s", branch, owner, repo), branchFix)
-	case 1:
-	default:
-		listed := make([]map[string]any, 0, len(prs))
-		for _, pr := range prs {
-			listed = append(listed, map[string]any{"number": pr.Number, "base": pr.BaseRef})
-		}
-		r := refusal.New(refusal.NoRun,
-			fmt.Sprintf("no run selected, and branch %s has %d open pull requests on %s/%s", branch, len(prs), owner, repo),
-			"--run <ref>")
-		r.Details = map[string]any{"pullRequests": listed}
-		return Ref{}, r
-	}
-	ref := Ref{Owner: owner, Repo: repo, Number: prs[0].Number}
+	ref := Ref{Owner: owner, Repo: repo, Number: number}
 	newest, err := Newest(root, owner, repo, ref.Number)
 	if err != nil {
 		return Ref{}, err
@@ -77,6 +61,73 @@ func ResolveBranch(ctx context.Context, root, clone string, gh func() (github.Cl
 	}
 	ref.Round = newest
 	return ref, nil
+}
+
+// branchPullRequest trusts the clone's upstream config over the local branch name: gh pr checkout records a fork pull
+// request as refs/pull/<n>/head, and a branch tracking a fork lives under the fork owner and possibly another name.
+func branchPullRequest(ctx context.Context, client github.Client, clone, owner, repo, branch, remote, merge string) (int, error) {
+	if n, ok := pullRefNumber(merge); ok {
+		pr, err := client.PullRequest(ctx, owner, repo, n)
+		if err != nil {
+			return 0, lookupRefusal(err, fmt.Sprintf("look up pull request #%d of %s/%s for branch %s", n, owner, repo, branch))
+		}
+		return pr.Number, nil
+	}
+	headOwner, headBranch := owner, branch
+	if name, ok := strings.CutPrefix(merge, "refs/heads/"); ok && remote != "" {
+		urls, err := gitx.RemoteURLs(clone, remote)
+		if err != nil {
+			return 0, err
+		}
+		for _, u := range urls {
+			if o, _, found := gitx.ParseGitHubURL(u); found {
+				headOwner, headBranch = o, name
+				break
+			}
+		}
+	}
+	prs, err := client.PullRequestsForBranch(ctx, owner, repo, headOwner, headBranch)
+	if err != nil {
+		return 0, lookupRefusal(err, fmt.Sprintf("look up the pull request for branch %s of %s/%s", branch, owner, repo))
+	}
+	switch len(prs) {
+	case 0:
+		return 0, refusal.New(refusal.NoRun,
+			fmt.Sprintf("no run selected, and branch %s has no open pull request on %s/%s", branch, owner, repo), branchFix)
+	case 1:
+		return prs[0].Number, nil
+	default:
+		listed := make([]map[string]any, 0, len(prs))
+		for _, pr := range prs {
+			listed = append(listed, map[string]any{"number": pr.Number, "base": pr.BaseRef})
+		}
+		r := refusal.New(refusal.NoRun,
+			fmt.Sprintf("no run selected, and branch %s has %d open pull requests on %s/%s", branch, len(prs), owner, repo),
+			"--run <ref>")
+		r.Details = map[string]any{"pullRequests": listed}
+		return 0, r
+	}
+}
+
+func pullRefNumber(merge string) (int, bool) {
+	rest, ok := strings.CutPrefix(merge, "refs/pull/")
+	if !ok {
+		return 0, false
+	}
+	digits, ok := strings.CutSuffix(rest, "/head")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(digits)
+	return n, err == nil && n > 0
+}
+
+func lookupRefusal(err error, what string) error {
+	if _, ok := refusal.As(err); ok {
+		return err
+	}
+	return refusal.New(refusal.GitHub, fmt.Sprintf("%s: %v", what, err),
+		"retry, or pass --run <ref>; check network access to api.github.com")
 }
 
 type Entry struct {

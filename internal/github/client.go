@@ -24,7 +24,7 @@ const host = "github.com"
 
 type Client interface {
 	PullRequest(ctx context.Context, owner, repo string, number int) (PullRequest, error)
-	PullRequestsForBranch(ctx context.Context, owner, repo, branch string) ([]PullRequest, error)
+	PullRequestsForBranch(ctx context.Context, owner, repo, headOwner, branch string) ([]PullRequest, error)
 	Viewer(ctx context.Context) (string, error)
 	ListReviews(ctx context.Context, owner, repo string, number int) ([]Review, error)
 	CreateReview(ctx context.Context, owner, repo string, number int, req ReviewRequest) (Review, error)
@@ -175,8 +175,8 @@ func (c *REST) PullRequest(ctx context.Context, owner, repo string, number int) 
 	return w.pullRequest(), nil
 }
 
-func (c *REST) PullRequestsForBranch(ctx context.Context, owner, repo, branch string) ([]PullRequest, error) {
-	query := url.Values{"state": {"open"}, "head": {owner + ":" + branch}}
+func (c *REST) PullRequestsForBranch(ctx context.Context, owner, repo, headOwner, branch string) ([]PullRequest, error) {
+	query := url.Values{"state": {"open"}, "head": {headOwner + ":" + branch}}
 	var ws []wirePullRequest
 	if err := c.do(ctx, http.MethodGet, pullsPath(owner, repo)+"?"+query.Encode(), nil, &ws); err != nil {
 		return nil, err

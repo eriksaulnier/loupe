@@ -60,6 +60,79 @@ func TestResolveBranchSinglePullRequest(t *testing.T) {
 	if ref != (Ref{Owner: "o", Repo: "r", Number: 5, Round: 2}) {
 		t.Fatalf("got %+v", ref)
 	}
+	if reqs := gh.Requests(); len(reqs) != 1 || reqs[0].Path != "/repos/o/r/pulls" || reqs[0].RawQuery != "head=o%3Afeature&state=open" {
+		t.Fatalf("requests %+v", reqs)
+	}
+}
+
+func TestResolveBranchForkCheckoutUsesPullRef(t *testing.T) {
+	r, gh, client := branchSetup(t)
+	closed := openPR(9, "main")
+	closed.State = "closed"
+	gh.SetPR("o", "r", closed)
+	gh.SetPR("o", "r", openPR(5, "main"))
+	gh.SetBranch("o", "r", 5, "x")
+	r.Git("checkout", "--quiet", "-b", "x")
+	r.Git("config", "branch.x.remote", "https://github.com/forker/r.git")
+	r.Git("config", "branch.x.merge", "refs/pull/9/head")
+	root := t.TempDir()
+	mkdirs(t, RunDir(root, "o", "r", 9, 1))
+
+	ref, err := ResolveBranch(context.Background(), root, r.Dir, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != (Ref{Owner: "o", Repo: "r", Number: 9, Round: 1}) {
+		t.Fatalf("got %+v", ref)
+	}
+	if reqs := gh.Requests(); len(reqs) != 1 || reqs[0].Path != "/repos/o/r/pulls/9" {
+		t.Fatalf("requests %+v", reqs)
+	}
+}
+
+func TestResolveBranchForkCheckoutMissingPullRequest(t *testing.T) {
+	r, _, client := branchSetup(t)
+	r.Git("checkout", "--quiet", "-b", "x")
+	r.Git("config", "branch.x.merge", "refs/pull/9/head")
+
+	_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, client)
+	if rr, ok := refusal.As(err); !ok || rr.Code != refusal.PR {
+		t.Fatalf("got %v, want refusal pr", err)
+	}
+}
+
+func TestResolveBranchTrackingForkRemoteBranch(t *testing.T) {
+	r, gh, client := branchSetup(t)
+	gh.SetPR("o", "r", openPR(7, "main"))
+	gh.SetForkBranch("o", "r", 7, "forker", "remote-name")
+	gh.SetPR("o", "r", openPR(8, "main"))
+	gh.SetBranch("o", "r", 8, "local-name")
+	r.Git("checkout", "--quiet", "-b", "local-name")
+	r.Git("config", "remote.fork.url", "git@github.com:forker/r.git")
+	r.Git("config", "branch.local-name.remote", "fork")
+	r.Git("config", "branch.local-name.merge", "refs/heads/remote-name")
+	root := t.TempDir()
+	mkdirs(t, RunDir(root, "o", "r", 7, 1))
+
+	ref, err := ResolveBranch(context.Background(), root, r.Dir, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != (Ref{Owner: "o", Repo: "r", Number: 7, Round: 1}) {
+		t.Fatalf("got %+v", ref)
+	}
+	if reqs := gh.Requests(); len(reqs) != 1 || reqs[0].Path != "/repos/o/r/pulls" || reqs[0].RawQuery != "head=forker%3Aremote-name&state=open" {
+		t.Fatalf("requests %+v", reqs)
+	}
+}
+
+func TestResolveBranchServerErrorRefusesGitHub(t *testing.T) {
+	r, gh, client := branchSetup(t)
+	gh.Fail("GET", "/repos/o/r/pulls", 502)
+	r.Git("checkout", "--quiet", "-b", "feature")
+
+	_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, client)
+	wantRefusal(t, err, refusal.GitHub, "", "retry, or pass --run <ref>; check network access to api.github.com")
 }
 
 func TestResolveBranchPullRequestWithoutRun(t *testing.T) {
