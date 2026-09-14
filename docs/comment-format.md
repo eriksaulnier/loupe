@@ -228,4 +228,4 @@ This is deliberately a line scanner, not a parser. It refuses more than GitHub w
 | :--- | :--- |
 | An included finding body that fails the allowlist | `loupe edit <id> --from -` |
 | A review summary that fails the allowlist, with or without findings | `loupe summary --from -` |
-| A composed body over 256 KiB | exclude a finding with `loupe edit <id> --exclude` or shorten bodies |
+| A composed body, or an inline comment body, over 65,536 characters | exclude a finding in `loupe review` or shorten bodies with `loupe edit <id> --from -` |

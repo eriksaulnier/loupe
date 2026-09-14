@@ -129,7 +129,7 @@ func TestRunRefusesMarkdownAndLimitBeforeConfirming(t *testing.T) {
 	}
 	limit := newRun(t, d)
 	_, err = limit.run()
-	wantRefusal(t, err, refusal.Markdown, "exclude a finding with loupe edit <id> --exclude or shorten bodies")
+	wantRefusal(t, err, refusal.Markdown, "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -")
 
 	if len(fx.previews)+len(limit.previews) != 0 || fx.exists("attempt.json") || limit.exists("attempt.json") {
 		t.Fatal("confirmation shown or attempt written")

@@ -3,6 +3,7 @@ package publish
 import (
 	"fmt"
 	"slices"
+	"unicode/utf8"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/findingid"
@@ -19,7 +20,12 @@ var (
 
 var events = map[string]string{"comment": "COMMENT", "approve": "APPROVE", "request-changes": "REQUEST_CHANGES"}
 
-const maxBodyBytes = 256 * 1024
+// maxBodyChars is the owner's reading of GitHub's limit on a review or comment body; longer bodies are believed to be
+// rejected with 422.
+const (
+	maxBodyChars = 65536
+	limitFix     = "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -"
+)
 
 // Build composes the review from the accepted findings only. It rechecks the allowlist because the draft file may
 // have been edited by hand since the content was filed.
@@ -72,18 +78,28 @@ func Build(target run.Target, d *draft.Draft, viewer, action, inline string) (En
 		env.Findings = append(env.Findings, EnvelopeFinding{ID: f.ID, Title: f.Title, Body: f.Body, Location: loc, Label: f.Label, Blocking: f.Blocking})
 	}
 
-	env.Body = render.Body(in)
-	if len(env.Body) > maxBodyBytes {
-		r := refusal.New(refusal.Markdown,
-			fmt.Sprintf("the composed review body is %d bytes; at most %d bytes (256 KiB) are allowed", len(env.Body), maxBodyBytes),
-			"exclude a finding with loupe edit <id> --exclude or shorten bodies")
-		r.Details = map[string]any{"rule": "limit"}
-		return Envelope{}, r
+	// One finding per call ties each comment to its id; included is already in the order Comments sorts by.
+	for _, rf := range in.Findings {
+		single := in
+		single.Findings = []render.Finding{rf}
+		for _, c := range render.Comments(single) {
+			if n := utf8.RuneCountInString(c.Body); n > maxBodyChars {
+				return Envelope{}, limitRefusal(fmt.Sprintf("the inline comment for %s is %d characters; at most %d characters are allowed", rf.ID, n, maxBodyChars))
+			}
+			env.Comments = append(env.Comments, Comment{Path: c.Path, Line: c.Line, Side: c.Side, StartLine: c.StartLine, StartSide: c.StartSide, Body: c.Body})
+		}
 	}
-	for _, c := range render.Comments(in) {
-		env.Comments = append(env.Comments, Comment{Path: c.Path, Line: c.Line, Side: c.Side, StartLine: c.StartLine, StartSide: c.StartSide, Body: c.Body})
+	env.Body = render.Body(in)
+	if n := utf8.RuneCountInString(env.Body); n > maxBodyChars {
+		return Envelope{}, limitRefusal(fmt.Sprintf("the composed review body is %d characters; at most %d characters are allowed", n, maxBodyChars))
 	}
 	return env, nil
+}
+
+func limitRefusal(message string) error {
+	r := refusal.New(refusal.Markdown, message, limitFix)
+	r.Details = map[string]any{"rule": "limit"}
+	return r
 }
 
 // accepted is sorted by id so the envelope's findings are in a stable order.

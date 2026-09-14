@@ -124,7 +124,33 @@ func TestBuildRefusesBodyOverLimit(t *testing.T) {
 	}
 	_, err := Build(fixtureTarget(), d, "reviewer", "comment", "none")
 	r, ok := refusal.As(err)
-	if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "limit" || r.Fix != "exclude a finding with loupe edit <id> --exclude or shorten bodies" {
+	if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "limit" || r.Fix != "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -" {
+		t.Fatalf("err %#v", err)
+	}
+}
+
+func TestBuildCountsBodyLimitInCharacters(t *testing.T) {
+	d := readyDraft()
+	wide := strings.Repeat("é", 30000)
+	d.Findings[0].Body, d.Findings[1].Body = wide, wide
+	if _, err := Build(fixtureTarget(), d, "reviewer", "comment", "none"); err != nil {
+		t.Fatalf("a body of about 60,000 two-byte characters was refused: %v", err)
+	}
+	d.Findings[4].Body = wide
+	_, err := Build(fixtureTarget(), d, "reviewer", "comment", "none")
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "limit" || !strings.Contains(r.Message, "65536 characters") {
+		t.Fatalf("err %#v", err)
+	}
+}
+
+func TestBuildRefusesInlineCommentOverLimit(t *testing.T) {
+	d := readyDraft()
+	d.Findings[0].Body, d.Findings[0].SuggestedFix = strings.Repeat("a", 60000), strings.Repeat("b", 10000)
+	_, err := Build(fixtureTarget(), d, "reviewer", "comment", "blocking")
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "limit" || !strings.Contains(r.Message, "f-001") ||
+		r.Fix != "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -" {
 		t.Fatalf("err %#v", err)
 	}
 }

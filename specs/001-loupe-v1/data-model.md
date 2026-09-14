@@ -176,7 +176,7 @@ A receipt is never deleted by loupe. Its existence makes every later `publish` a
 | `digest` | string | publishable digest; also inside the hidden marker |
 | `publicationId` | string | UUID v4, generated per attempt; inside the hidden marker |
 | `inline` | `none`, `blocking`, `all` | |
-| `body` | string | composed per `docs/comment-format.md`; at most 256 KiB |
+| `body` | string | composed per `docs/comment-format.md`; at most 65,536 characters, as is each inline comment body |
 | `comments` | `[{ path, line, side, startLine?, startSide?, body }]` | located findings selected by `inline`; body is the finding rendered without its `<details>` wrapper |
 | `findings` | `[{ id, title, body, location, label, blocking }]` | the published findings, kept for `show --previous` |
 

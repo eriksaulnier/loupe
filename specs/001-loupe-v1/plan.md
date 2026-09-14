@@ -24,7 +24,7 @@ A single static Go binary, `loupe`, that captures a pull request into a per-run 
 
 **Performance Goals**: SC-004: the review interface opens and shows the first finding's hunk in under 100 ms on a 500-file diff. Parse `pr.diff` once per process, lazily build per-file line indexes, never re-read the diff per finding.
 
-**Constraints**: No daemon, no database, no network beyond `git` and the GitHub API (constitution III). Never touch the working tree, index, branch or non-loupe refs (constitution IV). `review` and `publish` refuse without a TTY on stdin and stdout. Every mutation is all-or-nothing under one lock. Body and summary limit 64 KiB; composed review limit 256 KiB.
+**Constraints**: No daemon, no database, no network beyond `git` and the GitHub API (constitution III). Never touch the working tree, index, branch or non-loupe refs (constitution IV). `review` and `publish` refuse without a TTY on stdin and stdout. Every mutation is all-or-nothing under one lock. Body and summary limit 64 KiB; composed review body and each inline comment body limit 65,536 characters.
 
 **Scale/Scope**: Ten commands, one TUI program with four views plus a plain mode, one publication state machine, one renderer for `docs/comment-format.md`, one plugin. Tens of runs per user, hundreds of findings per run at most, diffs up to a few thousand hunks.
 
@@ -146,4 +146,5 @@ No constitution violations.
 
 | Departure | From | Why |
 | :--- | :--- | :--- |
+| Review and inline comment body limit is 65,536 characters, not 256 KiB | data-model.md "Envelope", docs/comment-format.md "Refusals" | Lowered on 2026-09-13 because GitHub is believed to reject longer review and comment bodies with 422. The owner will confirm this observation on the live walk. |
 | `go.mod` declares `go 1.25.0`, not `go 1.23` | research.md "Language and TUI stack", this plan's Technical Context | Current releases of the chosen dependencies require newer toolchains (go-gh v2.16 needs 1.25; bubbletea, bubbles, glamour and teatest need 1.24). Pinning every dependency to its last 1.23 release was rejected by the owner on 2026-09-13. `golang.org/x/term` is held at v0.45.0 because v0.46.0 requires go 1.26. Go 1.21+ fetches a newer toolchain on `go install`, so older installed toolchains still work. |
