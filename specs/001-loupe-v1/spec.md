@@ -186,7 +186,7 @@ A Claude Code user installs the loupe plugin. Typing the slash command with a pu
 - The clone's origin is not the pull request's repository: capture refuses and shows how to pass the clone path.
 - The newest round for the pull request is unpublished and at the same head: capture refuses and names that run's reference; a published round at the same head gets a new round.
 - A round was captured and abandoned unpublished: it does not advance the round a later review of the pull request publishes as, so the footer can name a lower round than the run reference.
-- The head is force-pushed back to an older round's commit and that round publishes, by `--retry-unknown` after a newer round published or at the same time as another round at that commit: both reviews MAY name the same round. Accepted rather than refused, since it needs the force-push and numbering never blocks a publish.
+- The head is force-pushed back to an older round's commit and that round publishes, by `--retry-unknown` after a newer round published or at the same time as another round at that commit, or its `--retry-unknown` is definitely rejected after a newer round counted its attempt, so the next round to publish reuses that newer round's number: two reviews MAY name the same round. Accepted rather than refused, since it needs the force-push and numbering never blocks a publish.
 - GitHub rejects the review because the viewer already has a pending review: the refusal says to submit or discard it on GitHub first.
 - The network fails after the request was sent: the attempt is kept as unknown and reconciled on the next publish.
 - The terminal is too small, reports itself as dumb, or standard input cannot be put in raw mode: the line-by-line review mode is used.
