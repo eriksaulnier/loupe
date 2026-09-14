@@ -9,11 +9,12 @@ loupe files pull request review findings for a human to decide and publish.
 ## Install
 
 ```sh
+export GITHUB_TOKEN="$(gh auth token)"
 mise use -g github:eriksaulnier/loupe@latest
 loupe --version
 ```
 
-The repository is private, so the installer needs GitHub credentials: `gh auth login` is enough, since mise reads the `gh` token.
+The repository is private, so mise needs a GitHub token to download the release asset. On macOS `gh` keeps its token in the keychain, where mise cannot read it, so export it in the shell profile as above.
 
 ```sh
 claude plugin marketplace add eriksaulnier/loupe
