@@ -89,3 +89,25 @@ func TestInlineBodyShape(t *testing.T) {
 		t.Fatalf("got\n%s\nwant\n%s", last.Body, want)
 	}
 }
+
+func TestInlinePunctuationGolden(t *testing.T) {
+	in := exampleInput()
+	in.Inline = "all"
+	in.Findings = []Finding{
+		{ID: "f-001", Title: "use `x` *now* [a](b)", Body: "Body f-001.", Label: "issue",
+			Location: &Location{Path: "a.go", Side: "RIGHT", Line: 3}},
+		{ID: "f-002", Title: `a < b & "c" \ ! # | ~ _x_ 'd'`, Body: "Body f-002.",
+			Location: &Location{Path: "a.go", Side: "RIGHT", Line: 4}},
+	}
+	var got strings.Builder
+	enc := json.NewEncoder(&got)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(Comments(in)); err != nil {
+		t.Fatal(err)
+	}
+	checkGolden(t, "inline-punctuation.json", got.String())
+	if !strings.Contains(Body(in), "<summary>use `x` *now* [a](b)</summary>") {
+		t.Fatalf("the review body's summary was escaped:\n%s", Body(in))
+	}
+}

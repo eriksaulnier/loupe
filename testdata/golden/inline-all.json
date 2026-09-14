@@ -15,7 +15,7 @@
     "path": "d.go",
     "line": 7,
     "side": "RIGHT",
-    "body": "🔵 <b>question:</b> Closes &lt;/b&gt; early second line\n\n> `d.go:7`\n\nBody f-005."
+    "body": "🔵 <b>question:</b> Closes &lt;\\/b&gt; early second line\n\n> `d.go:7`\n\nBody f-005."
   },
   {
     "path": "internal/a.go",

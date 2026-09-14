@@ -2,8 +2,10 @@ package draft
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/markdown"
@@ -24,6 +26,23 @@ type FindingInput struct {
 }
 
 const inputFix = "see loupe add --help for the input shape"
+
+// LabelPattern keeps labels free of Markdown punctuation, because an inline comment's summary line is a Markdown
+// paragraph where the label is not escaped.
+const LabelPattern = `^[\p{L}\p{N}][\p{L}\p{N}_.-]*$`
+
+const maxLabelRunes = 40
+
+var labelRE = regexp.MustCompile(LabelPattern)
+
+// ValidateLabel accepts the empty label, which means no label.
+func ValidateLabel(label string) error {
+	if label == "" || (labelRE.MatchString(label) && utf8.RuneCountInString(label) <= maxLabelRunes) {
+		return nil
+	}
+	return refusal.New(refusal.Input,
+		fmt.Sprintf("label %q must match %s and be at most %d characters", label, LabelPattern, maxLabelRunes), inputFix)
+}
 
 // Add validates every entry before appending any, so a batch is stored entirely or not at all.
 func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Time) ([]Finding, error) {
@@ -77,6 +96,9 @@ func validateInput(in FindingInput, dif *diff.Diff) error {
 		return refusal.New(refusal.Input, `a finding has either location or "general": true, not both`, inputFix)
 	case in.Location == nil && !in.General:
 		return refusal.New(refusal.Input, `a finding needs a location or "general": true`, inputFix)
+	}
+	if err := ValidateLabel(in.Label); err != nil {
+		return err
 	}
 	switch in.Confidence {
 	case "", "high", "medium", "low":

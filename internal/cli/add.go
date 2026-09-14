@@ -34,10 +34,10 @@ Input (--from <file>, or --from - for stdin): one finding object or an array of 
 title and body are required. Exactly one of location or "general": true is required.
 location must be in the captured diff: side RIGHT (the default) is the new file, LEFT the old
 file, and startLine and line must be in the same hunk. label is issue, suggestion, question or
-any other word, kept verbatim. blocking defaults to false. confidence is high, medium or low.
-body must pass the Markdown allowlist. A batch is stored entirely or not at all; a refusal
-names the zero-based details.entry. Input MUST NOT carry included, decision, status or
-findingRev.
+any other word of letters, digits, _, . or -, at most 40 characters, kept verbatim. blocking
+defaults to false. confidence is high, medium or low. body must pass the Markdown allowlist.
+A batch is stored entirely or not at all; a refusal names the zero-based details.entry. Input
+MUST NOT carry included, decision, status or findingRev.
 
 The flags build a single finding instead and cannot be combined with --from.
 
@@ -67,7 +67,7 @@ func newAddCmd(deps Deps) *cobra.Command {
 	f.Int("start-line", 0, "first line of a multi-line range")
 	f.String("side", "", "RIGHT (new file, default) or LEFT (old file)")
 	f.Bool("general", false, "a general finding with no location")
-	f.String("label", "", "issue, suggestion, question or any other word")
+	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")
 	f.String("confidence", "", "high, medium or low")
 	f.String("severity", "", "free-text severity")

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -181,5 +182,24 @@ func TestSetSummaryRefusesMarkdown(t *testing.T) {
 	r := wantRefusal(t, SetSummary(d, "<!-- hidden -->", nil, ByHuman), refusal.Markdown)
 	if r.Fix != "loupe summary --from -" || d.Summary != "" {
 		t.Fatalf("fix %q summary %q", r.Fix, d.Summary)
+	}
+}
+
+func TestAddValidatesLabel(t *testing.T) {
+	for _, label := range []string{"", "issue", "nit", "a11y", "perf.hot-path", "follow_up", "Frage", "問題", strings.Repeat("x", 40)} {
+		in := general("Labeled")
+		in.Label = label
+		if _, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), "", addNow); err != nil {
+			t.Errorf("label %q refused: %v", label, err)
+		}
+	}
+	for _, label := range []string{"-lead", "_lead", ".lead", "two words", "use`x`", "*now*", "[a](b)", `back\slash`, "bang!", "#tag", "a|b", "~x", "x:", strings.Repeat("x", 41)} {
+		in := general("Labeled")
+		in.Label = label
+		_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), "", addNow)
+		r := wantRefusal(t, err, refusal.Input)
+		if !strings.Contains(r.Message, "label") || !strings.Contains(r.Message, LabelPattern) {
+			t.Errorf("label %q: message %q does not name the field and pattern", label, r.Message)
+		}
 	}
 }

@@ -177,6 +177,9 @@ func section(title string, fs []Finding, ctx summaryContext, in Input) string {
 
 func summaryLine(f Finding, ctx summaryContext) string {
 	title := EscapeHTML(OneLine(f.Title))
+	if ctx == inInline {
+		title = escapePunctuation(title)
+	}
 	label := EscapeHTML(OneLine(f.Label))
 	if f.Blocking {
 		label = strings.TrimLeft(label+" (blocking)", " ")
@@ -194,6 +197,27 @@ func summaryLine(f Finding, ctx summaryContext) string {
 		}
 	}
 	return prefix + title
+}
+
+// escapePunctuation is for an inline comment's summary line, which GitHub renders as a Markdown paragraph rather than
+// an HTML block. Character references from EscapeHTML are copied whole so they still decode.
+func escapePunctuation(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '&' {
+			if end := strings.IndexByte(s[i:], ';'); end > 0 {
+				b.WriteString(s[i : i+end+1])
+				i += end
+				continue
+			}
+		}
+		if strings.IndexByte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", c) >= 0 {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
 }
 
 // disclosure is what sits inside a finding's <details>, and is also the rest of an inline comment.

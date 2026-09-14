@@ -68,7 +68,7 @@ draft:    { schema: 1, version, summary, findings[], decisions{}, notes[], repli
 | `body` | string | yes | required, Markdown, allowlist-checked, at most 64 KiB |
 | `location` | Location, optional | yes | exactly one of `location` or `general: true` |
 | `general` | bool | yes | |
-| `label` | string, optional | yes | `issue`, `suggestion`, `question` or any other word kept verbatim; empty means none |
+| `label` | string, optional | yes | `issue`, `suggestion`, `question` or any other word of letters, digits, `_`, `.` or `-` (at most 40 characters) kept verbatim; empty means none |
 | `blocking` | bool | yes | default false |
 | `confidence` | string, optional | yes | `high`, `medium` or `low` when present |
 | `severity` | string, optional | yes | arbitrary text, collapsed to one line at render |

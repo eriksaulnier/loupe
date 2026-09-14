@@ -86,7 +86,7 @@ Input: one finding object or an array of them.
 }
 ```
 
-Exactly one of `location` or `"general": true` is required. `side` defaults to `RIGHT`. `label` is `issue`, `suggestion`, `question` or any other word, kept verbatim. `blocking` defaults to false. `confidence` is `high`, `medium` or `low` when present. Flag equivalents for humans: `--title`, `--body`, `--path`, `--line`, `--start-line`, `--side`, `--general`, `--label`, `--blocking`, `--confidence`, `--severity`, `--suggested-fix`. A batch is stored entirely or not at all; a refusal names `details.entry` (zero-based).
+Exactly one of `location` or `"general": true` is required. `side` defaults to `RIGHT`. `label` is `issue`, `suggestion`, `question` or any other word of letters, digits, `_`, `.` or `-`, kept verbatim. `blocking` defaults to false. `confidence` is `high`, `medium` or `low` when present. Flag equivalents for humans: `--title`, `--body`, `--path`, `--line`, `--start-line`, `--side`, `--general`, `--label`, `--blocking`, `--confidence`, `--severity`, `--suggested-fix`. A batch is stored entirely or not at all; a refusal names `details.entry` (zero-based).
 
 Result payload: `findings` (array of `{id, rev}`), `version`.
 
