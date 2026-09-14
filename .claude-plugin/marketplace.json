@@ -1,0 +1,13 @@
+{
+  "name": "loupe",
+  "owner": {
+    "name": "Erik Saulnier"
+  },
+  "plugins": [
+    {
+      "name": "loupe",
+      "source": "./plugin",
+      "description": "Review a GitHub pull request with loupe: capture it, investigate, and file findings for the human to decide and publish."
+    }
+  ]
+}
