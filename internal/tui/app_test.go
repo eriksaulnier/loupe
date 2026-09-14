@@ -25,7 +25,10 @@ var testEnv = map[string]string{"NO_COLOR": "1"}
 // (a general question) over the multi-hunk diff.
 func newFixture(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := run.RunDir(t.TempDir(), "acme", "widgets", 42, 1)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	diffBytes, err := os.ReadFile(filepath.Join("..", "..", "testdata", "diffs", "multi-hunk.diff"))
 	if err != nil {
 		t.Fatal(err)

@@ -36,8 +36,13 @@ type fixture struct {
 // newRun writes a ready run and returns options that confirm with y unless a test replaces Confirm.
 func newRun(t *testing.T, d *draft.Draft) *fixture {
 	t.Helper()
-	dir := t.TempDir()
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), fixtureTarget()); err != nil {
+	root := t.TempDir()
+	target := fixtureTarget()
+	dir := run.RunDir(root, target.Owner, target.Repo, target.Number, target.Round)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), target); err != nil {
 		t.Fatal(err)
 	}
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
@@ -48,8 +53,13 @@ func newRun(t *testing.T, d *draft.Draft) *fixture {
 	fx.draft = fx.readDraft()
 	fx.opts = Options{
 		Dir: dir, Target: fixtureTarget(), GitHub: func() (github.Client, error) { return client, nil }, IsTerminal: true, Action: "comment", Inline: "all",
-		Now:    func() time.Time { return fixtureNow },
-		Getenv: func(string) string { return "" },
+		Now: func() time.Time { return fixtureNow },
+		Getenv: func(key string) string {
+			if key == "LOUPE_HOME" {
+				return root
+			}
+			return ""
+		},
 	}
 	fx.opts.Confirm = fx.confirmWith(true, nil)
 	return fx
@@ -254,7 +264,7 @@ func TestRunRefusesRecordAppearedDuringConfirmation(t *testing.T) {
 	for _, name := range []string{"receipt.json", "attempt.json"} {
 		t.Run(name, func(t *testing.T) {
 			fx := newRun(t, readyDraft())
-			env, err := Build(fixtureTarget(), readyDraft(), "reviewer", "comment", "all")
+			env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -496,7 +506,7 @@ func TestRunHoldsSignalsFromAttemptToOutcome(t *testing.T) {
 // saveMarkedAttempt stores an attempt in state for the ready draft, and returns it.
 func (fx *fixture) saveMarkedAttempt(state string) Attempt {
 	fx.t.Helper()
-	env, err := Build(fixtureTarget(), readyDraft(), "reviewer", "comment", "all")
+	env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all")
 	if err != nil {
 		fx.t.Fatal(err)
 	}
@@ -555,7 +565,7 @@ func TestRunNoMatchMarksInFlightUnknown(t *testing.T) {
 func TestRunRetryUnknownRefusesWhenRecordsChangeDuringConfirmation(t *testing.T) {
 	changes := map[string]func(fx *fixture){
 		"receipt appeared": func(fx *fixture) {
-			env, _ := Build(fixtureTarget(), readyDraft(), "reviewer", "comment", "all")
+			env, _ := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all")
 			if err := SaveReceipt(fx.dir, Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env}); err != nil {
 				fx.t.Error(err)
 			}

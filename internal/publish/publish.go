@@ -83,7 +83,15 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	env, err := Build(opts.Target, d, viewer, opts.Action, opts.Inline)
+	root, err := run.DataRoot(opts.Getenv)
+	if err != nil {
+		return Receipt{}, false, err
+	}
+	round, err := publishedRound(root, opts.Target)
+	if err != nil {
+		return Receipt{}, false, err
+	}
+	env, err := Build(opts.Target, round, d, viewer, opts.Action, opts.Inline)
 	if err != nil {
 		return Receipt{}, false, err
 	}

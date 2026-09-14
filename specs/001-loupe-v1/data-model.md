@@ -42,7 +42,7 @@ Only a clean exit records: `q`, Ctrl-C in the full-screen program, and `q` or en
 | `author` | string | pull request author login |
 | `viewer` | string | authenticated login at capture |
 | `baseSha`, `headSha` | string | from the API, verified against the fetched refs |
-| `round` | int | 1-based, one higher than any existing round for the pull request |
+| `round` | int | 1-based, one higher than any existing round for the pull request; the round a published review names counts only published rounds, so it MAY be lower (FR-042) |
 | `previousRound` | int, optional | `round - 1` when any earlier round exists, published or not; lineage only |
 | `capturedAt` | time | |
 | `clonePath` | string | absolute path of the clone used |

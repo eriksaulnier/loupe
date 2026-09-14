@@ -150,3 +150,28 @@ func TestRoundsAndSameHead(t *testing.T) {
 		t.Fatalf("round 4 target %v", target)
 	}
 }
+
+func TestAbandonedRoundDoesNotAdvancePublishedRound(t *testing.T) {
+	h := newHarness(t)
+	h.captureRound(1)
+	h.pushHead("src/round2.go")
+	h.captureRound(2)
+	h.publishRound(2)
+
+	body := lastPostBody(t, h)
+	if !strings.Contains(body, "loupe · round 1 · reviewed") || !strings.Contains(body, "<!-- loupe-meta v=1 round=1 ") {
+		t.Fatalf("round 2 published after an abandoned round 1:\n%s", body)
+	}
+	var receipt struct {
+		Envelope struct {
+			Body   string `json:"body"`
+			Target struct {
+				Round json.Number `json:"round"`
+			} `json:"target"`
+		} `json:"envelope"`
+	}
+	decodeNumbers(t, readFile(t, filepath.Join(h.RunDir(2), "receipt.json")), &receipt)
+	if receipt.Envelope.Body != body || receipt.Envelope.Target.Round != "2" {
+		t.Fatalf("receipt target round %s, body matches sent %v", receipt.Envelope.Target.Round, receipt.Envelope.Body == body)
+	}
+}

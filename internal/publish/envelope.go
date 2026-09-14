@@ -28,8 +28,9 @@ const (
 )
 
 // Build composes the review from the accepted findings only. It rechecks the allowlist because the draft file may
-// have been edited by hand since the content was filed.
-func Build(target run.Target, d *draft.Draft, viewer, action, inline string) (Envelope, error) {
+// have been edited by hand since the content was filed. round is the published round the body shows; the envelope
+// keeps the capture round, which receipts and run references are keyed by.
+func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline string) (Envelope, error) {
 	event, ok := events[action]
 	if !ok {
 		return Envelope{}, fmt.Errorf("unknown review action %q", action)
@@ -63,7 +64,7 @@ func Build(target run.Target, d *draft.Draft, viewer, action, inline string) (En
 		Comments:      []Comment{},
 		Findings:      []EnvelopeFinding{},
 	}
-	in := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: target.Round, HeadSHA: target.HeadSHA,
+	in := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: round, HeadSHA: target.HeadSHA,
 		Inline: inline, Summary: d.Summary, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source}
 	for _, f := range included {
 		rf := render.Finding{ID: f.ID, Title: f.Title, Body: f.Body, General: f.General, Label: f.Label, Blocking: f.Blocking,

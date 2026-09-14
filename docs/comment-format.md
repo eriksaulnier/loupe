@@ -166,7 +166,9 @@ loupe · round N · reviewed `SHA`
 loupe · round N · reviewed `SHA` · via `NAME VERSION`
 ```
 
-- `N` is the run's round and `SHA` is the abbreviated captured head commit, a generated code span subject to the backtick rule.
+- `N` is this review's position among the pull request's publications and `SHA` is the abbreviated captured head commit, a generated code span subject to the backtick rule.
+- **`N` counts publications, not captures.** It is 1 plus the number of the pull request's *other* rounds holding a receipt or an attempt, so a round captured and abandoned unpublished does not advance it, and it MAY be lower than the run's round. An attempt counts because its review may already be on GitHub, so no other round reuses its number, at the cost of a skipped number when an unknown attempt never landed. Other rounds count rather than earlier ones, so an older round that publishes after a newer one still gets the higher number.
+- **Two reviews MAY share an `N`**, and both ways need the head force-pushed back to an older round's commit: `--retry-unknown` on that round after a newer round published, since the retry counts the newer receipt that already counted its attempt; or two rounds at that commit publishing at once, since `N` is fixed before confirmation and each publish locks only its own run. This is accepted rather than refused.
 - The ` · via ` suffix MUST appear only when capture recorded a source, and is otherwise absent, leaving the first form byte for byte. `NAME VERSION` is that source with its `@` rendered as a space, or `NAME` alone when it has no version, in a generated code span.
 - Nothing else: no run reference, no local paths, and no agent name beyond the source capture was given, none of which a PR reader can resolve. Machine-readable provenance belongs in `loupe-meta`.
 
@@ -182,7 +184,7 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 - The first is the reconciliation marker: an unknown publication is resolved by finding a review whose body contains this exact comment. Its format MUST NOT change between versions that may need to reconcile each other's attempts.
 - **`loupe-meta`'s per-label counts are a census, not the chips row.** They count every included finding, blocking ones included, so a review whose only issue blocks records `blocking=1 issues=1` while the visible chips show no issue. The chips are an index of the headings a reader can scroll to; the marker is an inventory of what the review held.
 - **`src=` follows `round=` only when capture recorded a source**, as given (`src=gadfly-review-pr@2.2.0`). It is never escaped, so capture refuses a source that does not match `^[a-z0-9][a-z0-9._-]*(@[0-9][0-9A-Za-z.+-]*)?$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. None of those can close the comment.
-- New keys MAY be added to `loupe-meta`; existing keys MUST keep their meaning.
+- New keys MAY be added to `loupe-meta`; existing keys MUST keep their meaning. **`round=` is the one recorded exception:** it carries the footer's `N` (FR-042), where it once carried the run's round. Outside the shared-`N` cases under Footer, a pull request with no abandoned round reads identically under both, and `round=` still rises with each review a pull request publishes, so a reader that takes the highest as live picks the newest review.
 
 ## Inline modes
 

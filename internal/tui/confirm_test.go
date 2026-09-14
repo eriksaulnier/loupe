@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -165,9 +166,17 @@ func readyFixture(t *testing.T, viewer, author string) string {
 	return dir
 }
 
+// publishEnv answers LOUPE_HOME with the data root newFixture laid dir out under, since publish counts the pull
+// request's other rounds there.
+func publishEnv(dir string) func(string) string {
+	env := map[string]string{"LOUPE_HOME": filepath.Join(dir, "..", "..", "..", "..", "..")}
+	maps.Copy(env, testEnv)
+	return envOf(env)
+}
+
 func startPublishApp(t *testing.T, dir string, gh *fakegh.Server) *teatest.TestModel {
 	t.Helper()
-	cfg := Config{Dir: dir, Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard}
+	cfg := Config{Dir: dir, Getenv: publishEnv(dir), Now: func() time.Time { return testNow }, Output: io.Discard}
 	if gh != nil {
 		client := gh.Client(t)
 		cfg.GitHub = func() (github.Client, error) { return client, nil }

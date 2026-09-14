@@ -12,7 +12,7 @@ import (
 
 func TestBuildComposesEnvelope(t *testing.T) {
 	d := readyDraft()
-	env, err := Build(fixtureTarget(), d, "reviewer", "request-changes", "all")
+	env, err := Build(fixtureTarget(), 1, d, "reviewer", "request-changes", "all")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func assertOnlyAccepted(t *testing.T, payload string) {
 
 func TestBuildEventAndInlineModes(t *testing.T) {
 	for action, event := range map[string]string{"comment": "COMMENT", "approve": "APPROVE", "request-changes": "REQUEST_CHANGES"} {
-		env, err := Build(fixtureTarget(), readyDraft(), "reviewer", action, "none")
+		env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", action, "none")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,17 +77,17 @@ func TestBuildEventAndInlineModes(t *testing.T) {
 			t.Errorf("action %s: event %q comments %#v", action, env.Event, env.Comments)
 		}
 	}
-	env, err := Build(fixtureTarget(), readyDraft(), "reviewer", "comment", "blocking")
+	env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "blocking")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(env.Comments) != 1 || env.Comments[0].Line != 3 {
 		t.Fatalf("blocking comments %+v", env.Comments)
 	}
-	if _, err := Build(fixtureTarget(), readyDraft(), "reviewer", "merge", "none"); err == nil {
+	if _, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "merge", "none"); err == nil {
 		t.Fatal("unknown action accepted")
 	}
-	if _, err := Build(fixtureTarget(), readyDraft(), "reviewer", "comment", "some"); err == nil {
+	if _, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "some"); err == nil {
 		t.Fatal("unknown inline mode accepted")
 	}
 }
@@ -95,14 +95,14 @@ func TestBuildEventAndInlineModes(t *testing.T) {
 func TestBuildRechecksMarkdown(t *testing.T) {
 	d := readyDraft()
 	d.Summary = "<script>alert(1)</script>"
-	_, err := Build(fixtureTarget(), d, "reviewer", "comment", "none")
+	_, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none")
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.Markdown || r.Fix != "loupe summary --from -" {
 		t.Fatalf("summary: %#v", err)
 	}
 
 	d = readyDraft()
 	d.Findings[1].Body = "<pre>raw</pre>"
-	_, err = Build(fixtureTarget(), d, "reviewer", "comment", "none")
+	_, err = Build(fixtureTarget(), 1, d, "reviewer", "comment", "none")
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.Markdown || r.Fix != "loupe edit f-002 --from -" {
 		t.Fatalf("accepted body: %#v", err)
 	}
@@ -110,7 +110,7 @@ func TestBuildRechecksMarkdown(t *testing.T) {
 	d = readyDraft()
 	d.Findings[2].Body = "<pre>raw</pre>"
 	d.Findings[3].Body = "<pre>raw</pre>"
-	if _, err := Build(fixtureTarget(), d, "reviewer", "comment", "none"); err != nil {
+	if _, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none"); err != nil {
 		t.Fatalf("excluded or withdrawn body was checked: %v", err)
 	}
 }
@@ -118,7 +118,7 @@ func TestBuildRechecksMarkdown(t *testing.T) {
 func TestBuildCarriesSource(t *testing.T) {
 	target := fixtureTarget()
 	target.Source = "gadfly-review-pr@2.2.0"
-	env, err := Build(target, readyDraft(), "reviewer", "comment", "none")
+	env, err := Build(target, 1, readyDraft(), "reviewer", "comment", "none")
 	if err != nil || !strings.Contains(env.Body, " · via `gadfly-review-pr 2.2.0`") || !strings.Contains(env.Body, " src=gadfly-review-pr@2.2.0 ") {
 		t.Fatalf("source not rendered: %v\n%s", err, env.Body)
 	}
@@ -131,7 +131,7 @@ func TestBuildRefusesBodyOverLimit(t *testing.T) {
 	for _, i := range []int{0, 1, 4} {
 		d.Findings[i].Body, d.Findings[i].SuggestedFix = long, long
 	}
-	_, err := Build(fixtureTarget(), d, "reviewer", "comment", "none")
+	_, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none")
 	r, ok := refusal.As(err)
 	if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "limit" || r.Fix != "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -" {
 		t.Fatalf("err %#v", err)
@@ -142,11 +142,11 @@ func TestBuildCountsBodyLimitInCharacters(t *testing.T) {
 	d := readyDraft()
 	wide := strings.Repeat("é", 30000)
 	d.Findings[0].Body, d.Findings[1].Body = wide, wide
-	if _, err := Build(fixtureTarget(), d, "reviewer", "comment", "none"); err != nil {
+	if _, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none"); err != nil {
 		t.Fatalf("a body of about 60,000 two-byte characters was refused: %v", err)
 	}
 	d.Findings[4].Body = wide
-	_, err := Build(fixtureTarget(), d, "reviewer", "comment", "none")
+	_, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none")
 	r, ok := refusal.As(err)
 	if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "limit" || !strings.Contains(r.Message, "65536 characters") {
 		t.Fatalf("err %#v", err)
@@ -156,7 +156,7 @@ func TestBuildCountsBodyLimitInCharacters(t *testing.T) {
 func TestBuildRefusesInlineCommentOverLimit(t *testing.T) {
 	d := readyDraft()
 	d.Findings[0].Body, d.Findings[0].SuggestedFix = strings.Repeat("a", 60000), strings.Repeat("b", 10000)
-	_, err := Build(fixtureTarget(), d, "reviewer", "comment", "blocking")
+	_, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "blocking")
 	r, ok := refusal.As(err)
 	if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "limit" || !strings.Contains(r.Message, "f-001") ||
 		r.Fix != "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -" {
@@ -167,7 +167,7 @@ func TestBuildRefusesInlineCommentOverLimit(t *testing.T) {
 func TestBuildRefusesWhenPublishableSetIsNotAccepted(t *testing.T) {
 	d := readyDraft()
 	delete(d.Decisions, "f-002")
-	_, err := Build(fixtureTarget(), d, "reviewer", "comment", "none")
+	_, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none")
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.NotReady {
 		t.Fatalf("err %#v", err)
 	}

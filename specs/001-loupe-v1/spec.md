@@ -22,6 +22,7 @@
 - Q: Should a published review name what filed its findings? → A: Yes, when the agent names it at capture. An optional `name[@version]` source is shown after the reviewed commit in the footer and recorded as `src=` in `loupe-meta`. Without one, the review is unchanged.
 - Q: Should the review body open with a callout naming the action? → A: No. GitHub's review header already shows the event. The body opens with an `IMPORTANT` callout stating only the blocking count, and only when blocking findings are included; otherwise the chips row leads the body, or the summary when there are no findings.
 - Q: Which dots should the finding labels carry? → A: 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other, with ⛔ kept for the blocking chip. A red dot on a nonblocking issue read as alarming. The dot still follows the label, so a blocking issue reads `🟡 issue (blocking):`.
+- Q: A round captured and abandoned unpublished, as when a rebase forces a second capture mid-review, left the pull request's first review reading `round 2`. What should the published review number? → A: Its position among the pull request's publications. The footer `round N` and `loupe-meta` `round=` both carry it; the run keeps its capture round, so run references, receipts and `show --previous` are unchanged.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -133,7 +134,7 @@ A pull request is reviewed again after the author pushes fixes. Capturing it aga
 
 1. **Given** a published round for a pull request, **When** the agent captures the pull request again, **Then** a new round is created, numbered one higher, recording the previous round.
 2. **Given** a round with an earlier published round, **When** the agent asks for the previous findings, **Then** it receives the findings published by the newest earlier round, skipping any unpublished rounds between, with identifiers, titles, bodies, locations and blocking state.
-3. **Given** a follow-up round, **When** it is published, **Then** the review footer names the round.
+3. **Given** a follow-up round, **When** it is published, **Then** the review footer names its position among the pull request's published reviews.
 4. **Given** an unpublished earlier round at a different head, **When** the pull request is captured again, **Then** the new round is still created and the earlier round remains inspectable.
 5. **Given** an unpublished round at the current head, **When** the pull request is captured again, **Then** capture refuses, names that run's reference, and creates nothing.
 6. **Given** a published round at the current head, **When** the pull request is captured again, **Then** a new round is created at the same head.
@@ -184,6 +185,8 @@ A Claude Code user installs the loupe plugin. Typing the slash command with a pu
 - A location's path or line is not in the diff, or a range spans two hunks: refused with nearest valid lines.
 - The clone's origin is not the pull request's repository: capture refuses and shows how to pass the clone path.
 - The newest round for the pull request is unpublished and at the same head: capture refuses and names that run's reference; a published round at the same head gets a new round.
+- A round was captured and abandoned unpublished: it does not advance the round a later review of the pull request publishes as, so the footer can name a lower round than the run reference.
+- The head is force-pushed back to an older round's commit and that round publishes, by `--retry-unknown` after a newer round published or at the same time as another round at that commit: both reviews MAY name the same round. Accepted rather than refused, since it needs the force-push and numbering never blocks a publish.
 - GitHub rejects the review because the viewer already has a pending review: the refusal says to submit or discard it on GitHub first.
 - The network fails after the request was sent: the attempt is kept as unknown and reconciled on the next publish.
 - The terminal is too small, reports itself as dumb, or standard input cannot be put in raw mode: the line-by-line review mode is used.
@@ -252,6 +255,7 @@ General
 - **FR-039**: On every clean exit, including plain-mode end of input, review MUST record which open, unanswered notes it handed back, without changing the draft version.
 - **FR-040**: An agent-facing command MUST block until a handed-back note awaits a reply or the run is published, MUST honor a timeout and cancellation, and MUST refuse with `timeout` when the timeout elapses.
 - **FR-041**: Capture MUST accept an optional source naming what filed the findings and MUST refuse one that could close a marker, as MUST loading a run that records one; publish MUST show a source in the footer and `loupe-meta` only when capture recorded one.
+- **FR-042**: Publish MUST number a review by its position among the pull request's publications: one more than the number of the pull request's other rounds holding a receipt or an attempt. The footer and `loupe-meta` MUST both carry that number; the run's round, its references and its records MUST keep the capture round.
 
 ### Key Entities
 
@@ -275,7 +279,7 @@ General
 - **SC-003**: Every finding present in a published review corresponds to an explicit human accept recorded before publication, in 100% of published reviews.
 - **SC-004**: The review interface opens and shows the first finding's hunk in under 100 ms on a diff of 500 files.
 - **SC-005**: Installation is one static binary with no runtime to install.
-- **SC-006**: A second capture of the same pull request after fixes lets the agent read every previously published finding, and the published review names the round.
+- **SC-006**: A second capture of the same pull request after fixes lets the agent read every previously published finding, and the published review names its position among the pull request's published reviews.
 - **SC-007**: No test in the repository uses a real pseudo-terminal, a real reviewer or a real GitHub write, and the full integration flow from capture to receipt runs in the test suite.
 
 ## Assumptions
