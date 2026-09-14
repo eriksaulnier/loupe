@@ -34,8 +34,8 @@ type Options struct {
 	Now     func() time.Time
 	Getenv  func(string) string
 	// HoldSignals is called just before attempt.json is written and the func it returns once the outcome is recorded.
-	// Nil holds SIGINT and SIGTERM for real.
-	HoldSignals func() (release func())
+	// Nil holds the signals for real.
+	HoldSignals func(signals []os.Signal) (release func())
 }
 
 type Preview struct {
@@ -185,7 +185,7 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	if hold == nil {
 		hold = holdSignals
 	}
-	release := hold()
+	release := hold(heldSignals)
 	defer release()
 
 	started := opts.Now()
@@ -239,12 +239,15 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	}
 }
 
-// holdSignals keeps SIGINT and SIGTERM from killing the process while a review may be on its way to GitHub, which
-// would leave an in-flight attempt that only a human can resolve. A signal that arrives meanwhile is dropped; the
-// command ends on its own once the outcome is recorded.
-func holdSignals() func() {
+// heldSignals includes SIGHUP because a closed terminal or SSH session is the likeliest interruption.
+var heldSignals = []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP}
+
+// holdSignals keeps signals from killing the process while a review may be on its way to GitHub, which would leave an
+// in-flight attempt that only a human can resolve. A signal that arrives meanwhile is dropped; the command ends on its
+// own once the outcome is recorded.
+func holdSignals(signals []os.Signal) func() {
 	caught := make(chan os.Signal, 1)
-	signal.Notify(caught, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(caught, signals...)
 	return func() { signal.Stop(caught) }
 }
 

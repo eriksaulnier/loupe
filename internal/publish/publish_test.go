@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -401,8 +402,11 @@ func TestRunReceiptWriteFailureKeepsReviewIdentity(t *testing.T) {
 func TestRunHoldsSignalsFromAttemptToOutcome(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	holds, releases := 0, 0
-	fx.opts.HoldSignals = func() func() {
+	fx.opts.HoldSignals = func(signals []os.Signal) func() {
 		holds++
+		if !reflect.DeepEqual(signals, []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP}) {
+			t.Errorf("held signals %v", signals)
+		}
 		if fx.exists("attempt.json") || fx.gh.CreateCount() != 0 {
 			t.Error("signals were held after the attempt was written or the review was sent")
 		}
@@ -422,7 +426,7 @@ func TestRunHoldsSignalsFromAttemptToOutcome(t *testing.T) {
 
 	declined := newRun(t, readyDraft())
 	declined.opts.Confirm = declined.confirmWith(false, nil)
-	declined.opts.HoldSignals = func() func() {
+	declined.opts.HoldSignals = func([]os.Signal) func() {
 		t.Error("signals were held for a declined publish")
 		return func() {}
 	}
