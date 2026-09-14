@@ -177,9 +177,10 @@ func TestEditValidatesNewValues(t *testing.T) {
 	}
 }
 
-func TestWithdrawAndInclude(t *testing.T) {
+func TestEditWithdrawsAndIncludes(t *testing.T) {
 	d := editable()
-	f, cleared, err := Withdraw(d, "f-001", ByAgent, editNow)
+	withdraw, include := false, true
+	f, cleared, err := Edit(d, "f-001", EditInput{}, &withdraw, nil, ByAgent, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +191,7 @@ func TestWithdrawAndInclude(t *testing.T) {
 		t.Fatalf("history %#v", f.History)
 	}
 
-	f, cleared, err = Include(d, "f-001", ByAgent, editNow)
+	f, cleared, err = Edit(d, "f-001", EditInput{}, &include, nil, ByAgent, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +199,7 @@ func TestWithdrawAndInclude(t *testing.T) {
 		t.Fatalf("included %+v cleared %v dispositions %v", f, cleared, Dispositions(d))
 	}
 
-	f, _, err = Include(d, "f-001", ByAgent, editNow)
+	f, _, err = Edit(d, "f-001", EditInput{}, &include, nil, ByAgent, editNow)
 	if !errors.Is(err, ErrNoChange) || f.Rev != 3 {
 		t.Fatalf("including an included finding changed it: %+v err %v", f, err)
 	}
@@ -236,10 +237,6 @@ func TestReplyChangesNoStatusOrDecision(t *testing.T) {
 func TestEditUnknownIDsRefuseNotFound(t *testing.T) {
 	d := editable()
 	_, _, err := Edit(d, "f-009", editInput(t, `{"title": "x"}`), nil, multiHunk(t), ByAgent, editNow)
-	_ = wantRefusal(t, err, refusal.NotFound)
-	_, _, err = Withdraw(d, "f-009", ByAgent, editNow)
-	_ = wantRefusal(t, err, refusal.NotFound)
-	_, _, err = Include(d, "f-009", ByAgent, editNow)
 	_ = wantRefusal(t, err, refusal.NotFound)
 	_, err = AddReply(d, "n-009", "x", ByAgent, editNow)
 	_ = wantRefusal(t, err, refusal.NotFound)

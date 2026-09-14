@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -126,14 +125,9 @@ func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
 	if err != nil {
 		return run.Target{}, nil, nil, err
 	}
-	diffPath := filepath.Join(dir, "pr.diff")
-	diffBytes, err := run.ReadDiff(dir, target)
+	parsed, err := run.LoadDiff(dir, target)
 	if err != nil {
 		return run.Target{}, nil, nil, err
-	}
-	parsed, err := diff.Parse(diffBytes)
-	if err != nil {
-		return run.Target{}, nil, nil, refusal.New(refusal.Record, fmt.Sprintf("cannot parse %s: %v", diffPath, err), "inspect it with: less "+diffPath)
 	}
 	d, err := draft.Load(dir)
 	if err != nil {
@@ -312,7 +306,7 @@ func decide(dir string, displayed int, getenv func(string) string, fn func(*draf
 	if r.Code == refusal.Version {
 		return reloaded, staleNotice, nil
 	}
-	return reloaded, fmt.Sprintf("%s; %s", r.Message, r.Fix), nil
+	return reloaded, refusalNotice(r), nil
 }
 
 // frame is the one layout every view renders through: header lines, a body clipped or padded to the rows left, the
@@ -358,7 +352,7 @@ func (m *Model) helpView() string {
 }
 
 func (m *Model) header() string {
-	return fmt.Sprintf("%s/%s#%d  round %d  %s", m.target.Owner, m.target.Repo, m.target.Number, m.target.Round, render.ForDisplay(oneLine(m.target.Title)))
+	return fmt.Sprintf("%s/%s#%d  round %d  %s", m.target.Owner, m.target.Repo, m.target.Number, m.target.Round, render.ForDisplay(render.OneLine(m.target.Title)))
 }
 
 func countsLine(d *draft.Draft) string {
@@ -379,19 +373,20 @@ func (g GlyphSet) forDisposition(disposition string) string {
 	return g.Pending
 }
 
-func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 func locationText(f draft.Finding) string {
 	if f.Location == nil {
 		return "general"
 	}
-	loc := render.ForDisplay(f.Location.Path)
-	if f.Location.StartLine != 0 && f.Location.StartLine != f.Location.Line {
-		loc = fmt.Sprintf("%s:%d-%d", loc, f.Location.StartLine, f.Location.Line)
-	} else {
-		loc = fmt.Sprintf("%s:%d", loc, f.Location.Line)
+	return render.ForDisplay(formatLocation(f.Location.Path, f.Location.Line, f.Location.StartLine, f.Location.Side))
+}
+
+// formatLocation is path:line, or path:start-end for a range, marked (old) on the left side.
+func formatLocation(path string, line, startLine int, side string) string {
+	loc := fmt.Sprintf("%s:%d", path, line)
+	if startLine != 0 && startLine != line {
+		loc = fmt.Sprintf("%s:%d-%d", path, startLine, line)
 	}
-	if f.Location.Side == draft.SideLeft {
+	if side == draft.SideLeft {
 		loc += " (old)"
 	}
 	return loc
@@ -403,13 +398,13 @@ func chips(f draft.Finding, disposition string) []string {
 		out = append(out, "blocking")
 	}
 	if f.Label != "" {
-		out = append(out, render.ForDisplay(oneLine(f.Label)))
+		out = append(out, render.ForDisplay(render.OneLine(f.Label)))
 	}
 	if f.Confidence != "" {
 		out = append(out, "confidence "+render.ForDisplay(f.Confidence))
 	}
 	if f.Severity != "" {
-		out = append(out, "severity "+render.ForDisplay(oneLine(f.Severity)))
+		out = append(out, "severity "+render.ForDisplay(render.OneLine(f.Severity)))
 	}
 	return out
 }

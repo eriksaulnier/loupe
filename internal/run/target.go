@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
@@ -49,7 +50,7 @@ func LoadTarget(dir string) (Target, error) {
 		return Target{}, err
 	}
 	if t.Schema != TargetSchema {
-		return Target{}, recordRefusal(path, fmt.Errorf("schema is %d, expected %d", t.Schema, TargetSchema))
+		return Target{}, RecordRefusal(path, fmt.Errorf("schema is %d, expected %d", t.Schema, TargetSchema))
 	}
 	return t, nil
 }
@@ -60,18 +61,22 @@ func DiffSHA256(diff []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ReadDiff returns pr.diff only when it still matches the fingerprint capture recorded, so a truncated or edited diff
+// LoadDiff parses pr.diff only when it still matches the fingerprint capture recorded, so a truncated or edited diff
 // cannot silently change which locations are valid or what the review shows.
-func ReadDiff(dir string, target Target) ([]byte, error) {
+func LoadDiff(dir string, target Target) (*diff.Diff, error) {
 	path := filepath.Join(dir, "pr.diff")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, recordRefusal(path, err)
+		return nil, RecordRefusal(path, err)
 	}
 	if got := DiffSHA256(data); got != target.DiffSHA256 {
-		return nil, recordRefusal(path, fmt.Errorf("its SHA-256 is %s but target.json records diffSha256 %s", got, target.DiffSHA256))
+		return nil, RecordRefusal(path, fmt.Errorf("its SHA-256 is %s but target.json records diffSha256 %s", got, target.DiffSHA256))
 	}
-	return data, nil
+	parsed, err := diff.Parse(data)
+	if err != nil {
+		return nil, RecordRefusal(path, err)
+	}
+	return parsed, nil
 }
 
 // CreateRun takes the draft as bytes because run must not import draft. The run appears complete or not at all:

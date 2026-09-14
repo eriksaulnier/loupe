@@ -164,9 +164,9 @@ func (m *Model) row(f draft.Finding, disposition string, selected bool) string {
 	}
 	parts := []string{cursor, m.glyphs.forDisposition(disposition), f.ID, blocking}
 	if f.Label != "" {
-		parts = append(parts, render.ForDisplay(oneLine(f.Label)))
+		parts = append(parts, render.ForDisplay(render.OneLine(f.Label)))
 	}
-	parts = append(parts, render.ForDisplay(oneLine(f.Title)), " "+locationText(f))
+	parts = append(parts, render.ForDisplay(render.OneLine(f.Title)), " "+locationText(f))
 	line := strings.Join(parts, " ")
 	if selected {
 		return m.styles.bold.Render(line)

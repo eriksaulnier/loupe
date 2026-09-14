@@ -72,23 +72,15 @@ func TestResolveRef(t *testing.T) {
 	}
 }
 
-func TestHasReceiptAndAttempt(t *testing.T) {
+func TestHasReceipt(t *testing.T) {
 	dir := t.TempDir()
 	if ok, err := HasReceipt(dir); err != nil || ok {
 		t.Fatalf("receipt: %v %v", ok, err)
 	}
-	if ok, err := HasAttempt(dir); err != nil || ok {
-		t.Fatalf("attempt: %v %v", ok, err)
-	}
-	for _, name := range []string{"receipt.json", "attempt.json"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("{}"), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.WriteFile(filepath.Join(dir, "receipt.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	if ok, err := HasReceipt(dir); err != nil || !ok {
 		t.Fatalf("receipt: %v %v", ok, err)
-	}
-	if ok, err := HasAttempt(dir); err != nil || !ok {
-		t.Fatalf("attempt: %v %v", ok, err)
 	}
 }

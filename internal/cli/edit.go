@@ -238,9 +238,6 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 		}
 	}
 	if v, _ := f.GetBool("not-blocking"); v {
-		if f.Changed("blocking") {
-			return editFields{}, refusal.New(refusal.Usage, "--not-blocking cannot be combined with --blocking", editUsage)
-		}
 		out.blocking = "false"
 	}
 	return out, nil

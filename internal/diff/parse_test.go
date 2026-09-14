@@ -31,7 +31,7 @@ func onlyFile(t *testing.T, d *Diff) *File {
 func TestMultiHunkLineNumbers(t *testing.T) {
 	d := parseFixture(t, "multi-hunk.diff")
 	f := onlyFile(t, d)
-	if f.OldName != "multi.txt" || f.NewName != "multi.txt" || f.IsNew || f.IsDelete || f.IsRename || f.IsBinary {
+	if f.OldName != "multi.txt" || f.NewName != "multi.txt" || f.IsNew || f.IsDelete || f.IsBinary {
 		t.Fatalf("file header: %+v", f)
 	}
 	if len(f.Hunks) != 3 {
@@ -66,7 +66,7 @@ func TestFileHeaders(t *testing.T) {
 		check   func(*File) bool
 		hunks   int
 	}{
-		{"rename.diff", "renamed.txt", func(f *File) bool { return f.IsRename && f.OldName == "rename-me.txt" }, 1},
+		{"rename.diff", "renamed.txt", func(f *File) bool { return f.OldName == "rename-me.txt" }, 1},
 		{"binary.diff", "blob.bin", func(f *File) bool { return f.IsBinary }, 0},
 		{"mode-change.diff", "script.sh", func(f *File) bool { return !f.IsNew && !f.IsDelete && !f.IsBinary }, 0},
 		{"new-file.diff", "fresh.txt", func(f *File) bool { return f.IsNew && f.NewName == "fresh.txt" }, 1},
@@ -95,12 +95,12 @@ func TestFileLookupMisses(t *testing.T) {
 	}
 }
 
-func TestNoNewlineAtEOF(t *testing.T) {
+func TestNoNewlineMarkerIsNotALine(t *testing.T) {
 	lines := onlyFile(t, parseFixture(t, "no-newline.diff")).Hunks[0].Lines
 	want := []Line{
 		{Kind: Context, OldNum: 1, NewNum: 1, Text: "keep"},
-		{Kind: Delete, OldNum: 2, Text: "last", NoNewlineAtEOF: true},
-		{Kind: Add, NewNum: 2, Text: "last changed", NoNewlineAtEOF: true},
+		{Kind: Delete, OldNum: 2, Text: "last"},
+		{Kind: Add, NewNum: 2, Text: "last changed"},
 	}
 	if !reflect.DeepEqual(lines, want) {
 		t.Fatalf("got %+v", lines)

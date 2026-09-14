@@ -88,7 +88,7 @@ func (c *confirmation) content(m *Model) string {
 	if !c.showJSON {
 		parts := []string{render.ForDisplay(markdown.OpenDetails(c.preview.Body)), fmt.Sprintf("Inline comments: %d", len(c.preview.Comments))}
 		for _, comment := range c.preview.Comments {
-			parts = append(parts, m.styles.bold.Render(render.ForDisplay(commentLocation(comment)))+"\n"+render.ForDisplay(comment.Body))
+			parts = append(parts, m.styles.bold.Render(render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side)))+"\n"+render.ForDisplay(comment.Body))
 		}
 		text = strings.Join(parts, "\n\n")
 	}
@@ -254,7 +254,7 @@ func (m *Model) publishFinished(done publishDone) tea.Cmd {
 	case errors.Is(done.err, publish.ErrDeclined):
 		m.notice = "publish canceled; nothing was sent"
 	case errors.As(done.err, &r):
-		m.notice = fmt.Sprintf("%s; %s", r.Message, r.Fix)
+		m.notice = refusalNotice(r)
 	default:
 		return m.fail(done.err)
 	}

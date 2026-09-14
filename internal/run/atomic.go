@@ -65,19 +65,20 @@ func WriteJSONAtomic(path string, v any) error {
 func ReadJSON(path string, v any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return recordRefusal(path, err)
+		return RecordRefusal(path, err)
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
-		return recordRefusal(path, err)
+		return RecordRefusal(path, err)
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return recordRefusal(path, errors.New("unexpected data after the JSON value"))
+		return RecordRefusal(path, errors.New("unexpected data after the JSON value"))
 	}
 	return nil
 }
 
-func recordRefusal(path string, cause error) error {
+// RecordRefusal refuses a damaged run file, naming it and a command to inspect it; loupe never repairs one.
+func RecordRefusal(path string, cause error) error {
 	return refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", path, cause), "inspect it with: cat "+path)
 }

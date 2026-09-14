@@ -8,31 +8,15 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"slices"
 	"strings"
 
+	"github.com/eriksaulnier/loupe/internal/gitenv"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
-// repoEnv would redirect git away from the -C directory; git exports these to hooks, so loupe run from a hook would
-// otherwise read and write the wrong repository.
-var repoEnv = []string{
-	"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-	"GIT_COMMON_DIR", "GIT_PREFIX",
-}
-
 // GIT_DIFF_OPTS outranks -U on the command line, and GIT_NAMESPACE hides refs/pull from an upload-pack that inherits it.
-var outputEnv = []string{"GIT_DIFF_OPTS", "GIT_NAMESPACE", "GIT_TERMINAL_PROMPT"}
-
 func cleanEnv() []string {
-	env := make([]string, 0, len(os.Environ())+1)
-	for _, kv := range os.Environ() {
-		name, _, _ := strings.Cut(kv, "=")
-		if !slices.Contains(repoEnv, name) && !slices.Contains(outputEnv, name) {
-			env = append(env, kv)
-		}
-	}
-	return append(env, "GIT_TERMINAL_PROMPT=0")
+	return append(gitenv.WithoutRepo(os.Environ(), "GIT_DIFF_OPTS", "GIT_NAMESPACE", "GIT_TERMINAL_PROMPT"), "GIT_TERMINAL_PROMPT=0")
 }
 
 func git(clone string, args ...string) ([]byte, error) {

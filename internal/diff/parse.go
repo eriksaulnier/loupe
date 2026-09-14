@@ -28,7 +28,6 @@ type File struct {
 	NewName  string
 	IsNew    bool
 	IsDelete bool
-	IsRename bool
 	IsBinary bool
 	Hunks    []*Hunk
 
@@ -46,11 +45,10 @@ type Hunk struct {
 
 // Line numbers are zero on the side where the line does not exist: OldNum for Add, NewNum for Delete.
 type Line struct {
-	Kind           Kind
-	OldNum         int
-	NewNum         int
-	Text           string
-	NoNewlineAtEOF bool
+	Kind   Kind
+	OldNum int
+	NewNum int
+	Text   string
 }
 
 type lineRef struct {
@@ -70,7 +68,6 @@ func Parse(data []byte) (*Diff, error) {
 			NewName:  gf.NewName,
 			IsNew:    gf.IsNew,
 			IsDelete: gf.IsDelete,
-			IsRename: gf.IsRename,
 			IsBinary: gf.IsBinary,
 			Hunks:    make([]*Hunk, 0, len(gf.TextFragments)),
 		}
@@ -92,7 +89,7 @@ func convertHunk(frag *gitdiff.TextFragment) *Hunk {
 	}
 	oldNum, newNum := h.OldStart, h.NewStart
 	for _, gl := range frag.Lines {
-		l := Line{Text: strings.TrimSuffix(gl.Line, "\n"), NoNewlineAtEOF: gl.NoEOL()}
+		l := Line{Text: strings.TrimSuffix(gl.Line, "\n")}
 		switch gl.Op {
 		case gitdiff.OpContext:
 			l.Kind, l.OldNum, l.NewNum = Context, oldNum, newNum

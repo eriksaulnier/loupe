@@ -332,18 +332,6 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 	return next, cleared, nil
 }
 
-// Withdraw takes a finding out of the review without recording a human decision.
-func Withdraw(d *Draft, findingID, by string, now time.Time) (Finding, bool, error) {
-	included := false
-	return Edit(d, findingID, EditInput{}, &included, nil, by, now)
-}
-
-// Include restores a withdrawn finding; it is pending until the human decides it again.
-func Include(d *Draft, findingID, by string, now time.Time) (Finding, bool, error) {
-	included := true
-	return Edit(d, findingID, EditInput{}, &included, nil, by, now)
-}
-
 func applyEdit(f *Finding, in EditInput) error {
 	if err := decodeRequired("title", in.Title, &f.Title); err != nil {
 		return err

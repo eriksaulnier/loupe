@@ -57,15 +57,15 @@ func (m *Model) refreshDetail() error {
 		return err
 	}
 	var top []string
-	top = append(top, m.styles.bold.Render(render.ForDisplay(oneLine(f.Title))))
+	top = append(top, m.styles.bold.Render(render.ForDisplay(render.OneLine(f.Title))))
 	top = append(top, "["+strings.Join(chips(f, draft.Dispositions(m.draft)[f.ID]), "] [")+"]  "+locationText(f))
 	top = append(top, strings.Split(body, "\n")...)
 	for _, n := range m.draft.Notes {
 		if n.FindingID == f.ID {
-			top = append(top, fmt.Sprintf("%s %s: %s", n.ID, n.Status, render.ForDisplay(oneLine(n.Body))))
+			top = append(top, fmt.Sprintf("%s %s: %s", n.ID, n.Status, render.ForDisplay(render.OneLine(n.Body))))
 			for _, r := range m.draft.Replies {
 				if r.NoteID == n.ID {
-					top = append(top, fmt.Sprintf("  %s by %s: %s", render.ForDisplay(r.ID), render.ForDisplay(r.By), render.ForDisplay(oneLine(r.Body))))
+					top = append(top, fmt.Sprintf("  %s by %s: %s", render.ForDisplay(r.ID), render.ForDisplay(r.By), render.ForDisplay(render.OneLine(r.Body))))
 				}
 			}
 		}
@@ -83,10 +83,7 @@ func (m *Model) refreshDetail() error {
 func findingMarkdown(f draft.Finding) string {
 	md := render.ForDisplay(f.Body)
 	if f.SuggestedFix != "" {
-		fence := "```"
-		for strings.Contains(f.SuggestedFix, fence) {
-			fence += "`"
-		}
+		fence := render.Fence(f.SuggestedFix)
 		md += "\n\nSuggested fix:\n\n" + fence + "\n" + render.ForDisplay(f.SuggestedFix) + "\n" + fence + "\n"
 	}
 	return md

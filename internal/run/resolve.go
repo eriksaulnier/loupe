@@ -14,21 +14,15 @@ import (
 
 // Rounds ignores non-numeric entries such as the temp directories CreateRun leaves while it works.
 func Rounds(root, owner, repo string, number int) ([]int, error) {
-	prDir := filepath.Join(RunsDir(root), owner, repo, strconv.Itoa(number))
-	entries, err := os.ReadDir(prDir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return []int{}, nil
-	}
+	names, err := subdirs(filepath.Join(RunsDir(root), owner, repo, strconv.Itoa(number)))
 	if err != nil {
-		return nil, fmt.Errorf("list rounds in %s: %w", prDir, err)
+		return nil, err
 	}
 	rounds := []int{}
-	for _, e := range entries {
-		n, err := strconv.Atoi(e.Name())
-		if err != nil || n < 1 || !e.IsDir() {
-			continue
+	for _, name := range names {
+		if n, err := strconv.Atoi(name); err == nil && n >= 1 {
+			rounds = append(rounds, n)
 		}
-		rounds = append(rounds, n)
 	}
 	sort.Ints(rounds)
 	return rounds, nil
@@ -73,8 +67,6 @@ func noRun(ref Ref) error {
 }
 
 func HasReceipt(dir string) (bool, error) { return exists(filepath.Join(dir, "receipt.json")) }
-
-func HasAttempt(dir string) (bool, error) { return exists(filepath.Join(dir, "attempt.json")) }
 
 func exists(path string) (bool, error) {
 	_, err := os.Stat(path)

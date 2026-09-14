@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -146,7 +145,7 @@ func loadRecord(path string, v any, problem func() string) (bool, error) {
 		return true, err
 	}
 	if p := problem(); p != "" {
-		return true, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %s", path, p), "inspect it with: cat "+path)
+		return true, run.RecordRefusal(path, errors.New(p))
 	}
 	return true, nil
 }

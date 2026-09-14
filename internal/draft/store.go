@@ -34,7 +34,7 @@ func Load(dir string) (*Draft, error) {
 		problem = "replies is missing or null"
 	}
 	if problem != "" {
-		return nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %s", path, problem), "inspect it with: cat "+path)
+		return nil, run.RecordRefusal(path, errors.New(problem))
 	}
 	return &d, nil
 }

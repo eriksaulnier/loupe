@@ -37,7 +37,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 	}
 
 	p := &printer{w: out}
-	p.printf("%s/%s#%d  round %d  %s\n%s\n", target.Owner, target.Repo, target.Number, target.Round, render.ForDisplay(oneLine(target.Title)), countsLine(d))
+	p.printf("%s/%s#%d  round %d  %s\n%s\n", target.Owner, target.Repo, target.Number, target.Round, render.ForDisplay(render.OneLine(target.Title)), countsLine(d))
 	if strings.TrimSpace(d.Summary) != "" {
 		p.printf("\nSummary:\n%s\n", render.ForDisplay(d.Summary))
 	}
@@ -135,7 +135,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 func printFinding(p *printer, d *draft.Draft, dif *diff.Diff, i int) error {
 	f := d.Findings[i]
 	p.printf("\n[%d/%d] %s  %s  %s\n", i+1, len(d.Findings), f.ID, strings.Join(chips(f, draft.Dispositions(d)[f.ID]), "  "), locationText(f))
-	p.printf("%s\n\n%s\n", render.ForDisplay(oneLine(f.Title)), render.ForDisplay(f.Body))
+	p.printf("%s\n\n%s\n", render.ForDisplay(render.OneLine(f.Title)), render.ForDisplay(f.Body))
 	if f.SuggestedFix != "" {
 		p.printf("\nSuggested fix:\n%s\n", render.ForDisplay(f.SuggestedFix))
 	}
@@ -174,7 +174,7 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (bool, erro
 		p.printf("Review body:\n\n%s\n", render.ForDisplay(markdown.OpenDetails(preview.Body)))
 		p.printf("\nInline comments: %d\n", len(preview.Comments))
 		for _, c := range preview.Comments {
-			p.printf("\n%s\n%s\n", render.ForDisplay(commentLocation(c)), render.ForDisplay(c.Body))
+			p.printf("\n%s\n%s\n", render.ForDisplay(formatLocation(c.Path, c.Line, c.StartLine, c.Side)), render.ForDisplay(c.Body))
 		}
 		p.printf("\nEnvelope JSON:\n\n%s\n\nPublish this review? [y/N] ", render.ForDisplay(preview.EnvelopeJSON))
 		if p.err != nil {
@@ -186,15 +186,4 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (bool, erro
 		}
 		return lines.Text() == "y", nil
 	}
-}
-
-func commentLocation(c publish.Comment) string {
-	loc := fmt.Sprintf("%s:%d", c.Path, c.Line)
-	if c.StartLine != 0 && c.StartLine != c.Line {
-		loc = fmt.Sprintf("%s:%d-%d", c.Path, c.StartLine, c.Line)
-	}
-	if c.Side == draft.SideLeft {
-		loc += " (old)"
-	}
-	return loc
 }

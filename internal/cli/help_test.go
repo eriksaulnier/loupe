@@ -10,7 +10,7 @@ import (
 )
 
 // contractResultKeys are the result payload keys in contracts/cli.md. A command missing here fails the test so its
-// contract keys get recorded when it is added; nil means the command is human-only and has no JSON result.
+// contract keys get recorded when it is added; nil means contracts/cli.md names no payload keys for the command.
 var contractResultKeys = map[string][]string{
 	"capture":  {"target", "refs", "cleanup", "next"},
 	"add":      {"findings", "version"},

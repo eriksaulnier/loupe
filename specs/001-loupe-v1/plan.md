@@ -96,6 +96,7 @@ internal/
 │   ├── locate.go                  # validate Location; nearest valid lines (3 below, 3 above); hunk containing an anchor
 │   └── view.go                    # file diff with per-line finding markers, for the TUI and plain mode
 ├── markdown/                      # allowlist: size, fences, details/summary, comments, nesting depth
+├── gitenv/                        # leaf package: strips repository-selecting GIT_* variables before gitx and test repositories run git
 ├── gitx/                          # git subprocess: origin URL with insteadOf expansion, fetch into refs/loupe with safety flags, verify shas, diff, show, current branch
 ├── github/                        # go-gh wrapper behind an interface: PR lookup by URL and by branch, list reviews, create review, viewer login
 ├── render/                        # docs/comment-format.md: body composition, sections, chips, meta block, footer, markers, inline comments, escaping, code-span rules

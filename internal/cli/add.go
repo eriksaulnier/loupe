@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -213,15 +212,5 @@ func loadDiff(dir string) (*diff.Diff, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := run.ReadDiff(dir, target)
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dir, "pr.diff")
-	fix := "inspect it with: cat " + path
-	d, err := diff.Parse(data)
-	if err != nil {
-		return nil, refusal.New(refusal.Record, fmt.Sprintf("cannot read %s: %v", path, err), fix)
-	}
-	return d, nil
+	return run.LoadDiff(dir, target)
 }

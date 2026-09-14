@@ -9,10 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/gitenv"
 )
 
 type Repo struct {
@@ -220,30 +221,12 @@ func (r *Repo) git(t *testing.T, dir string, args ...string) string {
 func (r *Repo) run(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = withoutRepoEnv(os.Environ())
+	cmd.Env = gitenv.WithoutRepo(os.Environ())
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s in %s: %w\n%s", strings.Join(args, " "), dir, err, out)
 	}
 	return strings.TrimRight(string(out), "\n"), nil
-}
-
-// repoEnv names the variables git exports to hooks; the pre-commit hook runs go test, and inheriting them would point
-// every git call here at the outer repository.
-var repoEnv = []string{
-	"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-	"GIT_COMMON_DIR", "GIT_PREFIX",
-}
-
-func withoutRepoEnv(env []string) []string {
-	kept := make([]string, 0, len(env))
-	for _, kv := range env {
-		name, _, _ := strings.Cut(kv, "=")
-		if !slices.Contains(repoEnv, name) {
-			kept = append(kept, kv)
-		}
-	}
-	return kept
 }
 
 func numbered(prefix string, n int) string {
