@@ -1,5 +1,7 @@
 # loupe
 
+[![ci](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml/badge.svg)](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml) [![release](https://github.com/eriksaulnier/loupe/actions/workflows/release.yml/badge.svg)](https://github.com/eriksaulnier/loupe/actions/workflows/release.yml)
+
 loupe files pull request review findings for a human to decide and publish.
 
 1. An agent captures the pull request into a local draft and files findings.
@@ -15,6 +17,8 @@ loupe --version
 ```
 
 The repository is private, so mise needs a GitHub token to download the release asset. On macOS `gh` keeps its token in the keychain, where mise cannot read it, so export it in the shell profile as above.
+
+The Claude Code plugin ships from the same repository:
 
 ```sh
 claude plugin marketplace add eriksaulnier/loupe
@@ -35,32 +39,25 @@ claude plugin install loupe@loupe
 | agent | `feedback` | Read the human's notes, dispositions and readiness |
 | anyone | `show` | Show the draft, dispositions and readiness |
 | anyone | `list` | List every run with its state and counts |
-| human | `review` | Decide each finding in the review interface (human-only) |
-| human | `publish` | Confirm and post the review to GitHub (human-only) |
+| human | `review` | Decide each finding in the review interface |
+| human | `publish` | Confirm and post the review to GitHub |
 
 ## Environment
 
 | Variable | Meaning |
 | :--- | :--- |
-| `LOUPE_HOME` | data root (default `$XDG_DATA_HOME/loupe`, else `~/.local/share/loupe`) |
-| `LOUPE_RUN` | default run reference |
-| `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; the default `nerd` needs a Nerd Font |
+| `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; the default `nerd` needs a Nerd Font. A non-UTF-8 locale always gets ASCII. |
 | `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | honored for color, plain-mode fallback and glyph selection |
-
-A non-UTF-8 locale always gets ASCII.
 
 ## Develop
 
-- `mise run check` runs vet, lint, `scripts/check-tests.sh` and the tests. lefthook runs it on every commit.
+- `mise run check` runs vet, lint, `scripts/check-tests.sh` and the tests. lefthook runs it and enforces the Conventional Commit subject on every commit.
 - `mise run build` writes `dist/loupe`, stamped from `git describe`.
 - Goldens under `testdata/golden/cli` regenerate with `go test ./internal/cli/ -update`.
-- Every commit is a Conventional Commit, enforced by lefthook.
 
 ## Release
 
-- release-please turns the commits on `main` into a release PR with the changelog and the next version.
-- Merging it tags the release.
-- goreleaser attaches the archives and `checksums.txt` in the same workflow. Nothing is tagged or released by hand.
+release-please opens the release PR, merging it tags the release, and goreleaser attaches the archives and `checksums.txt`. Nothing is tagged or released by hand.
 
 ## Reference
 
