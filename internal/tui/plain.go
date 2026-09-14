@@ -211,6 +211,9 @@ func plainLocation(g GlyphSet, f draft.Finding) string {
 func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (bool, error) {
 	return func(preview publish.Preview) (bool, error) {
 		p := &printer{w: out}
+		if preview.HeadMoved != nil {
+			p.printf("%s\n\n", strings.Join(headMovedLines(preview.HeadMoved), "\n"))
+		}
 		p.printf("Review body:\n\n%s\n", render.ForDisplay(markdown.OpenDetails(preview.Body)))
 		p.printf("\nInline comments: %d\n", len(preview.Comments))
 		for _, c := range preview.Comments {

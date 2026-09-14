@@ -28,6 +28,26 @@ type Client interface {
 	Viewer(ctx context.Context) (string, error)
 	ListReviews(ctx context.Context, owner, repo string, number int) ([]Review, error)
 	CreateReview(ctx context.Context, owner, repo string, number int, req ReviewRequest) (Review, error)
+	Compare(ctx context.Context, owner, repo, base, head string) (Comparison, error)
+}
+
+// Comparison is what head adds to base. Status is GitHub's: ahead only when base is an ancestor of head.
+type Comparison struct {
+	Status  string
+	AheadBy int
+	Commits []Commit
+	// Files stops at GitHub's cap of 300 files.
+	Files []ComparedFile
+}
+
+type Commit struct {
+	SHA     string
+	Message string
+}
+
+type ComparedFile struct {
+	Filename         string
+	PreviousFilename string
 }
 
 type PullRequest struct {
@@ -227,6 +247,37 @@ func (c *REST) CreateReview(ctx context.Context, owner, repo string, number int,
 		return Review{}, err
 	}
 	return w.review(), nil
+}
+
+type wireComparison struct {
+	Status  string `json:"status"`
+	AheadBy int    `json:"ahead_by"`
+	Commits []struct {
+		SHA    string `json:"sha"`
+		Commit struct {
+			Message string `json:"message"`
+		} `json:"commit"`
+	} `json:"commits"`
+	Files []struct {
+		Filename         string `json:"filename"`
+		PreviousFilename string `json:"previous_filename"`
+	} `json:"files"`
+}
+
+func (c *REST) Compare(ctx context.Context, owner, repo, base, head string) (Comparison, error) {
+	var w wireComparison
+	path := fmt.Sprintf("repos/%s/%s/compare/%s...%s", url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(base), url.PathEscape(head))
+	if err := c.do(ctx, http.MethodGet, path, nil, &w); err != nil {
+		return Comparison{}, err
+	}
+	out := Comparison{Status: w.Status, AheadBy: w.AheadBy}
+	for _, commit := range w.Commits {
+		out.Commits = append(out.Commits, Commit{SHA: commit.SHA, Message: commit.Commit.Message})
+	}
+	for _, f := range w.Files {
+		out.Files = append(out.Files, ComparedFile{Filename: f.Filename, PreviousFilename: f.PreviousFilename})
+	}
+	return out, nil
 }
 
 func (c *REST) do(ctx context.Context, method, path string, body []byte, out any) error {

@@ -51,7 +51,7 @@ Refusal or error (exit 1 or 2):
 | `not-found` | Finding or note id does not exist | `loupe show` |
 | `lock` | Lock held or stale | the holder; wait for it or stop it |
 | `tty` | `review` or `publish` without an interactive terminal | run it in a terminal |
-| `head-moved` | Pull request head differs from the captured head | `loupe capture <url>` for a new round |
+| `head-moved` | The captured commit is no longer in the pull request's history; approve while the head differs from the captured head; or the head moved while publish was confirming | `loupe capture <url>` for a new round; for approve, `--action comment` or `request-changes`; after confirming, `loupe publish` again |
 | `own-pr` | approve or request-changes on the viewer's own pull request | `--action comment` |
 | `blocking` | approve while a finding in the publishable set is blocking | `--action comment` or `request-changes`, or exclude or unblock the finding in `loupe review` |
 | `not-ready` | Pending findings or open notes | `loupe review` |
@@ -137,7 +137,7 @@ Refuses with `tty` before reading the draft when stdin or stdout is not a termin
 
 ### `loupe publish [<ref>] --action comment|approve|request-changes [--inline none|blocking|all] [--retry-unknown] [--plain]` (human only)
 
-Runs the publication state machine in research.md. After a receipt replay or reconciliation, refuses with `tty` before reading the draft or GitHub credentials, with the same terminal rule as `review`. `--inline` defaults to `blocking`. Prints the review URL on success and on receipt replay.
+Runs the publication state machine in research.md. After a receipt replay or reconciliation, refuses with `tty` before reading the draft or GitHub credentials, with the same terminal rule as `review`. `--inline` defaults to `blocking`. When the head only gained commits since capture, the confirmation shows them and the findings on files they changed, and the review is sent at the captured head; there is no flag for this. Prints the review URL on success and on receipt replay.
 
 ## Environment
 

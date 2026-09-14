@@ -201,6 +201,55 @@ func TestConfirmPlainShowsPreview(t *testing.T) {
 	if !strings.HasSuffix(text, "Publish this review? [y/N] ") {
 		t.Errorf("output does not end with the prompt:\n%s", text)
 	}
+	if strings.Contains(text, "since capture") {
+		t.Errorf("an unmoved head shows the moved-head block:\n%s", text)
+	}
+}
+
+// movedPreview has more commits than it lists and a commit subject carrying an escape sequence.
+func movedPreview() publish.Preview {
+	p := confirmPreview()
+	p.HeadMoved = &publish.HeadMoved{Captured: "1111111111111111111111111111111111111111", Live: "4444444444444444444444444444444444444444", AheadBy: 23,
+		Commits: []publish.MovedCommit{{SHA: "0100000", Subject: "fix \x1b[31mred"}, {SHA: "0200000", Subject: "second"}},
+		Touched: []string{"f-001", "f-002"}}
+	return p
+}
+
+// movedHeadLines is what both confirmations must show for movedPreview.
+var movedHeadLines = []string{"Head moved 23 commits since capture (1111111 to 4444444)", "pinned to the captured commit 1111111",
+	"marks comments on lines the new commits changed as outdated", "0100000 fix \\u001B[31mred", "0200000 second", "and 21 earlier",
+	"Findings on changed files: f-001, f-002"}
+
+func TestConfirmPlainShowsMovedHead(t *testing.T) {
+	var out bytes.Buffer
+	if _, err := ConfirmPlain(strings.NewReader("n\n"), &out)(movedPreview()); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range movedHeadLines {
+		if !strings.Contains(text, want) {
+			t.Errorf("output lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.ContainsRune(text, '\x1b') {
+		t.Errorf("output has a raw escape:\n%q", text)
+	}
+	if strings.Index(text, "and 21 earlier") > strings.Index(text, "0100000") {
+		t.Errorf("the earlier-commit count comes after the listed commits:\n%s", text)
+	}
+	if strings.Index(text, "Head moved") > strings.Index(text, "Review body:") {
+		t.Errorf("the moved-head block comes after the body:\n%s", text)
+	}
+
+	truncated := movedPreview()
+	truncated.HeadMoved.Touched, truncated.HeadMoved.FilesTruncated = []string{}, true
+	out.Reset()
+	if _, err := ConfirmPlain(strings.NewReader("n\n"), &out)(truncated); err != nil {
+		t.Fatal(err)
+	}
+	if text := out.String(); !strings.Contains(text, "Findings on changed files: none") || !strings.Contains(text, "can be incomplete") {
+		t.Errorf("truncated file list:\n%s", text)
+	}
 }
 
 func TestConfirmPlainKeepsDetailsInsideFences(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
@@ -113,6 +114,38 @@ func TestViewer(t *testing.T) {
 	login, err := c.Viewer(context.Background())
 	if err != nil || login != "bob" || (*reqs)[0].Path != "/user" {
 		t.Fatalf("got %q, %v, %+v", login, err, *reqs)
+	}
+}
+
+func TestCompare(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, `{"status": "ahead", "ahead_by": 2, "behind_by": 0, "total_commits": 2,
+			"commits": [{"sha": "c1", "commit": {"message": "first\n\nbody"}}, {"sha": "c2", "commit": {"message": "second"}}],
+			"files": [{"filename": "a.go", "status": "modified"}, {"filename": "new.go", "previous_filename": "old.go", "status": "renamed"}]}`)
+	})
+	got, err := c.Compare(context.Background(), "o", "r", "b1", "h1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Comparison{Status: "ahead", AheadBy: 2,
+		Commits: []Commit{{SHA: "c1", Message: "first\n\nbody"}, {SHA: "c2", Message: "second"}},
+		Files:   []ComparedFile{{Filename: "a.go"}, {Filename: "new.go", PreviousFilename: "old.go"}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+	if (*reqs)[0].Method != "GET" || (*reqs)[0].Path != "/repos/o/r/compare/b1...h1" {
+		t.Fatalf("request %+v", (*reqs)[0])
+	}
+}
+
+func TestCompareNotFoundIsHTTPError(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 404, `{"message": "Not Found"}`)
+	})
+	_, err := c.Compare(context.Background(), "o", "r", "b1", "h1")
+	var he *HTTPError
+	if !errors.As(err, &he) || he.Status != 404 {
+		t.Fatalf("got %#v", err)
 	}
 }
 

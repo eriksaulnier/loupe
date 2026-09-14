@@ -49,6 +49,8 @@ type Preview struct {
 	Version      int
 	Digest       string
 	Dispositions map[string]string
+	// HeadMoved is set when the pull request gained commits since capture; the review is still sent at the captured head.
+	HeadMoved *HeadMoved
 }
 
 // Run publishes at most one review, or reports replayed when a receipt exists or reconciliation found the review. The
@@ -76,7 +78,8 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	if err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d}); err != nil {
+	moved, err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d})
+	if err != nil {
 		return Receipt{}, false, err
 	}
 	viewer, err := client.Viewer(ctx)
@@ -100,7 +103,7 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 		return Receipt{}, false, fmt.Errorf("encode envelope: %w", err)
 	}
 	preview := Preview{Body: env.Body, Comments: env.Comments, EnvelopeJSON: string(envJSON), Version: d.Version, Digest: env.Digest,
-		Dispositions: draft.Dispositions(d)}
+		Dispositions: draft.Dispositions(d), HeadMoved: moved}
 
 	confirmed, err := opts.Confirm(preview)
 	if err != nil {
@@ -109,7 +112,11 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	if !confirmed {
 		return Receipt{}, false, ErrDeclined
 	}
-	if err := recheckLive(ctx, opts, client, viewer); err != nil {
+	shownHead := opts.Target.HeadSHA
+	if moved != nil {
+		shownHead = moved.Live
+	}
+	if err := recheckLive(ctx, opts, client, viewer, shownHead); err != nil {
 		return Receipt{}, false, err
 	}
 	return send(ctx, opts, client, env, preview, retryID)
@@ -171,13 +178,17 @@ func unknownAttemptRefusal(target run.Target, message string) error {
 		fmt.Sprintf("inspect %s, then loupe publish --retry-unknown", target.URL))
 }
 
-func recheckLive(ctx context.Context, opts Options, client github.Client, viewer string) error {
+// recheckLive refuses a head other than shownHead, the one the confirmation described, so the human never sends past
+// commits they were not shown.
+func recheckLive(ctx context.Context, opts Options, client github.Client, viewer, shownHead string) error {
 	pr, err := client.PullRequest(ctx, opts.Target.Owner, opts.Target.Repo, opts.Target.Number)
 	if err != nil {
 		return err
 	}
-	if err := headRefusal(opts.Target, pr); err != nil {
-		return err
+	if pr.HeadSHA != shownHead {
+		return refusal.New(refusal.HeadMoved,
+			fmt.Sprintf("the pull request head moved to %s while the review was being confirmed; nothing was sent", pr.HeadSHA),
+			"loupe publish again to see the commits since capture")
 	}
 	now, err := client.Viewer(ctx)
 	if err != nil {

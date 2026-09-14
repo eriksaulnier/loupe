@@ -91,7 +91,44 @@ func (c *confirmation) band(m *Model) string {
 	if m.styles.Color {
 		position = m.styles.On(m.styles.BandBg, m.styles.Dim).Render(position + " ")
 	}
-	return m.styles.Band(style.BandParts{Ref: strings.TrimSpace(m.glyphs.Ready + " " + c.title), Right: position}, m.width)
+	title := c.title
+	if moved := c.preview.HeadMoved; moved != nil {
+		title += fmt.Sprintf("  head moved +%d", moved.AheadBy)
+	}
+	return m.styles.Band(style.BandParts{Ref: strings.TrimSpace(m.glyphs.Ready + " " + title), Right: position}, m.width)
+}
+
+// headMovedLines escapes every line for display because commit text is untrusted.
+func headMovedLines(moved *publish.HeadMoved) []string {
+	lines := []string{
+		fmt.Sprintf("Head moved %d %s since capture (%s to %s).", moved.AheadBy, plural(moved.AheadBy, "commit"), shortSHA(moved.Captured), shortSHA(moved.Live)),
+		fmt.Sprintf("This review posts pinned to the captured commit %s.", shortSHA(moved.Captured)),
+		"GitHub marks comments on lines the new commits changed as outdated.",
+		"",
+		"Commits since capture:",
+	}
+	if earlier := moved.AheadBy - len(moved.Commits); earlier > 0 {
+		lines = append(lines, fmt.Sprintf("  and %d earlier", earlier))
+	}
+	for _, commit := range moved.Commits {
+		lines = append(lines, "  "+commit.SHA+" "+commit.Subject)
+	}
+	touched := "none"
+	if len(moved.Touched) > 0 {
+		touched = strings.Join(moved.Touched, ", ")
+	}
+	if moved.FilesTruncated {
+		touched += " (GitHub lists at most 300 changed files, so this can be incomplete)"
+	}
+	lines = append(lines, "", "Findings on changed files: "+touched)
+	for i, line := range lines {
+		lines[i] = render.ForDisplay(line)
+	}
+	return lines
+}
+
+func shortSHA(sha string) string {
+	return sha[:min(len(sha), 7)]
 }
 
 func (c *confirmation) content(m *Model) string {
@@ -100,12 +137,20 @@ func (c *confirmation) content(m *Model) string {
 		return m.styles.Rule(m.width, "exact request payload", "") + "\n" +
 			m.styles.Wrap(render.ForDisplay(c.preview.EnvelopeJSON), width, " ")
 	}
-	parts := []string{
+	var parts []string
+	if moved := c.preview.HeadMoved; moved != nil {
+		parts = append(parts, m.styles.Rule(m.width, "head moved since capture", ""))
+		for _, line := range headMovedLines(moved) {
+			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(line, width, " ")))
+		}
+		parts = append(parts, "")
+	}
+	parts = append(parts,
 		m.styles.Rule(m.width, "review body", ""),
 		m.styles.Wrap(render.ForDisplay(markdown.OpenDetails(c.preview.Body)), width, " "),
 		"",
 		m.styles.Rule(m.width, fmt.Sprintf("inline comments (%d)", len(c.preview.Comments)), ""),
-	}
+	)
 	for _, comment := range c.preview.Comments {
 		location := m.styles.Accent.Render(strings.TrimSpace(m.glyphs.File + " " + render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side))))
 		parts = append(parts, " "+location, m.styles.Wrap(render.ForDisplay(comment.Body), width, " "), "")

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/github"
 )
 
 const threeFindings = `[
@@ -216,6 +218,32 @@ func TestPublishGateRefusals(t *testing.T) {
 			h.mustRefuse(c.code, "publish", runRef, "--action", c.action, "--plain")
 			h.checkSends(0)
 		})
+	}
+}
+
+func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
+	h := newHarness(t)
+	h.reviewed("a\na\nx\nq\n")
+	captured := h.Repo.HeadSHA()
+	live := h.pushHead("src/app.go")
+	h.GH.SetComparison(owner, repo, captured, live, github.Comparison{Status: "ahead", AheadBy: 1,
+		Commits: []github.Commit{{SHA: live, Message: "move head"}}, Files: []github.ComparedFile{{Filename: "src/app.go"}}})
+
+	h.Stdin = "y\n"
+	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
+	}
+	h.checkSends(1)
+	for _, want := range []string{"Head moved 1 commit since capture", live[:7] + " move head", "Findings on changed files: f-001, f-002"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("confirmation lacks %q:\n%s", want, stdout)
+		}
+	}
+	for _, r := range h.GH.Requests() {
+		if post, ok := r.Body.(map[string]any); r.Method == "POST" && (!ok || post["commit_id"] != captured) {
+			t.Fatalf("review sent at %v, want the captured head %s", r.Body, captured)
+		}
 	}
 }
 

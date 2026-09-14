@@ -54,6 +54,23 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	}
 }
 
+func TestConfirmViewShowsMovedHead(t *testing.T) {
+	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
+	view := m.View()
+	for _, want := range append([]string{"head moved +23"}, movedHeadLines...) {
+		if !strings.Contains(view, want) {
+			t.Errorf("view lacks %q:\n%s", want, view)
+		}
+	}
+	if strings.ContainsRune(view, '\x1b') {
+		t.Errorf("view has a raw escape:\n%q", view)
+	}
+	if strings.Index(view, "Head moved") > strings.Index(view, "review body") {
+		t.Errorf("the moved-head block comes after the body:\n%s", view)
+	}
+}
+
 func TestConfirmScrollsLongReview(t *testing.T) {
 	rows := make([]string, 200)
 	for i := range rows {
@@ -303,7 +320,7 @@ func TestPublishFlowShowsRefusalAndReturnsToList(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-	waitFor(t, tm, "loupe capture https://github.com/acme/widgets/pull/42")
+	waitFor(t, tm, "no longer in the pull request's history", "loupe capture", "https://github.com/acme/widgets/pull/42")
 	tm.Type("q")
 	finalView(t, tm)
 	if gh.CreateCount() != 0 {

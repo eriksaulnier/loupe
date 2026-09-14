@@ -2,7 +2,9 @@ package publish
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -20,30 +22,52 @@ type GateInput struct {
 }
 
 // Gates refuses in a fixed order so the human always fixes the most fundamental problem first. The terminal check
-// comes before any GitHub call.
-func Gates(ctx context.Context, in GateInput) error {
+// comes before any GitHub call. A head that only moved forward is not refused; what it gained is returned for the
+// confirmation to show.
+func Gates(ctx context.Context, in GateInput) (*HeadMoved, error) {
 	if !in.IsTerminal {
-		return ttyRefusal()
+		return nil, ttyRefusal()
 	}
 	pr, err := in.GitHub.PullRequest(ctx, in.Target.Owner, in.Target.Repo, in.Target.Number)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := headRefusal(in.Target, pr); err != nil {
-		return err
+	moved, err := checkHead(ctx, in.GitHub, in.Target, pr, in.Action, in.Draft)
+	if err != nil {
+		return nil, err
 	}
 	viewer, err := in.GitHub.Viewer(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := ActionRefusal(in.Action, viewer, pr.Author, in.Draft); err != nil {
-		return err
+		return nil, err
 	}
 	if strings.TrimSpace(in.Draft.Summary) == "" && len(included(in.Draft)) == 0 {
-		return refusal.New(refusal.Empty, "the draft has no summary and no included findings; there is nothing to publish",
+		return nil, refusal.New(refusal.Empty, "the draft has no summary and no included findings; there is nothing to publish",
 			"file findings with loupe add or write a summary with loupe summary")
 	}
-	return ReadinessRefusal(in.Draft)
+	return moved, ReadinessRefusal(in.Draft)
+}
+
+// HeadMoved is what the pull request gained since capture, for the confirmation to show before a review is sent at
+// the captured head.
+type HeadMoved struct {
+	Captured string
+	Live     string
+	AheadBy  int
+	// Commits is the last maxMovedCommits GitHub listed, oldest first, each with a short sha and its subject line. The
+	// newest are kept because after a base-branch merge the oldest are the base branch's own.
+	Commits []MovedCommit
+	// Touched is the ids of included located findings on a file the commits changed.
+	Touched []string
+	// FilesTruncated means GitHub stopped listing changed files at its cap, so Touched can miss findings.
+	FilesTruncated bool
+}
+
+type MovedCommit struct {
+	SHA     string
+	Subject string
 }
 
 func ttyRefusal() error {
@@ -51,13 +75,64 @@ func ttyRefusal() error {
 		"run loupe publish in an interactive terminal")
 }
 
-func headRefusal(target run.Target, pr github.PullRequest) error {
+const (
+	maxMovedCommits = 20
+	// compareFileCap is the most changed files GitHub lists for a comparison.
+	compareFileCap = 300
+)
+
+// checkHead lets a review go out at the captured head when the pull request only gained commits on top of it, because
+// the review's commit_id pins its comments there. A captured commit that left the history has nothing to pin to, and
+// an approval would cover commits nobody reviewed.
+func checkHead(ctx context.Context, client github.Client, target run.Target, pr github.PullRequest, action string, d *draft.Draft) (*HeadMoved, error) {
 	if pr.HeadSHA == target.HeadSHA {
-		return nil
+		return nil, nil
 	}
-	return refusal.New(refusal.HeadMoved,
-		fmt.Sprintf("the pull request head moved from %s to %s since this round was captured", target.HeadSHA, pr.HeadSHA),
-		"loupe capture "+target.URL)
+	cmp, err := client.Compare(ctx, target.Owner, target.Repo, target.HeadSHA, pr.HeadSHA)
+	var httpErr *github.HTTPError
+	notFound := errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound
+	if err != nil && !notFound {
+		return nil, err
+	}
+	if notFound || cmp.Status != "ahead" {
+		return nil, refusal.New(refusal.HeadMoved,
+			fmt.Sprintf("the pull request head moved from %s to %s and the captured commit is no longer in the pull request's history", target.HeadSHA, pr.HeadSHA),
+			"loupe capture "+target.URL)
+	}
+	if action == "approve" {
+		return nil, refusal.New(refusal.HeadMoved,
+			fmt.Sprintf("cannot approve: the pull request head moved %d %s past the captured head, and an approval would cover them unreviewed", cmp.AheadBy, commitsWord(cmp.AheadBy)),
+			"use --action comment or --action request-changes, or loupe capture "+target.URL+" to review the new head")
+	}
+	return headMoved(target.HeadSHA, pr.HeadSHA, cmp, d), nil
+}
+
+func headMoved(captured, live string, cmp github.Comparison, d *draft.Draft) *HeadMoved {
+	moved := &HeadMoved{Captured: captured, Live: live, AheadBy: cmp.AheadBy, FilesTruncated: len(cmp.Files) >= compareFileCap, Touched: []string{}}
+	for _, c := range cmp.Commits[max(0, len(cmp.Commits)-maxMovedCommits):] {
+		subject, _, _ := strings.Cut(c.Message, "\n")
+		moved.Commits = append(moved.Commits, MovedCommit{SHA: c.SHA[:min(len(c.SHA), 7)], Subject: subject})
+	}
+	changed := map[string]bool{}
+	for _, f := range cmp.Files {
+		changed[f.Filename] = true
+		if f.PreviousFilename != "" {
+			changed[f.PreviousFilename] = true
+		}
+	}
+	for _, f := range included(d) {
+		if f.Location != nil && changed[f.Location.Path] {
+			moved.Touched = append(moved.Touched, f.ID)
+		}
+	}
+	return moved
+}
+
+func commitsWord(n int) string {
+	if n == 1 {
+		return "commit"
+	}
+	return "commits"
 }
 
 // ActionRefusal is the part of the gates that depends on the chosen action, so a picker can disable an action with

@@ -63,6 +63,10 @@ type prKey struct {
 	number      int
 }
 
+type compareKey struct {
+	owner, repo, basehead string
+}
+
 type Server struct {
 	URL string
 
@@ -72,6 +76,7 @@ type Server struct {
 	headOwners  map[prKey]string
 	failures    map[string]int
 	reviews     map[prKey][]github.Review
+	comparisons map[compareKey]github.Comparison
 	viewer      string
 	outcomes    []Outcome
 	requests    []Request
@@ -83,12 +88,13 @@ type Server struct {
 func New(t *testing.T) *Server {
 	t.Helper()
 	s := &Server{
-		prs:        map[prKey]github.PullRequest{},
-		branches:   map[prKey]string{},
-		headOwners: map[prKey]string{},
-		failures:   map[string]int{},
-		reviews:    map[prKey][]github.Review{},
-		nextID:     1000,
+		prs:         map[prKey]github.PullRequest{},
+		branches:    map[prKey]string{},
+		headOwners:  map[prKey]string{},
+		failures:    map[string]int{},
+		reviews:     map[prKey][]github.Review{},
+		comparisons: map[compareKey]github.Comparison{},
+		nextID:      1000,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}", s.getPullRequest)
@@ -96,6 +102,7 @@ func New(t *testing.T) *Server {
 	mux.HandleFunc("GET /user", s.getUser)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}/reviews", s.listReviews)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{number}/reviews", s.createReview)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/compare/{basehead}", s.getComparison)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := s.record(r); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
@@ -179,6 +186,14 @@ func (s *Server) SetHead(owner, repo string, number int, sha string) {
 	pr := s.prs[key]
 	pr.HeadSHA = sha
 	s.prs[key] = pr
+}
+
+// SetComparison is what comparing base to head returns; a pair never set is a 404, as for a commit GitHub does not
+// have.
+func (s *Server) SetComparison(owner, repo, base, head string, c github.Comparison) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.comparisons[compareKey{owner, repo, base + "..." + head}] = c
 }
 
 func (s *Server) SetViewer(login string) {
@@ -297,6 +312,29 @@ func (s *Server) getUser(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"login": s.viewer})
+}
+
+func (s *Server) getComparison(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	c, found := s.comparisons[compareKey{r.PathValue("owner"), r.PathValue("repo"), r.PathValue("basehead")}]
+	s.mu.Unlock()
+	if !found {
+		notFound(w)
+		return
+	}
+	commits := make([]any, 0, len(c.Commits))
+	for _, commit := range c.Commits {
+		commits = append(commits, map[string]any{"sha": commit.SHA, "commit": map[string]any{"message": commit.Message}})
+	}
+	files := make([]any, 0, len(c.Files))
+	for _, f := range c.Files {
+		file := map[string]any{"filename": f.Filename}
+		if f.PreviousFilename != "" {
+			file["previous_filename"] = f.PreviousFilename
+		}
+		files = append(files, file)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": c.Status, "ahead_by": c.AheadBy, "commits": commits, "files": files})
 }
 
 func (s *Server) listReviews(w http.ResponseWriter, r *http.Request) {

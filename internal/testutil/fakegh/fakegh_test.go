@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -14,6 +15,23 @@ var ctx = context.Background()
 
 func samplePR() github.PullRequest {
 	return github.PullRequest{Number: 3, URL: "https://github.com/o/r/pull/3", Title: "T", State: "open", Author: "alice", BaseRef: "main", BaseSHA: "b1", HeadSHA: "h1"}
+}
+
+func TestCompare(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	want := github.Comparison{Status: "ahead", AheadBy: 1, Commits: []github.Commit{{SHA: "h2", Message: "move"}},
+		Files: []github.ComparedFile{{Filename: "b.go", PreviousFilename: "a.go"}}}
+	s.SetComparison("o", "r", "h1", "h2", want)
+
+	got, err := c.Compare(ctx, "o", "r", "h1", "h2")
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	var he *github.HTTPError
+	if _, err := c.Compare(ctx, "o", "r", "h2", "h1"); !errors.As(err, &he) || he.Status != 404 {
+		t.Fatalf("unset pair: %v", err)
+	}
 }
 
 func TestPullRequestLookups(t *testing.T) {

@@ -30,6 +30,12 @@ func assertOnlyCreateWrites(t *testing.T, gh *fakegh.Server) {
 	}
 }
 
+// gateErr is Gates for a test that only cares whether it refused.
+func gateErr(ctx context.Context, in GateInput) error {
+	_, err := Gates(ctx, in)
+	return err
+}
+
 // wantRefusal returns the refusal message.
 func wantRefusal(t *testing.T, err error, code refusal.Code, fixParts ...string) string {
 	t.Helper()
@@ -55,22 +61,22 @@ func TestGatesRunInOrder(t *testing.T) {
 	gh.SetViewer("author")
 	in := GateInput{IsTerminal: false, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}
 
-	wantRefusal(t, Gates(ctx, in), refusal.TTY)
+	wantRefusal(t, gateErr(ctx, in), refusal.TTY)
 	if n := len(gh.Requests()); n != 0 {
 		t.Fatalf("tty gate contacted GitHub %d times", n)
 	}
 
 	in.IsTerminal = true
-	wantRefusal(t, Gates(ctx, in), refusal.HeadMoved, "loupe capture "+prLink)
+	wantRefusal(t, gateErr(ctx, in), refusal.HeadMoved, "loupe capture "+prLink)
 
 	gh.SetHead("acme", "widgets", 42, headSHA)
-	wantRefusal(t, Gates(ctx, in), refusal.OwnPR, "--action comment")
+	wantRefusal(t, gateErr(ctx, in), refusal.OwnPR, "--action comment")
 	in.Action = "request-changes"
-	wantRefusal(t, Gates(ctx, in), refusal.OwnPR, "--action comment")
+	wantRefusal(t, gateErr(ctx, in), refusal.OwnPR, "--action comment")
 
 	gh.SetViewer("reviewer")
 	in.Action = "approve"
-	msg := wantRefusal(t, Gates(ctx, in), refusal.Blocking, "--action comment", "--action request-changes", "exclude", "unblock", "loupe review")
+	msg := wantRefusal(t, gateErr(ctx, in), refusal.Blocking, "--action comment", "--action request-changes", "exclude", "unblock", "loupe review")
 	if !strings.Contains(msg, "f-001") || strings.Contains(msg, "f-003") || strings.Contains(msg, "f-004") {
 		t.Errorf("blocking message %q", msg)
 	}
@@ -80,25 +86,25 @@ func TestGatesRunInOrder(t *testing.T) {
 	empty.Findings = []draft.Finding{finding("f-001", "issue", false, nil)}
 	empty.Decisions["f-001"] = draft.Decision{FindingID: "f-001", Decision: draft.DecisionExcluded, FindingRev: 1, At: fixtureNow}
 	in.Draft = empty
-	wantRefusal(t, Gates(ctx, in), refusal.Empty, "loupe add", "loupe summary")
+	wantRefusal(t, gateErr(ctx, in), refusal.Empty, "loupe add", "loupe summary")
 
 	// A pending finding is included, so the draft is not empty, only not ready.
 	delete(empty.Decisions, "f-001")
-	wantRefusal(t, Gates(ctx, in), refusal.NotReady, "loupe review")
+	wantRefusal(t, gateErr(ctx, in), refusal.NotReady, "loupe review")
 
 	empty.Summary = "Summary only."
-	wantRefusal(t, Gates(ctx, in), refusal.NotReady, "loupe review")
+	wantRefusal(t, gateErr(ctx, in), refusal.NotReady, "loupe review")
 
 	accept(empty, "f-001")
 	empty.Notes = []draft.Note{{ID: "n-001", FindingID: "f-001", Body: "why?", At: fixtureNow, Status: draft.NoteOpen}}
-	wantRefusal(t, Gates(ctx, in), refusal.NotReady, "loupe review")
+	wantRefusal(t, gateErr(ctx, in), refusal.NotReady, "loupe review")
 
 	empty.Notes[0].Status = draft.NoteResolved
-	if err := Gates(ctx, in); err != nil {
+	if err := gateErr(ctx, in); err != nil {
 		t.Fatal(err)
 	}
 	in.Draft = readyDraft()
-	if err := Gates(ctx, in); err != nil {
+	if err := gateErr(ctx, in); err != nil {
 		t.Fatalf("ready draft with comment: %v", err)
 	}
 	assertOnlyCreateWrites(t, gh)
@@ -110,7 +116,7 @@ func TestGatesRunInOrder(t *testing.T) {
 func TestGatesAllowCommentOnOwnPullRequest(t *testing.T) {
 	gh, client := newFake(t)
 	gh.SetViewer("author")
-	if err := Gates(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}); err != nil {
+	if err := gateErr(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -119,7 +125,7 @@ func TestGatesSummaryOnlyDraftIsNotEmpty(t *testing.T) {
 	_, client := newFake(t)
 	d := draft.NewEmpty()
 	d.Summary = "Nothing else to say."
-	if err := Gates(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}); err != nil {
+	if err := gateErr(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -128,7 +134,7 @@ func TestGatesBlockingCountsPendingFindings(t *testing.T) {
 	_, client := newFake(t)
 	d := draft.NewEmpty()
 	d.Findings = []draft.Finding{finding("f-001", "issue", true, nil)}
-	msg := wantRefusal(t, Gates(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}),
+	msg := wantRefusal(t, gateErr(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}),
 		refusal.Blocking, "--action comment")
 	if !strings.Contains(msg, "f-001") {
 		t.Fatalf("blocking message %q", msg)
@@ -136,7 +142,7 @@ func TestGatesBlockingCountsPendingFindings(t *testing.T) {
 
 	d.Decisions["f-001"] = draft.Decision{FindingID: "f-001", Decision: draft.DecisionExcluded, FindingRev: 1, At: fixtureNow}
 	d.Summary = "Excluded the blocker."
-	if err := Gates(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}); err != nil {
+	if err := gateErr(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}); err != nil {
 		t.Fatalf("excluded blocking finding: %v", err)
 	}
 }

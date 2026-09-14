@@ -258,6 +258,137 @@ func TestRunRefusesHeadMovedDuringConfirmation(t *testing.T) {
 	fx.check(0)
 }
 
+const (
+	movedSHA = "4444444444444444444444444444444444444444"
+	laterSHA = "5555555555555555555555555555555555555555"
+)
+
+// moveHead makes head the live head, which GitHub compares as the captured head plus commits changing files.
+func (fx *fixture) moveHead(head string, commits int, files ...github.ComparedFile) {
+	fx.t.Helper()
+	cmp := github.Comparison{Status: "ahead", AheadBy: commits, Files: files}
+	for i := range commits {
+		cmp.Commits = append(cmp.Commits, github.Commit{SHA: fmt.Sprintf("%02d%038d", i+1, 0), Message: fmt.Sprintf("commit %d\n\nbody", i+1)})
+	}
+	fx.gh.SetComparison("acme", "widgets", headSHA, head, cmp)
+	fx.gh.SetHead("acme", "widgets", 42, head)
+}
+
+func TestRunPublishesAtCapturedHeadWhenHeadMovedForward(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.moveHead(movedSHA, 23, github.ComparedFile{Filename: "z.go"}, github.ComparedFile{Filename: "b.go", PreviousFilename: "a.go"})
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
+	}
+	if len(fx.previews) != 1 || fx.previews[0].HeadMoved == nil {
+		t.Fatalf("previews %+v", fx.previews)
+	}
+	moved := *fx.previews[0].HeadMoved
+	if moved.Captured != headSHA || moved.Live != movedSHA || moved.AheadBy != 23 || moved.FilesTruncated {
+		t.Errorf("moved %+v", moved)
+	}
+	// The newest commits are kept, since after a base merge the oldest are the base branch's.
+	if len(moved.Commits) != 20 || moved.Commits[0] != (MovedCommit{SHA: "0400000", Subject: "commit 4"}) ||
+		moved.Commits[19] != (MovedCommit{SHA: "2300000", Subject: "commit 23"}) {
+		t.Errorf("commits %+v", moved.Commits)
+	}
+	// f-003 is excluded, f-004 withdrawn and f-005 general, so none of them is shown as touched.
+	if !reflect.DeepEqual(moved.Touched, []string{"f-001", "f-002"}) {
+		t.Errorf("touched %v", moved.Touched)
+	}
+	fx.check(1)
+	for _, r := range fx.gh.Requests() {
+		if body, ok := r.Body.(map[string]any); r.Method == "POST" && (!ok || body["commit_id"] != headSHA) {
+			t.Errorf("review sent at %v, want the captured head", r.Body)
+		}
+	}
+}
+
+func TestRunHeadMovedMarksTruncatedFileList(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	files := make([]github.ComparedFile, 300)
+	for i := range files {
+		files[i] = github.ComparedFile{Filename: fmt.Sprintf("f%03d.go", i)}
+	}
+	fx.moveHead(movedSHA, 1, files...)
+	fx.opts.Confirm = fx.confirmWith(false, nil)
+	if _, err := fx.run(); !errors.Is(err, ErrDeclined) {
+		t.Fatalf("got %v", err)
+	}
+	if moved := fx.previews[0].HeadMoved; moved == nil || !moved.FilesTruncated || len(moved.Touched) != 0 {
+		t.Fatalf("moved %+v", moved)
+	}
+}
+
+func TestRunRefusesWhenCapturedHeadLeftHistory(t *testing.T) {
+	for _, status := range []string{"diverged", "behind", "not found"} {
+		t.Run(status, func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+			if status != "not found" {
+				fx.gh.SetComparison("acme", "widgets", headSHA, movedSHA, github.Comparison{Status: status, AheadBy: 1})
+			}
+			_, err := fx.run()
+			msg := wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)
+			if !strings.Contains(msg, "no longer in the pull request's history") {
+				t.Errorf("message %q", msg)
+			}
+			if len(fx.previews) != 0 {
+				t.Error("confirmation shown")
+			}
+			fx.check(0)
+		})
+	}
+}
+
+func TestRunRefusesApproveAtMovedHead(t *testing.T) {
+	d := readyDraft()
+	d.Findings[0].Blocking = false
+	fx := newRun(t, d)
+	fx.opts.Action = "approve"
+	fx.moveHead(movedSHA, 2, github.ComparedFile{Filename: "a.go"})
+	_, err := fx.run()
+	msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment", "--action request-changes", "loupe capture "+prLink)
+	if !strings.Contains(msg, "2 commits") {
+		t.Errorf("message %q", msg)
+	}
+	if len(fx.previews) != 0 {
+		t.Error("confirmation shown")
+	}
+	fx.check(0)
+}
+
+// The second move is itself ahead, so only comparing against the head the confirmation showed catches it.
+func TestRunRefusesHeadMovedAgainDuringConfirmation(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.moveHead(movedSHA, 1, github.ComparedFile{Filename: "a.go"})
+	fx.opts.Confirm = fx.confirmWith(true, func() { fx.moveHead(laterSHA, 2, github.ComparedFile{Filename: "a.go"}) })
+	_, err := fx.run()
+	msg := wantRefusal(t, err, refusal.HeadMoved, "loupe publish")
+	if !strings.Contains(msg, laterSHA) {
+		t.Errorf("message %q", msg)
+	}
+	if fx.exists("attempt.json") {
+		t.Fatal("attempt written")
+	}
+	fx.check(0)
+}
+
+func TestRunUnmovedHeadDoesNotCompare(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
+	}
+	if fx.previews[0].HeadMoved != nil {
+		t.Errorf("moved %+v", fx.previews[0].HeadMoved)
+	}
+	for _, r := range fx.gh.Requests() {
+		if strings.Contains(r.Path, "/compare/") {
+			t.Errorf("compared at an unmoved head: %s", r.Path)
+		}
+	}
+}
+
 // A record written from inside Confirm stands in for a second publisher that passed the first check while the lock
 // was released.
 func TestRunRefusesRecordAppearedDuringConfirmation(t *testing.T) {
