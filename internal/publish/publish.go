@@ -176,9 +176,9 @@ func recheckLive(ctx context.Context, opts Options, client github.Client, viewer
 		return err
 	}
 	if now != viewer {
-		return refusal.New(refusal.Auth,
+		return refusal.New(refusal.Viewer,
 			fmt.Sprintf("the GitHub account changed from %s to %s during confirmation; nothing was sent", viewer, now),
-			"gh auth login --hostname github.com, then loupe publish")
+			"loupe publish again to confirm as "+now)
 	}
 	return nil
 }
@@ -235,9 +235,9 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 		return Receipt{}, false, err
 	}
 	if d.Version != preview.Version || draft.Digest(d) != preview.Digest || !draft.ReadinessOf(d).Ready {
-		return Receipt{}, false, refusal.New(refusal.Version,
-			fmt.Sprintf("the draft changed from version %d to %d while the review was being confirmed; nothing was sent", preview.Version, d.Version),
-			"loupe review")
+		return Receipt{}, false, refusal.New(refusal.Changed,
+			fmt.Sprintf("the draft changed while the review was being confirmed (confirmed version %d, now %d); nothing was sent", preview.Version, d.Version),
+			"loupe review, then loupe publish again")
 	}
 
 	hold := opts.HoldSignals

@@ -183,11 +183,25 @@ func TestRunRefusesDraftChangedDuringConfirmation(t *testing.T) {
 		}
 	})
 	_, err := fx.run()
-	wantRefusal(t, err, refusal.Version, "loupe review")
+	wantRefusal(t, err, refusal.Changed, "loupe review", "loupe publish")
 	if fx.exists("attempt.json") || fx.exists("receipt.json") {
 		t.Fatal("attempt or receipt written")
 	}
 	fx.draft = fx.readDraft()
+	fx.check(0)
+}
+
+func TestRunRefusesViewerChangedDuringConfirmation(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.Confirm = fx.confirmWith(true, func() { fx.gh.SetViewer("someone-else") })
+	_, err := fx.run()
+	msg := wantRefusal(t, err, refusal.Viewer, "loupe publish")
+	if !strings.Contains(msg, "reviewer") || !strings.Contains(msg, "someone-else") {
+		t.Fatalf("viewer message %q", msg)
+	}
+	if fx.exists("attempt.json") || fx.exists("receipt.json") {
+		t.Fatal("attempt or receipt written")
+	}
 	fx.check(0)
 }
 

@@ -28,6 +28,8 @@ const (
 	NotReady  Code = "not-ready"
 	Empty     Code = "empty"
 	Attempt   Code = "attempt"
+	Changed   Code = "changed"
+	Viewer    Code = "viewer"
 	GitHub    Code = "github"
 	Internal  Code = "internal"
 )

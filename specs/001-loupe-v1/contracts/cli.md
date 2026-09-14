@@ -57,6 +57,8 @@ Refusal or error (exit 1 or 2):
 | `not-ready` | Pending findings or open notes | `loupe review` |
 | `empty` | Draft has no summary and no included findings | `loupe add` / `loupe summary` |
 | `attempt` | Unknown attempt not reconciled | inspect the pull request URL, then `--retry-unknown` |
+| `changed` | The draft's version, content or readiness changed while publish was confirming | `loupe review`, then `loupe publish` again |
+| `viewer` | The GitHub login changed between showing the confirmation and sending | `loupe publish` again to confirm as the current login |
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
 | `internal` | A defect | file an issue; stack on stderr |
 
