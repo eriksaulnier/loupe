@@ -3,11 +3,13 @@ package gitx
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
@@ -175,6 +177,16 @@ func TestFetchPRIgnoresHooksTagsAndPruneConfig(t *testing.T) {
 
 func TestDiffIgnoresUserDiffConfigAndEnvironment(t *testing.T) {
 	repo := gitrepo.New(t, "o", "r", 7)
+	// A block inserted after a line it repeats is a slider whose hunk position diff.indentHeuristic decides.
+	app := make([]string, 0, 43)
+	for i := 1; i <= 40; i++ {
+		app = append(app, fmt.Sprintf("app line %d", i))
+		if i == 20 {
+			app = append(app, "\tbody", "", "app line 20")
+		}
+	}
+	app[2], app[37] = "app line 3 changed", "app line 35 changed"
+	repo.PushHead(map[string]string{"src/app.go": strings.Join(app, "\n") + "\n"})
 	baseRef, headRef := "refs/loupe/o/r/7/1/base", "refs/loupe/o/r/7/1/head"
 	if err := FetchPR(repo.Dir, 7, repo.BaseSHA(), baseRef, headRef); err != nil {
 		t.Fatal(err)
@@ -187,9 +199,15 @@ func TestDiffIgnoresUserDiffConfigAndEnvironment(t *testing.T) {
 		t.Fatalf("default diff lacks the three-line context hunk:\n%s", want)
 	}
 
-	global := filepath.Join(t.TempDir(), "gitconfig")
+	dir := t.TempDir()
+	order := filepath.Join(dir, "order")
+	if err := os.WriteFile(order, []byte("src/*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	global := filepath.Join(dir, "gitconfig")
 	config := "[diff]\n\tcontext = 10\n\tinterHunkContext = 30\n\talgorithm = histogram\n\trelative = true\n" +
-		"\tnoprefix = true\n\tmnemonicPrefix = true\n\tsuppressBlankEmpty = true\n\trenames = false\n"
+		"\tnoprefix = true\n\tmnemonicPrefix = true\n\tsuppressBlankEmpty = true\n\trenames = false\n" +
+		"\tindentHeuristic = false\n\torderFile = " + order + "\n"
 	if err := os.WriteFile(global, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -187,10 +187,11 @@ func MergeBase(clone, baseRef, headRef string) (string, error) {
 }
 
 // Diff compares the head against its merge base with the base, as GitHub's pull request diff does, so lines the base
-// gained after the branch point are not offered for comments. Explicit flags keep the user's diff config (context,
-// hunk merging, algorithm, drivers, textconv, color, prefixes, renames) from changing the stored bytes.
+// gained after the branch point are not offered for comments.
 func Diff(clone, baseRef, headRef string) ([]byte, error) {
-	return git(clone, "-c", "diff.interHunkContext=0", "diff", "-U3", "--diff-algorithm=myers", "--no-relative",
-		"--no-ext-diff", "--no-color", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--find-renames",
-		baseRef+"..."+headRef)
+	// Explicit flags keep the user's diff config (context, hunk merging, algorithm, indent heuristic, file order,
+	// drivers, textconv, color, prefixes, renames) from changing the stored bytes.
+	return git(clone, "-c", "diff.interHunkContext=0", "-c", "diff.indentHeuristic=true", "diff", "-U3",
+		"--diff-algorithm=myers", "--no-relative", "-O"+os.DevNull, "--no-ext-diff", "--no-color", "--no-textconv",
+		"--src-prefix=a/", "--dst-prefix=b/", "--find-renames", baseRef+"..."+headRef)
 }
