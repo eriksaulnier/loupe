@@ -118,7 +118,7 @@ Result payload: `reply` (`{id, noteId}`), `version`.
 
 ### `loupe list [--json]`
 
-All runs, newest capture first: `ref`, `url`, `title`, `round`, `state` (`captured`, `ready`, `published`), `counts` (accepted, pending, excluded, withdrawn, openNotes), `capturedAt`.
+All runs, newest capture first, as an array under `runs`: `ref`, `url`, `title`, `round`, `state` (`captured`, `ready`, `published`), `counts` (accepted, pending, excluded, withdrawn, openNotes), `capturedAt`.
 
 ### `loupe review [<ref>] [--plain]` (human only)
 
