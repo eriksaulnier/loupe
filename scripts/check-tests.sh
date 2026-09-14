@@ -40,8 +40,7 @@ violation() {
 
 tests=('*_test.go' 'internal/testutil/')
 
-# Go splits a call across lines freely, so each test file is flattened to one line before matching. A match names the
-# file and the matched text.
+# Go splits a call across lines freely, so each test file is flattened to one line before matching.
 pty=""
 while IFS= read -r -d '' file; do
 	hits=$(tr '\n\t' '  ' <"$file" | tr -s ' ' | grep -oE \
