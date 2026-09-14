@@ -54,10 +54,12 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 	}
 
 	s := style.New(out, getenv)
-	w := plainWidth(width)
+	full := plainWidth(width)
+	w := style.Content(full)
 	p := &printer{w: out}
 	r := draft.ReadinessOf(d)
-	p.printf("%s %s %s  %s\n", s.Brand(), s.Accent.Render(fmt.Sprintf("%s/%s#%d", target.Owner, target.Repo, target.Number)),
+	ref := strings.TrimSpace(s.Glyphs.PR + " " + fmt.Sprintf("%s/%s#%d", target.Owner, target.Repo, target.Number))
+	p.printf("%s %s %s  %s\n", s.Brand(), s.Accent.Render(ref),
 		s.Dim.Render(fmt.Sprintf("round %d", target.Round)), render.ForDisplay(render.OneLine(target.Title)))
 	p.printf("%s  %s\n", countsLine(d, s), s.ReadinessPill(r.Ready, len(r.Pending), len(r.OpenNotes)))
 	if strings.TrimSpace(d.Summary) != "" {
@@ -80,10 +82,10 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		if notice != "" {
 			p.printf("\n%s\n", notice)
 		}
-		if err := printFinding(p, s, d, dif, i, w); err != nil {
+		if err := printFinding(p, s, d, dif, i, full, w); err != nil {
 			return err
 		}
-		p.printf("\n%s\n%s %s ", s.Keys(plainAnswers), s.Accent.Render(d.Findings[i].ID), s.Glyphs.Cursor)
+		p.printf("\n%s\n%s %s ", s.Keys(plainAnswers), s.Accent.Render(d.Findings[i].ID), s.Cursor.Render(s.Glyphs.Cursor))
 		if p.err != nil {
 			return p.err
 		}
@@ -114,7 +116,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 				fn, success = func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, now) }, s.Glyphs.Excluded+" "+n.ID+" dismissed"
 			}
 		case "s":
-			p.printf("%s %s ", s.Note.Render(s.Glyphs.Note+" send back "+f.ID), s.Glyphs.Cursor)
+			p.printf("%s %s ", s.Note.Render(s.Glyphs.Note+" send back "+f.ID), s.Cursor.Render(s.Glyphs.Cursor))
 			body, ok := readLine()
 			if !ok {
 				return lines.Err()
@@ -154,14 +156,15 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 	}
 }
 
-func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i, width int) error {
+// printFinding prints one finding: rules span full, the terminal; prose wraps at width, the content width.
+func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i, full, width int) error {
 	f := d.Findings[i]
-	p.printf("\n%s\n", s.Rule(width, "", fmt.Sprintf("%d of %d", i+1, len(d.Findings))))
+	p.printf("\n%s\n", s.Rule(full, "", fmt.Sprintf("%d of %d", i+1, len(d.Findings))))
 	p.printf("%s  %s\n", s.Accent.Render(f.ID), s.Bold.Render(render.ForDisplay(render.OneLine(f.Title))))
-	p.printf("%s  %s\n", chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID])), s.Dim.Render(locationText(f)))
+	p.printf("%s  %s\n", chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID])), s.Dim.Render(plainLocation(s.Glyphs, f)))
 	p.printf("\n%s\n", s.Wrap(render.ForDisplay(f.Body), width, ""))
 	if f.SuggestedFix != "" {
-		p.printf("\n%s\n", s.Bold.Render("Suggested fix"))
+		p.printf("\n%s\n", s.Head.Render(strings.TrimSpace(s.Glyphs.Fix+" Suggested fix")))
 		for _, line := range strings.Split(s.Wrap(render.ForDisplay(f.SuggestedFix), width-2, ""), "\n") {
 			p.printf("%s %s\n", s.Dim.Render(s.Glyphs.Quote), line)
 		}
@@ -170,10 +173,10 @@ func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i, 
 		if n.FindingID != f.ID {
 			continue
 		}
-		p.printf("\n%s %s: %s\n", s.Note.Render(s.Glyphs.Note+" "+n.ID), s.Dim.Render(n.Status), render.ForDisplay(render.OneLine(n.Body)))
+		p.printf("\n%s %s: %s\n", s.Note.Render(s.Glyphs.Note+" "+n.ID), s.Dim.Render(noteStatus(s.Glyphs, n.Status)), render.ForDisplay(render.OneLine(n.Body)))
 		for _, r := range d.Replies {
 			if r.NoteID == n.ID {
-				p.printf("  %s: %s\n", s.Dim.Render(s.Glyphs.Reply+" "+render.ForDisplay(r.ID)+" by "+render.ForDisplay(r.By)), render.ForDisplay(render.OneLine(r.Body)))
+				p.printf("  %s %s: %s\n", s.Note.Render(s.Glyphs.Reply+" "+render.ForDisplay(r.ID)), s.Dim.Render("by "+render.ForDisplay(r.By)), render.ForDisplay(render.OneLine(r.Body)))
 			}
 		}
 	}
@@ -181,18 +184,27 @@ func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i, 
 	if err != nil {
 		return err
 	}
-	p.printf("\n%s\n", s.Rule(width, s.Accent.Render(locationText(f)), ""))
+	p.printf("\n%s\n", s.Rule(full, s.Accent.Render(plainLocation(s.Glyphs, f)), ""))
 	if f.Location == nil {
 		p.printf("%s\n", s.Dim.Render("general finding"))
 	}
 	for _, l := range lines {
 		gutter := s.Dim.Render(s.Glyphs.Gutter)
 		if l.Anchored {
-			gutter = s.Glyphs.Anchor
+			gutter = s.Warn.Bold(true).Render(s.Glyphs.Anchor)
 		}
 		p.printf("%s\n", diffRow(l, gutter, 1))
 	}
 	return nil
+}
+
+// plainLocation is the location behind its icon: a file for a located finding, the globe for a general one.
+func plainLocation(g GlyphSet, f draft.Finding) string {
+	icon := g.File
+	if f.Location == nil {
+		icon = g.General
+	}
+	return strings.TrimSpace(icon + " " + locationText(f))
 }
 
 // ConfirmPlain shows the review and its exact payload, then reads one line; only a line that is exactly y confirms.

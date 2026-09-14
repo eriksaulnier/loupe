@@ -236,7 +236,7 @@ func (m *Model) View() string {
 		if m.sending {
 			keys = "keys are ignored until the outcome is recorded"
 		}
-		return m.frame([]string{m.styles.Bold.Render(m.header())}, "", keys)
+		return m.frame([]string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), ""}, "", keys)
 	}
 	return m.listView()
 }
@@ -414,7 +414,9 @@ func (m *Model) helpView() string {
 		}
 	}
 
-	column := max(30, m.width/2-1)
+	// Columns are four cells apart, after the one-cell margin.
+	const helpGap = 4
+	column := max(30, (style.Content(m.width)-1-helpGap)/2)
 	lines := make([]string, 0, m.height)
 	leftLines, rightLines := m.helpColumn(left, column), m.helpColumn(right, column)
 	for i := range max(len(leftLines), len(rightLines)) {
@@ -425,15 +427,16 @@ func (m *Model) helpView() string {
 			row += strings.Repeat(" ", column)
 		}
 		if i < len(rightLines) {
-			row += " " + rightLines[i]
+			row += strings.Repeat(" ", helpGap) + rightLines[i]
 		}
 		lines = append(lines, strings.TrimRight(row, " "))
 	}
 	lines = append(lines, "", m.styles.Wrap("Decisions are recorded against the draft version on screen. If the draft changed meanwhile, "+
-		"nothing is recorded and the current version is shown instead.", m.width-1, " "))
+		"nothing is recorded and the current version is shown instead.", style.Content(m.width)-1, " "))
 
 	keys := m.styles.Keys([]style.Key{{K: "? or esc", Verb: "closes help"}})
-	return m.frame([]string{m.styles.Band(m.styles.Brand()+" keys", "", m.width)}, strings.Join(lines, "\n"), keys)
+	band := m.styles.Band(style.BandParts{Title: strings.TrimSpace(m.glyphs.Help + " keys")}, m.width)
+	return m.frame([]string{band}, strings.Join(lines, "\n"), keys)
 }
 
 // helpColumn lays one column out: every section's keys aligned under its heading.
@@ -445,34 +448,27 @@ func (m *Model) helpColumn(sections []helpSection, width int) []string {
 		}
 	}
 	var out []string
-	for i, section := range sections {
-		if i > 0 {
-			out = append(out, "")
-		}
-		out = append(out, m.styles.Heading(section.title))
+	for _, section := range sections {
+		out = append(out, "", m.styles.Heading(section.title))
 		for _, k := range section.keys {
-			out = append(out, m.styles.TruncRight(m.styles.Bold.Render(style.Pad(k.K, keyWidth))+"  "+m.styles.Dim.Render(k.Verb), width))
+			out = append(out, m.styles.TruncRight(m.styles.Accent.Bold(true).Render(style.Pad(k.K, keyWidth))+"  "+m.styles.Dim.Render(k.Verb), width))
 		}
 	}
 	return out
 }
 
-func (m *Model) header() string {
-	return fmt.Sprintf("%s/%s#%d  round %d  %s", m.target.Owner, m.target.Repo, m.target.Number, m.target.Round, render.ForDisplay(render.OneLine(m.target.Title)))
-}
-
 // band is the header line of every view: the program, the run it is reviewing, what the view is showing, and the
-// readiness pill at the right edge, which never truncates.
+// readiness pill at the right edge, which never truncates. middle is plain text: the segment paints it.
 func (m *Model) band(middle string) string {
 	round := fmt.Sprintf("round %d", m.target.Round)
 	if m.width < wideWidth {
 		round = fmt.Sprintf("r%d", m.target.Round)
 	}
-	left := m.styles.Brand() + " " + m.styles.Accent.Render(m.ref()) + " " + m.styles.Dim.Render(round)
-	if middle != "" {
-		left += "  " + middle
+	ref := m.ref() + "  " + round
+	if m.glyphs.DividerThin != "" {
+		ref = m.ref() + " " + m.glyphs.DividerThin + " " + round
 	}
-	return m.styles.Band(left, m.readinessPill(), m.width)
+	return m.styles.Band(style.BandParts{Ref: strings.TrimSpace(m.glyphs.PR + " " + ref), Title: middle, Right: m.readinessPill()}, m.width)
 }
 
 func (m *Model) ref() string {
@@ -541,13 +537,13 @@ func chips(s style.Style, f draft.Finding, disposition string) []chip {
 		out = append(out, chip{s.Glyphs.Blocking, "blocking", style.Bad})
 	}
 	if f.Label != "" {
-		out = append(out, chip{"", render.ForDisplay(render.OneLine(f.Label)), style.Plain})
+		out = append(out, chip{s.Glyphs.Label(f.Label), render.ForDisplay(render.OneLine(f.Label)), style.Plain})
 	}
 	if f.Confidence != "" {
-		out = append(out, chip{"", "confidence " + render.ForDisplay(f.Confidence), style.Faint})
+		out = append(out, chip{"", "confidence " + render.ForDisplay(f.Confidence), style.Dim})
 	}
 	if f.Severity != "" {
-		out = append(out, chip{"", "severity " + render.ForDisplay(render.OneLine(f.Severity)), style.Faint})
+		out = append(out, chip{"", "severity " + render.ForDisplay(render.OneLine(f.Severity)), style.Dim})
 	}
 	return out
 }
@@ -587,11 +583,18 @@ func hunkView(dif *diff.Diff, f draft.Finding) ([]diff.ViewLine, error) {
 }
 
 // diffRow is one line of a diff: its number on the new side, a gutter wide enough for the widest marker, and the
-// line as the diff carries it. A deleted line has no new-side number, so it keeps the old one.
+// line as the diff carries it.
 func diffRow(l diff.ViewLine, gutter string, gutterWidth int) string {
 	if l.Separator {
 		return render.ForDisplay(l.Text)
 	}
+	lead, text := diffCells(l)
+	return lead + style.Pad(gutter, gutterWidth) + text
+}
+
+// diffCells splits a diff line around its gutter, so a painted row can color the gutter on its own. A deleted line
+// has no new-side number, so it keeps the old one.
+func diffCells(l diff.ViewLine) (lead, text string) {
 	num := l.NewNum
 	if num == 0 {
 		num = l.OldNum
@@ -607,7 +610,19 @@ func diffRow(l diff.ViewLine, gutter string, gutterWidth int) string {
 	case diff.Delete:
 		sign = "-"
 	}
-	return fmt.Sprintf("%5s  %s  %s%s", number, style.Pad(gutter, gutterWidth), sign, render.ForDisplay(l.Text))
+	return fmt.Sprintf("%5s  ", number), "  " + sign + render.ForDisplay(l.Text)
+}
+
+// anchoredRow is the diff line a finding points at: the whole row on the anchor background, the marker in the warn
+// color, painted piece by piece because a reset inside the row would end the band.
+func (m *Model) anchoredRow(l diff.ViewLine) string {
+	lead, text := diffCells(l)
+	if !m.styles.Color {
+		return " " + lead + m.glyphs.Anchor + text
+	}
+	bg, marker := m.styles.Anchor, m.styles.On(m.styles.Anchor, m.styles.Warn.Bold(true))
+	rest := style.Pad(text, max(0, m.width-2-style.Width(lead)))
+	return bg.Render(" "+lead) + marker.Render(m.glyphs.Anchor) + bg.Render(rest)
 }
 
 func (m *Model) styleDiffLine(l diff.ViewLine, text string) string {

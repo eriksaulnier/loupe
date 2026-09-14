@@ -47,7 +47,7 @@ func (m *Model) refreshDetail() error {
 	}
 	for _, l := range lines {
 		if l.Anchored {
-			m.hunk = append(m.hunk, m.styles.Anchor.Render(" "+diffRow(l, m.glyphs.Anchor, 1)))
+			m.hunk = append(m.hunk, m.anchoredRow(l))
 			continue
 		}
 		m.hunk = append(m.hunk, " "+m.styleDiffLine(l, diffRow(l, m.styles.Dim.Render(m.glyphs.Gutter), 1)))
@@ -57,22 +57,27 @@ func (m *Model) refreshDetail() error {
 	if err != nil {
 		return err
 	}
+	// Title, chips, blank, body, blank, notes: the rhythm every detail shares.
 	top := []string{""}
-	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), m.width-1, " "), "\n") {
+	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), style.Content(m.width)-1, " "), "\n") {
 		top = append(top, m.styles.Bold.Render(line))
 	}
-	top = append(top, " "+chipRow(m.styles, chips(m.styles, f, draft.Dispositions(m.draft)[f.ID])))
+	top = append(top, " "+chipRow(m.styles, chips(m.styles, f, draft.Dispositions(m.draft)[f.ID])), "")
 	top = append(top, strings.Split(body, "\n")...)
 	top = append(top, m.suggestedFix(f)...)
 	top = append(top, m.noteThread(f)...)
 
 	available := m.bodyHeight(detailHeaderLines)
-	hunkHeight := min(len(m.hunk)+1, available/2)
+	// The hunk region holds the blank line before the rule and the rule itself.
+	hunkHeight := min(len(m.hunk)+hunkRuleLines, available/2)
 	m.body.Width = m.width
 	m.body.Height = max(1, available-hunkHeight)
 	m.body.SetContent(strings.Join(top, "\n"))
 	return nil
 }
+
+// hunkRuleLines is the blank line before the hunk's rule plus the rule.
+const hunkRuleLines = 2
 
 // suggestedFix is shown under a gutter rather than as Markdown, so a fix that is not code still reads as a quotation
 // and cannot close a fence.
@@ -80,44 +85,62 @@ func (m *Model) suggestedFix(f draft.Finding) []string {
 	if f.SuggestedFix == "" {
 		return nil
 	}
-	out := []string{"", " " + m.styles.Bold.Render("Suggested fix")}
-	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), m.width-3, ""), "\n") {
+	out := []string{"", " " + m.styles.Head.Render(strings.TrimSpace(m.glyphs.Fix+" Suggested fix"))}
+	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), style.Content(m.width)-3, ""), "\n") {
 		out = append(out, " "+m.styles.Dim.Render(m.glyphs.Quote)+" "+line)
 	}
 	return out
 }
 
 // noteThread lists the finding's notes with their replies indented under them, so a send-back reads as a conversation.
+// The thread is one block after a blank line; a closed note carries the glyph of how it closed.
 func (m *Model) noteThread(f draft.Finding) []string {
 	var out []string
 	for _, n := range m.draft.Notes {
 		if n.FindingID != f.ID {
 			continue
 		}
-		head := m.styles.Note.Render(m.glyphs.Note+" "+n.ID) + " " + m.styles.Dim.Render(n.Status) + ": "
-		out = append(out, "", " "+head+render.ForDisplay(render.OneLine(n.Body)))
+		if len(out) == 0 {
+			out = append(out, "")
+		}
+		head := m.styles.Note.Render(m.glyphs.Note+" "+n.ID) + " " + m.styles.Dim.Render(noteStatus(m.glyphs, n.Status)) + ": "
+		out = append(out, " "+head+render.ForDisplay(render.OneLine(n.Body)))
 		for _, r := range m.draft.Replies {
 			if r.NoteID != n.ID {
 				continue
 			}
-			reply := m.styles.Dim.Render(m.glyphs.Reply+" "+render.ForDisplay(r.ID)+" by "+render.ForDisplay(r.By)) + ": "
+			reply := m.styles.Note.Render(m.glyphs.Reply+" "+render.ForDisplay(r.ID)) + " " + m.styles.Dim.Render("by "+render.ForDisplay(r.By)) + ": "
 			out = append(out, "   "+reply+render.ForDisplay(render.OneLine(r.Body)))
 		}
 	}
 	return out
 }
 
+// noteStatus is the status word behind the glyph of how the note closed; an open note has only the word.
+func noteStatus(g GlyphSet, status string) string {
+	switch status {
+	case draft.NoteResolved:
+		return g.Accepted + " " + status
+	case draft.NoteDismissed:
+		return g.Excluded + " " + status
+	}
+	return status
+}
+
 func (m *Model) renderMarkdown(md string) (string, error) {
-	wrap := max(20, m.width-4)
+	wrap := max(20, style.Content(m.width)-1)
 	if m.glamour == nil || m.wrapWidth != wrap {
-		theme := glamourstyles.NoTTYStyle
+		theme := glamourstyles.NoTTYStyleConfig
 		if m.styles.Color {
-			theme = glamourstyles.LightStyle
+			theme = glamourstyles.LightStyleConfig
 			if m.darkBackground {
-				theme = glamourstyles.DarkStyle
+				theme = glamourstyles.DarkStyleConfig
 			}
 		}
-		r, err := glamour.NewTermRenderer(glamour.WithStandardStyle(theme), glamour.WithWordWrap(wrap))
+		// The body sits on the same one-cell margin as everything else on the screen.
+		margin := uint(1)
+		theme.Document.Margin = &margin
+		r, err := glamour.NewTermRenderer(glamour.WithStyles(theme), glamour.WithWordWrap(wrap))
 		if err != nil {
 			return "", fmt.Errorf("create Markdown renderer: %w", err)
 		}
@@ -156,7 +179,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		return m.decideAndStay(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
 		m.noting, m.notice = true, ""
-		m.note.Prompt = m.styles.Note.Render(m.glyphs.Note+" send back "+f.ID) + " " + m.glyphs.Cursor + " "
+		m.note.Prompt = m.styles.Note.Render(m.glyphs.Note+" send back "+f.ID) + " " + m.styles.Cursor.Render(m.glyphs.Cursor) + " "
 		m.note.Reset()
 		m.note.Cursor.SetMode(cursor.CursorStatic)
 		return m.note.Focus()
@@ -222,11 +245,9 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
-// decideAndShow records a decision and redraws the finding from the draft the decision left behind. success builds
-// the notice after fn has run, so it can name what fn created. A recorded decision opens the next finding, the way n
-// does, so a run of decisions needs no key between them; the last finding stays on screen.
 // decideAndStay records a change that leaves the finding undecided (a restore, a note resolved or dismissed), so
-// the view stays where the result can be seen.
+// the view stays where the result can be seen. success builds the notice after fn has run, so it can name what fn
+// created.
 func (m *Model) decideAndStay(fn func(*draft.Draft) error, success func() string) tea.Cmd {
 	recorded, err := m.Decide(fn)
 	if err != nil {
@@ -244,7 +265,9 @@ var settleAfterDecision = 250 * time.Millisecond
 
 type settledMsg struct{}
 
-// decideAndShow records a decision that settles the finding and moves on to the next one.
+// decideAndShow records a decision that settles the finding and opens the next one, the way n does, so a run of
+// decisions needs no key between them; the last finding stays on screen. success builds the notice after fn has
+// run, so it can name what fn created.
 func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string) tea.Cmd {
 	recorded, err := m.Decide(fn)
 	if err != nil {
@@ -268,9 +291,9 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 
 func (m *Model) detailView() string {
 	f, i := m.openedFinding()
-	position := fmt.Sprintf("%s %d of %d", m.glyphs.Pending, i+1, len(m.draft.Findings))
-	header := []string{m.band(m.styles.Accent.Render(f.ID) + " " + m.styles.Dim.Render(position))}
-	body := m.body.View() + "\n" + m.hunkRule(f) + "\n" + strings.Join(m.hunkWindow(), "\n")
+	position := fmt.Sprintf("%d of %d", i+1, len(m.draft.Findings))
+	header := []string{m.band(f.ID + "  " + position)}
+	body := m.body.View() + "\n\n" + m.hunkRule(f) + "\n" + strings.Join(m.hunkWindow(), "\n")
 
 	if m.noting {
 		keys := m.styles.Keys([]style.Key{{K: "enter", Verb: "send"}, {K: "esc", Verb: "cancel"}, {K: "ctrl+u", Verb: "clear"}})
@@ -286,14 +309,15 @@ func (m *Model) detailView() string {
 // hunkRule names the file the hunk comes from, so its origin is never in doubt, and offers the whole-file diff.
 func (m *Model) hunkRule(f draft.Finding) string {
 	if f.Location == nil {
-		return " " + m.styles.Rule(m.width-1, m.styles.Dim.Render("general finding"), "")
+		return m.styles.Rule(m.width, m.styles.Dim.Render(strings.TrimSpace(m.glyphs.General+" general finding")), "")
 	}
-	return " " + m.styles.Rule(m.width-1, m.styles.Accent.Render(locationText(f)), m.styles.Bold.Render("f")+m.styles.Dim.Render(" whole file"))
+	title := m.styles.Accent.Render(strings.TrimSpace(m.glyphs.File + " " + locationText(f)))
+	return m.styles.Rule(m.width, title, m.styles.Accent.Bold(true).Render("f")+m.styles.Dim.Render(" whole file"))
 }
 
 // hunkRows is the height of the region under the separator.
 func (m *Model) hunkRows() int {
-	return max(0, m.bodyHeight(detailHeaderLines)-m.body.Height-1)
+	return max(0, m.bodyHeight(detailHeaderLines)-m.body.Height-hunkRuleLines)
 }
 
 // maxHunkTop leaves the last page full: its rows less the line that counts the rows above.

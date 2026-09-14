@@ -161,7 +161,7 @@ func listStateKind(state string) style.Kind {
 	case "published":
 		return style.Good
 	}
-	return style.Faint
+	return style.Dim
 }
 
 // listCountsCell is the five counts as glyph pairs; a zero fades so the live numbers are what the eye lands on.
@@ -177,8 +177,8 @@ func listCountsCell(s style.Style, c listCounts) string {
 	}{
 		{style.Good, g.Accepted, c.Accepted},
 		{style.Warn, g.Pending, c.Pending},
-		{style.Faint, g.Excluded, c.Excluded},
-		{style.Faint, g.Withdrawn, c.Withdrawn},
+		{style.Dim, g.Excluded, c.Excluded},
+		{style.Dim, g.Withdrawn, c.Withdrawn},
 		{style.Note, g.Note, c.OpenNotes},
 	}
 	cells := make([]string, 0, len(pairs))

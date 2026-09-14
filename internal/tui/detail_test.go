@@ -168,7 +168,7 @@ func TestDetailShowsChipsRuleAndNumberedHunk(t *testing.T) {
 	}
 	view := m.View()
 	for _, want := range []string{
-		"f-002 \u00b7 2 of 3",
+		"f-002  2 of 3",
 		"\u00b7 pending   suggestion",
 		"\u2500\u2500 multi.txt:21 ",
 		" f whole file \u2500\u2500",

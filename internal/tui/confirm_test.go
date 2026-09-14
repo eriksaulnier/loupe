@@ -62,7 +62,7 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := m.View()
-	if !strings.Contains(view, "row 001") || strings.Contains(view, "inline comments (0)") || !strings.Contains(view, "lines 1-21 of 203") {
+	if !strings.Contains(view, "row 001") || strings.Contains(view, "inline comments (0)") || !strings.Contains(view, "lines 1-20 of 203") {
 		t.Fatalf("top of a long review:\n%s", view)
 	}
 
@@ -74,7 +74,7 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 		}
 	}
 	view = m.View()
-	if !strings.Contains(view, "inline comments (0)") || strings.Contains(view, "row 001") || !strings.Contains(view, "lines 183-203 of 203") {
+	if !strings.Contains(view, "inline comments (0)") || strings.Contains(view, "row 001") || !strings.Contains(view, "lines 184-203 of 203") {
 		t.Fatalf("after end:\n%s", view)
 	}
 	if m.Confirmed() {

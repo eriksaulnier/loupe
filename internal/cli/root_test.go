@@ -12,6 +12,8 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 type streams struct {
@@ -25,8 +27,17 @@ func testDeps(t *testing.T, env map[string]string) (Deps, *streams) {
 		Stdin:  strings.NewReader(""),
 		Stdout: &s.stdout,
 		Stderr: &s.stderr,
-		Getenv: func(k string) string { return env[k] },
-		Now:    func() time.Time { return time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC) },
+		// The icon tier defaults to unicode so the goldens keep their glyphs; a test that wants another tier sets it.
+		Getenv: func(k string) string {
+			if v, ok := env[k]; ok {
+				return v
+			}
+			if k == style.IconsEnv {
+				return "unicode"
+			}
+			return ""
+		},
+		Now: func() time.Time { return time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC) },
 		GitHub: func() (github.Client, error) {
 			t.Error("GitHub must not be built")
 			return nil, errors.New("unexpected GitHub client")

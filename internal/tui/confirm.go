@@ -20,8 +20,9 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-// confirmHeaderLines is the band, which carries what will be sent and where in the review the window sits.
-const confirmHeaderLines = 1
+// confirmHeaderLines is the band, which carries what will be sent and where in the review the window sits, and the
+// blank line under it.
+const confirmHeaderLines = 2
 
 // confirmation is the last look at a review before it is sent, shared by the review program and loupe publish.
 type confirmation struct {
@@ -83,25 +84,31 @@ func (c *confirmation) position(m *Model) string {
 	return fmt.Sprintf("lines %d%s%d of %d", min(c.scroll.YOffset+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset+c.scroll.Height, total), total)
 }
 
-// band carries what will be sent; the position tells the reader how much of the review is still below.
+// band carries what will be sent; the position at the right edge tells the reader how much of the review is still
+// below, and keeps its place when the title has to give way.
 func (c *confirmation) band(m *Model) string {
-	return m.styles.Band(m.styles.Brand()+" "+c.title, m.styles.Dim.Render(c.position(m)), m.width)
+	position := c.position(m)
+	if m.styles.Color {
+		position = m.styles.On(m.styles.BandBg, m.styles.Dim).Render(position + " ")
+	}
+	return m.styles.Band(style.BandParts{Ref: strings.TrimSpace(m.glyphs.Ready + " " + c.title), Right: position}, m.width)
 }
 
 func (c *confirmation) content(m *Model) string {
+	width := style.Content(m.width) - 1
 	if c.showJSON {
-		return " " + m.styles.Rule(m.width-1, "exact request payload", "") + "\n" +
-			m.styles.Wrap(render.ForDisplay(c.preview.EnvelopeJSON), m.width-1, " ")
+		return m.styles.Rule(m.width, "exact request payload", "") + "\n" +
+			m.styles.Wrap(render.ForDisplay(c.preview.EnvelopeJSON), width, " ")
 	}
 	parts := []string{
-		" " + m.styles.Rule(m.width-1, "review body", ""),
-		m.styles.Wrap(render.ForDisplay(markdown.OpenDetails(c.preview.Body)), m.width-1, " "),
+		m.styles.Rule(m.width, "review body", ""),
+		m.styles.Wrap(render.ForDisplay(markdown.OpenDetails(c.preview.Body)), width, " "),
 		"",
-		" " + m.styles.Rule(m.width-1, fmt.Sprintf("inline comments (%d)", len(c.preview.Comments)), ""),
+		m.styles.Rule(m.width, fmt.Sprintf("inline comments (%d)", len(c.preview.Comments)), ""),
 	}
 	for _, comment := range c.preview.Comments {
-		location := m.styles.Accent.Render(render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side)))
-		parts = append(parts, " "+location, m.styles.Wrap(render.ForDisplay(comment.Body), m.width-1, " "), "")
+		location := m.styles.Accent.Render(strings.TrimSpace(m.glyphs.File + " " + render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side))))
+		parts = append(parts, " "+location, m.styles.Wrap(render.ForDisplay(comment.Body), width, " "), "")
 	}
 	return strings.Join(parts, "\n")
 }
@@ -111,7 +118,7 @@ func (m *Model) confirmView(c *confirmation) string {
 	keys := m.styles.Good.Bold(true).Render("y") + " " + m.styles.Good.Render("publish this review") + "  " +
 		m.styles.Keys([]style.Key{{K: "v", Verb: "exact JSON payload"}, {K: "j/k", Verb: "scroll"}}) + "  " +
 		m.styles.Dim.Render("any other key cancels, nothing is sent")
-	return m.frameWith([]string{c.band(m)}, c.scroll.View(), "", keys)
+	return m.frameWith([]string{c.band(m), ""}, c.scroll.View(), "", keys)
 }
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
@@ -220,7 +227,7 @@ func (s *publishSession) wait() tea.Msg {
 func (m *Model) startPublish() tea.Cmd {
 	s := &publishSession{previews: make(chan publish.Preview), answers: make(chan bool, 1), done: make(chan publishDone, 1), finished: make(chan struct{})}
 	m.session, m.view = s, viewPublishing
-	m.say(style.Faint, "checking the pull request and composing the review...")
+	m.say(style.Dim, "checking the pull request and composing the review...")
 	opts := publish.Options{
 		Dir: m.cfg.Dir, Target: m.target, GitHub: m.cfg.GitHub, IsTerminal: true, Action: m.action, Inline: publish.InlineModes[m.pick],
 		Confirm: func(p publish.Preview) (bool, error) {
@@ -245,10 +252,10 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) tea.Cmd {
 	}
 	m.session.answers <- m.confirm.yes
 	m.view = viewPublishing
-	m.say(style.Faint, "nothing was sent")
+	m.say(style.Dim, "nothing was sent")
 	if m.confirm.yes {
 		m.sending = true
-		m.say(style.Faint, "sending the review...")
+		m.say(style.Dim, "sending the review...")
 	}
 	return m.session.wait
 }
@@ -268,9 +275,9 @@ func (m *Model) publishFinished(done publishDone) tea.Cmd {
 	var r *refusal.Error
 	switch {
 	case done.err == nil:
-		m.say(style.Good, "published: "+done.receipt.ReviewURL)
+		m.say(style.Good, strings.TrimSpace(m.glyphs.Published+" published: "+done.receipt.ReviewURL))
 	case errors.Is(done.err, publish.ErrDeclined):
-		m.say(style.Faint, "publish canceled; nothing was sent")
+		m.say(style.Dim, strings.TrimSpace(m.glyphs.Canceled+" publish canceled; nothing was sent"))
 	case errors.As(done.err, &r):
 		m.say(style.Warn, refusalNotice(r))
 	default:

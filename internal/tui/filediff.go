@@ -152,9 +152,12 @@ func (m *Model) fileDiffView() string {
 	pill := m.readinessPill()
 	// The file diff drops the run from the band: what the stats say about this file is what the view is for, and the
 	// path gives up its directories before they do.
-	room := m.width - style.Width(m.styles.Brand()) - style.Width(counts) - style.Width(pill) - 6
-	left := m.styles.Brand() + " " + m.styles.TruncLeft(path, max(10, room)) + "  " + m.styles.Dim.Render(counts)
-	header := []string{m.styles.Band(left, pill, m.width)}
+	icon := ""
+	if m.glyphs.File != "" {
+		icon = m.glyphs.File + " "
+	}
+	room := m.width - style.Width(m.styles.Brand()) - style.Width(icon) - style.Width(counts) - style.Width(pill) - 6
+	header := []string{m.styles.Band(style.BandParts{Title: icon + m.styles.TruncLeft(path, max(10, room)) + "  " + counts, Right: pill}, m.width)}
 	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "]/[", Verb: "next/prev finding"}, {K: "enter", Verb: "open finding"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}})
 	return m.frame(header, m.file.View(), keys)
 }

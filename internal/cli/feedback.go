@@ -111,7 +111,7 @@ func printFeedback(deps Deps, ref string, d *draft.Draft) error {
 			title = s.Bad.Render(s.Glyphs.Blocking) + " " + title
 		}
 		line := fmt.Sprintf("%s %s  %s  %s", s.Of(kind).Render(glyph), s.Accent.Render(oneLine(f.ID)), meta, title)
-		if kind == style.Faint {
+		if kind == style.Dim {
 			line = s.Dim.Render(fmt.Sprintf("%s %s  %s rev %d  %s", glyph, oneLine(f.ID), style.Pad(word, 10), f.Rev, oneLine(f.Title)))
 		}
 		fmt.Fprintf(&b, "%s\n", s.TruncRight(line, width))

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
@@ -142,7 +143,7 @@ func (m *Model) chooser(title string, rows []string, keys string) string {
 	for i, l := range box {
 		box[i] = indent + l
 	}
-	header := []string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), " " + m.countsLine()}
+	header := []string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), "", " " + m.countsLine()}
 	return m.frame(header, "\n"+strings.Join(box, "\n"), "")
 }
 
@@ -150,7 +151,7 @@ func (m *Model) chooser(title string, rows []string, keys string) string {
 func (m *Model) pickerRow(selected bool, text string) string {
 	cursor := " "
 	if selected {
-		cursor = m.glyphs.Cursor
+		cursor = m.styles.Cursor.Render(m.glyphs.Cursor)
 	}
 	return " " + cursor + " " + style.Pad(text, 17)
 }
@@ -181,7 +182,7 @@ func (m *Model) listColumns() listColumns {
 	if c.label > 0 {
 		gaps += 2
 	}
-	c.title = m.width - listFixed - c.label - c.location - gaps
+	c.title = style.Content(m.width) - listFixed - c.label - c.location - gaps
 	if c.title < 20 {
 		// Below the point where a title is readable, the location gives up the rest of its width.
 		c.location = max(0, c.location+c.title-20)
@@ -191,7 +192,7 @@ func (m *Model) listColumns() listColumns {
 }
 
 func (m *Model) listView() string {
-	header := []string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), " " + m.countsLine()}
+	header := []string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), "", " " + m.countsLine()}
 	cols := m.listColumns()
 
 	summary := m.summaryBlock(cols)
@@ -215,28 +216,30 @@ func (m *Model) listView() string {
 	return m.frame(header, body, m.styles.Keys(keys))
 }
 
-// summaryBlock is the draft summary beside its label, two lines by default so the findings stay on screen.
+// summaryBlock is the draft summary beside its heading, two lines by default so the findings stay on screen.
 func (m *Model) summaryBlock(cols listColumns) []string {
-	const label = " Summary  "
+	const label = " SUMMARY  "
 	indent := strings.Repeat(" ", len(label))
 	hint := "tab expands"
 	if !m.summaryCollapsed {
 		hint = "tab collapses"
 	}
+	heading := " " + m.styles.Heading("summary") + "  "
 	if strings.TrimSpace(m.draft.Summary) == "" {
-		return []string{"", m.styles.Dim.Render(label + "none"), ""}
+		return []string{heading + m.styles.Dim.Render("none"), ""}
 	}
-	width := max(20, m.width-1-style.Width(hint)-2)
+	content := style.Content(m.width)
+	width := max(20, content-1-style.Width(hint)-2)
 	lines := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(m.draft.Summary)), width, indent), "\n")
 	if m.summaryCollapsed && len(lines) > 2 {
 		// The rest of the summary is truncated once, by the helper that ends it with the ellipsis itself.
 		rest := strings.TrimSpace(strings.Join(lines[1:], " "))
 		lines = []string{lines[0], indent + m.styles.TruncRight(rest, width-len(indent))}
 	}
-	lines[0] = label + strings.TrimPrefix(lines[0], indent)
+	lines[0] = heading + strings.TrimPrefix(lines[0], indent)
 	last := len(lines) - 1
-	lines[last] = style.Pad(lines[last], m.width-style.Width(hint)-1) + m.styles.Dim.Render(hint)
-	return append(append([]string{""}, lines...), "")
+	lines[last] = style.Pad(lines[last], content-style.Width(hint)-1) + m.styles.Dim.Render(hint)
+	return append(lines, "")
 }
 
 func (m *Model) columnHeads(cols listColumns) string {
@@ -251,48 +254,79 @@ func (m *Model) columnHeads(cols listColumns) string {
 }
 
 func (m *Model) row(f draft.Finding, disposition string, selected bool, cols listColumns) string {
+	// A selected row is one painted band; every piece carries the background, since a reset inside would end it.
+	paint := func(st lipgloss.Style, text string) string {
+		if selected && m.styles.Color {
+			return m.styles.On(m.styles.Selected, st).Render(text)
+		}
+		return st.Render(text)
+	}
+	plain := m.styles.R.NewStyle()
 	cursor := " "
 	if selected {
 		cursor = m.glyphs.Cursor
 	}
 	glyph, _, kind := m.styles.Disposition(disposition)
 	title := render.ForDisplay(render.OneLine(f.Title))
+	titleWidth := cols.title
 	blocking := ""
 	if f.Blocking {
-		blocking = m.glyphs.Blocking
-		title = blocking + " " + title
+		blocking = m.glyphs.Blocking + " "
+		titleWidth -= style.Width(blocking)
 	}
-	title = style.Pad(m.styles.TruncRight(title, cols.title), cols.title)
-	label := ""
-	if cols.label > 0 {
-		label = "  " + style.Pad(m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Label)), cols.label), cols.label)
-	}
-	location := ""
-	if cols.location > 0 {
-		location = "  " + m.locationColumn(f, cols)
-	}
-	lead := " " + cursor + " "
-
-	if selected {
-		// A selected row is one painted band, so nothing inside it may reset the background.
-		line := lead + glyph + " " + style.Pad(f.ID, listIDWidth) + "  " + title + label + location
-		if !m.styles.Color {
-			return strings.TrimRight(line, " ")
-		}
-		return m.styles.Selected.Render(style.Pad(line, m.width))
-	}
+	title = style.Pad(m.styles.TruncRight(title, titleWidth), titleWidth)
+	var b strings.Builder
+	b.WriteString(paint(plain, " "))
+	b.WriteString(paint(m.styles.Cursor, cursor))
+	b.WriteString(paint(plain, " "))
+	b.WriteString(paint(m.styles.Of(kind), glyph))
+	b.WriteString(paint(plain, " "))
+	b.WriteString(paint(m.styles.Accent, style.Pad(f.ID, listIDWidth)))
+	b.WriteString(paint(plain, "  "))
 	if blocking != "" {
-		title = strings.Replace(title, blocking, m.styles.Bad.Render(blocking), 1)
+		b.WriteString(paint(m.styles.Bad, blocking))
 	}
-	return lead + m.styles.Of(kind).Render(glyph) + " " + m.styles.Accent.Render(style.Pad(f.ID, listIDWidth)) + "  " +
-		title + m.styles.Dim.Render(label) + m.styles.Dim.Render(location)
+	b.WriteString(paint(plain, title))
+	if cols.label > 0 {
+		b.WriteString(paint(m.styles.Dim, "  "+style.Pad(m.labelColumn(f, cols), cols.label)))
+	}
+	if cols.location > 0 {
+		b.WriteString(paint(m.styles.Dim, "  "+m.locationColumn(f, cols)))
+	}
+	if !selected {
+		return b.String()
+	}
+	if !m.styles.Color {
+		return strings.TrimRight(b.String(), " ")
+	}
+	// The band runs to the edge of the window, past the content width.
+	return b.String() + paint(plain, strings.Repeat(" ", max(0, m.width-style.Width(b.String()))))
 }
 
-// locationColumn keeps the end of the path, which is the part that identifies the file.
+// labelColumn is the label with its icon in the tier that has one.
+func (m *Model) labelColumn(f draft.Finding, cols listColumns) string {
+	icon := m.glyphs.Label(f.Label)
+	if f.Label == "" {
+		return ""
+	}
+	if icon == "" {
+		return m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Label)), cols.label)
+	}
+	return icon + " " + m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Label)), cols.label-2)
+}
+
+// locationColumn keeps the end of the path, which is the part that identifies the file, behind the file icon.
 func (m *Model) locationColumn(f draft.Finding, cols listColumns) string {
 	text := locationText(f)
 	if cols.shortLocation && f.Location != nil {
 		text = render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
 	}
-	return m.styles.TruncLeft(text, cols.location)
+	icon := m.glyphs.File
+	if f.Location == nil {
+		icon = m.glyphs.General
+	}
+	if icon == "" {
+		return m.styles.TruncLeft(text, cols.location)
+	}
+	return icon + " " + m.styles.TruncLeft(text, cols.location-2)
 }
