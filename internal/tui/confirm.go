@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/eriksaulnier/loupe/internal/publish"
@@ -14,26 +15,61 @@ import (
 	"github.com/eriksaulnier/loupe/internal/render"
 )
 
-const confirmKeys = "y publish  v/tab toggle exact JSON  any other key cancels"
+const confirmKeys = "j/k pgup/pgdn home/end scroll  y publish  v/tab toggle exact JSON  any other key cancels"
+
+// confirmHeaderLines is the title and the position line.
+const confirmHeaderLines = 2
 
 // confirmation is the last look at a review before it is sent, shared by the review program and loupe publish.
 type confirmation struct {
 	preview  publish.Preview
 	showJSON bool
 	yes      bool
+	scroll   viewport.Model
 }
 
-// key reports whether the human answered. Only y confirms, and every key other than the toggles is an answer, so a
-// stray key can never send.
-func (c *confirmation) key(msg tea.KeyMsg) bool {
+func newConfirmation(preview publish.Preview) confirmation {
+	return confirmation{preview: preview, scroll: viewport.New(80, 10)}
+}
+
+// key reports whether the human answered. Only y confirms, and every key other than scrolling and the toggles is an
+// answer, so a stray key can never send.
+func (c *confirmation) key(m *Model, msg tea.KeyMsg) bool {
+	c.sync(m)
 	switch msg.String() {
+	case "j", "down":
+		c.scroll.ScrollDown(1)
+	case "k", "up":
+		c.scroll.ScrollUp(1)
+	case "pgdown":
+		c.scroll.PageDown()
+	case "pgup":
+		c.scroll.PageUp()
+	case "home":
+		c.scroll.GotoTop()
+	case "end":
+		c.scroll.GotoBottom()
 	case "v", "tab":
 		c.showJSON = !c.showJSON
-		return false
+		c.scroll.GotoTop()
 	case "y":
 		c.yes = true
+		return true
+	default:
+		return true
 	}
-	return true
+	return false
+}
+
+// sync lays the content out for the current window before a scroll or a render, since both depend on its line count.
+func (c *confirmation) sync(m *Model) {
+	c.scroll.Width, c.scroll.Height = m.width, m.bodyHeight(confirmHeaderLines)
+	c.scroll.SetContent(c.content(m))
+}
+
+func (c *confirmation) position() string {
+	total := c.scroll.TotalLineCount()
+	return fmt.Sprintf("lines %d-%d of %d", min(c.scroll.YOffset+1, total), min(c.scroll.YOffset+c.scroll.Height, total), total)
 }
 
 func (c *confirmation) header() string {
@@ -56,7 +92,8 @@ func (c *confirmation) content(m *Model) string {
 }
 
 func (m *Model) confirmView(c *confirmation) string {
-	return m.frame([]string{m.styles.bold.Render(c.header())}, c.content(m), confirmKeys)
+	c.sync(m)
+	return m.frame([]string{m.styles.bold.Render(c.header()), c.position()}, c.scroll.View(), confirmKeys)
 }
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
@@ -69,7 +106,7 @@ func NewConfirmModel(preview publish.Preview, getenv func(string) string, output
 	color := getenv("NO_COLOR") == ""
 	return &ConfirmModel{
 		shell:   &Model{styles: newPalette(output, color), width: 80, height: 24},
-		confirm: confirmation{preview: preview},
+		confirm: newConfirmation(preview),
 	}
 }
 
@@ -83,7 +120,7 @@ func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		c.shell.width, c.shell.height = msg.Width, msg.Height
 	case tea.KeyMsg:
-		if c.confirm.key(msg) {
+		if c.confirm.key(c.shell, msg) {
 			return c, tea.Quit
 		}
 	}
@@ -157,7 +194,7 @@ func (m *Model) startPublish() tea.Cmd {
 }
 
 func (m *Model) updateConfirm(msg tea.KeyMsg) tea.Cmd {
-	if !m.confirm.key(msg) {
+	if !m.confirm.key(m, msg) {
 		return nil
 	}
 	m.session.answers <- m.confirm.yes

@@ -179,7 +179,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, m.fail(m.layout())
 	case previewMsg:
-		m.confirm, m.view = confirmation{preview: msg.preview}, viewConfirm
+		m.confirm, m.view = newConfirmation(msg.preview), viewConfirm
 		return m, nil
 	case publishDone:
 		return m, m.publishFinished(msg)

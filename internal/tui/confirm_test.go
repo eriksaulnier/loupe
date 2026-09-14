@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
@@ -46,6 +48,35 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	}
 	if m.Confirmed() {
 		t.Fatal("confirmed without y")
+	}
+}
+
+func TestConfirmScrollsLongReview(t *testing.T) {
+	rows := make([]string, 200)
+	for i := range rows {
+		rows[i] = fmt.Sprintf("row %03d", i+1)
+	}
+	preview := publish.Preview{Body: strings.Join(rows, "\n"), EnvelopeJSON: "{}"}
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	view := m.View()
+	if !strings.Contains(view, "row 001") || strings.Contains(view, "Inline comments: 0") || !strings.Contains(view, "lines 1-20 of 202") {
+		t.Fatalf("top of a long review:\n%s", view)
+	}
+
+	keys := []tea.KeyMsg{{Type: tea.KeyEnd}, {Type: tea.KeyHome}, {Type: tea.KeyPgDown}, {Type: tea.KeyPgUp}, {Type: tea.KeyDown}, {Type: tea.KeyUp},
+		{Type: tea.KeyRunes, Runes: []rune("j")}, {Type: tea.KeyRunes, Runes: []rune("k")}, {Type: tea.KeyEnd}}
+	for _, key := range keys {
+		if _, cmd := m.Update(key); cmd != nil {
+			t.Fatalf("scroll key %v ended the program", key)
+		}
+	}
+	view = m.View()
+	if !strings.Contains(view, "Inline comments: 0") || strings.Contains(view, "row 001") || !strings.Contains(view, "lines 183-202 of 202") {
+		t.Fatalf("after end:\n%s", view)
+	}
+	if m.Confirmed() {
+		t.Fatal("a scroll key confirmed")
 	}
 }
 
