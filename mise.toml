@@ -4,6 +4,10 @@ golangci-lint = "2"
 goreleaser = "2"
 lefthook = "2"
 
+# Inside the repository, loupe resolves to this worktree's dev build rather than the installed release.
+[env]
+_.path = ["{{config_root}}/dist"]
+
 [tasks.lint]
 run = "golangci-lint run"
 
@@ -21,3 +25,8 @@ run = 'CGO_ENABLED=0 go build -ldflags "-X github.com/eriksaulnier/loupe/interna
 [tasks.demo]
 # Built rather than go run, which would turn loupe's exit codes 1 and 2 into 1.
 run = "go build -o dist/loupe-demo ./cmd/loupe-demo && dist/loupe-demo"
+
+# --plugin-dir loads the skill from the working tree for one session, so edits need no reinstall.
+[tasks.claude]
+depends = ["build"]
+run = 'claude --plugin-dir "{{config_root}}/plugin"'

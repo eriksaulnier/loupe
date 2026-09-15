@@ -47,7 +47,8 @@ loupe files pull request review findings for a human to decide and publish. `REA
 ## Commands
 
 - `mise run check` before every commit; the lefthook pre-commit hook runs it.
-- `mise run build` writes `dist/loupe`.
+- `mise run build` writes `dist/loupe`. Inside the repository mise puts `dist/` first on PATH, so `loupe` is that build, not the installed release.
+- `mise run claude` builds, then starts Claude Code with the plugin loaded from `plugin/`.
 - `mise run demo [-- <loupe args>]` runs the working tree against seeded runs and the in-memory fake GitHub (`cmd/loupe-demo`); use it for by-eye checks instead of seeding a `LOUPE_HOME` by hand. Driving it needs a terminal, so an agent captures it through tmux.
 - `scripts/check-tests.sh` greps tracked test files for pseudo-terminals, network hosts and `CreateReview` calls outside `internal/publish`.
 
