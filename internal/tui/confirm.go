@@ -187,11 +187,19 @@ func (c *confirmation) content(m *Model) string {
 	return strings.Join(parts, "\n")
 }
 
-// confirmCancel is said whole: when the footer has no room for it, it moves to the notice line rather than shrink.
+// confirmCancel is said whole: when the footer has no room for it on one line, it moves to the notice line rather than
+// shrink.
 const confirmCancel = "any other key cancels, nothing is sent"
 
 func (m *Model) confirmView(c *confirmation) string {
 	c.sync(m)
+	keys, notice := m.confirmKeys()
+	return m.frameWith([]string{c.header(m), ""}, c.scroll.View(), notice, keys)
+}
+
+// confirmKeys is the confirmation footer, and the notice line the cancel sentence moves to when the footer cannot hold
+// it on one line: the notice line is there anyway, and a second footer line would cost a row of the review.
+func (m *Model) confirmKeys() (keys, notice string) {
 	hints := []style.Hint{
 		{Key: "y", Verb: "publish this review", KeyKind: style.Good, VerbKind: style.Good},
 		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav},
@@ -199,12 +207,11 @@ func (m *Model) confirmView(c *confirmation) string {
 		{Verb: confirmCancel},
 	}
 	keys, fits := m.styles.Footer(hints, m.width-2)
-	notice := ""
-	if !fits {
+	if !fits || strings.Contains(keys, "\n") {
 		keys, _ = m.styles.Footer(hints[:len(hints)-1], m.width-2)
 		notice = " " + m.styles.Dim.Render(confirmCancel)
 	}
-	return m.frameWith([]string{c.header(m), ""}, c.scroll.View(), notice, keys)
+	return keys, notice
 }
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
@@ -216,7 +223,7 @@ type ConfirmModel struct {
 func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer, title ConfirmHeading) *ConfirmModel {
 	st := style.New(output, getenv)
 	return &ConfirmModel{
-		shell:   &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24},
+		shell:   &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24, view: viewConfirm},
 		confirm: newConfirmation(preview, title),
 	}
 }

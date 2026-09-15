@@ -627,3 +627,41 @@ func TestEditRefusesAStaleDraft(t *testing.T) {
 		t.Fatalf("finding %+v notice %q editing %v", f, m.notice, m.editing)
 	}
 }
+
+// Help and the note row have footers of their own, but closing either returns to a detail body sized for the detail
+// footer, even after a resize made while they were open.
+func TestDetailBodyIsSizedForItsOwnFooterAfterHelpOrANote(t *testing.T) {
+	dir := newFixture(t)
+	fresh := modelOf(t, dir, testEnv, 80, 24)
+	mustOpenFinding(t, fresh, "f-001")
+	fresh.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	if !strings.Contains(fresh.footerKeys(), "\n") {
+		t.Fatalf("the detail footer does not wrap at 80 columns, so this test proves nothing: %q", fresh.footerKeys())
+	}
+
+	for name, keys := range map[string][]tea.KeyMsg{
+		"help": {{Type: tea.KeyRunes, Runes: []rune("?")}},
+		"note": {{Type: tea.KeyRunes, Runes: []rune("s")}},
+	} {
+		m := modelOf(t, dir, testEnv, 80, 24)
+		mustOpenFinding(t, m, "f-001")
+		for _, k := range keys {
+			m.Update(k)
+		}
+		m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+		m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		if m.help || m.noting {
+			t.Fatalf("%s: esc did not close it", name)
+		}
+		if m.body.Height != fresh.body.Height {
+			t.Errorf("%s: detail body is %d rows after closing, want %d", name, m.body.Height, fresh.body.Height)
+		}
+	}
+}
+
+func mustOpenFinding(t *testing.T, m *Model, id string) {
+	t.Helper()
+	if err := m.openFinding(id); err != nil {
+		t.Fatal(err)
+	}
+}

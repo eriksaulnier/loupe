@@ -401,8 +401,10 @@ type Hint struct {
 	KeyKind, VerbKind Kind
 }
 
-// Footer lays hints out on one line of at most width cells, giving way step by step: the "+ next" suffixes, then
-// navigation, then the file hint with tighter gaps, then decision verbs. It reports whether the result fits.
+// Footer lays hints out on at most two lines of width cells, joined by a newline. It drops the "+ next" suffixes and
+// tightens the gaps before taking a second line, and takes a second line before giving up any hint; past that it gives
+// way step by step: navigation, then the file hint with tighter gaps, then decision verbs. It reports whether the
+// result fits.
 func (s Style) Footer(hints []Hint, width int) (string, bool) {
 	all := func(Hint) bool { return true }
 	noNav := func(h Hint) bool { return h.Role != RoleNav }
@@ -412,12 +414,15 @@ func (s Style) Footer(hints []Hint, width int) (string, bool) {
 		next     bool
 		gap      int
 		keysOnly bool
+		lines    int
 	}{
-		{all, true, 3, false},
-		{all, false, 3, false},
-		{noNav, false, 3, false},
-		{noFile, false, 2, false},
-		{noFile, false, 2, true},
+		{all, true, 3, false, 1},
+		{all, false, 3, false, 1},
+		{all, false, 2, false, 1},
+		{all, false, 3, false, 2},
+		{noNav, false, 3, false, 2},
+		{noFile, false, 2, false, 2},
+		{noFile, false, 2, true, 2},
 	}
 	var line string
 	for _, lv := range levels {
@@ -438,12 +443,40 @@ func (s Style) Footer(hints []Hint, width int) (string, bool) {
 		if len(decisions) > 0 {
 			segs[slices.Index(segs, "")] = s.Accent.Bold(true).Render(strings.Join(decisions, " "))
 		}
-		line = strings.Join(segs, strings.Repeat(" ", lv.gap))
-		if Width(line) <= width {
-			return line, true
+		gap := strings.Repeat(" ", lv.gap)
+		line = strings.Join(segs, gap)
+		if lines, ok := fillLines(segs, gap, width, lv.lines); ok {
+			return strings.Join(lines, "\n"), true
 		}
 	}
 	return line, false
+}
+
+// fillLines breaks only between segments, filling each line before starting the next.
+func fillLines(segs []string, gap string, width, most int) ([]string, bool) {
+	var lines []string
+	line := ""
+	for _, seg := range segs {
+		switch {
+		case line == "":
+			line = seg
+		case Width(line+gap+seg) <= width:
+			line += gap + seg
+		default:
+			lines = append(lines, line)
+			line = seg
+		}
+	}
+	lines = append(lines, line)
+	if len(lines) > most {
+		return nil, false
+	}
+	for _, l := range lines {
+		if Width(l) > width {
+			return nil, false
+		}
+	}
+	return lines, true
 }
 
 func (s Style) hint(h Hint, next bool) string {

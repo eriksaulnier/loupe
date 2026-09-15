@@ -473,18 +473,19 @@ func (m *Model) detailView() string {
 		style.HeaderPart{Text: f.ID, Kind: style.Dim},
 		style.HeaderPart{Text: fmt.Sprintf("%d of %d", i+1, len(m.draft.Findings))},
 	), m.headerRule()}
-	if m.noting {
-		keys := m.footer([]style.Hint{{Key: "enter", Verb: "send"}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
-		return m.frameWith(header, m.body.View(), m.noteView(), keys)
+	switch {
+	case m.noting:
+		return m.frameWith(header, m.body.View(), m.noteView(), m.footerKeys())
+	case m.editing:
+		return m.frameWith(header, m.body.View(), m.editView(), m.footerKeys())
 	}
-	if m.editing {
-		keys := m.footer([]style.Hint{{Key: "enter", Verb: "save"}, {Key: m.glyphs.Left + "/" + m.glyphs.Right, Verb: "label"},
-			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
-		return m.frameWith(header, m.body.View(), m.editView(), keys)
-	}
+	return m.frame(header, m.body.View(), m.footerKeys())
+}
+
+func (m *Model) detailHints() []style.Hint {
+	f, i := m.openedFinding()
 	_, hasOpenNote := firstOpenNote(m.draft, f.ID)
-	hints := detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote, i+1 < len(m.draft.Findings))
-	return m.frame(header, m.body.View(), m.footer(hints))
+	return detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote, i+1 < len(m.draft.Findings))
 }
 
 // detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An

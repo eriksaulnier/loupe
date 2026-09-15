@@ -140,15 +140,18 @@ func (m *Model) updateFileDiff(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) fileDiffView() string {
+	return m.frame([]string{m.fileDiffHeader(), m.headerRule()}, m.file.View(), m.footerKeys())
+}
+
+func (m *Model) fileDiffHints() []style.Hint {
 	g := m.glyphs
-	keys := m.footer([]style.Hint{
+	return []style.Hint{
 		{Key: g.Up + "/" + g.Down, Verb: "line", Role: style.RoleNav},
 		{Key: g.Left + "/" + g.Right, Verb: "finding", Role: style.RoleNav},
 		{Key: "enter", Verb: "open"},
 		{Key: "esc", Verb: "back"},
 		{Key: "?", Verb: "help", Role: style.RoleHelp},
-	})
-	return m.frame([]string{m.fileDiffHeader(), m.headerRule()}, m.file.View(), keys)
+	}
 }
 
 // fileDiffHeader leads with the file and the finding under the cursor; the path gives up its directories first, and

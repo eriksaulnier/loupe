@@ -264,11 +264,7 @@ func (m *Model) View() string {
 	case viewConfirm:
 		return m.confirmView(&m.confirm)
 	case viewPublishing:
-		keys := m.footer([]style.Hint{{Key: "ctrl+c", Verb: "quit"}})
-		if m.sending {
-			keys = m.styles.Dim.Render("keys are ignored until the outcome is recorded")
-		}
-		return m.frame([]string{m.listHeader(), m.headerRule()}, "", keys)
+		return m.frame([]string{m.listHeader(), m.headerRule()}, "", m.footerKeys())
 	}
 	return m.listView()
 }
@@ -369,8 +365,8 @@ func (m *Model) noticeLines() []string {
 
 // frameWith is frame with the notice line spelled out, for a view that puts an input there instead.
 func (m *Model) frameWith(header []string, body, notice, keys string) string {
-	noticeLines := strings.Split(notice, "\n")
-	bodyHeight := max(0, m.height-len(header)-len(noticeLines)-1)
+	noticeLines, keyLines := strings.Split(notice, "\n"), strings.Split(keys, "\n")
+	bodyHeight := max(0, m.height-len(header)-len(noticeLines)-len(keyLines))
 	bodyLines := strings.Split(body, "\n")
 	if len(bodyLines) > bodyHeight {
 		bodyLines = bodyLines[:bodyHeight]
@@ -382,7 +378,9 @@ func (m *Model) frameWith(header []string, body, notice, keys string) string {
 	lines = append(lines, header...)
 	lines = append(lines, bodyLines...)
 	lines = append(lines, noticeLines...)
-	lines = append(lines, " "+keys)
+	for _, k := range keyLines {
+		lines = append(lines, " "+k)
+	}
 	clip := m.styles.R.NewStyle().MaxWidth(m.width)
 	for i, l := range lines {
 		lines[i] = render.ForDisplayANSI(l)
@@ -394,7 +392,51 @@ func (m *Model) frameWith(header []string, body, notice, keys string) string {
 }
 
 func (m *Model) bodyHeight(headerLines int) int {
-	return max(1, m.height-headerLines-len(m.noticeLines())-1)
+	return m.bodyHeightOver(headerLines, m.viewFooter())
+}
+
+// bodyHeightOver sizes a body against the footer under it, as it is against the notice, so a footer that wraps takes
+// a row from the body rather than hiding the body's last row.
+func (m *Model) bodyHeightOver(headerLines int, footer string) int {
+	return max(1, m.height-headerLines-len(m.noticeLines())-strings.Count(footer, "\n")-1)
+}
+
+// footerKeys is the footer on screen: help's, or the note or edit row's, over the view's own.
+func (m *Model) footerKeys() string {
+	switch {
+	case m.help:
+		return m.footer(m.helpHints(true))
+	case m.view == viewDetail && m.noting:
+		return m.footer([]style.Hint{{Key: "enter", Verb: "send"}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
+	case m.view == viewDetail && m.editing:
+		return m.footer([]style.Hint{{Key: "enter", Verb: "save"}, {Key: m.glyphs.Left + "/" + m.glyphs.Right, Verb: "label"},
+			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
+	}
+	return m.viewFooter()
+}
+
+// viewFooter is the view's own footer, which its body is sized against. Help and the note and edit rows come and go
+// without a layout, so a body sized against theirs would be wrong once they close.
+func (m *Model) viewFooter() string {
+	switch m.view {
+	case viewDetail:
+		return m.footer(m.detailHints())
+	case viewFileDiff:
+		return m.footer(m.fileDiffHints())
+	case viewAction:
+		return m.footer(m.publishStepHints(actionEnter))
+	case viewInline:
+		return m.footer(m.publishStepHints(inlineEnter))
+	case viewConfirm:
+		keys, _ := m.confirmKeys()
+		return keys
+	case viewPublishing:
+		if m.sending {
+			return m.styles.Dim.Render("keys are ignored until the outcome is recorded")
+		}
+		return m.footer([]style.Hint{{Key: "ctrl+c", Verb: "quit"}})
+	}
+	return m.footer(m.listHints())
 }
 
 // helpKey is one row of help: the primary key, what it does, and the compatibility alias when there is one.
@@ -456,20 +498,31 @@ var everywhere = helpSection{"Everywhere", []helpKey{
 // views: in two columns when every row fits one, otherwise in one column that scrolls.
 func (m *Model) helpView() string {
 	lines := m.helpLines()
-	height := m.bodyHeight(helpHeaderLines)
+	height := m.helpHeight()
 	top := min(m.helpTop, max(0, len(lines)-height))
 	right := m.readiness()
-	var hints []style.Hint
 	if len(lines) > height {
 		right = m.styles.Dim.Render(fmt.Sprintf("lines %d%s%d of %d", top+1, m.sign("\u2013", "-"), min(top+height, len(lines)), len(lines)))
-		hints = append(hints, style.Hint{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav})
 	}
-	hints = append(hints, style.Hint{Key: "? or esc", Verb: "close help", Role: style.RoleHelp})
+	hints := m.helpHints(len(lines) > height)
 	header := m.styles.Header([]style.HeaderPart{
 		{Text: strings.TrimSpace(m.glyphs.Help + " Keys"), Bold: true},
 		{Text: "from " + strings.ToLower(m.helpCurrent().title), Drop: 1, Kind: style.Dim},
 	}, right, m.width)
 	return m.frame([]string{header, m.headerRule()}, strings.Join(lines[top:], "\n"), m.footer(hints))
+}
+
+// helpHeight sizes help against its footer as if help scrolls, since whether it does depends on this height.
+func (m *Model) helpHeight() int {
+	return m.bodyHeightOver(helpHeaderLines, m.footer(m.helpHints(true)))
+}
+
+func (m *Model) helpHints(scrolls bool) []style.Hint {
+	var hints []style.Hint
+	if scrolls {
+		hints = append(hints, style.Hint{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav})
+	}
+	return append(hints, style.Hint{Key: "? or esc", Verb: "close help", Role: style.RoleHelp})
 }
 
 // helpCurrentView is the view whose keys help leads with; both publish steps share one section.
@@ -565,7 +618,7 @@ func (m *Model) helpRow(k helpKey, keyWidth int) string {
 }
 
 func (m *Model) updateHelp(msg tea.KeyMsg) {
-	lines, height := len(m.helpLines()), m.bodyHeight(helpHeaderLines)
+	lines, height := len(m.helpLines()), m.helpHeight()
 	last := max(0, lines-height)
 	m.helpTop = min(m.helpTop, last)
 	switch msg.String() {

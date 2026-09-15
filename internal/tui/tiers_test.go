@@ -31,7 +31,8 @@ func withOpenNote(t *testing.T, dir string) {
 	}
 }
 
-// screen is one full-screen view and the footer tokens it must keep at every width.
+// screen is one full-screen view and the footer tokens it must keep at every width. The footer wraps to a second line
+// before it gives a hint up, so at 60 columns and wider every hint these screens show stays.
 type screen struct {
 	name string
 	show func(*Model)
@@ -39,8 +40,8 @@ type screen struct {
 }
 
 var screens = []screen{
-	{"list", func(m *Model) {}, []string{"enter", "p", "publish", "?", "help"}},
-	{"detail pending", func(m *Model) { mustOpen(m, "f-001") }, []string{"a", "x", "s", "?", "help"}},
+	{"list", func(m *Model) {}, []string{"move", "enter", "p", "publish", "tab", "summary", "?", "help", "q", "quit"}},
+	{"detail pending", func(m *Model) { mustOpen(m, "f-001") }, []string{"finding", "scroll", "a", "x", "s", "f", "file", "?", "help"}},
 	{"detail excluded general", func(m *Model) { mustOpen(m, "f-003") }, []string{"u", "?", "help"}},
 	{"detail open note", func(m *Model) { mustOpen(m, "f-002") }, []string{"r", "d", "?", "help"}},
 	{"file diff", func(m *Model) { mustOpen(m, "f-001"); f, _ := m.openedFinding(); m.openFileDiff(f) }, []string{"enter", "esc", "?", "help"}},
@@ -116,13 +117,14 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 				if w := style.Width(lines[0]); w != width || (right != "" && !strings.HasSuffix(strings.TrimRight(lines[0], " "), strings.TrimRight(right, " "))) {
 					t.Errorf("%s: header is %d cells or lost its right edge %q:\n%q", where, w, right, lines[0])
 				}
-				footer := strings.Fields(ansi.Strip(lines[len(lines)-1]))
+				last := strings.Join(lines[len(lines)-2:], "\n")
+				footer := strings.Fields(ansi.Strip(last))
 				for _, k := range sc.keys {
 					if !slices.Contains(footer, k) {
-						t.Errorf("%s: footer lacks %q: %q", where, k, lines[len(lines)-1])
+						t.Errorf("%s: footer lacks %q: %q", where, k, last)
 					}
 				}
-				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-2:], "\n")), confirmCancel) {
+				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-3:], "\n")), confirmCancel) {
 					t.Errorf("%s: the cancel sentence is not on screen:\n%s", where, strings.Join(lines, "\n"))
 				}
 				// A rule of the window's width closes the header block on every screen but the confirmation, whose body

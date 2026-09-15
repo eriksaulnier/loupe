@@ -175,7 +175,7 @@ func TestHeaderDropsInOrderAndFillsTheWidth(t *testing.T) {
 	}
 }
 
-func TestFooterGivesWayStepByStep(t *testing.T) {
+func TestFooterWrapsBeforeGivingWay(t *testing.T) {
 	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
 	hints := []Hint{
 		{Key: "←/→", Verb: "finding", Role: RoleNav},
@@ -186,20 +186,33 @@ func TestFooterGivesWayStepByStep(t *testing.T) {
 		{Key: "f", Verb: "file", Role: RoleFile},
 		{Key: "?", Verb: "help", Role: RoleHelp},
 	}
-	steps := []string{
-		"←/→ finding   ↑/↓ scroll   a accept + next   x exclude + next   s send back + next   f file   ? help",
-		"←/→ finding   ↑/↓ scroll   a accept   x exclude   s send back   f file   ? help",
-		"a accept   x exclude   s send back   f file   ? help",
-		"a accept  x exclude  s send back  ? help",
-		"a x s  ? help",
-	}
-	for i, want := range steps {
-		got, fits := s.Footer(hints, Width(want))
-		if got != want || !fits {
-			t.Errorf("step %d: footer %q (fits %v), want %q", i+1, got, fits, want)
+	for _, c := range []struct {
+		width int
+		want  string
+	}{
+		{100, "←/→ finding   ↑/↓ scroll   a accept + next   x exclude + next   s send back + next   f file   ? help"},
+		// The "+ next" suffixes go, then the wide gaps, before the footer takes a second line.
+		{99, "←/→ finding   ↑/↓ scroll   a accept   x exclude   s send back   f file   ? help"},
+		{78, "←/→ finding  ↑/↓ scroll  a accept  x exclude  s send back  f file  ? help"},
+		// Every hint stays, over two lines, before any is given up.
+		{72, "←/→ finding   ↑/↓ scroll   a accept   x exclude   s send back   f file\n? help"},
+		{46, "←/→ finding   ↑/↓ scroll   a accept\nx exclude   s send back   f file   ? help"},
+		// Two lines too narrow for every hint give way in order: navigation, the file hint, decision verbs.
+		{40, "a accept   x exclude   s send back\nf file   ? help"},
+		{28, "a accept  x exclude\ns send back  ? help"},
+		{13, "a x s  ? help"},
+		{12, "a x s\n? help"},
+	} {
+		if got, fits := s.Footer(hints, c.width); got != c.want || !fits {
+			t.Errorf("width %d: footer %q (fits %v), want %q", c.width, got, fits, c.want)
+		}
+		for _, line := range strings.Split(c.want, "\n") {
+			if Width(line) > c.width {
+				t.Errorf("width %d: want line %q is wider than the footer", c.width, line)
+			}
 		}
 	}
-	if got, fits := s.Footer(hints, 5); fits || got != steps[4] {
+	if got, fits := s.Footer(hints, 5); fits || got != "a x s  ? help" {
 		t.Errorf("too narrow: %q fits %v", got, fits)
 	}
 }

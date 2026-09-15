@@ -207,7 +207,7 @@ The list footer MUST show `p publish` at all times; while the draft is not ready
 
 Compatibility aliases MUST appear in help but SHOULD NOT consume space in the persistent footer.
 
-When all hints do not fit, the footer MUST preserve currently available decision actions and `? help` before optional navigation prose.
+When all hints do not fit on one line, the footer MUST drop the `+ next` suffixes and tighten its gaps, then wrap onto a second line between hints, before it gives up any hint. Only when two lines cannot hold every hint does it give way, and then it MUST preserve currently available decision actions and `? help` before optional navigation prose. Every body MUST be sized against its own view's footer, so a wrapped footer takes a row from the body rather than hiding the body's last row; help and the note and edit rows, which open and close without a layout, MUST NOT change that size. The confirmation keeps a one-line footer and moves its cancel sentence to the notice line instead, since that line is reserved anyway. Plain mode's answer legend wraps the same way. (Amended 2026-09-15: a review split beside an agent pane is about 71 columns wide, where a one-line footer dropped `q quit` and arrow navigation.)
 
 Representative pending-finding footer:
 

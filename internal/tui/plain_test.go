@@ -13,7 +13,7 @@ import (
 )
 
 // plainPrompt is the answer legend, which is printed once before every prompt.
-const plainPrompt = "a accept  x exclude"
+const plainPrompt = "a accept   x exclude"
 
 // lineReader hands out one line per Read and runs before[i] just before line i is read, standing in for an agent
 // acting while the human reads.

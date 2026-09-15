@@ -104,7 +104,7 @@ func (m *Model) actionView() string {
 		}
 		rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action])...)
 	}
-	return m.publishStep(1, "", "Review action", rows, "next")
+	return m.publishStep(1, "", "Review action", rows, actionEnter)
 }
 
 var inlineDescriptions = map[string]string{
@@ -118,7 +118,7 @@ func (m *Model) inlineView() string {
 	for i, mode := range publish.InlineModes {
 		rows = append(rows, m.pickerRow(i == m.pick, false, mode, inlineDescriptions[mode])...)
 	}
-	return m.publishStep(2, m.action, "Inline comments", rows, "compose the review")
+	return m.publishStep(2, m.action, "Inline comments", rows, inlineEnter)
 }
 
 // publishStep is one step of the publish choice as an ordinary screen: where it sits in the flow, what it asks, and
@@ -131,13 +131,22 @@ func (m *Model) publishStep(step int, action, question string, rows []string, en
 		style.HeaderPart{Text: m.prRef(), Drop: 2, Kind: style.Dim},
 	)
 	body := append([]string{" " + m.styles.Bold.Render(question), ""}, rows...)
-	keys := m.footer([]style.Hint{
+	return m.frame([]string{header, m.headerRule()}, strings.Join(body, "\n"), m.footer(m.publishStepHints(enter)))
+}
+
+// actionEnter and inlineEnter are what enter does on each publish step.
+const (
+	actionEnter = "next"
+	inlineEnter = "compose the review"
+)
+
+func (m *Model) publishStepHints(enter string) []style.Hint {
+	return []style.Hint{
 		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "move", Role: style.RoleNav},
 		{Key: "enter", Verb: enter},
 		{Key: "esc", Verb: "back"},
 		{Key: "?", Verb: "help", Role: style.RoleHelp},
-	})
-	return m.frame([]string{header, m.headerRule()}, strings.Join(body, "\n"), keys)
+	}
 }
 
 // pickerIndent is where a choice's description starts, and where its wrapped lines continue.
@@ -215,18 +224,18 @@ func (m *Model) listView() string {
 		rows = append(rows, m.row(f, dispositions[f.ID], notes, i == m.cursor, cols))
 	}
 	body := strings.Join(append(summary, rows...), "\n")
+	return m.frame(header, body, m.footerKeys())
+}
 
-	hints := []style.Hint{
+func (m *Model) listHints() []style.Hint {
+	return []style.Hint{
 		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "move", Role: style.RoleNav},
 		{Key: "enter", Verb: "open"},
-	}
-	hints = append(hints,
 		m.publishHint(),
-		style.Hint{Key: "tab", Verb: "summary", Role: style.RoleNav},
-		style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp},
-		style.Hint{Key: "q", Verb: "quit", Role: style.RoleNav},
-	)
-	return m.frame(header, body, m.footer(hints))
+		{Key: "tab", Verb: "summary", Role: style.RoleNav},
+		{Key: "?", Verb: "help", Role: style.RoleHelp},
+		{Key: "q", Verb: "quit", Role: style.RoleNav},
+	}
 }
 
 // publishHint stays on the footer while the draft is not ready, so the human knows p exists. The header already names

@@ -322,3 +322,28 @@ func TestListHeaderKeepsThePullRequestNumber(t *testing.T) {
 		t.Errorf("header %q", header)
 	}
 }
+
+// A split beside an agent pane is about 71 columns: the footer takes a second line rather than drop quit, and the list
+// gives up a row for it, so the selected finding stays on screen at every height. Heights under 12 make the fixture's
+// three findings scroll.
+func TestListFooterWrapsAndKeepsTheCursorRow(t *testing.T) {
+	dir := newFixture(t)
+	for height := 10; height <= 20; height++ {
+		m := modelOf(t, dir, testEnv, 71, height)
+		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		lines := strings.Split(ansi.Strip(m.View()), "\n")
+		if len(lines) != height {
+			t.Fatalf("height %d: %d lines", height, len(lines))
+		}
+		footer := strings.Join(lines[len(lines)-2:], "\n")
+		for _, want := range []string{"move", "q quit", "? help"} {
+			if !strings.Contains(footer, want) {
+				t.Errorf("height %d: footer lacks %q:\n%s", height, want, footer)
+			}
+		}
+		if !strings.Contains(strings.Join(lines, "\n"), "Title three") {
+			t.Errorf("height %d: the selected last finding is not on screen:\n%s", height, strings.Join(lines, "\n"))
+		}
+	}
+}
