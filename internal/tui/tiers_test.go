@@ -112,6 +112,22 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-2:], "\n")), confirmCancel) {
 					t.Errorf("%s: the cancel sentence is not on screen:\n%s", where, strings.Join(lines, "\n"))
 				}
+				// A rule of the window's width closes the header block on every screen but the confirmation, whose body
+				// opens with titled rules of its own.
+				rule := strings.Repeat(m.glyphs.HRule, width/style.Width(m.glyphs.HRule))
+				ruled := -1
+				for i, l := range lines[:min(4, len(lines))] {
+					if ansi.Strip(l) == rule {
+						ruled = i
+						break
+					}
+				}
+				switch {
+				case sc.name == "confirmation" && ruled >= 0:
+					t.Errorf("%s: the confirmation stacks a header rule on its own rules:\n%s", where, strings.Join(lines, "\n"))
+				case sc.name != "confirmation" && (ruled < 1 || strings.TrimSpace(ansi.Strip(lines[ruled-1])) == ""):
+					t.Errorf("%s: no rule directly under the header block:\n%s", where, strings.Join(lines[:min(5, len(lines))], "\n"))
+				}
 				if view := strings.Join(lines, "\n"); strings.ContainsAny(view, "\ue0b0\ue0b1\ue0b2\ue0b3") {
 					t.Errorf("%s: a powerline divider is drawn", where)
 				}

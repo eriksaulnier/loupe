@@ -299,6 +299,7 @@ The explanation of stale-version protection MUST remain present.
 
 These follow the agreed mockup and stay within the intent of the sections above.
 
+- A dim horizontal rule the width of the window closes the header block of every full-screen view except the final confirmation, whose review opens with titled rules of its own. It takes the place of the blank line under the header where a view had one; the list and the file diff give up one row for it.
 - Finding identifiers stay visible but quiet: list ids are dim, and a selected row bolds its title in the accent rather than its id. The detail header shows the id dim beside its position.
 - The file diff marks a line carrying a finding with a one-cell glyph (`◆`, ASCII `*`) instead of the identifier, and its header names the finding under the cursor, with `+N` when the line carries more.
 - The list's counts line keeps three-space gaps when it fits; narrower, zero counts drop and the gaps shrink to two; if it still does not fit, it splits over two lines and the header grows with it.

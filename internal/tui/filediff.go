@@ -13,7 +13,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-const fileDiffHeaderLines = 1
+// fileDiffHeaderLines is the header and its rule.
+const fileDiffHeaderLines = 2
 
 func (m *Model) openFileDiff(open draft.Finding) {
 	right, left := map[int][]string{}, map[int][]string{}
@@ -147,7 +148,7 @@ func (m *Model) fileDiffView() string {
 		{Key: "esc", Verb: "back"},
 		{Key: "?", Verb: "help", Role: style.RoleHelp},
 	})
-	return m.frame([]string{m.fileDiffHeader()}, m.file.View(), keys)
+	return m.frame([]string{m.fileDiffHeader(), m.headerRule()}, m.file.View(), keys)
 }
 
 // fileDiffHeader leads with the file and the finding under the cursor; the path gives up its directories first, and

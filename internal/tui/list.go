@@ -130,14 +130,14 @@ func (m *Model) publishStep(step int, action, question string, rows []string, en
 		style.HeaderPart{Text: action, Drop: 1},
 		style.HeaderPart{Text: m.prRef(), Drop: 2, Kind: style.Dim},
 	)
-	body := append([]string{"", " " + m.styles.Bold.Render(question), ""}, rows...)
+	body := append([]string{" " + m.styles.Bold.Render(question), ""}, rows...)
 	keys := m.footer([]style.Hint{
 		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "move", Role: style.RoleNav},
 		{Key: "enter", Verb: enter},
 		{Key: "esc", Verb: "back"},
 		{Key: "?", Verb: "help", Role: style.RoleHelp},
 	})
-	return m.frame([]string{header}, strings.Join(body, "\n"), keys)
+	return m.frame([]string{header, m.headerRule()}, strings.Join(body, "\n"), keys)
 }
 
 // pickerIndent is where a choice's description starts, and where its wrapped lines continue.
@@ -199,7 +199,7 @@ func (m *Model) listColumns() listColumns {
 }
 
 func (m *Model) listView() string {
-	header := append([]string{m.listHeader()}, m.countsLines()...)
+	header := append(append([]string{m.listHeader()}, m.countsLines()...), m.headerRule())
 	cols := m.listColumns()
 
 	summary := m.summaryBlock(cols)

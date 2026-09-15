@@ -15,7 +15,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-const detailHeaderLines = 1
+// detailHeaderLines is the header and its rule.
+const detailHeaderLines = 2
 
 func (m *Model) openFinding(id string) error {
 	m.view, m.openID, m.noting, m.settling = viewDetail, id, false, false
@@ -46,7 +47,7 @@ func (m *Model) refreshDetail() error {
 	if err != nil {
 		return err
 	}
-	doc := []string{""}
+	var doc []string
 	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), style.Content(m.width)-1, " "), "\n") {
 		doc = append(doc, m.styles.Bold.Render(line))
 	}
@@ -313,7 +314,7 @@ func (m *Model) detailView() string {
 	header := []string{m.header(
 		style.HeaderPart{Text: f.ID, Kind: style.Dim},
 		style.HeaderPart{Text: fmt.Sprintf("%d of %d", i+1, len(m.draft.Findings))},
-	)}
+	), m.headerRule()}
 	if m.noting {
 		keys := m.footer([]style.Hint{{Key: "enter", Verb: "send"}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
 		return m.frameWith(header, m.body.View(), " "+m.note.View(), keys)

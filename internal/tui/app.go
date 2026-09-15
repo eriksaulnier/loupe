@@ -237,7 +237,7 @@ func (m *Model) View() string {
 		if m.sending {
 			keys = m.styles.Dim.Render("keys are ignored until the outcome is recorded")
 		}
-		return m.frame([]string{m.listHeader(), ""}, "", keys)
+		return m.frame([]string{m.listHeader(), m.headerRule()}, "", keys)
 	}
 	return m.listView()
 }
@@ -421,7 +421,7 @@ var everywhere = helpSection{"Everywhere", []helpKey{
 // views: in two columns when every row fits one, otherwise in one column that scrolls.
 func (m *Model) helpView() string {
 	lines := m.helpLines()
-	height := m.bodyHeight(1)
+	height := m.bodyHeight(helpHeaderLines)
 	top := min(m.helpTop, max(0, len(lines)-height))
 	right := m.readiness()
 	var hints []style.Hint
@@ -434,7 +434,7 @@ func (m *Model) helpView() string {
 		{Text: strings.TrimSpace(m.glyphs.Help + " Keys"), Bold: true},
 		{Text: "from " + strings.ToLower(m.helpCurrent().title), Drop: 1, Kind: style.Dim},
 	}, right, m.width)
-	return m.frame([]string{header}, strings.Join(lines[top:], "\n"), m.footer(hints))
+	return m.frame([]string{header, m.headerRule()}, strings.Join(lines[top:], "\n"), m.footer(hints))
 }
 
 // helpCurrentView is the view whose keys help leads with; both publish steps share one section.
@@ -497,8 +497,7 @@ func (m *Model) helpLines() []string {
 			body = append(body, strings.TrimRight(" "+m.styles.TruncRight(l, content-1), " "))
 		}
 	}
-	lines := append([]string{""}, body...)
-	lines = append(lines, "")
+	lines := append(body, "")
 	stale := m.styles.Wrap("Decisions are recorded against the draft version on screen. If the draft changed meanwhile, "+
 		"nothing is recorded and the current version is shown instead.", content-1, " ")
 	for _, l := range strings.Split(stale, "\n") {
@@ -531,7 +530,7 @@ func (m *Model) helpRow(k helpKey, keyWidth int) string {
 }
 
 func (m *Model) updateHelp(msg tea.KeyMsg) {
-	lines, height := len(m.helpLines()), m.bodyHeight(1)
+	lines, height := len(m.helpLines()), m.bodyHeight(helpHeaderLines)
 	last := max(0, lines-height)
 	m.helpTop = min(m.helpTop, last)
 	switch msg.String() {
@@ -547,6 +546,13 @@ func (m *Model) updateHelp(msg tea.KeyMsg) {
 		m.helpTop = max(m.helpTop-height, 0)
 	}
 }
+
+// helpHeaderLines is the header and its rule.
+const helpHeaderLines = 2
+
+// headerRule closes the header block of every screen but the confirmation, whose body opens with titled rules. It
+// is dim, so it reads as an edge rather than a pane border.
+func (m *Model) headerRule() string { return m.styles.Rule(m.width, "", "") }
 
 // header is the flat line every view opens with, readiness at its right edge.
 func (m *Model) header(parts ...style.HeaderPart) string {
