@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Fails when tests could reach a real terminal or network, or when a review could be posted from outside the one path
-# that records an attempt first. git grep sees only tracked and staged files, so a new file must be added to be checked.
+# Fails when tests could reach a real terminal or network, when a review could be posted from outside the one path
+# that records an attempt first, or when the binary names Herdr. git grep sees only tracked and staged files, so a new
+# file must be added to be checked.
 #
 # The greps guard against honest mistakes in tests, not an adversary: a pseudo-terminal reached through an
 # interpreter (python3 -c, sh -c) or a command name that is not a literal passes them. The go list -deps check of the
@@ -127,6 +128,13 @@ sends=$(tracked_grep -cw 'CreateReview' -- internal/publish/publish.go)
 sends=${sends##*:}
 if [ "${sends:-0}" != 1 ]; then
 	violation "internal/publish/publish.go MUST reference CreateReview exactly once:" "found ${sends:-0}"
+fi
+
+# Herdr belongs to the plugin's skill text, never the binary (constitution I). Tests are excluded because they pin that
+# text.
+herdr=$(tracked_grep -niI 'herdr' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go')
+if [ -n "$herdr" ]; then
+	violation "the loupe binary MUST NOT name Herdr:" "$herdr"
 fi
 
 exit "$failed"
