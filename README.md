@@ -36,7 +36,7 @@ codex plugin marketplace add eriksaulnier/loupe
 codex plugin add loupe@loupe
 
 # Pi, pinned to the release; use the version loupe --version prints
-pi install git:github.com/eriksaulnier/loupe@v0.4.0 # x-release-please-version
+pi install git:github.com/eriksaulnier/loupe@v0.5.0 # x-release-please-version
 ```
 
 Claude Code and Codex install the plugin from `main` while the binary is a release, so a skill can name a flag your binary lacks. Update both together. While the repository is private, Codex and Pi clone it with git, which needs credentials for github.com, such as those `gh auth setup-git` configures.

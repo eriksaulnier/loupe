@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0](https://github.com/eriksaulnier/loupe/compare/v0.4.0...v0.5.0) (2026-09-15)
+
+
+### Features
+
+* add loupe handoff and ship the plugin to codex and pi ([#14](https://github.com/eriksaulnier/loupe/issues/14)) ([1423482](https://github.com/eriksaulnier/loupe/commit/1423482b65a2eaa618d8f9a15d8b94dcfa8e58e5))
+* **render:** drop the blocking callout and body finding dots ([0bf49fe](https://github.com/eriksaulnier/loupe/commit/0bf49fed3abec62d13eaccfd0b62c7559ea55f44))
+* **tui:** edit a finding's label and blocking in review ([#11](https://github.com/eriksaulnier/loupe/issues/11)) ([0d5b39c](https://github.com/eriksaulnier/loupe/commit/0d5b39c2226402e1f0ad4249eb210627f45ac284))
+
+
+### Bug Fixes
+
+* **tui:** drop keys typed as review opens ([#12](https://github.com/eriksaulnier/loupe/issues/12)) ([9401114](https://github.com/eriksaulnier/loupe/commit/9401114c04641f91345b3a80d7492e44ac1edbd8))
+* **tui:** wrap the footer to two lines before dropping hints ([#13](https://github.com/eriksaulnier/loupe/issues/13)) ([d9666ec](https://github.com/eriksaulnier/loupe/commit/d9666ec2f6a7c7b232bcba71f93dbe2587db5df2))
+
 ## [0.4.0](https://github.com/eriksaulnier/loupe/compare/v0.3.0...v0.4.0) (2026-09-15)
 
 
