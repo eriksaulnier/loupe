@@ -63,6 +63,6 @@ These cannot be checked in this repository and remain for the owner:
 - Installing a release binary on a clean machine.
 - Loading the plugin in Claude Code.
 - A multi-hour `loupe wait` under a persistent Claude Code Monitor, and the session waking when it prints.
-- A full `/loupe` round inside Herdr against a named pull request: the agent opens review in a split, the human sends notes back, the agent opens a fresh split, and the human publishes from it (specs/003-herdr-handoff FR-020).
+- The Herdr handoff beyond one walk (specs/003-herdr-handoff FR-020). A full `/loupe` round on `eriksaulnier/loupe-probe#1` was walked on 2026-09-15 under zsh: review opened in a focused split below the agent pane, a send-back note woke the agent, which replied and opened a fresh split, and publishing from a split ended the run. Still unchecked: a `right` split from a pane at least 120 columns wide, a `loupe review` refusal leaving its pane open, and shells other than zsh.
 
 Also untested: a real SIGINT, SIGTERM or SIGHUP during a send (the hold is tested through an injected hook), end of input in the full-screen confirmation, and a CLI-level test of `--retry-unknown` finding the earlier review (covered by the publish unit test).
