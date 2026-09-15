@@ -107,6 +107,8 @@ type Model struct {
 	// settling is true right after a decision moved the view; decision keys are dropped until the new finding has
 	// had time to be seen.
 	settling bool
+	// opening is true from the program's start until settleOnOpen has passed; every key but ctrl+c is dropped.
+	opening bool
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -161,7 +163,20 @@ func New(cfg Config) (*Model, error) {
 // Err is the failure that ended the program, if any; refusals during review are notices, not errors.
 func (m *Model) Err() error { return m.err }
 
-func (m *Model) Init() tea.Cmd { return nil }
+// settleOnOpen is how long keys are dropped after the program starts: a multiplexer can open review in a split that
+// takes focus while the human is still typing into the pane beside it. It is shorter than reading the list. Tests set
+// it to zero.
+var settleOnOpen = 500 * time.Millisecond
+
+type openedMsg struct{}
+
+func (m *Model) Init() tea.Cmd {
+	if settleOnOpen <= 0 {
+		return nil
+	}
+	m.opening = true
+	return tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} })
+}
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -178,7 +193,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case settledMsg:
 		m.settling = false
 		return m, nil
+	case openedMsg:
+		m.opening = false
+		return m, nil
 	case tea.KeyMsg:
+		if m.opening && msg.Type != tea.KeyCtrlC {
+			return m, nil
+		}
 		// The confirmation comes first so that ctrl+c, like every key but y and the toggles, declines.
 		if m.view == viewConfirm {
 			return m, m.updateConfirm(msg)

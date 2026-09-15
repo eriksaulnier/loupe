@@ -51,6 +51,7 @@ A human runs `/loupe <pr-url>` in Claude Code inside Herdr. When the agent has f
 - **Two review panes on one run.** A human opens review in another terminal while an agent-opened pane is already showing the same run. Both are ordinary `loupe review` processes; the existing lock and stale-version protection govern them and no new handling is added.
 - **Narrow agent pane.** The split direction MUST leave the review pane at least the 60 by 12 cells spec 002 requires where the agent pane allows it: split right when the agent pane is wide enough, down otherwise.
 - **Human is elsewhere in Herdr.** Opening the split moves focus to it even if the human is looking at another pane in the tab. Handoff is the moment the agent needs the human, so this is intended.
+- **Typing when the split opens.** The split can take focus while the human is still typing into the agent pane. `loupe review` MUST drop keys that arrive within 500 milliseconds of its start, so typeahead cannot open a finding, decide it or quit. Ctrl+C still ends review at once. The guard names no multiplexer (FR-017).
 - **Several agents.** Each agent opens splits beside its own pane only, never beside the UI-focused pane of another client.
 
 ## Requirements *(mandatory)*

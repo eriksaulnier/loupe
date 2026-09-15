@@ -12,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/muesli/termenv"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
@@ -352,9 +353,10 @@ func TestDecisionOpensTheNextFinding(t *testing.T) {
 	}
 }
 
-// Decision keys settle instantly in tests; TestTypeaheadDoesNotDecideAnUnseenFinding raises the delay on purpose.
+// Keys settle instantly in tests; the tests of the settle windows raise the delays on purpose.
 func TestMain(m *testing.M) {
 	settleAfterDecision = 0
+	settleOnOpen = 0
 	os.Exit(m.Run())
 }
 
@@ -379,6 +381,41 @@ func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
 	if _, decided := d.Decisions["f-002"]; decided {
 		t.Fatalf("a typeahead key decided f-002 before it was shown: %+v", d.Decisions["f-002"])
 	}
+}
+
+func TestKeysTypedAsReviewOpensAreDropped(t *testing.T) {
+	// Longer than the test, so only the openedMsg sent below ends the window.
+	settleOnOpen = time.Hour
+	defer func() { settleOnOpen = 0 }()
+	dir := newFixture(t)
+	tm := startApp(t, dir)
+	waitFor(t, tm, "Title one")
+
+	// Typed into the pane beside review before review took focus: Enter would open f-001, a accept it, q quit.
+	key(tm, tea.KeyEnter)
+	tm.Type("aq")
+	// openedMsg queues behind the keys on the program's one message channel, so they all land inside the window.
+	tm.Send(openedMsg{})
+	tm.Type("q")
+	final, ok := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(*Model)
+	if !ok {
+		t.Fatal("final model is not *Model")
+	}
+	if final.view != viewList {
+		t.Fatalf("a key typed as review opened moved the view to %v", final.view)
+	}
+	if d := loadDraft(t, dir); len(d.Decisions) != 0 {
+		t.Fatalf("a key typed as review opened recorded a decision: %+v", d.Decisions)
+	}
+}
+
+func TestCtrlCQuitsAsReviewOpens(t *testing.T) {
+	settleOnOpen = time.Hour
+	defer func() { settleOnOpen = 0 }()
+	tm := startApp(t, newFixture(t))
+	waitFor(t, tm, "Title one")
+	key(tm, tea.KeyCtrlC)
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }
 
 // A hyphen is a break point in the body's word wrap; a wrap that does not count it strands a word on its own line.
