@@ -7,6 +7,7 @@ loupe files pull request review findings for a human to decide and publish. `REA
 | Path | What it is |
 | :--- | :--- |
 | `cmd/loupe` | The binary's `main` |
+| `cmd/loupe-demo` | An unreleased `main` that runs loupe on seeded runs against the fake GitHub |
 | `internal/cli` | Maps loupe's commands onto cobra and turns domain results and refusals into the output contract |
 | `internal/diff` | The parsed `pr.diff` that both location validation and the review interface read |
 | `internal/draft` | The review draft: findings, human decisions, send-back notes and replies |
@@ -47,6 +48,7 @@ loupe files pull request review findings for a human to decide and publish. `REA
 
 - `mise run check` before every commit; the lefthook pre-commit hook runs it.
 - `mise run build` writes `dist/loupe`.
+- `mise run demo [-- <loupe args>]` runs the working tree against seeded runs and the in-memory fake GitHub (`cmd/loupe-demo`); use it for by-eye checks instead of seeding a `LOUPE_HOME` by hand. Driving it needs a terminal, so an agent captures it through tmux.
 - `scripts/check-tests.sh` greps tracked test files for pseudo-terminals, network hosts and `CreateReview` calls outside `internal/publish`.
 
 ## Unverified by design

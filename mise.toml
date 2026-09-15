@@ -16,3 +16,8 @@ run = "go vet ./... && golangci-lint run && ./scripts/check-tests.sh && go test 
 # The version is stamped in so a build reports what it came from rather than "dev".
 [tasks.build]
 run = 'CGO_ENABLED=0 go build -ldflags "-X github.com/eriksaulnier/loupe/internal/cli.version=$(git describe --tags --always --dirty)" -o dist/loupe ./cmd/loupe'
+
+# Seeded runs and an in-memory GitHub, for trying the review interface and publish by hand; see cmd/loupe-demo.
+[tasks.demo]
+# Built rather than go run, which would turn loupe's exit codes 1 and 2 into 1.
+run = "go build -o dist/loupe-demo ./cmd/loupe-demo && dist/loupe-demo"

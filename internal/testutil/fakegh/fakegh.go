@@ -87,7 +87,14 @@ type Server struct {
 
 func New(t *testing.T) *Server {
 	t.Helper()
-	s := &Server{
+	s, stop := Start()
+	t.Cleanup(stop)
+	return s
+}
+
+// Start serves the fake outside a test, for the demo program; stop closes the listener.
+func Start() (s *Server, stop func()) {
+	s = &Server{
 		prs:         map[prKey]github.PullRequest{},
 		branches:    map[prKey]string{},
 		headOwners:  map[prKey]string{},
@@ -117,9 +124,8 @@ func New(t *testing.T) *Server {
 		}
 		mux.ServeHTTP(w, r)
 	}))
-	t.Cleanup(srv.Close)
 	s.URL = srv.URL
-	return s
+	return s, srv.Close
 }
 
 // Client builds the production REST client against this server with a fixed token.
@@ -127,15 +133,20 @@ func (s *Server) Client(t *testing.T) github.Client {
 	t.Helper()
 	// go-gh reads the gh config directory even when given a token; keep it away from the developer's.
 	t.Setenv("GH_CONFIG_DIR", t.TempDir())
-	target, err := url.Parse(s.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, err := github.NewRESTWithToken(rewriteTransport{target: target}, "fake-token")
+	c, err := s.NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// NewClient is Client for a caller without a test, which MUST point GH_CONFIG_DIR away from the developer's own.
+func (s *Server) NewClient() (github.Client, error) {
+	target, err := url.Parse(s.URL)
+	if err != nil {
+		return nil, err
+	}
+	return github.NewRESTWithToken(rewriteTransport{target: target}, "fake-token")
 }
 
 type rewriteTransport struct{ target *url.URL }

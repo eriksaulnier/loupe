@@ -60,6 +60,7 @@ claude plugin install loupe@loupe
 
 - `mise run check` runs vet, lint, `scripts/check-tests.sh` and the tests. lefthook runs it and enforces the Conventional Commit subject on every commit.
 - `mise run build` writes `dist/loupe`, stamped from `git describe`.
+- `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub, so the interface and the whole publish flow, `y` included, can be tried without a pull request or credentials. `mise run demo -- <loupe args>` runs any other command; `acme/widgets#42` is mid-review, `#43` is ready to publish and `#44` is ready with a moved head. Each run starts fresh and nothing leaves the machine.
 - Goldens under `testdata/golden/cli` regenerate with `go test ./internal/cli/ -update`.
 
 ## Release
