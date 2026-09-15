@@ -109,7 +109,7 @@ Validation is against the stored diff only. A refusal names up to three valid li
 | `findingRev` | int | the finding's `rev` when decided; the decision is current iff equal to the finding's current `rev` |
 | `at` | time | |
 
-Only the review interface writes decisions (`by` is implicitly human). A send-back deletes the finding's decision. A stale decision (rev mismatch) is ignored by derivation and overwritten by the next decision.
+Only the review interface writes decisions (`by` is implicitly human). A send-back deletes the finding's decision. A label or blocking edit made in the review interface re-records a current decision at the finding's new `rev` (specs/005-edit-in-review). A stale decision (rev mismatch) is ignored by derivation and overwritten by the next decision.
 
 ## Note
 

@@ -346,6 +346,48 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 	return next, cleared, nil
 }
 
+// Recalibratable refuses what Recalibrate would, so the review interface can refuse before asking for the new values.
+func Recalibratable(f Finding) error {
+	if f.Included {
+		return nil
+	}
+	return refusal.New(refusal.Input, fmt.Sprintf("%s is withdrawn, so its label and blocking cannot be edited", f.ID),
+		fmt.Sprintf("have the agent restore it with loupe edit %s --include", f.ID))
+}
+
+// Recalibrate is the human's label and blocking edit from the review interface. Unlike Edit it keeps a current
+// decision, since the human made the change while looking at the finding. The command line MUST NOT reach it: --by
+// is self-reported there, so an agent could change an accepted finding unseen. It closes no note, so a label change
+// never answers a note the human has not read.
+func Recalibrate(d *Draft, findingID, label string, blocking bool, dif *diff.Diff, now time.Time) (Finding, error) {
+	stored, err := findFinding(d, findingID)
+	if err != nil {
+		return Finding{}, err
+	}
+	if err := Recalibratable(*stored); err != nil {
+		return Finding{}, err
+	}
+	labelJSON, err := json.Marshal(label)
+	if err != nil {
+		return Finding{}, err
+	}
+	blockingJSON, err := json.Marshal(blocking)
+	if err != nil {
+		return Finding{}, err
+	}
+	decision, decided := d.Decisions[stored.ID]
+	current := decided && decision.FindingRev == stored.Rev
+	f, _, err := Edit(d, findingID, EditInput{Label: labelJSON, Blocking: blockingJSON}, nil, dif, ByHuman, now)
+	if err != nil {
+		return f, err
+	}
+	if current {
+		decision.FindingRev = f.Rev
+		d.Decisions[f.ID] = decision
+	}
+	return f, nil
+}
+
 func applyEdit(f *Finding, in EditInput) error {
 	if err := decodeRequired("title", in.Title, &f.Title); err != nil {
 		return err

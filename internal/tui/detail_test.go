@@ -208,8 +208,10 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 
 func TestDetailActionsFollowTheFinding(t *testing.T) {
 	g := Glyphs(envOf(map[string]string{"LANG": "en_US.UTF-8"}))
-	located := draft.Finding{ID: "f-001", Location: &draft.Location{Path: "a.go", Line: 1}}
-	general := draft.Finding{ID: "f-002"}
+	located := draft.Finding{ID: "f-001", Location: &draft.Location{Path: "a.go", Line: 1}, Included: true}
+	general := draft.Finding{ID: "f-002", Included: true}
+	withdrawn := located
+	withdrawn.Included = false
 	keys := func(hints []style.Hint) string {
 		var out []string
 		for _, h := range hints {
@@ -229,12 +231,13 @@ func TestDetailActionsFollowTheFinding(t *testing.T) {
 		hasNext     bool
 		want        string
 	}{
-		{"pending located", located, draft.DispositionPending, false, true, "←/→ ↑/↓ a+ x+ s+ f ?"},
-		{"pending last", located, draft.DispositionPending, false, false, "←/→ ↑/↓ a x s f ?"},
-		{"accepted", located, draft.DispositionAccepted, false, true, "←/→ ↑/↓ x+ s+ f ?"},
-		{"excluded general", general, draft.DispositionExcluded, false, true, "←/→ ↑/↓ u ?"},
-		{"withdrawn", located, draft.DispositionWithdrawn, false, true, "←/→ ↑/↓ f ?"},
-		{"open note", general, draft.DispositionPending, true, false, "←/→ ↑/↓ a x s r d ?"},
+		{"pending located", located, draft.DispositionPending, false, true, "←/→ ↑/↓ a+ x+ s+ e f ?"},
+		{"pending last", located, draft.DispositionPending, false, false, "←/→ ↑/↓ a x s e f ?"},
+		{"accepted", located, draft.DispositionAccepted, false, true, "←/→ ↑/↓ x+ s+ e f ?"},
+		{"excluded general", general, draft.DispositionExcluded, false, true, "←/→ ↑/↓ u e ?"},
+		{"withdrawn", withdrawn, draft.DispositionWithdrawn, false, true, "←/→ ↑/↓ f ?"},
+		{"excluded after withdrawal", withdrawn, draft.DispositionExcluded, false, true, "←/→ ↑/↓ u f ?"},
+		{"open note", general, draft.DispositionPending, true, false, "←/→ ↑/↓ a x s e r d ?"},
 	}
 	for _, c := range cases {
 		if got := keys(detailActions(g, c.f, c.disposition, c.openNote, c.hasNext)); got != c.want {
@@ -279,6 +282,31 @@ func TestDetailNoteInputNamesTheFinding(t *testing.T) {
 	if !strings.Contains(view, "\u270e send back f-001 \u203a") || !strings.Contains(view, "enter send") ||
 		!strings.Contains(view, "esc cancel") || !strings.Contains(view, "ctrl+u clear") {
 		t.Fatalf("the send-back input is not labeled with its keys:\n%s", view)
+	}
+}
+
+func TestDetailNoteInputWrapsAndKeepsTheCursorInView(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 15)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("short note")})
+	if view := m.View(); !strings.Contains(view, "send back f-001 \u203a short note") {
+		t.Fatalf("a short note is not on the prompt's line:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat(" and more", 40) + " END")})
+	view := m.View()
+	if !strings.Contains(view, "END") || strings.Contains(view, "send back f-001") {
+		t.Fatalf("a note taller than its rows does not follow the cursor to its end:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	if view := m.View(); !strings.Contains(view, "send back f-001 \u203a short note") || strings.Contains(view, "END") {
+		t.Fatalf("moving to the start does not bring the prompt back into view:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if n, ok := firstOpenNote(m.draft, "f-001"); !ok || !strings.HasSuffix(n.Body, " END") {
+		t.Fatalf("the wrapped note was not sent back whole: %+v", n)
 	}
 }
 
@@ -425,5 +453,140 @@ func TestBodyLinksShowAsText(t *testing.T) {
 				t.Errorf("color %v: body lacks %q:\n%s", color, want, text)
 			}
 		}
+	}
+}
+
+func runeKey(r string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(r)} }
+
+// editModel stores fn's change to the fixture, then opens id at 100 by 40.
+func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, string) {
+	t.Helper()
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), fn); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, testEnv, 100, 40)
+	if err := m.openFinding(id); err != nil {
+		t.Fatal(err)
+	}
+	return m, dir
+}
+
+func TestEditKeepsTheDecision(t *testing.T) {
+	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
+	for _, k := range []tea.KeyMsg{runeKey("e"), {Type: tea.KeyRight}, {Type: tea.KeySpace}} {
+		m.Update(k)
+	}
+	if row := ansi.Strip(m.View()); !strings.Contains(row, "> suggestion") || !strings.Contains(row, "not blocking") {
+		t.Fatalf("the editor row does not show the choice:\n%s", row)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	d := loadDraft(t, dir)
+	f := d.Findings[0]
+	if f.Label != "suggestion" || f.Blocking || draft.Dispositions(d)["f-001"] != draft.DispositionAccepted {
+		t.Fatalf("finding %+v disposition %s", f, draft.Dispositions(d)["f-001"])
+	}
+	if m.editing || !strings.Contains(m.notice, "f-001 is now suggestion, not blocking") || !strings.HasSuffix(m.notice, "still accepted") {
+		t.Fatalf("editing %v notice %q", m.editing, m.notice)
+	}
+	if m.openID != "f-001" {
+		t.Fatalf("an edit moved the view to %s", m.openID)
+	}
+}
+
+func TestEditEscAndUnchangedRecordNothing(t *testing.T) {
+	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
+	version := loadDraft(t, dir).Version
+	for _, keys := range [][]tea.KeyMsg{
+		{runeKey("e"), {Type: tea.KeyRight}, {Type: tea.KeySpace}, {Type: tea.KeyEsc}},
+		{runeKey("e"), {Type: tea.KeyEnter}},
+	} {
+		for _, k := range keys {
+			m.Update(k)
+		}
+		if d := loadDraft(t, dir); d.Version != version || m.editing || m.notice != "" {
+			t.Fatalf("version %d, want %d; editing %v notice %q", d.Version, version, m.editing, m.notice)
+		}
+	}
+}
+
+func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
+	for _, c := range []struct{ label, shown string }{{"perf-nit", "perf-nit"}, {"", "no label"}} {
+		m, dir := editModel(t, "f-003", func(d *draft.Draft) error {
+			_, err := draft.Recalibrate(d, "f-003", c.label, false, nil, testNow)
+			return err
+		})
+		version := loadDraft(t, dir).Version
+		m.Update(runeKey("e"))
+		if row := ansi.Strip(m.View()); !strings.Contains(row, "> "+c.shown) {
+			t.Fatalf("the row does not open on %q:\n%s", c.shown, row)
+		}
+		// Four moves cycle through issue, suggestion and question back to the finding's own label.
+		for range 4 {
+			m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		}
+		m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		if d := loadDraft(t, dir); d.Version != version || d.Findings[2].Label != c.label {
+			t.Fatalf("%q: cycling dropped the label: %q at version %d", c.label, d.Findings[2].Label, d.Version)
+		}
+	}
+}
+
+func TestEditRefusesAWithdrawnFinding(t *testing.T) {
+	m, _ := editModel(t, "f-002", func(d *draft.Draft) error {
+		withdraw := false
+		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, testNow)
+		return err
+	})
+	m.Update(runeKey("e"))
+	if m.editing || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "loupe edit f-002 --include") {
+		t.Fatalf("editing %v notice %q", m.editing, m.notice)
+	}
+}
+
+func TestEditIsDroppedWhileSettling(t *testing.T) {
+	m, _ := editModel(t, "f-001", func(*draft.Draft) error { return draft.ErrNoChange })
+	m.settling = true
+	m.Update(runeKey("e"))
+	if m.editing {
+		t.Fatal("a typed-ahead e opened the editor on a finding that was never on screen")
+	}
+}
+
+// A narrow window wraps the row between its parts, never between the blocking glyph and its word.
+func TestEditRowWrapsBetweenParts(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 24)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(runeKey("e"))
+	row := m.editView()
+	if !strings.Contains(row, m.glyphs.Blocking+" blocking") {
+		t.Fatalf("the blocking glyph wrapped away from its word:\n%s", row)
+	}
+	for _, l := range strings.Split(row, "\n") {
+		if w := style.Width(l); w > 60 {
+			t.Errorf("row line is %d cells: %q", w, l)
+		}
+	}
+}
+
+// An agent edit between opening the row and saving it refuses the save, as it does a stale accept.
+func TestEditRefusesAStaleDraft(t *testing.T) {
+	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
+	m.Update(runeKey("e"))
+	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].Title = "Updated title"
+		d.Findings[0].Rev++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	f := loadDraft(t, dir).Findings[0]
+	if f.Label != "issue" || f.Title != "Updated title" || m.notice != staleNotice || m.editing {
+		t.Fatalf("finding %+v notice %q editing %v", f, m.notice, m.editing)
 	}
 }

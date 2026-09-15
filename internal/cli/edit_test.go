@@ -59,6 +59,22 @@ func errorCode(env map[string]any) any {
 	return errObj["code"]
 }
 
+// Keeping a decision is only for an edit the human makes in review; --by is self-reported on the command line.
+func TestEditByHumanStillClearsAcceptance(t *testing.T) {
+	home, dir := sendBackRun(t)
+	code, env, s := execIn(t, home, "", "edit", "f-001", "--label", "suggestion", "--by", "human")
+	if code != 0 || env["clearedDecision"] != true {
+		t.Fatalf("exit %d envelope %v stderr %s", code, env, s.stderr.String())
+	}
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := draft.Dispositions(d)["f-001"]; got != draft.DispositionPending {
+		t.Fatalf("disposition %s after edit --by human", got)
+	}
+}
+
 func TestEditNullLocationClearsAndAbsentKeeps(t *testing.T) {
 	home, dir := sendBackRun(t)
 	code, env, s := execIn(t, home, `{"title": "Renamed"}`, "edit", "f-001", "--from", "-")

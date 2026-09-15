@@ -77,6 +77,7 @@ Open a new split at every handoff. You MUST NOT look for, reuse, or close an ear
 When the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`; after `loupe wait` returns, read its result instead. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
 
 - To revise a finding, write the changed fields to a file and run `loupe edit <finding-id> --from <file> --run <ref> --json`. An absent key leaves a field unchanged. `null` clears `location`, `label`, `confidence`, `severity` or `suggestedFix`; it is refused for `title`, `body`, `general` and `blocking`. Any change clears the human's decision, so they decide the finding again.
+- The human MAY change a finding's `label` or `blocking` in review without sending it back. Leave both out of your edit file unless a note asks you to change them, so you do not undo their call. When you do set either, re-read the finding with `loupe show --run <ref> --json` and pass its `version` as `--expect-version`, so a change they make meanwhile refuses your edit instead of being overwritten.
 - To withdraw a finding, run `loupe edit <finding-id> --exclude --run <ref> --json`.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.
 

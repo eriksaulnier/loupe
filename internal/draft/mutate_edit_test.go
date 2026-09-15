@@ -241,3 +241,89 @@ func TestEditUnknownIDsRefuseNotFound(t *testing.T) {
 	_, err = AddReply(d, "n-009", "x", ByAgent, editNow)
 	_ = wantRefusal(t, err, refusal.NotFound)
 }
+
+func TestRecalibrateKeepsTheDecision(t *testing.T) {
+	for _, c := range []struct {
+		name, disposition string
+		decide            func(d *Draft) error
+	}{
+		{"accepted", DispositionAccepted, func(*Draft) error { return nil }},
+		{"excluded", DispositionExcluded, func(d *Draft) error { _, err := Exclude(d, "f-001", addNow); return err }},
+		{"pending", DispositionPending, func(d *Draft) error { delete(d.Decisions, "f-001"); return nil }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			d := editable()
+			if err := c.decide(d); err != nil {
+				t.Fatal(err)
+			}
+			before, hadDecision := d.Decisions["f-001"]
+			f, err := Recalibrate(d, "f-001", "suggestion", false, multiHunk(t), editNow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if f.Label != "suggestion" || f.Blocking || f.Rev != 2 || !reflect.DeepEqual(f, d.Findings[0]) {
+				t.Fatalf("finding %+v", f)
+			}
+			want := []HistoryEntry{{At: editNow, By: ByHuman, Changed: map[string]any{"label": "issue", "blocking": true}}}
+			if !reflect.DeepEqual(f.History, want) {
+				t.Fatalf("history %#v", f.History)
+			}
+			if got := Dispositions(d)["f-001"]; got != c.disposition {
+				t.Fatalf("disposition %s, want %s", got, c.disposition)
+			}
+			after, hasDecision := d.Decisions["f-001"]
+			if hasDecision != hadDecision || (hadDecision && (after.Decision != before.Decision || !after.At.Equal(before.At) || after.FindingRev != 2)) {
+				t.Fatalf("decision before %+v after %+v", before, after)
+			}
+		})
+	}
+}
+
+func TestRecalibrateLeavesNotesOpen(t *testing.T) {
+	d := editable()
+	if _, err := SendBack(d, "f-002", "Is this blocking?", editNow); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Recalibrate(d, "f-002", "question", true, multiHunk(t), editNow); err != nil {
+		t.Fatal(err)
+	}
+	if d.Notes[0].Status != NoteOpen || d.Notes[0].ClosedAt != nil {
+		t.Fatalf("note %+v", d.Notes[0])
+	}
+}
+
+func TestRecalibrateDoesNotReviveAStaleDecision(t *testing.T) {
+	d := editable()
+	d.Findings[0].Rev = 2
+	f, err := Recalibrate(d, "f-001", "suggestion", true, multiHunk(t), editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Dispositions(d)["f-001"]; got != DispositionPending || f.Rev != 3 {
+		t.Fatalf("disposition %s rev %d", got, f.Rev)
+	}
+}
+
+func TestRecalibrateRefusals(t *testing.T) {
+	d := editable()
+	withdraw := false
+	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, editNow); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Recalibrate(d, "f-002", "issue", false, multiHunk(t), editNow)
+	r := wantRefusal(t, err, refusal.Input)
+	if !strings.Contains(r.Fix, "loupe edit f-002 --include") {
+		t.Fatalf("fix %q", r.Fix)
+	}
+
+	_, err = Recalibrate(d, "f-001", "not a label!", true, multiHunk(t), editNow)
+	_ = wantRefusal(t, err, refusal.Input)
+
+	_, err = Recalibrate(d, "f-009", "issue", true, multiHunk(t), editNow)
+	_ = wantRefusal(t, err, refusal.NotFound)
+
+	f, err := Recalibrate(d, "f-001", "issue", true, multiHunk(t), editNow)
+	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
+		t.Fatalf("unchanged recalibration %+v err %v", f, err)
+	}
+}

@@ -29,6 +29,7 @@
 ### Session 2026-09-15
 
 - Q: The published review on application-platform#843 opened with an `IMPORTANT` callout repeating the `⛔ 1 blocking` chip beneath it, and its blocking finding read `🟡 issue (blocking):` under the `⛔ Blocking` heading and inline. Should either stay? → A: No. The body opens with the chips row, or the summary when there are no findings, and never with a callout; this supersedes the 2026-09-14 callout answer. Body rows carry no dot in any section, so a blocking finding reads `issue (blocking):`. An inline comment keeps its dot, and a blocking one takes `⛔` whatever its label, amending the 2026-09-14 dot answer: a yellow dot on a blocking finding read as lower severity than it is.
+- Q: Recalibrating a finding ("this isn't blocking", "this is a suggestion") took a send-back note, an agent turn and a second accept, for a call the human already owns. Should the human be able to change it in review, and what happens to the decision? → A: Yes, label and blocking only, with `e` in the review interface and in plain mode (specs/005-edit-in-review). That edit is recorded as the human's, bumps the finding's revision, keeps its current decision and closes no note, amending User Story 4 scenario 3 and FR-019 for that edit alone. Every edit through `loupe edit` still clears the decision, whatever `--by` says, because `--by` is self-reported and an agent could otherwise change an accepted finding unseen.
 
 ## User Scenarios & Testing *(mandatory)*
 

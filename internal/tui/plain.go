@@ -29,7 +29,7 @@ func plainWidth(width int) int {
 // plainAnswers are the letters an answer may be, in the order the legend shows them.
 var plainAnswers = []style.Hint{
 	{Key: "a", Verb: "accept"}, {Key: "x", Verb: "exclude"}, {Key: "s", Verb: "send back"}, {Key: "u", Verb: "restore"},
-	{Key: "r/d", Verb: "note"}, {Key: "n", Verb: "next"}, {Key: "b", Verb: "back"}, {Key: "q", Verb: "quit"},
+	{Key: "e", Verb: "edit"}, {Key: "r/d", Verb: "note"}, {Key: "n", Verb: "next"}, {Key: "b", Verb: "back"}, {Key: "q", Verb: "quit"},
 }
 
 // printer keeps the first write error so the loop can check once per finding instead of after every line.
@@ -101,7 +101,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		}
 		f := d.Findings[i]
 		var fn func(*draft.Draft) error
-		success := ""
+		success, stay := "", false
 		now := time.Now()
 		switch answer {
 		case "a":
@@ -140,6 +140,58 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 				success = fmt.Sprintf("%s %s sent back as %s", s.Glyphs.Note, f.ID, n.ID)
 				return err
 			}
+		case "e":
+			if err := draft.Recalibratable(f); err != nil {
+				notice = refusalNotice(err)
+				continue
+			}
+			labels := editLabels(f.Label)
+			names := make([]string, len(labels))
+			for j, l := range labels {
+				names[j] = labelText(l)
+			}
+			p.printf("%s %s ", s.Note.Render(fmt.Sprintf("%s label %s (%s; enter keeps %s)", s.Glyphs.Note, f.ID, strings.Join(names, ", "), labelText(f.Label))),
+				s.Cursor.Render(s.Glyphs.Cursor))
+			labelAnswer, ok := readLine()
+			if !ok {
+				return lines.Err()
+			}
+			label, known := f.Label, labelAnswer == ""
+			for _, l := range labels {
+				if labelAnswer != "" && (labelAnswer == l || labelAnswer == labelText(l)) {
+					label, known = l, true
+				}
+			}
+			if !known {
+				notice = fmt.Sprintf("unknown label %q; choose %s", labelAnswer, strings.Join(names, ", "))
+				continue
+			}
+			keep := "n"
+			if f.Blocking {
+				keep = "y"
+			}
+			p.printf("%s %s ", s.Note.Render(fmt.Sprintf("blocking? (y, n; enter keeps %s)", keep)), s.Cursor.Render(s.Glyphs.Cursor))
+			blockingAnswer, ok := readLine()
+			if !ok {
+				return lines.Err()
+			}
+			blocking := f.Blocking
+			switch blockingAnswer {
+			case "y", "n":
+				blocking = blockingAnswer == "y"
+			case "":
+			default:
+				notice = fmt.Sprintf("unknown answer %q; blocking is y or n", blockingAnswer)
+				continue
+			}
+			stay = true
+			fn = func(d *draft.Draft) error {
+				_, err := draft.Recalibrate(d, f.ID, label, blocking, dif, now)
+				if err == nil {
+					success = editedNotice(s.Glyphs, f.ID, label, blocking, draft.Dispositions(d)[f.ID])
+				}
+				return err
+			}
 		case "n":
 			i, notice = min(i+1, len(d.Findings)-1), ""
 			continue
@@ -166,7 +218,12 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 			continue
 		}
 		notice = success
-		i = min(i+1, len(d.Findings)-1)
+		// An edit does not settle the finding, so it stays on screen to be decided.
+		if !stay {
+			i = min(i+1, len(d.Findings)-1)
+		} else if i = findingIndex(d, f.ID); i < 0 {
+			return fmt.Errorf("finding %s is no longer in the draft", f.ID)
+		}
 	}
 }
 

@@ -108,7 +108,7 @@ func TestPluginSkill(t *testing.T) {
 		"loupe capture", "loupe show --previous", "git show", "loupe add --from", "loupe summary --expect-findings",
 		"loupe feedback", "loupe reply", "loupe review", "loupe wait --run", "`awaiting`", "`timeout`",
 		"MUST NOT run `loupe review`", "`loupe publish`", "pseudo-terminal", "pipe or script confirmation",
-		"`gh pr review`", "`gh api`", "GitHub MCP",
+		"`gh pr review`", "`gh api`", "GitHub MCP", "change a finding's `label` or `blocking` in review", "pass its `version` as `--expect-version`", "Leave both out of your edit file unless a note asks",
 		"`HERDR_ENV`", "herdr pane layout", "herdr pane split", "--focus", "herdr pane run", "&& exit",
 		"\"loupe review '<ref>' && exit\"", "--env \"LOUPE_HOME=$LOUPE_HOME\"", "`pane_id` is `$HERDR_PANE_ID`",
 	} {

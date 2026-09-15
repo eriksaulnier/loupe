@@ -276,3 +276,79 @@ func TestConfirmPlainOnlyYConfirms(t *testing.T) {
 		}
 	}
 }
+
+func TestPlainEditsLabelAndBlocking(t *testing.T) {
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		_, err := draft.Accept(d, "f-001", testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	version := loadDraft(t, dir).Version
+	var out bytes.Buffer
+	// An edit stays on f-001, so every answer here is about it: a saved edit, an unknown label, then enter twice.
+	in := &lineReader{lines: []string{"e", "suggestion", "n", "e", "bogus", "e", "", "", "q"}}
+	if err := RunPlain(dir, in, &out, envOf(testEnv), 0); err != nil {
+		t.Fatal(err)
+	}
+	d := loadDraft(t, dir)
+	f := d.Findings[0]
+	if f.Label != "suggestion" || f.Blocking || draft.Dispositions(d)["f-001"] != draft.DispositionAccepted || d.Version != version+1 {
+		t.Fatalf("finding %+v disposition %s version %d, want %d", f, draft.Dispositions(d)["f-001"], d.Version, version+1)
+	}
+	if n := strings.Count(out.String(), "label f-001 ("); n != 3 {
+		t.Errorf("the label prompt named f-001 %d times, want 3; an edit moved off the finding:\n%s", n, out.String())
+	}
+	for _, want := range []string{
+		"label f-001 (issue, suggestion, question; enter keeps issue)",
+		"blocking? (y, n; enter keeps y)",
+		"f-001 is now suggestion, not blocking - still accepted",
+		`unknown label "bogus"; choose issue, suggestion, question`,
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestPlainEditRefusesAWithdrawnFinding(t *testing.T) {
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		withdraw := false
+		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := RunPlain(dir, &lineReader{lines: []string{"n", "e", "q"}}, &out, envOf(testEnv), 0); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "loupe edit f-002 --include") || strings.Contains(out.String(), "label f-002 (") {
+		t.Fatalf("e on a withdrawn finding did not refuse with the fix:\n%s", out.String())
+	}
+}
+
+func TestPlainEditRefusesAStaleDraft(t *testing.T) {
+	dir := newFixture(t)
+	var out bytes.Buffer
+	in := &lineReader{
+		lines: []string{"e", "suggestion", "n", "q"},
+		before: map[int]func(){2: func() {
+			if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+				d.Findings[0].Title = "Updated title"
+				d.Findings[0].Rev++
+				return nil
+			}); err != nil {
+				t.Error(err)
+			}
+		}},
+	}
+	if err := RunPlain(dir, in, &out, envOf(testEnv), 0); err != nil {
+		t.Fatal(err)
+	}
+	if f := loadDraft(t, dir).Findings[0]; f.Label != "issue" || !f.Blocking || !strings.Contains(out.String(), staleNotice) {
+		t.Fatalf("finding %+v; output:\n%s", f, out.String())
+	}
+}

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"charm.land/glamour/v2"
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -79,12 +79,17 @@ type Model struct {
 	// helpTop is the first help line shown when help is taller than the window.
 	helpTop int
 
-	openID    string
-	body      viewport.Model
-	noting    bool
-	note      textinput.Model
-	glamour   *glamour.TermRenderer
-	wrapWidth int
+	openID string
+	body   viewport.Model
+	noting bool
+	note   textarea.Model
+	// editing is true while the label and blocking editor is open; editPick indexes editLabels.
+	editing      bool
+	editLabels   []string
+	editPick     int
+	editBlocking bool
+	glamour      *glamour.TermRenderer
+	wrapWidth    int
 	// darkBackground is asked once before the program starts, while no one else is reading the terminal's replies.
 	darkBackground bool
 
@@ -126,8 +131,10 @@ func New(cfg Config) (*Model, error) {
 		return nil, err
 	}
 	st := style.New(cfg.Output, cfg.Getenv)
-	note := textinput.New()
-	note.Prompt = "note: "
+	note := textarea.New()
+	note.ShowLineNumbers, note.MaxHeight = false, 0
+	note.FocusedStyle, note.BlurredStyle = textarea.Style{}, textarea.Style{}
+	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
 		cfg:     cfg,
 		target:  target,
@@ -187,6 +194,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.noting {
 			return m, m.updateNote(msg)
+		}
+		if m.editing {
+			return m, m.updateEdit(msg)
 		}
 		if m.help {
 			m.updateHelp(msg)
@@ -252,6 +262,9 @@ func (m *Model) fail(err error) tea.Cmd {
 }
 
 func (m *Model) layout() error {
+	if m.noting {
+		m.sizeNote(0)
+	}
 	switch m.view {
 	case viewDetail:
 		return m.refreshDetail()
@@ -392,6 +405,7 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"a", "accept; resolves its open notes", ""},
 			{"x", "exclude; dismisses its open notes", ""},
 			{"s", "send it back with a note", ""},
+			{"e", "edit label and blocking", ""},
 			{"u", "restore an excluded finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},

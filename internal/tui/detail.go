@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 const detailHeaderLines = 2
 
 func (m *Model) openFinding(id string) error {
-	m.view, m.openID, m.noting, m.settling = viewDetail, id, false, false
+	m.view, m.openID, m.noting, m.editing, m.settling = viewDetail, id, false, false, false
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -78,19 +79,27 @@ func (m *Model) refreshDetail() error {
 
 // chipLines lays the chips out over as many lines as the window needs, so a narrow one never clips a state.
 func (m *Model) chipLines(cs []chip) []string {
+	parts := make([]string, 0, len(cs))
+	for _, c := range cs {
+		parts = append(parts, m.styles.Chip(c.kind, c.glyph, c.text))
+	}
+	return m.partLines(parts, 3)
+}
+
+// partLines breaks lines only between parts, so a glyph never wraps away from its word.
+func (m *Model) partLines(parts []string, gap int) []string {
 	width := style.Content(m.width) - 1
 	var lines []string
 	line := ""
-	for _, c := range cs {
-		text := m.styles.Chip(c.kind, c.glyph, c.text)
+	for _, part := range parts {
 		switch {
 		case line == "":
-			line = text
-		case style.Width(line)+3+style.Width(text) <= width:
-			line += "   " + text
+			line = part
+		case style.Width(line)+gap+style.Width(part) <= width:
+			line += strings.Repeat(" ", gap) + part
 		default:
 			lines = append(lines, " "+line)
-			line = text
+			line = part
 		}
 	}
 	return append(lines, " "+line)
@@ -185,7 +194,7 @@ var hyperlink = regexp.MustCompile("\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
 
 func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 	f, i := m.openedFinding()
-	if m.settling && strings.Contains("axsurd", msg.String()) && len(msg.String()) == 1 {
+	if m.settling && strings.Contains("axsurde", msg.String()) && len(msg.String()) == 1 {
 		// The finding under this key was never on screen: it arrived through typeahead or key repeat right after a
 		// decision moved the view. Per-finding sign-off is the product, so the key is dropped, not applied.
 		return nil
@@ -223,10 +232,27 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		return m.decideAndStay(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
 		m.noting, m.notice = true, ""
-		m.note.Prompt = m.styles.Note.Render(m.glyphs.Note+" send back "+f.ID) + " " + m.styles.Cursor.Render(m.glyphs.Cursor) + " "
+		prompt := m.styles.Note.Render(m.glyphs.Note+" send back "+f.ID) + " " + m.styles.Cursor.Render(m.glyphs.Cursor) + " "
+		m.note.SetPromptFunc(style.Width(prompt), func(row int) string {
+			if row == 0 {
+				return prompt
+			}
+			return ""
+		})
 		m.note.Reset()
 		m.note.Cursor.SetMode(cursor.CursorStatic)
-		return m.note.Focus()
+		cmd := m.note.Focus()
+		m.sizeNote(0)
+		return cmd
+	case "e":
+		if err := draft.Recalibratable(f); err != nil {
+			m.say(style.Warn, refusalNotice(err))
+			return nil
+		}
+		m.editing, m.notice = true, ""
+		m.editLabels, m.editBlocking = editLabels(f.Label), f.Blocking
+		m.editPick = slices.Index(m.editLabels, f.Label)
+		return nil
 	case "f":
 		if f.Location == nil {
 			m.say(style.Warn, "a general finding has no file diff")
@@ -280,14 +306,126 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 			return err
 		}, func() string { return fmt.Sprintf("%s %s sent back as %s", m.glyphs.Note, id, noteID) })
 	}
+	if msg.Type == tea.KeyRunes {
+		// A note is one paragraph, so a pasted line break or tab becomes a space.
+		msg.Runes = []rune(strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ", "\t", " ").Replace(string(msg.Runes)))
+	}
+	// Room for every row this key could add, so the input never scrolls itself and noteView can place the cursor.
+	m.sizeNote(len(msg.Runes) + 1)
 	var cmd tea.Cmd
 	m.note, cmd = m.note.Update(msg)
+	m.sizeNote(0)
 	return cmd
 }
 
-// decideAndStay records a change that leaves the finding undecided (a restore, a note resolved or dismissed), so
-// the view stays where the result can be seen. success builds the notice after fn has run, so it can name what fn
-// created.
+// updateEdit drives the editor row. Arrows move the label rather than the finding, so the row cannot outlive the
+// finding it was opened on.
+func (m *Model) updateEdit(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		m.editing = false
+	case "left", "h":
+		m.editPick = (m.editPick + len(m.editLabels) - 1) % len(m.editLabels)
+	case "right", "l":
+		m.editPick = (m.editPick + 1) % len(m.editLabels)
+	case " ":
+		m.editBlocking = !m.editBlocking
+	case "enter":
+		m.editing = false
+		id, label, blocking := m.openID, m.editLabels[m.editPick], m.editBlocking
+		changed, disposition := false, ""
+		return m.decideAndStay(func(d *draft.Draft) error {
+			_, err := draft.Recalibrate(d, id, label, blocking, m.diff, m.cfg.Now())
+			if err == nil {
+				changed, disposition = true, draft.Dispositions(d)[id]
+			}
+			return err
+		}, func() string {
+			if !changed {
+				return ""
+			}
+			return editedNotice(m.glyphs, id, label, blocking, disposition)
+		})
+	}
+	return nil
+}
+
+// editLabels are the documented labels, then the finding's own when it is none of them, so cycling never loses a
+// custom label or the absence of one.
+func editLabels(current string) []string {
+	labels := []string{"issue", "suggestion", "question"}
+	if !slices.Contains(labels, current) {
+		labels = append(labels, current)
+	}
+	return labels
+}
+
+func labelText(label string) string {
+	if label == "" {
+		return "no label"
+	}
+	return render.ForDisplay(label)
+}
+
+func blockingText(blocking bool) string {
+	if blocking {
+		return "blocking"
+	}
+	return "not blocking"
+}
+
+// editedNotice says what was saved and which decision survived it, since an accepted finding publishes with the edit.
+func editedNotice(g GlyphSet, id, label string, blocking bool, disposition string) string {
+	out := fmt.Sprintf("%s %s is now %s, %s", g.Note, id, labelText(label), blockingText(blocking))
+	if disposition == draft.DispositionAccepted || disposition == draft.DispositionExcluded {
+		out += " " + g.Sep + " still " + disposition
+	}
+	return out
+}
+
+// editView is the editor row in the notice slot. The chosen label carries the cursor glyph, not only a color, so it
+// reads under NO_COLOR; the others are padded by the glyph's width so the row does not shift as the choice moves.
+func (m *Model) editView() string {
+	pad := strings.Repeat(" ", style.Width(m.glyphs.Cursor)+1)
+	parts := []string{m.styles.Note.Render(m.glyphs.Note + " edit " + m.openID)}
+	for i, l := range m.editLabels {
+		if i == m.editPick {
+			parts = append(parts, m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor+" "+labelText(l)))
+			continue
+		}
+		parts = append(parts, m.styles.Dim.Render(pad+labelText(l)))
+	}
+	blocking := m.styles.Dim.Render(blockingText(false))
+	if m.editBlocking {
+		blocking = m.styles.Chip(style.Bad, m.glyphs.Blocking, blockingText(true))
+	}
+	parts = append(parts, blocking)
+	return strings.Join(m.partLines(parts, 2), "\n")
+}
+
+// sizeNote fits the note input inside its one-column margin, as tall as its wrapped text plus extra rows.
+func (m *Model) sizeNote(extra int) {
+	m.note.SetWidth(max(1, m.width-1))
+	m.note.SetHeight(m.note.LineInfo().Height + extra)
+}
+
+// noteView is the wrapped note input capped at a third of the window; a taller note shows the rows ending at the
+// cursor's.
+func (m *Model) noteView() string {
+	rows := strings.Split(m.note.View(), "\n")
+	if limit := max(1, m.height/3); len(rows) > limit {
+		start := min(max(0, m.note.LineInfo().RowOffset-limit+1), len(rows)-limit)
+		rows = rows[start : start+limit]
+	}
+	for i, r := range rows {
+		rows[i] = " " + r
+	}
+	return strings.Join(rows, "\n")
+}
+
+// decideAndStay records a change that does not settle the finding (a restore, a note resolved or dismissed, an
+// edit), so the view stays where the result can be seen. success builds the notice after fn has run, so it can name
+// what fn created.
 func (m *Model) decideAndStay(fn func(*draft.Draft) error, success func() string) tea.Cmd {
 	recorded, err := m.Decide(fn)
 	if err != nil {
@@ -337,7 +475,12 @@ func (m *Model) detailView() string {
 	), m.headerRule()}
 	if m.noting {
 		keys := m.footer([]style.Hint{{Key: "enter", Verb: "send"}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
-		return m.frameWith(header, m.body.View(), " "+m.note.View(), keys)
+		return m.frameWith(header, m.body.View(), m.noteView(), keys)
+	}
+	if m.editing {
+		keys := m.footer([]style.Hint{{Key: "enter", Verb: "save"}, {Key: m.glyphs.Left + "/" + m.glyphs.Right, Verb: "label"},
+			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
+		return m.frameWith(header, m.body.View(), m.editView(), keys)
 	}
 	_, hasOpenNote := firstOpenNote(m.draft, f.ID)
 	hints := detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote, i+1 < len(m.draft.Findings))
@@ -361,6 +504,9 @@ func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote,
 		hints = append(hints, decide("x", "exclude", true), decide("s", "send back", true))
 	case draft.DispositionExcluded:
 		hints = append(hints, decide("u", "restore", false))
+	}
+	if f.Included {
+		hints = append(hints, decide("e", "edit", false))
 	}
 	if hasOpenNote {
 		hints = append(hints, decide("r", "resolve", false), decide("d", "dismiss", false))

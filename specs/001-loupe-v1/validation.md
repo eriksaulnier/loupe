@@ -35,6 +35,7 @@ Task T104. Each row of the quickstart "Automated validation" table is listed wit
 | `wait` returns on a hand-back or a receipt, times out, refuses a negative timeout, ends on cancellation | `cli.TestWait*`, `integration.TestWaitFollowsTheSendBackLoop` |
 | Plugin files parse; SKILL.md has the workflow and prohibitions | `cli.TestPluginManifest`, `cli.TestPluginMarketplace`, `cli.TestPluginSkill`, `cli.TestPluginCommand` |
 | SKILL.md opens review in a Herdr split and keeps the non-Herdr handoff line (specs/003-herdr-handoff) | `cli.TestPluginSkill`, `cli.TestPluginSkillProhibitions`, `cli.TestPluginSkillHandoff` |
+| A label or blocking edit in review keeps the decision and open notes, refuses a withdrawn finding or a stale draft, records nothing when unchanged, and fits every tier; `loupe edit --by human` still clears acceptance (specs/005-edit-in-review) | `draft.TestRecalibrate*`, `cli.TestEditByHumanStillClearsAcceptance`, `tui.TestEdit*`, `tui.TestDetailActionsFollowTheFinding`, `tui.TestEveryTierFitsTheWindow`, `tui.TestPlainEdit*`, `cli.TestPluginSkill` |
 | No PTY library, non-loopback address or stray `CreateReview` in tests | `scripts/check-tests.sh` in `mise run check`; each rule was shown to fail on a staged violating file |
 | No non-test Go file under `cmd/` or `internal/`, and not `go.mod`, names Herdr (specs/003-herdr-handoff FR-017) | `scripts/check-tests.sh` in `mise run check`; shown to fail on staged violations in `cmd/`, `internal/` and `go.mod`, and to ignore a test file |
 

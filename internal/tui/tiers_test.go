@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 
@@ -51,6 +52,17 @@ var screens = []screen{
 		m.confirm, m.view = newConfirmation(movedPreview(), title), viewConfirm
 	}, []string{"y", "publish", "this", "review"}},
 	{"help", func(m *Model) { mustOpen(m, "f-001"); m.help = true }, []string{"?", "close", "help"}},
+	{"edit row", func(m *Model) {
+		// The longest label a finding can carry, so the row has to wrap at 60 columns.
+		m.draft.Findings[0].Label = strings.Repeat("perf-nit.", 4) + "abcd"
+		mustOpen(m, "f-001")
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	}, []string{"enter", "save", "esc", "cancel"}},
+	{"long note", func(m *Model) {
+		mustOpen(m, "f-001")
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat("a note that runs on ", 12))})
+	}, []string{"enter", "send", "esc", "cancel"}},
 }
 
 func mustOpen(m *Model, id string) {
