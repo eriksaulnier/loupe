@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -85,6 +86,62 @@ func TestDetailKeysSendBackResolveDismissRestore(t *testing.T) {
 	press(m, "u")
 	if d := loadDraft(t, dir); draft.Dispositions(d)["f-001"] != draft.DispositionPending {
 		t.Fatalf("u did not restore f-001: %v", d.Decisions)
+	}
+}
+
+// The loop the human runs after the agent answers a note: accepting or excluding closes the note, and until then the
+// list footer shows publish as not ready.
+func TestDecidingAFindingClosesItsNotes(t *testing.T) {
+	for _, c := range []struct{ key, notice, status string }{
+		{"a", "f-002 accepted %s n-001 resolved", draft.NoteResolved},
+		{"x", "f-002 excluded %s n-001 dismissed", draft.NoteDismissed},
+	} {
+		t.Run(c.key, func(t *testing.T) {
+			dir := newFixture(t)
+			if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+				for _, id := range []string{"f-001", "f-003"} {
+					if _, err := draft.Accept(d, id, testNow); err != nil {
+						return err
+					}
+				}
+				if _, err := draft.SendBack(d, "f-002", "Why?", testNow); err != nil {
+					return err
+				}
+				_, err := draft.AddReply(d, "n-001", "Because.", draft.ByAgent, testNow)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			m := newModel(t, dir)
+			footer := func() string {
+				lines := strings.Split(m.View(), "\n")
+				return lines[len(lines)-1]
+			}
+			if f := footer(); !strings.Contains(f, "p publish (not ready)") {
+				t.Fatalf("list footer before deciding: %q", f)
+			}
+			if err := m.openFinding("f-002"); err != nil {
+				t.Fatal(err)
+			}
+			press(m, c.key)
+			if want := fmt.Sprintf(c.notice, m.glyphs.Sep); !strings.Contains(m.notice, want) {
+				t.Errorf("notice %q, want %q", m.notice, want)
+			}
+			if got := strings.Join(noteStatuses(loadDraft(t, dir)), ", "); got != "n-001 "+c.status {
+				t.Errorf("notes %s", got)
+			}
+			if r := m.readiness(); !strings.Contains(r, "ready to publish") {
+				t.Errorf("readiness %q", r)
+			}
+			m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			if f := footer(); !strings.Contains(f, "p publish   ") || strings.Contains(f, "not ready") {
+				t.Errorf("list footer after deciding: %q", f)
+			}
+			press(m, "p")
+			if m.view != viewAction {
+				t.Errorf("p opened view %d, want the action step", m.view)
+			}
+		})
 	}
 }
 

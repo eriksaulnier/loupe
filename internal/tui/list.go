@@ -219,15 +219,22 @@ func (m *Model) listView() string {
 		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "move", Role: style.RoleNav},
 		{Key: "enter", Verb: "open"},
 	}
-	if draft.ReadinessOf(m.draft).Ready {
-		hints = append(hints, style.Hint{Key: "p", Verb: "publish"})
-	}
 	hints = append(hints,
+		m.publishHint(),
 		style.Hint{Key: "tab", Verb: "summary", Role: style.RoleNav},
 		style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp},
 		style.Hint{Key: "q", Verb: "quit", Role: style.RoleNav},
 	)
 	return m.frame(header, body, m.footer(hints))
+}
+
+// publishHint stays on the footer while the draft is not ready, so the human knows p exists. The header already names
+// what blocks it; the words say not ready where dim alone would not, under NO_COLOR.
+func (m *Model) publishHint() style.Hint {
+	if draft.ReadinessOf(m.draft).Ready {
+		return style.Hint{Key: "p", Verb: "publish"}
+	}
+	return style.Hint{Key: "p", Verb: "publish (not ready)", KeyKind: style.Dim, VerbKind: style.Dim}
 }
 
 // summaryBlock is the draft summary beside its heading, two lines by default so the findings stay on screen.

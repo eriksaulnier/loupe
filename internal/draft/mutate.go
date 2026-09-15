@@ -186,27 +186,29 @@ func findNote(d *Draft, id string) (*Note, error) {
 	return nil, refusal.New(refusal.NotFound, fmt.Sprintf("note %s does not exist", id), "loupe show")
 }
 
-// Accept records the decision at the finding's current rev, so any later edit puts the finding back to pending.
-func Accept(d *Draft, findingID string, now time.Time) error {
+// Accept records the decision at the finding's current rev, so any later edit puts the finding back to pending. It
+// resolves the finding's open notes, since accepting is the human's answer to them, and returns their ids.
+func Accept(d *Draft, findingID string, now time.Time) ([]string, error) {
 	f, err := findFinding(d, findingID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !f.Included {
-		return refusal.New(refusal.Input, "accept is for included findings only",
+		return nil, refusal.New(refusal.Input, "accept is for included findings only",
 			fmt.Sprintf("exclude %s instead, or have the agent restore it with loupe edit %s --include", f.ID, f.ID))
 	}
 	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionAccepted, FindingRev: f.Rev, At: now}
-	return nil
+	return closeOpenNotes(d, f.ID, NoteResolved, now), nil
 }
 
-func Exclude(d *Draft, findingID string, now time.Time) error {
+// Exclude dismisses the finding's open notes and returns their ids.
+func Exclude(d *Draft, findingID string, now time.Time) ([]string, error) {
 	f, err := findFinding(d, findingID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionExcluded, FindingRev: f.Rev, At: now}
-	return nil
+	return closeOpenNotes(d, f.ID, NoteDismissed, now), nil
 }
 
 // SendBack deletes the finding's decision so it stays pending until the human decides it again.
@@ -259,6 +261,18 @@ func closeNote(d *Draft, noteID, status string, now time.Time) error {
 	n.Status = status
 	n.ClosedAt = &now
 	return nil
+}
+
+func closeOpenNotes(d *Draft, findingID, status string, now time.Time) []string {
+	closed := []string{}
+	for i := range d.Notes {
+		if n := &d.Notes[i]; n.FindingID == findingID && n.Status == NoteOpen {
+			n.Status = status
+			n.ClosedAt = &now
+			closed = append(closed, n.ID)
+		}
+	}
+	return closed
 }
 
 // EditInput holds each field as raw JSON so an absent key (nil), a null and a value stay distinguishable.

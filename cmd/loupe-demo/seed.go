@@ -202,11 +202,11 @@ func seed(home string, gh *fakegh.Server, now time.Time) error {
 func midReview(parsed *diff.Diff, now time.Time) func(d *draft.Draft) error {
 	return func(d *draft.Draft) error {
 		for _, id := range []string{"f-001", "f-006"} {
-			if err := draft.Accept(d, id, now); err != nil {
+			if _, err := draft.Accept(d, id, now); err != nil {
 				return err
 			}
 		}
-		if err := draft.Exclude(d, "f-005", now); err != nil {
+		if _, err := draft.Exclude(d, "f-005", now); err != nil {
 			return err
 		}
 		note, err := draft.SendBack(d, "f-003", "Is the reset intentional? We only run one Prometheus.", now)
@@ -230,7 +230,7 @@ func readyToPublish(now time.Time) func(d *draft.Draft) error {
 			if f.ID == "f-005" || f.ID == "f-007" {
 				decide = draft.Exclude
 			}
-			if err := decide(d, f.ID, now); err != nil {
+			if _, err := decide(d, f.ID, now); err != nil {
 				return err
 			}
 		}

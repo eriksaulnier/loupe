@@ -389,8 +389,8 @@ func (m *Model) helpSections() map[view]helpSection {
 			{upDown, "scroll the finding", "k/j"},
 			{"PgUp/PgDn", "scroll one page", ""},
 			{"space", "scroll one page down", ""},
-			{"a", "accept the finding as shown", ""},
-			{"x", "exclude it from the review", ""},
+			{"a", "accept; resolves its open notes", ""},
+			{"x", "exclude; dismisses its open notes", ""},
 			{"s", "send it back with a note", ""},
 			{"u", "restore an excluded finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
@@ -712,6 +712,15 @@ func firstOpenNote(d *draft.Draft, findingID string) (draft.Note, bool) {
 		}
 	}
 	return draft.Note{}, false
+}
+
+// decidedNotice names the decision and the notes it closed, so a note never closes without the human seeing it.
+func decidedNotice(sep, glyph, findingID, decision string, closed []string, noteStatus string) string {
+	out := glyph + " " + findingID + " " + decision
+	if len(closed) > 0 {
+		out += " " + sep + " " + strings.Join(closed, ", ") + " " + noteStatus
+	}
+	return out
 }
 
 // hunkView is nil for a general finding.

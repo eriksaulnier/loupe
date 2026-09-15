@@ -35,7 +35,7 @@ func TestDigestKnownValue(t *testing.T) {
 
 func TestPublishableSet(t *testing.T) {
 	d := digestDraft()
-	if err := Accept(d, "f-002", digestNow); err != nil {
+	if _, err := Accept(d, "f-002", digestNow); err != nil {
 		t.Fatal(err)
 	}
 	var ids []string
@@ -68,7 +68,7 @@ func TestDigestStable(t *testing.T) {
 			d.Version = 9
 		},
 		"accepting a pending finding": func(d *Draft) {
-			if err := Accept(d, "f-001", digestNow); err != nil {
+			if _, err := Accept(d, "f-001", digestNow); err != nil {
 				t.Fatal(err)
 			}
 		},
@@ -92,7 +92,7 @@ func TestDigestAllPendingEqualsAllAccepted(t *testing.T) {
 	d := digestDraft()
 	pending := Digest(d)
 	for _, id := range []string{"f-001", "f-002"} {
-		if err := Accept(d, id, digestNow); err != nil {
+		if _, err := Accept(d, id, digestNow); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -103,7 +103,7 @@ func TestDigestAllPendingEqualsAllAccepted(t *testing.T) {
 
 func TestDigestChanges(t *testing.T) {
 	accepted := func(d *Draft) {
-		if err := Accept(d, "f-002", digestNow); err != nil {
+		if _, err := Accept(d, "f-002", digestNow); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -127,8 +127,8 @@ func TestDigestChanges(t *testing.T) {
 		"accepted location start":   {before: accepted, change: func(d *Draft) { d.Findings[1].Location.StartLine = 0 }},
 		"accepted location side":    {before: accepted, change: func(d *Draft) { d.Findings[1].Location.Side = "RIGHT" }},
 		"accepted location path":    {before: accepted, change: func(d *Draft) { d.Findings[1].Location.Path = "b.go" }},
-		"accepted finding excluded": {before: accepted, change: func(d *Draft) { must(t, Exclude(d, "f-002", digestNow)) }},
-		"pending finding excluded":  {change: func(d *Draft) { must(t, Exclude(d, "f-001", digestNow)) }},
+		"accepted finding excluded": {before: accepted, change: func(d *Draft) { must(t, errOf(Exclude(d, "f-002", digestNow))) }},
+		"pending finding excluded":  {change: func(d *Draft) { must(t, errOf(Exclude(d, "f-001", digestNow))) }},
 		"excluded finding restored": {change: func(d *Draft) { must(t, Restore(d, "f-004")) }},
 		"finding withdrawn":         {change: func(d *Draft) { d.Findings[0].Included = false }},
 		"finding included":          {change: func(d *Draft) { d.Findings[2].Included = true }},
@@ -147,6 +147,9 @@ func TestDigestChanges(t *testing.T) {
 		})
 	}
 }
+
+// errOf drops the closed note ids that Accept and Exclude return.
+func errOf(_ []string, err error) error { return err }
 
 func must(t *testing.T, err error) {
 	t.Helper()

@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose new behavior for loupe
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What loupe would do. Commands, flags and output, if you have them in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: principles
+    attributes:
+      label: Principles
+      description: Which of the seven principles in `.specify/memory/constitution.md` this touches, and how it keeps to them.
+    validations:
+      required: false

@@ -199,6 +199,7 @@ Finding:  pending --accept--> accepted --edit/withdraw/send-back--> pending
           pending --exclude--> excluded --edit--> pending ; excluded --restore(u)--> pending
           included --edit --exclude--> withdrawn --edit --include--> pending
 Note:     open --resolve|dismiss (review only)--> resolved|dismissed
+          open --accept its finding--> resolved ; open --exclude its finding--> dismissed
 Attempt:  (none) --confirm--> in-flight --2xx--> (deleted, receipt) | --4xx--> (deleted) | --other--> unknown
           unknown --reconcile match--> (deleted, receipt) | --retry-unknown + confirm--> in-flight
 ```

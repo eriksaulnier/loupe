@@ -76,11 +76,14 @@ func TestSendBackLoop(t *testing.T) {
 		t.Fatalf("f-001 after edit: %v", fb["findings"])
 	}
 
-	shown := h.plainReview("a\na\nr\nq\n")
+	shown := h.plainReview("a\na\nq\n")
 	noteAt := strings.Index(shown, "Show the evidence.")
 	replyAt := strings.Index(shown, "Added the evidence.")
 	if noteAt < 0 || replyAt < noteAt || !strings.Contains(shown, "r-001") {
 		t.Fatalf("plain review does not show the reply under the note:\n%s", shown)
+	}
+	if !strings.Contains(shown, "f-002 accepted - n-001 resolved") {
+		t.Fatalf("accepting f-002 does not name the note it resolved:\n%s", shown)
 	}
 	fb = h.mustOK("feedback", "--run", runRef)
 	if readiness, _ := fb["readiness"].(map[string]any); readiness["ready"] != true {

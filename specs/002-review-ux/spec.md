@@ -201,6 +201,8 @@ The footer MUST NOT advertise note resolution or dismissal unless the finding ha
 
 The footer MUST NOT advertise `file` for a general finding.
 
+The list footer MUST show `p publish` at all times; while the draft is not ready it MUST read `publish (not ready)`, dimmed, and leave naming the blockers to the header.
+
 Compatibility aliases MUST appear in help but SHOULD NOT consume space in the persistent footer.
 
 When all hints do not fit, the footer MUST preserve currently available decision actions and `? help` before optional navigation prose.

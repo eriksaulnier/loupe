@@ -27,7 +27,7 @@ func threeFindings() *Draft {
 
 func TestAcceptStoresDecisionAtCurrentRev(t *testing.T) {
 	d := threeFindings()
-	if err := Accept(d, "f-003", decideNow); err != nil {
+	if _, err := Accept(d, "f-003", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	want := Decision{FindingID: "f-003", Decision: DecisionAccepted, FindingRev: 2, At: decideNow}
@@ -38,7 +38,7 @@ func TestAcceptStoresDecisionAtCurrentRev(t *testing.T) {
 
 func TestAcceptRefusesWithdrawnFinding(t *testing.T) {
 	d := threeFindings()
-	r := wantRefusal(t, Accept(d, "f-002", decideNow), refusal.Input)
+	r := wantRefusal(t, errOf(Accept(d, "f-002", decideNow)), refusal.Input)
 	if r.Message != "accept is for included findings only" {
 		t.Fatalf("message %q", r.Message)
 	}
@@ -49,7 +49,7 @@ func TestAcceptRefusesWithdrawnFinding(t *testing.T) {
 
 func TestExcludeAndRestore(t *testing.T) {
 	d := threeFindings()
-	if err := Exclude(d, "f-001", decideNow); err != nil {
+	if _, err := Exclude(d, "f-001", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	want := Decision{FindingID: "f-001", Decision: DecisionExcluded, FindingRev: 1, At: decideNow}
@@ -67,7 +67,7 @@ func TestExcludeAndRestore(t *testing.T) {
 
 func TestSendBackAddsOpenNoteAndClearsDecision(t *testing.T) {
 	d := threeFindings()
-	if err := Accept(d, "f-001", decideNow); err != nil {
+	if _, err := Accept(d, "f-001", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	note, err := SendBack(d, "f-001", "Check the nil case.", decideNow)
@@ -119,11 +119,66 @@ func TestResolveAndDismissNote(t *testing.T) {
 	_ = wantRefusal(t, DismissNote(d, "n-001", later), refusal.Input)
 }
 
+func TestAcceptResolvesAndExcludeDismissesOpenNotes(t *testing.T) {
+	d := threeFindings()
+	for _, id := range []string{"f-001", "f-001", "f-001", "f-003"} {
+		if _, err := SendBack(d, id, "Why?", decideNow); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := DismissNote(d, "n-002", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	later := decideNow.Add(time.Hour)
+	closed, err := Accept(d, "f-001", later)
+	if err != nil || !reflect.DeepEqual(closed, []string{"n-001", "n-003"}) {
+		t.Fatalf("accept closed %v, %v", closed, err)
+	}
+	for _, n := range d.Notes[:3] {
+		if n.ID == "n-002" {
+			if n.Status != NoteDismissed || !n.ClosedAt.Equal(decideNow) {
+				t.Errorf("already closed %s changed: %+v", n.ID, n)
+			}
+		} else if n.Status != NoteResolved || n.ClosedAt == nil || !n.ClosedAt.Equal(later) {
+			t.Errorf("%s after accept: %+v", n.ID, n)
+		}
+	}
+	if d.Notes[3].Status != NoteOpen || d.Notes[3].ClosedAt != nil {
+		t.Errorf("note on another finding changed: %+v", d.Notes[3])
+	}
+	if closed, err := Accept(d, "f-001", later); err != nil || len(closed) != 0 {
+		t.Errorf("accept with nothing open closed %v, %v", closed, err)
+	}
+
+	closed, err = Exclude(d, "f-003", later)
+	if err != nil || !reflect.DeepEqual(closed, []string{"n-004"}) {
+		t.Fatalf("exclude closed %v, %v", closed, err)
+	}
+	if n := d.Notes[3]; n.Status != NoteDismissed || n.ClosedAt == nil || !n.ClosedAt.Equal(later) {
+		t.Errorf("n-004 after exclude: %+v", n)
+	}
+	if !ReadinessOf(d).Ready {
+		t.Errorf("readiness %+v", ReadinessOf(d))
+	}
+}
+
+func TestAcceptRefusalClosesNoNotes(t *testing.T) {
+	d := threeFindings()
+	if _, err := SendBack(d, "f-002", "Why?", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	closed, err := Accept(d, "f-002", decideNow)
+	_ = wantRefusal(t, err, refusal.Input)
+	if closed != nil || d.Notes[0].Status != NoteOpen {
+		t.Fatalf("closed %v notes %+v", closed, d.Notes)
+	}
+}
+
 func TestUnknownIDsRefuseNotFound(t *testing.T) {
 	d := threeFindings()
 	errs := map[string]error{
-		"Accept":      Accept(d, "f-009", decideNow),
-		"Exclude":     Exclude(d, "f-009", decideNow),
+		"Accept":      errOf(Accept(d, "f-009", decideNow)),
+		"Exclude":     errOf(Exclude(d, "f-009", decideNow)),
 		"Restore":     Restore(d, "f-009"),
 		"ResolveNote": ResolveNote(d, "n-009", decideNow),
 		"DismissNote": DismissNote(d, "n-009", decideNow),
@@ -143,7 +198,7 @@ func TestDecisionsThroughMutateWithStaleVersionWriteNothing(t *testing.T) {
 	if _, err := SendBack(d, "f-003", "open note", decideNow); err != nil {
 		t.Fatal(err)
 	}
-	if err := Exclude(d, "f-001", decideNow); err != nil {
+	if _, err := Exclude(d, "f-001", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	d.Version = 4
@@ -157,8 +212,8 @@ func TestDecisionsThroughMutateWithStaleVersionWriteNothing(t *testing.T) {
 	}
 	stale := 3
 	decisions := map[string]func(*Draft) error{
-		"Accept":      func(d *Draft) error { return Accept(d, "f-003", decideNow) },
-		"Exclude":     func(d *Draft) error { return Exclude(d, "f-003", decideNow) },
+		"Accept":      func(d *Draft) error { return errOf(Accept(d, "f-003", decideNow)) },
+		"Exclude":     func(d *Draft) error { return errOf(Exclude(d, "f-003", decideNow)) },
 		"SendBack":    func(d *Draft) error { _, err := SendBack(d, "f-003", "again", decideNow); return err },
 		"Restore":     func(d *Draft) error { return Restore(d, "f-001") },
 		"ResolveNote": func(d *Draft) error { return ResolveNote(d, "n-001", decideNow) },

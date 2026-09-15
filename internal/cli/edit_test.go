@@ -24,7 +24,7 @@ func sendBackRun(t *testing.T) (home, dir string) {
 			Label: "issue", By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}},
 		{ID: "f-002", Rev: 1, Title: "Two", Body: "Body.", General: true, By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}},
 	}
-	if err := draft.Accept(d, "f-001", sendBackAt); err != nil {
+	if _, err := draft.Accept(d, "f-001", sendBackAt); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := draft.SendBack(d, "f-002", "Needs evidence.", sendBackAt); err != nil {

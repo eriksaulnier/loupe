@@ -105,9 +105,17 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		now := time.Now()
 		switch answer {
 		case "a":
-			fn, success = func(d *draft.Draft) error { return draft.Accept(d, f.ID, now) }, s.Glyphs.Accepted+" "+f.ID+" accepted"
+			fn = func(d *draft.Draft) error {
+				closed, err := draft.Accept(d, f.ID, now)
+				success = decidedNotice(s.Glyphs.Sep, s.Glyphs.Accepted, f.ID, "accepted", closed, draft.NoteResolved)
+				return err
+			}
 		case "x":
-			fn, success = func(d *draft.Draft) error { return draft.Exclude(d, f.ID, now) }, s.Glyphs.Excluded+" "+f.ID+" excluded"
+			fn = func(d *draft.Draft) error {
+				closed, err := draft.Exclude(d, f.ID, now)
+				success = decidedNotice(s.Glyphs.Sep, s.Glyphs.Excluded, f.ID, "excluded", closed, draft.NoteDismissed)
+				return err
+			}
 		case "u":
 			fn, success = func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, s.Glyphs.Pending+" "+f.ID+" restored to pending"
 		case "r", "d":

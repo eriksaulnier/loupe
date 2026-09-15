@@ -23,7 +23,8 @@ func withOpenNote(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
-		return draft.Exclude(d, "f-003", testNow)
+		_, err := draft.Exclude(d, "f-003", testNow)
+		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ type screen struct {
 }
 
 var screens = []screen{
-	{"list", func(m *Model) {}, []string{"enter", "?", "help"}},
+	{"list", func(m *Model) {}, []string{"enter", "p", "publish", "?", "help"}},
 	{"detail pending", func(m *Model) { mustOpen(m, "f-001") }, []string{"a", "x", "s", "?", "help"}},
 	{"detail excluded general", func(m *Model) { mustOpen(m, "f-003") }, []string{"u", "?", "help"}},
 	{"detail open note", func(m *Model) { mustOpen(m, "f-002") }, []string{"r", "d", "?", "help"}},

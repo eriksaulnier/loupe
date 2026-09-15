@@ -43,10 +43,10 @@ func goldenRuns(t *testing.T) string {
 			Body: "The clause exists to pass the test, not to state a rule.", General: true,
 			By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}},
 	}
-	if err := draft.Accept(d, "f-001", at); err != nil {
+	if _, err := draft.Accept(d, "f-001", at); err != nil {
 		t.Fatal(err)
 	}
-	if err := draft.Exclude(d, "f-003", at); err != nil {
+	if _, err := draft.Exclude(d, "f-003", at); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := draft.SendBack(d, "f-002", "Please run gh --version on a Debian box and paste the output.", at); err != nil {

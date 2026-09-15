@@ -204,7 +204,7 @@ func readyFixture(t *testing.T, viewer, author string) string {
 	}
 	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
 		for _, f := range d.Findings {
-			if err := draft.Accept(d, f.ID, testNow); err != nil {
+			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
 				return err
 			}
 		}

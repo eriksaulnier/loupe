@@ -159,21 +159,24 @@ func TestInitialSelectionIsWhatNeedsTheHuman(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	decideAll(func(d *draft.Draft) error { return draft.Accept(d, "f-001", testNow) })
+	decideAll(func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
 	if m := modelOf(t, dir, env, 100, 24); m.cursor != 1 {
 		t.Errorf("f-001 accepted: cursor %d, want f-002", m.cursor)
 	}
 	decideAll(func(d *draft.Draft) error {
-		if err := draft.Accept(d, "f-003", testNow); err != nil {
+		if _, err := draft.Accept(d, "f-003", testNow); err != nil {
 			return err
 		}
 		if _, err := draft.SendBack(d, "f-002", "Why?", testNow); err != nil {
 			return err
 		}
-		return draft.Accept(d, "f-002", testNow)
+		// Accepting would resolve the note, so a withdrawal is what leaves it open with nothing pending.
+		withdrawn := false
+		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdrawn, nil, draft.ByAgent, testNow)
+		return err
 	})
 	if m := modelOf(t, dir, env, 100, 24); m.cursor != findingIndex(m.draft, "f-002") || len(draft.ReadinessOf(m.draft).Pending) != 0 {
-		t.Errorf("nothing pending, f-002 has an open note: cursor %d, pending %v", m.cursor, draft.ReadinessOf(m.draft).Pending)
+		t.Errorf("nothing pending, withdrawn f-002 has an open note: cursor %d, pending %v", m.cursor, draft.ReadinessOf(m.draft).Pending)
 	}
 	decideAll(func(d *draft.Draft) error { return draft.ResolveNote(d, "n-001", testNow) })
 	if m := modelOf(t, dir, env, 100, 24); m.cursor != 0 {

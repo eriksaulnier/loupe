@@ -55,15 +55,20 @@ Inside [Herdr](https://herdr.dev), the skill opens `loupe review` for you in a s
 
 | Variable | Meaning |
 | :--- | :--- |
+| `LOUPE_HOME` | Where runs are stored; the default is `$XDG_DATA_HOME/loupe`, else `~/.local/share/loupe` |
+| `LOUPE_RUN` | The run a command acts on when it names none |
+| `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for a run's lock; the default is 3000, the maximum 60000 |
 | `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; the default is `unicode`, and `nerd` needs a Nerd Font. A non-UTF-8 locale always gets ASCII. |
 | `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | honored for color, plain-mode fallback and glyph selection |
+| `GH_TOKEN`, `GITHUB_TOKEN` | The GitHub token for github.com, checked in that order. Without either, loupe uses the token `gh` stored at `gh auth login`, from its config directory or, when `gh` is on PATH, its keyring. |
 
-## Develop
+[`contracts/cli.md`](specs/001-loupe-v1/contracts/cli.md#environment) has the exact rules and refusals for the `LOUPE_` variables.
 
-- `mise run check` runs vet, lint, `scripts/check-tests.sh` and the tests. lefthook runs it and enforces the Conventional Commit subject on every commit.
-- `mise run build` writes `dist/loupe`, stamped from `git describe`.
-- `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub, so the interface and the whole publish flow, `y` included, can be tried without a pull request or credentials. `mise run demo -- <loupe args>` runs any other command; `acme/widgets#42` is mid-review, `#43` is ready to publish and `#44` is ready with a moved head. Each run starts fresh and nothing leaves the machine.
-- Goldens under `testdata/golden/cli` regenerate with `go test ./internal/cli/ -update`.
+## Contributing
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, how changes are made, tests and commits.
+
+To try loupe without a pull request or credentials, `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub, so the interface and the whole publish flow, `y` included, can be tried end to end. `mise run demo -- <loupe args>` runs any other command; `acme/widgets#42` is mid-review, `#43` is ready to publish and `#44` is ready with a moved head. Each run starts fresh and nothing leaves the machine.
 
 ## Release
 
@@ -71,6 +76,11 @@ release-please opens the release PR, merging it tags the release, and goreleaser
 
 ## Reference
 
+- [`.specify/memory/constitution.md`](.specify/memory/constitution.md): the seven principles every change answers to.
 - [`specs/001-loupe-v1/contracts/cli.md`](specs/001-loupe-v1/contracts/cli.md): the command, input, result and error contract.
 - [`docs/comment-format.md`](docs/comment-format.md): the published review format.
 - [`docs/github-facts.md`](docs/github-facts.md): observed GitHub behavior to design around.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).

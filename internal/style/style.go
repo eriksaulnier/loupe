@@ -391,7 +391,8 @@ const (
 	RoleHelp
 )
 
-// Hint is one entry on a footer. KeyKind and VerbKind left Plain mean the accent key and the dim verb.
+// Hint is one entry on a footer. KeyKind and VerbKind left Plain mean the accent key and the dim verb; a Dim key is
+// not bold, so an unavailable action reads as one.
 type Hint struct {
 	Key, Verb string
 	Role      Role
@@ -455,7 +456,11 @@ func (s Style) hint(h Hint, next bool) string {
 	}
 	out := s.Of(verbKind).Render(h.Verb)
 	if h.Key != "" {
-		out = s.Of(keyKind).Bold(true).Render(h.Key) + " " + out
+		key := s.Of(keyKind)
+		if keyKind != Dim {
+			key = key.Bold(true)
+		}
+		out = key.Render(h.Key) + " " + out
 	}
 	if next && h.Next {
 		out += s.Dim.Render(" + next")
