@@ -20,28 +20,35 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-// confirmHeaderLines is the band, which carries what will be sent and where in the review the window sits, and the
+// confirmHeaderLines is the header, which carries what will be sent and where in the review the window sits, and the
 // blank line under it.
 const confirmHeaderLines = 2
 
 // confirmation is the last look at a review before it is sent, shared by the review program and loupe publish.
 type confirmation struct {
 	preview publish.Preview
-	// title is the band's left text: what is about to be sent, and where. Its caller knows the run; the preview does
-	// not carry it.
-	title    string
+	// title comes from the caller, which knows the run; the preview does not carry it.
+	title    ConfirmHeading
 	showJSON bool
 	yes      bool
 	scroll   viewport.Model
 }
 
-func newConfirmation(preview publish.Preview, title string) confirmation {
+func newConfirmation(preview publish.Preview, title ConfirmHeading) confirmation {
 	return confirmation{preview: preview, title: title, scroll: viewport.New(80, 10)}
 }
 
-// ConfirmTitle is the band text of the confirmation: the two things a wrong keypress could change, and where they go.
-func ConfirmTitle(ref, action, inline string, comments int) string {
-	return fmt.Sprintf("Publish to %s  action %s  inline %s (%d)", ref, action, inline, comments)
+// ConfirmHeading is what the confirmation header names: the two things a wrong keypress could change, and where they
+// go.
+type ConfirmHeading struct {
+	ref, action, inline string
+	comments            int
+	// inFlow is set by the review program, where two choice steps come first; loupe publish takes them as flags.
+	inFlow bool
+}
+
+func ConfirmTitle(ref, action, inline string, comments int) ConfirmHeading {
+	return ConfirmHeading{ref: ref, action: action, inline: inline, comments: comments}
 }
 
 // key reports whether the human answered. Only y confirms, and every key other than scrolling and the toggles is an
@@ -84,18 +91,39 @@ func (c *confirmation) position(m *Model) string {
 	return fmt.Sprintf("lines %d%s%d of %d", min(c.scroll.YOffset+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset+c.scroll.Height, total), total)
 }
 
-// band carries what will be sent; the position at the right edge tells the reader how much of the review is still
-// below, and keeps its place when the title has to give way.
-func (c *confirmation) band(m *Model) string {
-	position := c.position(m)
-	if m.styles.Color {
-		position = m.styles.On(m.styles.BandBg, m.styles.Dim).Render(position + " ")
+// shortPosition is the position for a window too narrow to name the action, the moved head and the long position
+// together.
+func (c *confirmation) shortPosition(m *Model) string {
+	total := c.scroll.TotalLineCount()
+	return fmt.Sprintf("%d%s%d/%d", min(c.scroll.YOffset+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset+c.scroll.Height, total), total)
+}
+
+// header carries what will be sent in the warn color, the only screen that can publish. The action and a moved head
+// never give way, since the review body does not restate the one and has scrolled past the other; the run context and
+// the step do, and the position at the right edge shortens before either required part would truncate.
+func (c *confirmation) header(m *Model) string {
+	step := ""
+	if c.title.inFlow {
+		step = "Step 3 of 3"
 	}
-	title := c.title
+	parts := []style.HeaderPart{
+		{Text: "Publish", Kind: style.Warn, Bold: true},
+		{Text: step, Drop: 2, Kind: style.Warn},
+		{Text: render.ForDisplay(c.title.ref), Drop: 4, Kind: style.Dim},
+		{Text: c.title.action},
+		{Text: fmt.Sprintf("inline %s (%d)", c.title.inline, c.title.comments), Drop: 3, Kind: style.Dim},
+	}
+	required := style.Width("Publish") + 3 + style.Width(c.title.action)
 	if moved := c.preview.HeadMoved; moved != nil {
-		title += fmt.Sprintf("  head moved +%d", moved.AheadBy)
+		text := fmt.Sprintf("head moved +%d", moved.AheadBy)
+		parts = append(parts, style.HeaderPart{Text: text, Kind: style.Warn})
+		required += 3 + style.Width(text)
 	}
-	return m.styles.Band(style.BandParts{Ref: strings.TrimSpace(m.glyphs.Ready + " " + title), Right: position}, m.width)
+	position := c.position(m)
+	if 2+required+2+style.Width(position) > m.width {
+		position = c.shortPosition(m)
+	}
+	return m.styles.Header(parts, m.styles.Dim.Render(position), m.width)
 }
 
 // headMovedLines escapes every line for display because commit text is untrusted.
@@ -159,12 +187,24 @@ func (c *confirmation) content(m *Model) string {
 	return strings.Join(parts, "\n")
 }
 
+// confirmCancel is said whole: when the footer has no room for it, it moves to the notice line rather than shrink.
+const confirmCancel = "any other key cancels, nothing is sent"
+
 func (m *Model) confirmView(c *confirmation) string {
 	c.sync(m)
-	keys := m.styles.Good.Bold(true).Render("y") + " " + m.styles.Good.Render("publish this review") + "  " +
-		m.styles.Keys([]style.Key{{K: "v", Verb: "exact JSON payload"}, {K: "j/k", Verb: "scroll"}}) + "  " +
-		m.styles.Dim.Render("any other key cancels, nothing is sent")
-	return m.frameWith([]string{c.band(m), ""}, c.scroll.View(), "", keys)
+	hints := []style.Hint{
+		{Key: "y", Verb: "publish this review", KeyKind: style.Good, VerbKind: style.Good},
+		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav},
+		{Key: "v", Verb: "payload", Role: style.RoleNav},
+		{Verb: confirmCancel},
+	}
+	keys, fits := m.styles.Footer(hints, m.width-2)
+	notice := ""
+	if !fits {
+		keys, _ = m.styles.Footer(hints[:len(hints)-1], m.width-2)
+		notice = " " + m.styles.Dim.Render(confirmCancel)
+	}
+	return m.frameWith([]string{c.header(m), ""}, c.scroll.View(), notice, keys)
 }
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
@@ -173,7 +213,7 @@ type ConfirmModel struct {
 	confirm confirmation
 }
 
-func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer, title string) *ConfirmModel {
+func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer, title ConfirmHeading) *ConfirmModel {
 	st := style.New(output, getenv)
 	return &ConfirmModel{
 		shell:   &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24},
@@ -222,9 +262,9 @@ func (c *ConfirmModel) View() string {
 	return c.shell.confirmView(&c.confirm)
 }
 
-// Confirm runs the confirmation view full screen for loupe publish. title is the band text, which loupe publish
-// builds from the run and the flags it was given.
-func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title string) func(publish.Preview) (bool, error) {
+// Confirm runs the confirmation view full screen for loupe publish. title is what the header names, which loupe
+// publish builds from the run and the flags it was given.
+func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title ConfirmHeading) func(publish.Preview) (bool, error) {
 	return func(preview publish.Preview) (bool, error) {
 		var program *tea.Program
 		input := in

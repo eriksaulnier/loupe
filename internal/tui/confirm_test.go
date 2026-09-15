@@ -17,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
@@ -25,10 +26,14 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	view := m.View()
 	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
-		"Publish to acme/widgets#42  action comment  inline blocking (1)", "review body", "inline comments (1)", "y publish this review"} {
+		"Publish - acme/widgets#42 - comment - inline blocking (1)", "review body", "inline comments (1)", "y publish this review"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("review view lacks %q:\n%s", want, view)
 		}
+	}
+	// loupe publish takes the action and inline mode from flags, so there are no earlier steps to count.
+	if strings.Contains(view, "Step 3 of 3") {
+		t.Errorf("the standalone confirmation counts steps it never showed:\n%s", view)
 	}
 	if strings.Contains(view, "<details>") || strings.ContainsAny(view, "\u202e\u2066\x1b") || strings.Contains(view, `"event"`) {
 		t.Errorf("review view has a closed <details>, a raw hidden character or the JSON:\n%q", view)
@@ -100,6 +105,33 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 	}
 }
 
+// At the narrowest window the cancel sentence keeps every word, on the notice line when the footer has no room.
+func TestConfirmCancelSentenceSurvivesSixtyColumns(t *testing.T) {
+	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "request-changes", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	lines := strings.Split(m.View(), "\n")
+	if !strings.Contains(lines[len(lines)-2], confirmCancel) || !strings.Contains(lines[len(lines)-1], "y publish this review") {
+		t.Errorf("60-column confirmation lost the cancel sentence or y:\n%s", strings.Join(lines, "\n"))
+	}
+}
+
+// The confirmation header never gives up the action or the moved head, whatever the width and however far scrolled.
+func TestConfirmHeaderKeepsActionAndMovedHead(t *testing.T) {
+	preview := movedPreview()
+	preview.Body = strings.Repeat("A line of the review body.\n\n", 80)
+	for _, width := range []int{60, 80, 99} {
+		m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("my-organization/my-repository#1234", "request-changes", "blocking", 1))
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		for range 150 {
+			m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		}
+		header := strings.Split(m.View(), "\n")[0]
+		if !strings.Contains(header, "request-changes") || !strings.Contains(header, "head moved +") || strings.Contains(header, "...") || style.Width(header) != width {
+			t.Errorf("width %d: header lost the action or the moved head: %q", width, header)
+		}
+	}
+}
+
 func TestConfirmOnlyYConfirms(t *testing.T) {
 	cases := []struct {
 		name string
@@ -143,7 +175,7 @@ func TestConfirmEndsAtEndOfInput(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				ok, err := Confirm(strings.NewReader(c.input), io.Discard, envOf(testEnv), "Publish to acme/widgets#42")(confirmPreview())
+				ok, err := Confirm(strings.NewReader(c.input), io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))(confirmPreview())
 				done <- result{ok, err}
 			}()
 			select {
@@ -218,7 +250,7 @@ func TestActionPickerDisablesBlockedApprove(t *testing.T) {
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), nil)
 	waitFor(t, tm, "+ 3 accepted")
 	tm.Type("p")
-	waitFor(t, tm, "> comment", "  approve", "disabled: cannot approve while included findings are blocking: f-001")
+	waitFor(t, tm, "> comment", "  approve", "unavailable: cannot approve while included findings are blocking: f-001")
 	tm.Type("j")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "or exclude or unblock the finding in loupe review")
@@ -233,8 +265,8 @@ func TestActionPickerOffersOnlyCommentOnOwnPullRequest(t *testing.T) {
 	waitFor(t, tm, "+ 3 accepted")
 	tm.Type("p")
 	waitFor(t, tm, "> comment",
-		"disabled: author is the author of this pull request and cannot approve it",
-		"disabled: author is the author of this pull request and cannot request changes on it")
+		"unavailable: author is the author of this pull request and cannot approve it",
+		"unavailable: author is the author of this pull request and cannot request changes on it")
 	quitFromPicker(t, tm)
 }
 
@@ -275,7 +307,7 @@ func TestPublishFlowDeclineSendsNothing(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-	waitFor(t, tm, "<details open>", "multi.txt:3")
+	waitFor(t, tm, "<details open>", "multi.txt:3", "Publish - Step 3 of 3 - acme/widgets#42 - comment")
 	tm.Type("n")
 	waitFor(t, tm, "publish canceled; nothing was sent")
 	tm.Type("q")

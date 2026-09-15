@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
@@ -99,15 +98,13 @@ var actionDescriptions = map[string]string{
 func (m *Model) actionView() string {
 	rows := make([]string, 0, len(publish.Actions))
 	for i, action := range publish.Actions {
-		description := actionDescriptions[action]
 		if r, ok := refusal.As(m.actionRefusal(action)); ok {
-			rows = append(rows, m.styles.Dim.Render(m.pickerRow(false, action)+"disabled: "+r.Message))
+			rows = append(rows, m.pickerRow(false, true, action, "unavailable: "+r.Message)...)
 			continue
 		}
-		rows = append(rows, m.pickerRow(i == m.pick, action)+m.styles.Dim.Render(description))
+		rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action])...)
 	}
-	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "enter", Verb: "next: inline comments"}, {K: "esc", Verb: "back"}})
-	return m.chooser("Publish: review action", rows, keys)
+	return m.publishStep(1, "", "Review action", rows, "next")
 }
 
 var inlineDescriptions = map[string]string{
@@ -119,41 +116,51 @@ var inlineDescriptions = map[string]string{
 func (m *Model) inlineView() string {
 	rows := make([]string, 0, len(publish.InlineModes))
 	for i, mode := range publish.InlineModes {
-		rows = append(rows, m.pickerRow(i == m.pick, mode)+m.styles.Dim.Render(inlineDescriptions[mode]))
+		rows = append(rows, m.pickerRow(i == m.pick, false, mode, inlineDescriptions[mode])...)
 	}
-	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "enter", Verb: "compose the review"}, {K: "esc", Verb: "back"}})
-	return m.chooser("Publish as "+m.action+": inline comments", rows, keys)
+	return m.publishStep(2, m.action, "Inline comments", rows, "compose the review")
 }
 
-// chooser draws one step of the publish choice as a box over the list, centered while there is room for margins.
-func (m *Model) chooser(title string, rows []string, keys string) string {
-	lines := append([]string{""}, rows...)
-	lines = append(lines, "", " "+keys)
-	// The box is as wide as the widest row, since a disabled row carries the refusal that explains itself.
-	inner := style.Width(title) + 4
-	for _, l := range lines {
-		inner = max(inner, style.Width(l)+1)
-	}
-	inner = min(inner, m.width-4)
-	indent := ""
-	if m.width >= midWidth {
-		indent = strings.Repeat(" ", (m.width-inner-4)/2)
-	}
-	box := m.styles.Boxed(title, lines, inner)
-	for i, l := range box {
-		box[i] = indent + l
-	}
-	header := []string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), "", " " + m.countsLine()}
-	return m.frame(header, "\n"+strings.Join(box, "\n"), "")
+// publishStep is one step of the publish choice as an ordinary screen: where it sits in the flow, what it asks, and
+// the choices under it.
+func (m *Model) publishStep(step int, action, question string, rows []string, enter string) string {
+	header := m.header(
+		style.HeaderPart{Text: "Publish", Bold: true},
+		style.HeaderPart{Text: fmt.Sprintf("Step %d of 3", step), Kind: style.Dim},
+		style.HeaderPart{Text: action, Drop: 1},
+		style.HeaderPart{Text: m.prRef(), Drop: 2, Kind: style.Dim},
+	)
+	body := append([]string{"", " " + m.styles.Bold.Render(question), ""}, rows...)
+	keys := m.footer([]style.Hint{
+		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "move", Role: style.RoleNav},
+		{Key: "enter", Verb: enter},
+		{Key: "esc", Verb: "back"},
+		{Key: "?", Verb: "help", Role: style.RoleHelp},
+	})
+	return m.frame([]string{header}, strings.Join(body, "\n"), keys)
 }
 
-// pickerRow is the cursor and the name, in one column so the descriptions line up.
-func (m *Model) pickerRow(selected bool, text string) string {
+// pickerIndent is where a choice's description starts, and where its wrapped lines continue.
+const pickerIndent = 22
+
+// pickerRow is the cursor, the name and the description, wrapped under the description's column so a refusal reason
+// is never clipped.
+func (m *Model) pickerRow(selected, disabled bool, name, description string) []string {
 	cursor := " "
-	if selected {
-		cursor = m.styles.Cursor.Render(m.glyphs.Cursor)
+	nameStyle := m.styles.R.NewStyle()
+	switch {
+	case disabled:
+		nameStyle = m.styles.Dim
+	case selected:
+		cursor, nameStyle = m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor), m.styles.Accent.Bold(true)
 	}
-	return " " + cursor + " " + style.Pad(text, 17)
+	indent := strings.Repeat(" ", pickerIndent)
+	lines := strings.Split(m.styles.Wrap(render.ForDisplay(description), style.Content(m.width)-1, indent), "\n")
+	for i, l := range lines {
+		lines[i] = indent + m.styles.Dim.Render(strings.TrimPrefix(l, indent))
+	}
+	lines[0] = " " + cursor + " " + nameStyle.Render(style.Pad(name, pickerIndent-4)) + " " + strings.TrimPrefix(lines[0], indent)
+	return lines
 }
 
 // listColumns is the row layout for the current width: the title takes whatever the fixed columns leave. The label
@@ -192,7 +199,7 @@ func (m *Model) listColumns() listColumns {
 }
 
 func (m *Model) listView() string {
-	header := []string{m.band(m.styles.TruncRight(m.titleBand(), m.width/2)), "", " " + m.countsLine()}
+	header := append([]string{m.listHeader()}, m.countsLines()...)
 	cols := m.listColumns()
 
 	summary := m.summaryBlock(cols)
@@ -208,17 +215,24 @@ func (m *Model) listView() string {
 	}
 	body := strings.Join(append(summary, rows...), "\n")
 
-	keys := []style.Key{{K: "j/k", Verb: "move"}, {K: "enter", Verb: "open"}}
-	if m.width >= wideWidth {
-		keys = append(keys, style.Key{K: "tab", Verb: "summary"})
+	hints := []style.Hint{
+		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "move", Role: style.RoleNav},
+		{Key: "enter", Verb: "open"},
 	}
-	keys = append(keys, style.Key{K: "p", Verb: "publish"}, style.Key{K: "?", Verb: "help"}, style.Key{K: "q", Verb: "quit"})
-	return m.frame(header, body, m.styles.Keys(keys))
+	if draft.ReadinessOf(m.draft).Ready {
+		hints = append(hints, style.Hint{Key: "p", Verb: "publish"})
+	}
+	hints = append(hints,
+		style.Hint{Key: "tab", Verb: "summary", Role: style.RoleNav},
+		style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp},
+		style.Hint{Key: "q", Verb: "quit", Role: style.RoleNav},
+	)
+	return m.frame(header, body, m.footer(hints))
 }
 
 // summaryBlock is the draft summary beside its heading, two lines by default so the findings stay on screen.
 func (m *Model) summaryBlock(cols listColumns) []string {
-	const label = " SUMMARY  "
+	const label = " Summary  "
 	indent := strings.Repeat(" ", len(label))
 	hint := "tab expands"
 	if !m.summaryCollapsed {
@@ -247,91 +261,53 @@ func (m *Model) summaryBlock(cols listColumns) []string {
 }
 
 func (m *Model) columnHeads(cols listColumns) string {
-	head := strings.Repeat(" ", listFixed-listIDWidth-2) + style.Pad("ID", listIDWidth+2) + style.Pad("TITLE", cols.title+2)
+	head := strings.Repeat(" ", listFixed-listIDWidth-2) + style.Pad("ID", listIDWidth+2) + style.Pad("Title", cols.title+2)
 	if cols.label > 0 {
-		head += style.Pad("LABEL", cols.label+2)
+		head += style.Pad("Label", cols.label+2)
 	}
 	if cols.location > 0 {
-		head += "LOCATION"
+		head += "Location"
 	}
 	return m.styles.Dim.Render(m.styles.TruncRight(head, m.width))
 }
 
+// row is one finding: the cursor, one disposition glyph, the quiet id, the blocking marker and the title, which the
+// selection bolds in the accent.
 func (m *Model) row(f draft.Finding, disposition string, selected bool, cols listColumns) string {
-	// A selected row is one painted band; every piece carries the background, since a reset inside would end it.
-	paint := func(st lipgloss.Style, text string) string {
-		if selected && m.styles.Color {
-			return m.styles.On(m.styles.Selected, st).Render(text)
-		}
-		return st.Render(text)
-	}
-	plain := m.styles.R.NewStyle()
-	cursor := " "
+	cursor, titleStyle := " ", m.styles.R.NewStyle()
 	if selected {
-		cursor = m.glyphs.Cursor
+		cursor, titleStyle = m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor), m.styles.Accent.Bold(true)
 	}
 	glyph, _, kind := m.styles.Disposition(disposition)
-	title := render.ForDisplay(render.OneLine(f.Title))
 	titleWidth := cols.title
 	blocking := ""
 	if f.Blocking {
 		blocking = m.glyphs.Blocking + " "
 		titleWidth -= style.Width(blocking)
 	}
-	title = style.Pad(m.styles.TruncRight(title, titleWidth), titleWidth)
+	title := m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Title)), titleWidth)
 	var b strings.Builder
-	b.WriteString(paint(plain, " "))
-	b.WriteString(paint(m.styles.Cursor, cursor))
-	b.WriteString(paint(plain, " "))
-	b.WriteString(paint(m.styles.Of(kind), glyph))
-	b.WriteString(paint(plain, " "))
-	b.WriteString(paint(m.styles.Accent, style.Pad(f.ID, listIDWidth)))
-	b.WriteString(paint(plain, "  "))
+	b.WriteString(" " + cursor + " " + m.styles.Of(kind).Render(glyph) + " ")
+	b.WriteString(m.styles.Dim.Render(style.Pad(f.ID, listIDWidth)) + "  ")
 	if blocking != "" {
-		b.WriteString(paint(m.styles.Bad, blocking))
+		b.WriteString(m.styles.Bad.Render(blocking))
 	}
-	b.WriteString(paint(plain, title))
+	b.WriteString(titleStyle.Render(title) + strings.Repeat(" ", max(0, titleWidth-style.Width(title))))
 	if cols.label > 0 {
-		b.WriteString(paint(m.styles.Dim, "  "+style.Pad(m.labelColumn(f, cols), cols.label)))
+		label := m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Label)), cols.label)
+		b.WriteString(m.styles.Dim.Render("  " + style.Pad(label, cols.label)))
 	}
 	if cols.location > 0 {
-		b.WriteString(paint(m.styles.Dim, "  "+m.locationColumn(f, cols)))
+		b.WriteString(m.styles.Dim.Render("  " + m.locationColumn(f, cols)))
 	}
-	if !selected {
-		return b.String()
-	}
-	if !m.styles.Color {
-		return strings.TrimRight(b.String(), " ")
-	}
-	// The band runs to the edge of the window, past the content width.
-	return b.String() + paint(plain, strings.Repeat(" ", max(0, m.width-style.Width(b.String()))))
+	return strings.TrimRight(b.String(), " ")
 }
 
-// labelColumn is the label with its icon in the tier that has one.
-func (m *Model) labelColumn(f draft.Finding, cols listColumns) string {
-	icon := m.glyphs.Label(f.Label)
-	if f.Label == "" {
-		return ""
-	}
-	if icon == "" {
-		return m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Label)), cols.label)
-	}
-	return icon + " " + m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Label)), cols.label-2)
-}
-
-// locationColumn keeps the end of the path, which is the part that identifies the file, behind the file icon.
+// locationColumn keeps the end of the path, which is the part that identifies the file.
 func (m *Model) locationColumn(f draft.Finding, cols listColumns) string {
 	text := locationText(f)
 	if cols.shortLocation && f.Location != nil {
 		text = render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
 	}
-	icon := m.glyphs.File
-	if f.Location == nil {
-		icon = m.glyphs.General
-	}
-	// A column too narrow for the icon and a few cells of path shows the path alone.
-	if icon == "" || cols.location < 4 {
-		return m.styles.TruncLeft(text, cols.location)
-	}
-	return icon + " " + m.styles.TruncLeft(text, cols.location-2)
+	return m.styles.TruncLeft(text, cols.location)
 }

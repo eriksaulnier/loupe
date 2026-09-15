@@ -3,7 +3,7 @@ loupe  File pull request review findings for a human to decide and publish.
 An agent files findings into a local draft; the human decides each finding and posts exactly
 one confirmed GitHub review.
 
-WORKFLOW  capture → add → summary → review → publish
+Workflow  capture → add → summary → review → publish
   1  loupe capture https://github.com/owner/repo/pull/123 --json
      capture the pull request into a new round; prints the run reference
   2  loupe add --run owner/repo#123 --from findings.json --json
@@ -22,7 +22,7 @@ WORKFLOW  capture → add → summary → review → publish
   loupe review. An agent MAY block on loupe wait for the human's notes and MUST pass --run to
   it; it still MUST NOT run review.
 
-COMMANDS
+Commands
   agent   capture   Capture a pull request into a new review round
           add       File findings into the draft
           summary   Set the review summary
@@ -35,19 +35,19 @@ COMMANDS
   human   review    Decide each finding in the review interface (human-only)
           publish   Confirm and post the review to GitHub (human-only)
 
-SEND-BACK LOOP  when the human sends findings back from review with notes
+Send-back loop  when the human sends findings back from review with notes
   loupe feedback --run owner/repo#123 --json              read notes, dispositions and readiness
   loupe edit f-001 --run owner/repo#123 --from f.json     change the finding; clears its decision
   loupe reply n-001 --run owner/repo#123 --body "Fixed."  answer the note
 
-RUN REFERENCES
+Run references
   owner/repo#123      the newest round of pull request 123
   owner/repo#123@2    round 2
   Run selection, in order: --run <ref> (or the <ref> argument of review and publish), then
   LOUPE_RUN, then the pull request of the current branch in the working directory at its newest
   round.
 
-CONVENTIONS
+Conventions
   --json                  print exactly one JSON result object on stdout; diagnostics go to stderr
   --from <file>|-         read JSON input from a file, or from stdin with -
   --expect-version <n>    refuse unless the draft is at version n (add, edit, summary, reply)
@@ -56,9 +56,9 @@ CONVENTIONS
   Exit 0 on success, 1 on refusal, 2 on usage error. Every refusal names a code and a fix.
   Every command's --help shows its JSON input and result shapes.
 
-ENVIRONMENT
+Environment
   LOUPE_HOME                    data root (default $XDG_DATA_HOME/loupe, else ~/.local/share/loupe)
   LOUPE_RUN                     default run reference
   LOUPE_LOCK_TIMEOUT_MS         how long to wait for the run lock (default 3000, max 60000)
   NO_COLOR, TERM, LANG/LC_ALL   honored for color, plain-mode fallback and glyph selection
-  LOUPE_ICONS                   ascii, unicode or nerd; the default nerd needs a Nerd Font
+  LOUPE_ICONS                   ascii, unicode (the default) or nerd, which needs a Nerd Font

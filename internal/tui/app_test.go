@@ -118,7 +118,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	tm.Type("f")
 	waitFor(t, tm, "@@ -18,6 +18,7 @@", "inserted after 20")
 	tm.Type("]")
-	waitFor(t, tm, "f-002  +inserted after 20")
+	waitFor(t, tm, "multi.txt - f-002 - 2 findings", ">   21  *  +inserted after 20")
 	key(tm, tea.KeyEnter)
 	waitFor(t, tm, "Body two suggests a helper.")
 
@@ -138,7 +138,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	}
 
 	tm.Type("n")
-	waitFor(t, tm, "Body three asks about tests.", "general finding")
+	waitFor(t, tm, "Body three asks about tests.", ". pending   general   question")
 	tm.Type("s")
 	waitFor(t, tm, "send back f-003")
 	tm.Type("Needs a test.")
@@ -155,7 +155,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	finalView(t, tm)
 
 	again := startApp(t, dir)
-	waitFor(t, again, "+ 1 accepted", ". 1 pending", "x 1 excluded", "~ 1 open notes", "+ f-001", "x f-002", ". f-003")
+	waitFor(t, again, "+ 1 accepted", ". 1 pending", "x 1 excluded", "~ 1 open note", "+ f-001", "x f-002", ". f-003")
 	again.Type("q")
 	view := finalView(t, again)
 	for _, want := range []string{"+ f-001", "x f-002", ". f-003"} {

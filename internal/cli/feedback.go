@@ -88,14 +88,14 @@ func printFeedback(deps Deps, ref string, d *draft.Draft) error {
 	s, width := deps.outStyle(), deps.width()
 	readiness := draft.ReadinessOf(d)
 	var b strings.Builder
-	line := fmt.Sprintf("%s  %s  %s", header(s, width, ref, ""), s.Dim.Render(fmt.Sprintf("draft version %d", d.Version)),
-		s.ReadinessPill(readiness.Ready, len(readiness.Pending), len(readiness.OpenNotes)))
-	// The tally spells out what the pill only names, so it is the part that gives way when the line does not fit.
-	tally := s.Dim.Render(fmt.Sprintf("%d pending, %d open %s", len(readiness.Pending), len(readiness.OpenNotes), plural(len(readiness.OpenNotes), "note")))
-	if style.Width(line)+style.Width(tally)+2 <= width {
-		line += "  " + tally
+	line := header(s, width, ref, "") + "  " + s.Dim.Render(fmt.Sprintf("draft version %d", d.Version))
+	state := s.Readiness(readiness.Ready, len(readiness.Pending), len(readiness.OpenNotes))
+	// The readiness takes a line of its own rather than wrap the header.
+	sep := "  "
+	if style.Width(line)+2+style.Width(state) > width {
+		sep = "\n"
 	}
-	fmt.Fprintf(&b, "%s\n", line)
+	fmt.Fprintf(&b, "%s%s%s\n", line, sep, state)
 	if len(d.Notes) == 0 {
 		fmt.Fprintf(&b, "\n%s\n%s\n", s.Heading("notes"), s.Dim.Render("  (none)"))
 	}

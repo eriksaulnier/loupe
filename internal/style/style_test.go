@@ -2,6 +2,7 @@ package style
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -19,16 +20,16 @@ func TestNoColorEmitsNoEscapesInEveryTier(t *testing.T) {
 		}
 		g := s.Glyphs
 		out := strings.Join([]string{
-			s.Brand(), s.Heading("findings"), s.Pill(Warn, g.NotReady, "not ready"), s.Chip(Good, g.Accepted, "accepted"),
-			s.Band(BandParts{Ref: "o/r#1", Title: "title", Right: s.ReadinessPill(true, 0, 0)}, 40),
-			s.Keys([]Key{{"j", "move"}}, []Key{{"q", "quit"}}),
-			s.Rule(40, "src/cli.ts:598", "f whole file"), strings.Join(s.Boxed("t", []string{"a"}, 10), "\n"),
-			s.Counts(1, 2, 0, 0, 0), s.ReadinessPill(false, 2, 0), g.Label("issue"),
+			s.Brand(), s.Heading("findings"), s.Chip(Good, g.Accepted, "accepted"),
+			s.Header([]HeaderPart{{Text: "loupe", Bold: true}, {Text: "o/r#1", Kind: Accent}}, s.Readiness(true, 0, 0), 40),
+			footer(s, []Hint{{Key: "j", Verb: "move", Role: RoleNav}, {Key: "q", Verb: "quit"}}, 40),
+			s.Rule(40, "src/cli.ts:598", "f whole file"),
+			strings.Join(s.Counts(1, 2, 0, 0, 0, 80), "\n"), s.Readiness(false, 2, 0), g.Label("issue"),
 		}, "\n")
 		if strings.Contains(out, "\x1b") {
 			t.Fatalf("%s: escape sequence emitted without color:\n%q", tier, out)
 		}
-		if !strings.Contains(out, "[NOT READY]") || !strings.Contains(out, "loupe") {
+		if !strings.Contains(out, "2 pending") || !strings.Contains(out, "ready to publish") || !strings.Contains(out, "loupe") {
 			t.Fatalf("%s: plain fallbacks missing:\n%s", tier, out)
 		}
 	}
@@ -49,14 +50,15 @@ func TestTierSelection(t *testing.T) {
 		env  map[string]string
 		want Tier
 	}{
-		{map[string]string{"LANG": "en_US.UTF-8"}, Nerd},
+		{map[string]string{"LANG": "en_US.UTF-8"}, Unicode},
 		{map[string]string{"LANG": "en_US.UTF-8", IconsEnv: "unicode"}, Unicode},
 		{map[string]string{"LANG": "en_US.UTF-8", IconsEnv: "ASCII"}, ASCII},
 		{map[string]string{"LANG": "en_US.UTF-8", IconsEnv: "nerd"}, Nerd},
-		{map[string]string{"LANG": "en_US.UTF-8", IconsEnv: "emoji"}, Nerd},
+		{map[string]string{"LANG": "en_US.UTF-8", IconsEnv: "NERD"}, Nerd},
+		{map[string]string{"LANG": "en_US.UTF-8", IconsEnv: "emoji"}, Unicode},
 		{map[string]string{"LC_ALL": "C", "LANG": "en_US.UTF-8"}, ASCII},
 		{map[string]string{"LC_ALL": "C", "LANG": "en_US.UTF-8", IconsEnv: "nerd"}, ASCII},
-		{map[string]string{"LC_CTYPE": "en_US.utf8", "LANG": "C"}, Nerd},
+		{map[string]string{"LC_CTYPE": "en_US.utf8", "LANG": "C"}, Unicode},
 		{map[string]string{}, ASCII},
 	}
 	for _, c := range cases {
@@ -64,8 +66,8 @@ func TestTierSelection(t *testing.T) {
 			t.Errorf("%v: tier %v, want %v", c.env, got, c.want)
 		}
 	}
-	if Glyphs(env(map[string]string{})).Box.TL != "+" {
-		t.Error("ASCII box must use +")
+	if g := Glyphs(env(map[string]string{})); g.Sep != "-" || g.Mark != "*" || g.Left != "left" || g.Right != "right" || g.Up != "up" || g.Down != "down" {
+		t.Errorf("ASCII separators and arrow names %+v", g)
 	}
 	if got := Glyphs(env(map[string]string{"LANG": "C.UTF-8", IconsEnv: "unicode"})).Accepted; got != "✓" {
 		t.Errorf("unicode accepted %q", got)
@@ -83,10 +85,10 @@ func TestNerdGlyphsAreOneCell(t *testing.T) {
 	g := nerdGlyphs
 	icons := map[string]string{
 		"Accepted": g.Accepted, "Pending": g.Pending, "Excluded": g.Excluded, "Withdrawn": g.Withdrawn,
-		"Blocking": g.Blocking, "Note": g.Note, "Reply": g.Reply, "Cursor": g.Cursor, "Brand": g.Brand,
-		"File": g.File, "General": g.General, "PR": g.PR, "Ready": g.Ready, "NotReady": g.NotReady, "Fix": g.Fix,
-		"Error": g.Error, "Published": g.Published, "Canceled": g.Canceled, "Help": g.Help, "Divider": g.Divider,
-		"DividerThin": g.DividerThin, "issue": g.Label("issue"), "suggestion": g.Label("suggestion"),
+		"Blocking": g.Blocking, "Note": g.Note, "Reply": g.Reply, "Cursor": g.Cursor,
+		"File": g.File, "General": g.General, "PR": g.PR, "Fix": g.Fix,
+		"Error": g.Error, "Published": g.Published, "Canceled": g.Canceled, "Help": g.Help,
+		"issue": g.Label("issue"), "suggestion": g.Label("suggestion"),
 		"question": g.Label("question"), "nitpick": g.Label("nitpick"),
 	}
 	for name, icon := range icons {
@@ -106,51 +108,121 @@ func TestNerdGlyphsAreOneCell(t *testing.T) {
 	}
 }
 
-func TestBandRightAlignsAndTruncates(t *testing.T) {
-	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
-	pill := s.ReadinessPill(false, 2, 0)
-	got := s.Band(BandParts{Ref: "owner/repo#1  r1", Title: "a very long title that will not fit", Right: pill}, 48)
-	if w := Width(got); w != 48 {
-		t.Fatalf("band width %d, want 48: %q", w, got)
-	}
-	if !strings.HasSuffix(got, "[NOT READY]") || !strings.Contains(got, "...") || !strings.Contains(got, "owner/repo#1") {
-		t.Fatalf("band %q", got)
-	}
-	if short := s.Band(BandParts{Ref: "a", Title: "b", Right: "c"}, 16); short != " loupe  a  b   c" {
-		t.Fatalf("short band %q", short)
-	}
-	if noRef := s.Band(BandParts{Title: "keys"}, 16); noRef != " loupe  keys    " {
-		t.Fatalf("band without ref %q", noRef)
-	}
-	// Too narrow for any title: the ref gives way rather than the pill.
-	narrow := s.Band(BandParts{Ref: "owner/repository#123", Title: "title", Right: pill}, 30)
-	if w := Width(narrow); w != 30 {
-		t.Fatalf("narrow band width %d: %q", w, narrow)
-	}
-	if !strings.HasSuffix(narrow, "[NOT READY]") {
-		t.Fatalf("narrow band lost the pill: %q", narrow)
+func footer(s Style, hints []Hint, width int) string {
+	line, _ := s.Footer(hints, width)
+	return line
+}
+
+// No tier carries a Powerline divider, and the ASCII tier prints no arrow characters.
+func TestNoTierCarriesPowerlineOrASCIIArrows(t *testing.T) {
+	for _, g := range []GlyphSet{nerdGlyphs, unicodeGlyphs, asciiGlyphs} {
+		all := fmt.Sprintf("%+v", g)
+		if strings.ContainsAny(all, "\ue0b0\ue0b1\ue0b2\ue0b3") {
+			t.Errorf("tier %v carries a powerline divider: %s", g.Tier, all)
+		}
+		if g.Tier == ASCII && strings.ContainsAny(all, "←→↑↓·◆") {
+			t.Errorf("ASCII tier carries a non-ASCII character: %s", all)
+		}
 	}
 }
 
-// The powerline band adds a divider cell after every segment; the rendered width must still be exactly the window.
-func TestBandSegmentsFillTheWidth(t *testing.T) {
-	s := New(&bytes.Buffer{}, env(map[string]string{"LANG": "en_US.UTF-8"}))
-	// A buffer has no color profile; the layout is what is under test.
-	s.Color = true
-	s.Glyphs = nerdGlyphs
-	for _, width := range []int{40, 80, 100, 140} {
-		got := s.Band(BandParts{Ref: nerdGlyphs.PR + " owner/repo#1  round 1", Title: "chore: canonical review skills, gh doctor check, plannotator bump", Right: s.ReadinessPill(false, 1, 0)}, width)
-		if w := Width(got); w != width {
-			t.Errorf("width %d: band measures %d: %q", width, w, got)
-		}
-		if strings.Count(got, nerdGlyphs.Divider) != 2 {
-			t.Errorf("width %d: want two dividers in %q", width, got)
+func TestHeaderDropsInOrderAndFillsTheWidth(t *testing.T) {
+	parts := func(g GlyphSet) []HeaderPart {
+		return []HeaderPart{
+			{Text: "loupe", Drop: 3, Bold: true},
+			{Text: strings.TrimSpace(g.PR + " acme/widgets#42")},
+			{Text: "round 1", Drop: 2, Kind: Dim},
+			{Text: "feat(cache): add a read-through cache for pull request metadata", Drop: 4, Trunc: true, Kind: Dim},
 		}
 	}
-	flat := s
-	flat.Glyphs = unicodeGlyphs
-	if got := flat.Band(BandParts{Ref: "o/r#1", Title: "t"}, 30); strings.Contains(got, nerdGlyphs.Divider) || Width(got) != 30 {
-		t.Errorf("unicode band %q", got)
+	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
+	right := s.Readiness(false, 3, 1)
+	cases := []struct {
+		width int
+		want  string
+	}{
+		{140, " loupe · acme/widgets#42 · round 1 · feat(cache): add a read-through cache for pull request metadata"},
+		{80, " loupe · acme/widgets#42 · round 1 · feat(cache): add…  "},
+		{60, " loupe · acme/widgets#42 · round 1  "},
+		{44, " acme/widgets#42  "},
+		{30, " ac…  "},
+	}
+	for _, c := range cases {
+		got := s.Header(parts(s.Glyphs), right, c.width)
+		if w := Width(got); w != c.width {
+			t.Errorf("width %d: header is %d cells: %q", c.width, w, got)
+		}
+		if !strings.HasPrefix(got, c.want) || !strings.HasSuffix(got, "3 pending · 1 open note ") {
+			t.Errorf("width %d: header %q, want prefix %q and the readiness at the right edge", c.width, got, c.want)
+		}
+	}
+
+	// A required squeezed path truncates from the left once nothing is left to drop.
+	path := []HeaderPart{{Text: "internal/cache/deeply/nested/store.go", Squeeze: true, Left: true, Bold: true}, {Text: "f-002"}, {Text: "3 findings", Kind: Dim}, {Text: "+22 -4", Drop: 1}}
+	got := s.Header(path, right, 60)
+	if Width(got) != 60 || !strings.HasPrefix(got, " …ed/store.go · f-002 · 3 findings  ") || strings.Contains(got, "+22") {
+		t.Errorf("squeezed header %q", got)
+	}
+
+	for _, tier := range []GlyphSet{nerdGlyphs, unicodeGlyphs, asciiGlyphs} {
+		c := New(&bytes.Buffer{}, env(map[string]string{"LANG": "en_US.UTF-8"}))
+		c.Color, c.Glyphs = true, tier
+		for _, width := range []int{60, 79, 80, 99, 100, 140} {
+			if got := c.Header(parts(tier), c.Readiness(true, 0, 0), width); Width(got) != width {
+				t.Errorf("tier %v width %d: header is %d cells", tier.Tier, width, Width(got))
+			}
+		}
+	}
+}
+
+func TestFooterGivesWayStepByStep(t *testing.T) {
+	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
+	hints := []Hint{
+		{Key: "←/→", Verb: "finding", Role: RoleNav},
+		{Key: "↑/↓", Verb: "scroll", Role: RoleNav},
+		{Key: "a", Verb: "accept", Role: RoleDecision, Next: true},
+		{Key: "x", Verb: "exclude", Role: RoleDecision, Next: true},
+		{Key: "s", Verb: "send back", Role: RoleDecision, Next: true},
+		{Key: "f", Verb: "file", Role: RoleFile},
+		{Key: "?", Verb: "help", Role: RoleHelp},
+	}
+	steps := []string{
+		"←/→ finding   ↑/↓ scroll   a accept + next   x exclude + next   s send back + next   f file   ? help",
+		"←/→ finding   ↑/↓ scroll   a accept   x exclude   s send back   f file   ? help",
+		"a accept   x exclude   s send back   f file   ? help",
+		"a accept  x exclude  s send back  ? help",
+		"a x s  ? help",
+	}
+	for i, want := range steps {
+		got, fits := s.Footer(hints, Width(want))
+		if got != want || !fits {
+			t.Errorf("step %d: footer %q (fits %v), want %q", i+1, got, fits, want)
+		}
+	}
+	if got, fits := s.Footer(hints, 5); fits || got != steps[4] {
+		t.Errorf("too narrow: %q fits %v", got, fits)
+	}
+}
+
+func TestReadinessNamesTheRemainder(t *testing.T) {
+	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
+	for _, c := range []struct {
+		ready             bool
+		pending, openNote int
+		want              string
+	}{
+		{true, 0, 0, "ready to publish"},
+		{false, 2, 0, "2 pending"},
+		{false, 0, 1, "1 open note"},
+		{false, 3, 2, "3 pending · 2 open notes"},
+	} {
+		if got := s.Readiness(c.ready, c.pending, c.openNote); got != c.want {
+			t.Errorf("Readiness(%v, %d, %d) = %q, want %q", c.ready, c.pending, c.openNote, got, c.want)
+		}
+	}
+	a := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
+	if got := a.Readiness(false, 1, 1); got != "1 pending - 1 open note" {
+		t.Errorf("ASCII readiness %q", got)
 	}
 }
 
@@ -197,37 +269,29 @@ func TestWrapIndentsEveryLine(t *testing.T) {
 	}
 }
 
-func TestBoxedIsRectangular(t *testing.T) {
+func TestCountsGiveWay(t *testing.T) {
 	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
-	lines := s.Boxed("Publish", []string{"comment", "a line that is far too long for the box"}, 20)
-	for _, l := range lines {
-		if Width(l) != 24 {
-			t.Fatalf("line width %d: %q", Width(l), l)
-		}
+	full := "+ 2 accepted   . 3 pending   x 0 excluded   - 0 withdrawn   ~ 1 open note"
+	if got := s.Counts(2, 3, 0, 0, 1, Width(full)); len(got) != 1 || got[0] != full {
+		t.Errorf("full counts %q", got)
 	}
-	if lines[0] != "+- Publish ------------+" {
-		t.Fatalf("top %q", lines[0])
+	tight := "+ 2 accepted  . 3 pending  ~ 1 open note"
+	if got := s.Counts(2, 3, 0, 0, 1, Width(full)-1); len(got) != 1 || got[0] != tight {
+		t.Errorf("tight counts %q", got)
+	}
+	split := s.Counts(2, 3, 1, 1, 2, 30)
+	if len(split) != 2 || split[0] != "+ 2 accepted  . 3 pending  x 1 excluded" || split[1] != "- 1 withdrawn  ~ 2 open notes" {
+		t.Errorf("split counts %q", split)
 	}
 }
 
-func TestCountsAndReadiness(t *testing.T) {
+func TestHeadingIsSentenceCase(t *testing.T) {
 	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
-	if got := s.Counts(1, 2, 0, 0, 3); got != "+ 1 accepted   . 2 pending   x 0 excluded   - 0 withdrawn   ~ 3 open notes" {
-		t.Fatalf("counts %q", got)
+	if got := s.Heading("send-back loop"); got != "Send-back loop" {
+		t.Errorf("heading %q", got)
 	}
-	if got := s.ReadinessPill(true, 0, 0); got != "[READY]" {
-		t.Errorf("ready %q", got)
-	}
-	if got := s.ReadinessPill(false, 0, 1); got != "[1 OPEN NOTE]" {
-		t.Errorf("open note %q", got)
-	}
-	if got := s.ReadinessPill(false, 2, 1); got != "[NOT READY]" {
-		t.Errorf("pending %q", got)
-	}
-	nerd := New(&bytes.Buffer{}, env(map[string]string{"LANG": "en_US.UTF-8"}))
-	nerd.Color = true
-	if got := nerd.ReadinessPill(true, 0, 0); !strings.Contains(got, nerdGlyphs.Ready+" READY") {
-		t.Errorf("nerd ready pill %q lacks the rocket", got)
+	if got := s.Brand(); got != "loupe" {
+		t.Errorf("brand %q", got)
 	}
 }
 

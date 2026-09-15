@@ -146,7 +146,7 @@ func TestWaitHumanOutputNamesTheReason(t *testing.T) {
 		t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 	}
 	out := s.stdout.String()
-	if !strings.HasPrefix(out, "~ 1 note handed back: n-001\n") || !strings.Contains(out, "OPEN NOTES") {
+	if !strings.HasPrefix(out, "~ 1 note handed back: n-001\n") || !strings.Contains(out, "Open notes") {
 		t.Fatalf("output:\n%s", out)
 	}
 }

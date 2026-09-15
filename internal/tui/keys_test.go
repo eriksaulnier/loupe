@@ -160,3 +160,101 @@ func TestPlainModeEscapesFindings(t *testing.T) {
 	}
 	assertEscaped(t, "plain output", out.String(), `Title \u202Eeno \u001B[31mred`, `Body \u2066hidden \u001B]52;c;x\u0007`, `fix \u200Fmark`)
 }
+
+func arrow(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
+
+func runes(k string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)} }
+
+// ← and → move between findings exactly as N and n do, stopping at both ends.
+func TestDetailArrowsMatchTheirAliases(t *testing.T) {
+	dir := newFixture(t)
+	for _, pair := range []struct {
+		name       string
+		prev, next tea.KeyMsg
+	}{
+		{"arrows", arrow(tea.KeyLeft), arrow(tea.KeyRight)},
+		{"aliases", runes("N"), runes("n")},
+	} {
+		m := newModel(t, dir)
+		if err := m.openFinding("f-001"); err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, k := range []tea.KeyMsg{pair.prev, pair.next, pair.next, pair.next, pair.prev} {
+			m.Update(k)
+			got = append(got, m.openID)
+		}
+		if want := "f-001 f-002 f-003 f-003 f-002"; strings.Join(got, " ") != want {
+			t.Errorf("%s: visited %v, want %s", pair.name, got, want)
+		}
+	}
+}
+
+// ← and → jump between markers in the file diff exactly as [ and ] do, wrapping at both ends.
+func TestFileDiffArrowsMatchTheirAliases(t *testing.T) {
+	dir := newFixture(t)
+	for _, pair := range []struct {
+		name       string
+		prev, next tea.KeyMsg
+	}{
+		{"arrows", arrow(tea.KeyLeft), arrow(tea.KeyRight)},
+		{"aliases", runes("["), runes("]")},
+	} {
+		m := newModel(t, dir)
+		if err := m.openFinding("f-001"); err != nil {
+			t.Fatal(err)
+		}
+		f, _ := m.openedFinding()
+		m.openFileDiff(f)
+		marker := func() string {
+			if markers := m.fileLines[m.fileCursor].Markers; len(markers) > 0 {
+				return markers[0]
+			}
+			return "none"
+		}
+		var got []string
+		for _, k := range []tea.KeyMsg{pair.prev, pair.next, pair.next, pair.prev} {
+			m.Update(k)
+			got = append(got, marker())
+		}
+		if want := "f-002 f-001 f-002 f-001"; strings.Join(got, " ") != want {
+			t.Errorf("%s: markers %v, want %s", pair.name, got, want)
+		}
+	}
+}
+
+// Help taller than the window scrolls with the arrows, says where it is, and still closes on ?, esc and q.
+func TestHelpScrolls(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
+	m.Update(runes("?"))
+	first := m.View()
+	if !strings.Contains(first, "lines 1-") || !strings.Contains(first, "up/down scroll") {
+		t.Fatalf("tall help does not show its position or scroll hint:\n%s", first)
+	}
+	for range 100 {
+		m.Update(arrow(tea.KeyDown))
+	}
+	last := m.View()
+	if last == first || !strings.Contains(last, "shown instead.") {
+		t.Errorf("scrolling help does not reach its end:\n%s", last)
+	}
+	m.Update(arrow(tea.KeyPgUp))
+	for range 10 {
+		m.Update(runes("k"))
+	}
+	if m.View() != first {
+		t.Errorf("scrolling back does not return to the top:\n%s", m.View())
+	}
+	m.help = false
+	for _, k := range []tea.KeyMsg{runes("?"), arrow(tea.KeyEsc), runes("q")} {
+		m.Update(runes("?"))
+		if !m.help {
+			t.Fatal("? did not open help")
+		}
+		m.Update(k)
+		if m.help {
+			t.Errorf("%v did not close help", k)
+		}
+	}
+}

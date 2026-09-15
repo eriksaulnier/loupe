@@ -85,7 +85,7 @@ func TestRefusalTextWithColorNamesTheCodeAndIsolatesCommands(t *testing.T) {
 	// The Nerd tier puts an icon before each word and moves the shared column two cells right with it.
 	out.Reset()
 	nerd := colorStyle(t, &out)
-	nerd.Glyphs = style.Glyphs(func(k string) string { return map[string]string{"LANG": "en_US.UTF-8"}[k] })
+	nerd.Glyphs = style.Glyphs(func(k string) string { return map[string]string{"LANG": "en_US.UTF-8", style.IconsEnv: "nerd"}[k] })
 	writeRefusalText(&out, nerd, 100, r, nil)
 	lines = strings.Split(strings.TrimRight(stripANSI(out.String()), "\n"), "\n")
 	want = []string{

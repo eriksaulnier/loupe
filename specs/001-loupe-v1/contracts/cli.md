@@ -147,6 +147,6 @@ Runs the publication state machine in research.md. After a receipt replay or rec
 | `LOUPE_RUN` | Default run reference |
 | `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for the lock, default 3000, max 60000; a value that is not an integer from 0 to 60000 refuses with `usage` (exit 2) (ruled 2026-09-13) |
 | `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Honored for color, plain-mode fallback and glyph selection |
-| `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; default `nerd` under a UTF-8 locale, which needs a Nerd Font in the terminal; a non-UTF-8 locale forces `ascii` whatever is set; any other value refuses with `usage` (exit 2) |
+| `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; default `unicode` under a UTF-8 locale; `nerd` is opt-in and needs a Nerd Font in the terminal; a non-UTF-8 locale forces `ascii` whatever is set; any other value refuses with `usage` (exit 2) |
 
 Human output wraps to the terminal width (80 columns when stdout is not a terminal), and `--version` prints loupe's own version, as `loupeVersion` under `--json`.

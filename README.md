@@ -53,7 +53,7 @@ claude plugin install loupe@loupe
 
 | Variable | Meaning |
 | :--- | :--- |
-| `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; the default `nerd` needs a Nerd Font. A non-UTF-8 locale always gets ASCII. |
+| `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; the default is `unicode`, and `nerd` needs a Nerd Font. A non-UTF-8 locale always gets ASCII. |
 | `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | honored for color, plain-mode fallback and glyph selection |
 
 ## Develop

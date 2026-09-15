@@ -18,7 +18,7 @@ import (
 const detailHeaderLines = 1
 
 func (m *Model) openFinding(id string) error {
-	m.view, m.openID, m.noting, m.hunkTop, m.settling = viewDetail, id, false, 0, false
+	m.view, m.openID, m.noting, m.settling = viewDetail, id, false, false
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -31,7 +31,8 @@ func (m *Model) openedFinding() (draft.Finding, int) {
 	return m.draft.Findings[i], i
 }
 
-// refreshDetail rebuilds the finding's text and hunk from the current draft, so a reload shows the finding as it now is.
+// refreshDetail rebuilds the finding's document from the current draft, so a reload shows the finding as it now is.
+// The document is one viewport: title and chips, the location and its anchored hunk, the body, the fix, the notes.
 func (m *Model) refreshDetail() error {
 	f, i := m.openedFinding()
 	if i < 0 {
@@ -41,43 +42,65 @@ func (m *Model) refreshDetail() error {
 	if err != nil {
 		return err
 	}
-	m.hunk = m.hunk[:0]
-	if f.Location == nil {
-		m.hunk = append(m.hunk, m.styles.Dim.Render(" general finding"))
-	}
-	for _, l := range lines {
-		if l.Anchored {
-			m.hunk = append(m.hunk, m.anchoredRow(l))
-			continue
-		}
-		m.hunk = append(m.hunk, " "+m.styleDiffLine(l, diffRow(l, m.styles.Dim.Render(m.glyphs.Gutter), 1)))
-	}
-
 	body, err := m.renderMarkdown(render.ForDisplay(f.Body))
 	if err != nil {
 		return err
 	}
-	// Title, chips, blank, body, blank, notes: the rhythm every detail shares.
-	top := []string{""}
+	doc := []string{""}
 	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), style.Content(m.width)-1, " "), "\n") {
-		top = append(top, m.styles.Bold.Render(line))
+		doc = append(doc, m.styles.Bold.Render(line))
 	}
-	top = append(top, " "+chipRow(m.styles, chips(m.styles, f, draft.Dispositions(m.draft)[f.ID])), "")
-	top = append(top, strings.Split(body, "\n")...)
-	top = append(top, m.suggestedFix(f)...)
-	top = append(top, m.noteThread(f)...)
+	// The detail has no location line for a general finding, so its chips say what it is.
+	doc = append(doc, m.chipLines(chips(m.styles, f, draft.Dispositions(m.draft)[f.ID], f.Location == nil))...)
+	doc = append(doc, "")
+	if f.Location != nil {
+		doc = append(doc, " "+m.styles.Dim.Render(strings.TrimSpace(m.glyphs.File+" "+locationText(f))))
+		for _, l := range lines {
+			if l.Anchored {
+				doc = append(doc, m.anchoredRow(l))
+				continue
+			}
+			doc = append(doc, " "+m.styleDiffLine(l, diffRow(l, m.styles.Dim.Render(m.glyphs.Gutter), 1)))
+		}
+		doc = append(doc, "")
+	}
+	doc = append(doc, strings.Split(body, "\n")...)
+	doc = append(doc, m.suggestedFix(f)...)
+	doc = append(doc, m.noteThread(f)...)
 
-	available := m.bodyHeight(detailHeaderLines)
-	// The hunk region holds the blank line before the rule and the rule itself.
-	hunkHeight := min(len(m.hunk)+hunkRuleLines, available/2)
 	m.body.Width = m.width
-	m.body.Height = max(1, available-hunkHeight)
-	m.body.SetContent(strings.Join(top, "\n"))
+	m.body.Height = m.bodyHeight(detailHeaderLines)
+	m.body.SetContent(strings.Join(doc, "\n"))
 	return nil
 }
 
-// hunkRuleLines is the blank line before the hunk's rule plus the rule.
-const hunkRuleLines = 2
+// chipLines lays the chips out over as many lines as the window needs, so a narrow one never clips a state.
+func (m *Model) chipLines(cs []chip) []string {
+	width := style.Content(m.width) - 1
+	var lines []string
+	line := ""
+	for _, c := range cs {
+		text := m.styles.Chip(c.kind, c.glyph, c.text)
+		switch {
+		case line == "":
+			line = text
+		case style.Width(line)+3+style.Width(text) <= width:
+			line += "   " + text
+		default:
+			lines = append(lines, " "+line)
+			line = text
+		}
+	}
+	return append(lines, " "+line)
+}
+
+// hanging wraps a line of the note thread under an indent deeper than its first line, so a long note or reply is
+// read in full rather than clipped at the window edge.
+func (m *Model) hanging(lead, text, indent string) []string {
+	lines := strings.Split(m.styles.Wrap(text, style.Content(m.width)-1, indent), "\n")
+	lines[0] = lead + strings.TrimPrefix(lines[0], indent)
+	return lines
+}
 
 // suggestedFix is shown under a gutter rather than as Markdown, so a fix that is not code still reads as a quotation
 // and cannot close a fence.
@@ -104,13 +127,13 @@ func (m *Model) noteThread(f draft.Finding) []string {
 			out = append(out, "")
 		}
 		head := m.styles.Note.Render(m.glyphs.Note+" "+n.ID) + " " + m.styles.Dim.Render(noteStatus(m.glyphs, n.Status)) + ": "
-		out = append(out, " "+head+render.ForDisplay(render.OneLine(n.Body)))
+		out = append(out, m.hanging(" ", head+render.ForDisplay(render.OneLine(n.Body)), "   ")...)
 		for _, r := range m.draft.Replies {
 			if r.NoteID != n.ID {
 				continue
 			}
 			reply := m.styles.Note.Render(m.glyphs.Reply+" "+render.ForDisplay(r.ID)) + " " + m.styles.Dim.Render("by "+render.ForDisplay(r.By)) + ": "
-			out = append(out, "   "+reply+render.ForDisplay(render.OneLine(r.Body)))
+			out = append(out, m.hanging("   ", reply+render.ForDisplay(render.OneLine(r.Body)), "     ")...)
 		}
 	}
 	return out
@@ -191,20 +214,16 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		m.notice = ""
 		m.openFileDiff(f)
 		return nil
-	case "n":
+	case "right", "n":
 		if i+1 < len(m.draft.Findings) {
 			m.notice = ""
 			return m.fail(m.openFinding(m.draft.Findings[i+1].ID))
 		}
-	case "N":
+	case "left", "N":
 		if i > 0 {
 			m.notice = ""
 			return m.fail(m.openFinding(m.draft.Findings[i-1].ID))
 		}
-	case "J":
-		m.hunkTop = min(m.hunkTop+1, maxHunkTop(len(m.hunk), m.hunkRows()))
-	case "K":
-		m.hunkTop = max(m.hunkTop-1, 0)
 	case "j", "down":
 		m.body.ScrollDown(1)
 	case "k", "up":
@@ -291,71 +310,42 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 
 func (m *Model) detailView() string {
 	f, i := m.openedFinding()
-	position := fmt.Sprintf("%d of %d", i+1, len(m.draft.Findings))
-	header := []string{m.band(f.ID + "  " + position)}
-	body := m.body.View() + "\n\n" + m.hunkRule(f) + "\n" + strings.Join(m.hunkWindow(), "\n")
-
+	header := []string{m.header(
+		style.HeaderPart{Text: f.ID, Kind: style.Dim},
+		style.HeaderPart{Text: fmt.Sprintf("%d of %d", i+1, len(m.draft.Findings))},
+	)}
 	if m.noting {
-		keys := m.styles.Keys([]style.Key{{K: "enter", Verb: "send"}, {K: "esc", Verb: "cancel"}, {K: "ctrl+u", Verb: "clear"}})
-		return m.frameWith(header, body, " "+m.note.View(), keys)
+		keys := m.footer([]style.Hint{{Key: "enter", Verb: "send"}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
+		return m.frameWith(header, m.body.View(), " "+m.note.View(), keys)
 	}
-	keys := m.styles.Keys(
-		[]style.Key{{K: "a", Verb: "accept"}, {K: "x", Verb: "exclude"}, {K: "s", Verb: "send back"}, {K: "u", Verb: "restore"}, {K: "r/d", Verb: "note"}},
-		[]style.Key{{K: "n/N", Verb: "next/prev"}, {K: "f", Verb: "file"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}},
-	)
-	return m.frame(header, body, keys)
+	_, hasOpenNote := firstOpenNote(m.draft, f.ID)
+	hints := detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote, i+1 < len(m.draft.Findings))
+	return m.frame(header, m.body.View(), m.footer(hints))
 }
 
-// hunkRule names the file the hunk comes from, so its origin is never in doubt, and offers the whole-file diff.
-func (m *Model) hunkRule(f draft.Finding) string {
-	if f.Location == nil {
-		return m.styles.Rule(m.width, m.styles.Dim.Render(strings.TrimSpace(m.glyphs.General+" general finding")), "")
+// detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An
+// action the finding cannot take is not advertised, though its key still answers with a notice.
+func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote, hasNext bool) []style.Hint {
+	hints := []style.Hint{
+		{Key: g.Left + "/" + g.Right, Verb: "finding", Role: style.RoleNav},
+		{Key: g.Up + "/" + g.Down, Verb: "scroll", Role: style.RoleNav},
 	}
-	title := m.styles.Accent.Render(strings.TrimSpace(m.glyphs.File + " " + locationText(f)))
-	return m.styles.Rule(m.width, title, m.styles.Accent.Bold(true).Render("f")+m.styles.Dim.Render(" whole file"))
-}
-
-// hunkRows is the height of the region under the separator.
-func (m *Model) hunkRows() int {
-	return max(0, m.bodyHeight(detailHeaderLines)-m.body.Height-hunkRuleLines)
-}
-
-// maxHunkTop leaves the last page full: its rows less the line that counts the rows above.
-func maxHunkTop(lines, rows int) int {
-	if lines <= rows {
-		return 0
+	decide := func(key, verb string, next bool) style.Hint {
+		return style.Hint{Key: key, Verb: verb, Role: style.RoleDecision, Next: next && hasNext}
 	}
-	return max(0, lines-max(1, rows-1))
-}
-
-// hunkWindow is the part of the hunk that fits, with a line counting the rows hidden above or below so an anchored
-// line is never cut off without a trace.
-func (m *Model) hunkWindow() []string {
-	rows := m.hunkRows()
-	if len(m.hunk) <= rows {
-		return m.hunk
+	switch disposition {
+	case draft.DispositionPending:
+		hints = append(hints, decide("a", "accept", true), decide("x", "exclude", true), decide("s", "send back", true))
+	case draft.DispositionAccepted:
+		hints = append(hints, decide("x", "exclude", true), decide("s", "send back", true))
+	case draft.DispositionExcluded:
+		hints = append(hints, decide("u", "restore", false))
 	}
-	if rows == 0 {
-		return nil
+	if hasOpenNote {
+		hints = append(hints, decide("r", "resolve", false), decide("d", "dismiss", false))
 	}
-	top := min(m.hunkTop, maxHunkTop(len(m.hunk), rows))
-	var above, below string
-	if top > 0 {
-		above = m.styles.Dim.Render(fmt.Sprintf(" %s %d lines above  K scroll up", m.glyphs.Ellipsis, top))
-		rows--
+	if f.Location != nil {
+		hints = append(hints, style.Hint{Key: "f", Verb: "file", Role: style.RoleFile})
 	}
-	end := min(len(m.hunk), top+rows)
-	if end < len(m.hunk) && rows > 0 {
-		end--
-		below = m.styles.Dim.Render(fmt.Sprintf(" %s %d lines below  J scroll down", m.glyphs.Ellipsis, len(m.hunk)-max(end, top)))
-	}
-	var out []string
-	if above != "" {
-		out = append(out, above)
-	}
-	out = append(out, m.hunk[top:max(end, top)]...)
-	if below != "" {
-		out = append(out, below)
-	}
-	return out
+	return append(hints, style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp})
 }

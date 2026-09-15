@@ -5,8 +5,11 @@ package style
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -32,9 +35,9 @@ type Tier int
 const (
 	// ASCII is forced by a non-UTF-8 locale and chosen by LOUPE_ICONS=ascii.
 	ASCII Tier = iota
-	// Unicode is the box-drawing and dingbat set any UTF-8 terminal font carries.
+	// Unicode is the box-drawing and dingbat set any UTF-8 terminal font carries; it is the default under UTF-8.
 	Unicode
-	// Nerd adds the private-use icons a Nerd Font patches in; it is the default under UTF-8.
+	// Nerd adds the private-use icons a Nerd Font patches in, chosen only by LOUPE_ICONS=nerd.
 	Nerd
 )
 
@@ -44,7 +47,7 @@ const IconsEnv = "LOUPE_ICONS"
 // Tiers are the values IconsEnv accepts.
 var Tiers = []string{"ascii", "unicode", "nerd"}
 
-// ContentWidth caps prose, list rows and one-shot output; bands and rules still span the terminal.
+// ContentWidth caps prose, list rows and one-shot output; headers and rules still span the terminal.
 const ContentWidth = 110
 
 // GlyphSet is the character set for states and structure. Fields that are empty in a tier have no icon there: the
@@ -65,29 +68,22 @@ type GlyphSet struct {
 	Ellipsis  string
 	HRule     string
 	Quote     string
-	Box       Box
+	// Sep joins the parts of a header; Mark stands in the file diff's gutter for a line a finding is filed against.
+	Sep  string
+	Mark string
+	// Up, Down, Left and Right name the arrow keys in footers and help; the ASCII tier spells them out.
+	Up, Down, Left, Right string
 
-	Brand     string
 	File      string
 	General   string
 	PR        string
-	Ready     string
-	NotReady  string
 	Fix       string
 	Error     string
 	Published string
 	Canceled  string
 	Help      string
-	// Divider and DividerThin are the powerline joints between band segments.
-	Divider     string
-	DividerThin string
 
 	labelIssue, labelSuggestion, labelQuestion, labelOther string
-}
-
-// Box holds the corner and edge characters of a bordered panel.
-type Box struct {
-	TL, TR, BL, BR, H, V string
 }
 
 // Every private-use glyph is spelled as an escape with its Nerd Fonts name beside it, because the literal is
@@ -104,20 +100,15 @@ var (
 		Reply:     "\uf112", // nf-fa-reply
 		Cursor:    "\uf054", // nf-fa-chevron_right
 		Anchor:    "▎", Gutter: "│", Ellipsis: "…", HRule: "─", Quote: "┃",
-		Box:             Box{TL: "╭", TR: "╮", BL: "╰", BR: "╯", H: "─", V: "│"},
-		Brand:           "\uf002", // nf-fa-search
+		Sep: "·", Mark: "◆", Up: "↑", Down: "↓", Left: "←", Right: "→",
 		File:            "\uf016", // nf-fa-file_o
 		General:         "\uf0ac", // nf-fa-globe
 		PR:              "\uf407", // nf-oct-git_pull_request
-		Ready:           "\uf427", // nf-oct-rocket
-		NotReady:        "\uf252", // nf-fa-hourglass_half
 		Fix:             "\uf0ad", // nf-fa-wrench
 		Error:           "\uf057", // nf-fa-times_circle
 		Published:       "\uf427", // nf-oct-rocket
 		Canceled:        "\uf05e", // nf-fa-ban
 		Help:            "\uf11c", // nf-fa-keyboard_o
-		Divider:         "\ue0b0", // nf-pl-left_hard_divider
-		DividerThin:     "\ue0b1", // nf-pl-left_soft_divider
 		labelIssue:      "\uf41b", // nf-oct-issue_opened
 		labelSuggestion: "\uf400", // nf-oct-light_bulb
 		labelQuestion:   "\uf420", // nf-oct-question
@@ -127,19 +118,19 @@ var (
 		Tier:     Unicode,
 		Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●", Note: "✎", Reply: "↳",
 		Cursor: "›", Anchor: "▎", Gutter: "│", Ellipsis: "…", HRule: "─", Quote: "┃",
-		Box:       Box{TL: "╭", TR: "╮", BL: "╰", BR: "╯", H: "─", V: "│"},
+		Sep: "·", Mark: "◆", Up: "↑", Down: "↓", Left: "←", Right: "→",
 		Published: "✓", Canceled: "–",
 	}
 	asciiGlyphs = GlyphSet{
 		Tier:     ASCII,
 		Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!", Note: "~", Reply: "->",
 		Cursor: ">", Anchor: ">", Gutter: "|", Ellipsis: "...", HRule: "-", Quote: "|",
-		Box:       Box{TL: "+", TR: "+", BL: "+", BR: "+", H: "-", V: "|"},
+		Sep: "-", Mark: "*", Up: "up", Down: "down", Left: "left", Right: "right",
 		Published: "+", Canceled: "-",
 	}
 )
 
-// Glyphs picks the tier: a non-UTF-8 locale forces ASCII, then LOUPE_ICONS decides, then Nerd. The locale follows
+// Glyphs picks the tier: a non-UTF-8 locale forces ASCII, then LOUPE_ICONS decides, then Unicode. The locale follows
 // POSIX precedence: the first non-empty of LC_ALL, LC_CTYPE and LANG. An unknown LOUPE_ICONS value is ignored here
 // and refused by ValidateEnv, so a command still starts far enough to explain it.
 func Glyphs(getenv func(string) string) GlyphSet {
@@ -149,10 +140,10 @@ func Glyphs(getenv func(string) string) GlyphSet {
 	switch strings.ToLower(getenv(IconsEnv)) {
 	case "ascii":
 		return asciiGlyphs
-	case "unicode":
-		return unicodeGlyphs
+	case "nerd":
+		return nerdGlyphs
 	}
-	return nerdGlyphs
+	return unicodeGlyphs
 }
 
 // ValidateEnv is the refusal for an environment loupe cannot honor.
@@ -180,7 +171,8 @@ func utf8Locale(getenv func(string) string) bool {
 	return false
 }
 
-// Label is the icon for a finding label; kinds without their own icon share the comment glyph.
+// Label is the icon for a finding label in the one-shot commands; kinds without their own icon share the comment
+// glyph.
 func (g GlyphSet) Label(label string) string {
 	switch strings.ToLower(label) {
 	case "issue", "bug", "defect":
@@ -206,16 +198,9 @@ var (
 	colorGreen    = catppuccin("#a6e3a1", "#40a02b")
 	colorYellow   = catppuccin("#f9e2af", "#df8e1d")
 	colorRed      = catppuccin("#f38ba8", "#d20f39")
-	colorMauve    = catppuccin("#cba6f7", "#8839ef")
 	colorBlue     = catppuccin("#89b4fa", "#1e66f5")
-	colorLavender = catppuccin("#b4befe", "#7287fd")
-	colorPeach    = catppuccin("#fab387", "#fe640b")
 	colorOverlay1 = catppuccin("#7f849c", "#8c8fa1")
-	colorSubtext0 = catppuccin("#a6adc8", "#6c6f85")
-	colorText     = catppuccin("#cdd6f4", "#4c4f69")
 	colorSurface0 = catppuccin("#313244", "#ccd0da")
-	colorSurface1 = catppuccin("#45475a", "#bcc0cc")
-	colorCrust    = catppuccin("#11111b", "#dce0e8")
 	colorAnchor   = catppuccin("#3b3a2e", "#f4e9c8")
 )
 
@@ -227,9 +212,8 @@ type Style struct {
 	Color  bool
 
 	Bold, Dim, Accent, Good, Warn, Bad, Note, Head, Cursor lipgloss.Style
-	BandBg, Anchor, Selected                               lipgloss.Style
+	Anchor, Selected                                       lipgloss.Style
 	Added, Removed                                         lipgloss.Style
-	segBrand, segRef, pillGood, pillWarn, pillBad          lipgloss.Style
 }
 
 // New builds a Style drawing on out. A renderer on a writer that is not a terminal detects no color support and
@@ -251,19 +235,14 @@ func New(out io.Writer, getenv func(string) string) Style {
 	s.Good = r.NewStyle().Foreground(colorGreen)
 	s.Warn = r.NewStyle().Foreground(colorYellow)
 	s.Bad = r.NewStyle().Foreground(colorRed)
-	s.Note = r.NewStyle().Foreground(colorMauve)
-	s.Head = r.NewStyle().Bold(true).Foreground(colorLavender)
-	s.Cursor = r.NewStyle().Foreground(colorPeach)
-	s.BandBg = r.NewStyle().Background(colorSurface0).Foreground(colorSubtext0)
+	s.Note = r.NewStyle().Foreground(colorYellow)
+	s.Head = r.NewStyle().Bold(true)
+	// The cursor is the accent, so selection adds no color of its own.
+	s.Cursor = s.Accent
 	s.Selected = r.NewStyle().Background(colorSurface0)
 	s.Anchor = r.NewStyle().Bold(true).Background(colorAnchor)
 	s.Added = s.Good
 	s.Removed = s.Bad
-	s.segBrand = r.NewStyle().Bold(true).Background(colorPeach).Foreground(colorCrust)
-	s.segRef = r.NewStyle().Background(colorSurface1).Foreground(colorText)
-	s.pillGood = r.NewStyle().Bold(true).Foreground(colorCrust).Background(colorGreen)
-	s.pillWarn = r.NewStyle().Bold(true).Foreground(colorCrust).Background(colorYellow)
-	s.pillBad = r.NewStyle().Bold(true).Foreground(colorCrust).Background(colorRed)
 	return s
 }
 
@@ -292,46 +271,13 @@ func (s Style) On(bg, fg lipgloss.Style) lipgloss.Style {
 	return fg.Background(bg.GetBackground())
 }
 
-// Brand is the program name as it appears at the head of every screen: a peach segment with the search icon.
-func (s Style) Brand() string {
-	if !s.Color {
-		return "loupe"
-	}
-	return s.segBrand.Render(s.brandText())
-}
+// Brand is the program name as it appears at the head of every screen.
+func (s Style) Brand() string { return s.Bold.Render("loupe") }
 
-// BrandWidth is the cells the brand takes on a band, which is wider than Brand() prints without color.
-func (s Style) BrandWidth() int { return ansi.StringWidth(s.brandText()) }
-
-func (s Style) brandText() string {
-	if s.Glyphs.Brand != "" {
-		return " " + s.Glyphs.Brand + " loupe "
-	}
-	return " loupe "
-}
-
-// Heading is a section title: uppercase, lavender, bold.
+// Heading is a section title in sentence case.
 func (s Style) Heading(text string) string {
-	return s.Head.Render(strings.ToUpper(text))
-}
-
-// Pill is a short status word that must stand out, with its icon in tiers that have one; without color it is
-// bracketed, because a word with no background needs an edge.
-func (s Style) Pill(k Kind, icon, text string) string {
-	text = strings.ToUpper(text)
-	if !s.Color {
-		return "[" + text + "]"
-	}
-	if icon != "" {
-		text = icon + " " + text
-	}
-	switch k {
-	case Good:
-		return s.pillGood.Render(" " + text + " ")
-	case Bad:
-		return s.pillBad.Render(" " + text + " ")
-	}
-	return s.pillWarn.Render(" " + text + " ")
+	r, size := utf8.DecodeRuneInString(text)
+	return s.Head.Render(string(unicode.ToUpper(r)) + text[size:])
 }
 
 // Chip is a glyph and a word in one color: the unit every state is shown as.
@@ -339,90 +285,182 @@ func (s Style) Chip(k Kind, glyph, text string) string {
 	return s.Of(k).Render(strings.TrimSpace(glyph + " " + text))
 }
 
-// BandParts is what a band shows: the brand is implicit, ref is the run or the action, title is what the view is
-// looking at, right keeps the right edge and never truncates.
-type BandParts struct {
-	Ref, Title, Right string
+// HeaderPart is one piece of a header line.
+type HeaderPart struct {
+	Text string
+	// Drop is 0 for a part that never gives way; among the rest, the highest gives way first.
+	Drop int
+	// Trunc lets a droppable part shrink to headerTruncFloor cells before it drops.
+	Trunc bool
+	// Squeeze marks the required part that truncates once nothing is left to drop; Left keeps its tail.
+	Squeeze, Left bool
+	Kind          Kind
+	Bold          bool
 }
 
-// Band is the full-width header line. In the Nerd tier it is powerline segments, brand then ref then title, joined
-// by solid dividers; in the other tiers one flat surface carries ref and title after the brand. The title gives way
-// first, then the ref.
-func (s Style) Band(p BandParts, width int) string {
-	nerd := s.Color && s.Glyphs.Tier == Nerd
-	brand := s.brandText()
-	fixed := ansi.StringWidth(brand) + ansi.StringWidth(p.Right)
-	if nerd {
-		// One cell for the divider after the brand.
-		fixed++
-	}
-	ref := p.Ref
-	if ref != "" {
-		// The ref carries one space of padding at each end.
-		fixed += ansi.StringWidth(ref) + 2
-		if nerd {
-			// One cell for the divider after the ref.
-			fixed++
-		}
-	}
-	// The title segment keeps one space at each end even when empty, so the pill never touches the ref.
-	title := s.TruncRight(p.Title, width-fixed-2)
-	if title == "" && ref != "" {
-		room := width - (fixed - ansi.StringWidth(ref)) - 2
-		ref = s.TruncRight(ref, max(1, room))
-		fixed += ansi.StringWidth(ref) - ansi.StringWidth(p.Ref)
-	}
-	gap := max(1, width-fixed-ansi.StringWidth(title)-1)
-	titleSeg := " " + title + strings.Repeat(" ", gap)
+// headerTruncFloor is the narrowest a truncating part gets before dropping it reads better than keeping it.
+const headerTruncFloor = 12
 
-	if !s.Color {
-		line := brand
-		if ref != "" {
-			line += " " + ref + " "
+// Header is the flat line every full-screen view opens with: parts joined by a dim separator after a one-cell margin,
+// and right at the right edge, at least two cells away. Optional parts give way in Drop order, and right never
+// truncates. The line is exactly width cells.
+func (s Style) Header(parts []HeaderPart, right string, width int) string {
+	sep := " " + s.Glyphs.Sep + " "
+	kept := make([]HeaderPart, 0, len(parts))
+	for _, p := range parts {
+		if p.Text != "" {
+			kept = append(kept, p)
 		}
-		return line + titleSeg + p.Right
+	}
+	room := width - 2
+	if right != "" {
+		room -= Width(right) + 2
+	}
+	total := func() int {
+		n := 0
+		for i, p := range kept {
+			if i > 0 {
+				n += Width(sep)
+			}
+			n += Width(p.Text)
+		}
+		return n
+	}
+	for len(kept) > 0 && total() > room {
+		over := total() - room
+		drop := -1
+		for i, p := range kept {
+			if p.Drop > 0 && (drop < 0 || p.Drop > kept[drop].Drop) {
+				drop = i
+			}
+		}
+		if drop < 0 {
+			i := slices.IndexFunc(kept, func(p HeaderPart) bool { return p.Squeeze })
+			if i < 0 {
+				i = len(kept) - 1
+			}
+			target := Width(kept[i].Text) - over
+			if kept[i].Left {
+				kept[i].Text = s.TruncLeft(kept[i].Text, target)
+			} else {
+				kept[i].Text = s.TruncRight(kept[i].Text, target)
+			}
+			break
+		}
+		if target := Width(kept[drop].Text) - over; kept[drop].Trunc && target >= headerTruncFloor {
+			kept[drop].Text = s.TruncRight(kept[drop].Text, target)
+			continue
+		}
+		kept = slices.Delete(kept, drop, drop+1)
 	}
 	var b strings.Builder
-	b.WriteString(s.segBrand.Render(brand))
-	if nerd {
-		next := s.BandBg
-		if ref != "" {
-			next = s.segRef
+	b.WriteString(" ")
+	for i, p := range kept {
+		if i > 0 {
+			b.WriteString(s.Dim.Render(sep))
 		}
-		b.WriteString(s.divider(s.segBrand, next))
-	}
-	if ref != "" {
-		b.WriteString(s.segRef.Render(" " + ref + " "))
-		if nerd {
-			b.WriteString(s.divider(s.segRef, s.BandBg))
+		st := s.Of(p.Kind)
+		if p.Bold {
+			st = st.Bold(true)
 		}
+		b.WriteString(st.Render(p.Text))
 	}
-	b.WriteString(s.BandBg.Render(titleSeg))
-	b.WriteString(p.Right)
-	return b.String()
+	line := b.String()
+	if right != "" {
+		line += strings.Repeat(" ", max(2, width-1-Width(line)-Width(right))) + right
+	}
+	if Width(line) > width {
+		return ansi.Truncate(line, width, "")
+	}
+	return Pad(line, width)
 }
 
-// divider is the powerline joint: the left segment's background drawn as a glyph on the right segment's.
-func (s Style) divider(left, right lipgloss.Style) string {
-	return s.R.NewStyle().Foreground(left.GetBackground()).Background(right.GetBackground()).Render(s.Glyphs.Divider)
+// Role is what a footer hint is for, which decides when it gives way.
+type Role int
+
+const (
+	// RoleRequired never gives way.
+	RoleRequired Role = iota
+	// RoleNav is navigation prose, the first to go.
+	RoleNav
+	// RoleDecision is a decision key; at the last step decisions collapse to their keys.
+	RoleDecision
+	// RoleFile goes after navigation.
+	RoleFile
+	// RoleHelp never gives way.
+	RoleHelp
+)
+
+// Hint is one entry on a footer. KeyKind and VerbKind left Plain mean the accent key and the dim verb.
+type Hint struct {
+	Key, Verb string
+	Role      Role
+	// Next says the action opens the next finding, which the widest footer spells out.
+	Next              bool
+	KeyKind, VerbKind Kind
 }
 
-// Key is one entry on a key line.
-type Key struct {
-	K, Verb string
-}
-
-// Keys renders key hints: the key in accent, the verb dim, groups separated by a bar.
-func (s Style) Keys(groups ...[]Key) string {
-	var parts []string
-	for _, g := range groups {
-		var hints []string
-		for _, k := range g {
-			hints = append(hints, s.Accent.Bold(true).Render(k.K)+" "+s.Dim.Render(k.Verb))
-		}
-		parts = append(parts, strings.Join(hints, "  "))
+// Footer lays hints out on one line of at most width cells, giving way step by step: the "+ next" suffixes, then
+// navigation, then the file hint with tighter gaps, then decision verbs. It reports whether the result fits.
+func (s Style) Footer(hints []Hint, width int) (string, bool) {
+	all := func(Hint) bool { return true }
+	noNav := func(h Hint) bool { return h.Role != RoleNav }
+	noFile := func(h Hint) bool { return h.Role != RoleNav && h.Role != RoleFile }
+	levels := []struct {
+		keep     func(Hint) bool
+		next     bool
+		gap      int
+		keysOnly bool
+	}{
+		{all, true, 3, false},
+		{all, false, 3, false},
+		{noNav, false, 3, false},
+		{noFile, false, 2, false},
+		{noFile, false, 2, true},
 	}
-	return strings.Join(parts, s.Dim.Render("  "+s.Glyphs.Gutter+"  "))
+	var line string
+	for _, lv := range levels {
+		var segs, decisions []string
+		for _, h := range hints {
+			if !lv.keep(h) {
+				continue
+			}
+			if lv.keysOnly && h.Role == RoleDecision {
+				if len(decisions) == 0 {
+					segs = append(segs, "")
+				}
+				decisions = append(decisions, h.Key)
+				continue
+			}
+			segs = append(segs, s.hint(h, lv.next))
+		}
+		if len(decisions) > 0 {
+			segs[slices.Index(segs, "")] = s.Accent.Bold(true).Render(strings.Join(decisions, " "))
+		}
+		line = strings.Join(segs, strings.Repeat(" ", lv.gap))
+		if Width(line) <= width {
+			return line, true
+		}
+	}
+	return line, false
+}
+
+func (s Style) hint(h Hint, next bool) string {
+	keyKind, verbKind := h.KeyKind, h.VerbKind
+	if keyKind == Plain {
+		keyKind = Accent
+	}
+	if verbKind == Plain {
+		verbKind = Dim
+	}
+	out := s.Of(verbKind).Render(h.Verb)
+	if h.Key != "" {
+		out = s.Of(keyKind).Bold(true).Render(h.Key) + " " + out
+	}
+	if next && h.Next {
+		out += s.Dim.Render(" + next")
+	}
+	return out
 }
 
 // Rule is a horizontal rule, optionally titled at its left edge and labeled at its right.
@@ -443,24 +481,6 @@ func (s Style) Rule(width int, title, right string) string {
 	}
 	b.WriteString(tail)
 	return s.Dim.Render(b.String())
-}
-
-// Boxed wraps lines in a bordered panel of the given inner width; lines wider than it are truncated.
-func (s Style) Boxed(title string, lines []string, inner int) []string {
-	bx := s.Glyphs.Box
-	top := bx.TL + bx.H
-	if title != "" {
-		top += " " + title + " "
-	}
-	top += strings.Repeat(bx.H, max(0, inner+3-ansi.StringWidth(top))) + bx.TR
-	out := []string{s.Dim.Render(top)}
-	edge := s.Dim.Render(bx.V)
-	for _, l := range lines {
-		l = s.TruncRight(l, inner)
-		out = append(out, edge+" "+l+strings.Repeat(" ", max(0, inner-ansi.StringWidth(l)))+" "+edge)
-	}
-	out = append(out, s.Dim.Render(bx.BL+strings.Repeat(bx.H, inner+2)+bx.BR))
-	return out
 }
 
 // Wrap word-wraps prose to width and prefixes every line with indent. Existing newlines are kept. Hyphens are hidden
@@ -520,34 +540,59 @@ func Pad(text string, width int) string {
 // Width is the printed width of text, ignoring escape sequences.
 func Width(text string) int { return ansi.StringWidth(text) }
 
-// Counts is the readiness tally as glyph pairs; zero excluded and withdrawn fade so the live numbers stand out.
-func (s Style) Counts(accepted, pending, excluded, withdrawn, openNotes int) string {
+// Counts is the readiness tally as glyph pairs, one line when it fits width; zero excluded and withdrawn fade so the
+// live numbers stand out. Narrower, the zero counts go and the gaps tighten, and then the tally splits over two lines.
+func (s Style) Counts(accepted, pending, excluded, withdrawn, openNotes, width int) []string {
 	g := s.Glyphs
-	pair := func(k Kind, glyph string, n int, word string) string {
-		text := fmt.Sprintf("%s %d %s", glyph, n, word)
-		if n == 0 && (k == Dim || k == Good || k == Note) {
-			return s.Dim.Render(text)
-		}
-		return s.Of(k).Render(text)
+	type pair struct {
+		kind  Kind
+		glyph string
+		n     int
+		word  string
 	}
-	return strings.Join([]string{
-		pair(Good, g.Accepted, accepted, "accepted"),
-		pair(Warn, g.Pending, pending, "pending"),
-		pair(Dim, g.Excluded, excluded, "excluded"),
-		pair(Dim, g.Withdrawn, withdrawn, "withdrawn"),
-		pair(Note, g.Note, openNotes, "open notes"),
-	}, "   ")
+	pairs := []pair{
+		{Good, g.Accepted, accepted, "accepted"},
+		{Warn, g.Pending, pending, "pending"},
+		{Dim, g.Excluded, excluded, "excluded"},
+		{Dim, g.Withdrawn, withdrawn, "withdrawn"},
+		{Note, g.Note, openNotes, "open " + plural(openNotes, "note")},
+	}
+	join := func(ps []pair, gap int) string {
+		out := make([]string, 0, len(ps))
+		for _, p := range ps {
+			text := fmt.Sprintf("%s %d %s", p.glyph, p.n, p.word)
+			if p.n == 0 && p.kind != Warn {
+				out = append(out, s.Dim.Render(text))
+				continue
+			}
+			out = append(out, s.Of(p.kind).Render(text))
+		}
+		return strings.Join(out, strings.Repeat(" ", gap))
+	}
+	if full := join(pairs, 3); Width(full) <= width {
+		return []string{full}
+	}
+	live := slices.DeleteFunc(slices.Clone(pairs), func(p pair) bool { return p.n == 0 })
+	if tight := join(live, 2); Width(tight) <= width || len(live) < 2 {
+		return []string{tight}
+	}
+	half := (len(live) + 1) / 2
+	return []string{join(live[:half], 2), join(live[half:], 2)}
 }
 
-// ReadinessPill names what still blocks publication, or READY.
-func (s Style) ReadinessPill(ready bool, pending, openNotes int) string {
-	switch {
-	case ready:
-		return s.Pill(Good, s.Glyphs.Ready, "ready")
-	case openNotes > 0 && pending == 0:
-		return s.Pill(Warn, s.Glyphs.Note, fmt.Sprintf("%d open %s", openNotes, plural(openNotes, "note")))
+// Readiness is the concise publication state: ready to publish, or what remains.
+func (s Style) Readiness(ready bool, pending, openNotes int) string {
+	if ready {
+		return s.Good.Render("ready to publish")
 	}
-	return s.Pill(Warn, s.Glyphs.NotReady, "not ready")
+	var parts []string
+	if pending > 0 {
+		parts = append(parts, fmt.Sprintf("%d pending", pending))
+	}
+	if openNotes > 0 {
+		parts = append(parts, fmt.Sprintf("%d open %s", openNotes, plural(openNotes, "note")))
+	}
+	return s.Warn.Render(strings.Join(parts, " "+s.Glyphs.Sep+" "))
 }
 
 // Disposition is the glyph, word and kind for a finding's state.

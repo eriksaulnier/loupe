@@ -213,14 +213,14 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", header(s, width, ref.String(), target.Title))
 	version := s.Dim.Render(fmt.Sprintf("draft version %d", d.Version))
-	pill := s.ReadinessPill(readiness.Ready, len(readiness.Pending), len(readiness.OpenNotes))
+	state := s.Readiness(readiness.Ready, len(readiness.Pending), len(readiness.OpenNotes))
 	tally := listCounts{len(readiness.Accepted), len(readiness.Pending), len(readiness.Excluded), len(readiness.Withdrawn), len(readiness.OpenNotes)}
-	counts := s.Counts(tally.Accepted, tally.Pending, tally.Excluded, tally.Withdrawn, tally.OpenNotes)
-	if style.Width(version)+style.Width(counts)+style.Width(pill)+4 > width {
-		// When the words would push the pill off the line, the counts drop the words the glyphs already carry.
-		counts = listCountsCell(s, tally)
+	counts := listCountsCell(s, tally)
+	// When the words would push the readiness off the line, the counts drop the words the glyphs already carry.
+	if lines := s.Counts(tally.Accepted, tally.Pending, tally.Excluded, tally.Withdrawn, tally.OpenNotes, width-style.Width(version)-style.Width(state)-4); len(lines) == 1 {
+		counts = lines[0]
 	}
-	fmt.Fprintf(&b, "%s  %s  %s\n\n", version, counts, pill)
+	fmt.Fprintf(&b, "%s  %s  %s\n\n", version, counts, state)
 
 	fmt.Fprintf(&b, "%s\n", s.Heading("summary"))
 	if summary := text(d.Summary); summary == "" {

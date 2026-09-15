@@ -1,12 +1,12 @@
-loupe eriksaulnier/dev-loadout#2@1  draft version 11  [NOT READY]  1 pending, 1 open note
+loupe eriksaulnier/dev-loadout#2@1  draft version 11  1 pending · 1 open note
 
-OPEN NOTES
+Open notes
 ✎ n-001 on f-002  open
   Please run gh --version on a Debian box and paste the output.
   ↳ r-001 by agent  Ran it on a fresh Debian 12 container: `gh version 2.63.0 (2024-12-05)`, no
                     suffix. Lowered the finding to confidence low and kept it.
 
-FINDINGS
+Findings
 ✓ f-001  accepted   rev 1  Alias metadata removed from three skills, still live in four others
 · f-002  pending    rev 2  ● A packaged gh build reports as "unavailable" rather than as a version
 ✗ f-003  excluded   rev 1  Authority clause quotes a README phrase to satisfy a substring test

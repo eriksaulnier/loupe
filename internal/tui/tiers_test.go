@@ -1,19 +1,70 @@
 package tui
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-// Every tier, with and without color, must keep every line inside the window and the band exactly as wide as it.
-// The frame clips every line it prints, so the check reads the pieces before the frame sees them.
+// withOpenNote sends f-002 back and excludes the general f-003, so the detail states the footer depends on all exist.
+func withOpenNote(t *testing.T, dir string) {
+	t.Helper()
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		_, err := draft.SendBack(d, "f-002", "Is this still needed?", testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		return draft.Exclude(d, "f-003", testNow)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// screen is one full-screen view and the footer tokens it must keep at every width.
+type screen struct {
+	name string
+	show func(*Model)
+	keys []string
+}
+
+var screens = []screen{
+	{"list", func(m *Model) {}, []string{"enter", "?", "help"}},
+	{"detail pending", func(m *Model) { mustOpen(m, "f-001") }, []string{"a", "x", "s", "?", "help"}},
+	{"detail excluded general", func(m *Model) { mustOpen(m, "f-003") }, []string{"u", "?", "help"}},
+	{"detail open note", func(m *Model) { mustOpen(m, "f-002") }, []string{"r", "d", "?", "help"}},
+	{"file diff", func(m *Model) { mustOpen(m, "f-001"); f, _ := m.openedFinding(); m.openFileDiff(f) }, []string{"enter", "esc", "?", "help"}},
+	{"publish step 1", func(m *Model) { m.view, m.pick = viewAction, 0 }, []string{"enter", "esc", "?", "help"}},
+	{"publish step 2", func(m *Model) { m.view, m.action, m.pick = viewInline, "comment", 1 }, []string{"enter", "esc", "?", "help"}},
+	{"confirmation", func(m *Model) {
+		title := ConfirmTitle(m.ref(), "comment", "blocking", 1)
+		title.inFlow = true
+		m.confirm, m.view = newConfirmation(movedPreview(), title), viewConfirm
+	}, []string{"y", "publish", "this", "review"}},
+	{"help", func(m *Model) { mustOpen(m, "f-001"); m.help = true }, []string{"?", "close", "help"}},
+}
+
+func mustOpen(m *Model, id string) {
+	if err := m.openFinding(id); err != nil {
+		panic(err)
+	}
+}
+
+// Every screen, in every tier, with and without color, keeps every line inside the window, its header exactly as wide
+// and unclipped, and the actions it cannot do without in its footer.
 func TestEveryTierFitsTheWindow(t *testing.T) {
+	clipToWindow = false
+	t.Cleanup(func() { clipToWindow = true })
 	dir := newFixture(t)
+	withOpenNote(t, dir)
 	tiers := []struct {
 		name string
 		env  map[string]string
@@ -24,48 +75,64 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 		{"nerd without color", map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8", style.IconsEnv: "nerd"}},
 	}
 	for _, tier := range tiers {
-		for _, width := range []int{35, 80, 100, 140} {
-			m := modelOf(t, dir, tier.env, width, 30)
-			if tier.env["NO_COLOR"] == "" {
-				m.styles.R.SetColorProfile(termenv.TrueColor)
-				m.styles.Color = true
-			}
-			bands := map[string]string{"list": m.band(m.styles.TruncRight(m.titleBand(), m.width/2))}
-			cols := m.listColumns()
-			dispositions := draft.Dispositions(m.draft)
-			for i, f := range m.draft.Findings {
-				for _, selected := range []bool{true, false} {
-					if w := style.Width(m.row(f, dispositions[f.ID], selected, cols)); w > width {
-						t.Errorf("%s at %d: row %s (selected %v) is %d cells wide", tier.name, width, f.ID, selected, w)
+		for _, width := range []int{60, 79, 80, 99, 100, 140} {
+			for _, sc := range screens {
+				m := modelOf(t, dir, tier.env, width, 24)
+				if tier.env["NO_COLOR"] == "" {
+					m.styles.R.SetColorProfile(termenv.TrueColor)
+					m.styles.Color = true
+				}
+				sc.show(m)
+				where := fmt.Sprintf("%s at %d: %s", tier.name, width, sc.name)
+				lines := strings.Split(m.View(), "\n")
+				if len(lines) != 24 {
+					t.Errorf("%s: %d lines, want 24", where, len(lines))
+				}
+				for i, l := range lines {
+					if w := style.Width(l); w > width {
+						t.Errorf("%s: line %d is %d cells wide: %q", where, i, w, l)
 					}
 				}
-				if i == 0 {
-					for _, line := range m.summaryBlock(cols) {
-						if w := style.Width(line); w > width {
-							t.Errorf("%s at %d: summary line is %d cells wide: %q", tier.name, width, w, line)
-						}
+				right := m.readiness()
+				switch {
+				case sc.name == "confirmation":
+					right = m.styles.Dim.Render(m.confirm.position(m))
+				case sc.name == "help" && strings.Contains(lines[0], "lines "):
+					right = ""
+				}
+				if w := style.Width(lines[0]); w != width || (right != "" && !strings.HasSuffix(strings.TrimRight(lines[0], " "), strings.TrimRight(right, " "))) {
+					t.Errorf("%s: header is %d cells or lost its right edge %q:\n%q", where, w, right, lines[0])
+				}
+				footer := strings.Fields(ansi.Strip(lines[len(lines)-1]))
+				for _, k := range sc.keys {
+					if !slices.Contains(footer, k) {
+						t.Errorf("%s: footer lacks %q: %q", where, k, lines[len(lines)-1])
 					}
 				}
-			}
-			if err := m.openFinding("f-001"); err != nil {
-				t.Fatal(err)
-			}
-			bands["detail"] = m.band("f-001  1 of 3")
-			for _, line := range m.hunk {
-				if w := style.Width(line); w > width {
-					t.Errorf("%s at %d: hunk line is %d cells wide: %q", tier.name, width, w, line)
+				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-2:], "\n")), confirmCancel) {
+					t.Errorf("%s: the cancel sentence is not on screen:\n%s", where, strings.Join(lines, "\n"))
+				}
+				if view := strings.Join(lines, "\n"); strings.ContainsAny(view, "\ue0b0\ue0b1\ue0b2\ue0b3") {
+					t.Errorf("%s: a powerline divider is drawn", where)
 				}
 			}
-			m.openFileDiff(m.draft.Findings[0])
-			bands["file diff"] = m.fileDiffBand()
-			// Below the full-screen minimum the counts cannot fit beside the pill; plain mode takes over there.
-			if width >= minWidth && !strings.Contains(bands["file diff"], "finding") {
-				t.Errorf("%s at %d: file diff band lost its counts: %q", tier.name, width, bands["file diff"])
-			}
-			for name, band := range bands {
-				if w := style.Width(band); w != width {
-					t.Errorf("%s at %d: %s band is %d cells wide, want %d:\n%q", tier.name, width, name, w, width, band)
-				}
+		}
+	}
+}
+
+// The default tier draws no private-use glyph anywhere.
+func TestDefaultTierHasNoPrivateUseGlyphs(t *testing.T) {
+	dir := newFixture(t)
+	withOpenNote(t, dir)
+	for _, sc := range screens {
+		m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+		m.styles.R.SetColorProfile(termenv.TrueColor)
+		m.styles.Color = true
+		sc.show(m)
+		for _, r := range m.View() {
+			if r >= 0xE000 && r <= 0xF8FF {
+				t.Errorf("%s: private-use rune %U in the default tier", sc.name, r)
+				break
 			}
 		}
 	}
@@ -77,29 +144,27 @@ func TestNerdTierDrawsIcons(t *testing.T) {
 	m.styles.R.SetColorProfile(termenv.TrueColor)
 	m.styles.Color = true
 	list := m.View()
-	band := strings.Split(list, "\n")[0]
-	if strings.Count(band, "\ue0b0") != 2 || !strings.Contains(band, "\uf002 loupe") || !strings.Contains(band, "\uf407 acme/widgets#42") {
-		t.Errorf("list band is not three powerline segments:\n%q", band)
-	}
-	for name, icon := range map[string]string{
-		"pending": "\uf10c", "blocking": "\uf46e", "issue": "\uf41b", "suggestion": "\uf400", "question": "\uf420",
-		"file": "\uf016", "general": "\uf0ac", "cursor": "\uf054", "not ready": "\uf252 NOT READY",
-	} {
+	for name, icon := range map[string]string{"pull request": "\uf407 acme/widgets#42", "pending": "\uf10c", "blocking": "\uf46e", "cursor": "\uf054"} {
 		if !strings.Contains(list, icon) {
 			t.Errorf("list lacks the %s icon %q:\n%s", name, icon, list)
+		}
+	}
+	// A list row carries one disposition glyph and the blocking marker; the label and location words stand alone.
+	for name, icon := range map[string]string{"issue": "\uf41b", "suggestion": "\uf400", "file": "\uf016", "general": "\uf0ac"} {
+		if strings.Contains(list, icon) {
+			t.Errorf("list row carries the decorative %s icon:\n%s", name, list)
 		}
 	}
 	if err := m.openFinding("f-002"); err != nil {
 		t.Fatal(err)
 	}
 	detail := m.View()
-	if !strings.Contains(detail, "\uf400 suggestion") || !strings.Contains(detail, "\uf0ad Suggested fix") || !strings.Contains(detail, "\uf016 multi.txt:21") {
-		t.Errorf("detail lacks its label, fix or file icon:\n%s", detail)
+	if !strings.Contains(detail, "\uf0ad Suggested fix") || !strings.Contains(detail, "\uf016 multi.txt:21") {
+		t.Errorf("detail lacks its fix or file icon:\n%s", detail)
 	}
 
 	plain := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8", style.IconsEnv: "nerd"}, 100, 30)
-	view := plain.View()
-	if strings.ContainsRune(view, '\x1b') || strings.Contains(view, "\ue0b0") || !strings.Contains(view, "\uf10c") {
-		t.Errorf("NO_COLOR nerd tier must keep the icons, drop the segments and emit no escape:\n%q", view)
+	if view := plain.View(); strings.ContainsRune(view, '\x1b') || !strings.Contains(view, "\uf10c") {
+		t.Errorf("NO_COLOR nerd tier must keep the icons and emit no escape:\n%q", view)
 	}
 }

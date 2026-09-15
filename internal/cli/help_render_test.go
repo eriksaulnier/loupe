@@ -11,7 +11,7 @@ func TestRootHelpListsEveryCommandOnceUnderItsGroup(t *testing.T) {
 		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
 	}
 	help := s.stdout.String()
-	for _, heading := range []string{"WORKFLOW", "COMMANDS", "SEND-BACK LOOP", "RUN REFERENCES", "CONVENTIONS", "ENVIRONMENT"} {
+	for _, heading := range []string{"Workflow", "Commands", "Send-back loop", "Run references", "Conventions", "Environment"} {
 		if !strings.Contains(help, heading) {
 			t.Errorf("root help lacks the %s section:\n%s", heading, help)
 		}
@@ -41,7 +41,7 @@ func TestSubcommandHelpIsHeadedAndKeepsItsSentences(t *testing.T) {
 		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
 	}
 	help := s.stdout.String()
-	for _, want := range []string{"USAGE", "REFUSES", "FLAGS", "EXAMPLES", "RESULT"} {
+	for _, want := range []string{"Usage", "Refuses", "Flags", "Examples", "Result"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("publish help lacks %s:\n%s", want, help)
 		}

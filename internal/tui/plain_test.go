@@ -80,7 +80,7 @@ func TestPlainDecidesLikeFullScreen(t *testing.T) {
 			t.Errorf("context line is not in the plain gutter: %q", line)
 		}
 	}
-	for _, want := range []string{"loupe acme/widgets#42", "SUMMARY", "-- 1 of 3 --", ". pending   ! blocking   issue", "f-001 > "} {
+	for _, want := range []string{"loupe acme/widgets#42", "Summary", "-- 1 of 3 --", ". pending   ! blocking   issue", "f-001 > "} {
 		if !strings.Contains(text, want) {
 			t.Errorf("output lacks %q:\n%s", want, text)
 		}
@@ -100,8 +100,8 @@ func TestPlainUnderNoColorAndCLocale(t *testing.T) {
 	if strings.ContainsAny(text, "\u2713\u00b7\u2717\u21a9\u25cf\u203a\u258e\u2502\u2026\u2500\u2503") {
 		t.Errorf("plain mode uses a non-ASCII glyph under LANG=C:\n%s", text)
 	}
-	// The pill carries the word when nothing may be painted.
-	if !strings.Contains(text, "[NOT READY]") {
+	// The readiness is words, so it needs no paint.
+	if !strings.Contains(text, "\n3 pending\n") {
 		t.Errorf("plain mode does not name the readiness in words:\n%s", text)
 	}
 }

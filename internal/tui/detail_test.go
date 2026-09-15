@@ -15,6 +15,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 var sgr = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -130,34 +131,113 @@ func bigHunkRun(t *testing.T) string {
 	return dir
 }
 
-func TestDetailHunkScrollsAndMarksHiddenLines(t *testing.T) {
-	m, err := New(Config{Dir: bigHunkRun(t), Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})
+// A long body and a long anchored range scroll as one document, so the last anchored line, the fix and
+// the last reply are all reached with the ordinary scroll keys.
+func TestDetailScrollsAsOneDocument(t *testing.T) {
+	dir := bigHunkRun(t)
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].Body = strings.Repeat("A long paragraph that keeps the body going for a while. ", 40)
+		d.Findings[0].SuggestedFix = "Split the range."
+		d.Findings[0].Blocking, d.Findings[0].Label, d.Findings[0].Confidence, d.Findings[0].Severity = true, "issue", "medium", "major"
+		n, err := draft.SendBack(d, "f-001", "Why so wide?", testNow)
+		if err != nil {
+			return err
+		}
+		_, err = draft.AddReply(d, n.ID, "Because the hunk is as wide as the change, and narrowing it would hide the lines the finding is about, so it stays.", draft.ByAgent, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(Config{Dir: dir, Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	view := m.View()
+	if view := m.View(); !strings.Contains(view, "severity major") {
+		t.Errorf("the chips are clipped at 60 columns:\n%s", view)
+	}
 	anchored := func(view string, n int) bool {
-		return regexp.MustCompile(fmt.Sprintf(`(?m)^\s+%d\s+>\s+\+big line %d$`, n, n)).MatchString(view)
+		return regexp.MustCompile(fmt.Sprintf(`(?m)^\s+%d\s+>\s+\+big line %d\s*$`, n, n)).MatchString(view)
 	}
-	if !anchored(view, 5) || strings.Contains(view, "big line 30") || !strings.Contains(view, "lines below") {
-		t.Fatalf("first view does not mark the hidden anchored lines:\n%s", view)
+	if view := m.View(); !anchored(view, 5) || strings.Contains(view, "big line 30") {
+		t.Fatalf("first view does not start at the top of the hunk:\n%s", view)
 	}
-	for range 40 {
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("J")})
+	seen := map[string]bool{}
+	for _, keys := range []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyPgDown}} {
+		if err := m.openFinding("f-001"); err != nil {
+			t.Fatal(err)
+		}
+		for range 200 {
+			m.Update(keys)
+			view := m.View()
+			seen["last anchored line"] = seen["last anchored line"] || anchored(view, 30)
+			seen["fix"] = seen["fix"] || strings.Contains(view, "| Split the range.")
+			seen["reply"] = seen["reply"] || strings.Contains(view, "finding is about, so it stays.")
+		}
+		for _, part := range []string{"last anchored line", "fix", "reply"} {
+			if !seen[part] {
+				t.Errorf("%v never reaches the %s:\n%s", keys, part, m.View())
+			}
+		}
+		for _, back := range []tea.KeyMsg{{Type: tea.KeyUp}, {Type: tea.KeyPgUp}} {
+			for range 200 {
+				m.Update(back)
+			}
+			if view := m.View(); !anchored(view, 5) {
+				t.Errorf("%v does not return to the top:\n%s", back, view)
+			}
+			for range 200 {
+				m.Update(keys)
+			}
+		}
+		clear(seen)
 	}
-	view = m.View()
-	if !anchored(view, 30) || !strings.Contains(view, "lines above") || strings.Contains(view, "lines below") {
-		t.Fatalf("scrolled view does not reach the last anchored line:\n%s", view)
+	for _, k := range []string{"J", "K"} {
+		before := m.View()
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+		if m.View() != before {
+			t.Errorf("%s still scrolls something", k)
+		}
 	}
-	for range 40 {
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("K")})
+}
+
+func TestDetailActionsFollowTheFinding(t *testing.T) {
+	g := Glyphs(envOf(map[string]string{"LANG": "en_US.UTF-8"}))
+	located := draft.Finding{ID: "f-001", Location: &draft.Location{Path: "a.go", Line: 1}}
+	general := draft.Finding{ID: "f-002"}
+	keys := func(hints []style.Hint) string {
+		var out []string
+		for _, h := range hints {
+			k := h.Key
+			if h.Next {
+				k += "+"
+			}
+			out = append(out, k)
+		}
+		return strings.Join(out, " ")
 	}
-	if view = m.View(); !anchored(view, 5) || strings.Contains(view, "lines above") {
-		t.Fatalf("scrolling back does not return to the top:\n%s", view)
+	cases := []struct {
+		name        string
+		f           draft.Finding
+		disposition string
+		openNote    bool
+		hasNext     bool
+		want        string
+	}{
+		{"pending located", located, draft.DispositionPending, false, true, "←/→ ↑/↓ a+ x+ s+ f ?"},
+		{"pending last", located, draft.DispositionPending, false, false, "←/→ ↑/↓ a x s f ?"},
+		{"accepted", located, draft.DispositionAccepted, false, true, "←/→ ↑/↓ x+ s+ f ?"},
+		{"excluded general", general, draft.DispositionExcluded, false, true, "←/→ ↑/↓ u ?"},
+		{"withdrawn", located, draft.DispositionWithdrawn, false, true, "←/→ ↑/↓ f ?"},
+		{"open note", general, draft.DispositionPending, true, false, "←/→ ↑/↓ a x s r d ?"},
+	}
+	for _, c := range cases {
+		if got := keys(detailActions(g, c.f, c.disposition, c.openNote, c.hasNext)); got != c.want {
+			t.Errorf("%s: footer keys %q, want %q", c.name, got, c.want)
+		}
 	}
 }
 
@@ -168,10 +248,8 @@ func TestDetailShowsChipsRuleAndNumberedHunk(t *testing.T) {
 	}
 	view := m.View()
 	for _, want := range []string{
-		"f-002  2 of 3",
+		"f-002 \u00b7 2 of 3",
 		"\u00b7 pending   suggestion",
-		"\u2500\u2500 multi.txt:21 ",
-		" f whole file \u2500\u2500",
 		"Suggested fix",
 		"\u2503 extract insertAfter",
 		"   20  \u2502   line 20",
@@ -180,6 +258,9 @@ func TestDetailShowsChipsRuleAndNumberedHunk(t *testing.T) {
 		if !strings.Contains(view, want) {
 			t.Errorf("detail view lacks %q:\n%s", want, view)
 		}
+	}
+	if !regexp.MustCompile(`(?m)^ multi\.txt:21\s*$`).MatchString(view) || strings.Contains(view, "whole file") {
+		t.Errorf("detail view lacks its location line or still offers the old rule:\n%s", view)
 	}
 	if strings.Contains(view, "confidence ]") || strings.Contains(view, "[]") {
 		t.Errorf("detail view shows an empty chip:\n%s", view)
@@ -207,7 +288,7 @@ func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
 	f, _ := m.openedFinding()
 	m.openFileDiff(f)
 	view := m.View()
-	for _, want := range []string{"multi.txt  +3 \u22122 \u00b7 2 findings", "    3  f-001  +line three", "   21  f-002  +inserted after 20", "@@ -18,6 +18,7 @@"} {
+	for _, want := range []string{"multi.txt \u00b7 f-001 \u00b7 2 findings \u00b7 +3 \u22122", "\u203a    3  \u25c6  +line three", "    21  \u25c6  +inserted after 20", "@@ -18,6 +18,7 @@"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("file diff lacks %q:\n%s", want, view)
 		}

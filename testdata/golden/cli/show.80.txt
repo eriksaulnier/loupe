@@ -1,13 +1,13 @@
 loupe eriksaulnier/dev-loadout#2@1  chore: canonical review skills, gh doctor c…
-draft version 11  ✓ 1 · 1 ✗ 1 ↩ 0 ✎ 1  [NOT READY]
+draft version 11  ✓ 1 · 1 ✗ 1 ↩ 0 ✎ 1  1 pending · 1 open note
 
-SUMMARY
+Summary
   This is a large documentation and contract change (canonical `review-*` skills
   plus `gadfly-review-*` compatibility shims, an `unable` verifier verdict,
   evidence-preservation rules, publication moved wholly into `post-review`)
   around one small code change.
 
-FINDINGS
+Findings
 ✓ f-001  Alias metadata removed from three skills, still live in four others
          accepted · issue · confidence medium ·
          adapters/pi/skills/post-review/SKILL.md:10

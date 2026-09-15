@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/muesli/termenv"
 
+	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
@@ -29,10 +30,10 @@ func TestListAtEightyColumnsDropsTheLabelColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
-	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001  ! Title one", "multi.txt:3")
+	waitFor(t, tm, "acme/widgets#42", "round 1", "> . f-001  ! Title one", "multi.txt:3")
 	tm.Type("q")
 	view := finalView(t, tm)
-	if strings.Contains(view, "LABEL") || strings.Contains(view, "suggestion") {
+	if strings.Contains(view, "Label") || strings.Contains(view, "suggestion") {
 		t.Errorf("80-column list still carries the label column:\n%s", view)
 	}
 	for _, line := range strings.Split(view, "\n") {
@@ -104,22 +105,89 @@ func TestNoColorEmitsNoEscapes(t *testing.T) {
 	}
 }
 
-func TestPickerBoxIsASCIIUnderCLocale(t *testing.T) {
+func TestPublishStepsAreUnboxed(t *testing.T) {
 	dir := readyFixture(t, "author", "author")
-	ascii := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, 24)
-	ascii.view, ascii.pick = viewAction, 0
-	view := ascii.View()
-	if !strings.Contains(view, "+- Publish: review action -") || strings.ContainsAny(view, "\u256d\u2500\u2502\u2570") {
-		t.Errorf("the chooser is not drawn with ASCII box characters:\n%s", view)
-	}
-	if !strings.Contains(view, "> comment") || !strings.Contains(view, "disabled: author is the author of this pull request and cannot approve it") {
-		t.Errorf("the chooser lost its cursor or a disabled reason:\n%s", view)
+	for _, env := range []map[string]string{{"NO_COLOR": "1", "LANG": "C"}, {"NO_COLOR": "1", "LANG": "en_US.UTF-8"}} {
+		m := modelOf(t, dir, env, 100, 24)
+		m.view, m.pick = viewAction, 0
+		step1 := m.View()
+		m.view, m.action, m.pick = viewInline, "comment", 1
+		step2 := m.View()
+		sep := m.glyphs.Sep
+		for name, view := range map[string]string{"step 1": step1, "step 2": step2} {
+			if strings.Contains(view, "+-") || strings.ContainsAny(view, "\u256d\u256e\u2570\u256f\u250c\u2510\u2514\u2518") {
+				t.Errorf("%s under %v draws a box:\n%s", name, env, view)
+			}
+		}
+		if !strings.HasPrefix(step1, " Publish "+sep+" Step 1 of 3 "+sep+" acme/widgets#42") || !strings.Contains(step1, " Review action\n") ||
+			!strings.Contains(step1, " "+m.glyphs.Cursor+" comment ") {
+			t.Errorf("step 1 under %v lost its header, question or cursor:\n%s", env, step1)
+		}
+		if !strings.HasPrefix(step2, " Publish "+sep+" Step 2 of 3 "+sep+" comment "+sep+" acme/widgets#42") || !strings.Contains(step2, " Inline comments\n") ||
+			!strings.Contains(step2, " "+m.glyphs.Cursor+" blocking ") {
+			t.Errorf("step 2 under %v lost its header, question or cursor:\n%s", env, step2)
+		}
 	}
 
-	unicode := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 24)
-	unicode.view, unicode.action, unicode.pick = viewInline, "comment", 1
-	if view := unicode.View(); !strings.Contains(view, "\u256d\u2500 Publish as comment: inline comments ") || !strings.Contains(view, "\u203a blocking") {
-		t.Errorf("the second step is not titled after the action it follows:\n%s", view)
+	// At the narrowest window the refusal wraps under the description column instead of being clipped.
+	narrow := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 24)
+	narrow.view, narrow.pick = viewAction, 0
+	var text []string
+	for _, l := range strings.Split(narrow.View(), "\n") {
+		text = append(text, strings.TrimSpace(l))
+	}
+	joined := strings.Join(text, " ")
+	for _, want := range []string{
+		"unavailable: author is the author of this pull request and cannot approve it",
+		"unavailable: author is the author of this pull request and cannot request changes on it",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("60-column step 1 lacks %q:\n%s", want, narrow.View())
+		}
+	}
+}
+
+func TestInitialSelectionIsWhatNeedsTheHuman(t *testing.T) {
+	dir := newFixture(t)
+	env := map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}
+	if m := modelOf(t, dir, env, 100, 24); m.cursor != 0 {
+		t.Errorf("all pending: cursor %d, want the first finding", m.cursor)
+	}
+	decideAll := func(fn func(d *draft.Draft) error) {
+		t.Helper()
+		if _, err := draft.Mutate(dir, "review", nil, envOf(nil), fn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	decideAll(func(d *draft.Draft) error { return draft.Accept(d, "f-001", testNow) })
+	if m := modelOf(t, dir, env, 100, 24); m.cursor != 1 {
+		t.Errorf("f-001 accepted: cursor %d, want f-002", m.cursor)
+	}
+	decideAll(func(d *draft.Draft) error {
+		if err := draft.Accept(d, "f-003", testNow); err != nil {
+			return err
+		}
+		if _, err := draft.SendBack(d, "f-002", "Why?", testNow); err != nil {
+			return err
+		}
+		return draft.Accept(d, "f-002", testNow)
+	})
+	if m := modelOf(t, dir, env, 100, 24); m.cursor != findingIndex(m.draft, "f-002") || len(draft.ReadinessOf(m.draft).Pending) != 0 {
+		t.Errorf("nothing pending, f-002 has an open note: cursor %d, pending %v", m.cursor, draft.ReadinessOf(m.draft).Pending)
+	}
+	decideAll(func(d *draft.Draft) error { return draft.ResolveNote(d, "n-001", testNow) })
+	if m := modelOf(t, dir, env, 100, 24); m.cursor != 0 {
+		t.Errorf("all decided: cursor %d, want the first finding", m.cursor)
+	}
+}
+
+func TestListIDsAreNotAccented(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 24)
+	m.styles.R.SetColorProfile(termenv.TrueColor)
+	m.styles.Color = true
+	accented := m.styles.Accent.Render("f-001")
+	if view := m.View(); strings.Contains(view, accented) || !strings.Contains(view, m.styles.Dim.Render("f-001")) {
+		t.Errorf("list id is accented or not dim:\n%q", view)
 	}
 }
 
@@ -130,10 +198,18 @@ func TestHelpLeadsWithTheCurrentView(t *testing.T) {
 	}
 	m.help = true
 	view := m.View()
-	detail, everywhere, list := strings.Index(view, "DETAIL"), strings.Index(view, "EVERYWHERE"), strings.Index(view, "LIST")
+	detail, everywhere, list := strings.Index(view, "Finding detail"), strings.Index(view, "Everywhere"), strings.Index(view, "Finding list")
 	if detail < 0 || everywhere < detail || list < everywhere {
 		t.Fatalf("help does not lead with the current view:\n%s", view)
 	}
+	m.help, m.view, m.pick = false, viewInline, 0
+	m.help = true
+	if picker := m.View(); !strings.Contains(strings.Split(picker, "\n")[2], "Publish steps") {
+		t.Errorf("help from a publish step does not lead with its keys:\n%s", picker)
+	}
+	m.help, m.view = false, viewDetail
+	m.help = true
+	view = m.View()
 	if !strings.Contains(view, "Decisions are recorded against the draft version on screen.") {
 		t.Errorf("help lost the sentence about the version on screen:\n%s", view)
 	}
@@ -175,5 +251,14 @@ func TestCollapsedSummaryHasNoSpaceRuns(t *testing.T) {
 	rest = strings.TrimSpace(rest)
 	if !ok || !strings.HasSuffix(rest, "\u2026") || strings.Contains(rest, "  ") {
 		t.Errorf("second summary line must end with the ellipsis and carry no space run: %q", lines[1])
+	}
+}
+
+// A pull request reference too long for a narrow header keeps its number.
+func TestListHeaderKeepsThePullRequestNumber(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 20)
+	m.target.Owner, m.target.Repo, m.target.Number = "my-organization", "my-repository-with-a-long-name", 1234
+	if header := m.listHeader(); !strings.Contains(header, "name#1234") || style.Width(header) != 60 {
+		t.Errorf("header %q", header)
 	}
 }

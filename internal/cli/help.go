@@ -72,7 +72,7 @@ var environment = [][2]string{
 	{"LOUPE_RUN", "default run reference"},
 	{"LOUPE_LOCK_TIMEOUT_MS", "how long to wait for the run lock (default 3000, max 60000)"},
 	{"NO_COLOR, TERM, LANG/LC_ALL", "honored for color, plain-mode fallback and glyph selection"},
-	{"LOUPE_ICONS", "ascii, unicode or nerd; the default nerd needs a Nerd Font"},
+	{"LOUPE_ICONS", "ascii, unicode (the default) or nerd, which needs a Nerd Font"},
 }
 
 // setHelp replaces cobra's help and usage output for the whole command tree, so the commands are listed once, under

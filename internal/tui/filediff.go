@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -52,29 +53,33 @@ func markerLine(lines []diff.ViewLine, id string) int {
 	return diff.NextMarker(lines, -1)
 }
 
+// refreshFileDiff draws the file with a one-cell gutter: the mark on a line a finding is filed against, and the
+// cursor glyph on the active line in every tier.
 func (m *Model) refreshFileDiff() {
-	gutter := len(m.glyphs.Gutter)
-	for _, l := range m.fileLines {
-		for _, marker := range l.Markers {
-			gutter = max(gutter, len(marker))
-		}
-	}
 	rows := make([]string, len(m.fileLines))
 	for i, l := range m.fileLines {
-		// A finding on the line puts its id where the gutter would be, so the diff shows what is filed against it.
-		mark := m.styles.Dim.Render(m.glyphs.Gutter)
+		cursor := i == m.fileCursor
+		paint := func(st lipgloss.Style) lipgloss.Style {
+			if cursor && m.styles.Color {
+				return m.styles.On(m.styles.Selected, st).Bold(true)
+			}
+			return st
+		}
+		lead := " "
+		if cursor {
+			lead = m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor)
+		}
+		if l.Separator {
+			rows[i] = lead + paint(m.styles.Accent).Render(render.ForDisplay(l.Text))
+			continue
+		}
+		number, text := diffCells(l)
+		mark := paint(m.styles.Dim).Render(m.glyphs.Gutter)
 		if len(l.Markers) > 0 {
-			mark = m.styles.Accent.Render(strings.Join(l.Markers[:1], ""))
+			mark = paint(m.styles.Accent.Bold(true)).Render(m.glyphs.Mark)
 		}
-		text := diffRow(l, mark, gutter)
-		switch {
-		case i == m.fileCursor && m.styles.Color:
-			rows[i] = m.styles.Selected.Render(style.Pad(" "+diffRow(l, markerText(m.glyphs, l), gutter), m.width))
-		case i == m.fileCursor:
-			rows[i] = m.glyphs.Cursor + diffRow(l, markerText(m.glyphs, l), gutter)
-		default:
-			rows[i] = " " + m.styleDiffLine(l, text)
-		}
+		line := m.diffStyle(l)
+		rows[i] = lead + paint(line).Render(number) + mark + paint(line).Render(text)
 	}
 	m.file.Width = m.width
 	m.file.Height = m.bodyHeight(fileDiffHeaderLines)
@@ -85,14 +90,6 @@ func (m *Model) refreshFileDiff() {
 	case m.fileCursor >= m.file.YOffset+m.file.Height:
 		m.file.SetYOffset(m.fileCursor - m.file.Height + 1)
 	}
-}
-
-// markerText is the gutter of a row drawn without color, where nothing inside a painted band may reset it.
-func markerText(g GlyphSet, l diff.ViewLine) string {
-	if len(l.Markers) > 0 {
-		return l.Markers[0]
-	}
-	return g.Gutter
 }
 
 // fileCounts is what the file's diff does: lines added, lines removed, and how many findings sit on it.
@@ -121,11 +118,11 @@ func (m *Model) updateFileDiff(msg tea.KeyMsg) tea.Cmd {
 		m.fileCursor = min(m.fileCursor+1, len(m.fileLines)-1)
 	case "k", "up":
 		m.fileCursor = max(m.fileCursor-1, 0)
-	case "]":
+	case "right", "]":
 		if i := diff.NextMarker(m.fileLines, m.fileCursor); i >= 0 {
 			m.fileCursor = i
 		}
-	case "[":
+	case "left", "[":
 		if i := diff.PrevMarker(m.fileLines, m.fileCursor); i >= 0 {
 			m.fileCursor = i
 		}
@@ -142,28 +139,41 @@ func (m *Model) updateFileDiff(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) fileDiffView() string {
-	keys := m.styles.Keys([]style.Key{{K: "j/k", Verb: "move"}, {K: "]/[", Verb: "next/prev finding"}, {K: "enter", Verb: "open finding"}, {K: "esc", Verb: "back"}, {K: "?", Verb: "help"}})
-	return m.frame([]string{m.fileDiffBand()}, m.file.View(), keys)
+	g := m.glyphs
+	keys := m.footer([]style.Hint{
+		{Key: g.Up + "/" + g.Down, Verb: "line", Role: style.RoleNav},
+		{Key: g.Left + "/" + g.Right, Verb: "finding", Role: style.RoleNav},
+		{Key: "enter", Verb: "open"},
+		{Key: "esc", Verb: "back"},
+		{Key: "?", Verb: "help", Role: style.RoleHelp},
+	})
+	return m.frame([]string{m.fileDiffHeader()}, m.file.View(), keys)
 }
 
-// fileDiffBand drops the run from the band: what the stats say about this file is what the view is for, and the
-// path gives up its directories before they do.
-func (m *Model) fileDiffBand() string {
+// fileDiffHeader leads with the file and the finding under the cursor; the path gives up its directories first, and
+// the line counts drop before the finding count does.
+func (m *Model) fileDiffHeader() string {
 	f, _ := m.openedFinding()
 	path := ""
 	if f.Location != nil {
 		path = render.ForDisplay(f.Location.Path)
 	}
-	added, removed, findings := m.fileCounts()
-	counts := fmt.Sprintf("+%d %s%d %s %d %s", added, m.sign("\u2212", "-"), removed, m.glyphs.Pending, findings, plural(findings, "finding"))
-	pill := m.readinessPill()
-	icon := ""
-	if m.glyphs.File != "" {
-		icon = m.glyphs.File + " "
+	active := f.ID
+	if len(m.fileLines) > 0 {
+		if markers := m.fileLines[m.fileCursor].Markers; len(markers) > 0 {
+			active = markers[0]
+			if len(markers) > 1 {
+				active += fmt.Sprintf(" +%d", len(markers)-1)
+			}
+		}
 	}
-	// The band keeps a divider cell and two of padding around the title, and the title two more before the counts.
-	room := m.width - m.styles.BrandWidth() - style.Width(pill) - 5 - style.Width(icon) - style.Width(counts)
-	return m.styles.Band(style.BandParts{Title: icon + m.styles.TruncLeft(path, max(10, room)) + "  " + counts, Right: pill}, m.width)
+	added, removed, findings := m.fileCounts()
+	return m.header(
+		style.HeaderPart{Text: strings.TrimSpace(m.glyphs.File + " " + path), Squeeze: true, Left: true, Bold: true},
+		style.HeaderPart{Text: render.ForDisplay(active)},
+		style.HeaderPart{Text: fmt.Sprintf("%d %s", findings, plural(findings, "finding")), Kind: style.Dim},
+		style.HeaderPart{Text: fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed), Drop: 1, Kind: style.Dim},
+	)
 }
 
 func plural(n int, word string) string {

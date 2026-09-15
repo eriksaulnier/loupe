@@ -27,9 +27,9 @@ func plainWidth(width int) int {
 }
 
 // plainAnswers are the letters an answer may be, in the order the legend shows them.
-var plainAnswers = []style.Key{
-	{K: "a", Verb: "accept"}, {K: "x", Verb: "exclude"}, {K: "s", Verb: "send back"}, {K: "u", Verb: "restore"},
-	{K: "r/d", Verb: "note"}, {K: "n", Verb: "next"}, {K: "b", Verb: "back"}, {K: "q", Verb: "quit"},
+var plainAnswers = []style.Hint{
+	{Key: "a", Verb: "accept"}, {Key: "x", Verb: "exclude"}, {Key: "s", Verb: "send back"}, {Key: "u", Verb: "restore"},
+	{Key: "r/d", Verb: "note"}, {Key: "n", Verb: "next"}, {Key: "b", Verb: "back"}, {Key: "q", Verb: "quit"},
 }
 
 // printer keeps the first write error so the loop can check once per finding instead of after every line.
@@ -61,7 +61,12 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 	ref := strings.TrimSpace(s.Glyphs.PR + " " + fmt.Sprintf("%s/%s#%d", target.Owner, target.Repo, target.Number))
 	p.printf("%s %s %s  %s\n", s.Brand(), s.Accent.Render(ref),
 		s.Dim.Render(fmt.Sprintf("round %d", target.Round)), render.ForDisplay(render.OneLine(target.Title)))
-	p.printf("%s  %s\n", countsLine(d, s), s.ReadinessPill(r.Ready, len(r.Pending), len(r.OpenNotes)))
+	counts, readiness := countsLines(d, s, w), s.Readiness(r.Ready, len(r.Pending), len(r.OpenNotes))
+	sep := "\n"
+	if style.Width(counts[len(counts)-1])+2+style.Width(readiness) <= w {
+		sep = "  "
+	}
+	p.printf("%s%s%s\n", strings.Join(counts, "\n"), sep, readiness)
 	if strings.TrimSpace(d.Summary) != "" {
 		p.printf("\n%s\n%s\n", s.Heading("summary"), s.Wrap(render.ForDisplay(d.Summary), w, ""))
 	}
@@ -85,7 +90,8 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		if err := printFinding(p, s, d, dif, i, full, w); err != nil {
 			return err
 		}
-		p.printf("\n%s\n%s %s ", s.Keys(plainAnswers), s.Accent.Render(d.Findings[i].ID), s.Cursor.Render(s.Glyphs.Cursor))
+		answers, _ := s.Footer(plainAnswers, w)
+		p.printf("\n%s\n%s %s ", answers, s.Accent.Render(d.Findings[i].ID), s.Cursor.Render(s.Glyphs.Cursor))
 		if p.err != nil {
 			return p.err
 		}
@@ -161,7 +167,7 @@ func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i, 
 	f := d.Findings[i]
 	p.printf("\n%s\n", s.Rule(full, "", fmt.Sprintf("%d of %d", i+1, len(d.Findings))))
 	p.printf("%s  %s\n", s.Accent.Render(f.ID), s.Bold.Render(render.ForDisplay(render.OneLine(f.Title))))
-	p.printf("%s  %s\n", chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID])), s.Dim.Render(plainLocation(s.Glyphs, f)))
+	p.printf("%s  %s\n", chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID], false)), s.Dim.Render(plainLocation(s.Glyphs, f)))
 	p.printf("\n%s\n", s.Wrap(render.ForDisplay(f.Body), width, ""))
 	if f.SuggestedFix != "" {
 		p.printf("\n%s\n", s.Head.Render(strings.TrimSpace(s.Glyphs.Fix+" Suggested fix")))

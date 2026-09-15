@@ -408,7 +408,7 @@ Fix rounds after T104, from the owner's reviews in the vault under `Engineering/
 - [X] T109 Add `changed` and `viewer` codes for confirmation races instead of reusing `version` and `auth` per contracts/cli.md error codes (contradicts) — `cc23481`
 - [X] T110 Keep both diff entries of a type change so each side validates per FR-008 (partial) — `6d53fc8`
 - [X] T111 Escape the implicit bidi marks U+200E, U+200F, U+061C and keep fenced `<details>` closed in the confirmation per FR-027, Constitution II (partial) — `092bf22`
-- [X] T112 Scroll a tall hunk in the detail view and cancel the full-screen confirmation at end of input per FR-022, US2/AC2, research.md step 5 (partial) — `514da75`
+- [X] T112 Scroll a tall hunk in the detail view and cancel the full-screen confirmation at end of input per FR-022, US2/AC2, research.md step 5 (partial) — `514da75` (hunk scrolling superseded by 002-review-ux: one viewport)
 - [X] T113 Name the entry in batch refusals, give `no-run` a fix each command accepts, and print a capture summary step that runs per FR-010, FR-006, FR-035 (partial) — `91f6ede`
 - [X] T114 Catch split pseudo-terminal calls and pseudo-terminal modules in the test guard per Constitution VII (partial) — `f4f1a7e`
 - [X] T115 Pin behavior the mutation sweep left unpinned per Constitution VII (partial) — `d296326`
