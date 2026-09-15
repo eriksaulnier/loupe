@@ -125,6 +125,8 @@ A finding’s disposition, blocking state, label, confidence, and severity MUST 
 
 The interface SHOULD use one disposition glyph and at most one explicit blocking marker in a list row; file, label, and general-finding icons SHOULD be omitted when their text is already clear.
 
+A list row MUST also mark a finding with an open note using the note glyph, in the note color once the agent has replied to it and dim while it has not, so the counts line's open notes can be found without opening each finding.
+
 ## 4. Interaction model
 
 ### 4.1 Global keys

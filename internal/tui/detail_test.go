@@ -11,6 +11,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -348,5 +350,80 @@ func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
 	}
 	if _, decided := d.Decisions["f-002"]; decided {
 		t.Fatalf("a typeahead key decided f-002 before it was shown: %+v", d.Decisions["f-002"])
+	}
+}
+
+// A hyphen is a break point in the body's word wrap; a wrap that does not count it strands a word on its own line.
+func TestBodyWrapFillsEachLineAroundHyphens(t *testing.T) {
+	body := "The client sends `If-None-Match`, but the fake-server never answers 304, so the path that re-uses a cached " +
+		"entry is un-tested. Both `Get` and `Put` take the `mu` lock, and a well-known `ttl` is read without it."
+	for _, theme := range []struct {
+		name        string
+		color, dark bool
+	}{{"no color", false, false}, {"light", true, false}, {"dark", true, true}} {
+		for width := 40; width <= 140; width++ {
+			m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, width, 24)
+			if theme.color {
+				m.styles.R.SetColorProfile(termenv.TrueColor)
+			}
+			m.styles.Color, m.darkBackground = theme.color, theme.dark
+			out, err := m.renderMarkdown(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(ansi.Strip(out), "If-None-Match") || strings.ContainsRune(out, '‑') {
+				t.Fatalf("%s width %d: hyphens not shown as typed:\n%s", theme.name, width, ansi.Strip(out))
+			}
+			lines := strings.Split(ansi.Strip(out), "\n")
+			for i, l := range lines {
+				if style.Width(l) > m.wrapWidth {
+					t.Errorf("%s width %d: line %d is %d cells, wrap %d: %q", theme.name, width, i, style.Width(l), m.wrapWidth, l)
+				}
+				text := strings.TrimSpace(l)
+				if i+1 < len(lines) && text != "" {
+					next := strings.Fields(lines[i+1])
+					if len(next) == 0 {
+						continue
+					}
+					// Inline code in color pads each side with a space that stripping cannot tell from the gap after it,
+					// so a colored line is allowed the pads of the code spans that can meet at a break.
+					slack := 0
+					if theme.color {
+						slack = 4
+					}
+					// The body wraps inside a one-cell margin on each side, so a line that still had room for the next
+					// line's first word and the space before it was broken early.
+					if 1+style.Width(text)+1+style.Width(next[0])+1+slack <= m.wrapWidth {
+						t.Errorf("%s width %d: line %d %q ends early before %q", theme.name, width, i, text, next[0])
+					}
+				}
+			}
+		}
+	}
+}
+
+// glamour marks links as terminal hyperlinks, an escape sequence the display filter would show as text.
+func TestBodyLinksShowAsText(t *testing.T) {
+	body := "See [the docs](https://github.com/acme/docs), <https://github.com/acme/auto>, www.github.com/acme/www and " +
+		"![logo](https://github.com/acme/logo).\n\n| site |\n| --- |\n| https://github.com/acme/table |"
+	for _, color := range []bool{false, true} {
+		m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 24)
+		if color {
+			m.styles.R.SetColorProfile(termenv.TrueColor)
+		}
+		m.styles.Color = color
+		out, err := m.renderMarkdown(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := ansi.Strip(out)
+		if strings.Contains(text, `\u001B`) || strings.Contains(text, `\u0007`) || strings.Contains(text, "]8;") {
+			t.Errorf("color %v: escape sequence shown as text:\n%s", color, text)
+		}
+		for _, want := range []string{"the docs", "https://github.com/acme/docs", "https://github.com/acme/auto", "acme/table"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("color %v: body lacks %q:\n%s", color, want, text)
+			}
+		}
 	}
 }

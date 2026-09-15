@@ -205,13 +205,14 @@ func (m *Model) listView() string {
 	summary := m.summaryBlock(cols)
 	rowsHeight := max(1, m.bodyHeight(len(header))-len(summary)-1)
 	offset := max(0, m.cursor-rowsHeight+1)
-	dispositions := draft.Dispositions(m.draft)
+	dispositions, notes := draft.Dispositions(m.draft), openNotes(m.draft)
 	rows := []string{m.columnHeads(cols)}
 	if len(m.draft.Findings) == 0 {
 		rows = append(rows, m.styles.Dim.Render(" No findings"))
 	}
 	for i := offset; i < len(m.draft.Findings) && i < offset+rowsHeight; i++ {
-		rows = append(rows, m.row(m.draft.Findings[i], dispositions[m.draft.Findings[i].ID], i == m.cursor, cols))
+		f := m.draft.Findings[i]
+		rows = append(rows, m.row(f, dispositions[f.ID], notes, i == m.cursor, cols))
 	}
 	body := strings.Join(append(summary, rows...), "\n")
 
@@ -278,9 +279,9 @@ func (m *Model) columnHeads(cols listColumns) string {
 	return m.styles.Dim.Render(m.styles.TruncRight(head, m.width))
 }
 
-// row is one finding: the cursor, one disposition glyph, the quiet id, the blocking marker and the title, which the
-// selection bolds in the accent.
-func (m *Model) row(f draft.Finding, disposition string, selected bool, cols listColumns) string {
+// row is one finding: the cursor, one disposition glyph, the quiet id, the blocking and note markers and the title,
+// which the selection bolds in the accent.
+func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, selected bool, cols listColumns) string {
 	cursor, titleStyle := " ", m.styles.R.NewStyle()
 	if selected {
 		cursor, titleStyle = m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor), m.styles.Accent.Bold(true)
@@ -292,12 +293,25 @@ func (m *Model) row(f draft.Finding, disposition string, selected bool, cols lis
 		blocking = m.glyphs.Blocking + " "
 		titleWidth -= style.Width(blocking)
 	}
+	note := ""
+	replied, open := notes[f.ID]
+	if open {
+		note = m.glyphs.Note + " "
+		titleWidth -= style.Width(note)
+	}
 	title := m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Title)), titleWidth)
 	var b strings.Builder
 	b.WriteString(" " + cursor + " " + m.styles.Of(kind).Render(glyph) + " ")
 	b.WriteString(m.styles.Dim.Render(style.Pad(f.ID, listIDWidth)) + "  ")
 	if blocking != "" {
 		b.WriteString(m.styles.Bad.Render(blocking))
+	}
+	if note != "" {
+		kind := style.Dim
+		if replied {
+			kind = style.Note
+		}
+		b.WriteString(m.styles.Of(kind).Render(note))
 	}
 	b.WriteString(titleStyle.Render(title) + strings.Repeat(" ", max(0, titleWidth-style.Width(title))))
 	if cols.label > 0 {
@@ -308,6 +322,22 @@ func (m *Model) row(f draft.Finding, disposition string, selected bool, cols lis
 		b.WriteString(m.styles.Dim.Render("  " + m.locationColumn(f, cols)))
 	}
 	return strings.TrimRight(b.String(), " ")
+}
+
+// openNotes maps each finding with an open note to whether the agent has replied to one, which makes it the human's
+// move.
+func openNotes(d *draft.Draft) map[string]bool {
+	replied := map[string]bool{}
+	for _, r := range d.Replies {
+		replied[r.NoteID] = true
+	}
+	out := map[string]bool{}
+	for _, n := range d.Notes {
+		if n.Status == draft.NoteOpen {
+			out[n.FindingID] = out[n.FindingID] || replied[n.ID]
+		}
+	}
+	return out
 }
 
 // locationColumn keeps the end of the path, which is the part that identifies the file.

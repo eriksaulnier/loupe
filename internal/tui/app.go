@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/glamour/v2"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/eriksaulnier/loupe/internal/diff"

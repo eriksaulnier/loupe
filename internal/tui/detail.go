@@ -2,13 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
+	"charm.land/glamour/v2"
+	glamourstyles "charm.land/glamour/v2/styles"
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
-	glamourstyles "github.com/charmbracelet/glamour/styles"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/render"
@@ -174,8 +175,13 @@ func (m *Model) renderMarkdown(md string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("render finding body: %w", err)
 	}
-	return strings.Trim(render.ForDisplayANSI(out), "\n"), nil
+	return strings.Trim(render.ForDisplayANSI(hyperlink.ReplaceAllString(out, "")), "\n"), nil
 }
+
+// hyperlink matches the OSC 8 sequences glamour wraps links in. ForDisplayANSI would show them as text, and a terminal
+// would open a target the reader cannot see; the URL glamour prints beside the link stays. Every escape in glamour's
+// output is its own, since ForDisplayMarkdown already escaped any in the body.
+var hyperlink = regexp.MustCompile("\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
 
 func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 	f, i := m.openedFinding()

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/muesli/termenv"
 
@@ -181,6 +182,62 @@ func TestInitialSelectionIsWhatNeedsTheHuman(t *testing.T) {
 	decideAll(func(d *draft.Draft) error { return draft.ResolveNote(d, "n-001", testNow) })
 	if m := modelOf(t, dir, env, 100, 24); m.cursor != 0 {
 		t.Errorf("all decided: cursor %d, want the first finding", m.cursor)
+	}
+}
+
+// A row marks a finding with an open note, in the note color once the agent has replied and dim while it has not.
+func TestListRowMarksOpenNotes(t *testing.T) {
+	dir := newFixture(t)
+	mutate := func(fn func(d *draft.Draft) error) {
+		t.Helper()
+		if _, err := draft.Mutate(dir, "review", nil, envOf(nil), fn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rowOf := func(m *Model, id string) string {
+		for _, l := range strings.Split(m.View(), "\n") {
+			if strings.Contains(ansi.Strip(l), id+"  ") {
+				return l
+			}
+		}
+		t.Fatalf("no row for %s:\n%s", id, m.View())
+		return ""
+	}
+	colored := func() *Model {
+		m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 24)
+		m.styles.R.SetColorProfile(termenv.TrueColor)
+		m.styles.Color = true
+		return m
+	}
+	mutate(func(d *draft.Draft) error {
+		for _, id := range []string{"f-001", "f-003"} {
+			if _, err := draft.SendBack(d, id, "Why?", testNow); err != nil {
+				return err
+			}
+		}
+		return draft.ResolveNote(d, "n-002", testNow)
+	})
+	m := colored()
+	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.Dim.Render(m.glyphs.Note+" ")) {
+		t.Errorf("unanswered note is not a dim mark: %q", row)
+	}
+	if row := ansi.Strip(rowOf(m, "f-003")); strings.Contains(row, m.glyphs.Note) {
+		t.Errorf("closed note still marked: %q", row)
+	}
+	if row := ansi.Strip(rowOf(m, "f-002")); strings.Contains(row, m.glyphs.Note) {
+		t.Errorf("finding without notes marked: %q", row)
+	}
+
+	mutate(func(d *draft.Draft) error {
+		_, err := draft.AddReply(d, "n-001", "Because.", draft.ByAgent, testNow)
+		return err
+	})
+	m = colored()
+	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.Note.Render(m.glyphs.Note+" ")) {
+		t.Errorf("answered note is not in the note color: %q", row)
+	}
+	if plain := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "C", style.IconsEnv: "ascii"}, 100, 24); !strings.Contains(rowOf(plain, "f-001"), "! ~ Title one") {
+		t.Errorf("ascii row lacks the note mark: %q", rowOf(plain, "f-001"))
 	}
 }
 
