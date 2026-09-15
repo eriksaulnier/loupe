@@ -1,6 +1,3 @@
-> [!IMPORTANT]
-> **2 blocking findings**
-
 `⛔ 2 blocking`
 
 Summary.
@@ -10,14 +7,14 @@ Summary.
 ### ⛔ Blocking
 
 <details>
-<summary>🟡 <b>issue (blocking):</b> Title f-001</summary>
+<summary><b>issue (blocking):</b> Title f-001</summary>
 
 Body f-001.
 
 </details>
 
 <details>
-<summary>🔵 <b>question (blocking):</b> Title f-002</summary>
+<summary><b>question (blocking):</b> Title f-002</summary>
 
 Body f-002.
 

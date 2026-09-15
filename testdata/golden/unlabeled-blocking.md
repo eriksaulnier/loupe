@@ -1,6 +1,3 @@
-> [!IMPORTANT]
-> **1 blocking finding**
-
 `⛔ 1 blocking`
 
 Summary.
@@ -10,7 +7,7 @@ Summary.
 ### ⛔ Blocking
 
 <details>
-<summary>⚪ <b>(blocking):</b> Title f-001</summary>
+<summary><b>(blocking):</b> Title f-001</summary>
 
 Body f-001.
 

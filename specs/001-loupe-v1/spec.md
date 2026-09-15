@@ -26,6 +26,10 @@
 - Q: New commits landed on the pull request while the human was deciding findings, and publish refused `head-moved`; the only way forward was a new capture, whose empty draft lost every decision. What should publish do when the head moved? → A: When the captured commit is still an ancestor of the live head, publish at the captured commit, which the review's `commit_id` already pins, after a confirmation that shows the commits since capture and the findings on files they changed; GitHub does not mark its comments outdated for those commits, so a comment on a line they changed shows beside the new code (observed 2026-09-14). The confirmation is the acknowledgment, with no flag. Refuse when the captured commit has left the pull request's history, and refuse approve at a moved head. Findings are never remapped.
 - Q: Should the section headings carry the label dots? → A: Yes. Each heading is led by its chip's dot, `⛔ Blocking`, `🟡 Issues`, `🟣 Suggestions`, `🔵 Questions`, `⚪ Other`, so a reader matches a chip to its section, and rows in the label sections still carry no dot.
 
+### Session 2026-09-15
+
+- Q: The published review on application-platform#843 opened with an `IMPORTANT` callout repeating the `⛔ 1 blocking` chip beneath it, and its blocking finding read `🟡 issue (blocking):` under the `⛔ Blocking` heading and inline. Should either stay? → A: No. The body opens with the chips row, or the summary when there are no findings, and never with a callout; this supersedes the 2026-09-14 callout answer. Body rows carry no dot in any section, so a blocking finding reads `issue (blocking):`. An inline comment keeps its dot, and a blocking one takes `⛔` whatever its label, amending the 2026-09-14 dot answer: a yellow dot on a blocking finding read as lower severity than it is.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Agent files findings against a captured pull request (Priority: P1)

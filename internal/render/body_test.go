@@ -71,12 +71,12 @@ func TestBodyGoldens(t *testing.T) {
 	sourced := base(general("f-001", "issue", false))
 	sourced.Source = "gadfly-review-pr@2.2.0"
 	cases := map[string]Input{
-		"example.md":                 exampleInput(),
-		"blocking-callout.md":        base(general("f-001", "suggestion", true)),
-		"blocking-callout-plural.md": base(general("f-001", "issue", true), general("f-002", "question", true)),
-		"no-callout.md":              base(general("f-001", "question", false)),
-		"summary-only.md":            base(),
-		"unlabeled-blocking.md":      base(general("f-001", "", true)),
+		"example.md":            exampleInput(),
+		"blocking.md":           base(general("f-001", "suggestion", true)),
+		"blocking-mixed.md":     base(general("f-001", "issue", true), general("f-002", "question", true)),
+		"nonblocking.md":        base(general("f-001", "question", false)),
+		"summary-only.md":       base(),
+		"unlabeled-blocking.md": base(general("f-001", "", true)),
 		"left-side.md": base(Finding{ID: "f-001", Title: "Removed guard", Body: "Body.", Label: "issue",
 			Location: &Location{Path: "a.go", Side: "LEFT", Line: 24, StartLine: 21}}),
 		"hostile.md": hostile,
@@ -173,7 +173,7 @@ func TestBodySortsIDsNumerically(t *testing.T) {
 
 func TestBodyChipsAndMeta(t *testing.T) {
 	body := Body(mixedInput())
-	if !strings.Contains(body, "\n\n`⛔ 6 blocking` `🟡 1 issue` `🟣 1 suggestion` `🔵 2 questions` `⚪ 2 other`\n\n") {
+	if !strings.HasPrefix(body, "`⛔ 6 blocking` `🟡 1 issue` `🟣 1 suggestion` `🔵 2 questions` `⚪ 2 other`\n\n") {
 		t.Fatalf("chips row wrong\n%s", body)
 	}
 	if !strings.HasSuffix(body, "<!-- loupe-meta v=1 round=2 inline=blocking blocking=6 issues=3 suggestions=2 questions=3 other=4 -->\n") {
@@ -182,7 +182,7 @@ func TestBodyChipsAndMeta(t *testing.T) {
 	in := exampleInput()
 	in.Findings = []Finding{general("f-001", "issue", true)}
 	body = Body(in)
-	if !strings.Contains(body, "\n\n`⛔ 1 blocking`\n\n") || !strings.Contains(body, "blocking=1 issues=1 suggestions=0") {
+	if !strings.HasPrefix(body, "`⛔ 1 blocking`\n\n") || !strings.Contains(body, "blocking=1 issues=1 suggestions=0") {
 		t.Fatalf("a blocking issue must count only in the blocking chip and in both census keys\n%s", body)
 	}
 }

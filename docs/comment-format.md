@@ -30,9 +30,6 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 - Within `Blocking`, findings sort by label in section order (`issue`, `suggestion`, `question`, then every unknown label as one group) and by finding id within each group. Within a label section and within `Other`, findings sort by id.
 
 ````markdown
-> [!IMPORTANT]
-> **1 blocking finding**
-
 `⛔ 1 blocking` `⚪ 1 other`
 
 The retry path can publish twice and the digest is not verified on reconcile.
@@ -43,7 +40,7 @@ Tests were not executed in this read-only review.
 ### ⛔ Blocking
 
 <details>
-<summary>🟡 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary><b>issue (blocking):</b> Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
 > **Confidence:** high
@@ -81,24 +78,9 @@ loupe · round 2 · reviewed `d23632e`
 <!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 -->
 ````
 
-### Blocking callout
+### Opening
 
-The body opens with a callout only when blocking findings are included. Otherwise the chips row leads the body, or the summary when there are no findings.
-
-```
-> [!IMPORTANT]
-> **N blocking finding(s)**
-```
-
-- The count is derived from the final included findings at publish time, never authored. It also appears once in the leading blocking chip and in `loupe-meta`; label chips MUST NOT count blocking findings again.
-- The callout MUST NOT name the action. GitHub's review header already shows the event (approved, changes requested, commented), so a verdict word would only repeat it, and a plain comment would open with a callout that says nothing.
-
-`WARNING` and `CAUTION` are deliberately unused. Alert titles are GitHub's and cannot be customized.
-
-- "Warning" labels a routine request as a hazard.
-- `CAUTION` is GitHub's register for negative outcomes and a blocking finding is an ordinary outcome of review.
-
-`IMPORTANT` is the only alert loupe emits, because `NOTE` titles the callout "Note".
+The chips row leads the body, or the summary when there are no findings. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
 
 ### Chips
 
@@ -106,28 +88,28 @@ The body opens with a callout only when blocking findings are included. Otherwis
 - Each is led by a dot: ⛔ blocking, 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other.
 - Counts are derived from the final included findings at publish time, never from the summary prose.
 - **One chip per section that exists below, in the order the sections appear.** Blocking leads the row and is counted only there: a finding sits in exactly one section, so a blocking issue is `⛔ 1 blocking`, never also `🟡 1 issue`.
-- A reader who scans the row and finds no chip for a kind will find no heading for it either. The blocking callout states the blocking count again; that is the one repetition kept on purpose.
+- A reader who scans the row and finds no chip for a kind will find no heading for it either.
 - No external badge images. They are a network dependency and route through GitHub's camo proxy.
 
 ### The summary line
 
-`<summary>` carries the title, and a dot and label word only where they distinguish one row from another:
+`<summary>` carries the title, and a label word only where it distinguishes one row from another. Only an inline comment puts a dot on a finding; in the body, dots lead the headings and chips alone:
 
 ```
-<summary>🟡 <b>issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary><b>issue (blocking):</b> Retry loop can double-publish a review</summary>
 <summary>Redundant sort on every read</summary>
 ```
 
 | Where | Dot | Label word | Why |
 | :--- | :--- | :--- | :--- |
-| `Blocking` | yes | yes | Labels mix here, so both tell the rows apart |
+| `Blocking` | no | yes | Labels mix here, so the label word tells the rows apart. A label dot under the `⛔` heading would read as a lower severity |
 | `Issues` · `Suggestions` · `Questions` | no | no | The heading carries the dot and names the label; every row would repeat both |
 | `Other` | no | yes | The heading carries the constant dot but does not name the actual label |
-| Inline comment | yes | yes | No heading to lean on |
+| Inline comment | yes | yes | No heading to lean on. A blocking finding takes `⛔`, whatever its label |
 
 - The label is followed by ` (blocking)` when the finding blocks. That happens only in `Blocking` and on the inline surface, because a blocking finding is never placed in a label section. Inside `Blocking` it is redundant against the heading and kept anyway so the inline surface, which has no heading, keeps the signal.
 - `<b>` is the only tag loupe emits inside a `<summary>`. The title is HTML-escaped before interpolation.
-- A finding with no dot, label word or blocking decoration in its context renders the escaped title alone. An unlabeled inline finding keeps the `⚪` dot. A finding that blocks but carries no label renders `⚪ <b>(blocking):</b>` before its title.
+- A finding with no dot, label word or blocking decoration in its context renders the escaped title alone. An unlabeled nonblocking inline finding keeps the `⚪` dot. A finding that blocks but carries no label renders `<b>(blocking):</b>` before its title in `Blocking`, and `⛔ <b>(blocking):</b>` inline.
 
 ### The meta block
 

@@ -95,9 +95,6 @@ func Body(in Input) string {
 	})
 
 	var head []string
-	if callout := blockingCallout(len(blocking)); callout != "" {
-		head = append(head, callout)
-	}
 	if chips := chipsRow(len(blocking), sections); chips != "" {
 		head = append(head, chips)
 	}
@@ -140,13 +137,6 @@ func Body(in Input) string {
 	return strings.Join(blocks, "\n\n---\n\n")
 }
 
-func blockingCallout(blocking int) string {
-	if blocking == 0 {
-		return ""
-	}
-	return fmt.Sprintf("> [!IMPORTANT]\n> **%d blocking %s**", blocking, plural(blocking, "finding", "findings"))
-}
-
 func chipsRow(blocking int, sections [4][]Finding) string {
 	var chips []string
 	if blocking > 0 {
@@ -180,16 +170,15 @@ func summaryLine(f Finding, ctx summaryContext) string {
 		label = strings.TrimLeft(label+" (blocking)", " ")
 	}
 	var prefix string
-	switch ctx {
-	case inBlocking, inInline:
-		prefix = dots[group(f.Label)] + " "
-		if label != "" {
-			prefix += "<b>" + label + ":</b> "
+	if label != "" && ctx != inLabelSection {
+		prefix = "<b>" + label + ":</b> "
+	}
+	if ctx == inInline {
+		dot := dots[group(f.Label)]
+		if f.Blocking {
+			dot = "⛔"
 		}
-	case inOther:
-		if label != "" {
-			prefix = "<b>" + label + ":</b> "
-		}
+		prefix = dot + " " + prefix
 	}
 	return prefix + title
 }
