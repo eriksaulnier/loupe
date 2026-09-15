@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/eriksaulnier/loupe/compare/v0.3.0...v0.4.0) (2026-09-15)
+
+
+### Features
+
+* **plugin:** open loupe review in a herdr split ([55aeb5b](https://github.com/eriksaulnier/loupe/commit/55aeb5b7baf882c3d2b6392a75663b10adc013f0))
+* **render:** lead each section heading with its chip's dot ([753d380](https://github.com/eriksaulnier/loupe/commit/753d380c54b195e0fafe56b5a257400194c6a059))
+* **tui:** close each header block with a dim rule ([8abad7e](https://github.com/eriksaulnier/loupe/commit/8abad7efcd36755118e18fd897f3cee56d045639))
+* **tui:** flatten the review interface and lead with arrow keys ([d11438a](https://github.com/eriksaulnier/loupe/commit/d11438aa0f1a4c12d21acd7a83e5e83efc0df846))
+
+
+### Bug Fixes
+
+* **tui:** wrap finding bodies with glamour v2 and mark open notes ([#9](https://github.com/eriksaulnier/loupe/issues/9)) ([91be562](https://github.com/eriksaulnier/loupe/commit/91be562c913bb2b345dc0b29e66dd8e3321f84ef))
+
 ## [0.3.0](https://github.com/eriksaulnier/loupe/compare/v0.2.0...v0.3.0) (2026-09-14)
 
 
