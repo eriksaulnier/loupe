@@ -344,7 +344,7 @@ A future Herdr integration MUST be able to launch the unchanged command `loupe r
 - **UX-010**: Publish choices MUST use unboxed stepped screens with visible descriptions and refusal reasons.
 - **UX-011**: Final confirmation behavior MUST remain unchanged except for presentation and advertised arrow-first scrolling.
 - **UX-012**: Full-screen, plain, Unicode, Nerd, ASCII, color, and `NO_COLOR` modes MUST preserve all security escaping and width guarantees.
-- **UX-013**: No runtime path MAY depend on Herdr or Herdr environment variables.
+- **UX-013**: No runtime path MAY depend on Herdr or Herdr environment variables. Superseded on 2026-09-15 by `specs/006-agent-plugins` FR-010: `loupe handoff` runs Herdr from `internal/pane`; `loupe review` still has no Herdr path.
 
 ### Acceptance scenarios
 

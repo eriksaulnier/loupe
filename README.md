@@ -24,14 +24,26 @@ mise hides releases younger than its `minimum_release_age` window, so a release 
 mise settings add minimum_release_age_excludes "github:eriksaulnier/loupe"
 ```
 
-The Claude Code plugin ships from the same repository:
+The agent plugin ships from the same repository for Claude Code, Codex and Pi. It carries one skill, `human-review`: the workflow a review skill or agent follows to capture a pull request, file its findings, hand the run to you and answer your send-back notes. It brings no review method of its own, and calls the `loupe` binary installed above.
 
 ```sh
+# Claude Code
 claude plugin marketplace add eriksaulnier/loupe
 claude plugin install loupe@loupe
+
+# Codex
+codex plugin marketplace add eriksaulnier/loupe
+codex plugin add loupe@loupe
+
+# Pi, pinned to the release; use the version loupe --version prints
+pi install git:github.com/eriksaulnier/loupe@v0.4.0 # x-release-please-version
 ```
 
-Inside [Herdr](https://herdr.dev), the skill opens `loupe review` for you in a split beside the agent's pane instead of asking you to run it, and the pane closes when review exits cleanly. If Claude Code prompts for each Herdr call, allow `Bash(herdr pane layout:*)`, `Bash(herdr pane split:*)` and `Bash(herdr pane run:*)`. When a split cannot be opened, the skill tells you why and falls back to asking you to run `loupe review`.
+Claude Code and Codex install the plugin from `main` while the binary is a release, so a skill can name a flag your binary lacks. Update both together. While the repository is private, Codex and Pi clone it with git, which needs credentials for github.com, such as those `gh auth setup-git` configures.
+
+In Codex's default sandbox, loupe cannot reach GitHub, write the clone's `.git` or its own data directory, or reach the Herdr socket. Approve the skill's requests to run `loupe` outside the sandbox. Pi has no sandbox.
+
+Inside [Herdr](https://herdr.dev), `loupe handoff` opens `loupe review` for you in a split beside the agent's pane, and the pane closes when review exits cleanly. Outside Herdr, or when the split cannot be opened, the skill asks you to run `loupe review` yourself. To stop the approval prompt at each handoff, allow that one command: `Bash(loupe handoff:*)` in Claude Code, or `prefix_rule(pattern=["loupe", "handoff"], decision="allow")` in Codex's `~/.codex/rules/default.rules`. loupe builds the pane's command from the run it resolves, so the rule lets an agent open review and nothing else. Do not allow `herdr pane split` or `herdr pane run`: a blanket rule for either lets any command run in a new shell.
 
 ## Commands
 
@@ -42,6 +54,7 @@ Inside [Herdr](https://herdr.dev), the skill opens `loupe review` for you in a s
 | agent | `capture` | Capture a pull request into a new review round, optionally naming its `--source` |
 | agent | `add` | File findings into the draft |
 | agent | `summary` | Set the review summary |
+| agent | `handoff` | Open review for the human in a new Herdr pane |
 | agent | `wait` | Block until the human hands notes back or publishes |
 | agent | `edit` | Change, withdraw or restore a finding |
 | agent | `reply` | Answer a send-back note |

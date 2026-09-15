@@ -1,0 +1,31 @@
+Usage
+  loupe handoff [<ref>] [flags]
+
+Open loupe review for the human in a new terminal pane beside the agent's, then return.
+
+An agent runs this at the hand-off, then blocks on loupe wait. It works inside Herdr: it needs
+HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH, and otherwise refuses no-pane-host. The pane
+opens to the right of the agent's pane when that pane is at least 120 columns wide and below it
+otherwise, takes focus, and runs this loupe's review for the run. It closes when review exits
+cleanly and stays open on a refusal so the human can read it.
+
+The agent MUST NOT send to, read, resize, close or reuse the pane; each hand-off opens a new
+one. A failed herdr call refuses pane-failed with Herdr's message and is not retried. On either
+refusal the agent tells the human to run loupe review.
+
+The run is <ref> or --run <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the
+pull request of the current branch in the working directory at its newest round.
+
+Result (--json)
+  {"loupe": 1, "ok": true, "command": "handoff", "run": "owner/repo#123@1", "host": "herdr",
+   "paneId": "w1:p2", "direction": "right"}
+
+direction is right or down.
+
+Flags
+  -h, --help         help for handoff
+      --run string   run reference, owner/repo#123 or owner/repo#123@2
+      --json   print exactly one JSON result object on stdout
+
+Examples
+  loupe handoff --run owner/repo#123 --json

@@ -35,8 +35,11 @@ func TestReviewHelpSaysHumanOnly(t *testing.T) {
 	if code := Execute(deps, []string{"review", "--help"}); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if help := s.stdout.String(); !strings.Contains(help, "human-only") || !strings.Contains(help, "--plain") {
-		t.Fatalf("help:\n%s", help)
+	help := s.stdout.String()
+	for _, want := range []string{"human-only", "An agent MUST NOT operate it, pipe confirmation into it, drive it", "through a pseudo-terminal, or start loupe publish", "loupe handoff to start it in", "send to, read, resize, close or reuse that", "--plain"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("review help lacks %q:\n%s", want, help)
+		}
 	}
 }
 

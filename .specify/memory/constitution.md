@@ -6,7 +6,7 @@ loupe gives any shell-capable agent a standard way to file pull-request review f
 
 ### I. A tool for agents, not a tool that uses agents
 
-loupe MUST NOT invoke, prompt, supervise, sandbox or authenticate a reviewer. Any agent with a shell is a first-class user, and every workflow MUST be completable from `loupe --help` alone. Host integrations (a Claude Code plugin, later others) MAY package instructions and commands, but MUST NOT add code paths that only one host can reach.
+loupe MUST NOT invoke, prompt, supervise, sandbox or authenticate a reviewer. Any agent with a shell is a first-class user, and every workflow MUST be completable from `loupe --help` alone. Host integrations (the plugin for Claude Code, Codex and Pi) MAY package instructions and commands, but MUST NOT add code paths that only one host can reach.
 
 ### II. Nothing posts on its own, and nothing posts unread
 
@@ -50,4 +50,4 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 This constitution supersedes every other practice in the repository. An amendment MUST state what changed and why, bump the version below (MAJOR for a removed or redefined principle, MINOR for a new principle or section, PATCH for wording), and update the specification and plan when a principle they rely on changes. Plans MUST include a Constitution Check and justify each violation in Complexity Tracking.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-13
+**Version**: 1.0.1 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-15

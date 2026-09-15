@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fails when tests could reach a real terminal or network, when a review could be posted from outside the one path
-# that records an attempt first, or when the binary names Herdr. git grep sees only tracked and staged files, so a new
-# file must be added to be checked.
+# that records an attempt first, or when Herdr is named outside internal/pane and handoff. git grep sees only tracked
+# and staged files, so a new file must be added to be checked.
 #
 # The greps guard against honest mistakes in tests, not an adversary: a pseudo-terminal reached through an
 # interpreter (python3 -c, sh -c) or a command name that is not a literal passes them. The go list -deps check of the
@@ -130,11 +130,12 @@ if [ "${sends:-0}" != 1 ]; then
 	violation "internal/publish/publish.go MUST reference CreateReview exactly once:" "found ${sends:-0}"
 fi
 
-# Herdr belongs to the plugin's skill text, never the binary (constitution I). Tests are excluded because they pin that
-# text.
-herdr=$(tracked_grep -niI 'herdr' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go')
+# Herdr is run from internal/pane alone; beside it only handoff's help and refusal name it (specs/006-agent-plugins
+# FR-010). Tests are excluded because they fake it.
+herdr=$(tracked_grep -niI 'herdr' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go' \
+	':(exclude)internal/pane/*' ':(exclude)internal/cli/handoff.go')
 if [ -n "$herdr" ]; then
-	violation "the loupe binary MUST NOT name Herdr:" "$herdr"
+	violation "only internal/pane and internal/cli/handoff.go MAY name Herdr:" "$herdr"
 fi
 
 exit "$failed"

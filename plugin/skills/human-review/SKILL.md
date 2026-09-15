@@ -1,31 +1,34 @@
 ---
-name: loupe
-description: Use when reviewing a GitHub pull request with loupe, or when filing review findings for the human to decide and publish. Captures the pull request, investigates it read-only with git, files findings and a summary into a local draft, answers the human's send-back notes, and hands the review to the human. Never publishes.
+name: human-review
+description: Use when a skill or agent reviews a GitHub pull request for a human to decide and publish through loupe, or when the human has sent loupe findings back with notes. Captures the pull request before the review, files the review's findings and a summary into a local draft, opens loupe review for the human in a new terminal pane where it can, and answers the human's send-back notes until they publish. Brings no review method of its own. Never publishes.
 ---
 
-# Review a pull request with loupe
+# Hand review findings to a human with loupe
 
-loupe files your review findings into a local draft. The human decides each finding in `loupe review` and posts exactly one GitHub review.
+loupe keeps pull request review findings in a local draft. The human decides each finding in `loupe review` and posts exactly one GitHub review.
+
+This skill is the workflow around that, not a review. It does not say how to find or judge findings: that belongs to whatever skill or agent does the review. Sections 1 and 2 come before the review, which reads the change at the captured refs; sections 3 to 7 file what it found, hand the run to the human and answer their notes.
 
 Every command below MUST be run with `--json`. Each prints exactly one result object on stdout. Run `loupe <command> --help` when you need an input or result shape that this file does not spell out.
 
 ## Rules
 
-- You MUST NOT run `loupe publish` or open it for the human, in a Herdr pane or by any other route. It is human-only.
-- You MUST NOT run `loupe review` yourself; inside Herdr you MAY open it for the human as section 6 describes.
-- You MUST NOT allocate a pseudo-terminal to reach `loupe review` or `loupe publish`: no `script`, `expect`, `unbuffer`, or `pty` libraries. The Herdr pane in section 6 is the only exception.
-- You MUST NOT send keys or text to, read output from, resize, or close a pane running `loupe review` or `loupe publish`. The `herdr pane run` that starts review in section 6 is the only text you send it.
+- You MUST NOT run `loupe publish` or open it for the human, in a pane or by any other route. It is human-only.
+- You MUST NOT run `loupe review` yourself; `loupe handoff` MAY open it for the human, as section 5 describes.
+- You MUST NOT allocate a pseudo-terminal to reach `loupe review` or `loupe publish`: no `script`, `expect`, `unbuffer`, or `pty` libraries.
+- You MUST NOT send keys or text to, read output from, resize, close, or reuse a pane running `loupe review` or `loupe publish`.
 - You MUST NOT pipe or script confirmation into any loupe command.
 - You MUST NOT create GitHub reviews or review comments by any other route, including `gh pr review`, `gh api`, and the GitHub MCP.
-- You MUST NOT check out the pull request branch or modify the working tree. Investigate only with `git show <headSha>:<path>` and `git diff <baseRef>...<headRef>`, using the values from the capture result.
+- You MUST NOT run the pull request's code, check out its branch in the user's clone, or modify the user's working tree.
 - When a command refuses, the result has `"ok": false` and an `error` object. You SHOULD read `error.code` and follow `error.fix`, which names the corrective command. You MUST NOT work around a refusal by editing loupe's files.
+- In a sandboxed shell, such as Codex's default, `loupe capture` needs the network and write access to the clone's `.git`, every loupe command needs write access to loupe's data directory outside the workspace, and `loupe handoff` needs the Herdr socket. When a `loupe` command fails because of the sandbox, rerun it with the host's approval to run outside the sandbox, even when loupe returns a refusal. For `loupe handoff` this holds only when `error.message` starts with `herdr pane layout`, because a later step can already have opened a pane. You MUST NOT work around the sandbox by setting `LOUPE_HOME` or `XDG_DATA_HOME`.
 
 ## 1. Capture
 
 Run `loupe capture <pr-url> --json` from a clone of the pull request's repository, or add `--repo <path>` to point at one. Keep these values from the result:
 
 - `run`: the run reference, such as `owner/repo#123@1`. Pass it as `--run <ref>` to every later command.
-- `target.headSha`, `target.baseRef` and `target.headRef`: the refs you investigate with.
+- `target.headSha`, `target.baseRef` and `target.headRef`: the refs the review reads the change at.
 - `target.previousRound`: present from round 2 on.
 
 To name what filed the findings in the published footer, add `--source <name>[@<version>]`, such as `--source my-reviewer@1.0.0`. It is optional.
@@ -34,13 +37,11 @@ If capture refuses with `same-head`, an unpublished round already exists at this
 
 ## 2. Check the previous round
 
-When `target.previousRound` is set, run `loupe show --previous --run <ref> --json`. It lists the findings the human published in the newest earlier published round. For each one, check with `git show` and `git diff` whether the new head addresses it. File a new finding for any published finding that is still unresolved, and do not repeat findings that were fixed.
+When `target.previousRound` is set, run `loupe show --previous --run <ref> --json`. It lists the findings the human published in the newest earlier published round. Give them to the review, so it re-raises a published finding the new head leaves unresolved and does not repeat one that was fixed.
 
-## 3. Investigate
+## 3. File findings
 
-Read the change with `git diff <baseRef>...<headRef>` and read whole files at the head with `git show <headSha>:<path>`. You MAY read other files the same way. You MUST NOT run the pull request's code, check out its branch, or write to the working tree.
-
-## 4. File findings
+Run the review now, if it has not run, against `target.headSha`. Then file what it found.
 
 Write the findings to a JSON file, one object or an array, then run `loupe add --from <file> --run <ref> --json`. Each finding has:
 
@@ -51,28 +52,28 @@ Write the findings to a JSON file, one object or an array, then run `loupe add -
 
 The input MUST NOT carry `included`, `decision`, `status` or `findingRev`. A batch is stored entirely or not at all; a refusal names the failing entry in `error.details.entry`.
 
-## 5. Set the summary
+## 4. Set the summary
 
 Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findings <n> --from <file> --run <ref> --json`, where `<n>` is the number of findings you filed. On a `count` refusal, `error.details.included` lists the findings that landed; file the missing ones and run `summary` again.
 
-## 6. Hand off and wait
+## 5. Hand off
 
-Tell the user to run `loupe review <ref>` in their own terminal, then block on `loupe wait --run <ref> --json`. It returns when the human quits review leaving notes for you, or when the run is published.
+Run `loupe handoff --run <ref> --json`. On success, review is open for the human in a new pane beside yours and has focus. Tell the user it is open.
 
-Inside Herdr, when `HERDR_ENV` is `1`, open review for the human in a split beside your pane instead of telling them to run it, then block on the same `loupe wait`:
+If it refuses, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.
 
-1. Run `herdr pane layout --pane "$HERDR_PANE_ID"`. In `result.layout.panes`, find the entry whose `pane_id` is `$HERDR_PANE_ID`. The direction is `right` when its `rect.width` is at least 120, otherwise `down`.
-2. Run `herdr pane split --pane "$HERDR_PANE_ID" --direction <direction> --focus`, adding `--env "LOUPE_HOME=$LOUPE_HOME"` if `LOUPE_HOME` is set and `--env "XDG_DATA_HOME=$XDG_DATA_HOME"` if `XDG_DATA_HOME` is set. The new shell does not inherit your environment. Keep `result.pane.pane_id`.
-3. Run `herdr pane run <pane-id> "loupe review '<ref>' && exit"`. The ref MUST stay in single quotes, because zsh can read `#` as a glob. The pane closes when review succeeds and stays open on a refusal so the human can read it.
+Each hand-off opens a new pane. You MUST NOT look for or reuse an earlier one.
 
-Open a new split at every handoff. You MUST NOT look for, reuse, or close an earlier review pane. A step fails when it exits non-zero or its result lacks the field you need; do not retry it. If any step fails, tell the user the error in one line and hand off as above instead.
+## 6. Wait
+
+Block on `loupe wait --run <ref> --json`. It returns when the human quits review leaving notes for you, or when the run is published.
 
 - In Claude Code, when the Monitor tool is available, run `loupe wait` under a persistent Monitor so the session wakes when it prints.
 - Otherwise run `loupe wait` in the foreground with `--timeout` under the shell's limit, and run it again on a `timeout` refusal.
-- `"reason": "notes"`: answer only the notes listed in `awaiting`, following the Send-back notes section. The result already carries the `feedback` payload, so do not run `loupe feedback` again.
+- `"reason": "notes"`: answer only the notes listed in `awaiting`, following section 7. The result already carries the `feedback` payload, so do not run `loupe feedback` again.
 - `"reason": "published"`: the review is on GitHub. Stop.
 
-## Send-back notes
+## 7. Send-back notes
 
 When the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`; after `loupe wait` returns, read its result instead. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
 
@@ -81,4 +82,4 @@ When the user asks you to handle feedback on a run, run `loupe feedback --run <r
 - To withdraw a finding, run `loupe edit <finding-id> --exclude --run <ref> --json`.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.
 
-Only the human resolves or dismisses a note. When every note you were asked to answer has a reply, tell the user the revisions are ready and to run `loupe review <ref>` in their own terminal, then block on `loupe wait --run <ref> --json` again. Inside Herdr, tell them the revisions are ready and open a new split as section 6 describes instead of asking them to run it. An open note that was not handed to you is the human's to hand back; the next wait returns it.
+Only the human resolves or dismisses a note. When every note you were asked to answer has a reply, tell the user the revisions are ready and hand off again from section 5. An open note that was not handed to you is the human's to hand back; the next wait returns it.

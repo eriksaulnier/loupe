@@ -82,6 +82,7 @@ func TestHumanOutputGoldens(t *testing.T) {
 		args []string
 	}{
 		{"help", []string{"--help"}},
+		{"handoff-help", []string{"handoff", "--help"}},
 		{"list", []string{"list"}},
 		{"show", []string{"show", "--run", "eriksaulnier/dev-loadout#2"}},
 		{"feedback", []string{"feedback", "--run", "eriksaulnier/dev-loadout#2"}},

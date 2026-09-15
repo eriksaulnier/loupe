@@ -76,8 +76,8 @@ A human runs `/loupe <pr-url>` in Claude Code inside Herdr. When the agent has f
 
 #### Boundaries
 
-- **FR-017**: No code path in the loupe binary MAY depend on Herdr or read Herdr environment variables (constitution I; spec 002 UX-013).
-- **FR-018**: The README MUST note, next to the Claude Code plugin instructions, that inside Herdr the skill opens review in a split, and name the Bash permission patterns a user MAY allow for it.
+- **FR-017**: No code path in the loupe binary MAY depend on Herdr or read Herdr environment variables (constitution I; spec 002 UX-013). Superseded on 2026-09-15 by `specs/006-agent-plugins` FR-010, which moves the handoff into `loupe handoff`.
+- **FR-018**: The README MUST note, next to the Claude Code plugin instructions, that inside Herdr the skill opens review in a split, and name the Bash permission patterns a user MAY allow for it. Superseded on 2026-09-15 by `specs/006-agent-plugins` FR-024: the README names `loupe handoff` allow rules and no `herdr` rule.
 - **FR-020**: A live check of the skill handoff inside Herdr MUST be added to the Unverified list in `specs/001-loupe-v1/validation.md`, since tests MUST NOT use a real terminal or a real Herdr.
 
 ### Key Entities

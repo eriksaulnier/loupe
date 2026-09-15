@@ -17,6 +17,7 @@ loupe files pull request review findings for a human to decide and publish. `REA
 | `internal/gitx` | Runs the few git commands loupe needs against the user's clone |
 | `internal/integration` | Runs loupe's commands end to end against a local Git remote and a fake GitHub |
 | `internal/markdown` | Checks authored Markdown against the allowlist in `docs/comment-format.md` |
+| `internal/pane` | Opens review for the human in a new Herdr pane; the only package that runs Herdr |
 | `internal/publish` | The publication state machine: gates, envelope, confirmation, one review request, receipt |
 | `internal/refusal` | A leaf so every domain package can return refusals without importing `internal/cli` |
 | `internal/render` | Composes what loupe shows and sends |
@@ -24,8 +25,10 @@ loupe files pull request review findings for a human to decide and publish. `REA
 | `internal/style` | The one place terminal appearance is decided: colors, glyphs and layout helpers |
 | `internal/tui` | The human review interface: a full-screen Bubble Tea program and a line-by-line plain mode |
 | `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, and `fakegh`, an in-memory GitHub REST server |
-| `plugin/` | The Claude Code plugin: the `loupe` skill and `/loupe` command |
+| `plugin/` | The agent plugin: the `human-review` workflow skill and the Claude Code and Codex manifests. It ships no review skill and no command |
 | `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add eriksaulnier/loupe` find the plugin |
+| `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add eriksaulnier/loupe` |
+| `package.json` | Makes the repository a Pi package whose skills are `plugin/skills`; it holds no JavaScript |
 | `specs/NNN-topic/` | One directory per feature: `spec.md`, then `plan.md` and `tasks.md`. `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
 | `docs/` | `comment-format.md` (the published review format, a contract) and `github-facts.md` (observed GitHub behavior) |
 | `testdata/` | Diff fixtures and goldens |

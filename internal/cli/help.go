@@ -26,9 +26,9 @@ const (
 	rootTagline = "File pull request review findings for a human to decide and publish."
 	rootLead    = "An agent files findings into a local draft; the human decides each finding and posts exactly\none confirmed GitHub review."
 	rootFlow    = "capture → add → summary → review → publish"
-	rootRule    = "review and publish are human-only and MUST NOT be run by an agent. An agent MUST NOT pipe\nconfirmation into them or allocate a pseudo-terminal to reach them; it tells the human to run\nloupe review. An agent MAY block on loupe wait for the human's notes and MUST pass --run to\nit; it still MUST NOT run review."
+	rootRule    = "review and publish are human-only. An agent MUST NOT operate them, pipe confirmation into\nthem, drive them through a pseudo-terminal, or start publish by any route. An agent MAY run\nloupe handoff to start review in a new terminal pane the human sees, and MUST NOT then send\nto, read, resize, close or reuse that pane; otherwise it tells the human to run loupe review.\nAn agent MAY block on loupe wait for the human's notes and MUST pass --run to it."
 	sendBackWhy = "when the human sends findings back from review with notes"
-	runSelect   = "Run selection, in order: --run <ref> (or the <ref> argument of review and publish), then\nLOUPE_RUN, then the pull request of the current branch in the working directory at its newest\nround."
+	runSelect   = "Run selection, in order: --run <ref> (or the <ref> argument of handoff, review and publish),\nthen LOUPE_RUN, then the pull request of the current branch in the working directory at its\nnewest round."
 )
 
 type workflowStep struct {
@@ -41,6 +41,7 @@ var workflowSteps = []workflowStep{
 	{"loupe capture https://github.com/owner/repo/pull/123 --json", "capture the pull request into a new round; prints the run reference", false},
 	{"loupe add --run owner/repo#123 --from findings.json --json", "file findings, one object or an array", false},
 	{"loupe summary --run owner/repo#123 --from summary.json --expect-findings 2 --json", "set the summary and confirm how many findings landed", false},
+	{"loupe handoff --run owner/repo#123 --json", "open review for the human in a new pane, where the terminal can", false},
 	{"loupe wait --run owner/repo#123 --json", "block until the human hands notes back or publishes", false},
 	{"loupe review owner/repo#123", "the human decides each finding with the diff in view", true},
 	{"loupe publish owner/repo#123 --action comment", "the human confirms and posts one review", true},

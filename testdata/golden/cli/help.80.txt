@@ -10,22 +10,26 @@ Workflow  capture → add → summary → review → publish
      file findings, one object or an array
   3  loupe summary --run owner/repo#123 --from summary.json --expect-findings 2 --json
      set the summary and confirm how many findings landed
-  4  loupe wait --run owner/repo#123 --json
+  4  loupe handoff --run owner/repo#123 --json
+     open review for the human in a new pane, where the terminal can
+  5  loupe wait --run owner/repo#123 --json
      block until the human hands notes back or publishes
-  5  loupe review owner/repo#123                     human
+  6  loupe review owner/repo#123                     human
      the human decides each finding with the diff in view
-  6  loupe publish owner/repo#123 --action comment   human
+  7  loupe publish owner/repo#123 --action comment   human
      the human confirms and posts one review
 
-  review and publish are human-only and MUST NOT be run by an agent. An agent MUST NOT pipe
-  confirmation into them or allocate a pseudo-terminal to reach them; it tells the human to run
-  loupe review. An agent MAY block on loupe wait for the human's notes and MUST pass --run to
-  it; it still MUST NOT run review.
+  review and publish are human-only. An agent MUST NOT operate them, pipe confirmation into
+  them, drive them through a pseudo-terminal, or start publish by any route. An agent MAY run
+  loupe handoff to start review in a new terminal pane the human sees, and MUST NOT then send
+  to, read, resize, close or reuse that pane; otherwise it tells the human to run loupe review.
+  An agent MAY block on loupe wait for the human's notes and MUST pass --run to it.
 
 Commands
   agent   capture   Capture a pull request into a new review round
           add       File findings into the draft
           summary   Set the review summary
+          handoff   Open review for the human in a new pane
           wait      Block until the human hands notes back or publishes
           edit      Change, withdraw or restore a finding
           reply     Answer a send-back note
@@ -43,9 +47,9 @@ Send-back loop  when the human sends findings back from review with notes
 Run references
   owner/repo#123      the newest round of pull request 123
   owner/repo#123@2    round 2
-  Run selection, in order: --run <ref> (or the <ref> argument of review and publish), then
-  LOUPE_RUN, then the pull request of the current branch in the working directory at its newest
-  round.
+  Run selection, in order: --run <ref> (or the <ref> argument of handoff, review and publish),
+  then LOUPE_RUN, then the pull request of the current branch in the working directory at its
+  newest round.
 
 Conventions
   --json                  print exactly one JSON result object on stdout; diagnostics go to stderr

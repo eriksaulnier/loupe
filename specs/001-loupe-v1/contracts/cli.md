@@ -14,7 +14,7 @@ This is the agent-facing and human-facing command contract. `/speckit-plan` Phas
 - `--by agent|human` on `add`, `edit`, `summary`, `reply`; default `agent`.
 - `--expect-version <n>` on `add`, `edit`, `summary`, `reply`: refuse inside the lock unless the draft version equals `n`.
 - Unknown JSON fields are refused. JSON input MUST NOT carry `included`, `decision`, `status` or any decision field; such input is refused.
-- `loupe --help` describes the workflow (capture → add → summary → review → publish), the run reference syntax, and states that `review` and `publish` are human-only and MUST NOT be run by an agent. `loupe <command> --help` is complete without any run and shows the command's JSON input and result shapes.
+- `loupe --help` describes the workflow (capture → add → summary → review → publish), the run reference syntax, and states that `review` and `publish` are human-only: an agent MUST NOT operate either, pipe confirmation into them, drive them through a pseudo-terminal, or start `publish` by any route; an agent MAY run `loupe handoff` to start `review` in a new terminal pane the human sees, and MUST NOT then send to, read, resize, close or reuse that pane (ruled 2026-09-15, `specs/006-agent-plugins`). `loupe <command> --help` is complete without any run and shows the command's JSON input and result shapes.
 
 ## Result envelope
 
@@ -30,7 +30,7 @@ Refusal or error (exit 1 or 2):
 {"loupe": 1, "ok": false, "command": "add", "run": "owner/repo#123@1", "error": {"code": "location", "message": "src/a.ts:88 is not in the diff on side RIGHT", "fix": "use one of: src/a.ts:80-86, 90-97", "details": {"entry": 1, "nearest": [80, 81, 86, 90, 91, 97]}}}
 ```
 
-`run` is omitted when no run was resolved. `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait` and `show`. `list`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
+`run` is omitted when no run was resolved. `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait` and `show`. `list`, `handoff`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
 
 ## Error codes
 
@@ -61,6 +61,8 @@ Refusal or error (exit 1 or 2):
 | `viewer` | The GitHub login changed between showing the confirmation and sending | `loupe publish` again to confirm as the current login |
 | `timeout` | `wait --timeout` elapsed with no note handed back and no receipt | `loupe wait` again |
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
+| `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
+| `pane-failed` | The terminal refused or garbled a `handoff` call | the same; the message carries the terminal's error |
 | `internal` | A defect | file an issue; stack on stderr |
 
 ## Commands
@@ -112,6 +114,12 @@ Blocks until there is something for the agent to do: `review` exited leaving a n
 Turn-taking is cooperative: a return proves the human quit `review` with those notes, not that no review session is open now. The draft's version check already refuses a decision made against a draft the agent changed in between.
 
 Result payload: `reason` (`notes` or `published`), `awaiting` (note ids to answer, empty when published), plus the `feedback` payload (`readiness`, `notes`, `findings`).
+
+### `loupe handoff [<ref>] [--json]`
+
+Opens `review` for the human in a new terminal pane beside the agent's and returns; it does not wait for review (`specs/006-agent-plugins`). Selects the run as `review` does. Works inside Herdr only: it needs `HERDR_ENV=1`, a non-empty `HERDR_PANE_ID` and `herdr` on `PATH`, and otherwise refuses `no-pane-host`. The pane opens to the right of the agent's pane when that pane is at least 120 columns wide and below it otherwise, takes focus, and runs the same loupe executable as `review '<ref>' && exit` with `LOUPE_HOME` set to the absolute data root. A failed `herdr` call refuses `pane-failed` with Herdr's message; nothing is retried, reused or closed. It writes no run state.
+
+Result payload: `host` (`herdr`), `paneId`, `direction` (`right` or `down`).
 
 ### `loupe show [--previous] [--json]`
 

@@ -17,8 +17,10 @@ import (
 
 const reviewHelp = `Open the review interface for a run: the human decides each finding with its diff in view.
 
-This command is human-only. An agent MUST NOT run it; it refuses without an interactive
-terminal on stdin and stdout, and on stderr under --json.
+This command is human-only. An agent MUST NOT operate it, pipe confirmation into it, drive it
+through a pseudo-terminal, or start loupe publish. An agent MAY run loupe handoff to start it in
+a new terminal pane the human sees, and MUST NOT then send to, read, resize, close or reuse that
+pane. It refuses without an interactive terminal on stdin and stdout, and on stderr under --json.
 
 The list shows the summary, readiness counts and every finding. Opening a finding shows its
 body above the diff hunk it points at; J and K scroll a hunk taller than its region, and f
