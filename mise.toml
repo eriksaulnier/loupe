@@ -26,6 +26,26 @@ run = 'CGO_ENABLED=0 go build -ldflags "-X github.com/eriksaulnier/loupe/interna
 # Built rather than go run, which would turn loupe's exit codes 1 and 2 into 1.
 run = "go build -o dist/loupe-demo ./cmd/loupe-demo && dist/loupe-demo"
 
+# Links this worktree's build as github:eriksaulnier/loupe@dev and pins it globally, so every shell and agent session
+# runs it, not only those inside the repository. Run unlink before removing the worktree.
+[tasks.link]
+depends = ["build"]
+run = '''
+mkdir -p "{{config_root}}/dist/dev/bin"
+ln -sfn ../../loupe "{{config_root}}/dist/dev/bin/loupe"
+mise link --force github:eriksaulnier/loupe@dev "{{config_root}}/dist/dev"
+# Offline, so mise pins the linked build without listing the private repository's releases.
+MISE_OFFLINE=1 mise use --global github:eriksaulnier/loupe@dev
+'''
+
+[tasks.unlink]
+run = "mise use --global github:eriksaulnier/loupe@latest && mise uninstall github:eriksaulnier/loupe@dev"
+
+# --skill loads the workflow skill from the working tree for one Pi session. Codex has no per-session equivalent.
+[tasks.pi]
+depends = ["build"]
+run = 'pi --skill "{{config_root}}/plugin/skills/human-review"'
+
 # --plugin-dir loads the skill from the working tree for one session, so edits need no reinstall.
 [tasks.claude]
 depends = ["build"]

@@ -55,8 +55,9 @@ loupe files pull request review findings for a human to decide and publish. `REA
 `CONTRIBUTING.md` has setup, `mise run check` and the test rules. For an agent, also:
 
 - `mise run build` writes `dist/loupe`. Inside the repository mise puts `dist/` first on PATH, so `loupe` is that build, not the installed release.
-- `mise run claude` builds, then starts Claude Code with the plugin loaded from `plugin/`.
-- `mise run demo [-- <loupe args>]` runs the working tree against seeded runs and the in-memory fake GitHub (`cmd/loupe-demo`); use it for by-eye checks instead of seeding a `LOUPE_HOME` by hand. Driving it needs a terminal, so an agent captures it through tmux.
+- `mise run claude` builds, then starts Claude Code with the plugin loaded from `plugin/`; `mise run pi` does the same for Pi.
+- `mise run link` pins this worktree's build globally as `github:eriksaulnier/loupe@dev`, and `mise run unlink` undoes it. It changes the human's global mise config, so an agent MUST NOT run either unless asked.
+- `mise run demo [-- <loupe args>]` runs the working tree against seeded runs and the in-memory fake GitHub (`cmd/loupe-demo`); use it for by-eye checks instead of seeding a `LOUPE_HOME` by hand. Driving it needs a terminal, so an agent captures it through tmux. `LOUPE_DEMO_HOME=<dir>` keeps the seeded root between commands, which `loupe-demo handoff` needs, since its pane reuses the root.
 - `scripts/check-tests.sh` greps tracked test files for pseudo-terminals, network hosts and `CreateReview` calls outside `internal/publish`.
 
 ## Unverified by design

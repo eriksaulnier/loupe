@@ -36,6 +36,21 @@ Goldens under `testdata/golden/cli` pin the human output of `--help`, `show`, `l
 
 For a by-eye check of the review interface or the publish flow, `mise run demo` runs the working tree against seeded runs and an in-memory GitHub. Nothing leaves the machine.
 
+## Local development
+
+Inside the repository, mise puts `dist/` first on `PATH`, so `loupe` is the build `mise run build` wrote. These tasks reach further:
+
+| Task | What it does |
+| :--- | :--- |
+| `mise run link` | Builds, links the build as `github:eriksaulnier/loupe@dev` and pins it globally, so every shell and agent session runs it, such as a skill in another repository that calls `loupe handoff`. `mise run unlink` returns to the latest release and removes the link. Unlink before removing the worktree you linked from. |
+| `mise run claude` | Builds, then starts Claude Code with the plugin loaded from `plugin/`. An installed `loupe@loupe` plugin can shadow it; `claude plugin disable loupe@loupe` for the session. |
+| `mise run pi` | Builds, then starts Pi with the workflow skill loaded from `plugin/skills/human-review`. |
+| `mise run demo [-- <args>]` | Runs loupe against seeded runs and the fake GitHub in a temporary data root. |
+
+Codex has no per-session plugin flag. To check the Codex plugin, install it from the working tree into a scratch `CODEX_HOME` with `codex plugin marketplace add <path>` and `codex plugin add loupe@loupe`.
+
+`LOUPE_DEMO_HOME=<dir>` keeps the demo's data root: the first command seeds it, later ones reuse it with whatever was decided, and `rm -rf <dir>` starts over. It refuses a non-empty directory without the demo's marker, including one a failed seed left behind. It is also how to try the hand-off inside Herdr without a pull request: `LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42'` opens a split running `loupe-demo review`, which reuses that root and its own fake GitHub, so publishing there still sends nothing.
+
 ## Commits
 
 Commits MUST follow [Conventional Commits](https://www.conventionalcommits.org). The commit-msg hook checks the subject: `type(scope): summary` with a lowercase summary, at most 72 characters and no trailing period. The hook cannot check the rest, so the summary MUST be imperative ("add", not "added") and a body MUST be separated from the subject by a blank line. The type is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore` or `revert`. The scope is the package or area touched: `cli`, `tui`, `publish`, `plugin`, `specs`, `readme` and so on.

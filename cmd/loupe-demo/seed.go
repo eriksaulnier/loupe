@@ -141,8 +141,8 @@ var findings = []draft.FindingInput{
 	},
 }
 
-// seed writes the three demo runs and tells the fake GitHub about their pull requests.
-func seed(home string, gh *fakegh.Server, now time.Time) error {
+// seed tells the fake GitHub about the three demo pull requests and, when writeRuns is set, writes their runs.
+func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool) error {
 	parsed, err := diff.Parse([]byte(demoDiff))
 	if err != nil {
 		return fmt.Errorf("parse the demo diff: %w", err)
@@ -176,8 +176,10 @@ func seed(home string, gh *fakegh.Server, now time.Time) error {
 			Author: author, Viewer: viewer, BaseSHA: baseSHA, HeadSHA: headSHA, Round: 1, CapturedAt: now,
 			DiffSHA256: run.DiffSHA256([]byte(demoDiff)), Source: "loupe-demo",
 		}
-		if err := run.CreateRun(run.RunDir(home, owner, repo, r.number, 1), target, []byte(demoDiff), data); err != nil {
-			return fmt.Errorf("create demo run #%d: %w", r.number, err)
+		if writeRuns {
+			if err := run.CreateRun(run.RunDir(home, owner, repo, r.number, 1), target, []byte(demoDiff), data); err != nil {
+				return fmt.Errorf("create demo run #%d: %w", r.number, err)
+			}
 		}
 		gh.SetPR(owner, repo, github.PullRequest{
 			Number: r.number, URL: url, Title: prTitle, State: "open", Author: author, BaseRef: "main", BaseSHA: baseSHA, HeadSHA: r.live,

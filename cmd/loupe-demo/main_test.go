@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func TestSeedWritesRunsInTheirStates(t *testing.T) {
 	home := t.TempDir()
 	gh := fakegh.New(t)
 	client := gh.Client(t)
-	if err := seed(home, gh, time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)); err != nil {
+	if err := seed(home, gh, time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC), true); err != nil {
 		t.Fatal(err)
 	}
 	show := func(ref string) map[string]any {
@@ -101,4 +102,60 @@ func TestSeedWritesRunsInTheirStates(t *testing.T) {
 func isRefusal(err error, code refusal.Code) bool {
 	r, ok := refusal.As(err)
 	return ok && r.Code == code
+}
+
+func envOf(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+
+// A kept data root outlives the command, so loupe handoff can open review on it in a pane that runs loupe-demo too.
+func TestDemoHomeKeepsOnlyADemoDataRoot(t *testing.T) {
+	temp, keep, err := demoHome(envOf(nil))
+	if err != nil || keep || !strings.HasPrefix(filepath.Base(temp), "loupe-demo-") {
+		t.Fatalf("no env: %q keep %v err %v, want a temporary loupe-demo-* root", temp, keep, err)
+	}
+	_ = os.RemoveAll(temp)
+
+	fresh := filepath.Join(t.TempDir(), "demo")
+	if home, keep, err := demoHome(envOf(map[string]string{"LOUPE_DEMO_HOME": fresh})); err != nil || !keep || home != fresh {
+		t.Fatalf("new LOUPE_DEMO_HOME: %q keep %v err %v", home, keep, err)
+	}
+
+	foreign := t.TempDir()
+	if err := os.WriteFile(filepath.Join(foreign, "notes"), []byte("mine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := demoHome(envOf(map[string]string{"LOUPE_DEMO_HOME": foreign})); err == nil {
+		t.Fatal("LOUPE_DEMO_HOME on a non-empty directory the demo did not seed was accepted")
+	}
+
+	seeded := t.TempDir()
+	if err := os.WriteFile(filepath.Join(seeded, demoMarker), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if home, keep, err := demoHome(envOf(map[string]string{"LOUPE_HOME": seeded})); err != nil || !keep || home != seeded {
+		t.Fatalf("LOUPE_HOME with the marker: %q keep %v err %v", home, keep, err)
+	}
+	home, keep, err := demoHome(envOf(map[string]string{"LOUPE_HOME": foreign}))
+	if err != nil || keep || home == foreign {
+		t.Fatalf("LOUPE_HOME without the marker: %q keep %v err %v, want it ignored", home, keep, err)
+	}
+	_ = os.RemoveAll(home)
+}
+
+// Seeding a kept root twice leaves the runs as the first seed and any later decision left them.
+func TestPrepareSeedsAKeptRootOnce(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "demo")
+	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+	if err := prepare(home, fakegh.New(t), now, true); err != nil {
+		t.Fatal(err)
+	}
+	draftPath := filepath.Join(run.RunDir(home, "acme", "widgets", 42, 1), "draft.json")
+	if err := os.WriteFile(draftPath, []byte(`{"changed":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := prepare(home, fakegh.New(t), now, true); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(draftPath); err != nil || string(data) != `{"changed":true}` {
+		t.Fatalf("the second prepare rewrote the run: %q %v", data, err)
+	}
 }
