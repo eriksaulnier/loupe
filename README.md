@@ -31,6 +31,8 @@ claude plugin marketplace add eriksaulnier/loupe
 claude plugin install loupe@loupe
 ```
 
+Inside [Herdr](https://herdr.dev), the skill opens `loupe review` for you in a split beside the agent's pane instead of asking you to run it, and the pane closes when review exits cleanly. If Claude Code prompts for each Herdr call, allow `Bash(herdr pane layout:*)`, `Bash(herdr pane split:*)` and `Bash(herdr pane run:*)`. When a split cannot be opened, the skill tells you why and falls back to asking you to run `loupe review`.
+
 ## Commands
 
 `loupe --help` is the command reference. Every command's `--help` shows its JSON input and result shapes.

@@ -34,7 +34,9 @@ Task T104. Each row of the quickstart "Automated validation" table is listed wit
 | Review records handed-back notes on quit and on plain-mode end of input; nothing without a send-back | `cli.TestReviewRecordsHandBackOnQuit`, `cli.TestReviewHandBackLineGoesToStderrUnderJSON`, `cli.TestReviewWithoutSendBackRecordsNothing`, `draft.TestRecordHandBack*`, `draft.TestAwaitingDropsAnsweredAndClosedNotes` |
 | `wait` returns on a hand-back or a receipt, times out, refuses a negative timeout, ends on cancellation | `cli.TestWait*`, `integration.TestWaitFollowsTheSendBackLoop` |
 | Plugin files parse; SKILL.md has the workflow and prohibitions | `cli.TestPluginManifest`, `cli.TestPluginMarketplace`, `cli.TestPluginSkill`, `cli.TestPluginCommand` |
+| SKILL.md opens review in a Herdr split and keeps the non-Herdr handoff line (specs/003-herdr-handoff) | `cli.TestPluginSkill`, `cli.TestPluginSkillProhibitions`, `cli.TestPluginSkillHandoff` |
 | No PTY library, non-loopback address or stray `CreateReview` in tests | `scripts/check-tests.sh` in `mise run check`; each rule was shown to fail on a staged violating file |
+| No non-test Go file under `cmd/` or `internal/`, and not `go.mod`, names Herdr (specs/003-herdr-handoff FR-017) | `scripts/check-tests.sh` in `mise run check`; shown to fail on staged violations in `cmd/`, `internal/` and `go.mod`, and to ignore a test file |
 
 Performance (SC-004): `tui.TestOpenUnder100ms` measured 10.2 to 14.0 ms for model construction plus the first detail render on a 500-file run. `BenchmarkParseAndLocate` measured 6.0 to 6.5 ms per operation.
 
@@ -61,5 +63,6 @@ These cannot be checked in this repository and remain for the owner:
 - Installing a release binary on a clean machine.
 - Loading the plugin in Claude Code.
 - A multi-hour `loupe wait` under a persistent Claude Code Monitor, and the session waking when it prints.
+- A full `/loupe` round inside Herdr against a named pull request: the agent opens review in a split, the human sends notes back, the agent opens a fresh split, and the human publishes from it (specs/003-herdr-handoff FR-020).
 
 Also untested: a real SIGINT, SIGTERM or SIGHUP during a send (the hold is tested through an injected hook), end of input in the full-screen confirmation, and a CLI-level test of `--retry-unknown` finding the earlier review (covered by the publish unit test).

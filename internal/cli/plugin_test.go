@@ -109,6 +109,8 @@ func TestPluginSkill(t *testing.T) {
 		"loupe feedback", "loupe reply", "loupe review", "loupe wait --run", "`awaiting`", "`timeout`",
 		"MUST NOT run `loupe review`", "`loupe publish`", "pseudo-terminal", "pipe or script confirmation",
 		"`gh pr review`", "`gh api`", "GitHub MCP",
+		"`HERDR_ENV`", "herdr pane layout", "herdr pane split", "--focus", "herdr pane run", "&& exit",
+		"\"loupe review '<ref>' && exit\"", "--env \"LOUPE_HOME=$LOUPE_HOME\"", "`pane_id` is `$HERDR_PANE_ID`",
 	} {
 		if !strings.Contains(body, phrase) {
 			t.Errorf("SKILL.md body does not contain %q", phrase)
@@ -121,10 +123,25 @@ func TestPluginSkillProhibitions(t *testing.T) {
 	skill := readRepoFile(t, "plugin/skills/loupe/SKILL.md")
 	lines := strings.Split(skill, "\n")
 	for _, want := range []string{
-		"- You MUST NOT run `loupe review` or `loupe publish`. Both are human-only.",
-		"- You MUST NOT allocate a pseudo-terminal to reach them: no `script`, `expect`, `unbuffer`, or `pty` libraries.",
+		"- You MUST NOT run `loupe publish` or open it for the human, in a Herdr pane or by any other route. It is human-only.",
+		"- You MUST NOT run `loupe review` yourself; inside Herdr you MAY open it for the human as section 6 describes.",
+		"- You MUST NOT allocate a pseudo-terminal to reach `loupe review` or `loupe publish`: no `script`, `expect`, `unbuffer`, or `pty` libraries. The Herdr pane in section 6 is the only exception.",
+		"- You MUST NOT send keys or text to, read output from, resize, or close a pane running `loupe review` or `loupe publish`. The `herdr pane run` that starts review in section 6 is the only text you send it.",
 		"- You MUST NOT pipe or script confirmation into any loupe command.",
 		"- You MUST NOT create GitHub reviews or review comments by any other route, including `gh pr review`, `gh api`, and the GitHub MCP.",
+	} {
+		if !slices.Contains(lines, want) {
+			t.Errorf("SKILL.md lacks the line %q", want)
+		}
+	}
+}
+
+// Outside Herdr, and whenever a split fails, the handoff MUST stay `loupe review` in the user's own terminal.
+func TestPluginSkillHandoff(t *testing.T) {
+	lines := strings.Split(readRepoFile(t, "plugin/skills/loupe/SKILL.md"), "\n")
+	for _, want := range []string{
+		"Tell the user to run `loupe review <ref>` in their own terminal, then block on `loupe wait --run <ref> --json`. It returns when the human quits review leaving notes for you, or when the run is published.",
+		"Open a new split at every handoff. You MUST NOT look for, reuse, or close an earlier review pane. A step fails when it exits non-zero or its result lacks the field you need; do not retry it. If any step fails, tell the user the error in one line and hand off as above instead.",
 	} {
 		if !slices.Contains(lines, want) {
 			t.Errorf("SKILL.md lacks the line %q", want)
