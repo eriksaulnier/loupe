@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0
       - uses: jdx/mise-action@v2
       - run: mise run check
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: "~> v2"
