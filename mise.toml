@@ -40,7 +40,7 @@ run = '''
 mkdir -p "{{config_root}}/dist/dev/bin"
 ln -sfn ../../loupe "{{config_root}}/dist/dev/bin/loupe"
 mise link --force github:eriksaulnier/loupe@dev "{{config_root}}/dist/dev"
-# Offline, so mise pins the linked build without listing the private repository's releases.
+# Offline, so mise pins the linked build without listing the repository's releases.
 MISE_OFFLINE=1 mise use --global github:eriksaulnier/loupe@dev
 '''
 

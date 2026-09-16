@@ -11,12 +11,10 @@ loupe files pull request review findings for a human to decide and publish.
 ## Install
 
 ```sh
-export GITHUB_TOKEN="$(gh auth token)"
 mise use -g github:eriksaulnier/loupe@latest
 loupe --version
 ```
 
-- **Token:** the repository is private, so mise needs a GitHub token to download the release. On macOS `gh` keeps its token in the keychain, where mise cannot read it, so export it in your shell profile.
 - **A release cut today** fails with `no versions found for github:eriksaulnier/loupe matching date filter`, because mise hides releases younger than its `minimum_release_age`. Wait, or exempt loupe: `mise settings add minimum_release_age_excludes "github:eriksaulnier/loupe"`.
 
 ## Agent plugin
@@ -37,7 +35,6 @@ pi install git:github.com/eriksaulnier/loupe@v0.6.0 # x-release-please-version
 ```
 
 - **Keep plugin and binary together.** Claude Code and Codex install the plugin from `main`, so a skill can name a flag an older binary lacks.
-- **Private repository:** Codex and Pi clone with git, which needs github.com credentials, such as those `gh auth setup-git` configures.
 - **Codex sandbox:** loupe cannot reach GitHub, the clone's `.git`, its data directory or the Herdr socket from inside it. Approve the skill's requests to run `loupe` outside the sandbox. Pi has no sandbox.
 
 ## Review in a Herdr pane
