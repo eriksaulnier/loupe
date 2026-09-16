@@ -56,6 +56,16 @@ func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline 
 		if err := markdown.Check(f.Body, markdown.Body, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
 			return Envelope{}, err
 		}
+		if f.Impact != "" {
+			if err := markdown.Check(f.Impact, markdown.Body, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
+				return Envelope{}, err
+			}
+		}
+		// References render as autolinks that input validation keeps inert; a draft written by another version is
+		// checked again here for the same reason the body is.
+		if err := draft.ValidateReferences(f.References, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
+			return Envelope{}, err
+		}
 	}
 
 	env := Envelope{
@@ -72,10 +82,10 @@ func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline 
 		Findings:      []EnvelopeFinding{},
 	}
 	in := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: round, HeadSHA: target.HeadSHA,
-		Inline: inline, Summary: d.Summary, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source, Unattended: unattended}
+		Inline: inline, Summary: d.Summary, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source, Model: target.Model, Unattended: unattended}
 	for _, f := range included {
 		rf := render.Finding{ID: f.ID, Title: f.Title, Body: f.Body, General: f.General, Label: f.Label, Blocking: f.Blocking,
-			Confidence: f.Confidence, Severity: f.Severity, SuggestedFix: f.SuggestedFix}
+			Confidence: f.Confidence, Severity: f.Severity, Verified: f.Verified, Impact: f.Impact, References: f.References, SuggestedFix: f.SuggestedFix}
 		var loc *draft.Location
 		if f.Location != nil {
 			rf.Location = &render.Location{Path: f.Location.Path, Side: f.Location.Side, Line: f.Location.Line, StartLine: f.Location.StartLine}

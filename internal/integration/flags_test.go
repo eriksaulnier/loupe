@@ -16,13 +16,14 @@ func TestFromConflictsWithEveryContentFlag(t *testing.T) {
 	from := h.WriteFile("input.json", `{"title": "t", "body": "b", "general": true}`)
 	shared := map[string][]string{
 		"title": {"x"}, "body": {"x"}, "path": {"src/app.go"}, "line": {"3"}, "start-line": {"2"}, "side": {"RIGHT"},
-		"general": nil, "label": {"issue"}, "blocking": nil, "confidence": {"high"}, "severity": {"low"}, "suggested-fix": {"x"},
+		"general": nil, "label": {"issue"}, "blocking": nil, "confidence": {"high"}, "severity": {"minor"}, "verified": {"plausible"}, "impact": {"x"},
+		"reference": {"https://github.com/o/r/issues/1"}, "suggested-fix": {"x"},
 	}
 	for flag, value := range shared {
 		h.mustRefuseUsage(append([]string{"add", "--run", runRef, "--from", from, "--" + flag}, value...)...)
 		h.mustRefuseUsage(append([]string{"edit", "f-001", "--run", runRef, "--from", from, "--" + flag}, value...)...)
 	}
-	for _, flag := range []string{"clear-location", "clear-label", "clear-confidence", "clear-severity", "clear-suggested-fix", "not-blocking"} {
+	for _, flag := range []string{"clear-location", "clear-label", "clear-confidence", "clear-severity", "clear-verified", "clear-impact", "clear-references", "clear-suggested-fix", "not-blocking"} {
 		h.mustRefuseUsage("edit", "f-001", "--run", runRef, "--from", from, "--"+flag)
 	}
 	h.mustRefuseUsage("summary", "--run", runRef, "--from", from, "--body", "x", "--expect-findings", "1")

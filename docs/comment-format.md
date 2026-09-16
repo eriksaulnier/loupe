@@ -14,13 +14,18 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 | `label` | `issue`, `suggestion`, `question` | The kind of remark. Any other value is accepted and preserved verbatim |
 | `blocking` | boolean, absent means false | Whether the PR should not merge until this is addressed |
 | `confidence` | `high`, `medium`, `low` | Reviewer-reported. Optional |
-| `severity` | arbitrary text | Retained and rendered verbatim, never mapped onto a label |
+| `severity` | `critical`, `major`, `minor`, `trivial` | Reviewer-reported. Optional. Never mapped onto a label |
+| `verified` | `reproduced`, `plausible` | Whether the reviewer ran the failure or reasoned to it. Optional |
+| `impact` | Markdown | What goes wrong and under what input. Optional, allowlist-checked like `body` |
+| `references` | list of `http` or `https` URLs | What the reviewer looked at. At most six, never fetched. Optional |
 
 - **Label and blocking are independent.** A small required mechanical change is `suggestion (blocking)`, not an `issue`. `question (blocking)` is valid: a question whose answer determines whether the change is correct does block.
 - **Unknown labels are never refused.** An unrecognized label renders verbatim in the finding's own summary line (`perf-nit:`) and counts in the `Other` chip only when nonblocking. A finding with an unknown label and `blocking` set is placed and counted in `Blocking`, like every other blocking finding, while still counting under its own label in `loupe-meta`. `Other` is a bucket, never a rewrite of the label.
-- A label that is absent or empty is treated as no label: the finding counts as `other` and its summary line carries no label word. The same applies to an empty `confidence` or `severity`, which render nothing.
-- **Confidence MUST NOT be computed, defaulted or inferred.** It is a value the reviewer reports or omits. The reason for a confidence level belongs in the body.
-- **Severity is never mapped onto a label.** It renders as literal code-span content inside the disclosure body and never decides section placement.
+- A label that is absent or empty is treated as no label: the finding counts as `other` and its summary line carries no label word. The same applies to an empty `confidence`, `severity` or `verified`, which render nothing.
+- **Confidence, severity and verified MUST NOT be computed, defaulted or inferred.** Each is a value the reviewer reports or omits. The reason for a confidence level belongs in the body.
+- **Severity is never mapped onto a label.** It renders as a labeled word on the meta line and never decides section placement.
+- **Verified is not confidence.** Confidence is how sure the reviewer is; verified is whether it ran or observed the failure (`reproduced`) or reasoned to it (`plausible`).
+- **A stored severity outside the enum still renders.** Runs captured before the enum hold free text; it renders in the same place inside a code span, so it stays inert Markdown, and only a new or changed value is refused.
 
 ## Body composition
 
@@ -43,16 +48,26 @@ Tests were not executed in this read-only review.
 <summary><b>issue (blocking):</b> Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
-> **Confidence:** high
+> **Confidence:** high\
+> **Severity:** major\
+> **Verified:** reproduced
 
 Reproduced against the recorded fixture. The catch re-enters the loop after a request
 that may already have succeeded, so a 502 produces two reviews.
+
+**Impact**
+
+A 502 on the first send leaves two reviews on the pull request, and the receipt records only one.
 
 **Suggested fix**
 
 ```
 Return the original write error.
 ```
+
+**References**
+
+- <https://github.com/o/r/issues/12>
 
 </details>
 
@@ -64,7 +79,7 @@ Return the original write error.
 <summary><b>perf-nit:</b> Redundant sort on every read</summary>
 
 > [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)\
-> severity `minor`
+> **Severity:** minor
 
 …
 
@@ -115,27 +130,38 @@ The chips row leads the body, or the summary when there are no findings. The bod
 
 A blockquote at the top of the disclosure body, present only when at least one part exists.
 
-- The location stands alone on the first line; confidence and severity follow on the second, joined with ` · `. The two lines are separated by a backslash hard break.
-- A finding with no location has only the second line; one with only a location has only the first.
+- One part per line, each line separated from the next by a backslash hard break: the location first, then confidence, severity and verified, in that order. An absent part leaves no line.
+- A finding with no location starts at its first present part; one with only a location has that line alone.
 
 | Part | Rendering | Example |
 | :--- | :--- | :--- |
-| Location | Markdown code span, side included inside the span, alone on its line; in the review body it is the text of a link to the PR's files view | `` [`src/a.go:88`](…/pull/7/files#diff-<sha256 of the path>R88) `` |
+| Location | Review body only. A Markdown code span, side included inside the span, as the text of a link to the PR's files view | `` [`src/a.go:88`](…/pull/7/files#diff-<sha256 of the path>R88) `` |
 | Confidence | the bold label `**Confidence:**` then the escaped level word | `**Confidence:** high` |
-| Severity | Markdown code span | `` severity `minor` `` |
+| Severity | the bold label `**Severity:**` then the enum word; a stored value outside the enum goes in a code span instead | `**Severity:** minor`, `` **Severity:** `P2` `` |
+| Verified | the bold label `**Verified:**` then the escaped word | `**Verified:** reproduced` |
 
 - **Location is rendered in full**, path and range, because with `--inline none` this is the only place it survives. `src/a.go:88` for a single line, `src/a.go:10–14` for a range. **The side is shown only when it is `LEFT`**, appended as ` (LEFT)`.
 - **In the review body the location links to the PR's files view**, not to a review thread: GitHub assigns no inline-comment URL until the review is submitted. The anchor is `#diff-` followed by the SHA-256 hex of the path, then `L` or `R` for the side and the line, with `R21-R24` for a range. This is observed behavior, see github-facts.md.
-- **In an inline comment the location stays a plain code span**: the comment already sits on the line.
+- **An inline comment carries no location line**: the comment already sits on the line, so its meta block starts at confidence.
 - **A code span MUST be delimited by a backtick run longer than any run inside its content**, padded with a space when the content starts or ends with a backtick. This is the CommonMark rule and it applies to every generated code span, including the footer's.
 - **Code-span contents MUST NOT be HTML-escaped.** A code span is already inert, and GitHub shows character references inside one literally. Escaping is for text interpolated outside a span.
-- **Every generated inline field MUST be collapsed to a single line before interpolation**, with runs of whitespace becoming one space. A newline in a title breaks the summary line out of its tag; a newline in `severity` can open a fence that swallows the rest of the review.
-- Confidence renders only when the reviewer supplied it. Severity never appears in the summary line or decides section placement.
+- **Every generated inline field MUST be collapsed to a single line before interpolation**, with runs of whitespace becoming one space. A newline in a title breaks the summary line out of its tag; a newline in `severity` would end the meta block's blockquote and leave the rest of the line as body text.
+- Confidence, severity and verified render only when the reviewer supplied them. None appears in the summary line or decides section placement.
+
+### Impact
+
+- Rendered after the body and before the suggested fix, under a bold `**Impact**` line, as Markdown with trailing newlines trimmed.
+- It passes the same allowlist as `body` and is rechecked at composition, so it cannot unbalance the disclosure.
 
 ### Suggested fix
 
-- Rendered after the body under a bold `**Suggested fix**` line, inside a fence whose length is `max(3, longest backtick run in the content + 1)`, so its contents are inert.
+- Rendered after the body and the impact under a bold `**Suggested fix**` line, inside a fence whose length is `max(3, longest backtick run in the content + 1)`, so its contents are inert.
 - It is prose or code the human reads, never a GitHub `suggestion` fence: an applicable suggestion MUST contain the exact replacement lines for the anchored range, and a suggested fix holds prose. Wrapping prose in a suggestion fence produces a broken apply button.
+
+### References
+
+- Rendered last in the disclosure, under a bold `**References**` line, one `- <url>` autolink bullet per entry in input order.
+- Each entry MUST be an `http` or `https` URL with a host, at most 200 bytes, with no whitespace, control or format character (bidi overrides included), `<`, `>` or backtick, and there are at most six; `loupe add` refuses anything else and composition checks again. Those characters are what would end or break the autolink. loupe never fetches a reference.
 
 ### Dividers
 
@@ -171,6 +197,7 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 - **`loupe-meta`'s per-label counts are a census, not the chips row.** They count every included finding, blocking ones included, so a review whose only issue blocks records `blocking=1 issues=1` while the visible chips show no issue. The chips are an index of the headings a reader can scroll to; the marker is an inventory of what the review held.
 - **`unattended=1` follows `round=` only on a review `loupe publish --unattended` sent**, directly before `src=` when both are present (`specs/007-unattended-publish/spec.md` FR-016). It is also how `loupe publish --unattended` counts a pull request's earlier rounds for `N` (FR-015), alongside the review's author ending `[bot]`.
 - **`src=` follows `round=`, or `unattended=1` when present, only when capture recorded a source**, as given (`src=gadfly-review-pr@2.2.0`). It is never escaped, so capture refuses a source that does not match `^[a-z0-9][a-z0-9._-]*(@[0-9][0-9A-Za-z.+-]*)?$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. None of those can close the comment.
+- **`model=` follows `src=`, or sits where `src=` would, only when capture recorded a model** with `loupe capture --model`, as given (`model=anthropic/claude-sonnet-5`). It is never escaped, so capture refuses a model that does not match `^[a-z0-9][a-z0-9._/:-]*$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. The model is provenance for tooling and never appears in the footer.
 - New keys MAY be added to `loupe-meta`; existing keys MUST keep their meaning. **`round=` is the one recorded exception:** it carries the footer's `N` (FR-042), where it once carried the run's round. Outside the shared-`N` cases under Footer, a pull request with no abandoned round reads identically under both, and `round=` still rises with each review a pull request publishes, so a reader that takes the highest as live picks the newest review.
 
 ## Inline modes
@@ -186,19 +213,20 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 - The body is always complete regardless of mode.
 - General findings, those with no location, are never inline.
 - Excluded and withdrawn findings appear in neither the body nor `comments[]`.
-- An inline comment's body is the finding rendered as it appears inside its disclosure (summary line as a bold first line, then the meta block with a plain code-span location, then the body and suggested fix), without the `<details>` wrapper.
+- An inline comment's body is the finding rendered as it appears inside its disclosure (summary line as a bold first line, then the meta block without its location line, then the body, impact, suggested fix and references), without the `<details>` wrapper.
 
 ## The supported Markdown boundary
 
-The renderer wraps each finding in a generated `<details>`. Authored content that closes it early restructures the published review. Two fields carry raw Markdown: a finding `body` and the review `summary`. Every other interpolated field is made structurally incapable of unbalancing the wrapper:
+The renderer wraps each finding in a generated `<details>`. Authored content that closes it early restructures the published review. Three fields carry raw Markdown: a finding `body`, a finding `impact` and the review `summary`. Every other interpolated field is made structurally incapable of unbalancing the wrapper:
 
 | Field | Why it cannot escape |
 | :--- | :--- |
-| `title`, `label`, `confidence` | Collapsed to one line, then HTML-escaped before interpolation |
+| `title`, `label`, `confidence`, `verified` | Collapsed to one line, then HTML-escaped before interpolation |
+| `severity` | Collapsed to one line; an enum word is interpolated as is, anything else is emitted inside a code span |
 | Location, footer fields | Collapsed to one line and emitted inside a code span whose backtick run is longer than any run in the content |
-| `severity` | Collapsed to one line and emitted inside a code span |
 | `suggestedFix` | Emitted inside a fence longer than any backtick run in the content |
-| `body` | Validated by the allowlist below; correction `loupe edit <id> --from -` |
+| `references` | Refused at input, and again at composition, unless each is a URL free of whitespace, control and format characters, `<`, `>` and backticks; then emitted as an autolink |
+| `body`, `impact` | Validated by the allowlist below; correction `loupe edit <id> --from -` |
 | `summary` | Validated by the allowlist below; correction `loupe summary --from -` |
 
 ### Allowlist

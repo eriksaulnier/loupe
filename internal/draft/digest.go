@@ -23,7 +23,8 @@ func PublishableSet(d *Draft) []Finding {
 	return out
 }
 
-// The digest is published in the reconciliation marker, so these field orders and the encoding MUST NOT change.
+// The digest is published in the reconciliation marker, so the encoding is append-only: a new field goes last with
+// every key still present, and no field is removed, renamed or reordered.
 type digestDoc struct {
 	Summary  string          `json:"summary"`
 	Findings []digestFinding `json:"findings"`
@@ -40,6 +41,9 @@ type digestFinding struct {
 	Confidence   string          `json:"confidence"`
 	Severity     string          `json:"severity"`
 	SuggestedFix string          `json:"suggestedFix"`
+	Impact       string          `json:"impact"`
+	Verified     string          `json:"verified"`
+	References   []string        `json:"references"`
 }
 
 type digestLocation struct {
@@ -55,7 +59,8 @@ func Digest(d *Draft) string {
 	doc := digestDoc{Summary: d.Summary, Findings: []digestFinding{}}
 	for _, f := range PublishableSet(d) {
 		df := digestFinding{ID: f.ID, Title: f.Title, Body: f.Body, General: f.General, Label: f.Label, Blocking: f.Blocking,
-			Confidence: f.Confidence, Severity: f.Severity, SuggestedFix: f.SuggestedFix}
+			Confidence: f.Confidence, Severity: f.Severity, SuggestedFix: f.SuggestedFix, Impact: f.Impact, Verified: f.Verified,
+			References: append([]string{}, f.References...)}
 		if f.Location != nil {
 			df.Location = &digestLocation{Path: f.Location.Path, Side: f.Location.Side, Line: f.Location.Line, StartLine: f.Location.StartLine}
 		}

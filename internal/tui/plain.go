@@ -234,10 +234,19 @@ func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i, 
 	p.printf("%s  %s\n", s.Accent.Render(f.ID), s.Bold.Render(render.ForDisplay(render.OneLine(f.Title))))
 	p.printf("%s  %s\n", chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID], false)), s.Dim.Render(plainLocation(s.Glyphs, f)))
 	p.printf("\n%s\n", s.Wrap(render.ForDisplay(f.Body), width, ""))
+	if f.Impact != "" {
+		p.printf("\n%s\n%s\n", s.Head.Render("Impact"), s.Wrap(render.ForDisplay(f.Impact), width, ""))
+	}
 	if f.SuggestedFix != "" {
 		p.printf("\n%s\n", s.Head.Render(strings.TrimSpace(s.Glyphs.Fix+" Suggested fix")))
 		for _, line := range strings.Split(s.Wrap(render.ForDisplay(f.SuggestedFix), width-2, ""), "\n") {
 			p.printf("%s %s\n", s.Dim.Render(s.Glyphs.Quote), line)
+		}
+	}
+	if len(f.References) > 0 {
+		p.printf("\n%s\n", s.Head.Render("References"))
+		for _, ref := range f.References {
+			p.printf("%s\n", s.Dim.Render(render.ForDisplay(render.OneLine(ref))))
 		}
 	}
 	for _, n := range d.Notes {

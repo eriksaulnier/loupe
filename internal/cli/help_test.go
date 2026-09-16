@@ -28,8 +28,8 @@ var contractResultKeys = map[string][]string{
 
 // contractInputKeys are fragments of each command's JSON input example in contracts/cli.md.
 var contractInputKeys = map[string][]string{
-	"add":     {`"title"`, `"body"`, `"location"`, `"path"`, `"line"`, `"side"`, `"startLine"`, `"general"`, `"label"`, `"blocking"`, `"confidence"`, `"severity"`, `"suggestedFix"`},
-	"edit":    {`"title"`, `"location"`, `null`},
+	"add":     {`"title"`, `"body"`, `"location"`, `"path"`, `"line"`, `"side"`, `"startLine"`, `"general"`, `"label"`, `"blocking"`, `"confidence"`, `"severity"`, `"verified"`, `"impact"`, `"references"`, `"suggestedFix"`},
+	"edit":    {`"title"`, `"location"`, `null`, `references`},
 	"summary": {`{"summary": `},
 	"reply":   {`{"body": `},
 }

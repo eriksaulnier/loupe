@@ -152,6 +152,26 @@ func TestCaptureRecordsSource(t *testing.T) {
 	}
 }
 
+func TestCaptureRecordsModel(t *testing.T) {
+	h := newHarness(t)
+	h.mustRefuse("input", "capture", prURL(), "--model", "Claude Sonnet")
+	if _, err := os.Stat(h.RunDir(1)); !os.IsNotExist(err) {
+		t.Fatalf("refused capture left a run: %v", err)
+	}
+
+	result := h.mustOK("capture", prURL(), "--model", "anthropic/claude-sonnet-5")
+	if shown, _ := result["target"].(map[string]any); shown["model"] != "anthropic/claude-sonnet-5" {
+		t.Fatalf("capture target %v", shown)
+	}
+	var target map[string]any
+	if err := json.Unmarshal(readFile(t, filepath.Join(h.RunDir(1), "target.json")), &target); err != nil {
+		t.Fatal(err)
+	}
+	if target["model"] != "anthropic/claude-sonnet-5" {
+		t.Fatalf("target.json model %v", target["model"])
+	}
+}
+
 func TestCaptureHumanOutput(t *testing.T) {
 	h := newHarness(t)
 	stdout, stderr, exit := h.Run("capture", prURL())

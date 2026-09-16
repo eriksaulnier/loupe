@@ -3,10 +3,14 @@ package draft
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
@@ -24,6 +28,9 @@ type FindingInput struct {
 	Blocking     bool      `json:"blocking,omitempty"`
 	Confidence   string    `json:"confidence,omitempty"`
 	Severity     string    `json:"severity,omitempty"`
+	Verified     string    `json:"verified,omitempty"`
+	Impact       string    `json:"impact,omitempty"`
+	References   []string  `json:"references,omitempty"`
 	SuggestedFix string    `json:"suggestedFix,omitempty"`
 }
 
@@ -44,6 +51,54 @@ func ValidateLabel(label string) error {
 	}
 	return refusal.New(refusal.Input,
 		fmt.Sprintf("label %q must match %s and be at most %d characters", label, LabelPattern, maxLabelRunes), inputFix)
+}
+
+const maxReferences = 6
+
+const maxReferenceBytes = 200
+
+// ValidateReferences accepts an empty list. A reference is rendered as a Markdown autolink, <url>, so whitespace,
+// control characters, angle brackets and backticks are refused: any of them would end or break the autolink. fix
+// names the command that repairs the finding, which differs between add and a recheck at publish.
+func ValidateReferences(refs []string, fix string) error {
+	if len(refs) > maxReferences {
+		return refusal.New(refusal.Input, fmt.Sprintf("references has %d entries; at most %d are allowed", len(refs), maxReferences), fix)
+	}
+	for i, ref := range refs {
+		if err := validateReference(ref); err != nil {
+			return refusal.New(refusal.Input, fmt.Sprintf("references[%d] %q %s", i, ref, err), fix)
+		}
+	}
+	return nil
+}
+
+func validateReference(ref string) error {
+	if len(ref) > maxReferenceBytes {
+		return fmt.Errorf("is over %d bytes", maxReferenceBytes)
+	}
+	for _, r := range ref {
+		// Format characters cover the bidi overrides that make a URL display a host it does not point to.
+		if unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '<' || r == '>' || r == '`' {
+			return errors.New("must not contain whitespace, control or format characters, <, > or `")
+		}
+	}
+	u, err := url.Parse(ref)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return errors.New("must be an http or https URL with a host")
+	}
+	// user@host reads as the user part's host to anyone who stops at the first slash.
+	if u.User != nil {
+		return errors.New("must not carry userinfo before the host")
+	}
+	return nil
+}
+
+func validateSeverity(severity string) error {
+	switch severity {
+	case "", "critical", "major", "minor", "trivial":
+		return nil
+	}
+	return refusal.New(refusal.Input, fmt.Sprintf("severity %q must be critical, major, minor or trivial", severity), inputFix)
 }
 
 // Add validates every entry before appending any, so a batch is stored entirely or not at all.
@@ -68,12 +123,17 @@ func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Ti
 			Blocking:     in.Blocking,
 			Confidence:   in.Confidence,
 			Severity:     in.Severity,
+			Verified:     in.Verified,
+			Impact:       in.Impact,
 			SuggestedFix: in.SuggestedFix,
 			By:           by,
 			Included:     true,
 			CreatedAt:    now,
 			UpdatedAt:    now,
 			History:      []HistoryEntry{},
+		}
+		if len(in.References) > 0 {
+			f.References = slices.Clone(in.References)
 		}
 		if in.Location != nil {
 			loc := *in.Location
@@ -107,8 +167,24 @@ func validateInput(in FindingInput, dif *diff.Diff) error {
 	default:
 		return refusal.New(refusal.Input, fmt.Sprintf("confidence %q must be high, medium or low", in.Confidence), inputFix)
 	}
+	if err := validateSeverity(in.Severity); err != nil {
+		return err
+	}
+	switch in.Verified {
+	case "", "reproduced", "plausible":
+	default:
+		return refusal.New(refusal.Input, fmt.Sprintf("verified %q must be reproduced or plausible", in.Verified), inputFix)
+	}
+	if err := ValidateReferences(in.References, inputFix); err != nil {
+		return err
+	}
 	if err := markdown.Check(in.Body, markdown.Body, "loupe edit <id> --from -"); err != nil {
 		return err
+	}
+	if in.Impact != "" {
+		if err := markdown.Check(in.Impact, markdown.Body, "loupe edit <id> --from -"); err != nil {
+			return err
+		}
 	}
 	if in.Location == nil {
 		return nil
@@ -285,6 +361,9 @@ type EditInput struct {
 	Blocking     json.RawMessage `json:"blocking"`
 	Confidence   json.RawMessage `json:"confidence"`
 	Severity     json.RawMessage `json:"severity"`
+	Verified     json.RawMessage `json:"verified"`
+	Impact       json.RawMessage `json:"impact"`
+	References   json.RawMessage `json:"references"`
 	SuggestedFix json.RawMessage `json:"suggestedFix"`
 }
 
@@ -323,6 +402,9 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 	note("blocking", next.Blocking != stored.Blocking, stored.Blocking)
 	note("confidence", next.Confidence != stored.Confidence, stored.Confidence)
 	note("severity", next.Severity != stored.Severity, stored.Severity)
+	note("verified", next.Verified != stored.Verified, stored.Verified)
+	note("impact", next.Impact != stored.Impact, stored.Impact)
+	note("references", !slices.Equal(next.References, stored.References), stored.References)
 	note("suggestedFix", next.SuggestedFix != stored.SuggestedFix, stored.SuggestedFix)
 	publishable := len(changed) > 0
 	note("included", next.Included != stored.Included, stored.Included)
@@ -330,8 +412,14 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		return *stored, false, ErrNoChange
 	}
 	if publishable {
+		// A severity stored before the enum existed may be free text; it is checked only once an edit changes it.
+		severity := next.Severity
+		if severity == stored.Severity {
+			severity = ""
+		}
 		err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: next.Location, General: next.General, Label: next.Label,
-			Blocking: next.Blocking, Confidence: next.Confidence, Severity: next.Severity, SuggestedFix: next.SuggestedFix}, dif)
+			Blocking: next.Blocking, Confidence: next.Confidence, Severity: severity, Verified: next.Verified, Impact: next.Impact,
+			References: next.References, SuggestedFix: next.SuggestedFix}, dif)
 		if err != nil {
 			return Finding{}, false, err
 		}
@@ -403,10 +491,24 @@ func applyEdit(f *Finding, in EditInput) error {
 		raw  json.RawMessage
 		dst  *string
 	}{{"label", in.Label, &f.Label}, {"confidence", in.Confidence, &f.Confidence}, {"severity", in.Severity, &f.Severity},
-		{"suggestedFix", in.SuggestedFix, &f.SuggestedFix}} {
+		{"verified", in.Verified, &f.Verified}, {"impact", in.Impact, &f.Impact}, {"suggestedFix", in.SuggestedFix, &f.SuggestedFix}} {
 		if err := decodeOptional(field.name, field.raw, field.dst); err != nil {
 			return err
 		}
+	}
+	switch {
+	case in.References == nil:
+	case isNull(in.References):
+		f.References = nil
+	default:
+		var refs []string
+		if err := decodeValue("references", in.References, &refs); err != nil {
+			return err
+		}
+		if len(refs) == 0 {
+			refs = nil
+		}
+		f.References = refs
 	}
 
 	switch {
@@ -444,7 +546,7 @@ func decodeRequired(field string, raw json.RawMessage, dst any) error {
 		return nil
 	}
 	if isNull(raw) {
-		return refusal.New(refusal.Input, fmt.Sprintf("%s cannot be null; only location, label, confidence, severity and suggestedFix can be cleared", field), editFix)
+		return refusal.New(refusal.Input, fmt.Sprintf("%s cannot be null; only location, label, confidence, severity, verified, impact, references and suggestedFix can be cleared", field), editFix)
 	}
 	return decodeValue(field, raw, dst)
 }

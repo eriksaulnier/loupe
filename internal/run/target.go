@@ -45,6 +45,8 @@ type Target struct {
 	DiffSHA256   string `json:"diffSha256"`
 	// Source names what filed the findings, as name[@version]; empty when capture was given none.
 	Source string `json:"source,omitempty"`
+	// Model is the reviewer's model id as the caller names it; empty when capture was given none. Provenance only.
+	Model string `json:"model,omitempty"`
 }
 
 // SourcePattern keeps a source to one token without > because loupe-meta carries it unescaped inside an HTML comment.
@@ -66,6 +68,24 @@ func ValidateSource(source string) error {
 		"loupe capture <pr-url> --source <name>[@<version>]")
 }
 
+// ModelPattern admits ids like anthropic/claude-sonnet-5 and, like SourcePattern, keeps > out because loupe-meta
+// carries the value unescaped inside an HTML comment. ValidateModel refuses -- for the same reason.
+const ModelPattern = `^[a-z0-9][a-z0-9._/:-]*$`
+
+const maxModelChars = 64
+
+var modelRE = regexp.MustCompile(ModelPattern)
+
+// ValidateModel accepts the empty model, which means none.
+func ValidateModel(model string) error {
+	if model == "" || (modelRE.MatchString(model) && len(model) <= maxModelChars && !strings.Contains(model, "--")) {
+		return nil
+	}
+	return refusal.New(refusal.Input,
+		fmt.Sprintf("model %q must match %s, contain no --, and be at most %d characters", model, ModelPattern, maxModelChars),
+		"loupe capture <pr-url> --model <id>")
+}
+
 func LoadTarget(dir string) (Target, error) {
 	path := filepath.Join(dir, "target.json")
 	var t Target
@@ -76,6 +96,9 @@ func LoadTarget(dir string) (Target, error) {
 		return Target{}, RecordRefusal(path, fmt.Errorf("schema is %d, expected %d", t.Schema, TargetSchema))
 	}
 	if err := ValidateSource(t.Source); err != nil {
+		return Target{}, RecordRefusal(path, err)
+	}
+	if err := ValidateModel(t.Model); err != nil {
 		return Target{}, RecordRefusal(path, err)
 	}
 	return t, nil

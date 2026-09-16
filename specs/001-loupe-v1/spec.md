@@ -220,7 +220,7 @@ Capture
 
 Reporting
 
-- **FR-007**: The system MUST let an agent file one finding or a batch, each with title, body, either a location (path, side, line, optional start line) or a general marker, and optional label, blocking flag, confidence, severity and suggested fix.
+- **FR-007**: The system MUST let an agent file one finding or a batch, each with title, body, either a location (path, side, line, optional start line) or a general marker, and optional label, blocking flag, confidence, severity, verified, impact, references and suggested fix. Severity is one of four words and verified one of two; `specs/008-finding-fields/spec.md` defines them and the rendering of all four additions.
 - **FR-008**: The system MUST validate a location against the stored diff: the path MUST be in the diff, the line MUST fall in a hunk on the given side, and a range MUST lie within one hunk; a refusal MUST name the nearest valid lines.
 - **FR-009**: The system MUST validate a body and the summary against a small allowlist: a size limit, closed code fences, and no raw HTML except collapsible-section tags on their own lines with balanced nesting.
 - **FR-010**: A batch MUST be stored entirely or not at all, and a refusal MUST name the failing entry by position.
@@ -272,7 +272,7 @@ General
 - **Run**: One capture of one pull request at one head commit; identified by owner, repository, number and round. Holds the target, the diff, the draft and any publication records.
 - **Target**: The captured pull request: owner, repository, number, URL, author, viewer login, base and head commits, round, previous round, capture time, the clone and refs used, and the diff fingerprint. Immutable after capture.
 - **Draft**: The editable review: version, summary, findings, and the nonpublishable decisions, notes and replies.
-- **Finding**: One review remark with a stable identifier, a content revision counter, title, body, optional location, label, blocking flag, optional confidence, severity and suggested fix, author, inclusion flag, timestamps and edit history.
+- **Finding**: One review remark with a stable identifier, a content revision counter, title, body, optional location, label, blocking flag, optional confidence, severity, verified, impact, references and suggested fix, author, inclusion flag, timestamps and edit history.
 - **Location**: A path in the diff, a side (new or old), a line and an optional start line forming a range within one hunk.
 - **Decision**: The human's accept or exclude for one finding, bound to the finding's revision at the time.
 - **Note**: A human send-back message tied to one finding, with status open, resolved or dismissed.

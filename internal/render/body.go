@@ -22,6 +22,8 @@ type Input struct {
 	PublicationID string
 	// Source is name[@version], already validated; empty omits it from the footer and loupe-meta.
 	Source string
+	// Model is the reviewer's model id, already validated; empty omits it from loupe-meta. The footer never shows it.
+	Model string
 	// Unattended marks a review published without a human's confirmation, per constitution 2.0.0.
 	Unattended bool
 	// Findings are the included findings to publish; render does no filtering.
@@ -38,6 +40,9 @@ type Finding struct {
 	Blocking     bool
 	Confidence   string
 	Severity     string
+	Verified     string
+	Impact       string
+	References   []string
 	SuggestedFix string
 }
 
@@ -139,6 +144,9 @@ func Body(in Input) string {
 		footer += " · via " + CodeSpan(OneLine(strings.Replace(in.Source, "@", " ", 1)))
 		meta += " src=" + in.Source
 	}
+	if in.Model != "" {
+		meta += " model=" + in.Model
+	}
 	blocks = append(blocks, fmt.Sprintf("%s\n\n<!-- loupe digest=%s publication=%s -->\n"+
 		MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d -->\n",
 		footer, in.Digest, in.PublicationID,
@@ -216,25 +224,38 @@ func escapePunctuation(s string) string {
 }
 
 // disclosure is what sits inside a finding's <details>, and is also the rest of an inline comment.
-func disclosure(f Finding, in Input, link bool) string {
+func disclosure(f Finding, in Input, inBody bool) string {
 	var parts []string
-	if meta := metaBlock(f, in, link); meta != "" {
+	if meta := metaBlock(f, in, inBody); meta != "" {
 		parts = append(parts, meta)
 	}
 	if body := strings.TrimRight(f.Body, "\n"); body != "" {
 		parts = append(parts, body)
+	}
+	if impact := strings.TrimRight(f.Impact, "\n"); impact != "" {
+		parts = append(parts, "**Impact**\n\n"+impact)
 	}
 	if f.SuggestedFix != "" {
 		fix := strings.TrimRight(f.SuggestedFix, "\n")
 		fence := Fence(fix)
 		parts = append(parts, "**Suggested fix**\n\n"+fence+"\n"+fix+"\n"+fence)
 	}
+	if len(f.References) > 0 {
+		// Autolinks: input validation already refused anything that could end or break one.
+		lines := make([]string, 0, len(f.References))
+		for _, ref := range f.References {
+			lines = append(lines, "- <"+ref+">")
+		}
+		parts = append(parts, "**References**\n\n"+strings.Join(lines, "\n"))
+	}
 	return strings.Join(parts, "\n\n")
 }
 
-func metaBlock(f Finding, in Input, link bool) string {
+// metaBlock is the blockquote of one part per line: the location first, in the review body only, since an inline
+// comment already sits on the line; then confidence, severity and verified.
+func metaBlock(f Finding, in Input, inBody bool) string {
 	var lines []string
-	if loc := f.Location; loc != nil {
+	if loc := f.Location; loc != nil && inBody {
 		text := OneLine(loc.Path) + ":" + strconv.Itoa(loc.Line)
 		if isRange(loc) {
 			text = OneLine(loc.Path) + ":" + strconv.Itoa(loc.StartLine) + "–" + strconv.Itoa(loc.Line)
@@ -242,21 +263,24 @@ func metaBlock(f Finding, in Input, link bool) string {
 		if loc.Side == "LEFT" {
 			text += " (LEFT)"
 		}
-		span := CodeSpan(text)
-		if link {
-			span = "[" + span + "](" + filesURL(in, loc) + ")"
-		}
-		lines = append(lines, span)
+		lines = append(lines, "["+CodeSpan(text)+"]("+filesURL(in, loc)+")")
 	}
-	var second []string
 	if f.Confidence != "" {
-		second = append(second, "**Confidence:** "+EscapeHTML(OneLine(f.Confidence)))
+		lines = append(lines, "**Confidence:** "+EscapeHTML(OneLine(f.Confidence)))
 	}
 	if f.Severity != "" {
-		second = append(second, "severity "+CodeSpan(OneLine(f.Severity)))
+		// An enum word is inert as text. A run stored before the enum can hold any text, and nothing rechecks it at
+		// composition, so it stays in a code span where Markdown cannot run.
+		word := OneLine(f.Severity)
+		switch word {
+		case "critical", "major", "minor", "trivial":
+			lines = append(lines, "**Severity:** "+word)
+		default:
+			lines = append(lines, "**Severity:** "+CodeSpan(word))
+		}
 	}
-	if len(second) > 0 {
-		lines = append(lines, strings.Join(second, " · "))
+	if f.Verified != "" {
+		lines = append(lines, "**Verified:** "+EscapeHTML(OneLine(f.Verified)))
 	}
 	if len(lines) == 0 {
 		return ""

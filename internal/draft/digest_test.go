@@ -14,7 +14,7 @@ func digestDraft() *Draft {
 	d.Summary = "Two <issues> & more"
 	d.Findings = []Finding{
 		{ID: "f-001", Rev: 1, Title: "T1", Body: "B1", General: true, Label: "question", By: ByAgent, Included: true, CreatedAt: digestNow, UpdatedAt: digestNow, History: []HistoryEntry{}},
-		{ID: "f-002", Rev: 1, Title: "T2", Body: "B2\n", Location: &Location{Path: "a.go", Side: SideLeft, Line: 14, StartLine: 10}, Label: "issue", Blocking: true, Confidence: "high", Severity: "minor", SuggestedFix: "fix it", By: ByAgent, Included: true, CreatedAt: digestNow, UpdatedAt: digestNow, History: []HistoryEntry{}},
+		{ID: "f-002", Rev: 1, Title: "T2", Body: "B2\n", Location: &Location{Path: "a.go", Side: SideLeft, Line: 14, StartLine: 10}, Label: "issue", Blocking: true, Confidence: "high", Severity: "minor", SuggestedFix: "fix it", Impact: "Two reviews.", Verified: "reproduced", References: []string{"https://github.com/o/r/issues/1"}, By: ByAgent, Included: true, CreatedAt: digestNow, UpdatedAt: digestNow, History: []HistoryEntry{}},
 		{ID: "f-003", Rev: 2, Title: "withdrawn", Body: "gone", General: true, By: ByAgent, Included: false, History: []HistoryEntry{}},
 		{ID: "f-004", Rev: 1, Title: "excluded", Body: "no", General: true, By: ByAgent, Included: true, History: []HistoryEntry{}},
 	}
@@ -24,10 +24,11 @@ func digestDraft() *Draft {
 
 func TestDigestKnownValue(t *testing.T) {
 	// sha256 of {"summary":"Two <issues> & more","findings":[{"id":"f-001","title":"T1","body":"B1","location":null,
-	// "general":true,"label":"question","blocking":false,"confidence":"","severity":"","suggestedFix":""},{"id":"f-002",
-	// "title":"T2","body":"B2\n","location":{"path":"a.go","side":"LEFT","line":14,"startLine":10},"general":false,
-	// "label":"issue","blocking":true,"confidence":"high","severity":"minor","suggestedFix":"fix it"}]}
-	const want = "00e5b5d72df7bb13d5df9c2cbe735ae31ac5a510c4517b4bf7ff97e69a92982a"
+	// "general":true,"label":"question","blocking":false,"confidence":"","severity":"","suggestedFix":"","impact":"",
+	// "verified":"","references":[]},{"id":"f-002","title":"T2","body":"B2\n","location":{"path":"a.go","side":"LEFT",
+	// "line":14,"startLine":10},"general":false,"label":"issue","blocking":true,"confidence":"high","severity":"minor",
+	// "suggestedFix":"fix it","impact":"Two reviews.","verified":"reproduced","references":["https://github.com/o/r/issues/1"]}]}
+	const want = "3a2f60694ab5876ce01fc5cf545a84e9c73f3abac61909a4eb4b2ec6dbe60527"
 	if got := Digest(digestDraft()); got != want {
 		t.Fatalf("Digest = %s, want %s", got, want)
 	}
@@ -165,8 +166,8 @@ func TestDigestOrdersIDsNumerically(t *testing.T) {
 		{ID: "f-999", Title: "a", Body: "a", General: true, Included: true},
 	}
 	doc := `{"summary":"","findings":[` +
-		`{"id":"f-999","title":"a","body":"a","location":null,"general":true,"label":"","blocking":false,"confidence":"","severity":"","suggestedFix":""},` +
-		`{"id":"f-1000","title":"b","body":"b","location":null,"general":true,"label":"","blocking":false,"confidence":"","severity":"","suggestedFix":""}]}`
+		`{"id":"f-999","title":"a","body":"a","location":null,"general":true,"label":"","blocking":false,"confidence":"","severity":"","suggestedFix":"","impact":"","verified":"","references":[]},` +
+		`{"id":"f-1000","title":"b","body":"b","location":null,"general":true,"label":"","blocking":false,"confidence":"","severity":"","suggestedFix":"","impact":"","verified":"","references":[]}]}`
 	sum := sha256.Sum256([]byte(doc))
 	if got, want := Digest(d), hex.EncodeToString(sum[:]); got != want {
 		t.Fatalf("Digest = %s, want %s (f-999 before f-1000)", got, want)

@@ -85,6 +85,35 @@ func TestTargetJSONKeys(t *testing.T) {
 	if _, ok := again["source"]; ok {
 		t.Fatal("source must be omitted when capture recorded none")
 	}
+	if _, ok := again["model"]; ok {
+		t.Fatal("model must be omitted when capture recorded none")
+	}
+}
+
+func TestLoadTargetRefusesBadModel(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.json")
+	if err := os.WriteFile(path, []byte(`{"schema": 1, "model": "a-->b"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadTarget(dir)
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record || r.Fix != "inspect it with: cat "+path {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateModel(t *testing.T) {
+	for _, ok := range []string{"", "anthropic/claude-sonnet-5", "gpt-5.6", "openai:gpt-5.6-terra", "claude-opus-4.1-20250805", strings.Repeat("a", 64)} {
+		if err := ValidateModel(ok); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"a-->b", "a>b", "a--b", "Claude", "a b", "-a", "/a", "a@b", "a\tb", strings.Repeat("a", 65)} {
+		err := ValidateModel(bad)
+		if r, ok := refusal.As(err); !ok || r.Code != refusal.Input || r.Fix == "" {
+			t.Errorf("%q: got %v", bad, err)
+		}
+	}
 }
 
 func TestLoadTargetRefusesBadSource(t *testing.T) {

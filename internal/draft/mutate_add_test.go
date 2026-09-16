@@ -115,6 +115,19 @@ func TestAddRefusesInvalidInput(t *testing.T) {
 		{"location and general", FindingInput{Title: "t", Body: "b", General: true, Location: &Location{Path: "multi.txt", Line: 3}}},
 		{"neither location nor general", FindingInput{Title: "t", Body: "b"}},
 		{"unknown confidence", FindingInput{Title: "t", Body: "b", General: true, Confidence: "certain"}},
+		{"unknown severity", FindingInput{Title: "t", Body: "b", General: true, Severity: "P2"}},
+		{"unknown verified", FindingInput{Title: "t", Body: "b", General: true, Verified: "yes"}},
+		{"seven references", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https://github.com/o/r/issues/1", "https://github.com/o/r/issues/2", "https://github.com/o/r/issues/3", "https://github.com/o/r/issues/4", "https://github.com/o/r/issues/5", "https://github.com/o/r/issues/6", "https://github.com/o/r/issues/7"}}},
+		{"long reference", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https://github.com/o/r/" + strings.Repeat("x", 200)}}},
+		{"reference with space", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https://github.com/o/r/b c"}}},
+		{"reference with angle", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https://github.com/o/r/<b>"}}},
+		{"reference with backtick", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https://github.com/o/r/`b"}}},
+		{"reference with control byte", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https://github.com/o/r/b\x01"}}},
+		{"reference with no-break space", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https://github.com/o/r/b\u00a0c"}}},
+		{"reference with bidi override", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https://github.com/o/r/\u202ebad"}}},
+		{"reference without host", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https:" + "///path"}}},
+		{"reference with other scheme", FindingInput{Title: "t", Body: "b", General: true, References: []string{"ftp://a/b"}}},
+		{"reference with userinfo", FindingInput{Title: "t", Body: "b", General: true, References: []string{strings.Replace("http://localhost/o/r", "//", "//user@", 1)}}},
 		{"unknown side", FindingInput{Title: "t", Body: "b", Location: &Location{Path: "multi.txt", Side: "MIDDLE", Line: 3}}},
 	}
 	for _, c := range cases {
@@ -126,6 +139,56 @@ func TestAddRefusesInvalidInput(t *testing.T) {
 				t.Fatalf("details %v findings %d", r.Details, len(d.Findings))
 			}
 		})
+	}
+}
+
+func TestAddStoresEveryOptionalField(t *testing.T) {
+	d := NewEmpty()
+	in := general("Full")
+	in.Severity, in.Verified, in.Impact = "major", "reproduced", "A 502 leaves two reviews."
+	in.References = []string{"https://github.com/o/r/issues/12", "http://localhost/a?b=c#d"}
+	added, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := added[0]
+	if f.Severity != "major" || f.Verified != "reproduced" || f.Impact != "A 502 leaves two reviews." || !reflect.DeepEqual(f.References, in.References) {
+		t.Fatalf("finding %+v", f)
+	}
+}
+
+func TestAddStoresEmptyReferencesAsAbsent(t *testing.T) {
+	d := NewEmpty()
+	in := general("Empty")
+	in.References = []string{}
+	added, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added[0].References != nil {
+		t.Fatalf("references %#v, want nil", added[0].References)
+	}
+}
+
+func TestAddRefusesReferenceNamingTheEntry(t *testing.T) {
+	d := NewEmpty()
+	in := general("Bad ref")
+	in.References = []string{"https://github.com/o/r/issues/1", "ftp://a/b"}
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	r := wantRefusal(t, err, refusal.Input)
+	if !strings.Contains(r.Message, "references[1]") || r.Details["entry"] != 0 || len(d.Findings) != 0 {
+		t.Fatalf("message %q details %v findings %d", r.Message, r.Details, len(d.Findings))
+	}
+}
+
+func TestAddRefusesImpactFailingAllowlist(t *testing.T) {
+	d := NewEmpty()
+	in := general("Bad impact")
+	in.Impact = "one<br>two"
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	r := wantRefusal(t, err, refusal.Markdown)
+	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
+		t.Fatalf("fix %q details %v", r.Fix, r.Details)
 	}
 }
 

@@ -773,6 +773,9 @@ func chips(s style.Style, f draft.Finding, disposition string, general bool) []c
 	if f.Severity != "" {
 		out = append(out, chip{"", "severity " + render.ForDisplay(render.OneLine(f.Severity)), style.Dim})
 	}
+	if f.Verified != "" {
+		out = append(out, chip{"", "verified " + render.ForDisplay(f.Verified), style.Dim})
+	}
 	return out
 }
 

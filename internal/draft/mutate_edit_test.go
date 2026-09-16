@@ -18,7 +18,8 @@ func editable() *Draft {
 	d := NewEmpty()
 	d.Findings = []Finding{
 		{ID: "f-001", Rev: 1, Title: "One", Body: "Body one.", Location: &Location{Path: "multi.txt", Side: SideRight, Line: 3},
-			Label: "issue", Blocking: true, Confidence: "high", Severity: "major", SuggestedFix: "fix it", By: ByAgent, Included: true,
+			Label: "issue", Blocking: true, Confidence: "high", Severity: "major", Verified: "reproduced", Impact: "Two reviews.",
+			References: []string{"https://github.com/o/r/issues/1"}, SuggestedFix: "fix it", By: ByAgent, Included: true,
 			CreatedAt: addNow, UpdatedAt: addNow, History: []HistoryEntry{}},
 		{ID: "f-002", Rev: 1, Title: "Two", Body: "Body two.", General: true, By: ByAgent, Included: true,
 			CreatedAt: addNow, UpdatedAt: addNow, History: []HistoryEntry{}},
@@ -44,13 +45,18 @@ func TestEditEachPublishableField(t *testing.T) {
 		previous any
 		check    func(f Finding) bool
 	}{
-		"title":        {`{"title": "New"}`, "One", func(f Finding) bool { return f.Title == "New" }},
-		"body":         {`{"body": "New body."}`, "Body one.", func(f Finding) bool { return f.Body == "New body." }},
-		"location":     {`{"location": {"path": "multi.txt", "line": 20}}`, &Location{Path: "multi.txt", Side: SideRight, Line: 3}, func(f Finding) bool { return f.Location.Line == 20 && f.Location.Side == SideRight }},
-		"label":        {`{"label": "nit"}`, "issue", func(f Finding) bool { return f.Label == "nit" }},
-		"blocking":     {`{"blocking": false}`, true, func(f Finding) bool { return !f.Blocking }},
-		"confidence":   {`{"confidence": "low"}`, "high", func(f Finding) bool { return f.Confidence == "low" }},
-		"severity":     {`{"severity": "minor"}`, "major", func(f Finding) bool { return f.Severity == "minor" }},
+		"title":      {`{"title": "New"}`, "One", func(f Finding) bool { return f.Title == "New" }},
+		"body":       {`{"body": "New body."}`, "Body one.", func(f Finding) bool { return f.Body == "New body." }},
+		"location":   {`{"location": {"path": "multi.txt", "line": 20}}`, &Location{Path: "multi.txt", Side: SideRight, Line: 3}, func(f Finding) bool { return f.Location.Line == 20 && f.Location.Side == SideRight }},
+		"label":      {`{"label": "nit"}`, "issue", func(f Finding) bool { return f.Label == "nit" }},
+		"blocking":   {`{"blocking": false}`, true, func(f Finding) bool { return !f.Blocking }},
+		"confidence": {`{"confidence": "low"}`, "high", func(f Finding) bool { return f.Confidence == "low" }},
+		"severity":   {`{"severity": "minor"}`, "major", func(f Finding) bool { return f.Severity == "minor" }},
+		"verified":   {`{"verified": "plausible"}`, "reproduced", func(f Finding) bool { return f.Verified == "plausible" }},
+		"impact":     {`{"impact": "Three reviews."}`, "Two reviews.", func(f Finding) bool { return f.Impact == "Three reviews." }},
+		"references": {`{"references": ["https://github.com/o/r/issues/2"]}`, []string{"https://github.com/o/r/issues/1"}, func(f Finding) bool {
+			return len(f.References) == 1 && f.References[0] == "https://github.com/o/r/issues/2"
+		}},
 		"suggestedFix": {`{"suggestedFix": "other"}`, "fix it", func(f Finding) bool { return f.SuggestedFix == "other" }},
 	}
 	for field, c := range cases {
@@ -92,18 +98,45 @@ func TestEditToCurrentValuesChangesNothing(t *testing.T) {
 
 func TestEditNullClearsOptionalFields(t *testing.T) {
 	d := editable()
-	in := editInput(t, `{"label": null, "confidence": null, "severity": null, "suggestedFix": null}`)
+	in := editInput(t, `{"label": null, "confidence": null, "severity": null, "verified": null, "impact": null, "references": null, "suggestedFix": null}`)
 	f, _, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Label != "" || f.Confidence != "" || f.Severity != "" || f.SuggestedFix != "" || f.Rev != 2 {
+	if f.Label != "" || f.Confidence != "" || f.Severity != "" || f.Verified != "" || f.Impact != "" || f.References != nil || f.SuggestedFix != "" || f.Rev != 2 {
 		t.Fatalf("finding %+v", f)
 	}
-	want := map[string]any{"label": "issue", "confidence": "high", "severity": "major", "suggestedFix": "fix it"}
+	want := map[string]any{"label": "issue", "confidence": "high", "severity": "major", "verified": "reproduced", "impact": "Two reviews.",
+		"references": []string{"https://github.com/o/r/issues/1"}, "suggestedFix": "fix it"}
 	if len(f.History) != 1 || !reflect.DeepEqual(f.History[0].Changed, want) {
 		t.Fatalf("history %#v", f.History)
 	}
+}
+
+func TestEditEmptyReferencesClears(t *testing.T) {
+	d := editable()
+	f, _, err := Edit(d, "f-001", editInput(t, `{"references": []}`), nil, multiHunk(t), ByAgent, editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.References != nil || f.Rev != 2 {
+		t.Fatalf("finding %+v", f)
+	}
+}
+
+// A run captured before the severity enum holds free text; the value stays until an edit changes it.
+func TestEditKeepsALegacySeverity(t *testing.T) {
+	d := editable()
+	d.Findings[0].Severity = "P2"
+	f, _, err := Edit(d, "f-001", editInput(t, `{"title": "Renamed"}`), nil, multiHunk(t), ByAgent, editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Severity != "P2" || f.Title != "Renamed" {
+		t.Fatalf("finding %+v", f)
+	}
+	_, _, err = Edit(d, "f-001", editInput(t, `{"severity": "P1"}`), nil, multiHunk(t), ByAgent, editNow)
+	_ = wantRefusal(t, err, refusal.Input)
 }
 
 func TestEditNullLocationMakesFindingGeneral(t *testing.T) {
@@ -156,11 +189,15 @@ func TestEditLocationAndGeneralReplaceEachOther(t *testing.T) {
 func TestEditValidatesNewValues(t *testing.T) {
 	cases := map[string]refusal.Code{
 		`{"location": {"path": "multi.txt", "line": 12}}`: refusal.Location,
-		`{"title": "  "}`:                refusal.Input,
-		`{"body": "<script>x</script>"}`: refusal.Markdown,
-		`{"confidence": "sure"}`:         refusal.Input,
-		`{"label": "two words"}`:         refusal.Input,
-		`{"general": false}`:             refusal.Input,
+		`{"title": "  "}`:                                            refusal.Input,
+		`{"body": "<script>x</script>"}`:                             refusal.Markdown,
+		`{"confidence": "sure"}`:                                     refusal.Input,
+		`{"severity": "P1"}`:                                         refusal.Input,
+		`{"verified": "yes"}`:                                        refusal.Input,
+		`{"impact": "<script>x</script>"}`:                           refusal.Markdown,
+		`{"references": ["ftp://a/b"]}`:                              refusal.Input,
+		`{"label": "two words"}`:                                     refusal.Input,
+		`{"general": false}`:                                         refusal.Input,
 		`{"location": {"path": "multi.txt", "line": 3, "bogus": 1}}`: refusal.Input,
 	}
 	for input, code := range cases {

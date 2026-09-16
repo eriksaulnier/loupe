@@ -105,6 +105,9 @@ var findings = []draft.FindingInput{
 		Blocking:     true,
 		Confidence:   "high",
 		Severity:     "major",
+		Verified:     "reproduced",
+		Impact:       "Any repository whose API omits ETags shows the title and head SHA from the first fetch until restart, so a force-push is reviewed against the wrong commit.",
+		References:   []string{"https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#use-conditional-requests-if-appropriate"},
 		SuggestedFix: "Fall through to the TTL comparison when ETag is empty instead of returning early.",
 	},
 	{
@@ -113,6 +116,8 @@ var findings = []draft.FindingInput{
 		Location:     &draft.Location{Path: "internal/cache/metrics.go", StartLine: 39, Line: 40},
 		Label:        "suggestion",
 		Confidence:   "medium",
+		Severity:     "minor",
+		Verified:     "plausible",
 		SuggestedFix: "Export hits and misses as counters and let the dashboard compute the ratio.",
 	},
 	{
@@ -174,7 +179,7 @@ func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool) error {
 		target := run.Target{
 			Schema: run.TargetSchema, Owner: owner, Repo: repo, Number: r.number, URL: url, Title: prTitle,
 			Author: author, Viewer: viewer, BaseSHA: baseSHA, HeadSHA: headSHA, Round: 1, CapturedAt: now,
-			DiffSHA256: run.DiffSHA256([]byte(demoDiff)), Source: "loupe-demo",
+			DiffSHA256: run.DiffSHA256([]byte(demoDiff)), Source: "loupe-demo", Model: "demo/reviewer-1",
 		}
 		if writeRuns {
 			if err := run.CreateRun(run.RunDir(home, owner, repo, r.number, 1), target, []byte(demoDiff), data); err != nil {

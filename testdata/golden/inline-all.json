@@ -3,19 +3,19 @@
     "path": "internal/b.go",
     "line": 24,
     "side": "LEFT",
-    "body": "⛔ <b>suggestion (blocking):</b> Removed guard\n\n> `internal/b.go:24 (LEFT)`\\\n> severity `major`\n\nBody f-002."
+    "body": "⛔ <b>suggestion (blocking):</b> Removed guard\n\n> **Severity:** major\n\nBody f-002."
   },
   {
     "path": "c.go",
     "line": 3,
     "side": "RIGHT",
-    "body": "⛔ <b>(blocking):</b> Unlabeled blocking\n\n> `c.go:3`\n\nBody f-004."
+    "body": "⛔ <b>(blocking):</b> Unlabeled blocking\n\nBody f-004."
   },
   {
     "path": "d.go",
     "line": 7,
     "side": "RIGHT",
-    "body": "🔵 <b>question:</b> Closes &lt;\\/b&gt; early second line\n\n> `d.go:7`\n\nBody f-005."
+    "body": "🔵 <b>question:</b> Closes &lt;\\/b&gt; early second line\n\nBody f-005."
   },
   {
     "path": "internal/a.go",
@@ -23,6 +23,6 @@
     "side": "RIGHT",
     "start_line": 10,
     "start_side": "RIGHT",
-    "body": "⛔ <b>issue (blocking):</b> Range finding\n\n> `internal/a.go:10–14`\\\n> **Confidence:** high\n\nBody f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```"
+    "body": "⛔ <b>issue (blocking):</b> Range finding\n\n> **Confidence:** high\\\n> **Severity:** major\\\n> **Verified:** reproduced\n\nBody f-010.\n\n**Impact**\n\nImpact f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```\n\n**References**\n\n- <https://github.com/o/r/issues/1>"
   }
 ]

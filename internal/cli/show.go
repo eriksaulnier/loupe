@@ -161,7 +161,9 @@ type findingBlock struct {
 	title    string
 	meta     []string
 	body     string
+	impact   string
 	fix      string
+	refs     []string
 }
 
 const findingIndent = "         "
@@ -180,10 +182,20 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 	if body := text(f.body); body != "" {
 		fmt.Fprintf(b, "%s\n", s.Wrap(body, width, findingIndent))
 	}
+	if impact := text(f.impact); impact != "" {
+		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render("Impact"))
+		fmt.Fprintf(b, "%s\n", s.Wrap(impact, width, findingIndent))
+	}
 	if fix := text(f.fix); fix != "" {
 		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render(strings.TrimSpace(s.Glyphs.Fix+" Suggested fix")))
 		for _, line := range strings.Split(fix, "\n") {
 			fmt.Fprintf(b, "%s%s %s\n", findingIndent, s.Dim.Render(s.Glyphs.Quote), line)
+		}
+	}
+	if len(f.refs) > 0 {
+		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render("References"))
+		for _, ref := range f.refs {
+			fmt.Fprintf(b, "%s%s\n", findingIndent, s.Dim.Render(oneLine(ref)))
 		}
 	}
 	b.WriteString("\n")
@@ -248,10 +260,13 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 		if f.Severity != "" {
 			meta = append(meta, "severity "+oneLine(f.Severity))
 		}
+		if f.Verified != "" {
+			meta = append(meta, "verified "+oneLine(f.Verified))
+		}
 		meta = append(meta, locationCell(s, f.Location))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
-			title: f.Title, meta: meta, body: f.Body, fix: f.SuggestedFix,
+			title: f.Title, meta: meta, body: f.Body, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,
 		})
 	}
 	fmt.Fprintf(&b, "%s\n", showFooter(s, width, ref, d, readiness))

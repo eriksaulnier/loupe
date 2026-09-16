@@ -68,11 +68,11 @@ Refusal or error (exit 1 or 2):
 
 ## Commands
 
-### `loupe capture <pr-url> [--repo <path>] [--source <name>[@<version>]] [--json]`
+### `loupe capture <pr-url> [--repo <path>] [--source <name>[@<version>]] [--model <id>] [--json]`
 
-Resolves the pull request, verifies the clone (`--repo` or the working directory), fetches base and head into private refs, stores the diff and its SHA-256, creates an empty draft, links the previous round. `--source` names the tool filing the findings; the published footer and `loupe-meta` carry it, and a value outside the `src=` rule in `docs/comment-format.md` is refused with `input`.
+Resolves the pull request, verifies the clone (`--repo` or the working directory), fetches base and head into private refs, stores the diff and its SHA-256, creates an empty draft, links the previous round. `--source` names the tool filing the findings; the published footer and `loupe-meta` carry it, and a value outside the `src=` rule in `docs/comment-format.md` is refused with `input`. `--model` names the model that produced the findings, as the caller identifies it; `loupe-meta` carries it and the footer does not, and a value outside the `model=` rule there is refused with `input` before the clone is touched. Both are optional (spec 008).
 
-Result payload: `target` (as in `target.json`, with `source` when given), `refs` (`base`, `head`), `cleanup` (the two `git update-ref -d` commands), `next` (suggested commands).
+Result payload: `target` (as in `target.json`, with `source` and `model` when given), `refs` (`base`, `head`), `cleanup` (the two `git update-ref -d` commands), `next` (suggested commands).
 
 ### `loupe add [--from <path>|-] [flags] [--by a] [--expect-version n] [--json]`
 
@@ -88,17 +88,20 @@ Input: one finding object or an array of them.
   "blocking": true,
   "confidence": "high",
   "severity": "major",
+  "verified": "reproduced",
+  "impact": "Markdown. A 502 on the first send leaves two reviews on the pull request.",
+  "references": ["https://github.com/o/r/issues/12"],
   "suggestedFix": "Return the original error."
 }
 ```
 
-Exactly one of `location` or `"general": true` is required. `side` defaults to `RIGHT`. `label` is `issue`, `suggestion`, `question` or any other word of letters, digits, `_`, `.` or `-`, kept verbatim. `blocking` defaults to false. `confidence` is `high`, `medium` or `low` when present. Flag equivalents for humans: `--title`, `--body`, `--path`, `--line`, `--start-line`, `--side`, `--general`, `--label`, `--blocking`, `--confidence`, `--severity`, `--suggested-fix`. A batch is stored entirely or not at all; a refusal names `details.entry` (zero-based).
+Exactly one of `location` or `"general": true` is required. `side` defaults to `RIGHT`. `label` is `issue`, `suggestion`, `question` or any other word of letters, digits, `_`, `.` or `-`, kept verbatim. `blocking` defaults to false. `confidence` is `high`, `medium` or `low` when present. `severity` is `critical`, `major`, `minor` or `trivial` when present, and `verified` is `reproduced` or `plausible`. `impact` is Markdown under the same allowlist as `body`. `references` holds at most six `http` or `https` URLs with a host and no userinfo, each at most 200 bytes with no whitespace, control or format characters, `<`, `>` or backticks; an empty list is stored as absent. Flag equivalents for humans: `--title`, `--body`, `--path`, `--line`, `--start-line`, `--side`, `--general`, `--label`, `--blocking`, `--confidence`, `--severity`, `--verified`, `--impact`, `--reference` (repeatable), `--suggested-fix`. A batch is stored entirely or not at all; a refusal names `details.entry` (zero-based).
 
 Result payload: `findings` (array of `{id, rev}`), `version`.
 
 ### `loupe edit <finding-id> [--from <path>|-] [flags] [--include|--exclude] [--by a] [--expect-version n] [--json]`
 
-Input: an object with any subset of the fields above; `null` clears `location`, `label`, `confidence`, `severity` or `suggestedFix`. Setting `location` clears `general` and vice versa. `--exclude` withdraws the finding, `--include` restores it; neither records a human decision. Any publishable change or inclusion change increments `rev` and removes the finding's decision. Flag equivalents: the `add` flags plus `--clear-location`, `--clear-label`, `--clear-confidence`, `--clear-severity`, `--clear-suggested-fix`, `--not-blocking`.
+Input: an object with any subset of the fields above; `null` clears `location`, `label`, `confidence`, `severity`, `verified`, `impact`, `references` or `suggestedFix`, and an empty `references` list clears it too. Setting `location` clears `general` and vice versa. A `severity` is validated only when the edit changes it, so a finding stored with a value outside the enum stays editable. `--exclude` withdraws the finding, `--include` restores it; neither records a human decision. Any publishable change or inclusion change increments `rev` and removes the finding's decision. Flag equivalents: the `add` flags plus `--clear-location`, `--clear-label`, `--clear-confidence`, `--clear-severity`, `--clear-verified`, `--clear-impact`, `--clear-references`, `--clear-suggested-fix`, `--not-blocking`.
 
 Result payload: `finding` (`{id, rev, included}`), `version`, `clearedDecision` (boolean).
 

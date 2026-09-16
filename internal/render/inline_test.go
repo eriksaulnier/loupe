@@ -11,6 +11,7 @@ func inlineInput(mode string) Input {
 	in.Inline = mode
 	in.Findings = []Finding{
 		{ID: "f-010", Title: "Range finding", Body: "Body f-010.", Label: "issue", Blocking: true, Confidence: "high",
+			Severity: "major", Verified: "reproduced", Impact: "Impact f-010.", References: []string{"https://github.com/o/r/issues/1"},
 			Location: &Location{Path: "internal/a.go", Side: "RIGHT", Line: 14, StartLine: 10}, SuggestedFix: "return err"},
 		{ID: "f-002", Title: "Removed guard", Body: "Body f-002.", Label: "suggestion", Blocking: true, Severity: "major",
 			Location: &Location{Path: "internal/b.go", Side: "LEFT", Line: 24}},
@@ -84,7 +85,7 @@ func TestInlineBodyShape(t *testing.T) {
 		}
 	}
 	got := Comments(inlineInput("blocking"))
-	want := "⛔ <b>issue (blocking):</b> Range finding\n\n> `internal/a.go:10–14`\\\n> **Confidence:** high\n\nBody f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```"
+	want := "⛔ <b>issue (blocking):</b> Range finding\n\n> **Confidence:** high\\\n> **Severity:** major\\\n> **Verified:** reproduced\n\nBody f-010.\n\n**Impact**\n\nImpact f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```\n\n**References**\n\n- <https://github.com/o/r/issues/1>"
 	if last := got[len(got)-1]; last.Body != want {
 		t.Fatalf("got\n%s\nwant\n%s", last.Body, want)
 	}

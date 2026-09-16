@@ -37,14 +37,16 @@ Result (--json):
               "viewer": "...", "baseSha": "...", "headSha": "...", "round": 1,
               "capturedAt": "2026-09-13T12:00:00Z", "clonePath": "/path/to/clone",
               "baseRef": "refs/loupe/owner/repo/123/1/base", "headRef": "refs/loupe/owner/repo/123/1/head",
-              "mergeBaseSha": "...", "diffSha256": "...", "source": "my-reviewer@1.0.0"},
+              "mergeBaseSha": "...", "diffSha256": "...", "source": "my-reviewer@1.0.0",
+              "model": "anthropic/claude-sonnet-5"},
    "refs": {"base": "refs/loupe/owner/repo/123/1/base", "head": "refs/loupe/owner/repo/123/1/head"},
    "cleanup": ["git -C /path/to/clone update-ref -d refs/loupe/owner/repo/123/1/base",
                "git -C /path/to/clone update-ref -d refs/loupe/owner/repo/123/1/head"],
    "next": ["loupe add --run owner/repo#123@1 --from <file> --json",
             "loupe summary --run owner/repo#123@1 --from <file> --expect-findings <n> --json",
             "then the human runs: loupe review owner/repo#123@1"]}
-  target.previousRound is present from round 2 on; target.source only when --source was given.`
+  target.previousRound is present from round 2 on; target.source only when --source was given, and target.model only
+  when --model was.`
 
 const prURLFix = "loupe capture https://github.com/<owner>/<repo>/pull/<number>"
 
@@ -61,6 +63,7 @@ func newCaptureCmd(deps Deps) *cobra.Command {
 	}
 	cmd.Flags().String("repo", "", "path to a clone of the pull request's repository (default: the working directory)")
 	cmd.Flags().String("source", "", "the tool filing the findings, as name[@version]; shown in the published review's footer")
+	cmd.Flags().String("model", "", "the model that produces the findings, as you name it, matching "+run.ModelPattern+", at most 64 characters, no --; recorded in the published review's loupe-meta, never required")
 	return cmd
 }
 
@@ -95,6 +98,10 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	canonical := fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, number)
 	source, _ := cmd.Flags().GetString("source")
 	if err := run.ValidateSource(source); err != nil {
+		return err
+	}
+	model, _ := cmd.Flags().GetString("model")
+	if err := run.ValidateModel(model); err != nil {
 		return err
 	}
 	client, err := deps.GitHub()
@@ -218,6 +225,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		MergeBaseSHA: mergeBase,
 		DiffSHA256:   run.DiffSHA256(diffBytes),
 		Source:       source,
+		Model:        model,
 	}
 	if newest > 0 {
 		target.PreviousRound = newest

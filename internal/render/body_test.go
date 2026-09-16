@@ -48,7 +48,10 @@ func exampleInput() Input {
 			{ID: "f-001", Title: "Retry loop can double-publish a review",
 				Body:     "Reproduced against the recorded fixture. The catch re-enters the loop after a request\nthat may already have succeeded, so a 502 produces two reviews.\n",
 				Location: &Location{Path: "internal/publish/publish.go", Side: "RIGHT", Line: 88},
-				Label:    "issue", Blocking: true, Confidence: "high", SuggestedFix: "Return the original write error."},
+				Label:    "issue", Blocking: true, Confidence: "high", Severity: "major", Verified: "reproduced",
+				Impact:       "A 502 on the first send leaves two reviews on the pull request, and the receipt records only one.\n",
+				References:   []string{"https://github.com/o/r/issues/12"},
+				SuggestedFix: "Return the original write error."},
 		},
 	}
 }
@@ -199,6 +202,52 @@ func TestBodyFooterNamesSource(t *testing.T) {
 	body = Body(in)
 	if !strings.Contains(body, "reviewed `d23632e` · via `loupe`\n\n") || !strings.Contains(body, "round=2 src=loupe inline=") {
 		t.Fatalf("unversioned source wrong\n%s", body)
+	}
+}
+
+func TestBodyMetaNamesModel(t *testing.T) {
+	in := exampleInput()
+	in.Model = "anthropic/claude-sonnet-5"
+	body := Body(in)
+	if !strings.Contains(body, "loupe · round 2 · reviewed `d23632e`\n\n") ||
+		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 model=anthropic/claude-sonnet-5 inline=blocking ") {
+		t.Fatalf("model without source wrong\n%s", body)
+	}
+	in.Source = "gadfly-review-pr@2.2.0"
+	body = Body(in)
+	if !strings.Contains(body, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0`\n\n") ||
+		!strings.Contains(body, "round=2 src=gadfly-review-pr@2.2.0 model=anthropic/claude-sonnet-5 inline=") {
+		t.Fatalf("model with source wrong\n%s", body)
+	}
+	in.Unattended, in.Source = true, ""
+	if body = Body(in); !strings.Contains(body, "round=2 unattended=1 model=anthropic/claude-sonnet-5 inline=") {
+		t.Fatalf("model with unattended wrong\n%s", body)
+	}
+}
+
+// Severity, verified, impact and references each render alone, and a legacy free-text severity renders escaped.
+func TestBodyMetaLineParts(t *testing.T) {
+	in := exampleInput()
+	f := Finding{ID: "f-001", Title: "T", Body: "B.", General: true, Label: "issue"}
+	render := func(f Finding) string {
+		in.Findings = []Finding{f}
+		return Body(in)
+	}
+	f.Severity = "minor"
+	if body := render(f); !strings.Contains(body, "\n\n> **Severity:** minor\n\nB.\n\n</details>") {
+		t.Fatalf("severity alone wrong\n%s", body)
+	}
+	f.Severity, f.Verified = "", "plausible"
+	if body := render(f); !strings.Contains(body, "\n\n> **Verified:** plausible\n\nB.") {
+		t.Fatalf("verified alone wrong\n%s", body)
+	}
+	f.Severity, f.Confidence = "P2 <b>", "low"
+	if body := render(f); !strings.Contains(body, "> **Confidence:** low\\\n> **Severity:** `P2 <b>`\\\n> **Verified:** plausible\n") {
+		t.Fatalf("legacy severity wrong\n%s", body)
+	}
+	f = Finding{ID: "f-001", Title: "T", Body: "B.", General: true, Label: "issue", Impact: "Breaks.\n\n", References: []string{"https://github.com/o/r/issues/1", "http://localhost/2?x=1"}}
+	if body := render(f); !strings.Contains(body, "B.\n\n**Impact**\n\nBreaks.\n\n**References**\n\n- <https://github.com/o/r/issues/1>\n- <http://localhost/2?x=1>\n\n</details>") {
+		t.Fatalf("impact and references wrong\n%s", body)
 	}
 }
 

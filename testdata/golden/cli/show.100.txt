@@ -14,11 +14,17 @@ Findings
          advertised names never resolve.
 
 · f-002  ● A packaged gh build reports as "unavailable" rather than as a version
-         pending · blocking · suggestion · confidence low · severity major · src/cli.ts:598
+         pending · blocking · suggestion · confidence low · severity major · verified plausible ·
+         src/cli.ts:598
          The regex requires whitespace or end-of-line immediately after the patch number, so a
          packaged build with a suffix is reported as unavailable.
+         Impact
+         Every packaged build is reported as unavailable, so the version gate never passes on a
+         release machine.
          Suggested fix
          ┃ const m = /^gh version (\d+\.\d+\.\d+)/.exec(line);
+         References
+         https://github.com/cli/cli/issues/1
 
 ✗ f-003  Authority clause quotes a README phrase to satisfy a substring test
          excluded · general

@@ -68,7 +68,13 @@ func (m *Model) refreshDetail() error {
 		doc = append(doc, "")
 	}
 	doc = append(doc, strings.Split(body, "\n")...)
+	impact, err := m.impact(f)
+	if err != nil {
+		return err
+	}
+	doc = append(doc, impact...)
 	doc = append(doc, m.suggestedFix(f)...)
+	doc = append(doc, m.references(f)...)
 	doc = append(doc, m.noteThread(f)...)
 
 	m.body.Width = m.width
@@ -113,6 +119,19 @@ func (m *Model) hanging(lead, text, indent string) []string {
 	return lines
 }
 
+// impact is Markdown by contract, so it is rendered the way the body is, under its own heading.
+func (m *Model) impact(f draft.Finding) ([]string, error) {
+	if f.Impact == "" {
+		return nil, nil
+	}
+	rendered, err := m.renderMarkdown(render.ForDisplay(f.Impact))
+	if err != nil {
+		return nil, err
+	}
+	out := []string{"", " " + m.styles.Head.Render("Impact")}
+	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
+}
+
 // suggestedFix is shown under a gutter rather than as Markdown, so a fix that is not code still reads as a quotation
 // and cannot close a fence.
 func (m *Model) suggestedFix(f draft.Finding) []string {
@@ -122,6 +141,18 @@ func (m *Model) suggestedFix(f draft.Finding) []string {
 	out := []string{"", " " + m.styles.Head.Render(strings.TrimSpace(m.glyphs.Fix+" Suggested fix"))}
 	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), style.Content(m.width)-3, ""), "\n") {
 		out = append(out, " "+m.styles.Dim.Render(m.glyphs.Quote)+" "+line)
+	}
+	return out
+}
+
+// references are one URL per line, each a single token, so a reader can select one without picking up its neighbor.
+func (m *Model) references(f draft.Finding) []string {
+	if len(f.References) == 0 {
+		return nil
+	}
+	out := []string{"", " " + m.styles.Head.Render("References")}
+	for _, ref := range f.References {
+		out = append(out, " "+m.styles.Dim.Render(render.ForDisplay(render.OneLine(ref))))
 	}
 	return out
 }

@@ -142,6 +142,7 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 		d.Findings[0].Body = strings.Repeat("A long paragraph that keeps the body going for a while. ", 40)
 		d.Findings[0].SuggestedFix = "Split the range."
 		d.Findings[0].Blocking, d.Findings[0].Label, d.Findings[0].Confidence, d.Findings[0].Severity = true, "issue", "medium", "major"
+		d.Findings[0].Verified, d.Findings[0].Impact, d.Findings[0].References = "reproduced", "Every wide hunk.", []string{"https://github.com/o/r/issues/1"}
 		n, err := draft.SendBack(d, "f-001", "Why so wide?", testNow)
 		if err != nil {
 			return err
@@ -159,9 +160,10 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	if view := m.View(); !strings.Contains(view, "severity major") {
+	if view := m.View(); !strings.Contains(view, "severity major") || !strings.Contains(view, "verified reproduced") {
 		t.Errorf("the chips are clipped at 60 columns:\n%s", view)
 	}
+
 	anchored := func(view string, n int) bool {
 		return regexp.MustCompile(fmt.Sprintf(`(?m)^\s+%d\s+>\s+\+big line %d\s*$`, n, n)).MatchString(view)
 	}
@@ -177,10 +179,12 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 			m.Update(keys)
 			view := m.View()
 			seen["last anchored line"] = seen["last anchored line"] || anchored(view, 30)
+			seen["impact"] = seen["impact"] || strings.Contains(view, "Every wide hunk.")
 			seen["fix"] = seen["fix"] || strings.Contains(view, "| Split the range.")
+			seen["references"] = seen["references"] || strings.Contains(view, "https://github.com/o/r/issues/1")
 			seen["reply"] = seen["reply"] || strings.Contains(view, "finding is about, so it stays.")
 		}
-		for _, part := range []string{"last anchored line", "fix", "reply"} {
+		for _, part := range []string{"last anchored line", "impact", "fix", "references", "reply"} {
 			if !seen[part] {
 				t.Errorf("%v never reaches the %s:\n%s", keys, part, m.View())
 			}

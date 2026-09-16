@@ -9,7 +9,7 @@ Summary.
 <details>
 <summary>Closes &lt;/summary&gt; &amp; &lt;b&gt;early&lt;/b&gt;</summary>
 
-> severity ```major`` `` second line```
+> **Severity:** ```major`` `` second line```
 
 Body.
 

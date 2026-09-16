@@ -26,6 +26,9 @@ Input (--from <file>, or --from - for stdin): one finding object or an array of 
     "blocking": true,
     "confidence": "high",
     "severity": "major",
+    "verified": "reproduced",
+    "impact": "Markdown. A 502 on the first send leaves two reviews on the pull request.",
+    "references": ["https://github.com/o/r/issues/12"],
     "suggestedFix": "Return the original error."
   }
 
@@ -33,7 +36,11 @@ title and body are required. Exactly one of location or "general": true is requi
 location must be in the captured diff: side RIGHT (the default) is the new file, LEFT the old
 file, and startLine and line must be in the same hunk. label is issue, suggestion, question or
 any other word of letters, digits, _, . or -, at most 40 characters, kept verbatim. blocking
-defaults to false. confidence is high, medium or low. body must pass the Markdown allowlist.
+defaults to false. confidence is high, medium or low; severity is critical, major, minor or
+trivial; verified is reproduced (you ran or observed the failure) or plausible (you reasoned
+to it). body and impact must pass the Markdown allowlist. references holds at most six http or
+https URLs with a host and no userinfo, each at most 200 bytes with no whitespace, control or
+format characters, <, > or backticks; an empty list is stored as absent; they are never fetched.
 A batch is stored entirely or not at all; a refusal names the zero-based details.entry. Input
 MUST NOT carry included, decision, status or findingRev.
 
@@ -43,7 +50,7 @@ Result (--json):
   {"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1", "version": 4,
    "findings": [{"id": "f-001", "rev": 1}]}`
 
-var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "general", "label", "blocking", "confidence", "severity", "suggested-fix"}
+var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix"}
 
 func newAddCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -68,7 +75,10 @@ func newAddCmd(deps Deps) *cobra.Command {
 	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")
 	f.String("confidence", "", "high, medium or low")
-	f.String("severity", "", "free-text severity")
+	f.String("severity", "", "critical, major, minor or trivial")
+	f.String("verified", "", "reproduced or plausible")
+	f.String("impact", "", "Markdown: what goes wrong and under what input")
+	f.StringArray("reference", nil, "an http or https URL the finding rests on; repeatable, at most six")
 	f.String("suggested-fix", "", "prose or code for the correction")
 	addMutationFlags(cmd)
 	return cmd
@@ -177,6 +187,9 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, error) {
 	in.Blocking, _ = f.GetBool("blocking")
 	in.Confidence, _ = f.GetString("confidence")
 	in.Severity, _ = f.GetString("severity")
+	in.Verified, _ = f.GetString("verified")
+	in.Impact, _ = f.GetString("impact")
+	in.References, _ = f.GetStringArray("reference")
 	in.SuggestedFix, _ = f.GetString("suggested-fix")
 	if f.Changed("path") || f.Changed("line") || f.Changed("start-line") || f.Changed("side") {
 		loc := &draft.Location{}

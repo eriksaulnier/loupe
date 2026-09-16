@@ -31,7 +31,7 @@ Run `loupe capture <pr-url> --json` from a clone of the pull request's repositor
 - `target.headSha`, `target.baseRef` and `target.headRef`: the refs the review reads the change at.
 - `target.previousRound`: present from round 2 on.
 
-To name what filed the findings in the published footer, add `--source <name>[@<version>]`, such as `--source my-reviewer@1.0.0`. It is optional.
+To name what filed the findings in the published footer, add `--source <name>[@<version>]`, such as `--source my-reviewer@1.0.0`. To record which model produced them, add `--model <id>` with your own model identifier, such as `--model claude-opus-4-1`, when you know it. loupe checks it against `^[a-z0-9][a-z0-9._/:-]*$`, at most 64 characters and no `--`, so lowercase it and drop any `@` qualifier before passing it. Both are optional. If you do not know your model, omit the flag rather than guess.
 
 If capture refuses with `same-head`, an unpublished round already exists at this head. Follow `error.fix` and continue with that run instead of capturing again.
 
@@ -45,10 +45,11 @@ Run the review now, if it has not run, against `target.headSha`. Then file what 
 
 Write the findings to a JSON file, one object or an array, then run `loupe add --from <file> --run <ref> --json`. Each finding has:
 
-- `title` and `body` (required). `body` is Markdown with the evidence, the impact, and the correction. It MUST pass loupe's Markdown allowlist and MUST NOT exceed 64 KiB.
+- `title` and `body` (required). `body` is Markdown with the evidence and the correction; what goes wrong belongs in `impact`, not repeated here. It MUST pass loupe's Markdown allowlist and MUST NOT exceed 64 KiB.
 - Exactly one of `location` or `"general": true`. `location` is `{"path", "line", "side", "startLine"}`. `side` is `RIGHT` (the new file, the default) or `LEFT` (the old file). `line` MUST be in the captured diff, and `startLine` and `line` MUST be in the same hunk. A `location` refusal lists the nearest valid lines in `error.fix`.
 - Optional `label`: `issue`, `suggestion`, `question`, or any other word of letters, digits, `_`, `.` or `-`, at most 40 characters.
-- Optional `blocking` (default `false`), `confidence` (`high`, `medium` or `low`), `severity` (free text), and `suggestedFix`.
+- Optional `blocking` (default `false`), `confidence` (`high`, `medium` or `low`), `severity` (`critical`, `major`, `minor` or `trivial`), `verified` (`reproduced` when you ran or observed the failure, `plausible` when you reasoned to it), `impact` (Markdown: what goes wrong and under what input, under the same allowlist as `body`), `references` (at most six `http` or `https` URLs you relied on, each at most 200 bytes, never fetched by loupe), and `suggestedFix`.
+- Report `confidence`, `severity` and `verified` only when you mean them. loupe never defaults or infers them, and a reader treats an absent value as "not stated", which is better than a guessed one.
 
 The input MUST NOT carry `included`, `decision`, `status` or `findingRev`. A batch is stored entirely or not at all; a refusal names the failing entry in `error.details.entry`.
 
@@ -77,7 +78,7 @@ Block on `loupe wait --run <ref> --json`. It returns when the human quits review
 
 When the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`; after `loupe wait` returns, read its result instead. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
 
-- To revise a finding, write the changed fields to a file and run `loupe edit <finding-id> --from <file> --run <ref> --json`. An absent key leaves a field unchanged. `null` clears `location`, `label`, `confidence`, `severity` or `suggestedFix`; it is refused for `title`, `body`, `general` and `blocking`. Any change clears the human's decision, so they decide the finding again.
+- To revise a finding, write the changed fields to a file and run `loupe edit <finding-id> --from <file> --run <ref> --json`. An absent key leaves a field unchanged. `null` clears `location`, `label`, `confidence`, `severity`, `verified`, `impact`, `references` or `suggestedFix`, and an empty `references` list clears it too; `null` is refused for `title`, `body`, `general` and `blocking`. Any change clears the human's decision, so they decide the finding again.
 - The human MAY change a finding's `label` or `blocking` in review without sending it back. Leave both out of your edit file unless a note asks you to change them, so you do not undo their call. When you do set either, re-read the finding with `loupe show --run <ref> --json` and pass its `version` as `--expect-version`, so a change they make meanwhile refuses your edit instead of being overwritten.
 - To withdraw a finding, run `loupe edit <finding-id> --exclude --run <ref> --json`.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.

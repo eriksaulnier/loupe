@@ -95,10 +95,19 @@ jobs:
 
       # The only step that needs the clone (spec 007 FR-002). Its `--json` result names the run; every
       # later step passes that reference on through LOUPE_RUN rather than resolving one of its own.
+      # The model is recorded here rather than required by loupe (spec 008 FR-016, FR-017): this
+      # workflow always knows it, so an empty variable is a configuration error and stops the job.
       - name: Capture the pull request
         if: steps.pr.outputs.skip != 'true'
+        env:
+          REVIEW_MODEL: ${{ vars.REVIEW_MODEL }}
         run: |
-          result=$(loupe capture "https://github.com/$REPOSITORY/pull/$PULL_REQUEST" --json)
+          if [ -z "$REVIEW_MODEL" ]; then
+            echo "::error::the REVIEW_MODEL repository variable is empty; set it to the model id the review step uses"
+            exit 1
+          fi
+          result=$(loupe capture "https://github.com/$REPOSITORY/pull/$PULL_REQUEST" \
+            --source loupe-review-action --model "$REVIEW_MODEL" --json)
           {
             echo "LOUPE_RUN=$(echo "$result" | jq -r .run)"
             echo "LOUPE_HEAD_SHA=$(echo "$result" | jq -r .target.headSha)"

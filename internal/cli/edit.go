@@ -18,16 +18,21 @@ Input (--from <file>, or --from - for stdin): an object with any subset of the a
     "title": "Retry loop can double-publish",
     "location": {"path": "src/publish.go", "line": 90},
     "label": null,
+    "references": [],
     "suggestedFix": null
   }
 
-An absent key leaves the field unchanged. null clears location, label, confidence, severity or
-suggestedFix, and is refused for title, body, general and blocking. Setting location clears
+An absent key leaves the field unchanged. null clears location, label, confidence, severity,
+verified, impact, references or suggestedFix, as does an empty references list, and is refused
+for title, body, general and blocking. Setting location clears
 general and "general": true clears location; clearing location makes the finding general.
 New values follow the add rules: location must be in the captured diff, label is issue,
 suggestion, question or any other word of letters, digits, _, . or -, at most 40 characters,
-confidence is high, medium or low, and body must pass the Markdown allowlist. Input MUST NOT
-carry included, decision, status or findingRev.
+confidence is high, medium or low, severity is critical, major, minor or trivial, verified is
+reproduced or plausible, references are at most six http or https URLs, and body and impact
+must pass the Markdown allowlist. A severity is checked only when the edit changes it, so a
+finding stored with an older free-text value stays editable. Input MUST NOT carry included,
+decision, status or findingRev.
 
 --exclude withdraws the finding from the review and --include restores it; neither records a
 human decision. Any change to a published field or to inclusion increments rev and clears the
@@ -48,11 +53,15 @@ var (
 		"clear-label":         {"label"},
 		"clear-confidence":    {"confidence"},
 		"clear-severity":      {"severity"},
+		"clear-verified":      {"verified"},
+		"clear-impact":        {"impact"},
+		"clear-references":    {"reference"},
 		"clear-suggested-fix": {"suggested-fix"},
 		"not-blocking":        {"blocking"},
 	}
 	editContentFlags = append(append([]string{}, addContentFlags...),
-		"clear-location", "clear-label", "clear-confidence", "clear-severity", "clear-suggested-fix", "not-blocking")
+		"clear-location", "clear-label", "clear-confidence", "clear-severity", "clear-verified", "clear-impact", "clear-references",
+		"clear-suggested-fix", "not-blocking")
 )
 
 const editUsage = "loupe edit <finding-id> [--from <path>|-] [flags] [--include|--exclude]"
@@ -80,12 +89,18 @@ func newEditCmd(deps Deps) *cobra.Command {
 	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")
 	f.String("confidence", "", "high, medium or low")
-	f.String("severity", "", "free-text severity")
+	f.String("severity", "", "critical, major, minor or trivial")
+	f.String("verified", "", "reproduced or plausible")
+	f.String("impact", "", "Markdown: what goes wrong and under what input")
+	f.StringArray("reference", nil, "an http or https URL the finding rests on; repeatable, replaces the list")
 	f.String("suggested-fix", "", "prose or code for the correction")
 	f.Bool("clear-location", false, "remove the location, making the finding general")
 	f.Bool("clear-label", false, "remove the label")
 	f.Bool("clear-confidence", false, "remove the confidence")
 	f.Bool("clear-severity", false, "remove the severity")
+	f.Bool("clear-verified", false, "remove the verified mark")
+	f.Bool("clear-impact", false, "remove the impact")
+	f.Bool("clear-references", false, "remove every reference")
 	f.Bool("clear-suggested-fix", false, "remove the suggested fix")
 	f.Bool("not-blocking", false, "the finding does not block approval")
 	f.Bool("exclude", false, "withdraw the finding from the review")
@@ -163,7 +178,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 
 // editFields is comparable so an empty edit can be detected; each field is raw JSON as in draft.EditInput.
 type editFields struct {
-	title, body, location, general, label, blocking, confidence, severity, suggestedFix string
+	title, body, location, general, label, blocking, confidence, severity, verified, impact, references, suggestedFix string
 }
 
 func (e editFields) input() draft.EditInput {
@@ -174,7 +189,8 @@ func (e editFields) input() draft.EditInput {
 		return json.RawMessage(s)
 	}
 	return draft.EditInput{Title: raw(e.title), Body: raw(e.body), Location: raw(e.location), General: raw(e.general), Label: raw(e.label),
-		Blocking: raw(e.blocking), Confidence: raw(e.confidence), Severity: raw(e.severity), SuggestedFix: raw(e.suggestedFix)}
+		Blocking: raw(e.blocking), Confidence: raw(e.confidence), Severity: raw(e.severity), Verified: raw(e.verified), Impact: raw(e.impact),
+		References: raw(e.references), SuggestedFix: raw(e.suggestedFix)}
 }
 
 func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
@@ -187,7 +203,7 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 		}
 		return editFields{title: string(in.Title), body: string(in.Body), location: string(in.Location), general: string(in.General),
 			label: string(in.Label), blocking: string(in.Blocking), confidence: string(in.Confidence), severity: string(in.Severity),
-			suggestedFix: string(in.SuggestedFix)}, nil
+			verified: string(in.Verified), impact: string(in.Impact), references: string(in.References), suggestedFix: string(in.SuggestedFix)}, nil
 	}
 
 	var out editFields
@@ -211,6 +227,9 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 	set(&out.label, "label", str("label"))
 	set(&out.confidence, "confidence", str("confidence"))
 	set(&out.severity, "severity", str("severity"))
+	set(&out.verified, "verified", str("verified"))
+	set(&out.impact, "impact", str("impact"))
+	set(&out.references, "reference", func() (any, error) { return f.GetStringArray("reference") })
 	set(&out.suggestedFix, "suggested-fix", str("suggested-fix"))
 	set(&out.general, "general", func() (any, error) { return f.GetBool("general") })
 	set(&out.blocking, "blocking", func() (any, error) { return f.GetBool("blocking") })
@@ -231,7 +250,8 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 		return editFields{}, fmt.Errorf("encode edit flags: %w", err)
 	}
 	clears := map[string]*string{"clear-location": &out.location, "clear-label": &out.label, "clear-confidence": &out.confidence,
-		"clear-severity": &out.severity, "clear-suggested-fix": &out.suggestedFix}
+		"clear-severity": &out.severity, "clear-verified": &out.verified, "clear-impact": &out.impact, "clear-references": &out.references,
+		"clear-suggested-fix": &out.suggestedFix}
 	for flag, dst := range clears {
 		if v, _ := f.GetBool(flag); v {
 			*dst = "null"

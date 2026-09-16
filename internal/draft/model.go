@@ -57,9 +57,15 @@ type Finding struct {
 	Label    string `json:"label,omitempty"`
 	Blocking bool   `json:"blocking"`
 	// Confidence is high, medium or low when present.
-	Confidence   string `json:"confidence,omitempty"`
-	Severity     string `json:"severity,omitempty"`
-	SuggestedFix string `json:"suggestedFix,omitempty"`
+	Confidence string `json:"confidence,omitempty"`
+	// Severity is critical, major, minor or trivial when set through add or edit. A run captured before that rule may
+	// hold free text, which still renders and is refused only once an edit changes it.
+	Severity string `json:"severity,omitempty"`
+	// Verified is reproduced or plausible when present.
+	Verified     string   `json:"verified,omitempty"`
+	Impact       string   `json:"impact,omitempty"`
+	References   []string `json:"references,omitempty"`
+	SuggestedFix string   `json:"suggestedFix,omitempty"`
 	// By is ByAgent or ByHuman; audit only, it does not affect readiness.
 	By string `json:"by"`
 	// Included is never settable from JSON input; only edit --exclude and --include change it.

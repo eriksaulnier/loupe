@@ -124,6 +124,39 @@ func TestBuildCarriesSource(t *testing.T) {
 	}
 }
 
+func TestBuildCarriesModel(t *testing.T) {
+	target := fixtureTarget()
+	target.Model = "anthropic/claude-sonnet-5"
+	env, err := Build(target, 1, readyDraft(), "reviewer", "comment", "none", false)
+	if err != nil || strings.Contains(env.Body, "claude-sonnet-5`") || !strings.Contains(env.Body, " model=anthropic/claude-sonnet-5 ") {
+		t.Fatalf("model not rendered: %v\n%s", err, env.Body)
+	}
+}
+
+func TestBuildCarriesFindingFields(t *testing.T) {
+	d := readyDraft()
+	f := &d.Findings[0]
+	f.Severity, f.Verified, f.Impact, f.References = "major", "plausible", "Breaks.", []string{"https://github.com/o/r/issues/1"}
+	env, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"**Severity:** major\\\n> **Verified:** plausible", "**Impact**\n\nBreaks.", "**References**\n\n- <https://github.com/o/r/issues/1>"} {
+		if !strings.Contains(env.Body, want) {
+			t.Fatalf("missing %q in\n%s", want, env.Body)
+		}
+	}
+	f.Impact = "one<br>two"
+	if _, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none", false); err == nil {
+		t.Fatal("impact failing the allowlist was composed")
+	}
+	f.Impact, f.References = "", []string{"https://github.com/o/r/</details>"}
+	_, err = Build(fixtureTarget(), 1, d, "reviewer", "comment", "none", false)
+	if r, ok := refusal.As(err); !ok || r.Fix != "loupe edit "+f.ID+" --from -" {
+		t.Fatalf("a reference that could close the disclosure: got %v, want a refusal whose fix names the finding", err)
+	}
+}
+
 func TestBuildRefusesBodyOverLimit(t *testing.T) {
 	d := readyDraft()
 	long := strings.Repeat(strings.Repeat("a", 99)+"\n", 600)

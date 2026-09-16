@@ -50,8 +50,9 @@ Only a clean exit records: `q`, Ctrl-C in the full-screen program, and `q` or en
 | `mergeBaseSha` | string | `git merge-base baseRef headRef`, the commit `pr.diff` compares the head against |
 | `diffSha256` | string | hex SHA-256 of `pr.diff`; every load of `pr.diff` compares it and refuses `record` on a mismatch (ruled 2026-09-13) |
 | `source` | string, optional | `--source` at capture, `name[@version]`, shown in the published footer and `loupe-meta`; omitted when none, so runs captured before it load unchanged |
+| `model` | string, optional | `--model` at capture, the reviewer's model id as the caller names it, carried in `loupe-meta` only; omitted when none (spec 008) |
 
-Validation: capture refuses (`same-head`) when the newest existing round has the same `headSha` and no receipt. `previousRound` is lineage; the previous published findings are found by walking rounds downward from `round - 1` to the first with a receipt. Capture refuses (`input`) a `source` outside the `src=` rule in `docs/comment-format.md`, and loading a `target.json` that carries one refuses `record`.
+Validation: capture refuses (`same-head`) when the newest existing round has the same `headSha` and no receipt. `previousRound` is lineage; the previous published findings are found by walking rounds downward from `round - 1` to the first with a receipt. Capture refuses (`input`) a `source` outside the `src=` rule in `docs/comment-format.md` or a `model` outside the `model=` rule there, and loading a `target.json` that carries either refuses `record`.
 
 ## Draft
 
@@ -82,7 +83,10 @@ draft:    { schema: 1, version, summary, findings[], decisions{}, notes[], repli
 | `label` | string, optional | yes | `issue`, `suggestion`, `question` or any other word of letters, digits, `_`, `.` or `-` (at most 40 characters) kept verbatim; empty means none |
 | `blocking` | bool | yes | default false |
 | `confidence` | string, optional | yes | `high`, `medium` or `low` when present |
-| `severity` | string, optional | yes | arbitrary text, collapsed to one line at render |
+| `severity` | string, optional | yes | `critical`, `major`, `minor` or `trivial` when set or changed (spec 008); a stored value outside that set still loads and renders |
+| `verified` | string, optional | yes | `reproduced` or `plausible` when present (spec 008) |
+| `impact` | string, optional | yes | Markdown, allowlist-checked like `body` (spec 008) |
+| `references` | string[], optional | yes | at most six `http` or `https` URLs, each at most 200 bytes, no whitespace, control or format characters, `<`, `>` or backticks; empty stored as absent (spec 008) |
 | `suggestedFix` | string, optional | yes | prose or code; never a GitHub suggestion fence |
 | `by` | string | | `agent` or `human`; audit only, does not affect readiness |
 | `included` | bool | | true on add; `edit --exclude` sets false (withdraw), `edit --include` sets true (restore); never settable from JSON input |
