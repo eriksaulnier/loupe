@@ -15,6 +15,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/gitx"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -108,9 +109,13 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if pr.State != "open" {
 		return refusal.New(refusal.PR, fmt.Sprintf("pull request %s/%s#%d is %s, not open", owner, repo, number, pr.State), prURLFix)
 	}
-	viewer, err := client.Viewer(ctx)
-	if err != nil {
-		return githubReadRefusal(err, canonical)
+	// An installation token gets 403 on GET /user, so an empty viewer is what marks the run as pipeline-captured.
+	var viewer string
+	if client.TokenKind() != github.Installation {
+		viewer, err = client.Viewer(ctx)
+		if err != nil {
+			return githubReadRefusal(err, canonical)
+		}
 	}
 
 	root, err := run.DataRoot(deps.Getenv)

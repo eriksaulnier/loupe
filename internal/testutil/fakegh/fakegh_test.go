@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"testing"
 
@@ -72,6 +73,25 @@ func TestPullRequestLookups(t *testing.T) {
 	}
 	if s.CreateCount() != 0 {
 		t.Fatalf("create count %d", s.CreateCount())
+	}
+}
+
+func TestDenyUserForbids(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	s.SetPR("o", "r", samplePR())
+	s.DenyUser()
+	s.SetViewer("github-actions[bot]")
+
+	_, err := c.Viewer(ctx)
+	var he *github.HTTPError
+	if !errors.As(err, &he) || he.Status != http.StatusForbidden || he.Message != "Resource not accessible by integration" {
+		t.Fatalf("got %v", err)
+	}
+
+	review, err := c.CreateReview(ctx, "o", "r", 3, github.ReviewRequest{CommitID: "h1", Event: "COMMENT"})
+	if err != nil || review.User != "github-actions[bot]" {
+		t.Fatalf("got %+v, %v", review, err)
 	}
 }
 

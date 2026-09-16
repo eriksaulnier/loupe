@@ -14,6 +14,7 @@ const (
 	PR         Code = "pr"
 	SameHead   Code = "same-head"
 	Auth       Code = "auth"
+	Token      Code = "token"
 	Input      Code = "input"
 	Location   Code = "location"
 	Markdown   Code = "markdown"

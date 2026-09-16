@@ -27,10 +27,11 @@ const (
 	limitFix     = "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -"
 )
 
-// Build composes the review from the accepted findings only. It rechecks the allowlist because the draft file may
-// have been edited by hand since the content was filed. round is the published round the body shows; the envelope
-// keeps the capture round, which receipts and run references are keyed by.
-func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline string) (Envelope, error) {
+// Build composes the review from the accepted findings, or, when unattended, the whole publishable set: nothing
+// accepts a finding in a pipeline. It rechecks the allowlist because the draft file may have been edited by hand
+// since the content was filed. round is the published round the body shows; the envelope keeps the capture round,
+// which receipts and run references are keyed by.
+func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline string, unattended bool) (Envelope, error) {
 	event, ok := events[action]
 	if !ok {
 		return Envelope{}, fmt.Errorf("unknown review action %q", action)
@@ -38,9 +39,15 @@ func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline 
 	if !slices.Contains(InlineModes, inline) {
 		return Envelope{}, fmt.Errorf("unknown inline mode %q", inline)
 	}
-	included := accepted(d)
-	if !sameIDs(included, draft.PublishableSet(d)) {
-		return Envelope{}, refusal.New(refusal.NotReady, "the findings to publish are not all accepted", "loupe review")
+	var included []draft.Finding
+	if unattended {
+		included = draft.PublishableSet(d)
+		slices.SortFunc(included, func(a, b draft.Finding) int { return findingid.Compare(a.ID, b.ID) })
+	} else {
+		included = accepted(d)
+		if !sameIDs(included, draft.PublishableSet(d)) {
+			return Envelope{}, refusal.New(refusal.NotReady, "the findings to publish are not all accepted", "loupe review")
+		}
 	}
 	if err := markdown.Check(d.Summary, markdown.Summary, "loupe summary --from -"); err != nil {
 		return Envelope{}, err
@@ -65,7 +72,7 @@ func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline 
 		Findings:      []EnvelopeFinding{},
 	}
 	in := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: round, HeadSHA: target.HeadSHA,
-		Inline: inline, Summary: d.Summary, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source}
+		Inline: inline, Summary: d.Summary, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source, Unattended: unattended}
 	for _, f := range included {
 		rf := render.Finding{ID: f.ID, Title: f.Title, Body: f.Body, General: f.General, Label: f.Label, Blocking: f.Blocking,
 			Confidence: f.Confidence, Severity: f.Severity, SuggestedFix: f.SuggestedFix}

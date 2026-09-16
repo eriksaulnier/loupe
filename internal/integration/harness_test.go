@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -159,6 +161,51 @@ func (h *harness) mustRefuse(code string, args ...string) map[string]any {
 		h.t.Fatalf("exit %d envelope %v, want refusal %s", exit, env, code)
 	}
 	return errObj
+}
+
+// UseInstallationToken points the harness at a client holding a ghs_-prefixed token, as CI would present, and makes
+// the fake's /user answer 403 as GitHub does for one.
+func (h *harness) UseInstallationToken() {
+	h.t.Helper()
+	h.GH.DenyUser()
+	h.UseToken("ghs_installation-token")
+}
+
+// UseToken points the harness at a client built with token, still pointed at the fake, so a token-kind test does not
+// need its own transport. An empty token reproduces the no-token refusal NewREST gives a real caller.
+func (h *harness) UseToken(token string) {
+	h.t.Helper()
+	target, err := url.Parse(h.GH.URL)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	c, err := github.NewRESTWithToken(tokenRewrite{target: target}, token)
+	if err != nil {
+		h.client, h.GitHubErr = nil, err
+		return
+	}
+	h.client, h.GitHubErr = c, nil
+}
+
+type tokenRewrite struct{ target *url.URL }
+
+func (rt tokenRewrite) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.URL.Scheme = rt.target.Scheme
+	req.URL.Host = rt.target.Host
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// Restore copies the data root elsewhere and points WorkDir at a directory with no Git repository, so a later
+// command sees only the data root, as FR-003 requires.
+func (h *harness) Restore(t *testing.T) {
+	t.Helper()
+	restored := filepath.Join(t.TempDir(), "restored-home")
+	if err := os.CopyFS(restored, os.DirFS(h.Home)); err != nil {
+		t.Fatal(err)
+	}
+	h.Home = restored
+	h.WorkDir = t.TempDir()
 }
 
 func (h *harness) RunDir(round int) string {

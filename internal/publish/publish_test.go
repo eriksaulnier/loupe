@@ -416,7 +416,7 @@ func TestRunRefusesRecordAppearedDuringConfirmation(t *testing.T) {
 	for _, name := range []string{"receipt.json", "attempt.json"} {
 		t.Run(name, func(t *testing.T) {
 			fx := newRun(t, readyDraft())
-			env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all")
+			env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all", false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -505,6 +505,75 @@ func TestRunPublishesOnceThenReplays(t *testing.T) {
 	}
 	if len(fx.gh.Requests()) != requests || len(fx.previews) != 1 {
 		t.Fatalf("replay contacted GitHub or confirmed: %d requests, %d previews", len(fx.gh.Requests())-requests, len(fx.previews))
+	}
+	fx.check(1)
+}
+
+// newUnattendedRun is newRun for the unattended path: an installation-token client, no terminal, and a Confirm that
+// fails the test if it is ever called.
+func newUnattendedRun(t *testing.T, d *draft.Draft) *fixture {
+	t.Helper()
+	fx := newRun(t, d)
+	fx.opts.IsTerminal = false
+	fx.opts.Unattended = true
+	// An installation-captured run.
+	fx.opts.Target.Viewer = ""
+	client, err := fx.opts.GitHub()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+	fx.opts.Confirm = func(Preview) (bool, error) {
+		t.Fatal("Confirm must not be called when unattended")
+		return false, nil
+	}
+	return fx
+}
+
+func TestRunUnattendedSendsWithoutConfirmViewerOrRecheckThenReplays(t *testing.T) {
+	d := readyDraft()
+	delete(d.Decisions, "f-002")
+	fx := newUnattendedRun(t, d)
+	receipt, replayed, err := Run(context.Background(), fx.opts)
+	if err != nil || replayed {
+		t.Fatalf("replayed %v err %v", replayed, err)
+	}
+	fx.check(1)
+	if len(fx.previews) != 0 {
+		t.Fatalf("Confirm must not be called, previews %d", len(fx.previews))
+	}
+	var post *fakegh.Request
+	for _, r := range fx.gh.Requests() {
+		if r.Path == "/user" {
+			t.Fatalf("Viewer must not be called: %+v", r)
+		}
+		if r.Method == "POST" {
+			p := r
+			post = &p
+		}
+	}
+	if post == nil {
+		t.Fatal("no review request sent")
+	}
+	body, _ := post.Body.(map[string]any)
+	if body["event"] != "COMMENT" {
+		t.Fatalf("event %v, want COMMENT", body["event"])
+	}
+	if !strings.Contains(fmt.Sprint(body["body"]), "f-002") {
+		t.Fatalf("pending finding f-002 must be in the body: %v", body["body"])
+	}
+	saved, found, err := LoadReceipt(fx.dir)
+	if err != nil || !found || !reflect.DeepEqual(saved, receipt) {
+		t.Fatalf("receipt %+v found %v err %v", saved, found, err)
+	}
+
+	requests := len(fx.gh.Requests())
+	again, replayed, err := Run(context.Background(), fx.opts)
+	if err != nil || !replayed || !reflect.DeepEqual(again, receipt) {
+		t.Fatalf("replay %+v replayed %v err %v", again, replayed, err)
+	}
+	if len(fx.gh.Requests()) != requests {
+		t.Fatalf("replay contacted GitHub")
 	}
 	fx.check(1)
 }
@@ -658,7 +727,7 @@ func TestRunHoldsSignalsFromAttemptToOutcome(t *testing.T) {
 // saveMarkedAttempt stores an attempt in state for the ready draft, and returns it.
 func (fx *fixture) saveMarkedAttempt(state string) Attempt {
 	fx.t.Helper()
-	env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all")
+	env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all", false)
 	if err != nil {
 		fx.t.Fatal(err)
 	}
@@ -717,7 +786,7 @@ func TestRunNoMatchMarksInFlightUnknown(t *testing.T) {
 func TestRunRetryUnknownRefusesWhenRecordsChangeDuringConfirmation(t *testing.T) {
 	changes := map[string]func(fx *fixture){
 		"receipt appeared": func(fx *fixture) {
-			env, _ := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all")
+			env, _ := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all", false)
 			if err := SaveReceipt(fx.dir, Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env}); err != nil {
 				fx.t.Error(err)
 			}
@@ -815,4 +884,43 @@ func TestRunRetryUnknownRecheckListFailureKeepsAttempt(t *testing.T) {
 		t.Fatal("receipt written")
 	}
 	fx.check(0)
+}
+
+// An installation token refuses with the code and fix that name --unattended, whether or not a terminal is there.
+// Without this the terminal check answers first and sends a CI caller to a terminal it does not have.
+func TestRunRefusesInstallationTokenAheadOfTheTerminal(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.IsTerminal = false
+	_, client := newFake(t)
+	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Token, "--unattended")
+	fx.check(0)
+}
+
+// The terminal check still answers first when there is no client to ask about the token.
+func TestRunRefusesTTYWhenNoClientCanBeBuilt(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.IsTerminal = false
+	fx.opts.GitHub = func() (github.Client, error) { return nil, errors.New("no GitHub token found") }
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.TTY)
+}
+
+// Constitution 2.0.0 II holds an unattended review to COMMENT. The CLI refuses the other actions as usage, and the
+// package refuses them too, so no caller can send an approval nobody read.
+func TestRunRefusesUnattendedActionOtherThanComment(t *testing.T) {
+	for _, action := range []string{"approve", "request-changes"} {
+		t.Run(action, func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			fx.opts.IsTerminal = false
+			fx.opts.Unattended = true
+			fx.opts.Action = action
+			_, client := newFake(t)
+			fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+			_, err := fx.run()
+			wantRefusal(t, err, refusal.Usage, "--action comment")
+			fx.check(0)
+		})
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,6 +61,24 @@ func TestReceiptRoundTrip(t *testing.T) {
 	}
 	r := Receipt{Schema: RecordSchema, ReviewID: 7, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-7",
 		Action: "comment", PostedAt: time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC), Envelope: sampleEnvelope()}
+	if err := SaveReceipt(dir, r); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := LoadReceipt(dir)
+	if err != nil || !found || !reflect.DeepEqual(got, r) {
+		t.Fatalf("loaded %+v found %v err %v", got, found, err)
+	}
+}
+
+func TestReceiptAuthorRoundTripsAndIsOmittedWhenEmpty(t *testing.T) {
+	data := mustJSON(t, Receipt{Schema: RecordSchema, Envelope: sampleEnvelope()})
+	if strings.Contains(data, `"author"`) {
+		t.Fatalf("author must be omitted when empty: %s", data)
+	}
+
+	dir := t.TempDir()
+	r := Receipt{Schema: RecordSchema, ReviewID: 7, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-7",
+		Action: "comment", PostedAt: time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC), Envelope: sampleEnvelope(), Author: "github-actions[bot]"}
 	if err := SaveReceipt(dir, r); err != nil {
 		t.Fatal(err)
 	}

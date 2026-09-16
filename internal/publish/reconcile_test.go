@@ -27,6 +27,13 @@ func markedBody(digest, publication string) string {
 	return "Looks fine.\n\nloupe · round 1\n\n<!-- loupe digest=" + digest + " publication=" + publication + " -->\n<!-- loupe-meta v=1 -->"
 }
 
+// unattendedAttempt is unknownAttempt with no recorded viewer, as an unattended publish leaves it.
+func unattendedAttempt() Attempt {
+	a := unknownAttempt()
+	a.Envelope.Viewer = ""
+	return a
+}
+
 func TestMatch(t *testing.T) {
 	good := github.Review{ID: 7, User: "reviewer", CommitID: headSHA, State: "COMMENTED", Body: markedBody(testDigest, testPublication),
 		HTMLURL: prLink + "#pullrequestreview-7"}
@@ -70,6 +77,22 @@ func TestMatch(t *testing.T) {
 	}
 }
 
+func TestMatchUnattendedByBotAuthorSuffix(t *testing.T) {
+	attempt := unattendedAttempt()
+	bot := github.Review{ID: 7, User: "github-actions[bot]", CommitID: headSHA, State: "COMMENTED",
+		Body: markedBody(testDigest, testPublication), HTMLURL: prLink + "#pullrequestreview-7"}
+	got, ok := Match([]github.Review{bot}, attempt)
+	if !ok || got.ID != 7 {
+		t.Fatalf("match %v review %+v, want the bot author to match", ok, got)
+	}
+
+	notBot := bot
+	notBot.User = "someone"
+	if _, ok := Match([]github.Review{notBot}, attempt); ok {
+		t.Fatal("a non-bot login must not match an unattended attempt's marker")
+	}
+}
+
 func TestReconcileBuildsReceiptFromEnvelope(t *testing.T) {
 	gh, client := newFake(t)
 	gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "PENDING",
@@ -88,7 +111,7 @@ func TestReconcileBuildsReceiptFromEnvelope(t *testing.T) {
 		t.Fatalf("receipt %+v err %v", receipt, err)
 	}
 	want := Receipt{Schema: RecordSchema, ReviewID: 1002, ReviewURL: prLink + "#pullrequestreview-1002", Action: "comment",
-		PostedAt: fixtureNow, Envelope: attempt.Envelope}
+		PostedAt: fixtureNow, Envelope: attempt.Envelope, Author: "reviewer"}
 	if !reflect.DeepEqual(*receipt, want) {
 		t.Fatalf("receipt %+v, want %+v", *receipt, want)
 	}

@@ -202,6 +202,25 @@ func TestBodyFooterNamesSource(t *testing.T) {
 	}
 }
 
+func TestBodyUnattendedMarker(t *testing.T) {
+	in := exampleInput()
+	in.Unattended = true
+	body := Body(in)
+	if !strings.Contains(body, "loupe · round 2 · unattended · reviewed `d23632e`") {
+		t.Fatalf("unattended footer wrong\n%s", body)
+	}
+	if !strings.Contains(body, "<!-- loupe-meta v=1 round=2 unattended=1 inline=") {
+		t.Fatalf("unattended meta wrong\n%s", body)
+	}
+
+	in.Source = "gadfly-review-pr@2.2.0"
+	body = Body(in)
+	if !strings.Contains(body, "loupe · round 2 · unattended · reviewed `d23632e` · via `gadfly-review-pr 2.2.0`") ||
+		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 unattended=1 src=gadfly-review-pr@2.2.0 inline=") {
+		t.Fatalf("unattended with source wrong\n%s", body)
+	}
+}
+
 func TestBodyDividersFollowBlankLine(t *testing.T) {
 	for _, in := range []Input{mixedInput(), exampleInput()} {
 		lines := strings.Split(Body(in), "\n")

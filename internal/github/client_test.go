@@ -247,6 +247,29 @@ func TestTransportErrorIsNotHTTPError(t *testing.T) {
 	}
 }
 
+func TestTokenKind(t *testing.T) {
+	cases := []struct {
+		token string
+		want  TokenKind
+	}{
+		{"ghs_abc", Installation},
+		{"ghu_abc", User},
+		{"gho_abc", User},
+		{"ghp_abc", User},
+		{"github_pat_abc", User},
+		{"abc", User},
+	}
+	for _, tc := range cases {
+		c, err := NewRESTWithToken(http.DefaultTransport, tc.token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := c.TokenKind(); got != tc.want {
+			t.Errorf("token %q: got %v, want %v", tc.token, got, tc.want)
+		}
+	}
+}
+
 func TestEmptyTokenRefuses(t *testing.T) {
 	_, err := NewRESTWithToken(http.DefaultTransport, "")
 	r, ok := refusal.As(err)

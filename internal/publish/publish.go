@@ -30,6 +30,8 @@ type Options struct {
 	IsTerminal bool
 	Action     string
 	Inline     string
+	// Unattended publishes with no terminal, no confirmation and no viewer, from an App installation token.
+	Unattended bool
 	// RetryUnknown sends again when an attempt's outcome is unknown and no review matches it.
 	RetryUnknown bool
 	// Confirm shows the preview and reports whether the human pressed y. It runs with no lock held.
@@ -57,6 +59,12 @@ type Preview struct {
 // lock is released through the gates and the confirmation so agent commands are not blocked while the human reads;
 // after y it is retaken and everything that could have changed is rechecked.
 func Run(ctx context.Context, opts Options) (receipt Receipt, replayed bool, err error) {
+	// Constitution 2.0.0 II: a review nobody read may only comment. The CLI refuses the other actions before it gets
+	// here; this keeps the rule beside the code that sends, for any caller.
+	if opts.Unattended && opts.Action != "comment" {
+		return Receipt{}, false, refusal.New(refusal.Usage,
+			fmt.Sprintf("--unattended publishes as comment, not %s", opts.Action), "--action comment")
+	}
 	receipt, replay, retryID, err := firstCheck(ctx, opts)
 	if err != nil || replay {
 		return receipt, replay && err == nil, err
@@ -66,35 +74,50 @@ func Run(ctx context.Context, opts Options) (receipt Receipt, replayed bool, err
 
 // retryID is the publicationId of the unknown attempt being retried, or empty.
 func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, bool, error) {
-	// Checked again in Gates; here it keeps a draft or credential problem from hiding that the command is human-only.
-	if !opts.IsTerminal {
+	// The token decides which command the caller wanted, so it is read before the terminal rule: a pipeline holding an
+	// installation token is told to add --unattended rather than to find a terminal it does not have. Both checks run
+	// again in Gates; here they keep a draft problem from hiding either one.
+	client, clientErr := opts.GitHub()
+	if clientErr == nil {
+		if err := tokenRefusal(client.TokenKind(), opts.Unattended); err != nil {
+			return Receipt{}, false, err
+		}
+	}
+	if !opts.Unattended && !opts.IsTerminal {
 		return Receipt{}, false, ttyRefusal()
+	}
+	if clientErr != nil {
+		return Receipt{}, false, clientErr
 	}
 	d, err := draft.Load(opts.Dir)
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	client, err := opts.GitHub()
+	moved, err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d, Unattended: opts.Unattended})
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	moved, err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d})
-	if err != nil {
-		return Receipt{}, false, err
-	}
-	viewer, err := client.Viewer(ctx)
-	if err != nil {
-		return Receipt{}, false, err
+	var viewer string
+	if !opts.Unattended {
+		viewer, err = client.Viewer(ctx)
+		if err != nil {
+			return Receipt{}, false, err
+		}
 	}
 	root, err := run.DataRoot(opts.Getenv)
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	round, err := publishedRound(root, opts.Target)
+	round := 0
+	if opts.Unattended {
+		round, err = unattendedRound(ctx, client, opts.Target)
+	} else {
+		round, err = publishedRound(root, opts.Target)
+	}
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	env, err := Build(opts.Target, round, d, viewer, opts.Action, opts.Inline)
+	env, err := Build(opts.Target, round, d, viewer, opts.Action, opts.Inline, opts.Unattended)
 	if err != nil {
 		return Receipt{}, false, err
 	}
@@ -104,6 +127,10 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	}
 	preview := Preview{Body: env.Body, Comments: env.Comments, EnvelopeJSON: string(envJSON), Version: d.Version, Digest: env.Digest,
 		Dispositions: draft.Dispositions(d), HeadMoved: moved}
+
+	if opts.Unattended {
+		return send(ctx, opts, client, env, preview, retryID)
+	}
 
 	confirmed, err := opts.Confirm(preview)
 	if err != nil {
@@ -253,7 +280,8 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	if d.Version != preview.Version || draft.Digest(d) != preview.Digest || !draft.ReadinessOf(d).Ready {
+	// Unattended never required readiness, so a pending finding or open note here is not a change to refuse for.
+	if d.Version != preview.Version || draft.Digest(d) != preview.Digest || (!opts.Unattended && !draft.ReadinessOf(d).Ready) {
 		return Receipt{}, false, refusal.New(refusal.Changed,
 			fmt.Sprintf("the draft changed while the review was being confirmed (confirmed version %d, now %d); nothing was sent", preview.Version, d.Version),
 			"loupe review, then loupe publish again")
@@ -287,7 +315,7 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	r, isRefusal := refusal.As(sendErr)
 	switch {
 	case sendErr == nil:
-		receipt = Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: env.Action, PostedAt: opts.Now(), Envelope: env}
+		receipt = Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: env.Action, PostedAt: opts.Now(), Envelope: env, Author: review.User}
 		if err := SaveReceipt(opts.Dir, receipt); err != nil {
 			return Receipt{}, false, receiptLost(opts, attempt, review, err)
 		}

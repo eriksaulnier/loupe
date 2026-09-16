@@ -17,7 +17,8 @@ import (
 const publishHelp = `Publish the run's review: exactly one GitHub review, sent only after the human confirms it.
 
 This command is human-only. An agent MUST NOT run it, pipe a confirmation into it, or allocate a
-pseudo-terminal to reach it; it tells the human to run loupe publish.
+pseudo-terminal to reach it; it tells the human to run loupe publish. --unattended is the one
+exception, for a CI step holding a GitHub App installation token, and it is described at the end.
 
 Only accepted findings are published. Receipt replay and unknown-attempt recovery (below) run first,
 with or without a terminal. Then, before anything is shown, publish refuses, in this order:
@@ -55,6 +56,15 @@ review and asks Publish this review? [y/N] on one line instead.
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.
 
+--unattended publishes with no terminal, no confirmation and no viewer recheck, for a pipeline
+holding a GitHub App installation token; loupe refuses with token when the resolved token is not
+one, and refuses an installation token without the flag. It publishes the publishable set, accepted
+and pending alike, and skips the tty, own-pr and not-ready refusals above; head-moved, empty,
+replay and recovery still apply. --action defaults to comment and MUST NOT be set to anything else;
+--plain does not apply, since nothing is shown. The run MUST be named by <ref> or LOUPE_RUN; the
+current branch's pull request is never used. The review is posted by the App, numbered from the
+pull request's own bot reviews, and marked unattended in its footer and loupe-meta.
+
 Result (--json), alone on stdout while the confirmation draws on stderr:
   {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1", "reviewId": 123,
    "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true}
@@ -77,13 +87,24 @@ func newPublishCmd(deps Deps) *cobra.Command {
 	cmd.Flags().String("inline", "blocking", "located findings that also become inline comments: none, blocking or all")
 	cmd.Flags().Bool("retry-unknown", false, "send again after an unknown outcome that matches no review on the pull request")
 	cmd.Flags().Bool("plain", false, "confirm on one line instead of the full-screen view")
+	cmd.Flags().Bool("unattended", false, "publish with no terminal, confirmation or viewer recheck, from a GitHub App installation token")
 	return cmd
 }
 
 func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	action, _ := cmd.Flags().GetString("action")
 	inline, _ := cmd.Flags().GetString("inline")
-	if !slices.Contains(publish.Actions, action) {
+	plain, _ := cmd.Flags().GetBool("plain")
+	unattended, _ := cmd.Flags().GetBool("unattended")
+	if unattended {
+		if action != "" && action != "comment" {
+			return refusal.New(refusal.Usage, fmt.Sprintf("--unattended only publishes as comment, got --action %q", action), publishUsage)
+		}
+		if plain {
+			return refusal.New(refusal.Usage, "--unattended shows no confirmation, so --plain does not apply", publishUsage)
+		}
+		action = "comment"
+	} else if !slices.Contains(publish.Actions, action) {
 		message := fmt.Sprintf("--action must be one of %s", strings.Join(publish.Actions, ", "))
 		if action == "" {
 			message = "--action is required"
@@ -99,6 +120,9 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	if len(args) == 1 {
 		positional = args[0]
 	}
+	if unattended && positional == "" && deps.Getenv("LOUPE_RUN") == "" {
+		return refusal.New(refusal.Usage, "loupe publish --unattended needs a run: pass <ref> or set LOUPE_RUN", publishUsage)
+	}
 	dir, ref, err := resolveRun(cmd, deps, positional)
 	if err != nil {
 		return err
@@ -107,12 +131,11 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
-	plain, _ := cmd.Flags().GetBool("plain")
 	retryUnknown, _ := cmd.Flags().GetBool("retry-unknown")
 	jsonMode := wantJSON(cmd)
 	ui := interactiveOutput(deps, jsonMode)
 	receipt, replayed, err := publish.Run(cmd.Context(), publish.Options{
-		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, RetryUnknown: retryUnknown,
+		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, Unattended: unattended, RetryUnknown: retryUnknown,
 		Confirm: func(preview publish.Preview) (bool, error) {
 			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
 			width, height := terminalSize(deps)

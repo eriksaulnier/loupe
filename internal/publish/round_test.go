@@ -1,10 +1,15 @@
 package publish
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
+	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -46,5 +51,46 @@ func TestPublishedRoundOfOnlyRoundIsOne(t *testing.T) {
 	got, err := publishedRound(root, fixtureTarget())
 	if err != nil || got != 1 {
 		t.Fatalf("publishedRound = %d, %v; want 1", got, err)
+	}
+}
+
+func metaMarker(round int) string {
+	return render.MetaPrefix + "v=1 round=" + strconv.Itoa(round) + " unattended=1 -->"
+}
+
+func TestUnattendedRoundCountsBotLoupeReviews(t *testing.T) {
+	gh, client := newFake(t)
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "github-actions[bot]", CommitID: headSHA, State: "COMMENTED",
+		Body: "loupe · round 1 · unattended · reviewed `x`\n\n<!-- loupe digest=d publication=p -->\n" + metaMarker(1) + "\n"})
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED",
+		Body: "loupe · round 1 · reviewed `x`\n\n" + metaMarker(1) + "\n"})
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "some-bot[bot]", CommitID: headSHA, State: "COMMENTED", Body: "not a loupe review"})
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "github-actions[bot]", CommitID: headSHA, State: "PENDING", Body: metaMarker(2)})
+
+	got, err := unattendedRound(context.Background(), client, fixtureTarget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 2 {
+		t.Fatalf("unattendedRound = %d, want 2 (a human review and a pending bot review must not count)", got)
+	}
+}
+
+func TestUnattendedRoundOfNoBotReviewsIsOne(t *testing.T) {
+	gh, client := newFake(t)
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED", Body: metaMarker(1)})
+	got, err := unattendedRound(context.Background(), client, fixtureTarget())
+	if err != nil || got != 1 {
+		t.Fatalf("unattendedRound = %d, %v; want 1", got, err)
+	}
+}
+
+func TestUnattendedRoundRefusesOnListFailure(t *testing.T) {
+	gh, client := newFake(t)
+	gh.Fail("GET", "/repos/acme/widgets/pulls/42/reviews", 502)
+	_, err := unattendedRound(context.Background(), client, fixtureTarget())
+	wantRefusal(t, err, refusal.GitHub, prLink)
+	if n := gh.CreateCount(); n != 0 {
+		t.Fatalf("create count %d, nothing must be sent", n)
 	}
 }

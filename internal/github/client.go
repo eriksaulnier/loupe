@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cli/go-gh/v2/pkg/api"
@@ -29,7 +30,16 @@ type Client interface {
 	ListReviews(ctx context.Context, owner, repo string, number int) ([]Review, error)
 	CreateReview(ctx context.Context, owner, repo string, number int, req ReviewRequest) (Review, error)
 	Compare(ctx context.Context, owner, repo, base, head string) (Comparison, error)
+	TokenKind() TokenKind
 }
+
+// TokenKind tells an App installation token, which posts as the App, from every token that acts as a person.
+type TokenKind string
+
+const (
+	Installation TokenKind = "installation"
+	User         TokenKind = "user"
+)
 
 // Comparison is what head adds to base. Status is GitHub's: ahead only when base is an ancestor of head.
 type Comparison struct {
@@ -108,6 +118,7 @@ func (e *HTTPError) Definite() bool {
 
 type REST struct {
 	client *api.RESTClient
+	kind   TokenKind
 }
 
 // defaultTimeout bounds each request so a stalled connection cannot hang a command that has no ctx deadline.
@@ -132,7 +143,19 @@ func newREST(transport http.RoundTripper, token string, timeout time.Duration) (
 	if err != nil {
 		return nil, fmt.Errorf("create GitHub client: %w", err)
 	}
-	return &REST{client: client}, nil
+	return &REST{client: client, kind: tokenKind(token)}, nil
+}
+
+// tokenKind reads only the prefix: ghs_ is an App installation token, everything else acts as a person.
+func tokenKind(token string) TokenKind {
+	if strings.HasPrefix(token, "ghs_") {
+		return Installation
+	}
+	return User
+}
+
+func (c *REST) TokenKind() TokenKind {
+	return c.kind
 }
 
 type wireUser struct {

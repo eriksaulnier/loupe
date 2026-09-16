@@ -55,6 +55,8 @@ func (f failingGitHub) PullRequest(context.Context, string, string, int) (github
 
 func (f failingGitHub) Viewer(context.Context) (string, error) { return "reviewer", f.viewerErr }
 
+func (f failingGitHub) TokenKind() github.TokenKind { return github.User }
+
 func TestCaptureGitHubReadFailures(t *testing.T) {
 	cases := []struct {
 		name             string

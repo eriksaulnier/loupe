@@ -19,13 +19,21 @@ type GateInput struct {
 	Target     run.Target
 	Action     string
 	Draft      *draft.Draft
+	// Unattended skips the gates a pipeline has no human or terminal for: tty, own-pr, the confirmation and readiness.
+	Unattended bool
 }
 
-// Gates refuses in a fixed order so the human always fixes the most fundamental problem first. The terminal check
-// comes before any GitHub call. A head that only moved forward is not refused; what it gained is returned for the
-// confirmation to show.
+// Gates refuses in a fixed order so the human always fixes the most fundamental problem first. The token gate comes
+// before any GitHub call, since it needs none. A head that only moved forward is not refused; what it gained is
+// returned for the confirmation to show.
 func Gates(ctx context.Context, in GateInput) (*HeadMoved, error) {
-	if !in.IsTerminal {
+	if err := tokenRefusal(in.GitHub.TokenKind(), in.Unattended); err != nil {
+		return nil, err
+	}
+	if err := tokenKindMismatch(in.Target.Viewer, in.GitHub.TokenKind()); err != nil {
+		return nil, err
+	}
+	if !in.Unattended && !in.IsTerminal {
 		return nil, ttyRefusal()
 	}
 	pr, err := in.GitHub.PullRequest(ctx, in.Target.Owner, in.Target.Repo, in.Target.Number)
@@ -36,18 +44,48 @@ func Gates(ctx context.Context, in GateInput) (*HeadMoved, error) {
 	if err != nil {
 		return nil, err
 	}
-	viewer, err := in.GitHub.Viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if err := ActionRefusal(in.Action, viewer, pr.Author, in.Draft); err != nil {
-		return nil, err
+	if !in.Unattended {
+		viewer, err := in.GitHub.Viewer(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := ActionRefusal(in.Action, viewer, pr.Author, in.Draft); err != nil {
+			return nil, err
+		}
 	}
 	if strings.TrimSpace(in.Draft.Summary) == "" && len(included(in.Draft)) == 0 {
 		return nil, refusal.New(refusal.Empty, "the draft has no summary and no included findings; there is nothing to publish",
 			"file findings with loupe add or write a summary with loupe summary")
 	}
+	if in.Unattended {
+		return moved, nil
+	}
 	return moved, ReadinessRefusal(in.Draft)
+}
+
+// tokenRefusal is FR-009 and FR-010: --unattended needs an App installation token, and an installation token can only
+// publish unattended, since it posts as the App rather than a person.
+func tokenRefusal(kind github.TokenKind, unattended bool) error {
+	if unattended && kind != github.Installation {
+		return refusal.New(refusal.Token, "loupe publish --unattended needs a GitHub App installation token",
+			"set GITHUB_TOKEN to an installation token with permissions: pull-requests: write")
+	}
+	if !unattended && kind == github.Installation {
+		return refusal.New(refusal.Token, "an installation token can only publish with --unattended, since it posts as the App",
+			"add --unattended")
+	}
+	return nil
+}
+
+// tokenKindMismatch is FR-020: capture recorded an empty viewer for an installation token and a login for a user
+// token, so publish compares that record against the token it resolved rather than trust a caller's flag alone.
+func tokenKindMismatch(viewer string, kind github.TokenKind) error {
+	if (viewer == "") == (kind == github.Installation) {
+		return nil
+	}
+	return refusal.New(refusal.Viewer,
+		"this run was captured with a different kind of token than the one publish resolved now",
+		"capture and publish with the same token kind")
 }
 
 // HeadMoved is what the pull request gained since capture, for the confirmation to show before a review is sent at

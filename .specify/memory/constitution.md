@@ -1,6 +1,6 @@
 # loupe Constitution
 
-loupe gives any shell-capable agent a standard way to file pull-request review findings into a local draft, gives the human a terminal interface to decide each finding, and posts exactly one human-confirmed GitHub review. These principles govern every specification, plan and task in this repository.
+loupe gives any shell-capable agent a standard way to file pull-request review findings into a local draft, gives the human a terminal interface to decide each finding, and posts exactly one GitHub review per publication: confirmed by the human, or posted by a GitHub App and marked unattended. These principles govern every specification, plan and task in this repository.
 
 ## Core Principles
 
@@ -8,9 +8,9 @@ loupe gives any shell-capable agent a standard way to file pull-request review f
 
 loupe MUST NOT invoke, prompt, supervise, sandbox or authenticate a reviewer. Any agent with a shell is a first-class user, and every workflow MUST be completable from `loupe --help` alone. Host integrations (the plugin for Claude Code, Codex and Pi) MAY package instructions and commands, but MUST NOT add code paths that only one host can reach.
 
-### II. Nothing posts on its own, and nothing posts unread
+### II. Nothing posts unread under a human's name
 
-Every finding that reaches GitHub MUST have been individually accepted by the human, and the review as a whole MUST have been confirmed by the human in one interactive command that sends exactly one GitHub request. Agents are forbidden from publishing by contract, and the CLI MUST refuse publication without an interactive terminal. Per-finding sign-off is the product, not a safety rail: designs that let a human approve a batch without seeing each item are out of scope.
+Every finding that reaches GitHub under a human's identity MUST have been individually accepted by that human, and the review as a whole MUST have been confirmed by the human in one interactive command that sends exactly one GitHub request. That command MUST refuse without an interactive terminal. An unattended publication MAY skip the terminal and the per-finding decisions only when it authenticates with a GitHub App installation token. It MUST post as that App, MUST send a COMMENT review, and MUST mark the review as unattended, so a review no one read never approves or blocks a merge and never reads as a person's. Agents working in a human's session are forbidden from publishing by contract. Per-finding sign-off is the product, not a safety rail: designs that let a human approve a batch without seeing each item are out of scope.
 
 ### III. Local files, no service
 
@@ -50,4 +50,4 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 This constitution supersedes every other practice in the repository. An amendment MUST state what changed and why, bump the version below (MAJOR for a removed or redefined principle, MINOR for a new principle or section, PATCH for wording), and update the specification and plan when a principle they rely on changes. Plans MUST include a Constitution Check and justify each violation in Complexity Tracking.
 
-**Version**: 1.0.1 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-15
+**Version**: 2.0.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-15

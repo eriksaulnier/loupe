@@ -92,6 +92,8 @@ type Receipt struct {
 	Action    string    `json:"action"`
 	PostedAt  time.Time `json:"postedAt"`
 	Envelope  Envelope  `json:"envelope"`
+	// Author is the login GitHub returned for the review, recorded because an unattended envelope's Viewer is empty.
+	Author string `json:"author,omitempty"`
 }
 
 // LoadAttempt reports found false only when attempt.json does not exist; a damaged file is a record refusal.

@@ -43,6 +43,7 @@ Refusal or error (exit 1 or 2):
 | `pr` | Pull request not found, closed, or not on github.com | the capture syntax for an open pull request |
 | `same-head` | The newest round is unpublished and at the pull request's current head | `--run <ref>` for that round |
 | `auth` | GitHub authentication missing | `gh auth login --hostname github.com` |
+| `token` | `--unattended` with a user token; publish without `--unattended` with an installation token | `GITHUB_TOKEN` with `permissions: pull-requests: write`; for the second, `--unattended` |
 | `input` | JSON input malformed, unknown field, wrong shape, or a forbidden field | the field and the `--help` for the shape |
 | `location` | Path or line not in the stored diff, or a range spans hunks | nearest valid lines |
 | `markdown` | Body or summary fails the allowlist | the code (`limit`, `fence`, `html`, `depth`), line, and `loupe edit <id> --from -` or `loupe summary --from -` |
@@ -58,7 +59,7 @@ Refusal or error (exit 1 or 2):
 | `empty` | Draft has no summary and an empty publishable set | `loupe add` / `loupe summary` |
 | `attempt` | Unknown attempt not reconciled | inspect the pull request URL, then `--retry-unknown` |
 | `changed` | The draft's version, content or readiness changed while publish was confirming | `loupe review`, then `loupe publish` again |
-| `viewer` | The GitHub login changed between showing the confirmation and sending | `loupe publish` again to confirm as the current login |
+| `viewer` | The GitHub login changed between showing the confirmation and sending; or the token's kind at publish differs from the kind capture recorded | `loupe publish` again to confirm as the current login; for the kind mismatch, capture and publish with the same token kind |
 | `timeout` | `wait --timeout` elapsed with no note handed back and no receipt | `loupe wait` again |
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
@@ -143,9 +144,11 @@ All runs, newest capture first, as an array under `runs`: `ref`, `url`, `title`,
 
 Refuses with `tty` before reading the draft when stdin or stdout is not a terminal, or under `--json` when stderr, where the interface then draws, is not. Opens the review interface described in research.md. `--plain` forces line mode.
 
-### `loupe publish [<ref>] --action comment|approve|request-changes [--inline none|blocking|all] [--retry-unknown] [--plain]` (human only)
+### `loupe publish [<ref>] --action comment|approve|request-changes [--inline none|blocking|all] [--retry-unknown] [--plain] [--unattended]` (human only, except `--unattended`)
 
 Runs the publication state machine in research.md. After a receipt replay or reconciliation, refuses with `tty` before reading the draft or GitHub credentials, with the same terminal rule as `review`. `--inline` defaults to `blocking`. When the head only gained commits since capture, the confirmation shows them and the findings on files they changed, and the review is sent at the captured head; there is no flag for this. Prints the review URL on success and on receipt replay.
+
+`--unattended` publishes without a terminal, a confirmation or per-finding decisions, for a CI pipeline rather than a human (specs/007-unattended-publish). It requires a GitHub App installation token and refuses `token` for any other kind; publish without it refuses `token` for an installation token. It selects the run from `<ref>` or `LOUPE_RUN` only, and refuses `usage` rather than falling back to the current branch's pull request. `--action` defaults to `comment`, and any other action, or `--plain`, is a `usage` error. It composes from the publishable set rather than the accepted findings, skips the `tty`, `own-pr` and `not-ready` refusals, keeps `head-moved`, `empty`, replay and reconciliation, numbers the review from the pull request's bot reviews, and marks it unattended in the footer and `loupe-meta` per `docs/comment-format.md`.
 
 ## Environment
 

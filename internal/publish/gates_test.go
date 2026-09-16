@@ -20,6 +20,14 @@ func newFake(t *testing.T) (*fakegh.Server, github.Client) {
 	return gh, gh.Client(t)
 }
 
+// tokenKindClient overrides TokenKind on a real fake client, since fakegh always builds a user-kind token.
+type tokenKindClient struct {
+	github.Client
+	kind github.TokenKind
+}
+
+func (c tokenKindClient) TokenKind() github.TokenKind { return c.kind }
+
 // assertOnlyCreateWrites fails if the fake received any write other than review creation.
 func assertOnlyCreateWrites(t *testing.T, gh *fakegh.Server) {
 	t.Helper()
@@ -145,6 +153,60 @@ func TestGatesBlockingCountsPendingFindings(t *testing.T) {
 	if err := gateErr(context.Background(), GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "approve", Draft: d}); err != nil {
 		t.Fatalf("excluded blocking finding: %v", err)
 	}
+}
+
+func TestGatesRefusesTokenBeforeAnyCall(t *testing.T) {
+	gh, client := newFake(t)
+	in := GateInput{Unattended: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
+	wantRefusal(t, gateErr(context.Background(), in), refusal.Token, "GITHUB_TOKEN", "permissions: pull-requests: write")
+	if n := len(gh.Requests()); n != 0 {
+		t.Fatalf("token gate contacted GitHub %d times", n)
+	}
+}
+
+func TestGatesRefusesInstallationTokenWhenAttended(t *testing.T) {
+	_, real := newFake(t)
+	client := tokenKindClient{Client: real, kind: github.Installation}
+	in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
+	wantRefusal(t, gateErr(context.Background(), in), refusal.Token, "--unattended")
+}
+
+func TestGatesUnattendedSkipsTTYOwnPRAndReadinessButKeepsHeadMovedAndEmpty(t *testing.T) {
+	gh, real := newFake(t)
+	client := tokenKindClient{Client: real, kind: github.Installation}
+	// The viewer and the pending finding would refuse as own-pr and not-ready if those gates still ran.
+	gh.SetViewer("author")
+	d := readyDraft()
+	delete(d.Decisions, "f-002")
+	target := fixtureTarget()
+	// An installation-captured run.
+	target.Viewer = ""
+	in := GateInput{Unattended: true, IsTerminal: false, GitHub: client, Target: target, Action: "comment", Draft: d}
+	if err := gateErr(context.Background(), in); err != nil {
+		t.Fatalf("unattended gates: %v", err)
+	}
+
+	gh.SetHead("acme", "widgets", 42, "3333333333333333333333333333333333333333")
+	wantRefusal(t, gateErr(context.Background(), in), refusal.HeadMoved, "loupe capture "+prLink)
+	gh.SetHead("acme", "widgets", 42, headSHA)
+
+	in.Draft = draft.NewEmpty()
+	wantRefusal(t, gateErr(context.Background(), in), refusal.Empty, "loupe add", "loupe summary")
+}
+
+func TestGatesRefusesTokenKindDifferentFromCapture(t *testing.T) {
+	// newFake's client is user-kind, and fixtureTarget's Viewer is the login a user token captured with.
+	_, real := newFake(t)
+	installation := tokenKindClient{Client: real, kind: github.Installation}
+
+	userCaptured := fixtureTarget()
+	wantRefusal(t, gateErr(context.Background(), GateInput{Unattended: true, GitHub: installation, Target: userCaptured, Action: "comment", Draft: readyDraft()}),
+		refusal.Viewer, "capture and publish with the same token kind")
+
+	installationCaptured := fixtureTarget()
+	installationCaptured.Viewer = ""
+	wantRefusal(t, gateErr(context.Background(), GateInput{IsTerminal: true, GitHub: real, Target: installationCaptured, Action: "comment", Draft: readyDraft()}),
+		refusal.Viewer, "capture and publish with the same token kind")
 }
 
 func TestActionRefusal(t *testing.T) {

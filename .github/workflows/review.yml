@@ -1,0 +1,233 @@
+name: review
+
+# Committed with `workflow_dispatch` only, per spec 007 FR-028: the maintainer names a pull request by hand.
+# Adding `pull_request` (types `opened`, `ready_for_review`) is a separate change, made only after a
+# maintainer has judged a live run on a pull request they named.
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number to review
+        required: true
+        type: number
+
+# The reviewing job and the publishing job are split so that the agent never holds a token that can
+# write to the pull request: the action embeds the token it is given into the workspace's .git/config
+# before it starts Claude, and a review is exactly the place untrusted text is read. Publish needs no
+# clone (spec 007 FR-003), so the data root travels between them as an artifact.
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # Kill switch: flip the LOUPE_AUTO_REVIEW repository variable to "true" to let this job run at all.
+    if: vars.LOUPE_AUTO_REVIEW == 'true'
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.pr.outputs.skip }}
+    env:
+      # Set in the first step rather than here: the runner context is not available to a job's env.
+      LOUPE_HOME: ""
+      GITHUB_TOKEN: ${{ github.token }}
+      PULL_REQUEST: ${{ inputs.pull_request }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Check pull request eligibility
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "LOUPE_HOME=$RUNNER_TEMP/loupe-home" >> "$GITHUB_ENV"
+          pr_json=$(gh api "repos/$REPOSITORY/pulls/$PULL_REQUEST")
+          draft=$(echo "$pr_json" | jq -r .draft)
+          head_repo=$(echo "$pr_json" | jq -r .head.repo.full_name)
+          head_ref=$(echo "$pr_json" | jq -r .head.ref)
+          author=$(echo "$pr_json" | jq -r .user.login)
+          skip=false
+          [ "$draft" = "true" ] && skip=true
+          [ "$head_repo" != "$REPOSITORY" ] && skip=true
+          case "$head_ref" in release-please--*) skip=true ;; esac
+          [ "$author" = "dependabot[bot]" ] && skip=true
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
+      # main at the workspace root, which is the base the reviewing action expects to run in, and the
+      # only source loupe's own binary is built from: a pull request cannot change the code that holds
+      # the write token.
+      - name: Check out main
+        if: steps.pr.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          # Pinned, because a dispatch can name any branch, and without this the binary holding the
+          # write token would be built from whichever one was chosen.
+          ref: main
+          # Capture fetches the pull request's head and base into this clone and asks for their merge
+          # base, which a shallow clone cannot answer.
+          fetch-depth: 0
+
+      - name: Set up Go
+        if: steps.pr.outputs.skip != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build loupe from main
+        if: steps.pr.outputs.skip != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/loupe-bin"
+          go build -o "$RUNNER_TEMP/loupe-bin/loupe" ./cmd/loupe
+          echo "$RUNNER_TEMP/loupe-bin" >> "$GITHUB_PATH"
+
+      # The only step that needs the clone (spec 007 FR-002). Its `--json` result names the run; every
+      # later step passes that reference on through LOUPE_RUN rather than resolving one of its own.
+      - name: Capture the pull request
+        if: steps.pr.outputs.skip != 'true'
+        run: |
+          result=$(loupe capture "https://github.com/$REPOSITORY/pull/$PULL_REQUEST" --json)
+          echo "LOUPE_RUN=$(echo "$result" | jq -r .run)" >> "$GITHUB_ENV"
+          echo "LOUPE_HEAD_SHA=$(echo "$result" | jq -r .target.headSha)" >> "$GITHUB_ENV"
+          echo "LOUPE_ROUND=$(echo "$result" | jq -r .target.round)" >> "$GITHUB_ENV"
+
+      # review/ is the pull request: its files at the captured head, with symlinks dropped so no file
+      # tool can follow one out of it, and a copy of the captured diff. `loupe show` does not expose
+      # the diff and the agent has no git, so without this copy it could read the code but not tell
+      # what changed. The workspace around it stays main, which is what the action runs in.
+      - name: Lay out the review directory
+        if: steps.pr.outputs.skip != 'true'
+        run: |
+          mkdir -p review/head
+          git archive "$LOUPE_HEAD_SHA" | tar -x -C review/head
+          find review/head -type l -delete
+          # Reaches into loupe's on-disk run layout, which the CLI contract does not promise. A loupe
+          # command that hands back the captured diff would replace this.
+          cp "$LOUPE_HOME/runs/$REPOSITORY/$PULL_REQUEST/$LOUPE_ROUND/pr.diff" review/pr.diff
+
+      # Claude Code, routed through OpenRouter's Anthropic-compatible endpoint. `--allowedTools` is the
+      # only way this step can run `loupe` at all: the action grants no Bash access by default, and a
+      # command outside the list is refused rather than asked about. It allows exactly what spec 007
+      # FR-033 does; a blanket `Bash(*)` denial would outrank those allow rules and take the six with it.
+      - name: Review the pull request
+        if: steps.pr.outputs.skip != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          # Without this the action finds no token and asks for an OIDC one instead, which this job
+          # has no id-token permission for, so it fails before the reviewer starts.
+          github_token: ${{ github.token }}
+          anthropic_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          claude_args: |
+            --model ${{ vars.LOUPE_REVIEW_MODEL }}
+            --add-dir review
+            --allowedTools "Bash(loupe --help),Bash(loupe capture --help),Bash(loupe add --help),Bash(loupe add:*),Bash(loupe edit --help),Bash(loupe edit:*),Bash(loupe summary --help),Bash(loupe summary:*),Bash(loupe wait --help),Bash(loupe handoff --help),Bash(loupe reply --help),Bash(loupe feedback --help),Bash(loupe show --help),Bash(loupe show:*),Bash(loupe list --help),Bash(loupe review --help),Bash(loupe publish --help)"
+          prompt: |
+            Run `loupe --help` first; every subcommand's `--help` shows its JSON input and result shapes.
+
+            You are running in a checkout of this repository's `main` branch. That is NOT what you
+            are reviewing; it is only what the `loupe` binary was built from. The pull request is in
+            `review/`: `review/head/` holds its files at the commit loupe captured, and
+            `review/pr.diff` is the diff you are reviewing. Read those, not the files around you.
+
+            File findings with `loupe add`. A finding whose location is not in `pr.diff` is refused with
+            the nearest valid lines; correct it or file it as `general`. Set a summary with
+            `loupe summary`, even when you have no findings to report.
+
+            Do not run `loupe publish`, `loupe review`, `loupe capture`, `loupe wait`, `loupe handoff`,
+            `loupe feedback`, `loupe reply` or `loupe list`, and do not run git or any other shell
+            command; only `loupe --help`, a subcommand's `--help`, `loupe add`, `loupe edit`,
+            `loupe summary` and `loupe show` are available to you.
+        env:
+          ANTHROPIC_BASE_URL: https://openrouter.ai/api
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
+
+      # The draft the agent filed, handed to the job that may publish it.
+      - name: Upload the data root
+        if: always() && steps.pr.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: loupe-home-${{ inputs.pull_request }}
+          path: ${{ env.LOUPE_HOME }}
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  # The only job holding a token that can write to the pull request. No agent runs here, and the
+  # pull request's own content never reaches this workspace: it publishes a draft loupe already
+  # composed, and the body it sends passes the Markdown allowlist before anything is sent.
+  publish:
+    needs: review
+    if: needs.review.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      LOUPE_HOME: ""
+      GITHUB_TOKEN: ${{ github.token }}
+      PULL_REQUEST: ${{ inputs.pull_request }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build loupe from main
+        run: |
+          mkdir -p "$RUNNER_TEMP/loupe-bin"
+          go build -o "$RUNNER_TEMP/loupe-bin/loupe" ./cmd/loupe
+          echo "$RUNNER_TEMP/loupe-bin" >> "$GITHUB_PATH"
+          echo "LOUPE_HOME=$RUNNER_TEMP/loupe-home" >> "$GITHUB_ENV"
+
+      # Restored rather than re-captured: the run keeps its attempts and receipts, so a receipt
+      # replays and an unknown attempt reconciles instead of posting the review a second time.
+      #
+      # This job's own state comes first. A re-run that started from the reviewing job's snapshot
+      # would hold neither attempt.json nor receipt.json, so it would mint a new publication id and
+      # could post the review GitHub already has.
+      - name: Restore this job's publication state
+        id: published
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: loupe-home-published-${{ inputs.pull_request }}
+          path: ${{ env.LOUPE_HOME }}
+
+      - name: Refuse a retry that cannot recover its publication state
+        if: steps.published.outcome != 'success' && github.run_attempt != 1
+        run: |
+          echo "attempt $GITHUB_RUN_ATTEMPT found no loupe-home-published-$PULL_REQUEST artifact." >&2
+          echo "An earlier attempt may have posted a review this one cannot see; publishing now could post it twice." >&2
+          echo "Check the pull request, then publish by hand from the artifact." >&2
+          exit 1
+
+      - name: Restore the captured draft
+        if: steps.published.outcome != 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: loupe-home-${{ inputs.pull_request }}
+          path: ${{ env.LOUPE_HOME }}
+
+      # The run is named rather than resolved: this checkout is main, not the pull request's branch,
+      # and --unattended refuses to guess from a branch for exactly that reason.
+      - name: Publish unattended
+        env:
+          LOUPE_RUN: ${{ github.repository }}#${{ inputs.pull_request }}
+        run: loupe publish --unattended --json
+
+      # The run directory is the only evidence of a publication once the runner is gone, so it is
+      # kept whether the publish step succeeded, refused or failed. Overwritten rather than kept per
+      # attempt, so the step above always finds the newest state under one name.
+      - name: Upload the published data root
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: loupe-home-published-${{ inputs.pull_request }}
+          path: ${{ env.LOUPE_HOME }}
+          include-hidden-files: true
+          if-no-files-found: ignore

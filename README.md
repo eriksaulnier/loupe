@@ -83,6 +83,16 @@ loupe builds the pane's command from the run it resolves, so the rule lets an ag
 
 [`contracts/cli.md`](specs/001-loupe-v1/contracts/cli.md#environment) has the exact rules and refusals for the `LOUPE_` variables.
 
+## Unattended publish
+
+A pipeline reviews a pull request with no human and no terminal: capture, file, publish. Capture is the only step that needs the Git clone.
+
+1. `loupe capture <pr-url> --json` creates the run and prints its reference as `run`. Pass that reference to the later steps, either as `--run <ref>` or by exporting it as `LOUPE_RUN`; unattended publish will not fall back to the pull request of a branch, since a pipeline's checkout is usually not sitting on it.
+2. Something files findings and a summary through the input any agent uses: one `loupe add` object or array, stored entirely or not at all, and one `loupe summary`, set even when there is nothing to report. A finding whose location is not in the captured diff is refused with the nearest valid lines. loupe ships no adapter that turns a reviewer's output into this shape; a pipeline supplies its own, and this feature names no particular review action.
+3. `loupe publish --unattended --json` posts exactly one comment review, with no confirmation and no terminal, once the resolved token is a GitHub App installation token: the `ghs_` prefix, which is what Actions' own `GITHUB_TOKEN` carries. The token needs `permissions: pull-requests: write`; a user token here refuses with `token`. Restoring the data root at a different path, even on a different machine, replays a receipt or reconciles an unknown attempt, so a pipeline that persists `LOUPE_HOME` between steps can retry safely.
+
+`.github/workflows/review.yml` is a worked example: it builds loupe from `main`, captures a pull request named by hand, runs an agent over the captured head and diff, and publishes unattended.
+
 ## Try it without a pull request
 
 In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub, so the interface and the whole publish flow, `y` included, can be tried end to end. Nothing leaves the machine. `mise run demo -- <loupe args>` runs any other command: `acme/widgets#42` is mid-review, `#43` is ready to publish, and `#44` is ready with a moved head.

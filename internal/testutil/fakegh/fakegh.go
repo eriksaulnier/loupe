@@ -70,19 +70,20 @@ type compareKey struct {
 type Server struct {
 	URL string
 
-	mu          sync.Mutex
-	prs         map[prKey]github.PullRequest
-	branches    map[prKey]string
-	headOwners  map[prKey]string
-	failures    map[string]int
-	reviews     map[prKey][]github.Review
-	comparisons map[compareKey]github.Comparison
-	viewer      string
-	outcomes    []Outcome
-	requests    []Request
-	createCount int
-	nextID      int64
-	onCreate    func(*http.Request)
+	mu            sync.Mutex
+	prs           map[prKey]github.PullRequest
+	branches      map[prKey]string
+	headOwners    map[prKey]string
+	failures      map[string]int
+	reviews       map[prKey][]github.Review
+	comparisons   map[compareKey]github.Comparison
+	viewer        string
+	userForbidden bool
+	outcomes      []Outcome
+	requests      []Request
+	createCount   int
+	nextID        int64
+	onCreate      func(*http.Request)
 }
 
 func New(t *testing.T) *Server {
@@ -213,6 +214,14 @@ func (s *Server) SetViewer(login string) {
 	s.viewer = login
 }
 
+// DenyUser makes GET /user answer 403, as GitHub does for an App installation token. The created review's author
+// still follows SetViewer.
+func (s *Server) DenyUser() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.userForbidden = true
+}
+
 // AddReview stores a review as if it already existed; a zero ID and empty HTMLURL are assigned.
 func (s *Server) AddReview(owner, repo string, number int, review github.Review) {
 	s.mu.Lock()
@@ -322,6 +331,10 @@ func (s *Server) listPullRequests(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getUser(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.userForbidden {
+		writeJSON(w, http.StatusForbidden, map[string]any{"message": "Resource not accessible by integration"})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"login": s.viewer})
 }
 

@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
 const threeFindings = `[
@@ -310,6 +312,302 @@ func TestPublishJSONPrintsOneObject(t *testing.T) {
 	}
 	if sent["sent"] != true || sent["reviewUrl"] != replay["reviewUrl"] || fmt.Sprint(sent["reviewId"]) != fmt.Sprint(replay["reviewId"]) || sent["replayed"] != nil {
 		t.Fatalf("sent %v, replay %v", sent, replay)
+	}
+}
+
+func TestPublishUnattendedEndToEnd(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture("--source", "gadfly-review-pr@2.2.0")
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
+	h.IsTerminal = false
+
+	stdout, stderr, exit := h.Run("publish", runRef, "--unattended", "--json")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
+	}
+	h.checkSends(1)
+
+	var post map[string]any
+	for _, r := range h.GH.Requests() {
+		if r.Method == "POST" {
+			post, _ = r.Body.(map[string]any)
+		}
+	}
+	body, _ := post["body"].(string)
+	if post["event"] != "COMMENT" {
+		t.Fatalf("event %v, want COMMENT", post["event"])
+	}
+	for _, want := range []string{"Changed line", "Second change", " · unattended", "unattended=1", "via `gadfly-review-pr 2.2.0`"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q:\n%s", want, body)
+		}
+	}
+
+	var receipt struct {
+		Author string `json:"author"`
+	}
+	if err := json.Unmarshal(readFile(t, filepath.Join(h.RunDir(1), "receipt.json")), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Author != "github-actions[bot]" {
+		t.Fatalf("receipt author %q, want the bot login", receipt.Author)
+	}
+}
+
+// TestPublishUnattendedPortableDataRoot proves FR-003: publish reads only the data root and GitHub, so a root
+// restored at a different absolute path, with no Git repository nearby, publishes the same review.
+func TestPublishUnattendedPortableDataRoot(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
+
+	restored := filepath.Join(t.TempDir(), "restored-home")
+	if err := os.CopyFS(restored, os.DirFS(h.Home)); err != nil {
+		t.Fatal(err)
+	}
+	h.Home = restored
+	h.WorkDir = t.TempDir()
+	h.Env["LOUPE_RUN"] = runRef
+
+	stdout, stderr, exit := h.Run("publish", "--unattended", "--json")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
+	}
+	h.checkSends(1)
+	if _, err := os.Stat(filepath.Join(h.RunDir(1), "receipt.json")); err != nil {
+		t.Fatalf("receipt not written to the restored root: %v", err)
+	}
+}
+
+// TestPublishUnattendedNumbersFromBotReviews proves FR-015 end to end: a fresh data root holds no round state, so
+// the number in the footer can only come from the pull request's own bot loupe reviews.
+func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.GH.AddReview(owner, repo, number, github.Review{User: "github-actions[bot]", CommitID: h.Repo.HeadSHA(), State: "COMMENTED",
+		Body: "an earlier round\n\n<!-- loupe-meta v=1 round=1 unattended=1 -->"})
+	h.GH.AddReview(owner, repo, number, github.Review{User: "reviewer", CommitID: h.Repo.HeadSHA(), State: "COMMENTED",
+		Body: "a human's loupe review\n\n<!-- loupe-meta v=1 round=1 -->"})
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
+	h.IsTerminal = false
+
+	stdout, stderr, exit := h.Run("publish", runRef, "--unattended", "--json")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
+	}
+	h.checkSends(1)
+
+	var post map[string]any
+	for _, r := range h.GH.Requests() {
+		if r.Method == "POST" {
+			post, _ = r.Body.(map[string]any)
+		}
+	}
+	body, _ := post["body"].(string)
+	if !strings.Contains(body, "loupe · round 2 · unattended") || !strings.Contains(body, "round=2 unattended=1") {
+		t.Errorf("body does not number this review 2:\n%s", body)
+	}
+}
+
+func TestPublishUnattendedRefusesUserTokens(t *testing.T) {
+	for _, prefix := range []string{"ghu_", "gho_", "ghp_", "github_pat_"} {
+		t.Run(prefix, func(t *testing.T) {
+			h := newHarness(t)
+			h.capture()
+			h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+			h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+			h.UseToken(prefix + "user-token")
+			h.mustRefuse("token", "publish", runRef, "--unattended")
+			h.checkSends(0)
+		})
+	}
+}
+
+func TestPublishTokenMismatchAttendedRefusesInstallationToken(t *testing.T) {
+	h := newHarness(t)
+	h.reviewed("a\na\nx\nq\n")
+	h.UseInstallationToken()
+	h.IsTerminal = true
+	h.mustRefuse("token", "publish", runRef, "--action", "comment", "--plain")
+	h.checkSends(0)
+}
+
+func TestPublishTokenMismatchRefusesViewer(t *testing.T) {
+	t.Run("user-captured published unattended", func(t *testing.T) {
+		h := newHarness(t)
+		h.capture()
+		h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+		h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+		h.UseInstallationToken()
+		h.mustRefuse("viewer", "publish", runRef, "--unattended")
+		h.checkSends(0)
+	})
+	t.Run("installation-captured published attended", func(t *testing.T) {
+		h := newHarness(t)
+		h.UseInstallationToken()
+		h.capture()
+		h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+		h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+		h.UseToken("ghp_user-token")
+		h.IsTerminal = true
+		h.mustRefuse("viewer", "publish", runRef, "--action", "comment", "--plain")
+		h.checkSends(0)
+	})
+}
+
+func TestPublishUnattendedRefusesNoToken(t *testing.T) {
+	h := newHarness(t)
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+	h.UseToken("")
+	h.mustRefuse("auth", "publish", runRef, "--unattended")
+	h.checkSends(0)
+}
+
+// publishRefusesUnattended runs publish --unattended with no terminal and asserts it refuses with code.
+func (h *harness) publishRefusesUnattended(code string) map[string]any {
+	h.t.Helper()
+	env, exit := h.RunJSON("publish", runRef, "--unattended")
+	errObj, _ := env["error"].(map[string]any)
+	if exit != 1 || errObj["code"] != code {
+		h.t.Fatalf("publish --unattended: exit %d envelope %v, want refusal %s", exit, env, code)
+	}
+	return errObj
+}
+
+func TestPublishUnattendedReconcilesAmbiguousSend(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+
+	h.GH.QueueCreate(fakegh.ServerErrorAfterRecord())
+	stdout, stderr, exit := h.Run("publish", runRef, "--unattended")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
+	}
+	url, _ := h.receipt()
+	if !strings.HasSuffix(stdout, url+"\n") || h.exists("attempt.json") {
+		t.Fatalf("stdout %q receipt URL %q", stdout, url)
+	}
+	h.checkSends(1)
+}
+
+func TestPublishUnattendedReconcilesAmbiguousSendFromRestoredRoot(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+	h.Restore(t)
+
+	h.GH.QueueCreate(fakegh.ServerErrorAfterRecord())
+	stdout, stderr, exit := h.Run("publish", runRef, "--unattended")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
+	}
+	url, _ := h.receipt()
+	if !strings.HasSuffix(stdout, url+"\n") || h.exists("attempt.json") {
+		t.Fatalf("stdout %q receipt URL %q", stdout, url)
+	}
+	h.checkSends(1)
+}
+
+// The case a CI retry actually hits: an earlier job left an unknown attempt behind because both the send's response
+// and its reconciliation failed, and a later job restores that data root elsewhere. The review is on GitHub by then,
+// so the attempt becomes a receipt under its original publication id and nothing is sent a second time.
+func TestPublishUnattendedReconcilesRestoredUnknownAttempt(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+
+	// The review lands, its response does not, and the reconciliation that would have caught it cannot read the
+	// pull request's reviews either, so the attempt survives the job that made it. The failure starts at the send,
+	// since the round this review carries is read from those same reviews beforehand.
+	h.GH.OnCreate(func(*http.Request) {
+		h.GH.Fail("GET", "/repos/acme/widgets/pulls/42/reviews", http.StatusInternalServerError)
+	})
+	h.GH.QueueCreate(fakegh.ServerErrorAfterRecord())
+	h.publishRefusesUnattended("attempt")
+	attempt := h.attempt().Envelope["publicationId"]
+	h.checkSends(1)
+
+	h.GH.Fail("GET", "/repos/acme/widgets/pulls/42/reviews", 0)
+	h.Restore(t)
+
+	stdout, stderr, exit := h.Run("publish", runRef, "--unattended")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stdout %q stderr %q", exit, stdout, stderr)
+	}
+	h.checkSends(1)
+	url, envelope := h.receipt()
+	if !strings.HasSuffix(stdout, url+"\n") || envelope["publicationId"] != attempt || h.exists("attempt.json") {
+		t.Fatalf("restored attempt did not reconcile: stdout %q attempt %v receipt %v", stdout, attempt, envelope["publicationId"])
+	}
+}
+
+func TestPublishUnattendedRetriesUnknownAttempt(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+
+	h.GH.QueueCreate(fakegh.ServerErrorDrop())
+	h.publishRefusesUnattended("attempt")
+	first := h.attempt().Envelope["publicationId"]
+	h.checkSends(1)
+
+	stdout, stderr, exit := h.Run("publish", runRef, "--unattended", "--retry-unknown")
+	if exit != 0 {
+		t.Fatalf("retry exit %d stdout %q stderr %q", exit, stdout, stderr)
+	}
+	h.checkSends(2)
+	url, envelope := h.receipt()
+	if !strings.HasSuffix(stdout, url+"\n") || envelope["publicationId"] == first || h.exists("attempt.json") {
+		t.Fatalf("retry did not send once: stdout %q first %v now %v", stdout, first, envelope["publicationId"])
+	}
+}
+
+func TestPublishUnattendedRetriesUnknownAttemptFromRestoredRoot(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+
+	h.GH.QueueCreate(fakegh.ServerErrorDrop())
+	h.publishRefusesUnattended("attempt")
+	first := h.attempt().Envelope["publicationId"]
+	h.checkSends(1)
+	h.Restore(t)
+
+	stdout, stderr, exit := h.Run("publish", runRef, "--unattended", "--retry-unknown")
+	if exit != 0 {
+		t.Fatalf("retry exit %d stdout %q stderr %q", exit, stdout, stderr)
+	}
+	h.checkSends(2)
+	url, envelope := h.receipt()
+	if !strings.HasSuffix(stdout, url+"\n") || envelope["publicationId"] == first || h.exists("attempt.json") {
+		t.Fatalf("retry did not send once: stdout %q first %v now %v", stdout, first, envelope["publicationId"])
 	}
 }
 

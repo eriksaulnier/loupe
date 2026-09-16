@@ -22,6 +22,8 @@ type Input struct {
 	PublicationID string
 	// Source is name[@version], already validated; empty omits it from the footer and loupe-meta.
 	Source string
+	// Unattended marks a review published without a human's confirmation, per constitution 2.0.0.
+	Unattended bool
 	// Findings are the included findings to publish; render does no filtering.
 	Findings []Finding
 }
@@ -45,6 +47,10 @@ type Location struct {
 	Line      int
 	StartLine int
 }
+
+// MetaPrefix opens the hidden loupe-meta comment; publish's round count reads it to recognize a loupe review's body
+// without needing that attempt's digest.
+const MetaPrefix = "<!-- loupe-meta "
 
 // Section and label-group order; groupOther collects every unknown or empty label.
 const (
@@ -122,14 +128,19 @@ func Body(in Input) string {
 	for _, f := range in.Findings {
 		census[group(f.Label)]++
 	}
-	footer := fmt.Sprintf("loupe · round %d · reviewed %s", in.Round, CodeSpan(OneLine(shortSHA(in.HeadSHA))))
+	footer := fmt.Sprintf("loupe · round %d", in.Round)
 	meta := fmt.Sprintf("v=1 round=%d", in.Round)
+	if in.Unattended {
+		footer += " · unattended"
+		meta += " unattended=1"
+	}
+	footer += " · reviewed " + CodeSpan(OneLine(shortSHA(in.HeadSHA)))
 	if in.Source != "" {
 		footer += " · via " + CodeSpan(OneLine(strings.Replace(in.Source, "@", " ", 1)))
 		meta += " src=" + in.Source
 	}
 	blocks = append(blocks, fmt.Sprintf("%s\n\n<!-- loupe digest=%s publication=%s -->\n"+
-		"<!-- loupe-meta %s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d -->\n",
+		MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d -->\n",
 		footer, in.Digest, in.PublicationID,
 		meta, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther]))
 

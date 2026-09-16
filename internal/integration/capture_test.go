@@ -111,6 +111,25 @@ func TestCaptureLeavesCloneUntouched(t *testing.T) {
 	}
 }
 
+func TestCaptureWithInstallationTokenSkipsViewer(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.capture()
+
+	var target map[string]any
+	if err := json.Unmarshal(readFile(t, filepath.Join(h.RunDir(1), "target.json")), &target); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := target["viewer"]; !ok || v != "" {
+		t.Fatalf("target.json viewer %v, want empty", v)
+	}
+	for _, req := range h.GH.Requests() {
+		if req.Path == "/user" {
+			t.Fatalf("capture with an installation token called /user: %+v", req)
+		}
+	}
+}
+
 func TestCaptureRecordsSource(t *testing.T) {
 	h := newHarness(t)
 	h.mustRefuse("input", "capture", prURL(), "--source", "a-->b")
