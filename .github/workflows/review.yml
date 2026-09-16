@@ -345,8 +345,14 @@ jobs:
     # added to a pull request fires this workflow too, and deleting a label that is not there is a
     # 404 on somebody else's change; a request the kill switch turned away keeps its label, so it is
     # still there to answer when the switch goes back on.
+    #
+    # A pull request from a fork is left alone. GitHub hands a `pull_request` event from a fork a
+    # read-only token whatever this job asks for, so the delete below would 403 and fail a run whose
+    # only outcome was the reviewing job declining the fork. Its label stays on, which is honest:
+    # nothing answered the request.
     if: >-
       always() && github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.label.name == 'ai-review' && needs.review.result != 'skipped'
     runs-on: ubuntu-latest
     permissions:
