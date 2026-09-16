@@ -57,7 +57,9 @@ Codex has no per-session plugin flag. To check the Codex plugin, install it from
 
 Commits MUST follow [Conventional Commits](https://www.conventionalcommits.org). The commit-msg hook checks the subject: `type(scope): summary` with a lowercase summary, at most 72 characters and no trailing period. The hook cannot check the rest, so the summary MUST be imperative ("add", not "added") and a body MUST be separated from the subject by a blank line. The type is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore` or `revert`. The scope is the package or area touched: `cli`, `tui`, `publish`, `plugin`, `specs`, `readme` and so on.
 
-Each commit SHOULD be one logical change. The body, when there is one, explains what changed and why. release-please builds the changelog from `feat` and `fix` commits, so pick the type for what a user of loupe would notice.
+Each commit MUST be one logical change, and the work SHOULD be committed as it lands rather than in one commit at the end. A rename, a behavior change and a documentation update are three commits even when one sitting produced them, and a subject that needs "and" to describe it is two commits wearing one hat. The gain is at review time: a reviewer can follow a rename without reading it as a rewrite, and a bisect lands on the change that broke something rather than on the afternoon that contained it.
+
+The body, when there is one, explains what changed and why. release-please builds the changelog from `feat` and `fix` commits, so pick the type for what a user of loupe would notice.
 
 ## Pull requests
 

@@ -46,3 +46,13 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - The files view anchors a line as `#diff-<sha256 hex of the path>R<line>` (or `L` for the old side), with `R21-R24` for a range. This is observed, not documented; it rendered and landed in the boundary probe.
 - Images in review bodies are proxied through camo; external badge images add a network dependency and were rejected.
 - A `suggestion` fence must contain the exact replacement lines for the anchored range; wrapping prose in one produces a broken apply button. loupe never emits suggestion fences automatically.
+
+## Actions and unattended publication
+
+Observed on 2026-09-16 in `.github/workflows/review.yml` run 35049778372, on `eriksaulnier/loupe#18`.
+
+- A workflow's `GITHUB_TOKEN` satisfies loupe's installation-token gate. `loupe publish --unattended` refuses any token without the `ghs_` prefix, and it published, so the token Actions handed the job carries it. GitHub documents the token as a GitHub App installation access token; a newer stateless form, `ghs_<app id>_<jwt>`, keeps the prefix.
+- The review it created is authored by `github-actions[bot]`, so the `[bot]` suffix that reconciliation and round counting rely on is what a workflow's own review carries.
+- `GET /user` was not exercised: capture skips it for an installation token, which is the whole point of the branch. Its 403 remains unobserved.
+- `anthropics/claude-code-action` confines the agent's `Read` to its working directory plus `--add-dir`: a read of `/home/runner/work/loupe/review/head/mise.toml`, one directory above the workspace, was refused as a permission denial. The action's own documentation claims `--add-dir` only grants a directory, so this is stronger than documented and MUST NOT be relied on across versions.
+- An OpenRouter balance too low for the run ends the agent step with `API Error: 402`, `terminal_reason: api_error` and a failed job, after the model has already been billed for the turns it took.

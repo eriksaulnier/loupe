@@ -34,7 +34,7 @@ loupe files pull request review findings for a human to decide and publish. `REA
 | `testdata/` | Diff fixtures and goldens |
 | `scripts/` | `check-tests.sh`, the test-hygiene grep that `mise run check` runs |
 | `.github/workflows/` | `ci.yml` runs `mise run check`; `release.yml` runs release-please, then goreleaser |
-| `.github/workflows/review.yml` | The example unattended-publish integration: builds loupe from `main`, captures a pull request named by hand, runs an agent over the captured head and diff, and publishes unattended. `workflow_dispatch` only, and gated on the `LOUPE_AUTO_REVIEW` repository variable |
+| `.github/workflows/review.yml` | The example unattended-publish integration: builds loupe from `main`, captures a pull request named by hand, runs an agent over the captured head and diff, and publishes unattended. started by a `workflow_dispatch` naming a pull request or by the `ai-review` label, which the run then takes off; gated on the `REVIEW_ENABLED` repository variable |
 | `.specify/memory/constitution.md` | The seven principles. Read first |
 | `.specify/`, `.claude/skills/speckit-*` | spec-kit's templates, scripts and the skills that drive the spec, plan and tasks flow |
 
