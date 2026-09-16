@@ -40,7 +40,7 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 ## Development Workflow
 
-- Each task follows failing test → implementation → passing check. The repository check is `go vet ./...`, `golangci-lint run` and `go test ./...`; all three MUST pass before a commit.
+- Each task follows failing test → implementation → passing check. The repository check is `mise run check`, which runs `go vet ./...`, `golangci-lint run`, `actionlint`, `scripts/check-tests.sh` and `go test ./...`; every one of them MUST pass before a commit.
 - Commits MUST use Conventional Commits: `type(scope): subject`, imperative lowercase subject of at most 72 characters, no trailing period, blank line before a body. One logical change per commit.
 - No push, release, GitHub review or PR MAY be created without an explicit request from the user.
 - Live runs against GitHub MUST target a pull request the user names, on a repository the user controls.
@@ -50,4 +50,4 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 This constitution supersedes every other practice in the repository. An amendment MUST state what changed and why, bump the version below (MAJOR for a removed or redefined principle, MINOR for a new principle or section, PATCH for wording), and update the specification and plan when a principle they rely on changes. Plans MUST include a Constitution Check and justify each violation in Complexity Tracking.
 
-**Version**: 2.0.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-15
+**Version**: 2.0.1 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-16

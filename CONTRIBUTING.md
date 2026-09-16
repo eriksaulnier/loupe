@@ -12,7 +12,7 @@ mise exec -- lefthook install
 mise run check
 ```
 
-`mise run check` runs `go vet`, `golangci-lint`, `scripts/check-tests.sh` and `go test ./...`. It MUST pass before every commit; the pre-commit hook runs it.
+`mise run check` runs `go vet`, `golangci-lint`, `actionlint`, `scripts/check-tests.sh` and `go test ./...`. It MUST pass before every commit; the pre-commit hook runs it.
 
 ## Principles first
 

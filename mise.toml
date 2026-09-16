@@ -1,4 +1,10 @@
 [tools]
+# Exact, unlike the tools below: both carry rule sets that gate a commit, and a new rule in a patch
+# release turns the runner red while a developer who has not run `mise up` stays green. That gap is
+# what the shellcheck pin exists to close, so it MUST NOT be reopened one tier up. Bump deliberately.
+actionlint = "1.7.12"
+# actionlint runs its shellcheck pass over run: blocks only where shellcheck exists.
+shellcheck = "0.11.0"
 go = "1.25"
 golangci-lint = "2"
 goreleaser = "2"
@@ -15,7 +21,7 @@ run = "golangci-lint run"
 run = "go test ./..."
 
 [tasks.check]
-run = "go vet ./... && golangci-lint run && ./scripts/check-tests.sh && go test ./..."
+run = "go vet ./... && golangci-lint run && actionlint && ./scripts/check-tests.sh && go test ./..."
 
 # The version is stamped in so a build reports what it came from rather than "dev".
 [tasks.build]

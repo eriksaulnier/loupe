@@ -86,9 +86,11 @@ jobs:
         if: steps.pr.outputs.skip != 'true'
         run: |
           result=$(loupe capture "https://github.com/$REPOSITORY/pull/$PULL_REQUEST" --json)
-          echo "LOUPE_RUN=$(echo "$result" | jq -r .run)" >> "$GITHUB_ENV"
-          echo "LOUPE_HEAD_SHA=$(echo "$result" | jq -r .target.headSha)" >> "$GITHUB_ENV"
-          echo "LOUPE_ROUND=$(echo "$result" | jq -r .target.round)" >> "$GITHUB_ENV"
+          {
+            echo "LOUPE_RUN=$(echo "$result" | jq -r .run)"
+            echo "LOUPE_HEAD_SHA=$(echo "$result" | jq -r .target.headSha)"
+            echo "LOUPE_ROUND=$(echo "$result" | jq -r .target.round)"
+          } >> "$GITHUB_ENV"
 
       # review/ is the pull request: its files at the captured head, with symlinks dropped so no file
       # tool can follow one out of it, and a copy of the captured diff. `loupe show` does not expose
