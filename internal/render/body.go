@@ -133,16 +133,18 @@ func Body(in Input) string {
 	for _, f := range in.Findings {
 		census[group(f.Label)]++
 	}
-	footer := fmt.Sprintf("loupe · round %d", in.Round)
+	footer := "reviewed " + CodeSpan(OneLine(shortSHA(in.HeadSHA)))
 	meta := fmt.Sprintf("v=1 round=%d", in.Round)
 	if in.Unattended {
-		footer += " · unattended"
 		meta += " unattended=1"
 	}
-	footer += " · reviewed " + CodeSpan(OneLine(shortSHA(in.HeadSHA)))
 	if in.Source != "" {
 		footer += " · via " + CodeSpan(OneLine(strings.Replace(in.Source, "@", " ", 1)))
 		meta += " src=" + in.Source
+	}
+	// The footer ends with unattended while the marker keeps it before src=, so the two no longer build in step.
+	if in.Unattended {
+		footer += " · unattended"
 	}
 	if in.Model != "" {
 		meta += " model=" + in.Model

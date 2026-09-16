@@ -194,7 +194,7 @@ func TestBodyFooterNamesSource(t *testing.T) {
 	in := exampleInput()
 	in.Source = "gadfly-review-pr@2.2.0"
 	body := Body(in)
-	if !strings.Contains(body, "loupe · round 2 · reviewed `d23632e` · via `gadfly-review-pr 2.2.0`\n\n") ||
+	if !strings.Contains(body, "\n\nreviewed `d23632e` · via `gadfly-review-pr 2.2.0`\n\n") ||
 		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=blocking ") {
 		t.Fatalf("versioned source wrong\n%s", body)
 	}
@@ -209,7 +209,7 @@ func TestBodyMetaNamesModel(t *testing.T) {
 	in := exampleInput()
 	in.Model = "anthropic/claude-sonnet-5"
 	body := Body(in)
-	if !strings.Contains(body, "loupe · round 2 · reviewed `d23632e`\n\n") ||
+	if !strings.Contains(body, "\n\nreviewed `d23632e`\n\n") ||
 		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 model=anthropic/claude-sonnet-5 inline=blocking ") {
 		t.Fatalf("model without source wrong\n%s", body)
 	}
@@ -255,7 +255,7 @@ func TestBodyUnattendedMarker(t *testing.T) {
 	in := exampleInput()
 	in.Unattended = true
 	body := Body(in)
-	if !strings.Contains(body, "loupe · round 2 · unattended · reviewed `d23632e`") {
+	if !strings.Contains(body, "\n\nreviewed `d23632e` · unattended\n\n") {
 		t.Fatalf("unattended footer wrong\n%s", body)
 	}
 	if !strings.Contains(body, "<!-- loupe-meta v=1 round=2 unattended=1 inline=") {
@@ -264,9 +264,31 @@ func TestBodyUnattendedMarker(t *testing.T) {
 
 	in.Source = "gadfly-review-pr@2.2.0"
 	body = Body(in)
-	if !strings.Contains(body, "loupe · round 2 · unattended · reviewed `d23632e` · via `gadfly-review-pr 2.2.0`") ||
+	if !strings.Contains(body, "\n\nreviewed `d23632e` · via `gadfly-review-pr 2.2.0` · unattended\n\n") ||
 		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 unattended=1 src=gadfly-review-pr@2.2.0 inline=") {
 		t.Fatalf("unattended with source wrong\n%s", body)
+	}
+}
+
+func TestBodyFooterSegmentOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		source     string
+		unattended bool
+		want       string
+	}{
+		{"bare", "", false, "reviewed `d23632e`"},
+		{"source", "gadfly-review-pr@2.2.0", false, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0`"},
+		{"unattended", "", true, "reviewed `d23632e` · unattended"},
+		{"source and unattended", "gadfly-review-pr@2.2.0", true, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · unattended"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := exampleInput()
+			in.Source, in.Unattended = tc.source, tc.unattended
+			if body := Body(in); !strings.Contains(body, "\n\n"+tc.want+"\n\n<!-- loupe digest=") {
+				t.Fatalf("footer wrong, want %q\n%s", tc.want, body)
+			}
+		})
 	}
 }
 

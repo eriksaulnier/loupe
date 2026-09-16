@@ -24,7 +24,7 @@ func unknownAttempt() Attempt {
 }
 
 func markedBody(digest, publication string) string {
-	return "Looks fine.\n\nloupe · round 1\n\n<!-- loupe digest=" + digest + " publication=" + publication + " -->\n<!-- loupe-meta v=1 -->"
+	return "Looks fine.\n\nreviewed `x`\n\n<!-- loupe digest=" + digest + " publication=" + publication + " -->\n<!-- loupe-meta v=1 -->"
 }
 
 // unattendedAttempt is unknownAttempt with no recorded viewer, as an unattended publish leaves it.

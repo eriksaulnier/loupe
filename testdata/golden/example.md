@@ -50,7 +50,7 @@ Return the original write error.
 
 ---
 
-loupe · round 2 · reviewed `d23632e`
+reviewed `d23632e`
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
 <!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 -->

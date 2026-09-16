@@ -143,7 +143,7 @@ A pull request is reviewed again after the author pushes fixes. Capturing it aga
 
 1. **Given** a published round for a pull request, **When** the agent captures the pull request again, **Then** a new round is created, numbered one higher, recording the previous round.
 2. **Given** a round with an earlier published round, **When** the agent asks for the previous findings, **Then** it receives the findings published by the newest earlier round, skipping any unpublished rounds between, with identifiers, titles, bodies, locations and blocking state.
-3. **Given** a follow-up round, **When** it is published, **Then** the review footer names its position among the pull request's published reviews.
+3. **Given** a follow-up round, **When** it is published, **Then** the review's `loupe-meta` names its position among the pull request's published reviews. The footer named it too until `specs/009-review-footer`.
 4. **Given** an unpublished earlier round at a different head, **When** the pull request is captured again, **Then** the new round is still created and the earlier round remains inspectable.
 5. **Given** an unpublished round at the current head, **When** the pull request is captured again, **Then** capture refuses, names that run's reference, and creates nothing.
 6. **Given** a published round at the current head, **When** the pull request is captured again, **Then** a new round is created at the same head.
@@ -194,7 +194,7 @@ A Claude Code user installs the loupe plugin. Typing the slash command with a pu
 - A location's path or line is not in the diff, or a range spans two hunks: refused with nearest valid lines.
 - The clone's origin is not the pull request's repository: capture refuses and shows how to pass the clone path.
 - The newest round for the pull request is unpublished and at the same head: capture refuses and names that run's reference; a published round at the same head gets a new round.
-- A round was captured and abandoned unpublished: it does not advance the round a later review of the pull request publishes as, so the footer can name a lower round than the run reference.
+- A round was captured and abandoned unpublished: it does not advance the round a later review of the pull request publishes as, so `loupe-meta`'s `round=` can name a lower round than the run reference.
 - The head is force-pushed back to an older round's commit and that round publishes, by `--retry-unknown` after a newer round published or at the same time as another round at that commit, or its `--retry-unknown` is definitely rejected after a newer round counted its attempt, so the next round to publish reuses that newer round's number: two reviews MAY name the same round. Accepted rather than refused, since it needs the force-push and numbering never blocks a publish.
 - GitHub rejects the review because the viewer already has a pending review: the refusal says to submit or discard it on GitHub first.
 - The network fails after the request was sent: the attempt is kept as unknown and reconciled on the next publish.
@@ -264,7 +264,7 @@ General
 - **FR-039**: On every clean exit, including plain-mode end of input, review MUST record which open, unanswered notes it handed back, without changing the draft version.
 - **FR-040**: An agent-facing command MUST block until a handed-back note awaits a reply or the run is published, MUST honor a timeout and cancellation, and MUST refuse with `timeout` when the timeout elapses.
 - **FR-041**: Capture MUST accept an optional source naming what filed the findings and MUST refuse one that could close a marker, as MUST loading a run that records one; publish MUST show a source in the footer and `loupe-meta` only when capture recorded one.
-- **FR-042**: Publish MUST number a review by its position among the pull request's publications: one more than the number of the pull request's other rounds holding a receipt or an attempt. The footer and `loupe-meta` MUST both carry that number; the run's round, its references and its records MUST keep the capture round.
+- **FR-042**: Publish MUST number a review by its position among the pull request's publications: one more than the number of the pull request's other rounds holding a receipt or an attempt. The footer and `loupe-meta` MUST both carry that number; the run's round, its references and its records MUST keep the capture round. Narrowed on 2026-09-16 by `specs/009-review-footer`, which drops the number from the footer; `loupe-meta` still carries it, derived as before.
 - **FR-043**: When the pull request head differs from the captured head and the captured commit is an ancestor of it, publish MUST send the review at the captured commit and MUST first show, in the confirmation, how many commits the head moved, that the review is pinned to the captured commit, that GitHub will not mark its comments outdated for those commits, the newest 20 commits since capture with a count of the earlier ones, and the included located findings on files those commits changed, saying when GitHub's list of changed files was cut off. The confirmation MUST be the only acknowledgment; publish MUST NOT require a flag for it.
 
 ### Key Entities

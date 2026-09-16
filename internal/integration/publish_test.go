@@ -386,7 +386,7 @@ func TestPublishUnattendedPortableDataRoot(t *testing.T) {
 }
 
 // TestPublishUnattendedNumbersFromBotReviews proves FR-015 end to end: a fresh data root holds no round state, so
-// the number in the footer can only come from the pull request's own bot loupe reviews.
+// the number in the marker can only come from the pull request's own bot loupe reviews.
 func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 	h := newHarness(t)
 	h.UseInstallationToken()
@@ -413,7 +413,7 @@ func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 		}
 	}
 	body, _ := post["body"].(string)
-	if !strings.Contains(body, "loupe · round 2 · unattended") || !strings.Contains(body, "round=2 unattended=1") {
+	if !strings.Contains(body, " · unattended\n\n<!-- loupe digest=") || !strings.Contains(body, "round=2 unattended=1") {
 		t.Errorf("body does not number this review 2:\n%s", body)
 	}
 }

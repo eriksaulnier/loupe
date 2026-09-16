@@ -31,7 +31,7 @@ Expected: all three exit 0. The suite MUST include the scenarios below; each map
 | Publish refusals: no TTY, head moved, own PR with approve, approve with a blocking finding, pending finding, open note, empty draft, draft changed after display | `internal/publish`, `internal/integration` | US3 AS4 to AS9, FR-025, FR-028 |
 | Send-back loop: note created in review, `feedback` lists it, `reply` attaches, edit clears acceptance, human resolves, readiness true; reply carrying a decision field refused | `internal/integration` | US4 |
 | `review` with no argument resolves the current branch's pull request; `list` shows both runs newest first with state and counts | `internal/integration` | US5 |
-| Round two after a published round one: linked, `show --previous` returns round one's published findings, footer names round two | `internal/integration` | US6 AS1 to AS3 |
+| Round two after a published round one: linked, `show --previous` returns round one's published findings, `loupe-meta` names round two | `internal/integration` | US6 AS1 to AS3 |
 | Capture at the same head: refused with `same-head` when the newest round is unpublished; new round when it is published | `internal/integration` | US6 AS5, AS6, clarification 1 |
 | `show --previous` skips an unpublished round two and returns round one; refuses when nothing earlier was published | `internal/run`, `internal/integration` | US6 AS2, clarification 2 |
 | Fake GitHub records the request then returns 500: attempt marked unknown; next publish matches the marker and writes a receipt without sending | `internal/integration` | US7 AS1, AS2 |

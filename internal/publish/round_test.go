@@ -61,9 +61,9 @@ func metaMarker(round int) string {
 func TestUnattendedRoundCountsBotLoupeReviews(t *testing.T) {
 	gh, client := newFake(t)
 	gh.AddReview("acme", "widgets", 42, github.Review{User: "github-actions[bot]", CommitID: headSHA, State: "COMMENTED",
-		Body: "loupe · round 1 · unattended · reviewed `x`\n\n<!-- loupe digest=d publication=p -->\n" + metaMarker(1) + "\n"})
+		Body: "reviewed `x` · unattended\n\n<!-- loupe digest=d publication=p -->\n" + metaMarker(1) + "\n"})
 	gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED",
-		Body: "loupe · round 1 · reviewed `x`\n\n" + metaMarker(1) + "\n"})
+		Body: "reviewed `x`\n\n" + metaMarker(1) + "\n"})
 	gh.AddReview("acme", "widgets", 42, github.Review{User: "some-bot[bot]", CommitID: headSHA, State: "COMMENTED", Body: "not a loupe review"})
 	gh.AddReview("acme", "widgets", 42, github.Review{User: "github-actions[bot]", CommitID: headSHA, State: "PENDING", Body: metaMarker(2)})
 
