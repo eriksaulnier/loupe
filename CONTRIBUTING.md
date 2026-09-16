@@ -28,6 +28,8 @@ New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory 
 
 A plan that departs from the constitution, research or contracts MUST record the departure and its reason in its Complexity Tracking table. A new runtime dependency MUST carry a one-line reason in the plan (Principle VI).
 
+A spec that is drafted but not scheduled belongs in a GitHub issue labelled `spec`, not in `specs/`. A directory there takes the next number, which says the work is starting, and a branch holding one nobody is working on is a number reserved against a feature that may never arrive. When the work is picked up, run the flow, paste the issue in as the spec's **Input**, and let the pull request close the issue. Finished specs stay in the repository: `docs/comment-format.md`, `specs/001-loupe-v1/validation.md`, the README, `AGENTS.md` and two code comments cite them by path, and a spec is reviewed as a diff like anything else.
+
 ## Tests
 
 Tests MUST use the fake GitHub (`internal/testutil/fakegh`), local Git repositories (`internal/testutil/gitrepo`) and injected terminal input. They MUST NOT use a real pseudo-terminal, a real reviewer or real publication (Principle VII), and MUST NOT reach a network host. `scripts/check-tests.sh` enforces the terminal, network and publication rules over tracked test files, so add a new test file to git before running the check.

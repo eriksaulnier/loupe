@@ -425,6 +425,8 @@ Fix rounds after T104, from the owner's reviews in the vault under `Engineering/
 
 ### Remaining gaps
 
+Tracked as [issue #22](https://github.com/eriksaulnier/loupe/issues/22), since they are one piece of work and none of it is scheduled: the repository says "included" where it means the publishable set or what was published, and the readiness and dead-lock-holder wording do not match the code. The tasks stay below as the record of what was found.
+
 - [ ] T123 Reword FR-019 readiness to "no finding pending and no note open", since an excluded finding stays `included: true` and does not block (`internal/draft/derive.go:66`) per FR-019 (contradicts)
 - [ ] T124 Replace "included" with "publishable" (gates) or "published" (body contents) in FR-025, FR-026, the US3 intro and scenarios 2 and 9, clarification Q3 and the blocking edge case per FR-025, FR-026 (contradicts)
 - [ ] T125 Replace "included finding(s)" with "published finding(s)" in `docs/comment-format.md` lines 30, 94, 102, 179, 188-189, 210 and 229, through the spec amendment the constitution requires for that contract per docs/comment-format.md (contradicts)

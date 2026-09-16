@@ -47,7 +47,7 @@ description: "Task list for loupe handoff and agent plugins"
 - [x] T013 [P] README: `handoff` in the Commands table; install blocks for Claude Code, Codex and Pi replacing the `npx skills` section; the handoff and allow-rule paragraph replacing the `herdr` one. AGENTS.md layout rows for `plugin/`, `internal/pane`, `.agents/plugins/marketplace.json` and `package.json`.
 - [x] T014 [P] Spec notes: `specs/002-review-ux/spec.md` UX-013, `specs/003-herdr-handoff/spec.md` FR-017 and FR-018, `specs/003-herdr-handoff/plan.md` socket note, `specs/004-agent-hosts/spec.md` FR-005, FR-007 and Deferred, each pointing at `specs/006-agent-plugins`. `specs/001-loupe-v1/validation.md`: rows for T001, T003, T005, T009 and T011, the narrowed guard row, and the FR-025 Unverified bullets.
 - [x] T015 `mise run demo -- handoff 'acme/widgets#42'` with `HERDR_ENV` unset shows the `no-pane-host` refusal.
-- [ ] T016 Run `cleanup-comments` over the diff, have a read-only reviewer check the diff against spec.md, run `mise run check`, make atomic local commits on `006-agent-plugins`, and delete the local branches `fix/help-pane-rule` and `docs/readme-herdr-allow`. No push, pull request or release.
+- [x] T016 Run `cleanup-comments` over the diff, have a read-only reviewer check the diff against spec.md, run `mise run check`, make atomic local commits on `006-agent-plugins`, and delete the local branches `fix/help-pane-rule` and `docs/readme-herdr-allow`. No push, pull request or release.
 
 ## Dependencies
 

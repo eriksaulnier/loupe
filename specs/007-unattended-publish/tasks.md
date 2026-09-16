@@ -61,13 +61,13 @@ description: "Task list for unattended publish"
 
 ## Phase 5: User Story 4 - The example workflow (P4)
 
-- [ ] T026 [P] [US4] Add `.github/workflows/review.yml` per spec FR-028 to FR-034: `workflow_dispatch` with a pull request number only, the `LOUPE_AUTO_REVIEW` kill switch and the draft, fork, release-please and Dependabot skips, `contents: read` and `pull-requests: write`, a build of loupe from `main` outside the checkout, job-level `LOUPE_HOME` and `LOUPE_RUN`, a capture step, a step that lays out the review directory (the head extracted with symlinks removed, plus the captured diff), the agent step with exactly `loupe --help`, subcommand help, `add`, `edit`, `summary` and `show`, file tools scoped to that directory, a separate `loupe publish --unattended --json` step, and an artifact upload that always runs. Confirm the action inputs against the `anthropics/claude-code-action` and OpenRouter documentation while writing it.
+- [x] T026 [P] [US4] Add `.github/workflows/review.yml` per spec FR-028 to FR-034: `workflow_dispatch` with a pull request number only, the `LOUPE_AUTO_REVIEW` kill switch and the draft, fork, release-please and Dependabot skips, `contents: read` and `pull-requests: write`, a build of loupe from `main` outside the checkout, job-level `LOUPE_HOME` and `LOUPE_RUN`, a capture step, a step that lays out the review directory (the head extracted with symlinks removed, plus the captured diff), the agent step with exactly `loupe --help`, subcommand help, `add`, `edit`, `summary` and `show`, file tools scoped to that directory, a separate `loupe publish --unattended --json` step, and an artifact upload that always runs. Confirm the action inputs against the `anthropics/claude-code-action` and OpenRouter documentation while writing it.
 
 ## Phase 6: Docs, review and close
 
-- [ ] T027 [P] Document the publish flag and its run rule in the publish section of `specs/001-loupe-v1/contracts/cli.md`, and add the Unverified items (token prefix, `/user` 403, bot author, cancellation during the send) to `specs/001-loupe-v1/validation.md` with rows for the new tests.
-- [ ] T028 [P] Add the integration guide to `README.md`: the three steps, passing the run reference, the shared data root, the token and permissions, and what an adapter must emit for `loupe add`. Say loupe ships no adapters. Add a `.github/workflows/review.yml` row to the AGENTS.md layout table.
-- [ ] T029 Run `cleanup-comments` over the diff, have a read-only reviewer check the diff against spec.md's FR list, run `mise run check`, and make atomic local commits on `007-unattended-publish`. No push, pull request, release or live run.
+- [x] T027 [P] Document the publish flag and its run rule in the publish section of `specs/001-loupe-v1/contracts/cli.md`, and add the Unverified items (token prefix, `/user` 403, bot author, cancellation during the send) to `specs/001-loupe-v1/validation.md` with rows for the new tests.
+- [x] T028 [P] Add the integration guide to `README.md`: the three steps, passing the run reference, the shared data root, the token and permissions, and what an adapter must emit for `loupe add`. Say loupe ships no adapters. Add a `.github/workflows/review.yml` row to the AGENTS.md layout table.
+- [x] T029 Run `cleanup-comments` over the diff, have a read-only reviewer check the diff against spec.md's FR list, run `mise run check`, and make atomic local commits on `007-unattended-publish`. No push, pull request, release or live run.
 
 ## Dependencies
 
