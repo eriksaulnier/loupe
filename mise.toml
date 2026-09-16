@@ -9,6 +9,9 @@ go = "1.25"
 golangci-lint = "2"
 goreleaser = "2"
 lefthook = "2"
+# Exact, and NOT 0.12.0: on darwin/arm64 that release writes neither its gif nor its screenshots and still
+# exits 0. Verify a bump by hand, on a Mac, before taking it.
+vhs = "0.11.0"
 
 # Inside the repository, loupe resolves to this worktree's dev build rather than the installed release.
 [env]
@@ -27,10 +30,29 @@ run = "go vet ./... && golangci-lint run && actionlint && ./scripts/check-tests.
 [tasks.build]
 run = 'CGO_ENABLED=0 go build -ldflags "-X github.com/eriksaulnier/loupe/internal/cli.version=$(git describe --tags --always --dirty)" -o dist/loupe ./cmd/loupe'
 
+# Built rather than go run, which would turn loupe's exit codes 1 and 2 into 1.
+[tasks.build-demo]
+run = "go build -o dist/loupe-demo ./cmd/loupe-demo"
+
 # Seeded runs and an in-memory GitHub, for trying the review interface and publish by hand; see cmd/loupe-demo.
 [tasks.demo]
-# Built rather than go run, which would turn loupe's exit codes 1 and 2 into 1.
-run = "go build -o dist/loupe-demo ./cmd/loupe-demo && dist/loupe-demo"
+depends = ["build-demo"]
+run = "dist/loupe-demo"
+
+# Redraws the README's images from the tapes in docs/tapes. vhs renders headless, so this needs no terminal,
+# unlike demo. The gif's frame timing moves between runs even when nothing changed, so regenerate
+# deliberately and read the diff. Nothing checks that the images match the interface they show.
+[tasks.screenshots]
+depends = ["build-demo"]
+run = '''
+# vhs needs ttyd and ffmpeg, which are not pinned above: ttyd publishes no macOS binary, so both are the
+# platform package manager's. Run each rather than look it up: a Homebrew ffmpeg left linked against an
+# upgraded x265 is still on PATH and still dies on every call, and vhs reports success either way.
+ttyd --version >/dev/null 2>&1 || { echo "screenshots: vhs needs a working ttyd; brew install ttyd" >&2; exit 1; }
+# ffmpeg spells the flag -version, not --version.
+ffmpeg -version >/dev/null 2>&1 || { echo "screenshots: vhs needs a working ffmpeg; brew install ffmpeg" >&2; exit 1; }
+for tape in docs/tapes/*.tape; do vhs "$tape"; done
+'''
 
 # Links this worktree's build as github:eriksaulnier/loupe@dev and pins it globally, so every shell and agent session
 # runs it, not only those inside the repository. Run unlink before removing the worktree.

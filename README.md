@@ -8,6 +8,8 @@ loupe files pull request review findings for a human to decide and publish.
 2. You decide each finding in `loupe review`.
 3. `loupe publish` posts exactly one confirmed GitHub review.
 
+![Steps 2 and 3: accepting the blocking finding, closing out the agent's answer to an earlier send-back, dropping a finding, then publishing one review.](docs/assets/walkthrough.gif)
+
 ## Install
 
 ```sh
@@ -93,6 +95,14 @@ A pipeline reviews a pull request with no human and no terminal: capture, file, 
 ## Try it without a pull request
 
 In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub, so the interface and the whole publish flow, `y` included, can be tried end to end. Nothing leaves the machine. `mise run demo -- <loupe args>` runs any other command: `acme/widgets#42` is mid-review, `#43` is ready to publish, and `#44` is ready with a moved head.
+
+The board, one finding, and the last screen before anything is sent:
+
+![The findings board: seven findings with their decision, label and location, over a summary that tab expands.](docs/assets/list.png)
+
+![One finding: the hunk it points at, why it matters, a suggested fix, and a send-back note the agent has answered and you have resolved.](docs/assets/detail.png)
+
+![Step 3 of publish: the exact Markdown the review will carry, and one key that sends it.](docs/assets/publish.png)
 
 ## Contributing and releases
 

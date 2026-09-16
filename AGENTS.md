@@ -30,7 +30,7 @@ loupe files pull request review findings for a human to decide and publish. `REA
 | `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add eriksaulnier/loupe` |
 | `package.json` | Makes the repository a Pi package whose skills are `plugin/skills`; it holds no JavaScript |
 | `specs/NNN-topic/` | One directory per feature: `spec.md`, then `plan.md` and `tasks.md`. `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
-| `docs/` | `comment-format.md` (the published review format, a contract) and `github-facts.md` (observed GitHub behavior) |
+| `docs/` | `comment-format.md` (the published review format, a contract) and `github-facts.md` (observed GitHub behavior). `tapes/` drives the README's images in `assets/`; neither is read by the binary |
 | `testdata/` | Diff fixtures and goldens |
 | `scripts/` | `check-tests.sh`, the test-hygiene grep that `mise run check` runs |
 | `.github/workflows/` | `ci.yml` runs `mise run check`; `release.yml` runs release-please, then goreleaser |
@@ -59,6 +59,7 @@ loupe files pull request review findings for a human to decide and publish. `REA
 - `mise run claude` builds, then starts Claude Code with the plugin loaded from `plugin/`; `mise run pi` does the same for Pi.
 - `mise run link` pins this worktree's build globally as `github:eriksaulnier/loupe@dev`, and `mise run unlink` undoes it. It changes the human's global mise config, so an agent MUST NOT run either unless asked.
 - `mise run demo [-- <loupe args>]` runs the working tree against seeded runs and the in-memory fake GitHub (`cmd/loupe-demo`); use it for by-eye checks instead of seeding a `LOUPE_HOME` by hand. Driving it needs a terminal, so an agent captures it through tmux. `LOUPE_DEMO_HOME=<dir>` keeps the seeded root between commands, which `loupe-demo handoff` needs, since its pane reuses the root.
+- `mise run screenshots` redraws the README's images in `docs/assets/` by replaying the tapes in `docs/tapes/` against the demo. vhs records headless, so unlike `mise run demo` this needs no terminal, but it does need `ttyd` and `ffmpeg` from the platform's package manager. The stills have come out byte-identical run to run, but the gif's frame timing has not, so it re-renders to a different file whether or not anything changed. Regenerate deliberately and read the diff, as with the goldens; nothing checks that they are current.
 - `scripts/check-tests.sh` greps tracked test files for pseudo-terminals, network hosts and `CreateReview` calls outside `internal/publish`.
 
 ## Unverified by design
