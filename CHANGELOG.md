@@ -5,25 +5,25 @@
 
 ### Features
 
-* a footer for the people reading the review ([#25](https://github.com/eriksaulnier/loupe/issues/25)) ([d80d6e7](https://github.com/eriksaulnier/loupe/commit/d80d6e763b42dbf6b9a6795e0fc4acf24a9d19da))
-* add impact, verified, references and the reviewer's model ([#20](https://github.com/eriksaulnier/loupe/issues/20)) ([9a048ff](https://github.com/eriksaulnier/loupe/commit/9a048ff03a0ae068b72d5b9ce4807d57e917d9bb))
-* publish unattended for any review pipeline ([#16](https://github.com/eriksaulnier/loupe/issues/16)) ([32b676a](https://github.com/eriksaulnier/loupe/commit/32b676aef39c26c8ca187cbaffd16081f27ac5b3))
-* **review:** ask for a round with a label ([#19](https://github.com/eriksaulnier/loupe/issues/19)) ([e7cb8d2](https://github.com/eriksaulnier/loupe/commit/e7cb8d2f92607b1d686cbbe2f4d39376f1e029f7))
+* a footer for the people reading the review ([d80d6e7](https://github.com/eriksaulnier/loupe/commit/d80d6e763b42dbf6b9a6795e0fc4acf24a9d19da))
+* add impact, verified, references and the reviewer's model ([9a048ff](https://github.com/eriksaulnier/loupe/commit/9a048ff03a0ae068b72d5b9ce4807d57e917d9bb))
+* publish unattended for any review pipeline ([32b676a](https://github.com/eriksaulnier/loupe/commit/32b676aef39c26c8ca187cbaffd16081f27ac5b3))
+* **review:** ask for a round with a label ([e7cb8d2](https://github.com/eriksaulnier/loupe/commit/e7cb8d2f92607b1d686cbbe2f4d39376f1e029f7))
 
 ## [0.5.0](https://github.com/eriksaulnier/loupe/compare/v0.4.0...v0.5.0) (2026-09-15)
 
 
 ### Features
 
-* add loupe handoff and ship the plugin to codex and pi ([#14](https://github.com/eriksaulnier/loupe/issues/14)) ([36bbb02](https://github.com/eriksaulnier/loupe/commit/36bbb020124b30352213761e6cbb744bf7a46825))
+* add loupe handoff and ship the plugin to codex and pi ([36bbb02](https://github.com/eriksaulnier/loupe/commit/36bbb020124b30352213761e6cbb744bf7a46825))
 * **render:** drop the blocking callout and body finding dots ([9533218](https://github.com/eriksaulnier/loupe/commit/953321802154501e485e89a7cbeec46a9a65beed))
-* **tui:** edit a finding's label and blocking in review ([#11](https://github.com/eriksaulnier/loupe/issues/11)) ([03964b6](https://github.com/eriksaulnier/loupe/commit/03964b68efbfa31ebe95978a274666c303e364ad))
+* **tui:** edit a finding's label and blocking in review ([03964b6](https://github.com/eriksaulnier/loupe/commit/03964b68efbfa31ebe95978a274666c303e364ad))
 
 
 ### Bug Fixes
 
-* **tui:** drop keys typed as review opens ([#12](https://github.com/eriksaulnier/loupe/issues/12)) ([3c157b5](https://github.com/eriksaulnier/loupe/commit/3c157b581359ae10432ffd1dfca02b14f4f28d48))
-* **tui:** wrap the footer to two lines before dropping hints ([#13](https://github.com/eriksaulnier/loupe/issues/13)) ([dc3f7b0](https://github.com/eriksaulnier/loupe/commit/dc3f7b05b3172bb67cadd1d3a44e8e26bf930506))
+* **tui:** drop keys typed as review opens ([3c157b5](https://github.com/eriksaulnier/loupe/commit/3c157b581359ae10432ffd1dfca02b14f4f28d48))
+* **tui:** wrap the footer to two lines before dropping hints ([dc3f7b0](https://github.com/eriksaulnier/loupe/commit/dc3f7b05b3172bb67cadd1d3a44e8e26bf930506))
 
 ## [0.4.0](https://github.com/eriksaulnier/loupe/compare/v0.3.0...v0.4.0) (2026-09-15)
 
@@ -38,7 +38,7 @@
 
 ### Bug Fixes
 
-* **tui:** wrap finding bodies with glamour v2 and mark open notes ([#9](https://github.com/eriksaulnier/loupe/issues/9)) ([050971e](https://github.com/eriksaulnier/loupe/commit/050971e7e37546dc57b01dc58d71553b142de8a8))
+* **tui:** wrap finding bodies with glamour v2 and mark open notes ([050971e](https://github.com/eriksaulnier/loupe/commit/050971e7e37546dc57b01dc58d71553b142de8a8))
 
 ## [0.3.0](https://github.com/eriksaulnier/loupe/compare/v0.2.0...v0.3.0) (2026-09-14)
 
