@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0](https://github.com/eriksaulnier/loupe/compare/v0.5.0...v0.6.0) (2026-09-16)
+
+
+### Features
+
+* a footer for the people reading the review ([#25](https://github.com/eriksaulnier/loupe/issues/25)) ([15e3ad9](https://github.com/eriksaulnier/loupe/commit/15e3ad9298ac169b70f5965382f912f9c44b55cf))
+* add impact, verified, references and the reviewer's model ([#20](https://github.com/eriksaulnier/loupe/issues/20)) ([a0e4c0b](https://github.com/eriksaulnier/loupe/commit/a0e4c0b3ef8a59130cc2b56e7217a4aa7dc5c5c8))
+* publish unattended for any review pipeline ([#16](https://github.com/eriksaulnier/loupe/issues/16)) ([1736ace](https://github.com/eriksaulnier/loupe/commit/1736ace83b756493718f83b4b358eb59ac38b585))
+* **review:** ask for a round with a label ([#19](https://github.com/eriksaulnier/loupe/issues/19)) ([f93e3e1](https://github.com/eriksaulnier/loupe/commit/f93e3e1f76437789168c83ae916d61a2505bab50))
+
 ## [0.5.0](https://github.com/eriksaulnier/loupe/compare/v0.4.0...v0.5.0) (2026-09-15)
 
 

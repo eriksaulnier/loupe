@@ -1,6 +1,6 @@
 {
   "name": "loupe",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Hand pull request review findings to a human with loupe: capture the pull request, file the findings into a local draft, open review for the human, and answer their notes. Never publishes.",
   "license": "MIT",

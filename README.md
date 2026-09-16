@@ -33,7 +33,7 @@ codex plugin marketplace add eriksaulnier/loupe
 codex plugin add loupe@loupe
 
 # Pi, pinned to the release; use the version loupe --version prints
-pi install git:github.com/eriksaulnier/loupe@v0.5.0 # x-release-please-version
+pi install git:github.com/eriksaulnier/loupe@v0.6.0 # x-release-please-version
 ```
 
 - **Keep plugin and binary together.** Claude Code and Codex install the plugin from `main`, so a skill can name a flag an older binary lacks.
