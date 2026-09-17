@@ -259,6 +259,26 @@ func TestAddShowAndSummary(t *testing.T) {
 	}
 }
 
+func TestShowDiffHandsOverTheCapturedFile(t *testing.T) {
+	h := newHarness(t)
+	h.capture()
+
+	stdout, stderr, exit := h.Run("show", "--run", runRef, "--diff")
+	if exit != 0 {
+		t.Fatalf("exit %d stderr %q", exit, stderr)
+	}
+	stored := readFile(t, filepath.Join(h.RunDir(1), "pr.diff"))
+	if stdout != string(stored) {
+		t.Fatalf("show --diff wrote %q, want the captured %q", stdout, stored)
+	}
+	if !strings.Contains(stdout, "diff --git") {
+		t.Fatalf("the captured diff looks empty: %q", stdout)
+	}
+	if env := h.mustOK("show", "--run", runRef, "--diff", "--json"); env["diff"] != string(stored) {
+		t.Fatalf("show --diff --json carried %v", env["diff"])
+	}
+}
+
 func TestCaptureRefusalAfterFetchNamesCleanup(t *testing.T) {
 	h := newHarness(t)
 	h.GH.SetHead(owner, repo, number, h.Repo.BaseSHA())
