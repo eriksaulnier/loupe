@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/eriksaulnier/loupe/compare/v0.6.0...v0.7.0) (2026-09-17)
+
+
+### Features
+
+* **cli:** add loupe show --diff ([#6](https://github.com/eriksaulnier/loupe/issues/6)) ([c8c2635](https://github.com/eriksaulnier/loupe/commit/c8c2635379a4c9edd921c5a146372e66ee90dc42))
+
 ## [0.6.0](https://github.com/eriksaulnier/loupe/compare/v0.5.0...v0.6.0) (2026-09-16)
 
 
