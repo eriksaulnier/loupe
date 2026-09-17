@@ -1,6 +1,6 @@
 name: review
 
-# The plumbing lives in eriksaulnier/loupe-review, shared with the other repositories reviewed this
+# The plumbing lives in eriksaulnier/loupe-workflows, shared with the other repositories reviewed this
 # way. What stays here is what only this repository can answer: when a round is asked for, whether
 # rounds are turned on at all, and which model reviews. The per-round guidance is in
 # .github/review-instructions.md, read from the default branch and never from the pull request.
@@ -28,7 +28,7 @@ jobs:
       pull-requests: write
       checks: read
       actions: read
-    uses: eriksaulnier/loupe-review/.github/workflows/review.yml@v1
+    uses: eriksaulnier/loupe-workflows/.github/workflows/review.yml@v1
     with:
       pull_request: ${{ inputs.pull_request || github.event.pull_request.number }}
       model: ${{ vars.REVIEW_MODEL }}
