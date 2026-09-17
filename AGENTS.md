@@ -1,6 +1,6 @@
 # loupe
 
-loupe files pull request review findings for a human to decide and publish. `README.md` is the human entry. `CONTRIBUTING.md` covers setup, how changes are made, tests, commits and pull requests, and applies to agents as much as to people. This file adds only what an agent working in the repository needs beyond that.
+loupe collects a review agent's findings into a local draft so a human decides each one and publishes a single GitHub review. `README.md` is the human entry. `CONTRIBUTING.md` covers setup, how changes are made, tests, commits and pull requests, and applies to agents as much as to people. This file adds only what an agent working in the repository needs beyond that.
 
 ## Layout
 
