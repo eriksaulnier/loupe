@@ -14,7 +14,7 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 | `label` | `issue`, `suggestion`, `question` | The kind of remark. Any other value is accepted and preserved verbatim |
 | `blocking` | boolean, absent means false | Whether the PR should not merge until this is addressed |
 | `confidence` | `high`, `medium`, `low` | Reviewer-reported. Optional |
-| `severity` | `critical`, `major`, `minor`, `trivial` | Reviewer-reported. Optional. Never mapped onto a label |
+| `severity` | `critical`, `major`, `minor`, `trivial` | How bad the consequence is, per the table below. Reviewer-reported. Optional. Never mapped onto a label |
 | `verified` | `reproduced`, `plausible` | Whether the reviewer ran the failure or reasoned to it. Optional |
 | `impact` | Markdown | What goes wrong and under what input. Optional, allowlist-checked like `body` |
 | `references` | list of `http` or `https` URLs | What the reviewer looked at. At most six, never fetched. Optional |
@@ -26,6 +26,15 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 - **Severity is never mapped onto a label.** It renders as a labeled word on the meta line and never decides section placement.
 - **Verified is not confidence.** Confidence is how sure the reviewer is; verified is whether it ran or observed the failure (`reproduced`) or reasoned to it (`plausible`).
 - **A stored severity outside the enum still renders.** Runs captured before the enum hold free text; it renders in the same place inside a code span, so it stays inert Markdown, and only a new or changed value is refused.
+
+| `severity` | What goes wrong if it ships |
+| :--- | :--- |
+| `critical` | Data loss, a security hole, an outage |
+| `major` | A real defect on a normal path |
+| `minor` | An edge case, or a cost paid later |
+| `trivial` | Cosmetic. Naming, style, a preference |
+
+**Severity says how bad the consequence is; `blocking` says whether merge waits.** The two correlate and MAY diverge: a `critical` finding in code the release does not reach need not block, and a `trivial` one MAY block when the human says so.
 
 ## Body composition
 
