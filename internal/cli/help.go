@@ -23,7 +23,7 @@ const (
 )
 
 const (
-	rootTagline = "File pull request review findings for a human to decide and publish."
+	rootTagline = "Collect pull request review findings for a human to decide and publish."
 	rootLead    = "An agent files findings into a local draft; the human decides each finding and posts exactly\none confirmed GitHub review."
 	rootFlow    = "capture → add → summary → review → publish"
 	rootRule    = "review and publish are human-only. An agent MUST NOT operate them, pipe confirmation into\nthem, drive them through a pseudo-terminal, or start publish by any route. An agent MAY run\nloupe handoff to start review in a new terminal pane the human sees, and MUST NOT then send\nto, read, resize, close or reuse that pane; otherwise it tells the human to run loupe review.\nAn agent MAY block on loupe wait for the human's notes and MUST pass --run to it."

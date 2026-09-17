@@ -1,4 +1,4 @@
-loupe  File pull request review findings for a human to decide and publish.
+loupe  Collect pull request review findings for a human to decide and publish.
 
 An agent files findings into a local draft; the human decides each finding and posts exactly
 one confirmed GitHub review.

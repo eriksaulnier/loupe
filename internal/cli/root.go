@@ -73,7 +73,7 @@ func (d Deps) width() int {
 func NewRoot(deps Deps) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "loupe",
-		Short:         "File pull request review findings for a human to decide and publish",
+		Short:         "Collect pull request review findings for a human to decide and publish",
 		Long:          rootTagline + "\n\n" + rootLead,
 		Version:       version,
 		SilenceUsage:  true,

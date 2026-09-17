@@ -61,7 +61,7 @@ func TestHelpTouchesNothingButThePalette(t *testing.T) {
 	if code := Execute(deps, []string{"--help"}); code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
 	}
-	if !strings.Contains(s.stdout.String(), "File pull request review findings") || s.stderr.Len() != 0 {
+	if !strings.Contains(s.stdout.String(), "Collect pull request review findings") || s.stderr.Len() != 0 {
 		t.Fatalf("stdout %q stderr %q", s.stdout.String(), s.stderr.String())
 	}
 }
@@ -72,10 +72,10 @@ func TestHelpWithJSONIsOneEnvelope(t *testing.T) {
 		command string
 		text    string
 	}{
-		{[]string{"--json"}, "loupe", "File pull request review findings"},
-		{[]string{"--json", "--help"}, "loupe", "File pull request review findings"},
+		{[]string{"--json"}, "loupe", "Collect pull request review findings"},
+		{[]string{"--json", "--help"}, "loupe", "Collect pull request review findings"},
 		{[]string{"probe", "--help", "--json"}, "probe", "loupe probe [<ref>]"},
-		{[]string{"help", "--json"}, "help", "File pull request review findings"},
+		{[]string{"help", "--json"}, "help", "Collect pull request review findings"},
 	}
 	for _, c := range cases {
 		t.Run(strings.Join(c.args, " "), func(t *testing.T) {

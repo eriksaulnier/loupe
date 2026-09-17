@@ -1,7 +1,7 @@
 {
   "name": "loupe",
   "version": "0.7.0",
-  "description": "Hand pull request review findings to a human with loupe: capture the pull request, file the findings into a local draft, open review for the human, and answer their notes. Never publishes.",
+  "description": "Hand pull request review findings to a human with loupe: capture the pull request, file your findings into a local draft, open review for the human, and answer their notes. Never publishes.",
   "author": {
     "name": "Erik Saulnier"
   },
