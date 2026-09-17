@@ -110,9 +110,9 @@ func DiffSHA256(diff []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// LoadDiff parses pr.diff only when it still matches the fingerprint capture recorded, so a truncated or edited diff
-// cannot silently change which locations are valid or what the review shows.
-func LoadDiff(dir string, target Target) (*diff.Diff, error) {
+// ReadDiff returns pr.diff only when it still matches the fingerprint capture recorded, so a truncated or edited diff
+// cannot silently change which locations are valid, what the review shows, or what a pipeline hands its reviewer.
+func ReadDiff(dir string, target Target) ([]byte, error) {
 	path := filepath.Join(dir, "pr.diff")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -121,9 +121,18 @@ func LoadDiff(dir string, target Target) (*diff.Diff, error) {
 	if got := DiffSHA256(data); got != target.DiffSHA256 {
 		return nil, RecordRefusal(path, fmt.Errorf("its SHA-256 is %s but target.json records diffSha256 %s", got, target.DiffSHA256))
 	}
+	return data, nil
+}
+
+// LoadDiff parses the diff ReadDiff verified.
+func LoadDiff(dir string, target Target) (*diff.Diff, error) {
+	data, err := ReadDiff(dir, target)
+	if err != nil {
+		return nil, err
+	}
 	parsed, err := diff.Parse(data)
 	if err != nil {
-		return nil, RecordRefusal(path, err)
+		return nil, RecordRefusal(filepath.Join(dir, "pr.diff"), err)
 	}
 	return parsed, nil
 }

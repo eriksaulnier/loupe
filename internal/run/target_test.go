@@ -187,3 +187,30 @@ func TestLoadTargetRefusesWrongSchema(t *testing.T) {
 		})
 	}
 }
+
+func TestReadDiffChecksTheFingerprint(t *testing.T) {
+	root := t.TempDir()
+	dir := RunDir(root, "o", "r", 12, 2)
+	stored := []byte("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n")
+	target := sampleTarget()
+	target.DiffSHA256 = DiffSHA256(stored)
+	if err := CreateRun(dir, target, stored, []byte("{}\n")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadDiff(dir, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(stored) {
+		t.Fatalf("ReadDiff returned %q, want %q", got, stored)
+	}
+
+	path := filepath.Join(dir, "pr.diff")
+	if err := os.WriteFile(path, []byte("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+c\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = ReadDiff(dir, target)
+	if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "diffSha256") {
+		t.Fatalf("edited pr.diff: %v, want a refusal naming the file and the fingerprint", err)
+	}
+}

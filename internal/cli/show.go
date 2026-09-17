@@ -9,6 +9,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -45,14 +46,24 @@ Result (--previous --json):
    "round": 1, "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
    "findings": [{"id": "f-001", "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
-                 "label": "issue", "blocking": true}]}`
+                 "label": "issue", "blocking": true}]}
+
+--diff writes the diff capture stored for the run, checked against the fingerprint in target.json,
+so a pipeline can put it beside the checked-out head without knowing where a run lives. Without
+--json it writes those bytes to stdout and nothing else: loupe show --diff > review/pr.diff
+reproduces the captured file exactly. With --previous it refuses, since a published round is not
+a capture.
+
+Result (--diff --json):
+  {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1", "version": 5,
+   "diff": "diff --git a/src/a.go b/src/a.go\n..."}`
 
 func newShowCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "show",
 		Short:   "Show the draft, dispositions and readiness",
 		Long:    showHelp,
-		Example: "  loupe show --run owner/repo#123 --json\n  loupe show --previous --run owner/repo#123@2 --json",
+		Example: "  loupe show --run owner/repo#123 --json\n  loupe show --run owner/repo#123 --diff > review/pr.diff\n  loupe show --previous --run owner/repo#123@2 --json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runShow(cmd, deps)
@@ -60,15 +71,26 @@ func newShowCmd(deps Deps) *cobra.Command {
 	}
 	cmd.Flags().String("run", "", "run reference, owner/repo#123 or owner/repo#123@2")
 	cmd.Flags().Bool("previous", false, "show the findings published by the newest earlier published round")
+	cmd.Flags().Bool("diff", false, "write the captured diff to stdout instead of the draft")
 	return cmd
 }
 
 func runShow(cmd *cobra.Command, deps Deps) error {
+	wantDiff, _ := cmd.Flags().GetBool("diff")
+	previous, _ := cmd.Flags().GetBool("previous")
+	if wantDiff && previous {
+		return refusal.New(refusal.Usage,
+			"--diff cannot be combined with --previous; a published round carries no capture",
+			"run loupe show --diff for the captured diff, or loupe show --previous for the published findings")
+	}
 	dir, ref, err := resolveRun(cmd, deps, "")
 	if err != nil {
 		return err
 	}
-	if previous, _ := cmd.Flags().GetBool("previous"); previous {
+	if wantDiff {
+		return runShowDiff(cmd, deps, dir, ref)
+	}
+	if previous {
 		return runShowPrevious(cmd, deps, ref)
 	}
 	target, err := run.LoadTarget(dir)
@@ -96,6 +118,27 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 		})
 	}
 	return printShow(deps, ref, target, d, dispositions, readiness)
+}
+
+// Raw mode writes the captured bytes and nothing else, so a redirect reproduces pr.diff exactly.
+func runShowDiff(cmd *cobra.Command, deps Deps, dir string, ref run.Ref) error {
+	target, err := run.LoadTarget(dir)
+	if err != nil {
+		return err
+	}
+	data, err := run.ReadDiff(dir, target)
+	if err != nil {
+		return err
+	}
+	if wantJSON(cmd) {
+		d, err := draft.Load(dir)
+		if err != nil {
+			return err
+		}
+		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{"diff": string(data)})
+	}
+	_, err = deps.Stdout.Write(data)
+	return err
 }
 
 func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {

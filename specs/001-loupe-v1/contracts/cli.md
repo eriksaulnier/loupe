@@ -125,9 +125,11 @@ Opens `review` for the human in a new terminal pane beside the agent's and retur
 
 Result payload: `host` (`herdr`), `paneId`, `direction` (`right` or `down`).
 
-### `loupe show [--previous] [--json]`
+### `loupe show [--previous] [--diff] [--json]`
 
 Without `--previous`: the whole draft plus `target`, `dispositions` (`{id: disposition}`), `readiness` and `digest` (SHA-256 of the publishable set, the value that will appear in the hidden marker). With `--previous`: the published findings of the newest earlier round that has a receipt, skipping unpublished rounds, as `{round, reviewUrl, findings: [{id, title, body, location, label, blocking}]}`; refuses with `not-found` when no earlier round was published.
+
+With `--diff`: the diff capture stored for the run, read only when it still matches `target.json`'s `diffSha256`. Without `--json` it writes those bytes to stdout and nothing else, so `loupe show --diff > review/pr.diff` reproduces the captured file byte for byte; this is the form a pipeline uses, and the only one that is byte-exact. With `--json` the payload is a single `diff` string alongside the draft's `version`. `--diff` with `--previous` refuses with `usage`, since a published round is not a capture.
 
 ### `loupe feedback [--json]`
 
