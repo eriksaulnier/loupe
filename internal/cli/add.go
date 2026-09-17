@@ -36,8 +36,10 @@ title and body are required. Exactly one of location or "general": true is requi
 location must be in the captured diff: side RIGHT (the default) is the new file, LEFT the old
 file, and startLine and line must be in the same hunk. label is issue, suggestion, question or
 any other word of letters, digits, _, . or -, at most 40 characters, kept verbatim. blocking
-defaults to false. confidence is high, medium or low; severity is critical, major, minor or
-trivial; verified is reproduced (you ran or observed the failure) or plausible (you reasoned
+defaults to false. confidence is high, medium or low; severity is how bad the consequence is if
+it ships: critical (data loss, a security hole, an outage), major (a real defect on a normal
+path), minor (an edge case, or a cost paid later) or trivial (cosmetic: naming, style, a
+preference); verified is reproduced (you ran or observed the failure) or plausible (you reasoned
 to it). body and impact must pass the Markdown allowlist. references holds at most six http or
 https URLs with a host and no userinfo, each at most 200 bytes with no whitespace, control or
 format characters, <, > or backticks; an empty list is stored as absent; they are never fetched.
