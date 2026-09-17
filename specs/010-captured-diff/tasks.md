@@ -7,7 +7,7 @@ description: "Task list for handing over the captured diff"
 
 **Input**: Design documents from `specs/010-captured-diff/`
 
-**Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), `.specify/memory/constitution.md`
+**Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), and `.specify/memory/constitution.md`
 
 **Tests**: REQUIRED by the constitution's failing test → implementation → passing check. Each test task comes first and MUST fail before the task that follows it.
 
