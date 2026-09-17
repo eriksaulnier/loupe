@@ -59,9 +59,11 @@ Commits MUST follow [Conventional Commits](https://www.conventionalcommits.org).
 
 Each commit MUST be one logical change, and the work SHOULD be committed as it lands rather than in one commit at the end. A rename, a behavior change and a documentation update are three commits even when one sitting produced them, and a subject that needs "and" to describe it is two commits wearing one hat. The gain is at review time: a reviewer can follow a rename without reading it as a rewrite, and a bisect lands on the change that broke something rather than on the afternoon that contained it.
 
-The body, when there is one, explains what changed and why. release-please builds the changelog from `feat` and `fix` commits, so pick the type for what a user of loupe would notice.
+The body, when there is one, explains what changed and why. A squash merge discards those subjects: the pull request title becomes the single commit on `main`, so the changelog entry follows the title's type and not any commit's. The per-commit types still earn their keep before that, in local history, at review and under `git bisect`.
 
 ## Pull requests
+
+The title MUST be a Conventional Commit in the same shape the commit-msg hook enforces on a commit subject: `type(scope): summary`, a lowercase summary, at most 72 characters and no trailing period. The types and scopes are the ones listed under Commits above. The repository merges by squash and takes the title as the commit subject, so the title is the permanent subject on `main` and release-please's only input: pick its type for what a user of loupe would notice. Nothing checks it: a title with no recognized type merges cleanly and then produces no changelog entry and no version bump, which shows up at the next release and not before. Dependabot is the standing exception, since it prefixes `build` but capitalizes its summary.
 
 CI runs `mise run check` on every pull request. The description MUST show the checks that ran, with their output, and MUST name what was not verified (Principle VII). A change to a contract names the spec amendment that allows it.
 
