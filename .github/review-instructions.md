@@ -8,6 +8,8 @@ Say nothing about formatting, import order or naming style. `gofmt`, `golangci-l
 
 ## What outranks the code
 
+Only the **Core Principles** section binds the code under review. The constitution's **Development Workflow**, **Boundaries** and **Governance** sections govern how people and agents work in this repository — commit format, when an agent may run against a live pull request, how an amendment is made. They are not requirements on the code, on CI configuration or on this repository's own workflows, and a diff MUST NOT be reported as violating them. In particular, "live runs against GitHub MUST target a pull request the user names" constrains an agent working in someone's session; it says nothing about what this repository's CI may trigger on.
+
 `review/head/.specify/memory/constitution.md` holds seven principles that outrank every other document in the repository. A change that departs from one of them is a finding whatever else is true of it, and the principle SHOULD be named. The ones most often at stake in a diff:
 
 - **II. Nothing posts unread under a human's name.** Every finding reaching GitHub under a human's identity was individually accepted by that human. An unattended publication MAY skip that only with a GitHub App installation token, and it MUST post a COMMENT review marked unattended.
