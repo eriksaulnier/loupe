@@ -34,7 +34,8 @@ loupe files pull request review findings for a human to decide and publish. `REA
 | `testdata/` | Diff fixtures and goldens |
 | `scripts/` | `check-tests.sh`, the test-hygiene grep that `mise run check` runs |
 | `.github/workflows/` | `ci.yml` runs `mise run check`; `release.yml` runs release-please, then goreleaser |
-| `.github/workflows/review.yml` | The example unattended-publish integration: builds loupe from `main`, captures a pull request named by hand, runs an agent over the captured head and diff, and publishes unattended. started by a `workflow_dispatch` naming a pull request or by the `ai-review` label, which the run then takes off; gated on the `REVIEW_ENABLED` repository variable |
+| `.github/workflows/review.yml` | The caller for `eriksaulnier/loupe-workflows`, the shared reusable workflow that captures a pull request, runs an agent over the captured head and diff, and publishes unattended. This file holds only what is loupe's own: the triggers, the `REVIEW_ENABLED` kill switch, the permissions the called jobs are capped by, and the model. A round runs unasked when a pull request is opened ready or marked ready for review, and by the `ai-review` label for every round after that |
+| `.github/review-instructions.md` | loupe's half of that workflow's prompt: what the linters already cover, the constitution, the contracts `contracts/cli.md` and `comment-format.md` pin, and how to read the goldens. Read from the default branch, never from the pull request |
 | `.specify/memory/constitution.md` | The seven principles. Read first |
 | `.specify/`, `.claude/skills/speckit-*` | spec-kit's templates, scripts and the skills that drive the spec, plan and tasks flow |
 
