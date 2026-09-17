@@ -8,7 +8,9 @@ Say nothing about formatting, import order or naming style. `gofmt`, `golangci-l
 
 ## What outranks the code
 
-Only the **Core Principles** section binds the code under review. The constitution's **Development Workflow**, **Boundaries** and **Governance** sections govern how people and agents work in this repository — commit format, when an agent may run against a live pull request, how an amendment is made. They are not requirements on the code, on CI configuration or on this repository's own workflows, and a diff MUST NOT be reported as violating them. In particular, "live runs against GitHub MUST target a pull request the user names" constrains an agent working in someone's session; it says nothing about what this repository's CI may trigger on.
+The **Core Principles** bind the code under review, and so does **Boundaries** — including that `docs/comment-format.md` is a contract whose changes require a spec amendment. The **Development Workflow** section is mixed: its documentation rules bind any documentation the diff adds — American spelling, RFC 2119 keywords for normative statements, one line per paragraph, a final newline.
+
+Its *process* rules describe no code at all, and a diff MUST NOT be reported as violating them: that `mise run check` passes, the Conventional Commits format, that no push, release, GitHub review or pull request may be created without an explicit request, or that a live run must target a pull request the user names. Those constrain a person or an agent working in a session. In particular the live-run rule says nothing about what this repository's own CI may trigger on.
 
 The seven Core Principles within `review/head/.specify/memory/constitution.md` outrank every other document that binds the code under review. A **verified** change that departs from one of them is a finding even if another document permits it, and the principle SHOULD be named. Suspecting a departure you could not trace is a question, as it would be anywhere else. The ones most often at stake in a diff:
 
