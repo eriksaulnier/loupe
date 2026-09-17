@@ -325,7 +325,7 @@ func TestPlainEditRefusesAWithdrawnFinding(t *testing.T) {
 	if err := RunPlain(dir, &lineReader{lines: []string{"n", "e", "q"}}, &out, envOf(testEnv), 0); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "loupe edit f-002 --include") || strings.Contains(out.String(), "label f-002 (") {
+	if !strings.Contains(out.String(), "reinstate f-002 first") || strings.Contains(out.String(), "label f-002 (") {
 		t.Fatalf("e on a withdrawn finding did not refuse with the fix:\n%s", out.String())
 	}
 }

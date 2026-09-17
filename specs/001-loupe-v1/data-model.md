@@ -113,7 +113,7 @@ Validation is against the stored diff only. A refusal names up to three valid li
 | `findingRev` | int | the finding's `rev` when decided; the decision is current iff equal to the finding's current `rev` |
 | `at` | time | |
 
-Only the review interface writes decisions (`by` is implicitly human). A send-back deletes the finding's decision. A label or blocking edit made in the review interface re-records a current decision at the finding's new `rev` (specs/005-edit-in-review). A stale decision (rev mismatch) is ignored by derivation and overwritten by the next decision.
+Only the review interface writes decisions (`by` is implicitly human). A send-back deletes the finding's decision. A label or blocking edit made in the review interface re-records a current decision at the finding's new `rev` (specs/005-edit-in-review). Reinstating a withdrawn finding there sets `included`, bumps `rev` and records an acceptance at the new `rev` (specs/011-reinstate-withdrawn); like that edit it is out of the command line's reach, because `--by` is self-reported. A stale decision (rev mismatch) is ignored by derivation and overwritten by the next decision.
 
 ## Note
 
@@ -201,7 +201,7 @@ A receipt is never deleted by loupe. Its existence makes every later `publish` a
 Run:      (none) --capture--> captured --publishable set all accepted, no open note--> ready --receipt--> published
 Finding:  pending --accept--> accepted --edit/withdraw/send-back--> pending
           pending --exclude--> excluded --edit--> pending ; excluded --restore(u)--> pending
-          included --edit --exclude--> withdrawn --edit --include--> pending
+          included --edit --exclude--> withdrawn --edit --include--> pending ; withdrawn --reinstate(u)--> accepted
 Note:     open --resolve|dismiss (review only)--> resolved|dismissed
           open --accept its finding--> resolved ; open --exclude its finding--> dismissed
 Attempt:  (none) --confirm--> in-flight --2xx--> (deleted, receipt) | --4xx--> (deleted) | --other--> unknown

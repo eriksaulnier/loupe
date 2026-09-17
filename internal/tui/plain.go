@@ -28,7 +28,7 @@ func plainWidth(width int) int {
 
 // plainAnswers are the letters an answer may be, in the order the legend shows them.
 var plainAnswers = []style.Hint{
-	{Key: "a", Verb: "accept"}, {Key: "x", Verb: "exclude"}, {Key: "s", Verb: "send back"}, {Key: "u", Verb: "restore"},
+	{Key: "a", Verb: "accept"}, {Key: "x", Verb: "exclude"}, {Key: "s", Verb: "send back"}, {Key: "u", Verb: "restore/reinstate"},
 	{Key: "e", Verb: "edit"}, {Key: "r/d", Verb: "note"}, {Key: "n", Verb: "next"}, {Key: "b", Verb: "back"}, {Key: "q", Verb: "quit"},
 }
 
@@ -117,7 +117,15 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 				return err
 			}
 		case "u":
-			fn, success = func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, s.Glyphs.Pending+" "+f.ID+" restored to pending"
+			if draft.Dispositions(d)[f.ID] == draft.DispositionWithdrawn {
+				fn = func(d *draft.Draft) error {
+					closed, err := draft.Reinstate(d, f.ID, now)
+					success = decidedNotice(s.Glyphs.Sep, s.Glyphs.Accepted, f.ID, "reinstated and accepted", closed, draft.NoteResolved)
+					return err
+				}
+			} else {
+				fn, success = func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, s.Glyphs.Pending+" "+f.ID+" restored to pending"
+			}
 		case "r", "d":
 			n, open := firstOpenNote(d, f.ID)
 			if !open {

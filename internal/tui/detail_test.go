@@ -240,7 +240,7 @@ func TestDetailActionsFollowTheFinding(t *testing.T) {
 		{"pending last", located, draft.DispositionPending, false, false, "←/→ ↑/↓ a x s e f ?"},
 		{"accepted", located, draft.DispositionAccepted, false, true, "←/→ ↑/↓ x+ s+ e f ?"},
 		{"excluded general", general, draft.DispositionExcluded, false, true, "←/→ ↑/↓ u e ?"},
-		{"withdrawn", withdrawn, draft.DispositionWithdrawn, false, true, "←/→ ↑/↓ f ?"},
+		{"withdrawn", withdrawn, draft.DispositionWithdrawn, false, true, "←/→ ↑/↓ u+ f ?"},
 		{"excluded after withdrawal", withdrawn, draft.DispositionExcluded, false, true, "←/→ ↑/↓ u f ?"},
 		{"open note", general, draft.DispositionPending, true, false, "←/→ ↑/↓ a x s e r d ?"},
 	}
@@ -581,7 +581,7 @@ func TestEditRefusesAWithdrawnFinding(t *testing.T) {
 		return err
 	})
 	m.Update(runeKey("e"))
-	if m.editing || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "loupe edit f-002 --include") {
+	if m.editing || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "reinstate f-002 first") {
 		t.Fatalf("editing %v notice %q", m.editing, m.notice)
 	}
 }

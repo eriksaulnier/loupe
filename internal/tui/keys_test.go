@@ -315,3 +315,54 @@ func TestHelpScrolls(t *testing.T) {
 		}
 	}
 }
+
+// withdrawnFixture sends f-002 back and has the agent answer by withdrawing it, which is how a finding reaches the
+// human withdrawn with its note still open.
+func withdrawnFixture(t *testing.T) string {
+	t.Helper()
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		if _, err := draft.SendBack(d, "f-002", "Why?", testNow); err != nil {
+			return err
+		}
+		withdraw := false
+		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestDetailKeyReinstatesAWithdrawnFinding(t *testing.T) {
+	dir := withdrawnFixture(t)
+	m := newModel(t, dir)
+	if err := m.openFinding("f-002"); err != nil {
+		t.Fatal(err)
+	}
+	press(m, "u")
+	d := loadDraft(t, dir)
+	if draft.Dispositions(d)["f-002"] != draft.DispositionAccepted || !d.Findings[1].Included {
+		t.Fatalf("u did not reinstate f-002: %+v", d.Findings[1])
+	}
+	if want := fmt.Sprintf("f-002 reinstated and accepted %s n-001 resolved", m.glyphs.Sep); !strings.Contains(m.notice, want) {
+		t.Fatalf("notice %q, want %q", m.notice, want)
+	}
+	if h := d.Findings[1].History; len(h) != 2 || h[1].By != draft.ByHuman {
+		t.Fatalf("history %+v", h)
+	}
+}
+
+func TestPlainKeyReinstatesAWithdrawnFinding(t *testing.T) {
+	dir := withdrawnFixture(t)
+	var out bytes.Buffer
+	if err := RunPlain(dir, &lineReader{lines: []string{"n", "u", "q"}}, &out, envOf(testEnv), 0); err != nil {
+		t.Fatal(err)
+	}
+	if d := loadDraft(t, dir); draft.Dispositions(d)["f-002"] != draft.DispositionAccepted {
+		t.Fatalf("u did not reinstate f-002:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "f-002 reinstated and accepted") {
+		t.Fatalf("output lacks the notice:\n%s", out.String())
+	}
+}

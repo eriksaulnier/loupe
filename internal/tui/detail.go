@@ -250,6 +250,16 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 			return decidedNotice(m.glyphs.Sep, m.glyphs.Excluded, f.ID, "excluded", closed, draft.NoteDismissed)
 		})
 	case "u":
+		if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
+			var closed []string
+			decide := func(d *draft.Draft) (err error) {
+				closed, err = draft.Reinstate(d, f.ID, m.cfg.Now())
+				return err
+			}
+			return m.decideAndShow(decide, func() string {
+				return decidedNotice(m.glyphs.Sep, m.glyphs.Accepted, f.ID, "reinstated and accepted", closed, draft.NoteResolved)
+			})
+		}
 		return m.decideAndStay(func(d *draft.Draft) error { return draft.Restore(d, f.ID) }, func() string { return fmt.Sprintf("%s %s restored to pending", m.glyphs.Pending, f.ID) })
 	case "r", "d":
 		n, ok := firstOpenNote(m.draft, f.ID)
@@ -536,6 +546,8 @@ func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote,
 		hints = append(hints, decide("x", "exclude", true), decide("s", "send back", true))
 	case draft.DispositionExcluded:
 		hints = append(hints, decide("u", "restore", false))
+	case draft.DispositionWithdrawn:
+		hints = append(hints, decide("u", "reinstate", true))
 	}
 	if f.Included {
 		hints = append(hints, decide("e", "edit", false))

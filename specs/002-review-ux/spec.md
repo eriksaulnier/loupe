@@ -167,7 +167,7 @@ On initial open or reload, the selected row SHOULD be the first pending finding,
 | `a` | none | Accept the finding as shown |
 | `x` | none | Exclude the finding from the review |
 | `s` | none | Send the finding back with a note |
-| `u` | none | Restore an excluded finding to pending |
+| `u` | none | Restore an excluded finding to pending; reinstate a withdrawn one, which includes and accepts it (specs/011-reinstate-withdrawn) |
 | `r` | none | Resolve the finding’s open note |
 | `d` | none | Dismiss the finding’s open note |
 | `f` | none | Open the whole-file diff for a located finding |
@@ -197,7 +197,7 @@ The file diff MUST continue to mark every finding on the file and keep the activ
 
 The persistent footer MUST advertise primary arrow navigation, currently available decisions, and contextual help.
 
-The footer MUST NOT advertise `restore` unless the finding is excluded.
+The footer MUST NOT advertise `restore` unless the finding is excluded. (Amended 2026-09-17 by `specs/011-reinstate-withdrawn` FR-006: it MUST NOT advertise `reinstate` unless the finding is withdrawn, which is the only other meaning `u` has.)
 
 The footer MUST NOT advertise note resolution or dismissal unless the finding has an open note.
 

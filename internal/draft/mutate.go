@@ -271,7 +271,7 @@ func Accept(d *Draft, findingID string, now time.Time) ([]string, error) {
 	}
 	if !f.Included {
 		return nil, refusal.New(refusal.Input, "accept is for included findings only",
-			fmt.Sprintf("exclude %s instead, or have the agent restore it with loupe edit %s --include", f.ID, f.ID))
+			fmt.Sprintf("reinstate %s to accept it, or exclude it instead", f.ID))
 	}
 	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionAccepted, FindingRev: f.Rev, At: now}
 	return closeOpenNotes(d, f.ID, NoteResolved, now), nil
@@ -316,6 +316,34 @@ func Restore(d *Draft, findingID string) error {
 	}
 	delete(d.Decisions, f.ID)
 	return nil
+}
+
+// Reinstate is the human's override of an agent withdrawal, from the review interface: it puts the finding back in
+// the review and accepts it in one move, since the human decided while looking at it. The command line MUST NOT
+// reach it: --by is self-reported there, so an agent could undo its own withdrawal unseen. Like Accept it resolves
+// the finding's open notes and returns their ids, since overriding the withdrawal is the human's answer to them.
+func Reinstate(d *Draft, findingID string, now time.Time) ([]string, error) {
+	stored, err := findFinding(d, findingID)
+	if err != nil {
+		return nil, err
+	}
+	if got := disposition(d, *stored); got != DispositionWithdrawn {
+		fix := "accept, exclude or send back the finding instead"
+		if !stored.Included {
+			// Withdrawn under a current excluded decision. Accept would refuse it too, so restore first: that clears
+			// the decision and leaves the finding withdrawn, which reinstate does take.
+			fix = fmt.Sprintf("restore %s first, then reinstate it", stored.ID)
+		}
+		return nil, refusal.New(refusal.Input, fmt.Sprintf("reinstate is for withdrawn findings only; %s is %s", stored.ID, got), fix)
+	}
+	included := true
+	// No publishable field changes, so Edit needs no diff to validate against.
+	f, _, err := Edit(d, findingID, EditInput{}, &included, nil, ByHuman, now)
+	if err != nil {
+		return nil, err
+	}
+	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionAccepted, FindingRev: f.Rev, At: now}
+	return closeOpenNotes(d, f.ID, NoteResolved, now), nil
 }
 
 func ResolveNote(d *Draft, noteID string, now time.Time) error {
@@ -440,7 +468,7 @@ func Recalibratable(f Finding) error {
 		return nil
 	}
 	return refusal.New(refusal.Input, fmt.Sprintf("%s is withdrawn, so its label and blocking cannot be edited", f.ID),
-		fmt.Sprintf("have the agent restore it with loupe edit %s --include", f.ID))
+		fmt.Sprintf("reinstate %s first", f.ID))
 }
 
 // Recalibrate is the human's label and blocking edit from the review interface. Unlike Edit it keeps a current
