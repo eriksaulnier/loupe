@@ -34,6 +34,8 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 | `minor` | An edge case, or a cost paid later |
 | `trivial` | Cosmetic. Naming, style, a preference |
 
+**The rows are ordered, and a finding takes the highest row it satisfies.** They name different kinds of consequence, so more than one MAY fit; the order decides. Data loss confined to an edge case is `critical`, not `minor`, and an outage on a normal path is `critical`, not `major`.
+
 **Severity says how bad the consequence is; `blocking` says whether merge waits.** The two correlate and MAY diverge: a `critical` finding in code the release does not reach need not block, and a `trivial` one MAY block when the human says so.
 
 ## Body composition

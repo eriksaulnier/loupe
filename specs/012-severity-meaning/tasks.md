@@ -19,6 +19,7 @@ description: "Task list for what loupe's four severity words mean"
 ## Phase 1: Contracts (FR-001 to FR-005, FR-009)
 
 - [x] T001 Amend the Vocabulary section of `docs/comment-format.md`: point the `severity` row's Meaning cell at the new table, and add the four-row meaning table and the line saying severity is how bad the consequence is while `blocking` is whether merge waits, and that the two MAY diverge. Keep every existing normative bullet, including "Severity is never mapped onto a label" and the out-of-enum rendering bullet.
+- [x] T001a Add the precedence rule to `docs/comment-format.md` under the table: the rows are ordered and a finding takes the highest row it satisfies, with the two overlapping examples (FR-011). Carry a clause for it in `plugin/skills/human-review/SKILL.md` and in `internal/cli/add.go`'s long help.
 - [x] T002 [P] Extend the FR-007 pointer in `specs/001-loupe-v1/spec.md` so it names `specs/012-severity-meaning/spec.md` as the definer of the meanings alongside 008 as the definer of the enum.
 
 ## Phase 2: User Story 1 - A reviewer picks the word (P1)

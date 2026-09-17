@@ -41,6 +41,7 @@ An agent filing a finding, or a human editing one in review, reads what the four
 2. **Given** an agent that has read only the workflow skill, **When** it files a finding, **Then** it has the four meanings without leaving the skill.
 3. **Given** an agent that has read only `loupe add --help`, **When** it composes its input, **Then** it has the four meanings, as Principle I requires of every workflow.
 4. **Given** a reviewer choosing between `major` and `blocking`, **When** the contract is read, **Then** it says which axis each is on.
+5. **Given** a finding that satisfies more than one row, **When** the contract is read, **Then** it says which row wins.
 
 ---
 
@@ -63,6 +64,7 @@ The pull request author opens the review they were going to get before this chan
 ### Edge Cases
 
 - **A stored severity outside the enum.** Runs captured before 008 hold free text. It still renders inside a code span and is still refused only on a new or changed value; the table describes the enum and says nothing about those.
+- **A finding that fits more than one row.** The rows name different kinds of consequence, so overlap is normal: data loss confined to an edge case is both data loss and an edge case. The rows are ordered and the highest one that fits wins, so it is `critical`. Without that rule the vocabulary cannot deliver the consistent choice SC-001 promises.
 - **A finding whose severity and blocking disagree.** Allowed, and named as allowed. A `critical` finding in code the release does not reach need not block; a `trivial` one MAY block when the human says so.
 - **A reviewer who wants a fifth word.** There is no fifth word. The four cover data loss through cosmetics, and a finding that fits none of them is a finding whose severity is better left absent.
 - **An agent that now feels obliged to supply one.** Severity stays optional. The guard against the meanings becoming pressure — "Report `confidence`, `severity` and `verified` only when you mean them" — stays exactly as it is.
@@ -79,6 +81,7 @@ The pull request author opens the review they were going to get before this chan
 - **FR-008**: No published review MAY render differently. No glyph moves, no legend is added, and no golden under `testdata/golden/` changes.
 - **FR-009**: `specs/001-loupe-v1/spec.md` FR-007 MUST point at this specification for the meanings alongside 008 for the enum.
 - **FR-010**: Whether the meanings make reviewers pick more consistently MUST be recorded as unverified in `specs/001-loupe-v1/validation.md`, not claimed.
+- **FR-011**: The contract MUST state that the rows are ordered and that a finding takes the highest row it satisfies. The rows grade different kinds of consequence, so more than one can fit one finding, and without a stated precedence two reviewers reach different words for the same defect. `plugin/skills/human-review/SKILL.md` and `loupe add`'s long help MUST carry the rule, since they are where the word is picked.
 
 ### Key Entities
 
@@ -89,6 +92,7 @@ The pull request author opens the review they were going to get before this chan
 
 - **SC-001**: A reviewer can pick a severity word from the contract, the skill or `loupe add --help` without inferring what any of them means.
 - **SC-002**: No severity word can be read as an instruction about what to do with the finding.
+- **SC-005**: A finding that satisfies more than one row has exactly one correct word, and the contract says which.
 - **SC-003**: Every published review is byte-identical to what it was before this change, and no golden is regenerated.
 - **SC-004**: All automated repository checks pass after the final edit.
 
