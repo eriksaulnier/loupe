@@ -8,7 +8,11 @@ Say nothing about formatting, import order or naming style. `gofmt`, `golangci-l
 
 ## What outranks the code
 
-`review/head/.specify/memory/constitution.md` holds seven principles that outrank every other document in the repository. A change that departs from one of them is a finding whatever else is true of it, and the principle SHOULD be named. The ones most often at stake in a diff:
+The **Core Principles** bind the code under review, and so does **Boundaries** — including that `docs/comment-format.md` is a contract whose changes require a spec amendment. The **Development Workflow** section is mixed: its documentation rules bind any documentation the diff adds — American spelling, RFC 2119 keywords for normative statements, one line per paragraph, a final newline.
+
+Its *process* rules describe no code at all, and a diff MUST NOT be reported as violating them: that `mise run check` passes, the Conventional Commits format, that no push, release, GitHub review or pull request may be created without an explicit request, or that a live run must target a pull request the user names. Those constrain a person or an agent working in a session. In particular the live-run rule says nothing about what this repository's own CI may trigger on.
+
+The seven Core Principles within `review/head/.specify/memory/constitution.md` outrank every other document that binds the code under review. A **verified** change that departs from one of them is a finding even if another document permits it, and the principle SHOULD be named. Suspecting a departure you could not trace is a question, as it would be anywhere else. The ones most often at stake in a diff:
 
 - **II. Nothing posts unread under a human's name.** Every finding reaching GitHub under a human's identity was individually accepted by that human. An unattended publication MAY skip that only with a GitHub App installation token, and it MUST post a COMMENT review marked unattended.
 - **III. Local files, no service.** No daemon, no database, no network beyond Git and the GitHub API.
@@ -18,7 +22,7 @@ Say nothing about formatting, import order or naming style. `gofmt`, `golangci-l
 
 ## The contracts tests pin
 
-A change to any of these without a matching change to the document that promises it is a finding:
+A change that alters behavior any of these documents promises, without a matching change to the document that promises it, is a finding. A refactor that preserves the promised behavior exactly is not, however much it churns:
 
 - `review/head/specs/001-loupe-v1/contracts/cli.md` — the `--json` result envelopes, the refusal codes and the exit codes (0 success, 1 refusal, 2 usage).
 - `review/head/docs/comment-format.md` — the published review format, shared with humans reading GitHub. The constitution says changing it requires a spec amendment under `specs/`.
@@ -32,4 +36,4 @@ A run's on-disk layout under `LOUPE_HOME` is documented but is **not** a contrac
 
 ## Test rules the repository enforces
 
-`review/head/scripts/check-tests.sh` greps tracked test files for pseudo-terminals, network hosts and `CreateReview` calls outside `internal/publish`. A test that reaches for any of those is a finding even if the script's grep happens not to catch its spelling.
+Tests MUST NOT use a pseudo-terminal, reach a network host, or call `CreateReview` outside `internal/publish`. `review/head/scripts/check-tests.sh` enforces that mechanically by grepping tracked test files, but the rule is the contract and the grep is only its enforcement. A test that reaches for any of the three is therefore a finding even when it evades the script's current spellings.
