@@ -39,7 +39,7 @@ func exampleInput() Input {
 	return Input{
 		Owner: "o", Repo: "r", Number: 7, Round: 2,
 		HeadSHA: "d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2", Inline: "blocking",
-		Summary: "The retry path can publish twice and the digest is not verified on reconcile.\nTests were not executed in this read-only review.",
+		Summary: "The retry path can publish twice and the digest is not verified on reconcile.\nWorth fixing before this merges; the rest reads fine to me.",
 		Digest:  "<sha256>", PublicationID: "<uuid>",
 		Findings: []Finding{
 			{ID: "f-002", Title: "Redundant sort on every read", Body: "…",

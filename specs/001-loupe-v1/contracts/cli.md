@@ -109,6 +109,8 @@ Result payload: `finding` (`{id, rev, included}`), `version`, `clearedDecision` 
 
 Input: `{"summary": "Markdown"}`. `--expect-findings` is required for `--by agent` and compares `n` with the number of included findings inside the same lock; a mismatch leaves the summary unchanged and returns `details.included` as `[{id, title}]`.
 
+The summary orients the human while they sort findings, and is the opening prose of an unattended publication. An attended publication does not post it: the human types the review's opening at the confirmation instead (specs/013-human-message).
+
 Result payload: `version`, `includedCount`.
 
 ### `loupe wait [--timeout <duration>] [--json]`
@@ -152,6 +154,8 @@ Refuses with `tty` before reading the draft when stdin or stdout is not a termin
 ### `loupe publish [<ref>] --action comment|approve|request-changes [--inline none|blocking|all] [--retry-unknown] [--plain] [--unattended]` (human only, except `--unattended`)
 
 Runs the publication state machine in research.md. After a receipt replay or reconciliation, refuses with `tty` before reading the draft or GitHub credentials, with the same terminal rule as `review`. `--inline` defaults to `blocking`. When the head only gained commits since capture, the confirmation shows them and the findings on files they changed, and the review is sent at the captured head; there is no flag for this. Prints the review URL on success and on receipt replay.
+
+The confirmation is where the human writes the review's opening prose, in the body and at the place their words will appear. There is no command and no flag that sets it, because a command that writes the human's words is a command an agent can call. An empty message publishes a body that opens on the chips row, as a draft with no summary does. The plain fallback asks for it on one line before its `[y/N]` prompt, and an empty line means none.
 
 `--unattended` publishes without a terminal, a confirmation or per-finding decisions, for a CI pipeline rather than a human (specs/007-unattended-publish). It requires a GitHub App installation token and refuses `token` for any other kind; publish without it refuses `token` for an installation token. It selects the run from `<ref>` or `LOUPE_RUN` only, and refuses `usage` rather than falling back to the current branch's pull request. `--action` defaults to `comment`, and any other action, or `--plain`, is a `usage` error. It composes from the publishable set rather than the accepted findings, skips the `tty`, `own-pr` and `not-ready` refusals, keeps `head-moved`, `empty`, replay and reconciliation, numbers the review from the pull request's bot reviews, and marks it unattended in the footer and `loupe-meta` per `docs/comment-format.md`.
 
