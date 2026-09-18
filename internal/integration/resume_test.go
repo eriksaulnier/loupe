@@ -96,7 +96,7 @@ func TestResumeFromBranch(t *testing.T) {
 	}
 	checkList("ready", "captured")
 
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	if stdout, stderr, exit := h.Run("publish", "--action", "comment", "--plain"); exit != 0 {
 		t.Fatalf("publish exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}

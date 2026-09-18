@@ -16,6 +16,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
@@ -24,6 +25,11 @@ import (
 func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if !strings.Contains(m.View(), "your message") {
+		t.Errorf("the confirmation opens without the message input:\n%s", m.View())
+	}
+	// esc hands the keyboard back to the confirmation, which is where its own keys are live.
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	view := m.View()
 	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
 		"Publish - acme/widgets#42 - comment - inline blocking (1)", "review body", "inline comments (1)", "y publish this review"} {
@@ -39,23 +45,94 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 		t.Errorf("review view has a closed <details>, a raw hidden character or the JSON:\n%q", view)
 	}
 
-	for _, toggle := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune("v")}, {Type: tea.KeyTab}} {
-		if _, cmd := m.Update(toggle); cmd != nil {
-			t.Fatalf("toggle %v ended the program", toggle)
-		}
-		json := m.View()
-		if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") {
-			t.Errorf("JSON view after %v:\n%s", toggle, json)
-		}
-		if _, cmd := m.Update(toggle); cmd != nil {
-			t.Fatalf("toggle %v ended the program", toggle)
-		}
-		if m.View() != view {
-			t.Errorf("toggling %v twice did not return to the review:\n%s", toggle, m.View())
-		}
+	toggle := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}
+	if _, cmd := m.Update(toggle); cmd != nil {
+		t.Fatalf("toggle %v ended the program", toggle)
+	}
+	json := m.View()
+	if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") {
+		t.Errorf("JSON view after %v:\n%s", toggle, json)
+	}
+	if _, cmd := m.Update(toggle); cmd != nil {
+		t.Fatalf("toggle %v ended the program", toggle)
+	}
+	if m.View() != view {
+		t.Errorf("toggling %v twice did not return to the review:\n%s", toggle, m.View())
 	}
 	if m.Confirmed() {
 		t.Fatal("confirmed without y")
+	}
+}
+
+// TestConfirmTypesTheOpeningInPlace is FR-003: the message is written where it will be read, under the chips row
+// and above the findings it introduces, and every row of it is on screen.
+func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
+	typeInto(m, "The cache bug is the blocker here. The rest can land later.")
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	typeInto(m, "Fix the ETag path first.")
+	view := m.View()
+	// Wrapped at this width, so the first paragraph is matched by its ends.
+	for _, want := range []string{"The cache bug is the blocker", "later.", "Fix the ETag path first."} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the confirmation lost part of the message %q:\n%s", want, view)
+		}
+	}
+	chips, body := strings.Index(view, previewChips), strings.Index(view, "<details open>")
+	if opening := strings.Index(view, "The cache bug"); chips < 0 || body < 0 || opening < chips || opening > body {
+		t.Errorf("the message is not in the body's opening slot (chips %d, opening %d, body %d):\n%s", chips, opening, body, view)
+	}
+	if m.Message() != "The cache bug is the blocker here. The rest can land later.\n\nFix the ETag path first." {
+		t.Errorf("message %q", m.Message())
+	}
+}
+
+// TestConfirmFocusedInputSwallowsY is FR-010: one key confirms, and it is not a key the human is typing with.
+func TestConfirmFocusedInputSwallowsY(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "yes, y, and y again")
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd != nil {
+		t.Fatal("a keystroke in the message ended the program")
+	}
+	if m.Confirmed() {
+		t.Fatal("typing y into the message confirmed the review")
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd == nil {
+		t.Fatal("y did not confirm once the input was blurred")
+	}
+	if !m.Confirmed() || m.Message() != "yes, y, and y againy" {
+		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
+	}
+}
+
+// TestConfirmKeepsAMalformedMessageOnScreen is FR-009: the allowlist is checked before anything is sent, and the
+// human stays on the confirmation with their text.
+func TestConfirmKeepsAMalformedMessageOnScreen(t *testing.T) {
+	preview := confirmPreview()
+	preview.Compose = composeOpening(preview, refusal.New(refusal.Markdown, "the summary has a raw HTML tag on line 1", "reword the message at the publish confirmation"))
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "<script>bad</script>")
+	if view := m.View(); !strings.Contains(view, "raw HTML tag") || !strings.Contains(view, "reword the message") {
+		t.Errorf("the refusal is not on screen:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd != nil || m.Confirmed() {
+		t.Fatal("a malformed message was published")
+	}
+	if m.Message() != "<script>bad</script>" {
+		t.Errorf("the typed text was lost: %q", m.Message())
+	}
+}
+
+// typeInto sends text to the confirmation one keystroke at a time, as a human types it.
+func typeInto(m *ConfirmModel, text string) {
+	for _, r := range text {
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 }
 
@@ -110,7 +187,9 @@ func TestConfirmCancelSentenceSurvivesSixtyColumns(t *testing.T) {
 	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "request-changes", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	lines := strings.Split(m.View(), "\n")
-	if !strings.Contains(lines[len(lines)-2], confirmCancel) || !strings.Contains(lines[len(lines)-1], "y publish this review") {
+	// At this width the footer takes two lines, and the cancel sentence moves to the notice line above them.
+	tail := strings.Join(lines[len(lines)-3:], "\n")
+	if !strings.Contains(tail, confirmCancel) || !strings.Contains(tail, "y publish this review") {
 		t.Errorf("60-column confirmation lost the cancel sentence or y:\n%s", strings.Join(lines, "\n"))
 	}
 }
@@ -151,7 +230,8 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 			tm := teatest.NewTestModel(t, NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1)),
 				teatest.WithInitialTermSize(100, 40))
 			waitFor(t, tm, "<details open>")
-			tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+			tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+			tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
 			waitFor(t, tm, `"event": "COMMENT"`)
 			tm.Send(c.key)
 			final, ok := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(*ConfirmModel)
@@ -175,8 +255,10 @@ func TestConfirmEndsAtEndOfInput(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				ok, err := Confirm(strings.NewReader(c.input), io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))(confirmPreview())
-				done <- result{ok, err}
+				// Tab blurs the message input, which opens focused; what follows is an answer. It stands in for esc,
+				// whose byte would join the key after it into one alt-key sequence.
+				answer, err := Confirm(strings.NewReader("\t"+c.input), io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))(confirmPreview())
+				done <- result{answer.Publish, err}
 			}()
 			select {
 			case r := <-done:
@@ -308,6 +390,7 @@ func TestPublishFlowDeclineSendsNothing(t *testing.T) {
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "<details open>", "multi.txt:3", "Publish - Step 3 of 3 - acme/widgets#42 - comment")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Type("n")
 	waitFor(t, tm, "publish canceled; nothing was sent")
 	tm.Type("q")
@@ -328,6 +411,7 @@ func TestPublishFlowSendsAndShowsURL(t *testing.T) {
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "<details open>", "inline blocking (1)")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Type("y")
 	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
 	tm.Type("q")
@@ -375,6 +459,7 @@ func TestPublishingViewIgnoresKeysWhileSending(t *testing.T) {
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "<details open>")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Type("y")
 	select {
 	case <-entered:

@@ -65,13 +65,18 @@ func newRun(t *testing.T, d *draft.Draft) *fixture {
 	return fx
 }
 
-func (fx *fixture) confirmWith(answer bool, during func()) func(Preview) (bool, error) {
-	return func(p Preview) (bool, error) {
+func (fx *fixture) confirmWith(answer bool, during func()) func(Preview) (Confirmation, error) {
+	return fx.confirmMessage(answer, "", during)
+}
+
+// confirmMessage answers with the opening prose a human typed, which is what an attended review publishes.
+func (fx *fixture) confirmMessage(answer bool, message string, during func()) func(Preview) (Confirmation, error) {
+	return func(p Preview) (Confirmation, error) {
 		fx.previews = append(fx.previews, p)
 		if during != nil {
 			during()
 		}
-		return answer, nil
+		return Confirmation{Publish: answer, Message: message}, nil
 	}
 }
 
@@ -162,6 +167,65 @@ func TestRunRefusesMarkdownAndLimitBeforeConfirming(t *testing.T) {
 	limit.check(0)
 }
 
+// TestRunPublishesTheHumansMessage is FR-001 and FR-004: the review opens on what the human typed, the agent's
+// summary is nowhere in it, and the bytes GitHub received are the bytes the confirmation last composed.
+func TestRunPublishesTheHumansMessage(t *testing.T) {
+	const message = "I read every one of these before sending them."
+	fx := newRun(t, readyDraft())
+	var approved Envelope
+	fx.opts.Confirm = func(p Preview) (Confirmation, error) {
+		fx.previews = append(fx.previews, p)
+		env, _, err := p.Compose(message)
+		if err != nil {
+			t.Fatal(err)
+		}
+		approved = env
+		return Confirmation{Publish: true, Message: message}, nil
+	}
+	receipt, err := fx.run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.check(1)
+	if !strings.Contains(receipt.Envelope.Body, message) {
+		t.Fatalf("the review does not open on the message:\n%s", receipt.Envelope.Body)
+	}
+	if strings.Contains(receipt.Envelope.Body, "Looks mostly fine.") {
+		t.Fatalf("the draft summary reached an attended review:\n%s", receipt.Envelope.Body)
+	}
+	// The reconciliation marker included: a second composition minting its own id would make an interrupted publish
+	// unreconcilable.
+	if !reflect.DeepEqual(approved, receipt.Envelope) {
+		t.Fatalf("what was approved is not what was sent:\n%s\n%s", approved.Body, receipt.Envelope.Body)
+	}
+	var posted string
+	for _, r := range fx.gh.Requests() {
+		if body, ok := r.Body.(map[string]any); r.Method == "POST" && ok {
+			posted, _ = body["body"].(string)
+		}
+	}
+	if posted != approved.Body {
+		t.Fatalf("GitHub received a different body:\n%s", posted)
+	}
+}
+
+// TestRunWithoutAMessagePublishes is FR-005 and FR-006: an empty message is the common case and refuses nothing,
+// and the opening slot is simply left out.
+func TestRunWithoutAMessagePublishes(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	receipt, err := fx.run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.check(1)
+	if strings.Contains(receipt.Envelope.Body, "Looks mostly fine.") {
+		t.Fatalf("the draft summary reached an attended review:\n%s", receipt.Envelope.Body)
+	}
+	if first, _, _ := strings.Cut(receipt.Envelope.Body, "\n"); !strings.Contains(first, "blocking") {
+		t.Fatalf("the body does not begin at the chips row: %q", first)
+	}
+}
+
 func TestRunDeclinedSendsAndWritesNothing(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.Confirm = fx.confirmWith(false, nil)
@@ -178,7 +242,7 @@ func TestRunDeclinedSendsAndWritesNothing(t *testing.T) {
 func TestRunConfirmErrorSendsNothing(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	boom := errors.New("terminal went away")
-	fx.opts.Confirm = func(Preview) (bool, error) { return true, boom }
+	fx.opts.Confirm = func(Preview) (Confirmation, error) { return Confirmation{Publish: true}, boom }
 	if _, err := fx.run(); !errors.Is(err, boom) {
 		t.Fatalf("err %v", err)
 	}
@@ -416,7 +480,7 @@ func TestRunRefusesRecordAppearedDuringConfirmation(t *testing.T) {
 	for _, name := range []string{"receipt.json", "attempt.json"} {
 		t.Run(name, func(t *testing.T) {
 			fx := newRun(t, readyDraft())
-			env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all", false)
+			env, err := Build(buildInput(fixtureTarget(), readyDraft(), "comment", "all", false))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -523,9 +587,9 @@ func newUnattendedRun(t *testing.T, d *draft.Draft) *fixture {
 		t.Fatal(err)
 	}
 	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
-	fx.opts.Confirm = func(Preview) (bool, error) {
+	fx.opts.Confirm = func(Preview) (Confirmation, error) {
 		t.Fatal("Confirm must not be called when unattended")
-		return false, nil
+		return Confirmation{}, nil
 	}
 	return fx
 }
@@ -727,7 +791,7 @@ func TestRunHoldsSignalsFromAttemptToOutcome(t *testing.T) {
 // saveMarkedAttempt stores an attempt in state for the ready draft, and returns it.
 func (fx *fixture) saveMarkedAttempt(state string) Attempt {
 	fx.t.Helper()
-	env, err := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all", false)
+	env, err := Build(buildInput(fixtureTarget(), readyDraft(), "comment", "all", false))
 	if err != nil {
 		fx.t.Fatal(err)
 	}
@@ -786,7 +850,7 @@ func TestRunNoMatchMarksInFlightUnknown(t *testing.T) {
 func TestRunRetryUnknownRefusesWhenRecordsChangeDuringConfirmation(t *testing.T) {
 	changes := map[string]func(fx *fixture){
 		"receipt appeared": func(fx *fixture) {
-			env, _ := Build(fixtureTarget(), 1, readyDraft(), "reviewer", "comment", "all", false)
+			env, _ := Build(buildInput(fixtureTarget(), readyDraft(), "comment", "all", false))
 			if err := SaveReceipt(fx.dir, Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env}); err != nil {
 				fx.t.Error(err)
 			}

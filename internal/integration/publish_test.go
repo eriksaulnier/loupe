@@ -51,7 +51,7 @@ func (h *harness) checkSends(want int) {
 func TestPublishSendsCapturedSource(t *testing.T) {
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n", "--source", "gadfly-review-pr@2.2.0")
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	if _, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 {
 		t.Fatalf("publish exit %d stderr %q", exit, stderr)
 	}
@@ -70,13 +70,17 @@ func TestPublishSendsCapturedSource(t *testing.T) {
 	}
 }
 
+// humanMessage is the opening prose the human types at the confirmation, which an attended review publishes in
+// place of the draft's summary.
+const humanMessage = "I read every one of these before sending them."
+
 func TestPublishEndToEnd(t *testing.T) {
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	draftPath := filepath.Join(h.RunDir(1), "draft.json")
 	draftBefore := readFile(t, draftPath)
 
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish(humanMessage, "y")
 	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--inline", "all", "--plain")
 	if exit != 0 {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
@@ -120,8 +124,12 @@ func TestPublishEndToEnd(t *testing.T) {
 	if post["commit_id"] != h.Repo.HeadSHA() || post["event"] != "COMMENT" || body != receipt.Envelope.Body || len(comments) != 2 {
 		t.Fatalf("POST %v", post)
 	}
-	if !strings.Contains(body, "Changed line") || !strings.Contains(body, "Second change") || !strings.Contains(body, "Two things to look at.") {
-		t.Fatalf("POST body lacks the accepted findings or summary:\n%s", body)
+	if !strings.Contains(body, "Changed line") || !strings.Contains(body, "Second change") {
+		t.Fatalf("POST body lacks the accepted findings:\n%s", body)
+	}
+	// An attended review opens on what the human typed, and the agent's summary is orientation that stays home.
+	if !strings.Contains(body, humanMessage) || strings.Contains(body, "Two things to look at.") {
+		t.Fatalf("POST body opens on the wrong prose:\n%s", body)
 	}
 	if !strings.Contains(stdout, strings.ReplaceAll(body, "<details>", "<details open>")) {
 		t.Fatalf("the confirmation did not show the body that was sent:\n%s", stdout)
@@ -187,7 +195,7 @@ func TestInteractiveJSONNeedsStderrTerminal(t *testing.T) {
 	h.mustRefuse("tty", "review", runRef, "--plain")
 
 	// Without --json the interface draws on stdout, so a redirected stderr is fine.
-	h.Stdin = "n\n"
+	h.Stdin = confirmPublish("", "n")
 	if _, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 || !strings.Contains(stderr, "canceled") {
 		t.Fatalf("exit %d stderr %q", exit, stderr)
 	}
@@ -216,7 +224,7 @@ func TestPublishGateRefusals(t *testing.T) {
 			if c.setup != nil {
 				c.setup(h)
 			}
-			h.Stdin = "y\n"
+			h.Stdin = confirmPublish("", "y")
 			h.mustRefuse(c.code, "publish", runRef, "--action", c.action, "--plain")
 			h.checkSends(0)
 		})
@@ -232,7 +240,7 @@ func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
 	h.GH.SetComparison(owner, repo, qualifier+captured, qualifier+live, github.Comparison{Status: "ahead", AheadBy: 1,
 		Commits: []github.Commit{{SHA: live, Message: "move head"}}, Files: []github.ComparedFile{{Filename: "src/app.go"}}})
 
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain")
 	if exit != 0 {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
@@ -254,7 +262,7 @@ func TestPublishRefusesEmptyDraft(t *testing.T) {
 	h := newHarness(t)
 	h.capture()
 	h.IsTerminal = true
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	errObj := h.mustRefuse("empty", "publish", runRef, "--action", "comment", "--plain")
 	if fix, _ := errObj["fix"].(string); !strings.Contains(fix, "loupe add") || !strings.Contains(fix, "loupe summary") {
 		t.Fatalf("fix %v", errObj["fix"])
@@ -285,19 +293,19 @@ func TestPublishJSONPrintsOneObject(t *testing.T) {
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 
-	h.Stdin = "n\n"
+	h.Stdin = confirmPublish("", "n")
 	env, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
 	if exit != 0 || env["ok"] != true || env["sent"] != false || env["reviewUrl"] != nil || env["replayed"] != nil {
 		t.Fatalf("declined: exit %d envelope %v", exit, env)
 	}
 	h.checkSends(0)
 
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain", "--json")
 	if exit != 0 || !strings.Contains(stderr, "Publish this review? [y/N]") || strings.Contains(stdout, "Publish this review?") {
 		t.Fatalf("the confirmation did not go to stderr: exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	h.GitHubErr = errors.New("no GitHub credentials")
 	replay, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
 	h.GitHubErr = nil

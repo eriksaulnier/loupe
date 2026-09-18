@@ -10,6 +10,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -175,23 +176,51 @@ func TestPlainEndOfInputQuits(t *testing.T) {
 	}
 }
 
+// previewChips and previewRest are the review the confirmation fixtures show: a chips row, the opening slot beneath
+// it as render.Body places it, and one finding. Each part carries text the display has to make safe.
+const (
+	previewChips = "`\u26d4 1 blocking`"
+	previewRest  = "> [!NOTE]\n\nSummary \u202eevil\n\n<details>\n<summary>Title</summary>\n\nBody \x1b[31m\n\n</details>\n"
+)
+
 func confirmPreview() publish.Preview {
-	return publish.Preview{
-		Body:         "> [!NOTE]\n\nSummary \u202eevil\n\n<details>\n<summary>Title</summary>\n\nBody \x1b[31m\n\n</details>\n",
+	p := publish.Preview{
 		Comments:     []publish.Comment{{Path: "a.go", Line: 12, Side: "RIGHT", StartLine: 10, StartSide: "RIGHT", Body: "**Inline** \u2066body"}},
 		EnvelopeJSON: "{\n  \"event\": \"COMMENT\",\n  \"body\": \"x\\u202e\"\n}",
+	}
+	p.Compose = composeOpening(p, nil)
+	env, _, err := p.Compose("")
+	if err != nil {
+		panic(err)
+	}
+	p.Body = env.Body
+	return p
+}
+
+// composeOpening stands in for publish.Run's closure: it puts the message where render.Body puts the opening prose,
+// under the chips row. With refuse set it refuses a message carrying a raw tag, as the allowlist does.
+func composeOpening(base publish.Preview, refuse error) func(string) (publish.Envelope, string, error) {
+	return func(message string) (publish.Envelope, string, error) {
+		if refuse != nil && strings.Contains(message, "<") {
+			return publish.Envelope{}, "", refuse
+		}
+		head := previewChips
+		if message != "" {
+			head += "\n\n" + message
+		}
+		return publish.Envelope{Body: head + "\n\n---\n\n" + previewRest, Comments: base.Comments}, base.EnvelopeJSON, nil
 	}
 }
 
 func TestConfirmPlainShowsPreview(t *testing.T) {
 	var out bytes.Buffer
-	ok, err := ConfirmPlain(strings.NewReader("y\n"), &out)(confirmPreview())
-	if err != nil || !ok {
-		t.Fatalf("ok %v err %v", ok, err)
+	answer, err := ConfirmPlain(strings.NewReader("\ny\n"), &out)(confirmPreview())
+	if err != nil || !answer.Publish || answer.Message != "" {
+		t.Fatalf("answer %+v err %v", answer, err)
 	}
 	text := out.String()
 	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
-		"\"event\": \"COMMENT\"", "Publish this review? [y/N] "} {
+		"\"event\": \"COMMENT\"", "Your message, which opens the review (one line; empty for none): ", "Publish this review? [y/N] "} {
 		if !strings.Contains(text, want) {
 			t.Errorf("output lacks %q:\n%s", want, text)
 		}
@@ -223,7 +252,7 @@ var movedHeadLines = []string{"Head moved 23 commits since capture (1111111 to 4
 
 func TestConfirmPlainShowsMovedHead(t *testing.T) {
 	var out bytes.Buffer
-	if _, err := ConfirmPlain(strings.NewReader("n\n"), &out)(movedPreview()); err != nil {
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(movedPreview()); err != nil {
 		t.Fatal(err)
 	}
 	text := out.String()
@@ -245,7 +274,7 @@ func TestConfirmPlainShowsMovedHead(t *testing.T) {
 	truncated := movedPreview()
 	truncated.HeadMoved.Touched, truncated.HeadMoved.FilesTruncated = []string{}, true
 	out.Reset()
-	if _, err := ConfirmPlain(strings.NewReader("n\n"), &out)(truncated); err != nil {
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(truncated); err != nil {
 		t.Fatal(err)
 	}
 	if text := out.String(); !strings.Contains(text, "Findings on changed files: none") || !strings.Contains(text, "can be incomplete") {
@@ -257,7 +286,7 @@ func TestConfirmPlainKeepsDetailsInsideFences(t *testing.T) {
 	preview := confirmPreview()
 	preview.Body = "<details>\n<summary>Title</summary>\n\n```html\n<details>\n```\n\n</details>\n"
 	var out bytes.Buffer
-	if _, err := ConfirmPlain(strings.NewReader("n\n"), &out)(preview); err != nil {
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(preview); err != nil {
 		t.Fatal(err)
 	}
 	if text := out.String(); !strings.Contains(text, "<details open>\n<summary>Title</summary>") || !strings.Contains(text, "```html\n<details>\n```") {
@@ -266,15 +295,58 @@ func TestConfirmPlainKeepsDetailsInsideFences(t *testing.T) {
 }
 
 func TestConfirmPlainOnlyYConfirms(t *testing.T) {
-	for _, in := range []string{"y", "y\nn\n"} {
-		if ok, err := ConfirmPlain(strings.NewReader(in), io.Discard)(confirmPreview()); err != nil || !ok {
-			t.Errorf("input %q: ok %v err %v", in, ok, err)
+	// The first line is the message, so every case opens with the empty one.
+	for _, in := range []string{"\ny", "\ny\nn\n"} {
+		if answer, err := ConfirmPlain(strings.NewReader(in), io.Discard)(confirmPreview()); err != nil || !answer.Publish {
+			t.Errorf("input %q: answer %+v err %v", in, answer, err)
 		}
 	}
-	for _, in := range []string{"", "\n", "n\n", "Y\n", "yes\n", " y\n", "y \n", "q\ny\n"} {
-		if ok, err := ConfirmPlain(strings.NewReader(in), io.Discard)(confirmPreview()); err != nil || ok {
-			t.Errorf("input %q: ok %v err %v", in, ok, err)
+	for _, in := range []string{"", "\n", "\nn\n", "\nY\n", "\nyes\n", "\n y\n", "\ny \n", "\nq\ny\n"} {
+		if answer, err := ConfirmPlain(strings.NewReader(in), io.Discard)(confirmPreview()); err != nil || answer.Publish {
+			t.Errorf("input %q: answer %+v err %v", in, answer, err)
 		}
+	}
+}
+
+// TestConfirmPlainReadsTheMessage is FR-011: the fallback takes one line of the human's own prose, an empty line
+// means none, and a review that gained an opening is shown again before the answer.
+func TestConfirmPlainReadsTheMessage(t *testing.T) {
+	var out bytes.Buffer
+	answer, err := ConfirmPlain(strings.NewReader("  I read every one of these.  \ny\n"), &out)(confirmPreview())
+	if err != nil || !answer.Publish || answer.Message != "I read every one of these." {
+		t.Fatalf("answer %+v err %v", answer, err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "I read every one of these.") {
+		t.Errorf("the message was not shown in the body it opens:\n%s", text)
+	}
+	if strings.Index(text, "I read every one of these.") > strings.Index(text, "Publish this review? [y/N]") {
+		t.Errorf("the composed body comes after the prompt:\n%s", text)
+	}
+
+	out.Reset()
+	answer, err = ConfirmPlain(strings.NewReader("   \ny\n"), &out)(confirmPreview())
+	if err != nil || !answer.Publish || answer.Message != "" {
+		t.Fatalf("a blank line is no message: answer %+v err %v", answer, err)
+	}
+	if strings.Count(out.String(), "Review body:") != 1 {
+		t.Errorf("an empty message reprinted the body:\n%s", out.String())
+	}
+}
+
+// TestConfirmPlainRefusesAMalformedMessage is FR-009 on the fallback: the allowlist is checked before anything is
+// sent, and the prompt is never reached.
+func TestConfirmPlainRefusesAMalformedMessage(t *testing.T) {
+	preview := confirmPreview()
+	preview.Compose = composeOpening(preview, refusal.New(refusal.Markdown, "the summary has a raw HTML tag", "reword the message at the publish confirmation"))
+	var out bytes.Buffer
+	if _, err := ConfirmPlain(strings.NewReader("<script>bad</script>\ny\n"), &out)(preview); err == nil {
+		t.Fatal("a malformed message was accepted")
+	} else if r, ok := refusal.As(err); !ok || r.Code != refusal.Markdown {
+		t.Fatalf("err %#v", err)
+	}
+	if strings.Contains(out.String(), "Publish this review? [y/N]") {
+		t.Errorf("the prompt was reached with a malformed message:\n%s", out.String())
 	}
 }
 

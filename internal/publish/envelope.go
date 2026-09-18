@@ -25,22 +25,44 @@ var events = map[string]string{"comment": "COMMENT", "approve": "APPROVE", "requ
 const (
 	maxBodyChars = 65536
 	limitFix     = "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -"
+	// messageFix names the only place the message can be changed, because nothing else may write it.
+	messageFix = "reword the message at the publish confirmation"
 )
 
-// Build composes the review from the accepted findings, or, when unattended, the whole publishable set: nothing
-// accepts a finding in a pipeline. It rechecks the allowlist because the draft file may have been edited by hand
-// since the content was filed. round is the published round the body shows; the envelope keeps the capture round,
-// which receipts and run references are keyed by.
-func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline string, unattended bool) (Envelope, error) {
-	event, ok := events[action]
+// BuildInput is everything a review is composed from. It is a struct rather than a parameter list because
+// PublicationID and Message are adjacent strings the compiler cannot tell apart, and transposing them would publish
+// a UUID as the review's opening prose.
+type BuildInput struct {
+	Target run.Target
+	// Round is the published round the body shows; the envelope keeps the capture round, which receipts and run
+	// references are keyed by.
+	Round  int
+	Draft  *draft.Draft
+	Viewer string
+	Action string
+	Inline string
+	// Unattended composes the whole publishable set, because nothing accepts a finding in a pipeline.
+	Unattended bool
+	// PublicationID is minted by the caller, so the reconciliation marker a human approves is the one that is sent.
+	PublicationID string
+	// Message is the human's own opening prose, typed at the confirmation. It fills the slot the draft's summary
+	// fills unattended, and is empty when they typed none.
+	Message string
+}
+
+// Build composes the review from the accepted findings, or, when unattended, the whole publishable set. It rechecks
+// the allowlist because the draft file may have been edited by hand since the content was filed.
+func Build(in BuildInput) (Envelope, error) {
+	target, d := in.Target, in.Draft
+	event, ok := events[in.Action]
 	if !ok {
-		return Envelope{}, fmt.Errorf("unknown review action %q", action)
+		return Envelope{}, fmt.Errorf("unknown review action %q", in.Action)
 	}
-	if !slices.Contains(InlineModes, inline) {
-		return Envelope{}, fmt.Errorf("unknown inline mode %q", inline)
+	if !slices.Contains(InlineModes, in.Inline) {
+		return Envelope{}, fmt.Errorf("unknown inline mode %q", in.Inline)
 	}
 	var included []draft.Finding
-	if unattended {
+	if in.Unattended {
 		included = draft.PublishableSet(d)
 		slices.SortFunc(included, func(a, b draft.Finding) int { return findingid.Compare(a.ID, b.ID) })
 	} else {
@@ -49,7 +71,13 @@ func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline 
 			return Envelope{}, refusal.New(refusal.NotReady, "the findings to publish are not all accepted", "loupe review")
 		}
 	}
-	if err := markdown.Check(d.Summary, markdown.Summary, "loupe summary --from -"); err != nil {
+	// Only the prose that is about to be published is checked. An attended publication does not post the draft's
+	// summary, so refusing over it would be refusing over text no reader will see.
+	opening, openingFix := in.Message, messageFix
+	if in.Unattended {
+		opening, openingFix = d.Summary, "loupe summary --from -"
+	}
+	if err := markdown.Check(opening, markdown.Summary, openingFix); err != nil {
 		return Envelope{}, err
 	}
 	for _, f := range included {
@@ -70,19 +98,19 @@ func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline 
 
 	env := Envelope{
 		Target:        EnvelopeTarget{Owner: target.Owner, Repo: target.Repo, Number: target.Number, HeadSHA: target.HeadSHA, Round: target.Round},
-		Viewer:        viewer,
-		Action:        action,
+		Viewer:        in.Viewer,
+		Action:        in.Action,
 		Event:         event,
 		CommitID:      target.HeadSHA,
 		DraftVersion:  d.Version,
 		Digest:        draft.Digest(d),
-		PublicationID: newPublicationID(),
-		Inline:        inline,
+		PublicationID: in.PublicationID,
+		Inline:        in.Inline,
 		Comments:      []Comment{},
 		Findings:      []EnvelopeFinding{},
 	}
-	in := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: round, HeadSHA: target.HeadSHA,
-		Inline: inline, Summary: d.Summary, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source, Model: target.Model, Unattended: unattended}
+	r := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: in.Round, HeadSHA: target.HeadSHA,
+		Inline: in.Inline, Summary: opening, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source, Model: target.Model, Unattended: in.Unattended}
 	for _, f := range included {
 		rf := render.Finding{ID: f.ID, Title: f.Title, Body: f.Body, General: f.General, Label: f.Label, Blocking: f.Blocking,
 			Confidence: f.Confidence, Severity: f.Severity, Verified: f.Verified, Impact: f.Impact, References: f.References, SuggestedFix: f.SuggestedFix}
@@ -92,13 +120,13 @@ func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline 
 			copied := *f.Location
 			loc = &copied
 		}
-		in.Findings = append(in.Findings, rf)
+		r.Findings = append(r.Findings, rf)
 		env.Findings = append(env.Findings, EnvelopeFinding{ID: f.ID, Title: f.Title, Body: f.Body, Location: loc, Label: f.Label, Blocking: f.Blocking})
 	}
 
 	// One finding per call ties each comment to its id; included is already in the order Comments sorts by.
-	for _, rf := range in.Findings {
-		single := in
+	for _, rf := range r.Findings {
+		single := r
 		single.Findings = []render.Finding{rf}
 		for _, c := range render.Comments(single) {
 			if n := utf8.RuneCountInString(c.Body); n > maxBodyChars {
@@ -107,7 +135,7 @@ func Build(target run.Target, round int, d *draft.Draft, viewer, action, inline 
 			env.Comments = append(env.Comments, Comment{Path: c.Path, Line: c.Line, Side: c.Side, StartLine: c.StartLine, StartSide: c.StartSide, Body: c.Body})
 		}
 	}
-	env.Body = render.Body(in)
+	env.Body = render.Body(r)
 	if n := utf8.RuneCountInString(env.Body); n > maxBodyChars {
 		return Envelope{}, limitRefusal(fmt.Sprintf("the composed review body is %d characters; at most %d characters are allowed", n, maxBodyChars))
 	}

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/charmbracelet/bubbles/cursor"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
@@ -24,19 +26,68 @@ import (
 // blank line under it.
 const confirmHeaderLines = 2
 
-// confirmation is the last look at a review before it is sent, shared by the review program and loupe publish.
+// messageSlot is the prose Compose is asked to place so the confirmation can find where the review's opening goes.
+// It is ordinary text to the allowlist, and the first place it appears is that slot, which every finding follows.
+const messageSlot = "loupe-message-slot"
+
+// confirmation is the last look at a review before it is sent, shared by the review program and loupe publish. It is
+// also where the human writes the review's opening prose, in the body and at the place their words will appear.
 type confirmation struct {
 	preview publish.Preview
+	// shown is preview recomposed around the typed message: the payload this screen shows and publication sends.
+	shown publish.Preview
 	// title comes from the caller, which knows the run; the preview does not carry it.
 	title    ConfirmHeading
 	showJSON bool
 	yes      bool
 	scroll   viewport.Model
+	// message is the human's own opening prose. It lives here and nowhere else: a canceled confirmation discards it
+	// and nothing can pre-fill it, because text that arrives already written is text that gets approved unread.
+	message textarea.Model
+	// typing is true while the message input holds the keyboard. The confirmation keys are live only when it does
+	// not, so a message containing the letter y cannot publish the review.
+	typing bool
+	// composeErr is what the typed message drew from the allowlist. It blocks y until the message is reworded, and
+	// the text stays on screen.
+	composeErr error
+	// before and after are the review either side of the opening slot, which the input is drawn into. They are empty
+	// when the preview carries no closure, and the recomposed body is then shown whole instead.
+	before, after string
+	// inputTop and inputRows are where the input sits in the scrolling content, so typing can keep it on screen.
+	inputTop, inputRows int
 }
 
 func newConfirmation(preview publish.Preview, title ConfirmHeading) confirmation {
-	return confirmation{preview: preview, title: title, scroll: viewport.New(80, 10)}
+	message := textarea.New()
+	message.ShowLineNumbers, message.MaxHeight = false, 0
+	message.FocusedStyle, message.BlurredStyle = textarea.Style{}, textarea.Style{}
+	message.Cursor.SetMode(cursor.CursorStatic)
+	c := confirmation{preview: preview, shown: preview, title: title, scroll: viewport.New(80, 10), message: message}
+	// Only publish.Run builds a preview and it always carries a closure; a fixture without one gets no input.
+	if preview.Compose == nil {
+		return c
+	}
+	env, _, err := preview.Compose(messageSlot)
+	if err == nil {
+		var found bool
+		if c.before, c.after, found = strings.Cut(markdown.OpenDetails(env.Body), messageSlot); !found {
+			err = fmt.Errorf("the composed review has nowhere to put your message")
+		}
+	}
+	if err != nil {
+		c.before, c.after, c.composeErr = "", "", err
+		return c
+	}
+	c.typing = true
+	c.message.Focus()
+	return c
 }
+
+// inline reports whether the message input is drawn into the body.
+func (c *confirmation) inline() bool { return c.before != "" || c.after != "" }
+
+// value is the message as it will be published: what the human typed, with the surrounding blank space gone.
+func (c *confirmation) value() string { return strings.TrimSpace(c.message.Value()) }
 
 // ConfirmHeading is what the confirmation header names: the two things a wrong keypress could change, and where they
 // go.
@@ -51,10 +102,23 @@ func ConfirmTitle(ref, action, inline string, comments int) ConfirmHeading {
 	return ConfirmHeading{ref: ref, action: action, inline: inline, comments: comments}
 }
 
-// key reports whether the human answered. Only y confirms, and every key other than scrolling and the toggles is an
-// answer, so a stray key can never send.
-func (c *confirmation) key(m *Model, msg tea.KeyMsg) bool {
+// key reports whether the human answered, and the command the message input asked for. Only y confirms, and every
+// key other than scrolling, the toggles and the input is an answer, so a stray key can never send.
+func (c *confirmation) key(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
 	c.sync(m)
+	if c.typing {
+		switch msg.Type {
+		// ctrl+c cancels from the input too; the review program hands the confirmation every key for that reason.
+		case tea.KeyCtrlC:
+			return true, nil
+		case tea.KeyEsc, tea.KeyTab:
+			c.blur()
+			return false, nil
+		}
+		cmd := c.typeMessage(msg)
+		c.sync(m)
+		return false, cmd
+	}
 	switch msg.String() {
 	case "j", "down":
 		c.scroll.ScrollDown(1)
@@ -68,22 +132,123 @@ func (c *confirmation) key(m *Model, msg tea.KeyMsg) bool {
 		c.scroll.GotoTop()
 	case "end":
 		c.scroll.GotoBottom()
-	case "v", "tab":
+	case "tab":
+		// Nothing to move to when the preview carries no closure, which only a test fixture does.
+		if !c.inline() {
+			return false, nil
+		}
+		c.typing = true
+		cmd := c.message.Focus()
+		c.sync(m)
+		return false, cmd
+	case "v":
+		// The payload hides the body the input is drawn into, so the keyboard comes back to the confirmation.
 		c.showJSON = !c.showJSON
+		if c.showJSON {
+			c.blur()
+		}
 		c.scroll.GotoTop()
 	case "y":
+		// A message the allowlist refused is not sent and not silently dropped; the human stays here with their text.
+		if c.composeErr != nil {
+			return false, nil
+		}
 		c.yes = true
-		return true
+		return true, nil
 	default:
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
-// sync lays the content out for the current window before a scroll or a render, since both depend on its line count.
+func (c *confirmation) blur() {
+	c.typing = false
+	c.message.Blur()
+}
+
+// typeMessage routes a keystroke into the input and rebuilds the review around what it now says, so the payload and
+// any refusal on screen are the ones publication would produce.
+func (c *confirmation) typeMessage(msg tea.KeyMsg) tea.Cmd {
+	if msg.Type == tea.KeyRunes {
+		// A pasted carriage return is a line break like any other; a tab would render as a jump nothing typed.
+		msg.Runes = []rune(strings.NewReplacer("\r\n", "\n", "\r", "\n", "\t", " ").Replace(string(msg.Runes)))
+	}
+	before := c.value()
+	// Room for every row this key could add before it is typed: the textarea scrolls itself to keep the cursor in
+	// view and never scrolls back, so a height that grows only afterwards leaves the first rows hidden for good.
+	c.message.SetHeight(c.message.Height() + len(msg.Runes) + 1)
+	var cmd tea.Cmd
+	c.message, cmd = c.message.Update(msg)
+	if c.value() != before {
+		c.recompose()
+	}
+	return cmd
+}
+
+// recompose rebuilds the review around the typed message through the one closure publication will send from, so what
+// was read and what is sent cannot differ. A refusal leaves the last good payload on screen under its notice.
+func (c *confirmation) recompose() {
+	env, envJSON, err := c.preview.Compose(c.value())
+	c.composeErr = err
+	if err != nil {
+		return
+	}
+	c.shown = c.preview
+	c.shown.Body, c.shown.Comments, c.shown.EnvelopeJSON = env.Body, env.Comments, envJSON
+}
+
+// messageRows is how many rows the input's text takes. The textarea pads its view out to the height it was given and
+// never reports the text's own height, but it asks its prompt function for one row at a time, the text's rows first
+// and the padding after, so counting the calls gives the count. The prompt's width is part of the wrapping, so the
+// counting prompt keeps it.
+func (c *confirmation) messageRows(promptWidth int) int {
+	rows := 0
+	c.message.SetPromptFunc(promptWidth, func(int) string {
+		rows++
+		return ""
+	})
+	c.message.SetHeight(1)
+	_ = c.message.View()
+	return max(1, rows-1)
+}
+
+// messageView is the input where the opening prose goes, behind a gutter that is the one colored mark in the body,
+// so the human can see at a glance which words are theirs.
+func (c *confirmation) messageView(m *Model, width int) string {
+	mark := m.styles.Dim
+	if c.typing {
+		mark = m.styles.Note
+	}
+	gutter := mark.Render(m.glyphs.Note) + " "
+	gutterWidth := style.Width(m.glyphs.Note) + 1
+	prompt := func(int) string { return gutter }
+	// The prompt comes first: SetWidth takes its width out of the width the text wraps to.
+	c.message.SetPromptFunc(gutterWidth, prompt)
+	c.message.SetWidth(max(gutterWidth+1, width-1))
+	c.message.SetHeight(c.messageRows(gutterWidth))
+	c.message.SetPromptFunc(gutterWidth, prompt)
+	rows := strings.Split(c.message.View(), "\n")
+	c.inputRows = len(rows)
+	for i, r := range rows {
+		rows[i] = " " + r
+	}
+	return strings.Join(rows, "\n")
+}
+
+// sync lays the content out for the current window before a scroll or a render, since both depend on its line count,
+// and keeps the input on screen while it is being typed into.
 func (c *confirmation) sync(m *Model) {
 	c.scroll.Width, c.scroll.Height = m.width, m.bodyHeight(confirmHeaderLines)
 	c.scroll.SetContent(c.content(m))
+	if !c.typing {
+		return
+	}
+	if c.inputTop < c.scroll.YOffset {
+		c.scroll.SetYOffset(c.inputTop)
+	}
+	if bottom := c.inputTop + c.inputRows; bottom > c.scroll.YOffset+c.scroll.Height {
+		c.scroll.SetYOffset(bottom - c.scroll.Height)
+	}
 }
 
 func (c *confirmation) position(m *Model) string {
@@ -164,7 +329,7 @@ func (c *confirmation) content(m *Model) string {
 	width := style.Content(m.width) - 1
 	if c.showJSON {
 		return m.styles.Rule(m.width, "exact request payload", "") + "\n" +
-			m.styles.Wrap(render.ForDisplay(c.preview.EnvelopeJSON), width, " ")
+			m.styles.Wrap(render.ForDisplay(c.shown.EnvelopeJSON), width, " ")
 	}
 	var parts []string
 	if moved := c.preview.HeadMoved; moved != nil {
@@ -174,13 +339,16 @@ func (c *confirmation) content(m *Model) string {
 		}
 		parts = append(parts, "")
 	}
-	parts = append(parts,
-		m.styles.Rule(m.width, "review body", ""),
-		m.styles.Wrap(render.ForDisplay(markdown.OpenDetails(c.preview.Body)), width, " "),
-		"",
-		m.styles.Rule(m.width, fmt.Sprintf("inline comments (%d)", len(c.preview.Comments)), ""),
-	)
-	for _, comment := range c.preview.Comments {
+	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
+	if c.inline() {
+		parts = append(parts, m.styles.Wrap(render.ForDisplay(c.before), width, " "), "")
+		c.inputTop = strings.Count(strings.Join(parts, "\n"), "\n") + 1
+		parts = append(parts, c.messageView(m, width), m.styles.Wrap(render.ForDisplay(c.after), width, " "))
+	} else {
+		parts = append(parts, m.styles.Wrap(render.ForDisplay(markdown.OpenDetails(c.shown.Body)), width, " "))
+	}
+	parts = append(parts, "", m.styles.Rule(m.width, fmt.Sprintf("inline comments (%d)", len(c.shown.Comments)), ""))
+	for _, comment := range c.shown.Comments {
 		location := m.styles.Accent.Render(strings.TrimSpace(m.glyphs.File + " " + render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side))))
 		parts = append(parts, " "+location, m.styles.Wrap(render.ForDisplay(comment.Body), width, " "), "")
 	}
@@ -191,17 +359,31 @@ func (c *confirmation) content(m *Model) string {
 // shrink.
 const confirmCancel = "any other key cancels, nothing is sent"
 
+// notice is the notice line: what the allowlist made of the typed message, or the caller's own notice.
+func (c *confirmation) notice(m *Model, notice string) string {
+	if c.composeErr == nil {
+		return notice
+	}
+	return " " + m.styles.Warn.Render(m.styles.TruncRight(refusalNotice(c.composeErr), max(20, m.width-1)))
+}
+
 func (m *Model) confirmView(c *confirmation) string {
 	c.sync(m)
 	keys, notice := m.confirmKeys()
-	return m.frameWith([]string{c.header(m), ""}, c.scroll.View(), notice, keys)
+	return m.frameWith([]string{c.header(m), ""}, c.scroll.View(), c.notice(m, notice), keys)
 }
 
 // confirmKeys is the confirmation footer, and the notice line the cancel sentence moves to when the footer cannot hold
 // it on one line: the notice line is there anyway, and a second footer line would cost a row of the review.
 func (m *Model) confirmKeys() (keys, notice string) {
+	if m.confirmTyping() {
+		keys, _ = m.styles.Footer([]style.Hint{{Key: "esc", Verb: "done"}, {Key: "enter", Verb: "new line"},
+			{Key: "ctrl+u", Verb: "clear"}, {Verb: "your words open the review"}}, m.width-2)
+		return keys, ""
+	}
 	hints := []style.Hint{
 		{Key: "y", Verb: "publish this review", KeyKind: style.Good, VerbKind: style.Good},
+		{Key: "tab", Verb: "your message", Role: style.RoleNav},
 		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav},
 		{Key: "v", Verb: "payload", Role: style.RoleNav},
 		{Verb: confirmCancel},
@@ -220,6 +402,10 @@ type ConfirmModel struct {
 	confirm confirmation
 }
 
+// confirmTyping reports whether the confirmation on screen has the keyboard in its message input, which the footer
+// and the body's sizing both depend on.
+func (m *Model) confirmTyping() bool { return m.view == viewConfirm && m.confirm.typing }
+
 func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer, title ConfirmHeading) *ConfirmModel {
 	st := style.New(output, getenv)
 	return &ConfirmModel{
@@ -231,6 +417,9 @@ func NewConfirmModel(preview publish.Preview, getenv func(string) string, output
 // Confirmed is true only when the program ended on y.
 func (c *ConfirmModel) Confirmed() bool { return c.confirm.yes }
 
+// Message is the opening prose the human typed, empty when they typed none.
+func (c *ConfirmModel) Message() string { return c.confirm.value() }
+
 func (c *ConfirmModel) Init() tea.Cmd { return nil }
 
 func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -238,9 +427,11 @@ func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		c.shell.width, c.shell.height = msg.Width, msg.Height
 	case tea.KeyMsg:
-		if c.confirm.key(c.shell, msg) {
+		answered, cmd := c.confirm.key(c.shell, msg)
+		if answered {
 			return c, tea.Quit
 		}
+		return c, cmd
 	case endOfInput:
 		return c, tea.Quit
 	}
@@ -271,8 +462,8 @@ func (c *ConfirmModel) View() string {
 
 // Confirm runs the confirmation view full screen for loupe publish. title is what the header names, which loupe
 // publish builds from the run and the flags it was given.
-func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title ConfirmHeading) func(publish.Preview) (bool, error) {
-	return func(preview publish.Preview) (bool, error) {
+func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title ConfirmHeading) func(publish.Preview) (publish.Confirmation, error) {
+	return func(preview publish.Preview) (publish.Confirmation, error) {
 		var program *tea.Program
 		input := in
 		// A terminal is passed through as a file so bubbletea can make it raw; a terminal that hangs up gets SIGHUP.
@@ -282,20 +473,20 @@ func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title Conf
 		program = tea.NewProgram(NewConfirmModel(preview, getenv, out, title), tea.WithInput(input), tea.WithOutput(out), tea.WithAltScreen())
 		final, err := program.Run()
 		if err != nil {
-			return false, fmt.Errorf("confirmation view: %w", err)
+			return publish.Confirmation{}, fmt.Errorf("confirmation view: %w", err)
 		}
 		m, ok := final.(*ConfirmModel)
 		if !ok {
-			return false, fmt.Errorf("confirmation view ended with an unexpected model %T", final)
+			return publish.Confirmation{}, fmt.Errorf("confirmation view ended with an unexpected model %T", final)
 		}
-		return m.Confirmed(), nil
+		return publish.Confirmation{Publish: m.Confirmed(), Message: m.Message()}, nil
 	}
 }
 
 // publishSession connects publish.Run, which blocks in Confirm on its own goroutine, to the program's update loop.
 type publishSession struct {
 	previews chan publish.Preview
-	answers  chan bool
+	answers  chan publish.Confirmation
 	done     chan publishDone
 	// finished is closed when publish.Run returns, whoever reads done.
 	finished chan struct{}
@@ -318,12 +509,12 @@ func (s *publishSession) wait() tea.Msg {
 }
 
 func (m *Model) startPublish() tea.Cmd {
-	s := &publishSession{previews: make(chan publish.Preview), answers: make(chan bool, 1), done: make(chan publishDone, 1), finished: make(chan struct{})}
+	s := &publishSession{previews: make(chan publish.Preview), answers: make(chan publish.Confirmation, 1), done: make(chan publishDone, 1), finished: make(chan struct{})}
 	m.session, m.view = s, viewPublishing
 	m.say(style.Dim, "checking the pull request and composing the review...")
 	opts := publish.Options{
 		Dir: m.cfg.Dir, Target: m.target, GitHub: m.cfg.GitHub, IsTerminal: true, Action: m.action, Inline: publish.InlineModes[m.pick],
-		Confirm: func(p publish.Preview) (bool, error) {
+		Confirm: func(p publish.Preview) (publish.Confirmation, error) {
 			s.previews <- p
 			return <-s.answers, nil
 		},
@@ -340,10 +531,11 @@ func (m *Model) startPublish() tea.Cmd {
 }
 
 func (m *Model) updateConfirm(msg tea.KeyMsg) tea.Cmd {
-	if !m.confirm.key(m, msg) {
-		return nil
+	answered, cmd := m.confirm.key(m, msg)
+	if !answered {
+		return cmd
 	}
-	m.session.answers <- m.confirm.yes
+	m.session.answers <- publish.Confirmation{Publish: m.confirm.yes, Message: m.confirm.value()}
 	m.view = viewPublishing
 	m.say(style.Dim, "nothing was sent")
 	if m.confirm.yes {

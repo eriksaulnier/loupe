@@ -22,7 +22,7 @@ func (h *harness) publishRound(round int) {
 	if _, stderr, exit := h.Run("review", ref, "--plain"); exit != 0 {
 		h.t.Fatalf("review %s exit %d stderr %q", ref, exit, stderr)
 	}
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	if stdout, stderr, exit := h.Run("publish", ref, "--action", "comment", "--plain"); exit != 0 {
 		h.t.Fatalf("publish %s exit %d stdout %q stderr %q", ref, exit, stdout, stderr)
 	}

@@ -43,7 +43,7 @@ func (h *harness) receipt() (url string, envelope map[string]any) {
 
 func (h *harness) publishRefuses(code string, args ...string) map[string]any {
 	h.t.Helper()
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	env, exit := h.RunJSON(append([]string{"publish", runRef, "--action", "comment", "--plain"}, args...)...)
 	errObj, _ := env["error"].(map[string]any)
 	if exit != 1 || errObj["code"] != code {
@@ -98,7 +98,7 @@ func TestAmbiguousSendReconcilesAtOnce(t *testing.T) {
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	h.GH.QueueCreate(fakegh.ServerErrorAfterRecord())
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain")
 	if exit != 0 {
 		t.Fatalf("exit %d stdout %q stderr %q", exit, stdout, stderr)
@@ -132,7 +132,7 @@ func TestUnknownOutcomeWithoutMatchNeedsRetry(t *testing.T) {
 	h.checkSends(1)
 	h.GH.SetHead(owner, repo, number, head)
 
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain", "--retry-unknown")
 	if exit != 0 {
 		t.Fatalf("retry exit %d stdout %q stderr %q", exit, stdout, stderr)

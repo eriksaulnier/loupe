@@ -303,6 +303,16 @@ func TestLongNoticeWrapsInsteadOfClipping(t *testing.T) {
 	}
 }
 
+// TestSummaryBlockNamesTheReviewer is FR-013: a block that used to be published and is not any more is a trap
+// unless the human can see whose words it holds.
+func TestSummaryBlockNamesTheReviewer(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 24)
+	m.draft.Summary = "Three things stood out."
+	if head := m.summaryBlock(m.listColumns())[0]; !strings.Contains(head, "Reviewer's summary") {
+		t.Errorf("the summary block does not name the reviewer: %q", head)
+	}
+}
+
 // A collapsed summary joins its wrapped lines; the indent each carries must not become a run of spaces in the text.
 func TestCollapsedSummaryHasNoSpaceRuns(t *testing.T) {
 	dir := newFixture(t)

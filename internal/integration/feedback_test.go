@@ -96,7 +96,7 @@ func TestSendBackLoop(t *testing.T) {
 		t.Fatalf("f-002 after withdraw: %v", fb["findings"])
 	}
 	h.IsTerminal = true
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	errObj := h.mustRefuse("not-ready", "publish", runRef, "--action", "comment", "--plain")
 	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "open notes n-002") {
 		t.Fatalf("refusal %v", errObj)

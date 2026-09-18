@@ -297,9 +297,11 @@ func plainLocation(g GlyphSet, f draft.Finding) string {
 	return strings.TrimSpace(icon + " " + locationText(f))
 }
 
-// ConfirmPlain shows the review and its exact payload, then reads one line; only a line that is exactly y confirms.
-func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (bool, error) {
-	return func(preview publish.Preview) (bool, error) {
+// ConfirmPlain shows the review and its exact payload, reads the human's opening prose on one line, then reads the
+// answer; only a line that is exactly y confirms. Multi-line authoring is a full-screen affordance, and one line is
+// enough for the sentence this is for.
+func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Confirmation, error) {
+	return func(preview publish.Preview) (publish.Confirmation, error) {
 		p := &printer{w: out}
 		if preview.HeadMoved != nil {
 			p.printf("%s\n\n", strings.Join(headMovedLines(preview.HeadMoved), "\n"))
@@ -309,14 +311,31 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (bool, erro
 		for _, c := range preview.Comments {
 			p.printf("\n%s\n%s\n", render.ForDisplay(formatLocation(c.Path, c.Line, c.StartLine, c.Side)), render.ForDisplay(c.Body))
 		}
-		p.printf("\nEnvelope JSON:\n\n%s\n\nPublish this review? [y/N] ", render.ForDisplay(preview.EnvelopeJSON))
+		p.printf("\nEnvelope JSON:\n\n%s\n", render.ForDisplay(preview.EnvelopeJSON))
+		p.printf("\nYour message, which opens the review (one line; empty for none): ")
 		if p.err != nil {
-			return false, p.err
+			return publish.Confirmation{}, p.err
 		}
 		lines := bufio.NewScanner(in)
 		if !lines.Scan() {
-			return false, lines.Err()
+			return publish.Confirmation{}, lines.Err()
 		}
-		return lines.Text() == "y", nil
+		message := strings.TrimSpace(lines.Text())
+		// Nobody answers y to a body they were not shown, so a review that gained an opening is printed again.
+		if message != "" && preview.Compose != nil {
+			env, _, err := preview.Compose(message)
+			if err != nil {
+				return publish.Confirmation{}, err
+			}
+			p.printf("\nReview body:\n\n%s\n", render.ForDisplay(markdown.OpenDetails(env.Body)))
+		}
+		p.printf("\nPublish this review? [y/N] ")
+		if p.err != nil {
+			return publish.Confirmation{}, p.err
+		}
+		if !lines.Scan() {
+			return publish.Confirmation{}, lines.Err()
+		}
+		return publish.Confirmation{Publish: lines.Text() == "y", Message: message}, nil
 	}
 }

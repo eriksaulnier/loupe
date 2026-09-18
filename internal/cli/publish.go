@@ -136,7 +136,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	ui := interactiveOutput(deps, jsonMode)
 	receipt, replayed, err := publish.Run(cmd.Context(), publish.Options{
 		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, Unattended: unattended, RetryUnknown: retryUnknown,
-		Confirm: func(preview publish.Preview) (bool, error) {
+		Confirm: func(preview publish.Preview) (publish.Confirmation, error) {
 			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
 			width, height := terminalSize(deps)
 			mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, Width: width, Height: height, RawProbe: func() error { return rawProbe(deps) }})
