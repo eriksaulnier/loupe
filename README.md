@@ -4,7 +4,7 @@
 
 loupe collects a review agent's findings into a local draft so you decide each one and publish a single GitHub review.
 
-![Steps 2 and 3: accepting the blocking finding, closing out the agent's answer to an earlier send-back, dropping a finding, then publishing one review.](docs/assets/walkthrough.gif)
+![Accepting the blocking finding, closing out the agent's answer to an earlier send-back, dropping a finding, then writing the review's opening sentence into the body and sending it with one key.](docs/assets/walkthrough.gif)
 
 ## Why loupe
 
@@ -32,13 +32,13 @@ loupe --version
 
 In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub, so the interface and the whole publish flow, `y` included, can be tried end to end. Nothing leaves the machine. `mise run demo -- <loupe args>` runs any other command: `acme/widgets#42` is mid-review, `#43` is ready to publish, and `#44` is ready with a moved head.
 
-The board, one finding, and the last screen before anything is sent:
+The board, one finding, and the last screen before anything is sent, where you write the review's opening:
 
-![The findings board: seven findings with their decision, severity, label and location, in the order the published review puts them, over a summary that tab expands.](docs/assets/list.png)
+![The findings board: seven findings with their decision, severity, label and location, in the order the published review puts them, over the reviewer's summary that tab expands.](docs/assets/list.png)
 
 ![One finding: the hunk it points at, why it matters, a suggested fix, and a send-back note the agent has answered and you have resolved.](docs/assets/detail.png)
 
-![Step 3 of publish: the exact Markdown the review will carry, your own opening typed into it, and one key that sends it.](docs/assets/publish.png)
+![Step 3 of publish: the exact Markdown the review will carry, with your own opening typed into the body where it will appear, and one key that sends it.](docs/assets/publish.png)
 
 ## Setting up an agent
 

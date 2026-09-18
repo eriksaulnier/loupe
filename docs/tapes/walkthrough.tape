@@ -67,6 +67,18 @@ Sleep 2000ms
 Enter
 Sleep 1800ms
 Enter
-Sleep 3200ms
+Sleep 2600ms
+
+# The last beat, and the point of the whole gif: the review opens on the human's own sentence, typed
+# into the body where it will appear. The confirmation opens with the box already focused, so the text
+# goes straight in. Slower than the default, because this is the part to read rather than watch.
+Set TypingSpeed 55ms
+Type "The cache bug blocks this one; the rest can land."
+Set TypingSpeed 50ms
+Sleep 2200ms
+
+# esc leaves the box, and only then does y send. A y typed into the message is a y in the message.
+Escape
+Sleep 1600ms
 Type "y"
 Sleep 4s

@@ -2,6 +2,9 @@
 #
 # acme/widgets#43 is seeded ready to publish with a blocking finding included, so the envelope shows a
 # comment review rather than an approval. The tape stops at the confirmation and never presses y.
+#
+# The still is taken with the message written, not with the box empty: what this screen is for is the
+# human's own opening sitting in the body above the findings it introduces.
 
 # vhs needs an Output even when only the screenshot is kept, so the gif goes to the ignored dist/.
 Output dist/publish.gif
@@ -32,6 +35,9 @@ Sleep 1500ms
 Enter
 Sleep 1500ms
 Enter
-Sleep 3s
+Sleep 2s
+Set TypingSpeed 40ms
+Type "The cache bug blocks this one; the rest can land."
+Sleep 2s
 Screenshot docs/assets/publish.png
 Sleep 2s
