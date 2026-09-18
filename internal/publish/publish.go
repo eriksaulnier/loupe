@@ -172,6 +172,13 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	if err != nil {
 		return Receipt{}, false, err
 	}
+	// The gate before the confirmation reads the draft's summary, which an attended review does not post, so the
+	// only place the emptiness of what is actually being sent can be judged is here, once the message is known.
+	if strings.TrimSpace(answer.Message) == "" && len(env.Findings) == 0 {
+		return Receipt{}, false, refusal.New(refusal.Empty,
+			"the review has no message and no included findings; there is nothing to publish",
+			"write a message at the confirmation, or accept a finding in loupe review")
+	}
 	shownHead := opts.Target.HeadSHA
 	if moved != nil {
 		shownHead = moved.Live

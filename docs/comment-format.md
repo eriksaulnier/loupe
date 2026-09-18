@@ -106,11 +106,11 @@ reviewed `d23632e`
 
 ### Opening
 
-The chips row leads the body, and the opening prose follows it. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
+The chips row leads the body and the opening prose follows it, or the prose leads when there are no findings to count. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
 
 **Who writes the opening prose depends on who published.** An attended review carries a message the human typed at the publish confirmation, reading the body as they wrote it; the draft's summary is not published on that path and orients the human while they sort findings instead. An unattended review carries the draft's summary, because no human is there to type anything, and its footer already ends in ` · unattended` so a reader knows the prose was not read by a person before it appeared.
 
-The prose is optional in both modes. When there is none the body opens on the chips row, and nothing is rendered in its place.
+The prose is optional in both modes. When there is none the body opens on the chips row, and nothing is rendered in its place. A review with neither prose nor a finding is refused rather than posted.
 
 ### Chips
 

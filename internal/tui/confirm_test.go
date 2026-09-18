@@ -290,7 +290,6 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 		{"Y", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Y")}, false},
 		{"q", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}, false},
 		{"enter", tea.KeyMsg{Type: tea.KeyEnter}, false},
-		{"esc", tea.KeyMsg{Type: tea.KeyEsc}, false},
 		{"ctrl+c", tea.KeyMsg{Type: tea.KeyCtrlC}, false},
 	}
 	for _, c := range cases {
@@ -307,6 +306,30 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 				t.Fatalf("confirmed %v, want %v", ok && final.Confirmed(), c.want)
 			}
 		})
+	}
+}
+
+// TestConfirmEscOnlyMovesToTheMessage: esc must not mean leave-the-input and throw-the-review-away one keystroke
+// apart, because the second of those discards everything typed.
+func TestConfirmEscOnlyMovesToTheMessage(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "Mine to own.")
+	// It toggles: out of the message, back into it, out again. None of the three ends the publication.
+	for i, want := range []bool{false, true, false} {
+		if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc}); cmd != nil {
+			t.Fatalf("esc %d ended the program", i+1)
+		}
+		if m.confirm.typing != want {
+			t.Fatalf("after esc %d, typing %v, want %v", i+1, m.confirm.typing, want)
+		}
+	}
+	if m.Confirmed() || m.Message() != "Mine to own." {
+		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
+	}
+	// Canceling is still one keystroke away, on every key that is not y.
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}); cmd == nil || m.Confirmed() {
+		t.Fatal("q did not cancel")
 	}
 }
 

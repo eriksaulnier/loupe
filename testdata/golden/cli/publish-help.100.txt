@@ -16,7 +16,8 @@ Refuses
                loupe capture <url> starts a new round
   own-pr       approve or request-changes on your own pull request; use --action comment
   blocking     approve while a publishable (accepted or pending) finding is blocking
-  empty        no summary and no publishable findings
+  empty        no summary and no publishable findings; and, after you confirm, no message and
+               no included findings, since your message is what an attended review opens on
   not-ready    pending findings or open notes; finish in loupe review
 
 A head that only gained commits since capture is not refused. The confirmation lists those
@@ -29,11 +30,12 @@ comment. The review opens on a message you type, in the body and where your word
 marked off from the rest; the cursor starts there, Enter adds a line, PgUp and PgDn page through
 the findings without leaving it, and leaving it empty publishes a body that opens on the chips
 row. The draft's summary is not published here: it is the reviewer's, for you to read while
-sorting. Esc leaves the message; then j/k, up/down, pgup/pgdown and home/end scroll, v switches
-to the exact JSON payload, and Tab goes back to the message. Only y sends, and only from outside
-the message, so a y you typed cannot publish. Any other key, Ctrl-C or end of input cancels and
-nothing is sent or written. Once the review is being sent, keys, Ctrl-C and SIGTERM do not stop
-loupe until the outcome is recorded.
+sorting. Esc and Tab move between the message and the review; neither cancels, so leaving the
+message and going back cannot throw away what you wrote. Outside it, j/k, up/down, pgup/pgdown
+and home/end scroll and v switches to the exact JSON payload. Only y sends, and only from
+outside the message, so a y you typed cannot publish. Any other key, Ctrl-C or end of input
+cancels and nothing is sent or written. Once the review is being sent, keys, Ctrl-C and SIGTERM
+do not stop loupe until the outcome is recorded.
 
 Once the review is posted, receipt.json records it and publish prints the review URL; every later
 publish prints that URL again without contacting GitHub, with or without a terminal. If a send

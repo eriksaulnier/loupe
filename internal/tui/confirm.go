@@ -143,8 +143,9 @@ func (c *confirmation) key(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
 		c.scroll.GotoTop()
 	case "end":
 		c.scroll.GotoBottom()
-	case "tab":
-		// Nothing to move to when the preview carries no closure, which only a test fixture does.
+	case "tab", "esc":
+		// esc means one thing on this screen, and it is not cancel: leaving the message with it and pressing it
+		// again to go back would otherwise throw away the review and everything typed into it.
 		if !c.inline() {
 			return false, nil
 		}
@@ -424,7 +425,7 @@ func (m *Model) confirmKeys() (keys, notice string) {
 	}
 	hints := []style.Hint{
 		{Key: "y", Verb: "publish this review", KeyKind: style.Good, VerbKind: style.Good},
-		{Key: "tab", Verb: "your message", Role: style.RoleNav},
+		{Key: "tab/esc", Verb: "your message", Role: style.RoleNav},
 		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav},
 		{Key: "v", Verb: "payload", Role: style.RoleNav},
 		{Verb: confirmCancel},

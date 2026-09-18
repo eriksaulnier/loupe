@@ -226,6 +226,37 @@ func TestRunWithoutAMessagePublishes(t *testing.T) {
 	}
 }
 
+// TestRunRefusesAReviewWithNothingInIt closes the hole the message opened in the empty gate: that gate reads the
+// draft's summary, which an attended review does not post, so it passes a draft whose findings were all excluded.
+// With no message there is then nothing to send (FR-006).
+func TestRunRefusesAReviewWithNothingInIt(t *testing.T) {
+	d := draft.NewEmpty()
+	d.Version = 7
+	d.Summary = "Nothing to flag."
+	d.Findings = []draft.Finding{finding("f-001", "issue", false, nil)}
+	d.Decisions["f-001"] = draft.Decision{FindingID: "f-001", Decision: draft.DecisionExcluded, FindingRev: 1, At: fixtureNow}
+
+	fx := newRun(t, d)
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Empty, "write a message")
+	if fx.exists("attempt.json") || fx.exists("receipt.json") {
+		t.Fatal("attempt or receipt written")
+	}
+	fx.check(0)
+
+	// The human's own words are enough to publish on: the review then says something the summary never did.
+	typed := newRun(t, d)
+	typed.opts.Confirm = typed.confirmMessage(true, "Nothing to flag; I read the diff.", nil)
+	receipt, err := typed.run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed.check(1)
+	if !strings.Contains(receipt.Envelope.Body, "Nothing to flag; I read the diff.") {
+		t.Fatalf("the review does not carry the message:\n%s", receipt.Envelope.Body)
+	}
+}
+
 func TestRunDeclinedSendsAndWritesNothing(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.Confirm = fx.confirmWith(false, nil)
