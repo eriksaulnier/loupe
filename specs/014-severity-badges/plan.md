@@ -24,7 +24,7 @@ A new leaf package holds the four words as one ordered list and the comparison e
 
 **Constraints**: Constitution 2.0.1 Boundaries — the comment format is a contract, so this specification is the amendment that permits the summary-line and sort changes. The reconciliation marker, the `loupe-meta` keys, the chips row, section placement and the meta block are out of scope and untouched.
 
-**Scale/Scope**: One new leaf package of three declarations, one validation switch replaced, one sort key added in three places, one column added to one row layout, one ordered view threaded through the review interface, and three documents amended.
+**Scale/Scope**: One new leaf package of four declarations, one palette entry and the role that names it, one validation switch replaced, one sort key added in three places, one column added to one row layout, one ordered view threaded through the review interface, and three documents amended.
 
 ## Research
 
@@ -34,7 +34,7 @@ A new leaf package holds the four words as one ordered list and the comparison e
 - **The enum word is already known inert.** Decision: only an enum word may lead a summary line; a legacy free-text severity is omitted there and keeps its meta-line code span. Rationale: the Edge Case and FR-014. A summary line interpolates its prefix outside a code span, and `severity` is the one field the renderer interpolates as is rather than escaping — safe for the four known words, and not safe for arbitrary stored text. Alternative rejected: escaping the free text into the summary line, which would put a value nothing else in the review treats as a rank into the one line a reader is guaranteed to see.
 - **Severity outranks the label group inside `Blocking`.** Decision: `Blocking` sorts severity, then label group, then id; a label section and `Other` sort severity, then id. Rationale: FR-009 and FR-010, and the spec's "What this deliberately costs". The section that exists to be read first was ordered by a taxonomy that is not urgency, so a `critical` question sat below a `minor` issue. The label group survives as the tie-break, so labels still cluster among equal severities, and the contract's stated property is amended rather than quietly broken.
 - **The chips row is left alone.** Decision: no severity chip and no severity count. Rationale: FR-012. The row's stated property is that every chip maps to a heading below it that a reader can scroll to. Severity decides no heading, so a severity chip would be the one chip that indexes nothing, and the row would carry two taxonomies at once.
-- **Reuse the semantic roles; no new glyph.** Decision: `critical` takes `style.Bad`, `major` `style.Warn`, `minor` `style.Note`, `trivial` `style.Dim`, and no tier gains a severity glyph. Rationale: FR-018 and FR-021. The roles already map to the Catppuccin palette, so no color is named at the call site and no palette entry is added. `style.GlyphSet` documents that a field empty in a tier has no icon there and "the word beside them carries the state alone"; inventing a severity glyph would mean inventing one for three tiers, and the word plus its color already degrades correctly to a plain word in a column under `NO_COLOR`.
+- **One new role, and no new glyph.** Decision: `critical` takes `style.Bad`, `major` a new `style.Caution`, `minor` `style.Warn`, `trivial` `style.Dim`, and no tier gains a severity glyph. Rationale: FR-018 and FR-021. The obvious ramp reuses `Bad`, `Warn`, `Note` and `Dim`, but `Warn` and `Note` are both `colorYellow`, so `major` and `minor` come out the same color — confirmed by eye in the demo before this was changed. `Caution` adds Catppuccin Peach between yellow and red, which is the one step the palette was missing, and it is named for what it means so the next ramp can reuse it. No call site names a color. `style.GlyphSet` documents that a field empty in a tier has no icon there and "the word beside them carries the state alone"; inventing a severity glyph would mean inventing one for three tiers, and the word plus its color already degrades correctly to a plain word in a column under `NO_COLOR`.
 - **Severity gives way after the label.** Decision: as the window narrows the location shortens to a filename, then the label column drops, then the severity column. Rationale: FR-020. The two are the droppable columns and severity is now the higher-value one, so it goes last. The title floor is unchanged and still wins over both.
 - **One ordered view, not a sorted draft.** Decision: the review interface derives an ordered slice of the loaded draft and indexes that; `internal/draft` keeps arrival order and is never sorted in place. Rationale: FR-004. The draft is written back on every decision, and the digest is computed over an id-sorted copy, so sorting the stored slice would either move the digest or be undone on the next write. The list cursor, the detail view's previous and next, its "N of M" and line-by-line mode all read the same ordered slice, which is what keeps them agreeing (FR-022, FR-024).
 - **Line-by-line mode is a surface.** Decision: `--plain` follows the same order, though the specification's file list was written around the full-screen list. Rationale: FR-001 and FR-024, confirmed with the owner before implementation. It is the same review interface for a terminal that cannot take a full-screen program; two review surfaces that disagree about which finding is next give the human two answers to the same question.
@@ -61,13 +61,15 @@ specs/014-severity-badges/
 ├── plan.md
 └── tasks.md
 
-internal/severity/severity.go     # new leaf: Order, Rank, Compare
+internal/severity/severity.go     # new leaf: Order, Rank, Rated, Compare
 internal/draft/mutate.go          # validateSeverity checks severity.Order
 internal/render/body.go           # summaryLine prefix, blocking sort, section sort
 internal/tui/list.go              # severity column, ordered view, column heads
 internal/tui/detail.go            # navigation and N of M follow the ordered view
 internal/tui/plain.go             # line-by-line mode follows the ordered view
 internal/tui/app.go               # the ordered view; chips() colors severity
+internal/draft/derive.go          # Ordered, the one presentation order for a draft
+internal/style/style.go           # the Caution role and the severity ramp
 internal/cli/show.go              # ordered findings; the severity cell carries its kind
 docs/comment-format.md            # summary-line table and rule, Blocking sort, the example
 specs/001-loupe-v1/validation.md  # two Unverified rows

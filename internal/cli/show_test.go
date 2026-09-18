@@ -183,13 +183,13 @@ func TestShowColorsTheSeverityCell(t *testing.T) {
 		t.Errorf("severity cell is still dim like the rest of the line:\n%q", got)
 	}
 
-	// Every rank paints differently, and a value captured before the enum stays dim.
-	seen := map[style.Kind]string{}
+	// Every rank paints a different color, and a value captured before the enum stays dim.
+	seen := map[string]string{}
 	for _, word := range []string{"critical", "major", "minor", "trivial"} {
-		seen[style.Severity(word)] = word
+		seen[s.Of(style.Severity(word)).Render("x")] = word
 	}
 	if len(seen) != 4 {
-		t.Errorf("the four words do not paint in four roles: %v", seen)
+		t.Errorf("the four words paint %d colors, not 4: %v", len(seen), seen)
 	}
 	if style.Severity("P2") != style.Dim || style.Severity("") != style.Dim {
 		t.Error("a severity outside the enum must stay dim")

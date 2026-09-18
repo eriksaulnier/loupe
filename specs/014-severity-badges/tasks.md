@@ -43,6 +43,7 @@ description: "Task list for severity at the top level"
 - [ ] T013 [US2] Point `internal/tui/detail.go`'s previous, next, settle-to-next and "N of M" at the ordered view, so the detail walks the order the list showed.
 - [ ] T014 [US2] Add a failing test to `internal/tui/plain_test.go` that line-by-line mode presents a mixed-severity draft in the list's order, then point `internal/tui/plain.go`'s cursor and `printFinding` at the ordered view.
 - [ ] T015 [US2] Color the severity chip in `internal/tui/app.go`'s `chips()` by the ramp, leaving a legacy free-text value dim. The chip's text is unchanged.
+- [ ] T015a [US2] Add `style.Caution` and Catppuccin Peach to `internal/style`, under a failing test that the four words paint four distinguishable colors. `style.Warn` and `style.Note` are one yellow, so the obvious ramp leaves `major` and `minor` the same color (FR-018).
 - [ ] T016 [US2] Add a failing test to `internal/cli/show_test.go` for the order and the colored severity cell, then order `printShow`'s finding loop and give `writeFinding`'s meta cells their own kinds in `internal/cli/show.go`, with dim as every other cell's kind.
 - [ ] T017 [US2] Run `go test ./internal/cli/ -update`, then read the diff. `show.{80,100}.txt` carry the meta line and should move; the three `list.*.txt` goldens are run-level and MUST NOT move. If one does, something leaked.
 

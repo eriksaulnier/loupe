@@ -29,6 +29,9 @@ const (
 	Note
 	Accent
 	Dim
+	// Caution sits between Warn and Bad. Warn and Note share one yellow, so a ramp that needs four steps between
+	// good and bad has only three without it.
+	Caution
 )
 
 // Tier is which character repertoire the terminal is trusted to draw.
@@ -199,6 +202,7 @@ func catppuccin(mocha, latte string) lipgloss.AdaptiveColor {
 var (
 	colorGreen    = catppuccin("#a6e3a1", "#40a02b")
 	colorYellow   = catppuccin("#f9e2af", "#df8e1d")
+	colorPeach    = catppuccin("#fab387", "#fe640b")
 	colorRed      = catppuccin("#f38ba8", "#d20f39")
 	colorBlue     = catppuccin("#89b4fa", "#1e66f5")
 	colorOverlay1 = catppuccin("#7f849c", "#8c8fa1")
@@ -214,6 +218,7 @@ type Style struct {
 	Color  bool
 
 	Bold, Dim, Accent, Good, Warn, Bad, Note, Head, Cursor lipgloss.Style
+	Caution                                                lipgloss.Style
 	Anchor, Selected                                       lipgloss.Style
 	Added, Removed                                         lipgloss.Style
 }
@@ -237,6 +242,7 @@ func New(out io.Writer, getenv func(string) string) Style {
 	s.Good = r.NewStyle().Foreground(colorGreen)
 	s.Warn = r.NewStyle().Foreground(colorYellow)
 	s.Bad = r.NewStyle().Foreground(colorRed)
+	s.Caution = r.NewStyle().Foreground(colorPeach)
 	s.Note = r.NewStyle().Foreground(colorYellow)
 	s.Head = r.NewStyle().Bold(true)
 	// The cursor is the accent, so selection adds no color of its own.
@@ -263,14 +269,16 @@ func (s Style) Of(k Kind) lipgloss.Style {
 		return s.Accent
 	case Dim:
 		return s.Dim
+	case Caution:
+		return s.Caution
 	}
 	return s.R.NewStyle()
 }
 
-// severityKinds paints a finding's severity by how bad it is, most severe first, reusing roles the palette already
-// maps so no surface names a color. There is no glyph: the word and its color are the badge, and under NO_COLOR the
-// word stands alone.
-var severityKinds = [...]Kind{Bad, Warn, Note, Dim}
+// severityKinds paints a finding's severity by how bad it is, most severe first, so no surface names a color. The
+// four steps need Caution because Warn and Note are one yellow, which would leave major and minor indistinguishable.
+// There is no glyph: the word and its color are the badge, and under NO_COLOR the word stands alone.
+var severityKinds = [...]Kind{Bad, Caution, Warn, Dim}
 
 // Severity is the role a severity word paints in. A value captured before the enum stays dim, because nothing here
 // can say where it ranks.

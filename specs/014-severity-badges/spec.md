@@ -109,7 +109,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 ### The terminal
 
 - **FR-017**: The review list MUST carry a severity column, between the finding id and the title, wide enough for the longest word.
-- **FR-018**: The column MUST be colored by severity, most severe to least, reusing the existing semantic roles so no new palette entry is added.
+- **FR-018**: The column MUST be colored by severity, most severe to least, in four distinguishable colors. The existing semantic roles do not supply four: two of them share one yellow, so a ramp built from them alone collapses `major` and `minor` onto the same color. One palette entry MAY be added to separate them, and the role it defines MUST be named by what it means rather than by its color.
 - **FR-019**: An unrated finding's severity column MUST be blank.
 - **FR-020**: As the window narrows, the location MUST shorten first, then the label column MUST drop, then the severity column.
 - **FR-021**: The severity badge MUST NOT introduce a glyph. The word and its color are the badge, in every tier.
@@ -143,5 +143,6 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 
 - Severity is the only rank. `impact` is free prose about what goes wrong and under what input, not a second scale; `confidence` and `verified` answer different questions and already have chips; `blocking` is an independent axis with a chip on every surface. The badge encodes severity and nothing else.
 - Unrated sorting last is not a judgment that unrated findings matter least. It is the only placement that does not invent a value the reviewer withheld.
+- Four words need four colors. A ramp whose middle two look alike puts the burden back on reading the word, which is what the color was there to save.
 - The reordering within `Blocking` is worth the label-grouping property it costs. A reader who wants findings grouped by label has the label sections; a reader in `Blocking` wants the worst thing first.
 - Whether the words in a column actually change how reviewers pick needs reviews landing on real pull requests over time. It is not claimed here.

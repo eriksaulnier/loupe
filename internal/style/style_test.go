@@ -3,9 +3,12 @@ package style
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/muesli/termenv"
 )
 
 func env(m map[string]string) func(string) string {
@@ -331,5 +334,21 @@ func TestWrapBreaksTokensWiderThanTheLimit(t *testing.T) {
 	}
 	if got := s.Wrap("keep  as is", 40, ""); got != "keep  as is" {
 		t.Fatalf("private-use character altered: %q", got)
+	}
+}
+
+// The four severity words must be four distinguishable colors, not four roles that collapse onto two.
+func TestSeverityRampIsFourDistinctColors(t *testing.T) {
+	s := New(io.Discard, func(string) string { return "" })
+	s.R.SetColorProfile(termenv.TrueColor)
+	seen := map[string]string{}
+	for _, word := range []string{"critical", "major", "minor", "trivial"} {
+		seen[s.Of(Severity(word)).Render("x")] = word
+	}
+	if len(seen) != 4 {
+		t.Errorf("the severity ramp paints %d colors, not 4: %v", len(seen), seen)
+	}
+	if got := Severity("P2"); got != Dim {
+		t.Errorf("Severity(%q) = %v, want Dim", "P2", got)
 	}
 }
