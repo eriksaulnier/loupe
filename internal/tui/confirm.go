@@ -394,9 +394,12 @@ func (c *confirmation) content(m *Model) string {
 	}
 	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
 	if c.inline() {
+		// Wrap drops the blank lines the renderer left after the chips row but keeps the ones before the divider,
+		// so both sides of the box are spaced here instead: one row, whatever the split handed over.
 		parts = append(parts, m.styles.Wrap(render.ForDisplay(c.before), width, " "), "")
 		c.inputTop = strings.Count(strings.Join(parts, "\n"), "\n") + 1
-		parts = append(parts, c.messageView(m, width), m.styles.Wrap(render.ForDisplay(c.after), width, " "))
+		after := strings.TrimLeft(c.after, "\n")
+		parts = append(parts, c.messageView(m, width), "", m.styles.Wrap(render.ForDisplay(after), width, " "))
 	} else {
 		parts = append(parts, m.styles.Wrap(render.ForDisplay(markdown.OpenDetails(c.shown.Body)), width, " "))
 	}

@@ -98,6 +98,48 @@ func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 	}
 }
 
+// TestConfirmBoxIsEvenlySpaced: the renderer leaves blank lines on one side of the opening slot and not the other,
+// so the box sat one row closer to the chips than to the divider under it.
+func TestConfirmBoxIsEvenlySpaced(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	g := m.shell.glyphs
+	rows := strings.Split(m.confirm.content(m.shell), "\n")
+	// The ASCII tier draws every corner as +, so the edges are the first and last cornered rows, not two shapes.
+	top, bottom := -1, -1
+	for i, row := range rows {
+		trimmed := strings.TrimSpace(row)
+		if !strings.HasPrefix(trimmed, g.BoxTL) && !strings.HasPrefix(trimmed, g.BoxBL) {
+			continue
+		}
+		if top < 0 {
+			top = i
+		}
+		bottom = i
+	}
+	if top < 1 || bottom < top {
+		t.Fatalf("no box in the body (top %d, bottom %d):\n%s", top, bottom, strings.Join(rows, "\n"))
+	}
+	above, below := blanksBefore(rows, top), blanksAfter(rows, bottom)
+	if above != 1 || below != 1 {
+		t.Errorf("the box has %d blank rows above it and %d below:\n%s", above, below, strings.Join(rows[top-above-1:], "\n"))
+	}
+}
+
+func blanksBefore(rows []string, i int) int {
+	n := 0
+	for ; i-1-n >= 0 && strings.TrimSpace(rows[i-1-n]) == ""; n++ {
+	}
+	return n
+}
+
+func blanksAfter(rows []string, i int) int {
+	n := 0
+	for ; i+1+n < len(rows) && strings.TrimSpace(rows[i+1+n]) == ""; n++ {
+	}
+	return n
+}
+
 // TestConfirmFocusedInputSwallowsY is FR-010: one key confirms, and it is not a key the human is typing with.
 func TestConfirmFocusedInputSwallowsY(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
