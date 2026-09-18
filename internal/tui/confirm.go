@@ -162,6 +162,9 @@ func (c *confirmation) key(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
 		if !c.inline() {
 			return false, nil
 		}
+		// The payload is drawn instead of the body the input sits in, so coming back to the message has to bring
+		// the body back with it; otherwise the human types into a field that is not on screen.
+		c.showJSON = false
 		c.typing, c.follow = true, true
 		cmd := c.message.Focus()
 		c.sync(m)

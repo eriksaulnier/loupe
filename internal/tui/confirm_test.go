@@ -352,6 +352,29 @@ func TestConfirmPublishesWhenThereIsNoRoomForAMessage(t *testing.T) {
 	}
 }
 
+// TestConfirmLeavesThePayloadToTypeTheMessage: the payload is drawn instead of the body, so returning to the
+// message from it has to bring the body back or the human types into a field that is not on screen.
+func TestConfirmLeavesThePayloadToTypeTheMessage(t *testing.T) {
+	for _, back := range []tea.KeyMsg{{Type: tea.KeyTab}, {Type: tea.KeyEsc}} {
+		m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+		m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+		if !strings.Contains(m.View(), `"event": "COMMENT"`) {
+			t.Fatalf("v did not show the payload:\n%s", m.View())
+		}
+		m.Update(back)
+		typeInto(m, "Mine to own.")
+		view := m.View()
+		if strings.Contains(view, `"event": "COMMENT"`) {
+			t.Errorf("%v left the payload on screen:\n%s", back.Type, view)
+		}
+		if !strings.Contains(view, "Mine to own.") || !strings.Contains(view, messageTitle) {
+			t.Errorf("%v typed into a field that is not on screen:\n%s", back.Type, view)
+		}
+	}
+}
+
 // TestConfirmReadsTheFindingsWhileTyping keeps the review readable while its opening is written: the message is
 // about the findings, so paging through them MUST NOT mean leaving the input.
 func TestConfirmReadsTheFindingsWhileTyping(t *testing.T) {
