@@ -110,7 +110,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	tm := startApp(t, dir)
 	waitFor(t, tm, "acme/widgets#42", "round 1", "Two issues to look at.", "tab expands",
 		"+ 0 accepted", ". 3 pending", "x 0 excluded", "- 0 withdrawn", "~ 0 open notes",
-		"> . f-001  ! Title one", "issue", "multi.txt:3", ". f-002  Title two", "suggestion", "multi.txt:21", ". f-003  Title three", "general")
+		"> . f-001            ! Title one", "issue", "multi.txt:3", ". f-002            Title two", "suggestion", "multi.txt:21", ". f-003            Title three", "general")
 
 	key(tm, tea.KeyEnter)
 	waitFor(t, tm, "Body one explains the rename.", "> ", "line three")

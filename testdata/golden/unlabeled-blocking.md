@@ -7,7 +7,7 @@ Summary.
 ### ⛔ Blocking
 
 <details>
-<summary><b>(blocking):</b> Title f-001</summary>
+<summary>Title f-001</summary>
 
 Body f-001.
 

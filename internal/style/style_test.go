@@ -3,9 +3,14 @@ package style
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/muesli/termenv"
+
+	"github.com/eriksaulnier/loupe/internal/severity"
 )
 
 func env(m map[string]string) func(string) string {
@@ -331,5 +336,30 @@ func TestWrapBreaksTokensWiderThanTheLimit(t *testing.T) {
 	}
 	if got := s.Wrap("keep  as is", 40, ""); got != "keep  as is" {
 		t.Fatalf("private-use character altered: %q", got)
+	}
+}
+
+// The four severity words must be four distinguishable colors, not four roles that collapse onto two.
+func TestSeverityRampIsFourDistinctColors(t *testing.T) {
+	s := New(io.Discard, func(string) string { return "" })
+	s.R.SetColorProfile(termenv.TrueColor)
+	seen := map[string]string{}
+	for _, word := range severity.Order {
+		seen[s.Of(Severity(word)).Render("x")] = word
+	}
+	if len(seen) != len(severity.Order) {
+		t.Errorf("the severity ramp paints %d colors for %d words: %v", len(seen), len(severity.Order), seen)
+	}
+	if got := Severity("P2"); got != Dim {
+		t.Errorf("Severity(%q) = %v, want Dim", "P2", got)
+	}
+}
+
+// severityKinds is parallel to severity.Order by hand. If a word is ever added to one and not the other, this is
+// where it lands, rather than as an out-of-range panic inside whichever package happened to paint first.
+func TestSeverityRampCoversEveryWord(t *testing.T) {
+	if len(severityKinds) != len(severity.Order) {
+		t.Fatalf("severityKinds has %d entries, severity.Order has %d: give the new word a Kind",
+			len(severityKinds), len(severity.Order))
 	}
 }

@@ -57,7 +57,7 @@ The pull request author opens the review they were going to get before this chan
 
 1. **Given** any run, **When** its review body is rendered, **Then** it is byte-identical to what the same run rendered before this change.
 2. **Given** the goldens under `testdata/golden/`, **When** the suite runs, **Then** none needs regenerating.
-3. **Given** a published review, **When** the author reads it, **Then** no legend defines the severity words, because `blocking` already answers the author's real question and says so loudly: the `⛔` chip, the `⛔ Blocking` section and `(blocking)` on the summary line.
+3. **Given** a published review, **When** the author reads it, **Then** no legend defines the severity words, because `blocking` already answers the author's real question and says so loudly: the `⛔` chip, the `⛔ Blocking` section and, at the time, `(blocking)` on the summary line, which `specs/014-severity-badges` dropped as a fourth statement of the same thing.
 
 ---
 

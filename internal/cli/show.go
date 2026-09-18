@@ -177,14 +177,14 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  (none)"))
 	}
 	for _, f := range findings {
-		meta := []string{}
+		meta := []metaCell{}
 		if f.Blocking {
-			meta = append(meta, "blocking")
+			meta = append(meta, dimCell("blocking"))
 		}
 		if f.Label != "" {
-			meta = append(meta, labelCell(s, f.Label))
+			meta = append(meta, dimCell(labelCell(s, f.Label)))
 		}
-		meta = append(meta, locationCell(s, f.Location))
+		meta = append(meta, dimCell(locationCell(s, f.Location)))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: s.Glyphs.Accepted, kind: style.Good, id: f.ID, blocking: f.Blocking,
 			title: f.Title, meta: meta, body: f.Body,
@@ -202,11 +202,59 @@ type findingBlock struct {
 	id       string
 	blocking bool
 	title    string
-	meta     []string
+	meta     []metaCell
 	body     string
 	impact   string
 	fix      string
 	refs     []string
+}
+
+// metaCell is one part of a finding's meta line and the role it paints in. Most parts are dim; severity carries its
+// rank's color, which is why the line is painted a cell at a time rather than dimmed whole.
+type metaCell struct {
+	text string
+	kind style.Kind
+}
+
+func dimCell(text string) metaCell { return metaCell{text, style.Dim} }
+
+// metaLine paints each cell in its own role and wraps the joined line. Two things are hidden from the wrapper: a
+// cell's own space, so "severity major" cannot break in two and lose its color on the second line, and the space
+// before each separator, so a lone "·" can never end up on a line of its own. A cell too wide to keep whole keeps its
+// spaces, since hard-splitting it mid-word costs more than the break it was spared.
+func metaLine(s style.Style, cells []metaCell, width int) []string {
+	// The marker is private-use, and render.ForDisplay escapes control, C1 and bidi runes but not those, so a Git
+	// path can carry one into a cell. Text that already holds it is wrapped without the protection rather than have
+	// its own copy turned into a space on the way back, which is the rule style.Wrap follows for its own marker.
+	const keepTogether = "\uE001"
+	protect := true
+	for _, c := range cells {
+		if strings.Contains(c.text, keepTogether) {
+			protect = false
+			break
+		}
+	}
+	sep, limit := metaSep(s), max(10, width-style.Width(findingIndent))
+	var b strings.Builder
+	for i, c := range cells {
+		text := c.text
+		if protect && style.Width(text)+style.Width(sep) <= limit {
+			text = strings.ReplaceAll(text, " ", keepTogether)
+		}
+		b.WriteString(s.Of(c.kind).Render(text))
+		if i < len(cells)-1 {
+			glue := " "
+			if protect {
+				glue = keepTogether
+			}
+			b.WriteString(s.Dim.Render(glue+strings.TrimSpace(sep)) + " ")
+		}
+	}
+	wrapped := s.Wrap(b.String(), width, findingIndent)
+	if protect {
+		wrapped = strings.ReplaceAll(wrapped, keepTogether, " ")
+	}
+	return strings.Split(wrapped, "\n")
 }
 
 const findingIndent = "         "
@@ -218,8 +266,8 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 	}
 	fmt.Fprintf(b, "%s %s  %s\n", s.Of(f.kind).Render(f.glyph), s.Accent.Render(oneLine(f.id)), title)
 	if len(f.meta) > 0 {
-		for _, line := range strings.Split(s.Wrap(strings.Join(f.meta, metaSep(s)), width, findingIndent), "\n") {
-			fmt.Fprintf(b, "%s\n", s.Dim.Render(line))
+		for _, line := range metaLine(s, f.meta, width) {
+			fmt.Fprintf(b, "%s\n", line)
 		}
 	}
 	if body := text(f.body); body != "" {
@@ -288,25 +336,27 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 	if len(d.Findings) == 0 {
 		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  (none)"))
 	}
-	for _, f := range d.Findings {
+	// The findings are shown in the order the review interface decides them and the published review presents them.
+	for _, f := range draft.Ordered(d) {
 		glyph, word, kind := s.Disposition(dispositions[f.ID])
-		meta := []string{word}
+		meta := []metaCell{dimCell(word)}
 		if f.Blocking {
-			meta = append(meta, "blocking")
+			meta = append(meta, dimCell("blocking"))
 		}
 		if f.Label != "" {
-			meta = append(meta, labelCell(s, f.Label))
+			meta = append(meta, dimCell(labelCell(s, f.Label)))
 		}
 		if f.Confidence != "" {
-			meta = append(meta, "confidence "+oneLine(f.Confidence))
+			meta = append(meta, dimCell("confidence "+oneLine(f.Confidence)))
 		}
 		if f.Severity != "" {
-			meta = append(meta, "severity "+oneLine(f.Severity))
+			word := oneLine(f.Severity)
+			meta = append(meta, metaCell{"severity " + word, style.Severity(word)})
 		}
 		if f.Verified != "" {
-			meta = append(meta, "verified "+oneLine(f.Verified))
+			meta = append(meta, dimCell("verified "+oneLine(f.Verified)))
 		}
-		meta = append(meta, locationCell(s, f.Location))
+		meta = append(meta, dimCell(locationCell(s, f.Location)))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
 			title: f.Title, meta: meta, body: f.Body, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,

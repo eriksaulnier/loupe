@@ -1,11 +1,38 @@
 package draft
 
+import (
+	"cmp"
+	"slices"
+
+	"github.com/eriksaulnier/loupe/internal/findingid"
+	"github.com/eriksaulnier/loupe/internal/section"
+	"github.com/eriksaulnier/loupe/internal/severity"
+)
+
 const (
 	DispositionAccepted  = "accepted"
 	DispositionExcluded  = "excluded"
 	DispositionWithdrawn = "withdrawn"
 	DispositionPending   = "pending"
 )
+
+// Ordered is the findings as a reader meets them on every human-facing surface, which is the sequence the published
+// review puts them in: the body's section first, then severity, then the label group that breaks ties inside
+// Blocking, then the finding id. Severity alone would disagree with the review, which places a blocking finding above
+// every nonblocking one whatever its severity. It derives a view and never reorders the stored slice, which keeps
+// arrival order and is what the digest is built from.
+func Ordered(d *Draft) []Finding {
+	out := slices.Clone(d.Findings)
+	slices.SortFunc(out, func(a, b Finding) int {
+		return cmp.Or(
+			cmp.Compare(section.Rank(a.Label, a.Blocking), section.Rank(b.Label, b.Blocking)),
+			severity.Compare(a.Severity, b.Severity),
+			cmp.Compare(section.Group(a.Label), section.Group(b.Label)),
+			findingid.Compare(a.ID, b.ID),
+		)
+	})
+	return out
+}
 
 // Readiness holds id lists; counts are their lengths.
 type Readiness struct {

@@ -73,6 +73,8 @@ type Model struct {
 	noticeKind style.Kind
 	err        error
 
+	// order is the draft's findings as every surface presents them; the cursor and the detail's position index it.
+	order            []draft.Finding
 	cursor           int
 	summaryCollapsed bool
 
@@ -138,22 +140,21 @@ func New(cfg Config) (*Model, error) {
 	note.FocusedStyle, note.BlurredStyle = textarea.Style{}, textarea.Style{}
 	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
-		cfg:     cfg,
-		target:  target,
-		draft:   d,
-		diff:    parsed,
-		version: d.Version,
-		glyphs:  st.Glyphs,
-		styles:  st,
-		width:   80,
-		height:  24,
-		note:    note,
-		body:    viewport.New(80, 10),
-		file:    viewport.New(80, 10),
+		cfg:    cfg,
+		target: target,
+		diff:   parsed,
+		glyphs: st.Glyphs,
+		styles: st,
+		width:  80,
+		height: 24,
+		note:   note,
+		body:   viewport.New(80, 10),
+		file:   viewport.New(80, 10),
 		// The summary starts collapsed so the findings, not the prose, fill the first screen.
 		summaryCollapsed: true,
 	}
-	m.cursor = initialCursor(d)
+	m.setDraft(d)
+	m.cursor = initialCursor(d, m.order)
 	if st.Color {
 		m.darkBackground = st.R.HasDarkBackground()
 	}
@@ -291,12 +292,17 @@ func (m *Model) layout() error {
 	return nil
 }
 
+// setDraft takes a freshly loaded draft and rebuilds the order every surface reads, so the two can never disagree.
+func (m *Model) setDraft(d *draft.Draft) {
+	m.draft, m.version, m.order = d, d.Version, draft.Ordered(d)
+}
+
 func (m *Model) reload() error {
 	d, err := draft.Load(m.cfg.Dir)
 	if err != nil {
 		return err
 	}
-	m.draft, m.version = d, d.Version
+	m.setDraft(d)
 	return nil
 }
 
@@ -307,7 +313,7 @@ func (m *Model) Decide(fn func(*draft.Draft) error) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	m.draft, m.version = d, d.Version
+	m.setDraft(d)
 	m.say(style.Warn, notice)
 	return notice == "", nil
 }
@@ -706,10 +712,10 @@ func countsLines(d *draft.Draft, s style.Style, width int) []string {
 }
 
 // initialCursor selects what needs the human first: the first pending finding, then the first with an open note.
-func initialCursor(d *draft.Draft) int {
+func initialCursor(d *draft.Draft, order []draft.Finding) int {
 	r := draft.ReadinessOf(d)
 	for _, ids := range [][]string{r.Pending, openNoteFindings(d)} {
-		for i, f := range d.Findings {
+		for i, f := range order {
 			if slices.Contains(ids, f.ID) {
 				return i
 			}
@@ -771,7 +777,8 @@ func chips(s style.Style, f draft.Finding, disposition string, general bool) []c
 		out = append(out, chip{"", "confidence " + render.ForDisplay(f.Confidence), style.Dim})
 	}
 	if f.Severity != "" {
-		out = append(out, chip{"", "severity " + render.ForDisplay(render.OneLine(f.Severity)), style.Dim})
+		word := render.OneLine(f.Severity)
+		out = append(out, chip{"", "severity " + render.ForDisplay(word), style.Severity(word)})
 	}
 	if f.Verified != "" {
 		out = append(out, chip{"", "verified " + render.ForDisplay(f.Verified), style.Dim})
@@ -787,8 +794,8 @@ func chipRow(s style.Style, cs []chip) string {
 	return strings.Join(out, "   ")
 }
 
-func findingIndex(d *draft.Draft, id string) int {
-	for i, f := range d.Findings {
+func orderedIndex(fs []draft.Finding, id string) int {
+	for i, f := range fs {
 		if f.ID == id {
 			return i
 		}

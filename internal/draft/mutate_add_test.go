@@ -10,6 +10,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/severity"
 )
 
 var addNow = time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
@@ -263,6 +264,20 @@ func TestAddValidatesLabel(t *testing.T) {
 		r := wantRefusal(t, err, refusal.Input)
 		if !strings.Contains(r.Message, "label") || !strings.Contains(r.Message, LabelPattern) {
 			t.Errorf("label %q: message %q does not name the field and pattern", label, r.Message)
+		}
+	}
+}
+
+// The refusal spells the enum out in prose, so it goes stale silently if a word is ever added to severity.Order.
+func TestSeverityRefusalNamesEveryWord(t *testing.T) {
+	err := validateSeverity("P2")
+	r, ok := refusal.As(err)
+	if !ok {
+		t.Fatalf("validateSeverity(%q) = %v, want a refusal", "P2", err)
+	}
+	for _, word := range severity.Order {
+		if !strings.Contains(r.Message, word) {
+			t.Errorf("refusal %q does not name %q", r.Message, word)
 		}
 	}
 }

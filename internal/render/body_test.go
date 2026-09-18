@@ -233,9 +233,11 @@ func TestBodyMetaLineParts(t *testing.T) {
 		in.Findings = []Finding{f}
 		return Body(in)
 	}
+	// An enum word leads the summary line, so the meta block does not repeat it; a general finding with nothing
+	// else to report has no meta block at all.
 	f.Severity = "minor"
-	if body := render(f); !strings.Contains(body, "\n\n> **Severity:** minor\n\nB.\n\n</details>") {
-		t.Fatalf("severity alone wrong\n%s", body)
+	if body := render(f); !strings.Contains(body, "<summary><b>minor:</b> T</summary>\n\nB.\n\n</details>") {
+		t.Fatalf("severity must not repeat on the meta line\n%s", body)
 	}
 	f.Severity, f.Verified = "", "plausible"
 	if body := render(f); !strings.Contains(body, "\n\n> **Verified:** plausible\n\nB.") {
@@ -299,6 +301,212 @@ func TestBodyDividersFollowBlankLine(t *testing.T) {
 			if l == "---" && (i == 0 || lines[i-1] != "") {
 				t.Fatalf("divider at line %d not preceded by a blank line", i+1)
 			}
+		}
+	}
+}
+
+// A rated finding leads its bold prefix with the word; where the context carries no label, the word is the prefix.
+func TestSummaryLineLeadsWithSeverity(t *testing.T) {
+	cases := []struct {
+		name            string
+		severity, label string
+		blocking        bool
+		ctx             summaryContext
+		want            string
+	}{
+		{"blocking", "critical", "issue", true, inBlocking, "<b>critical · issue:</b> T"},
+		{"blocking unlabeled", "major", "", true, inBlocking, "<b>major:</b> T"},
+		{"label section", "minor", "issue", false, inLabelSection, "<b>minor:</b> T"},
+		{"other", "trivial", "perf-nit", false, inOther, "<b>trivial · perf-nit:</b> T"},
+		{"other unlabeled", "trivial", "", false, inOther, "<b>trivial:</b> T"},
+		{"inline", "major", "issue", true, inInline, "⛔ <b>major · issue:</b> T"},
+		{"inline nonblocking", "minor", "question", false, inInline, "🔵 <b>minor · question:</b> T"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := Finding{ID: "f-001", Title: "T", Severity: c.severity, Label: c.label, Blocking: c.blocking}
+			if got := summaryLine(f, c.ctx); got != c.want {
+				t.Errorf("summaryLine = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// A finding that carries neither a severity nor the blocking flag renders its summary line byte for byte what it
+// rendered before either change. Blocking rows are covered by TestSummaryLineLeavesBlockingToTheDotAndHeading.
+func TestSummaryLineWithoutSeverityOrBlockingIsUnchanged(t *testing.T) {
+	cases := []struct {
+		name            string
+		severity, label string
+		blocking        bool
+		ctx             summaryContext
+		want            string
+	}{
+		{"absent in blocking", "", "issue", false, inBlocking, "<b>issue:</b> T"},
+		{"absent in label section", "", "issue", false, inLabelSection, "T"},
+		{"absent in other", "", "perf-nit", false, inOther, "<b>perf-nit:</b> T"},
+		{"absent unlabeled in other", "", "", false, inOther, "T"},
+		{"absent inline", "", "issue", false, inInline, "🟡 <b>issue:</b> T"},
+		{"legacy free text", "P2", "issue", false, inBlocking, "<b>issue:</b> T"},
+		{"legacy free text in other", "P2", "", false, inOther, "T"},
+		{"wrong case", "Critical", "issue", false, inLabelSection, "T"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := Finding{ID: "f-001", Title: "T", Severity: c.severity, Label: c.label, Blocking: c.blocking}
+			if got := summaryLine(f, c.ctx); got != c.want {
+				t.Errorf("summaryLine = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// A legacy free-text severity stays out of the summary line, where the prefix is interpolated raw, and keeps its
+// code span on the meta line.
+func TestLegacySeverityStaysInItsCodeSpan(t *testing.T) {
+	in := exampleInput()
+	in.Findings = []Finding{{ID: "f-001", Title: "T", Body: "B", General: true, Label: "issue", Severity: "P2"}}
+	body := Body(in)
+	if strings.Contains(body, "<summary><b>P2") {
+		t.Errorf("free-text severity reached the summary line\n%s", body)
+	}
+	if !strings.Contains(body, "**Severity:** `P2`") {
+		t.Errorf("free-text severity lost its code span\n%s", body)
+	}
+}
+
+func rated(id, label, sev string, blocking bool) Finding {
+	f := general(id, label, blocking)
+	f.Severity = sev
+	return f
+}
+
+// Inside Blocking severity outranks the label group, which survives as the tie-break among equal severities.
+func TestBodyBlockingSortsBySeverityThenLabelGroup(t *testing.T) {
+	in := exampleInput()
+	in.Findings = []Finding{
+		rated("f-001", "issue", "minor", true),
+		rated("f-002", "question", "critical", true),
+		rated("f-003", "suggestion", "major", true),
+		rated("f-004", "issue", "major", true),
+		rated("f-005", "issue", "", true),
+		rated("f-006", "question", "", true),
+	}
+	body := Body(in)
+	got := indexes(t, body,
+		"Title f-002<", // critical
+		"Title f-004<", // major, issue
+		"Title f-003<", // major, suggestion
+		"Title f-001<", // minor
+		"Title f-005<", // unrated, issue
+		"Title f-006<", // unrated, question
+	)
+	if !slices.IsSorted(got) {
+		t.Fatalf("blocking offsets %v not in severity, label-group, id order\n%s", got, body)
+	}
+}
+
+// A label section and Other sort by severity, then by id, so a trivial f-001 sits below a critical f-007.
+func TestBodySectionSortsBySeverityThenID(t *testing.T) {
+	in := exampleInput()
+	in.Findings = []Finding{
+		rated("f-001", "issue", "trivial", false),
+		rated("f-007", "issue", "critical", false),
+		rated("f-003", "issue", "", false),
+		rated("f-002", "issue", "trivial", false),
+		rated("f-004", "perf-nit", "major", false),
+		rated("f-005", "perf-nit", "", false),
+	}
+	body := Body(in)
+	got := indexes(t, body, "Title f-007<", "Title f-001<", "Title f-002<", "Title f-003<",
+		"### ⚪ Other", "Title f-004<", "Title f-005<")
+	if !slices.IsSorted(got) {
+		t.Fatalf("section offsets %v not in severity then id order\n%s", got, body)
+	}
+}
+
+// The summary line above a meta block always carries an enum severity, so the block repeats it only when the summary
+// line could not take it: a value stored before the enum, in the code span that keeps it inert.
+func TestMetaBlockRepeatsOnlyALegacySeverity(t *testing.T) {
+	in := exampleInput()
+	// Blocking, so the summary line keeps its label word and the ` · ` join is exercised too.
+	base := Finding{ID: "f-001", Title: "T", Body: "B.", General: true, Label: "issue", Blocking: true,
+		Confidence: "high", Verified: "reproduced"}
+	for _, word := range []string{"critical", "major", "minor", "trivial"} {
+		f := base
+		f.Severity = word
+		in.Findings = []Finding{f}
+		body := Body(in)
+		if !strings.Contains(body, "<b>"+word+" · issue:</b>") {
+			t.Errorf("%s did not lead the summary line\n%s", word, body)
+		}
+		if strings.Contains(body, "**Severity:**") {
+			t.Errorf("%s repeated on the meta line\n%s", word, body)
+		}
+		if !strings.Contains(body, "> **Confidence:** high\\\n> **Verified:** reproduced") {
+			t.Errorf("dropping severity broke the meta block's hard breaks\n%s", body)
+		}
+	}
+	f := base
+	f.Severity = "P2"
+	in.Findings = []Finding{f}
+	body := Body(in)
+	if strings.Contains(body, "<b>P2") {
+		t.Errorf("a legacy severity reached the summary line\n%s", body)
+	}
+	if !strings.Contains(body, "> **Confidence:** high\\\n> **Severity:** `P2`\\\n> **Verified:** reproduced") {
+		t.Errorf("a legacy severity lost its meta line\n%s", body)
+	}
+}
+
+// An inline comment's meta block follows the same rule, since its bold first line is the summary line.
+func TestInlineMetaBlockDropsARatedSeverity(t *testing.T) {
+	in := exampleInput()
+	in.Inline = "all"
+	in.Findings = []Finding{{ID: "f-001", Title: "T", Body: "B.", Label: "issue", Severity: "critical",
+		Confidence: "high", Location: &Location{Path: "a.go", Side: "RIGHT", Line: 3}}}
+	got := Comments(in)
+	if len(got) != 1 {
+		t.Fatalf("want one comment, got %d", len(got))
+	}
+	if want := "🟡 <b>critical · issue:</b> T\n\n> **Confidence:** high\n\nB."; got[0].Body != want {
+		t.Errorf("inline body\n got %q\nwant %q", got[0].Body, want)
+	}
+}
+
+// Blocking is said by the ⛔ heading in the body and by the ⛔ dot inline, so the summary line never repeats it. The
+// label word stays: the dot says a finding blocks, not what kind of remark it is.
+func TestSummaryLineLeavesBlockingToTheDotAndHeading(t *testing.T) {
+	cases := []struct {
+		name            string
+		severity, label string
+		ctx             summaryContext
+		want            string
+	}{
+		{"blocking", "major", "issue", inBlocking, "<b>major · issue:</b> T"},
+		{"blocking unrated", "", "suggestion", inBlocking, "<b>suggestion:</b> T"},
+		{"blocking unlabeled", "", "", inBlocking, "T"},
+		{"inline", "major", "issue", inInline, "⛔ <b>major · issue:</b> T"},
+		{"inline unrated", "", "question", inInline, "⛔ <b>question:</b> T"},
+		{"inline unlabeled", "", "", inInline, "⛔ T"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := Finding{ID: "f-001", Title: "T", Severity: c.severity, Label: c.label, Blocking: true}
+			got := summaryLine(f, c.ctx)
+			if got != c.want {
+				t.Errorf("summaryLine = %q, want %q", got, c.want)
+			}
+			if strings.Contains(got, "(blocking)") {
+				t.Errorf("the summary line still says (blocking): %q", got)
+			}
+		})
+	}
+	// The ⛔ dot is what carries it inline, whatever the label would otherwise have drawn.
+	for _, label := range []string{"issue", "suggestion", "question", "perf-nit", ""} {
+		f := Finding{ID: "f-001", Title: "T", Label: label, Blocking: true}
+		if got := summaryLine(f, inInline); !strings.HasPrefix(got, "⛔ ") {
+			t.Errorf("inline %q lost its blocking dot: %q", label, got)
 		}
 	}
 }

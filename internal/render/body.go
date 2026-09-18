@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/findingid"
+	"github.com/eriksaulnier/loupe/internal/section"
+	"github.com/eriksaulnier/loupe/internal/severity"
 )
 
 type Input struct {
@@ -57,25 +59,16 @@ type Location struct {
 // without needing that attempt's digest.
 const MetaPrefix = "<!-- loupe-meta "
 
-// Section and label-group order; groupOther collects every unknown or empty label.
+// The label groups are internal/section's, so the order this body emits and the order every terminal surface walks
+// have one definition rather than two that have to agree.
 const (
-	groupIssue = iota
-	groupSuggestion
-	groupQuestion
-	groupOther
+	groupIssue      = section.Issue
+	groupSuggestion = section.Suggestion
+	groupQuestion   = section.Question
+	groupOther      = section.Other
 )
 
-func group(label string) int {
-	switch label {
-	case "issue":
-		return groupIssue
-	case "suggestion":
-		return groupSuggestion
-	case "question":
-		return groupQuestion
-	}
-	return groupOther
-}
+func group(label string) int { return section.Group(label) }
 
 var dots = [...]string{groupIssue: "🟡", groupSuggestion: "🟣", groupQuestion: "🔵", groupOther: "⚪"}
 
@@ -101,8 +94,11 @@ func Body(in Input) string {
 		g := group(f.Label)
 		sections[g] = append(sections[g], f)
 	}
+	// Severity outranks the label group here: the section that exists to be read first is ordered by urgency, and
+	// the label group survives as the tie-break so labels still cluster among findings of equal severity.
 	slices.SortFunc(blocking, func(a, b Finding) int {
-		return cmp.Or(cmp.Compare(group(a.Label), group(b.Label)), findingid.Compare(a.ID, b.ID))
+		return cmp.Or(severity.Compare(a.Severity, b.Severity),
+			cmp.Compare(group(a.Label), group(b.Label)), findingid.Compare(a.ID, b.ID))
 	})
 
 	var head []string
@@ -115,18 +111,20 @@ func Body(in Input) string {
 	blocks := []string{strings.Join(head, "\n\n")}
 
 	if len(blocking) > 0 {
-		blocks = append(blocks, section("⛔ Blocking", blocking, inBlocking, in))
+		blocks = append(blocks, sectionBlock("⛔ Blocking", blocking, inBlocking, in))
 	}
 	for g, fs := range sections {
 		if len(fs) == 0 {
 			continue
 		}
-		slices.SortFunc(fs, func(a, b Finding) int { return findingid.Compare(a.ID, b.ID) })
+		slices.SortFunc(fs, func(a, b Finding) int {
+			return cmp.Or(severity.Compare(a.Severity, b.Severity), findingid.Compare(a.ID, b.ID))
+		})
 		ctx := inLabelSection
 		if g == groupOther {
 			ctx = inOther
 		}
-		blocks = append(blocks, section(dots[g]+" "+sectionTitles[g], fs, ctx, in))
+		blocks = append(blocks, sectionBlock(dots[g]+" "+sectionTitles[g], fs, ctx, in))
 	}
 
 	census := [4]int{}
@@ -173,7 +171,7 @@ func chipsRow(blocking int, sections [4][]Finding) string {
 	return strings.Join(chips, " ")
 }
 
-func section(title string, fs []Finding, ctx summaryContext, in Input) string {
+func sectionBlock(title string, fs []Finding, ctx summaryContext, in Input) string {
 	parts := make([]string, len(fs))
 	for i, f := range fs {
 		parts[i] = "<details>\n<summary>" + summaryLine(f, ctx) + "</summary>\n\n" + disclosure(f, in, true) + "\n\n</details>"
@@ -186,13 +184,20 @@ func summaryLine(f Finding, ctx summaryContext) string {
 	if ctx == inInline {
 		title = escapePunctuation(title)
 	}
-	label := EscapeHTML(OneLine(f.Label))
-	if f.Blocking {
-		label = strings.TrimLeft(label+" (blocking)", " ")
+	var bold []string
+	// Only an enum word leads the line. The prefix is interpolated outside a code span, and a run captured before the
+	// enum can hold any text, so a free-text severity stays on the meta line where a code span makes it inert.
+	if word := OneLine(f.Severity); severity.Rated(word) {
+		bold = append(bold, word)
+	}
+	// Blocking is not written here. The ⛔ heading says it in the body and the ⛔ dot says it inline, and a blocking
+	// finding never reaches a label section, so there is no context where the word would be the only carrier.
+	if label := EscapeHTML(OneLine(f.Label)); label != "" && ctx != inLabelSection {
+		bold = append(bold, label)
 	}
 	var prefix string
-	if label != "" && ctx != inLabelSection {
-		prefix = "<b>" + label + ":</b> "
+	if len(bold) > 0 {
+		prefix = "<b>" + strings.Join(bold, " · ") + ":</b> "
 	}
 	if ctx == inInline {
 		dot := dots[group(f.Label)]
@@ -270,16 +275,11 @@ func metaBlock(f Finding, in Input, inBody bool) string {
 	if f.Confidence != "" {
 		lines = append(lines, "**Confidence:** "+EscapeHTML(OneLine(f.Confidence)))
 	}
-	if f.Severity != "" {
-		// An enum word is inert as text. A run stored before the enum can hold any text, and nothing rechecks it at
-		// composition, so it stays in a code span where Markdown cannot run.
-		word := OneLine(f.Severity)
-		switch word {
-		case "critical", "major", "minor", "trivial":
-			lines = append(lines, "**Severity:** "+word)
-		default:
-			lines = append(lines, "**Severity:** "+CodeSpan(word))
-		}
+	// An enum word already leads the summary line above this block, the way an inline comment's line already carries
+	// its location, so repeating it here would put the same word two lines from itself. A run stored before the enum
+	// cannot reach that line, so it is repeated here, in a code span where Markdown cannot run.
+	if word := OneLine(f.Severity); word != "" && !severity.Rated(word) {
+		lines = append(lines, "**Severity:** "+CodeSpan(word))
 	}
 	if f.Verified != "" {
 		lines = append(lines, "**Verified:** "+EscapeHTML(OneLine(f.Verified)))
