@@ -308,6 +308,50 @@ func cutSGR(row string, i int) (seq string, next int, ok bool) {
 	return strings.Join(kept, ";"), i + end + 1, true
 }
 
+// composeAtLimit is a review already at the body-size limit: anything added to its opening slot, a human's message
+// or the confirmation's own sentinel, pushes it over.
+func composeAtLimit(base publish.Preview, refuse error) func(string) (publish.Envelope, string, error) {
+	compose := composeOpening(base, nil)
+	return func(message string) (publish.Envelope, string, error) {
+		if message != "" {
+			return publish.Envelope{}, "", refuse
+		}
+		return compose(message)
+	}
+}
+
+// TestConfirmPublishesWhenThereIsNoRoomForAMessage: the slot probe composes a body one sentinel longer than the
+// review it stands in for, so a review near the size limit can fail it. That must not strand a publishable review.
+func TestConfirmPublishesWhenThereIsNoRoomForAMessage(t *testing.T) {
+	preview := confirmPreview()
+	limit := refusal.New(refusal.Markdown, "the composed review body is 65545 characters; at most 65536 characters are allowed",
+		"exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -")
+	preview.Compose = composeAtLimit(preview, limit)
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+
+	if m.confirm.inline() || m.confirm.typing {
+		t.Fatal("an input was offered for a review with nowhere to put one")
+	}
+	view := m.View()
+	if !strings.Contains(view, "this review has no room for a message: the composed review body is 65545") {
+		t.Errorf("the confirmation does not say why there is no input:\n%s", view)
+	}
+	if strings.Contains(view, "your message") {
+		t.Errorf("the footer offers a key for an input that is not there:\n%s", view)
+	}
+	// Tab has nothing to move to, and neither it nor the missing input may stand between the human and y.
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyTab}); cmd != nil {
+		t.Fatal("tab ended the program")
+	}
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd == nil {
+		t.Fatal("y did not confirm")
+	}
+	if !m.Confirmed() || m.Message() != "" {
+		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
+	}
+}
+
 // TestConfirmReadsTheFindingsWhileTyping keeps the review readable while its opening is written: the message is
 // about the findings, so paging through them MUST NOT mean leaving the input.
 func TestConfirmReadsTheFindingsWhileTyping(t *testing.T) {

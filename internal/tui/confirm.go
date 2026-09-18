@@ -50,6 +50,9 @@ type confirmation struct {
 	// composeErr is what the typed message drew from the allowlist. It blocks y until the message is reworded, and
 	// the text stays on screen.
 	composeErr error
+	// slotErr is why there is no input to type into. It is said on the notice line and blocks nothing, because a
+	// review that cannot hold a message can still be published without one.
+	slotErr error
 	// before and after are the review either side of the opening slot, which the input is drawn into. They are empty
 	// when the preview carries no closure, and the recomposed body is then shown whole instead.
 	before, after string
@@ -81,7 +84,10 @@ func newConfirmation(preview publish.Preview, title ConfirmHeading, message stri
 		}
 	}
 	if err != nil {
-		c.before, c.after, c.composeErr = "", "", err
+		// The probe composes a body one sentinel longer than the one it is standing in for, so a review near the
+		// size limit can fail it while the review itself is fine. Whatever the reason, the failure belongs to the
+		// probe and not to the human: they are told, they get no input, and y still publishes what they were shown.
+		c.before, c.after, c.slotErr = "", "", err
 		return c
 	}
 	c.typing, c.follow = true, true
@@ -427,12 +433,19 @@ func (c *confirmation) content(m *Model) string {
 // shrink.
 const confirmCancel = "any other key cancels, nothing is sent"
 
-// notice is the notice line: what the allowlist made of the typed message, or the caller's own notice.
+// notice is the notice line: what the allowlist made of the typed message, why there is nowhere to type one, or
+// the caller's own notice.
 func (c *confirmation) notice(m *Model, notice string) string {
-	if c.composeErr == nil {
+	said := ""
+	switch {
+	case c.composeErr != nil:
+		said = refusalNotice(c.composeErr)
+	case c.slotErr != nil:
+		said = "this review has no room for a message: " + refusalNotice(c.slotErr)
+	default:
 		return notice
 	}
-	return " " + m.styles.Warn.Render(m.styles.TruncRight(refusalNotice(c.composeErr), max(20, m.width-1)))
+	return " " + m.styles.Warn.Render(m.styles.TruncRight(said, max(20, m.width-1)))
 }
 
 func (m *Model) confirmView(c *confirmation) string {
@@ -449,13 +462,15 @@ func (m *Model) confirmKeys() (keys, notice string) {
 			{Key: "ctrl+u", Verb: "clear"}, {Key: "pgup/pgdn", Verb: "read the findings", Role: style.RoleNav}}, m.width-2)
 		return keys, ""
 	}
-	hints := []style.Hint{
-		{Key: "y", Verb: "publish this review", KeyKind: style.Good, VerbKind: style.Good},
-		{Key: "tab/esc", Verb: "your message", Role: style.RoleNav},
-		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav},
-		{Key: "v", Verb: "payload", Role: style.RoleNav},
-		{Verb: confirmCancel},
+	hints := []style.Hint{{Key: "y", Verb: "publish this review", KeyKind: style.Good, VerbKind: style.Good}}
+	// A review with no room for a message has no input to offer the key for.
+	if m.view == viewConfirm && m.confirm.inline() {
+		hints = append(hints, style.Hint{Key: "tab/esc", Verb: "your message", Role: style.RoleNav})
 	}
+	hints = append(hints,
+		style.Hint{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav},
+		style.Hint{Key: "v", Verb: "payload", Role: style.RoleNav},
+		style.Hint{Verb: confirmCancel})
 	keys, fits := m.styles.Footer(hints, m.width-2)
 	if !fits || strings.Contains(keys, "\n") {
 		keys, _ = m.styles.Footer(hints[:len(hints)-1], m.width-2)
