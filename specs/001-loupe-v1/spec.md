@@ -220,7 +220,7 @@ Capture
 
 Reporting
 
-- **FR-007**: The system MUST let an agent file one finding or a batch, each with title, body, either a location (path, side, line, optional start line) or a general marker, and optional label, blocking flag, confidence, severity, verified, impact, references and suggested fix. Severity is one of four words and verified one of two; `specs/008-finding-fields/spec.md` defines them and the rendering of all four additions.
+- **FR-007**: The system MUST let an agent file one finding or a batch, each with title, body, either a location (path, side, line, optional start line) or a general marker, and optional label, blocking flag, confidence, severity, verified, impact, references and suggested fix. Severity is one of four words and verified one of two; `specs/008-finding-fields/spec.md` defines the enums and the rendering of all four additions, and `specs/012-severity-meaning/spec.md` defines what the four severity words mean.
 - **FR-008**: The system MUST validate a location against the stored diff: the path MUST be in the diff, the line MUST fall in a hunk on the given side, and a range MUST lie within one hunk; a refusal MUST name the nearest valid lines.
 - **FR-009**: The system MUST validate a body and the summary against a small allowlist: a size limit, closed code fences, and no raw HTML except collapsible-section tags on their own lines with balanced nesting.
 - **FR-010**: A batch MUST be stored entirely or not at all, and a refusal MUST name the failing entry by position.
