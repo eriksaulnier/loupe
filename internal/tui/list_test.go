@@ -17,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/severity"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
@@ -553,5 +554,65 @@ func TestEscapeKeepsTheCursorOnTheOpenFinding(t *testing.T) {
 	}
 	if got := m.order[m.cursor].ID; got != "f-001" {
 		t.Errorf("cursor landed on %s, want the finding that was open, f-001", got)
+	}
+}
+
+// The severity chip is colored on both surfaces that draw it. Nothing else notices: the chip's text is unchanged, so
+// reverting its kind to Dim leaves every other assertion true.
+func TestSeverityChipIsColoredByRank(t *testing.T) {
+	s := style.New(io.Discard, envOf(map[string]string{"LANG": "en_US.UTF-8"}))
+	s.R.SetColorProfile(termenv.TrueColor)
+	s.Color = true
+	find := func(cs []chip, prefix string) chip {
+		for _, c := range cs {
+			if strings.HasPrefix(c.text, prefix) {
+				return c
+			}
+		}
+		t.Fatalf("no %q chip in %v", prefix, cs)
+		return chip{}
+	}
+	for _, word := range severity.Order {
+		f := draft.Finding{ID: "f-001", Severity: word, Confidence: "high"}
+		cs := chips(s, f, draft.DispositionPending, false)
+		if got, want := find(cs, "severity ").kind, style.Severity(word); got != want {
+			t.Errorf("severity %s chip kind = %v, want %v", word, got, want)
+		}
+		// Confidence stays dim, so this is not passing on a row where everything is colored.
+		if got := find(cs, "confidence ").kind; got != style.Dim {
+			t.Errorf("the confidence chip is no longer dim: %v", got)
+		}
+	}
+	// A value stored before the enum has no rank, so it keeps the dim it has always had.
+	legacy := chips(s, draft.Finding{ID: "f-001", Severity: "P2"}, draft.DispositionPending, false)
+	if got := find(legacy, "severity ").kind; got != style.Dim {
+		t.Errorf("a legacy severity chip is painted %v, want Dim", got)
+	}
+	// critical must actually paint differently from trivial once rendered, not merely differ as a Kind.
+	if a, b := s.Chip(style.Severity("critical"), "", "x"), s.Chip(style.Severity("trivial"), "", "x"); a == b {
+		t.Errorf("critical and trivial chips render identically: %q", a)
+	}
+}
+
+// initialCursor indexes the ordered view, so the finding it picks has to be found in that order, not in arrival order.
+func TestInitialCursorIndexesTheOrderedView(t *testing.T) {
+	dir := severityFixture(t)
+	// Everything decided but f-002, which is unrated and therefore last in the order though second to arrive.
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		for _, id := range []string{"f-001", "f-003", "f-004"} {
+			if _, err := draft.Accept(d, id, testNow); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, testEnv, 120, 24)
+	if got := m.order[m.cursor].ID; got != "f-002" {
+		t.Errorf("the opening cursor sits on %s, want the one pending finding f-002", got)
+	}
+	if m.cursor != 3 {
+		t.Errorf("cursor = %d, want 3, f-002's place in the order rather than its place in arrival order", m.cursor)
 	}
 }

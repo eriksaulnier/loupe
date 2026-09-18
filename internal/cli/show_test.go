@@ -202,3 +202,78 @@ func TestShowColorsTheSeverityCell(t *testing.T) {
 		}
 	}
 }
+
+// The colored cell has to survive printShow, not only metaLine: the goldens are NO_COLOR, so nothing else would
+// notice the call site handing the severity cell the same dim kind as everything beside it.
+func TestPrintShowPaintsTheSeverityCellByRank(t *testing.T) {
+	d := draft.NewEmpty()
+	d.Findings = []draft.Finding{
+		{ID: "f-001", Title: "Rated", Body: "B.", General: true, Label: "issue", Confidence: "high", Severity: "critical"},
+		{ID: "f-002", Title: "Unrated", Body: "B.", General: true, Label: "issue", Confidence: "high"},
+	}
+	deps, out := printDeps(t)
+	s := colorStyle(t, out)
+	deps.palettes = &palettes{out: s, err: s}
+	if err := printShow(deps, run.Ref{Owner: "o", Repo: "r", Number: 1, Round: 1}, run.Target{}, d,
+		draft.Dispositions(d), draft.ReadinessOf(d)); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if want := s.Of(style.Severity("critical")).Render("severity critical"); !strings.Contains(got, want) {
+		t.Errorf("the severity cell is not painted by its rank:\n%q", got)
+	}
+	if bland := s.Dim.Render("severity critical"); strings.Contains(got, bland) {
+		t.Errorf("the severity cell is dim like the rest of the meta line:\n%q", got)
+	}
+	// Every other cell keeps the dim it had.
+	if want := s.Dim.Render("confidence high"); !strings.Contains(got, want) {
+		t.Errorf("a plain meta cell lost its dim:\n%q", got)
+	}
+}
+
+// The separator never ends up alone on a line, and no word that fits is hard-split across two. A cell may still wrap
+// at its own space when it is too wide to keep whole; that is the break it always had.
+func TestMetaLineNeverOrphansASeparatorOrSplitsAWord(t *testing.T) {
+	var buf bytes.Buffer
+	s := colorStyle(t, &buf)
+	sep := strings.TrimSpace(metaSep(s))
+	cells := []metaCell{dimCell("pending"), dimCell("confidence medium"),
+		{"severity critical", style.Severity("critical")}, dimCell("verified plausible"),
+		dimCell("adapters/pi/skills/post-review/SKILL.md:10")}
+	for width := 20; width <= 110; width++ {
+		limit := max(10, width-style.Width(findingIndent))
+		lines := metaLine(s, cells, width)
+		var plain []string
+		for _, l := range lines {
+			p := strings.TrimSpace(ansi.Strip(l))
+			if p == sep {
+				t.Fatalf("width %d orphaned the separator:\n%s", width, strings.Join(lines, "\n"))
+			}
+			plain = append(plain, p)
+		}
+		for _, c := range cells {
+			for _, word := range strings.Fields(c.text) {
+				if style.Width(word) > limit {
+					continue // A word wider than the line has nowhere to go but across two.
+				}
+				if !slices.ContainsFunc(plain, func(l string) bool { return strings.Contains(l, word) }) {
+					t.Fatalf("width %d split the word %q, which fits in %d:\n%s",
+						width, word, limit, strings.Join(lines, "\n"))
+				}
+			}
+		}
+	}
+}
+
+// A cell short enough to keep whole is kept whole, so its color cannot be lost on a second line.
+func TestMetaLineKeepsAShortCellWhole(t *testing.T) {
+	var buf bytes.Buffer
+	s := colorStyle(t, &buf)
+	cells := []metaCell{dimCell("pending"), {"severity critical", style.Severity("critical")}, dimCell("general")}
+	for width := 40; width <= 110; width++ {
+		joined := strings.Join(metaLine(s, cells, width), "\n")
+		if !strings.Contains(ansi.Strip(joined), "severity critical") {
+			t.Fatalf("width %d broke a cell that fits:\n%s", width, joined)
+		}
+	}
+}

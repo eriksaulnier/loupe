@@ -283,10 +283,12 @@ var severityKinds = [...]Kind{Bad, Caution, Warn, Dim}
 // Severity is the role a severity word paints in. A value captured before the enum stays dim, because nothing here
 // can say where it ranks.
 func Severity(word string) Kind {
-	if !severity.Rated(word) {
-		return Dim
+	// Rank is bounded by severity.Order, which this array is parallel to; the guard is for the moment a fifth word is
+	// added to one and not the other, so that lands on TestSeverityRampCoversEveryWord and not on a panic elsewhere.
+	if r := severity.Rank(word); r < len(severityKinds) {
+		return severityKinds[r]
 	}
-	return severityKinds[severity.Rank(word)]
+	return Dim
 }
 
 // On paints a style onto a background, for the pieces of a row that is one painted band: an inner reset would

@@ -218,16 +218,25 @@ type metaCell struct {
 
 func dimCell(text string) metaCell { return metaCell{text, style.Dim} }
 
-// metaLine paints each cell and wraps the joined line. The space inside a cell is hidden from the wrapper, which
-// would otherwise break "severity major" across two lines and leave the second half unpainted.
+// metaLine paints each cell in its own role and wraps the joined line. Two things are hidden from the wrapper: a
+// cell's own space, so "severity major" cannot break in two and lose its color on the second line, and the space
+// before each separator, so a lone "·" can never end up on a line of its own. A cell too wide to keep whole keeps its
+// spaces, since hard-splitting it mid-word costs more than the break it was spared.
 func metaLine(s style.Style, cells []metaCell, width int) []string {
 	const keepTogether = "\uE001"
-	parts := make([]string, len(cells))
+	sep, limit := metaSep(s), max(10, width-style.Width(findingIndent))
+	var b strings.Builder
 	for i, c := range cells {
-		parts[i] = s.Of(c.kind).Render(strings.ReplaceAll(c.text, " ", keepTogether))
+		text := c.text
+		if style.Width(text)+style.Width(sep) <= limit {
+			text = strings.ReplaceAll(text, " ", keepTogether)
+		}
+		b.WriteString(s.Of(c.kind).Render(text))
+		if i < len(cells)-1 {
+			b.WriteString(s.Dim.Render(keepTogether+strings.TrimSpace(sep)) + " ")
+		}
 	}
-	joined := strings.Join(parts, s.Dim.Render(metaSep(s)))
-	return strings.Split(strings.ReplaceAll(s.Wrap(joined, width, findingIndent), keepTogether, " "), "\n")
+	return strings.Split(strings.ReplaceAll(s.Wrap(b.String(), width, findingIndent), keepTogether, " "), "\n")
 }
 
 const findingIndent = "         "

@@ -75,7 +75,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 1. **Given** a draft of mixed severities, **When** the review list is drawn, **Then** every rated finding precedes every unrated one, rated findings are in `critical`, `major`, `minor`, `trivial` order, and equal severities are in finding-id order.
 2. **Given** the review list, **When** a row is drawn for a rated finding, **Then** a severity column between the id and the title carries the word.
 3. **Given** a row for an unrated finding, **When** it is drawn, **Then** the severity column is blank rather than filled with a stand-in word.
-4. **Given** a window too narrow for every column, **When** the list is drawn, **Then** the location shortens first, then the label drops, and the severity column drops last of the three.
+4. **Given** a window too narrow for every column, **When** the list is drawn, **Then** the label drops first, then the location shortens to a filename, and the severity column drops last of the three.
 5. **Given** the detail view, **When** the human walks findings with the next and previous keys, **Then** they move in the order the list showed, and the "N of M" position matches.
 6. **Given** a finding open in the detail view, **When** its chips are drawn, **Then** the severity chip is colored by how bad it is rather than dimmed like an incidental field.
 7. **Given** the line-by-line review mode, **When** findings are presented, **Then** they are in the same order the full-screen list uses.
@@ -90,7 +90,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 - **A stored severity outside the enum.** Runs captured before 008 hold free text. It counts as unrated for ordering, is omitted from the summary line, and still renders on the meta line inside a code span exactly as today. It cannot lead a summary line, because a summary line interpolates its prefix outside a code span and only the enum words are known to be inert there.
 - **Every finding unrated.** Every surface is byte for byte what it is today. This is the property that keeps a review published before this change comparable to one published after it.
 - **Severity and blocking disagree.** Unchanged and still allowed. Section placement is decided by `blocking` alone; severity orders findings within a section and never moves one between sections.
-- **A window too narrow for the severity column.** The column drops. It outranks the label because it is the higher-value column, but a title the reader cannot read costs more than either.
+- **A window too narrow for the severity column.** The column drops, after the label has gone and the location has given up its width. It outranks both, but a title the reader cannot read costs more than any of them.
 - **`NO_COLOR` or a non-UTF-8 locale.** The badge is a word plus a color, and no glyph. Under `NO_COLOR` the word stands alone in its column and the ordering still carries the rank; under ASCII nothing is lost, because there is no glyph to degrade.
 
 ## Requirements *(mandatory)*
@@ -123,7 +123,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 - **FR-017**: The review list MUST carry a severity column, between the finding id and the title, wide enough for the longest word.
 - **FR-018**: The column MUST be colored by severity, most severe to least, in four distinguishable colors. The existing semantic roles do not supply four: two of them share one yellow, so a ramp built from them alone collapses `major` and `minor` onto the same color. One palette entry MAY be added to separate them, and the role it defines MUST be named by what it means rather than by its color.
 - **FR-019**: An unrated finding's severity column MUST be blank.
-- **FR-020**: As the window narrows, the location MUST shorten first, then the label column MUST drop, then the severity column.
+- **FR-020**: As the window narrows, the severity column MUST be the last of the three to give way. The two steps before it are unchanged: the label column drops first, then the location shortens to a filename. Severity goes only when the title cannot otherwise reach its floor.
 - **FR-021**: The severity badge MUST NOT introduce a glyph. The word and its color are the badge, in every tier.
 - **FR-022**: Finding-to-finding navigation in the detail view, and the "N of M" position it shows, MUST follow the list's order.
 - **FR-023**: The severity chip in the detail view and in line-by-line mode MUST be colored by the same ramp. A legacy free-text severity keeps the dim it has today.
