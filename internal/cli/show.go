@@ -223,20 +223,38 @@ func dimCell(text string) metaCell { return metaCell{text, style.Dim} }
 // before each separator, so a lone "·" can never end up on a line of its own. A cell too wide to keep whole keeps its
 // spaces, since hard-splitting it mid-word costs more than the break it was spared.
 func metaLine(s style.Style, cells []metaCell, width int) []string {
+	// The marker is private-use, and render.ForDisplay escapes control, C1 and bidi runes but not those, so a Git
+	// path can carry one into a cell. Text that already holds it is wrapped without the protection rather than have
+	// its own copy turned into a space on the way back, which is the rule style.Wrap follows for its own marker.
 	const keepTogether = "\uE001"
+	protect := true
+	for _, c := range cells {
+		if strings.Contains(c.text, keepTogether) {
+			protect = false
+			break
+		}
+	}
 	sep, limit := metaSep(s), max(10, width-style.Width(findingIndent))
 	var b strings.Builder
 	for i, c := range cells {
 		text := c.text
-		if style.Width(text)+style.Width(sep) <= limit {
+		if protect && style.Width(text)+style.Width(sep) <= limit {
 			text = strings.ReplaceAll(text, " ", keepTogether)
 		}
 		b.WriteString(s.Of(c.kind).Render(text))
 		if i < len(cells)-1 {
-			b.WriteString(s.Dim.Render(keepTogether+strings.TrimSpace(sep)) + " ")
+			glue := " "
+			if protect {
+				glue = keepTogether
+			}
+			b.WriteString(s.Dim.Render(glue+strings.TrimSpace(sep)) + " ")
 		}
 	}
-	return strings.Split(strings.ReplaceAll(s.Wrap(b.String(), width, findingIndent), keepTogether, " "), "\n")
+	wrapped := s.Wrap(b.String(), width, findingIndent)
+	if protect {
+		wrapped = strings.ReplaceAll(wrapped, keepTogether, " ")
+	}
+	return strings.Split(wrapped, "\n")
 }
 
 const findingIndent = "         "

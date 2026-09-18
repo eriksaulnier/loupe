@@ -290,3 +290,19 @@ func TestWriteFindingWithNoMetaPrintsNoLine(t *testing.T) {
 		}
 	}
 }
+
+// The no-break marker is a private-use rune, and nothing upstream escapes those: render.ForDisplay hides control, C1
+// and bidi runes and leaves U+E000..U+F8FF alone, so a Git path can carry the marker into a cell. It must come out
+// the way it went in, the way style.Wrap guards its own marker.
+func TestMetaLineKeepsAPrivateUseRuneInACell(t *testing.T) {
+	const marker = ""
+	var buf bytes.Buffer
+	s := colorStyle(t, &buf)
+	for _, text := range []string{"src/a" + marker + "b.go:3", marker, "severity P" + marker + "2", "a" + marker + " b"} {
+		cells := []metaCell{dimCell("pending"), dimCell(text), dimCell("confidence high")}
+		got := ansi.Strip(strings.Join(metaLine(s, cells, 100), "\n"))
+		if !strings.Contains(got, text) {
+			t.Errorf("cell %q came out as %q", text, strings.TrimSpace(got))
+		}
+	}
+}
