@@ -530,3 +530,28 @@ func TestDetailWalksTheListOrder(t *testing.T) {
 		t.Errorf("left moved to %s, want f-003", m.openID)
 	}
 }
+
+// Leaving the detail view keeps the cursor on the finding that was open. With arrival order a finding the agent filed
+// meanwhile only ever appended; ordered by severity it can land above the open one and shift it.
+func TestEscapeKeepsTheCursorOnTheOpenFinding(t *testing.T) {
+	dir := severityFixture(t)
+	m := modelOf(t, dir, testEnv, 120, 24)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		_, err := draft.Add(d, []draft.FindingInput{
+			{Title: "Filed while the human read", Body: "Body five.", General: true, Label: "issue", Severity: "critical"},
+		}, nil, draft.ByAgent, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.view != viewList {
+		t.Fatalf("esc left the view at %v", m.view)
+	}
+	if got := m.order[m.cursor].ID; got != "f-001" {
+		t.Errorf("cursor landed on %s, want the finding that was open, f-001", got)
+	}
+}

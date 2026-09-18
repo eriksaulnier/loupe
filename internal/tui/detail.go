@@ -322,10 +322,13 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		m.body.PageUp()
 	case "esc":
 		m.view, m.notice = viewList, ""
-		if i >= 0 {
-			m.cursor = i
+		cmd := m.fail(m.reload())
+		// The cursor is found again after the reload, not before it: a finding the agent filed meanwhile can sort
+		// above the open one, which would leave the cursor on its neighbor.
+		if j := orderedIndex(m.order, m.openID); j >= 0 {
+			m.cursor = j
 		}
-		return m.fail(m.reload())
+		return cmd
 	}
 	return nil
 }
