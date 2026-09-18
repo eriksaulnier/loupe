@@ -395,7 +395,7 @@ func TestComposedBodyFollowsTheOrderTheHumanDecidedIn(t *testing.T) {
 	for _, f := range d.Findings {
 		accept(d, f.ID)
 	}
-	env, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none", false)
+	env, err := Build(buildInput(fixtureTarget(), d, "comment", "none", false))
 	if err != nil {
 		t.Fatal(err)
 	}

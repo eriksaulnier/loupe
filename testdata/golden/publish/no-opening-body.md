@@ -5,7 +5,7 @@
 ### ⛔ Blocking
 
 <details>
-<summary><b>issue (blocking):</b> Title f-001</summary>
+<summary><b>issue:</b> Title f-001</summary>
 
 > [`a.go:3`](https://github.com/acme/widgets/pull/42/files#diff-ffc4fd9bc24722ba464194a85b255d4b50945f3e68a120122e11f6cdae4a8c19R3)
 
