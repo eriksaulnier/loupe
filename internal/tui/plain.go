@@ -11,6 +11,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -312,24 +313,37 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Co
 			p.printf("\n%s\n%s\n", render.ForDisplay(formatLocation(c.Path, c.Line, c.StartLine, c.Side)), render.ForDisplay(c.Body))
 		}
 		p.printf("\nEnvelope JSON:\n\n%s\n", render.ForDisplay(preview.EnvelopeJSON))
-		p.printf("\nYour message, which opens the review (one line; empty for none): ")
-		if p.err != nil {
-			return publish.Confirmation{}, p.err
-		}
 		lines := bufio.NewScanner(in)
-		if !lines.Scan() {
-			return publish.Confirmation{}, lines.Err()
-		}
-		message := strings.TrimSpace(lines.Text())
-		// Nobody answers y to a body they were not shown, and "exact request payload" has to stay exact, so a
-		// review that gained an opening is printed again with the envelope that carries it.
-		if message != "" && preview.Compose != nil {
+		message := ""
+		// A message the allowlist refuses is asked for again rather than ending the publication: the fallback has
+		// nowhere to keep the text the way the full-screen input does, so it prints it back for reworking. Input
+		// that runs out ends the loop, so a pipe cannot spin here.
+		for {
+			p.printf("\nYour message, which opens the review (one line; empty for none): ")
+			if p.err != nil {
+				return publish.Confirmation{}, p.err
+			}
+			if !lines.Scan() {
+				return publish.Confirmation{}, lines.Err()
+			}
+			message = strings.TrimSpace(lines.Text())
+			if message == "" || preview.Compose == nil {
+				break
+			}
 			env, envJSON, err := preview.Compose(message)
 			if err != nil {
-				return publish.Confirmation{}, err
+				r, ok := refusal.As(err)
+				if !ok {
+					return publish.Confirmation{}, err
+				}
+				p.printf("\n%s\n%s\n\nYour message was:\n\n%s\n", r.Message, r.Fix, render.ForDisplay(message))
+				continue
 			}
+			// Nobody answers y to a body they were not shown, and "exact request payload" has to stay exact, so a
+			// review that gained an opening is printed again with the envelope that carries it.
 			p.printf("\nReview body:\n\n%s\n", render.ForDisplay(markdown.OpenDetails(env.Body)))
 			p.printf("\nEnvelope JSON:\n\n%s\n", render.ForDisplay(envJSON))
+			break
 		}
 		p.printf("\nPublish this review? [y/N] ")
 		if p.err != nil {

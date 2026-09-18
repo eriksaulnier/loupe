@@ -338,16 +338,37 @@ func TestConfirmPlainReadsTheMessage(t *testing.T) {
 	}
 }
 
+// TestConfirmPlainAsksAgainForAMalformedMessage: the fallback has nowhere to keep the text the way the
+// full-screen input does, so it prints it back and asks again rather than ending the publication on it.
+func TestConfirmPlainAsksAgainForAMalformedMessage(t *testing.T) {
+	preview := confirmPreview()
+	preview.Compose = composeOpening(preview, refusal.New(refusal.Markdown, "the summary has a raw HTML tag on line 1", "reword it"))
+	var out bytes.Buffer
+	answer, err := ConfirmPlain(strings.NewReader("<script>bad</script>\nPlainly, then.\ny\n"), &out)(preview)
+	if err != nil || !answer.Publish || answer.Message != "Plainly, then." {
+		t.Fatalf("answer %+v err %v", answer, err)
+	}
+	text := out.String()
+	for _, want := range []string{"the summary has a raw HTML tag on line 1", "reword it", "Your message was:", "<script>bad</script>"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("output lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Count(text, "Your message, which opens the review") != 2 {
+		t.Errorf("the message was not asked for twice:\n%s", text)
+	}
+}
+
 // TestConfirmPlainRefusesAMalformedMessage is FR-009 on the fallback: the allowlist is checked before anything is
 // sent, and the prompt is never reached.
 func TestConfirmPlainRefusesAMalformedMessage(t *testing.T) {
 	preview := confirmPreview()
 	preview.Compose = composeOpening(preview, refusal.New(refusal.Markdown, "the summary has a raw HTML tag", "reword the message at the publish confirmation"))
 	var out bytes.Buffer
-	if _, err := ConfirmPlain(strings.NewReader("<script>bad</script>\ny\n"), &out)(preview); err == nil {
-		t.Fatal("a malformed message was accepted")
-	} else if r, ok := refusal.As(err); !ok || r.Code != refusal.Markdown {
-		t.Fatalf("err %#v", err)
+	// Input that runs out while the message is still refused ends the confirmation; nothing is sent.
+	answer, err := ConfirmPlain(strings.NewReader("<script>bad</script>\n"), &out)(preview)
+	if err != nil || answer.Publish {
+		t.Fatalf("answer %+v err %v", answer, err)
 	}
 	if strings.Contains(out.String(), "Publish this review? [y/N]") {
 		t.Errorf("the prompt was reached with a malformed message:\n%s", out.String())
