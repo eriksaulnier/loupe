@@ -38,7 +38,7 @@ func isConfirmation(name string) bool { return strings.HasPrefix(name, "confirma
 func showConfirmation(m *Model) {
 	title := ConfirmTitle(m.ref(), "comment", "blocking", 1)
 	title.inFlow = true
-	m.confirm, m.view = newConfirmation(movedPreview(), title), viewConfirm
+	m.confirm, m.view = newConfirmation(movedPreview(), title, ""), viewConfirm
 }
 
 // screen is one full-screen view and the footer tokens it must keep at every width. The footer wraps to a second line

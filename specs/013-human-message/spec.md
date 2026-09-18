@@ -99,7 +99,7 @@ A pull request opens, the workflow runs a reviewer over it, and the review posts
 
 ### Edge Cases
 
-- **The human cancels the confirmation.** The message is discarded with it. Re-entering the confirmation starts with an empty box. Retyping a sentence is cheaper than the alternative, which is a stored message that something else could put there first.
+- **The human cancels the confirmation, or publication refuses after they confirmed.** Their words survive in the review program's memory and fill the box when they reach the confirmation again. They never reach disk, so nothing else can put them there and quitting `loupe review` ends them. The refusal case is the one that matters most: a draft that changed or a head that moved throws the human back to the list having already written the opening.
 - **A message that fails the Markdown allowlist.** It is checked like any authored Markdown, and the human is told before anything is sent, not after. The human stays on the confirmation with their text intact.
 - **A terminal too small or too dumb for the full-screen interface.** The plain fallback asks for the message on one line before its existing confirmation prompt. Multi-line authoring is a full-screen affordance, and one line is enough for the sentence this is for.
 - **An unattended publication whose summary is empty.** Unchanged: the body opens on the chips row, and the existing refusal still fires when there are also no included findings.
@@ -117,7 +117,7 @@ A pull request opens, the workflow runs a reviewer over it, and the review posts
 - **FR-004**: What the human approved and what is sent MUST be produced by one composition path, so the two cannot differ.
 - **FR-005**: An empty message MUST render nothing in the opening slot, leaving the body byte-identical to one composed from an empty summary before this change. Publication MUST NOT refuse for an empty message.
 - **FR-006**: The existing refusal for a draft with neither opening prose nor an included finding MUST still fire, and MUST NOT be widened to cover an empty message on a draft that has findings.
-- **FR-007**: The message MUST NOT be stored in the draft, and MUST NOT survive a cancelled confirmation. Nothing — an agent, an earlier round, or an abandoned attempt — MAY pre-fill it. Text that arrives already written is text that gets approved unread, which is what Principle II exists to prevent.
+- **FR-007**: The message MUST NOT be stored in the draft or written to disk outside the envelope of what was sent, and no agent, earlier round or other process MAY pre-fill it. It MAY be held in memory for the life of the process that typed it, so a human who cancels or is refused and reaches the confirmation again in the same `loupe review` session finds their own words still there; it MUST NOT outlive that process. `loupe publish` confirms once per process and therefore never restores one. Text that arrives already written is text that gets approved unread, which is what Principle II exists to prevent — and words the same human typed minutes earlier, into the same box, and reads again before pressing y, are not that.
 - **FR-008**: There MUST be no command that sets the message. A command that writes the human's words is a command an agent can call.
 - **FR-009**: The message MUST be validated against the same authored-Markdown allowlist as the summary, and the human MUST be told before any request is sent.
 - **FR-010**: The confirmation MUST NOT lose its existing guarantee that exactly one key confirms and publication happens only after it. A focused input MUST NOT let a keystroke meant for the message confirm the review.
@@ -143,7 +143,7 @@ A pull request opens, the workflow runs a reviewer over it, and the review posts
 - **SC-002**: A human can read the exact body they are about to post, with their own words in it, before confirming.
 - **SC-003**: A review published with no message is byte-identical to one published today from a draft with no summary.
 - **SC-004**: An unattended review is byte-identical to what the same run produced before this change.
-- **SC-005**: No stored run needs migrating, and no draft written before this change becomes invalid.
+- **SC-005**: No stored run needs migrating, and no draft written before this change becomes invalid. No file loupe writes gains a key for the message.
 - **SC-006**: Nothing but a human at a terminal can put text in the opening slot of an attended review.
 - **SC-007**: All automated repository checks pass after the final edit.
 
@@ -152,5 +152,5 @@ A pull request opens, the workflow runs a reviewer over it, and the review posts
 - The opening prose is worth keeping at all. The alternative, cutting the slot entirely, was considered and rejected: the chips say how many, the findings say what, and nothing else says what the reviewer thinks.
 - A sentence or two is the expected length. The input is sized for that, not for an essay, and the plain fallback's single line is sized for it too.
 - Losing the agent's coverage caveat from attended reviews is acceptable for now. If it proves to matter, the answer is a separately attributed provenance line near the footer, where it cannot read as the human's words, and that is its own specification rather than a reason to keep publishing unaccepted prose.
-- Retyping after a cancelled confirmation is a fair price for a message nothing can pre-fill.
+- Keeping the message in memory across a cancelled confirmation is worth the one thing it costs: a human who returns to the confirmation is reading words that were already in the box. They are their own, from minutes earlier in the same session, and the box shows them before anything is sent, which is the acceptance Principle II asks for.
 - Whether the change improves what reviews actually say needs rounds landing on real pull requests over time. It is not claimed here.

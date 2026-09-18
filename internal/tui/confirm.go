@@ -60,12 +60,15 @@ type confirmation struct {
 	follow bool
 }
 
-func newConfirmation(preview publish.Preview, title ConfirmHeading) confirmation {
-	message := textarea.New()
-	message.ShowLineNumbers, message.MaxHeight = false, 0
-	message.FocusedStyle, message.BlurredStyle = textarea.Style{}, textarea.Style{}
-	message.Cursor.SetMode(cursor.CursorStatic)
-	c := confirmation{preview: preview, shown: preview, title: title, scroll: viewport.New(80, 10), message: message}
+// newConfirmation opens the confirmation on message, which is what the human last typed in this session and is
+// empty in a session that has not reached one. It is passed in rather than read from anywhere, because the only
+// thing allowed to fill this box is the person at the terminal.
+func newConfirmation(preview publish.Preview, title ConfirmHeading, message string) confirmation {
+	input := textarea.New()
+	input.ShowLineNumbers, input.MaxHeight = false, 0
+	input.FocusedStyle, input.BlurredStyle = textarea.Style{}, textarea.Style{}
+	input.Cursor.SetMode(cursor.CursorStatic)
+	c := confirmation{preview: preview, shown: preview, title: title, scroll: viewport.New(80, 10), message: input}
 	// Only publish.Run builds a preview and it always carries a closure; a fixture without one gets no input.
 	if preview.Compose == nil {
 		return c
@@ -83,6 +86,10 @@ func newConfirmation(preview publish.Preview, title ConfirmHeading) confirmation
 	}
 	c.typing, c.follow = true, true
 	c.message.Focus()
+	if message != "" {
+		c.message.SetValue(message)
+		c.recompose()
+	}
 	return c
 }
 
@@ -466,7 +473,7 @@ func NewConfirmModel(preview publish.Preview, getenv func(string) string, output
 	st := style.New(output, getenv)
 	return &ConfirmModel{
 		shell:   &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24, view: viewConfirm},
-		confirm: newConfirmation(preview, title),
+		confirm: newConfirmation(preview, title, ""),
 	}
 }
 
@@ -591,7 +598,10 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) tea.Cmd {
 	if !answered {
 		return cmd
 	}
-	m.session.answers <- publish.Confirmation{Publish: m.confirm.yes, Message: m.confirm.value()}
+	// The words outlive the screen, so a cancel or a refusal after y does not make them be written twice. They are
+	// held here and nowhere else: no file gains them, and quitting the program ends them.
+	m.message = m.confirm.value()
+	m.session.answers <- publish.Confirmation{Publish: m.confirm.yes, Message: m.message}
 	m.view = viewPublishing
 	m.say(style.Dim, "nothing was sent")
 	if m.confirm.yes {
@@ -616,6 +626,8 @@ func (m *Model) publishFinished(done publishDone) tea.Cmd {
 	var r *refusal.Error
 	switch {
 	case done.err == nil:
+		// The review it opened is posted, so the words have been spent; a later round starts empty.
+		m.message = ""
 		m.say(style.Good, strings.TrimSpace(m.glyphs.Published+" published: "+done.receipt.ReviewURL))
 	case errors.Is(done.err, publish.ErrDeclined):
 		m.say(style.Dim, strings.TrimSpace(m.glyphs.Canceled+" publish canceled; nothing was sent"))

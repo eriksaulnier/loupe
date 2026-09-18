@@ -5,6 +5,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -357,6 +358,77 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPublishFlowKeepsTheMessageAcrossACancel is FR-007: the words survive in the program's memory, so a cancel
+// or a refusal after y does not make the human write the opening twice. Nothing reaches disk, and publishing ends
+// them.
+func TestPublishFlowKeepsTheMessageAcrossACancel(t *testing.T) {
+	gh := newPublishFake(t)
+	dir := readyFixture(t, "reviewer", "author")
+	tm := startPublishApp(t, dir, gh)
+	waitFor(t, tm, "+ 3 accepted")
+	reachConfirmation(t, tm)
+	tm.Type("Mine to own.")
+	waitFor(t, tm, "Mine to own.")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Type("n")
+	waitFor(t, tm, "publish canceled; nothing was sent")
+
+	// Nothing wrote it down; only this process is holding it.
+	for _, name := range []string{"draft.json", "attempt.json", "receipt.json"} {
+		if data, err := os.ReadFile(filepath.Join(dir, name)); err == nil && strings.Contains(string(data), "Mine to own.") {
+			t.Fatalf("%s carries the message", name)
+		}
+	}
+
+	reachConfirmation(t, tm)
+	tm.Type(" And read again.")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Type("y")
+	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
+	tm.Type("q")
+	finalView(t, tm)
+
+	var posted string
+	for _, r := range gh.Requests() {
+		if body, ok := r.Body.(map[string]any); r.Method == "POST" && ok {
+			posted, _ = body["body"].(string)
+		}
+	}
+	if !strings.Contains(posted, "Mine to own. And read again.") {
+		t.Fatalf("the restored message was not published:\n%s", posted)
+	}
+}
+
+// TestConfirmOpensOnWhatWasTypedBefore is the rendering half of FR-007: the words the program held are in the box
+// and in the body the box sits in, so the human re-reads them rather than being told they were kept.
+func TestConfirmOpensOnWhatWasTypedBefore(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m.confirm = newConfirmation(confirmPreview(), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), "Mine to own.")
+	view := m.View()
+	if !strings.Contains(view, "Mine to own.") || strings.Contains(view, messageHint) {
+		t.Errorf("the confirmation did not open on the words it was given:\n%s", view)
+	}
+	if m.Message() != "Mine to own." {
+		t.Errorf("message %q", m.Message())
+	}
+	// The payload follows the box, so what is sent carries them too.
+	if !strings.Contains(m.confirm.shown.Body, "Mine to own.") {
+		t.Errorf("the body was not recomposed for the restored message:\n%s", m.confirm.shown.Body)
+	}
+}
+
+// reachConfirmation walks the two picker steps p opens, taking the default at each.
+func reachConfirmation(t *testing.T, tm *teatest.TestModel) {
+	t.Helper()
+	tm.Type("p")
+	waitFor(t, tm, "> comment")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	waitFor(t, tm, "> blocking")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	waitFor(t, tm, "your message")
 }
 
 // TestConfirmEscOnlyMovesToTheMessage: esc must not mean leave-the-input and throw-the-review-away one keystroke

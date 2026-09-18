@@ -42,7 +42,9 @@ marked off from the rest; the cursor starts there, Enter adds a line, PgUp and P
 the findings without leaving it, and leaving it empty publishes a body that opens on the chips
 row. The draft's summary is not published here: it is the reviewer's, for you to read while
 sorting. Esc and Tab move between the message and the review; neither cancels, so leaving the
-message and going back cannot throw away what you wrote. Outside it, j/k, up/down, pgup/pgdown
+message and going back cannot throw away what you wrote. Inside loupe review it also survives a
+cancel and a refusal, in memory and no further: the next confirmation of that session opens on
+it, and quitting ends it. Outside it, j/k, up/down, pgup/pgdown
 and home/end scroll and v switches to the exact JSON payload. Only y sends, and only from
 outside the message, so a y you typed cannot publish. Any other key, Ctrl-C or end of input
 cancels and nothing is sent or written. Once the review is being sent, keys, Ctrl-C and SIGTERM
