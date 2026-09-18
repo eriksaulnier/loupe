@@ -97,9 +97,9 @@ description: "Task list for the review's opening prose is the human's own"
 
 ## Phase 7: Review and close
 
-- [ ] T032 Regenerate the CLI goldens with `go test ./internal/cli/ -update` only if `loupe publish`'s long help changed, and read the diff before staging it.
-- [ ] T033 Run `LOUPE_DEMO_HOME=.demo mise run demo` through tmux and check the focus model and the live preview by eye: typing, `esc`, scrolling, `y`, and a cancel followed by a re-entry showing an empty box.
-- [ ] T034 Run `mise run check`, have a read-only reviewer check the diff against spec.md's FR list, and make atomic local commits. Name the outcome claim as unverified. No push, pull request, release or live run without the owner naming the pull request.
+- [x] T032 Regenerate the CLI goldens with `go test ./internal/cli/ -update` only if `loupe publish`'s long help changed, and read the diff before staging it.
+- [x] T033 Run `LOUPE_DEMO_HOME=.demo mise run demo` through tmux and check the focus model and the live preview by eye: typing, `esc`, scrolling, `y`, and a cancel followed by a re-entry showing an empty box.
+- [x] T034 Run `mise run check`, have a read-only reviewer check the diff against spec.md's FR list, and make atomic local commits. Name the outcome claim as unverified. No push, pull request, release or live run without the owner naming the pull request.
 
 ## Dependencies
 
