@@ -97,7 +97,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 
 ### The ordering rule
 
-- **FR-001**: One ordering rule MUST apply on every surface that presents findings to a reader: rated findings first in `critical`, `major`, `minor`, `trivial` order; then every unrated finding; then the surface's existing tie-break.
+- **FR-001**: One ordering rule MUST apply on every surface that presents a draft's findings to a reader: rated findings first in `critical`, `major`, `minor`, `trivial` order; then every unrated finding; then the surface's existing tie-break. The recap of an already-published round is the one exception: it reads a stored receipt whose findings carry no severity, so ordering it would mean changing a stored schema, which Principle III puts out of scope. It keeps the order it has today, and this specification does not claim otherwise.
 - **FR-002**: An absent severity, an empty severity and a stored severity outside the enum MUST all sort as unrated. None MAY be mapped onto an enum word for ordering.
 - **FR-003**: Unrated findings MUST sort among themselves by finding id, which is the order every surface uses today.
 - **FR-004**: The stored order of findings MUST NOT change, and the publishable digest MUST NOT change because of this feature.

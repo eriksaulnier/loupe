@@ -277,3 +277,16 @@ func TestMetaLineKeepsAShortCellWhole(t *testing.T) {
 		}
 	}
 }
+
+// A finding with nothing to report on its meta line prints no line at all, not an empty one. Unreachable from the two
+// call sites today, since both always append a location cell, and pinned so it stays that way.
+func TestWriteFindingWithNoMetaPrintsNoLine(t *testing.T) {
+	var b strings.Builder
+	var buf bytes.Buffer
+	writeFinding(&b, colorStyle(t, &buf), 100, findingBlock{glyph: "·", id: "f-001", title: "T", body: "B."})
+	for i, line := range strings.Split(strings.TrimRight(b.String(), "\n"), "\n") {
+		if strings.TrimSpace(ansi.Strip(line)) == "" {
+			t.Errorf("line %d is blank where the meta line would have been:\n%q", i, b.String())
+		}
+	}
+}

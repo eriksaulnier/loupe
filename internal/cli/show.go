@@ -247,8 +247,10 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 		title = s.Bad.Render(s.Glyphs.Blocking) + " " + title
 	}
 	fmt.Fprintf(b, "%s %s  %s\n", s.Of(f.kind).Render(f.glyph), s.Accent.Render(oneLine(f.id)), title)
-	for _, line := range metaLine(s, f.meta, width) {
-		fmt.Fprintf(b, "%s\n", line)
+	if len(f.meta) > 0 {
+		for _, line := range metaLine(s, f.meta, width) {
+			fmt.Fprintf(b, "%s\n", line)
+		}
 	}
 	if body := text(f.body); body != "" {
 		fmt.Fprintf(b, "%s\n", s.Wrap(body, width, findingIndent))
