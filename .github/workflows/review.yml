@@ -28,7 +28,7 @@ jobs:
       pull-requests: write
       checks: read
       actions: read
-    uses: eriksaulnier/loupe-workflows/.github/workflows/review.yml@v1
+    uses: eriksaulnier/loupe-workflows/.github/workflows/review.yml@8e1f8704ad1ad279fa60a5a02b08ef7322d8e675 # v1.1.0
     with:
       pull_request: ${{ inputs.pull_request || github.event.pull_request.number }}
       model: ${{ vars.REVIEW_MODEL }}
