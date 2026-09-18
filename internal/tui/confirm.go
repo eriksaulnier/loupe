@@ -55,6 +55,9 @@ type confirmation struct {
 	before, after string
 	// inputTop and inputRows are where the input sits in the scrolling content, so typing can keep it on screen.
 	inputTop, inputRows int
+	// follow pulls the input back into view on the next layout. It is set by a keystroke that changed the message
+	// and cleared once that is done, so paging away to read the findings is not undone until the human types again.
+	follow bool
 }
 
 func newConfirmation(preview publish.Preview, title ConfirmHeading) confirmation {
@@ -78,7 +81,7 @@ func newConfirmation(preview publish.Preview, title ConfirmHeading) confirmation
 		c.before, c.after, c.composeErr = "", "", err
 		return c
 	}
-	c.typing = true
+	c.typing, c.follow = true, true
 	c.message.Focus()
 	return c
 }
@@ -114,6 +117,14 @@ func (c *confirmation) key(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
 		case tea.KeyEsc, tea.KeyTab:
 			c.blur()
 			return false, nil
+		// The findings are what the message is about, so they stay readable while it is written. The arrows belong
+		// to the text; these two are the keys a textarea has no use for.
+		case tea.KeyPgUp:
+			c.scroll.PageUp()
+			return false, nil
+		case tea.KeyPgDown:
+			c.scroll.PageDown()
+			return false, nil
 		}
 		cmd := c.typeMessage(msg)
 		c.sync(m)
@@ -137,7 +148,7 @@ func (c *confirmation) key(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
 		if !c.inline() {
 			return false, nil
 		}
-		c.typing = true
+		c.typing, c.follow = true, true
 		cmd := c.message.Focus()
 		c.sync(m)
 		return false, cmd
@@ -180,6 +191,7 @@ func (c *confirmation) typeMessage(msg tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
 	c.message, cmd = c.message.Update(msg)
 	if c.value() != before {
+		c.follow = true
 		c.recompose()
 	}
 	return cmd
@@ -212,16 +224,44 @@ func (c *confirmation) messageRows(promptWidth int) int {
 	return max(1, rows-1)
 }
 
-// messageView is the input where the opening prose goes, behind a gutter that is the one colored mark in the body,
-// so the human can see at a glance which words are theirs.
+// messageHint says what the empty input is for. The block is the only part of the body the human writes, and an
+// empty one is otherwise a blank line between the chips and the findings.
+const (
+	messageHint        = "write the sentence this review opens on"
+	messageHintBlurred = "tab to write the sentence this review opens on"
+)
+
+// messageView is the input where the opening prose goes. It is the one block of the body the human owns, so it is
+// marked as theirs on every row: a colored bar down its left edge, and, where the terminal has color, a tint behind
+// it while it holds the keyboard.
 func (c *confirmation) messageView(m *Model, width int) string {
-	mark := m.styles.Dim
-	if c.typing {
-		mark = m.styles.Note
+	mark, hint := m.styles.Note, messageHint
+	if !c.typing {
+		mark, hint = m.styles.Dim, messageHintBlurred
 	}
-	gutter := mark.Render(m.glyphs.Note) + " "
-	gutterWidth := style.Width(m.glyphs.Note) + 1
-	prompt := func(int) string { return gutter }
+	// The tint goes on the textarea's own text style, not around its rendered rows: the rows carry resets of their
+	// own, and a background wrapped around them would end at the first one. Focus and Blur are what point the
+	// textarea at one style set or the other, and they are called again here because Update copies the model and
+	// leaves that pointer in the copy it was made from.
+	tint := m.styles.R.NewStyle()
+	if c.typing {
+		tint = m.styles.Selected
+	}
+	c.message.FocusedStyle.Text, c.message.FocusedStyle.CursorLine = tint, tint
+	c.message.BlurredStyle.Text, c.message.BlurredStyle.CursorLine = tint, tint
+	faint := tint.Inherit(m.styles.Dim)
+	c.message.FocusedStyle.Placeholder, c.message.BlurredStyle.Placeholder = faint, faint
+	c.message.Placeholder = hint
+	if c.typing {
+		c.message.Focus()
+	} else {
+		c.message.Blur()
+	}
+	// One style for the gutter rather than a tint wrapped around a colored bar, which would reset the background
+	// after the glyph and leave a gap before the text.
+	bar := tint.Inherit(mark).Render(m.glyphs.Anchor + " ")
+	gutterWidth := style.Width(m.glyphs.Anchor) + 1
+	prompt := func(int) string { return bar }
 	// The prompt comes first: SetWidth takes its width out of the width the text wraps to.
 	c.message.SetPromptFunc(gutterWidth, prompt)
 	c.message.SetWidth(max(gutterWidth+1, width-1))
@@ -240,9 +280,10 @@ func (c *confirmation) messageView(m *Model, width int) string {
 func (c *confirmation) sync(m *Model) {
 	c.scroll.Width, c.scroll.Height = m.width, m.bodyHeight(confirmHeaderLines)
 	c.scroll.SetContent(c.content(m))
-	if !c.typing {
+	if !c.follow {
 		return
 	}
+	c.follow = false
 	if c.inputTop < c.scroll.YOffset {
 		c.scroll.SetYOffset(c.inputTop)
 	}
@@ -378,7 +419,7 @@ func (m *Model) confirmView(c *confirmation) string {
 func (m *Model) confirmKeys() (keys, notice string) {
 	if m.confirmTyping() {
 		keys, _ = m.styles.Footer([]style.Hint{{Key: "esc", Verb: "done"}, {Key: "enter", Verb: "new line"},
-			{Key: "ctrl+u", Verb: "clear"}, {Verb: "your words open the review"}}, m.width-2)
+			{Key: "ctrl+u", Verb: "clear"}, {Key: "pgup/pgdn", Verb: "read the findings", Role: style.RoleNav}}, m.width-2)
 		return keys, ""
 	}
 	hints := []style.Hint{

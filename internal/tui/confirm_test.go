@@ -138,6 +138,65 @@ func TestConfirmKeepsAMalformedMessageOnScreen(t *testing.T) {
 	}
 }
 
+// TestConfirmMarksTheMessageBlock is what tells a human which part of the body is theirs: a hint while it is empty
+// and a gutter down every row of it once it is not.
+func TestConfirmMarksTheMessageBlock(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
+	if !strings.Contains(m.View(), messageHint) {
+		t.Errorf("the empty message says nothing about itself:\n%s", m.View())
+	}
+	typeInto(m, "The cache bug is the blocker here. The rest can land later.")
+	view := m.View()
+	if strings.Contains(view, messageHint) {
+		t.Errorf("the hint outlived the empty message:\n%s", view)
+	}
+	// The block is read on its own: the body's own blockquotes carry the ASCII tier's gutter glyph too.
+	bar := m.shell.glyphs.Anchor
+	block := strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")
+	if len(block) < 2 {
+		t.Fatalf("the message did not wrap, so a second row is untested: %q", block)
+	}
+	for i, row := range block {
+		if !strings.HasPrefix(strings.TrimSpace(row), bar) {
+			t.Errorf("row %d of the message is unmarked: %q", i, row)
+		}
+	}
+	if !strings.Contains(view, strings.TrimSpace(block[0])) {
+		t.Errorf("the marked block is not what the screen shows:\n%s", view)
+	}
+	// Blurring leaves the block marked, since it is still the human's half of the body.
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if row := strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")[0]; !strings.HasPrefix(strings.TrimSpace(row), bar) {
+		t.Errorf("the blurred message is unmarked: %q", row)
+	}
+}
+
+// TestConfirmReadsTheFindingsWhileTyping keeps the review readable while its opening is written: the message is
+// about the findings, so paging through them MUST NOT mean leaving the input.
+func TestConfirmReadsTheFindingsWhileTyping(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 14})
+	typeInto(m, "Mine.")
+	before := m.confirm.scroll.YOffset
+	m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	if m.confirm.scroll.YOffset <= before {
+		t.Fatalf("pgdown did not scroll the review: offset %d", m.confirm.scroll.YOffset)
+	}
+	if !m.confirm.typing || m.Confirmed() {
+		t.Fatalf("pgdown left the input (typing %v) or confirmed (%v)", m.confirm.typing, m.Confirmed())
+	}
+	typeInto(m, " More.")
+	c := &m.confirm
+	if c.inputTop < c.scroll.YOffset || c.inputTop+c.inputRows > c.scroll.YOffset+c.scroll.Height {
+		t.Errorf("typing did not bring the input back: rows %d-%d, window %d-%d", c.inputTop, c.inputTop+c.inputRows,
+			c.scroll.YOffset, c.scroll.YOffset+c.scroll.Height)
+	}
+	if m.Message() != "Mine. More." {
+		t.Errorf("message %q", m.Message())
+	}
+}
+
 // typeInto sends text to the confirmation one keystroke at a time, as a human types it.
 func typeInto(m *ConfirmModel, text string) {
 	for _, r := range text {
