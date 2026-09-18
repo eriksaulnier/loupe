@@ -16,6 +16,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/severity"
 )
 
 // FindingInput is the add input in contracts/cli.md. It has no included field because only the human changes that.
@@ -93,12 +94,11 @@ func validateReference(ref string) error {
 	return nil
 }
 
-func validateSeverity(severity string) error {
-	switch severity {
-	case "", "critical", "major", "minor", "trivial":
+func validateSeverity(word string) error {
+	if word == "" || slices.Contains(severity.Order[:], word) {
 		return nil
 	}
-	return refusal.New(refusal.Input, fmt.Sprintf("severity %q must be critical, major, minor or trivial", severity), inputFix)
+	return refusal.New(refusal.Input, fmt.Sprintf("severity %q must be critical, major, minor or trivial", word), inputFix)
 }
 
 // Add validates every entry before appending any, so a batch is stored entirely or not at all.
