@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.0](https://github.com/eriksaulnier/loupe/compare/v0.7.0...v0.8.0) (2026-09-18)
+
+
+### Features
+
+* **publish:** let the human write the review's opening ([#19](https://github.com/eriksaulnier/loupe/issues/19)) ([cde9bb6](https://github.com/eriksaulnier/loupe/commit/cde9bb607a69d9c02bbbf8ee6d54128e3dc01ad8))
+* show severity and order every surface by it ([#18](https://github.com/eriksaulnier/loupe/issues/18)) ([8561907](https://github.com/eriksaulnier/loupe/commit/85619078485ded5416994bd83450b876a45280dd))
+* **tui:** reinstate a withdrawn finding from review ([#13](https://github.com/eriksaulnier/loupe/issues/13)) ([fcd0b12](https://github.com/eriksaulnier/loupe/commit/fcd0b1216911abf00ae0932b493323dbb99f3bf5))
+
 ## [0.7.0](https://github.com/eriksaulnier/loupe/compare/v0.6.0...v0.7.0) (2026-09-17)
 
 
