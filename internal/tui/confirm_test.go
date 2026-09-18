@@ -308,6 +308,18 @@ func cutSGR(row string, i int) (seq string, next int, ok bool) {
 	return strings.Join(kept, ";"), i + end + 1, true
 }
 
+// composeWithinLimit is a review close enough to the body-size limit that the confirmation's own sentinel pushes
+// it over while a shorter message still fits.
+func composeWithinLimit(base publish.Preview, room int, refuse error) func(string) (publish.Envelope, string, error) {
+	compose := composeOpening(base, nil)
+	return func(message string) (publish.Envelope, string, error) {
+		if len(message) > room {
+			return publish.Envelope{}, "", refuse
+		}
+		return compose(message)
+	}
+}
+
 // composeAtLimit is a review already at the body-size limit: anything added to its opening slot, a human's message
 // or the confirmation's own sentinel, pushes it over.
 func composeAtLimit(base publish.Preview, refuse error) func(string) (publish.Envelope, string, error) {
@@ -372,6 +384,36 @@ func TestConfirmLeavesThePayloadToTypeTheMessage(t *testing.T) {
 		if !strings.Contains(view, "Mine to own.") || !strings.Contains(view, messageTitle) {
 			t.Errorf("%v typed into a field that is not on screen:\n%s", back.Type, view)
 		}
+	}
+}
+
+// TestConfirmKeepsTheMessageWhenThereIsNoRoomToEditIt: the words carried across a refusal MUST NOT be dropped
+// because the slot probe failed. Losing them silently and then publishing without them is worse than showing
+// them somewhere they cannot be edited.
+func TestConfirmKeepsTheMessageWhenThereIsNoRoomToEditIt(t *testing.T) {
+	preview := confirmPreview()
+	limit := refusal.New(refusal.Markdown, "the composed review body is 65545 characters; at most 65536 characters are allowed",
+		"exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -")
+	// Shorter than the sentinel, longer than nothing: the probe fails and the human's own message still fits.
+	preview.Compose = composeWithinLimit(preview, len(messageSlot)-1, limit)
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.confirm = newConfirmation(preview, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), "Mine to own.")
+
+	if m.confirm.inline() {
+		t.Fatal("an input was offered for a review with nowhere to put one")
+	}
+	if m.Message() != "Mine to own." {
+		t.Fatalf("the carried message was dropped: %q", m.Message())
+	}
+	if !strings.Contains(m.confirm.shown.Body, "Mine to own.") {
+		t.Errorf("the body on screen does not carry the message:\n%s", m.confirm.shown.Body)
+	}
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd == nil {
+		t.Fatal("y did not confirm")
+	}
+	if !m.Confirmed() || m.Message() != "Mine to own." {
+		t.Fatalf("published as %q", m.Message())
 	}
 }
 

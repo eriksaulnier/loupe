@@ -84,19 +84,30 @@ func newConfirmation(preview publish.Preview, title ConfirmHeading, message stri
 		}
 	}
 	if err != nil {
-		// The probe composes a body one sentinel longer than the one it is standing in for, so a review near the
-		// size limit can fail it while the review itself is fine. Whatever the reason, the failure belongs to the
-		// probe and not to the human: they are told, they get no input, and y still publishes what they were shown.
+		// The probe composes a body one sentinel longer than the one it is standing in for, so a review within a
+		// sentinel of the size limit fails it while the review itself, and a shorter message, would be fine.
+		// Whatever the reason, the failure belongs to the probe and not to the human: they are told, they get no
+		// input, and y still publishes what they were shown. Words they typed before a refusal sent them back
+		// here are kept and composed into that body, because dropping them silently and publishing without them
+		// is worse than not being able to edit them.
 		c.before, c.after, c.slotErr = "", "", err
+		c.restore(message)
 		return c
 	}
 	c.typing, c.follow = true, true
 	c.message.Focus()
-	if message != "" {
-		c.message.SetValue(message)
-		c.recompose()
-	}
+	c.restore(message)
 	return c
+}
+
+// restore puts back what the human typed earlier in this session. Composing it is what gets it into the body on
+// screen, whether or not there is an input to edit it in.
+func (c *confirmation) restore(message string) {
+	if message == "" {
+		return
+	}
+	c.message.SetValue(message)
+	c.recompose()
 }
 
 // inline reports whether the message input is drawn into the body.
