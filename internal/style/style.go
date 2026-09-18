@@ -640,6 +640,10 @@ func Pad(text string, width int) string {
 	return text + strings.Repeat(" ", max(0, width-ansi.StringWidth(text)))
 }
 
+// Head is the first width cells of text with its styling intact and nothing added, for a caller that will put its
+// own content where the rest was. TruncRight is the one that marks what it dropped.
+func Head(text string, width int) string { return ansi.Truncate(text, max(0, width), "") }
+
 // Width is the printed width of text, ignoring escape sequences.
 func Width(text string) int { return ansi.StringWidth(text) }
 

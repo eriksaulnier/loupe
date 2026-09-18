@@ -10,9 +10,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
+	"github.com/muesli/termenv"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -221,6 +223,89 @@ func TestConfirmMarksTheMessageBlock(t *testing.T) {
 	if !strings.HasPrefix(blurred, g.BoxTL) || !strings.Contains(blurred, messageWayBlurred) {
 		t.Errorf("the blurred box lost its frame or its way in: %q", blurred)
 	}
+}
+
+// TestConfirmBoxIsTintedWholeRows: the textarea fills the rows that carry text and leaves the placeholder's tail
+// and the empty rows under it bare, so the focused box came out tinted in patches.
+func TestConfirmBoxIsTintedWholeRows(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(map[string]string{"LANG": "en_US.UTF-8"}), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.shell.styles.R.SetColorProfile(termenv.TrueColor)
+	m.shell.styles.Color = true
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+
+	// An empty box is the worst case: a placeholder row whose tail the textarea never fills, then empty rows.
+	rows := strings.Split(m.confirm.messageView(m.shell, style.Content(80)-1), "\n")
+	content := rows[1 : len(rows)-1]
+	if len(content) < minMessageRows {
+		t.Fatalf("the box holds %d rows, want %d", len(content), minMessageRows)
+	}
+	for i, row := range content {
+		// Every cell between the frame glyphs, which carry no background of their own, nor does the margin left of
+		// the box: a row is one margin column, two frame columns and the field between them.
+		if want, got := style.Width(row)-3, tintedCells(row); got != want {
+			t.Errorf("row %d is tinted over %d of its %d cells: %q", i, got, want, row)
+		}
+	}
+
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	for i, row := range strings.Split(m.confirm.messageView(m.shell, style.Content(80)-1), "\n") {
+		if n := tintedCells(row); n != 0 {
+			t.Errorf("row %d of the blurred box is tinted over %d cells: %q", i, n, row)
+		}
+	}
+}
+
+// tintedCells is how many of a row's printed cells sit on a background, by tracking the SGR parameters that turn
+// one on and off. style.Width cannot see this: a bare cell and a tinted one are both one column wide.
+func tintedCells(row string) int {
+	cells, on := 0, false
+	for i := 0; i < len(row); {
+		if seq, next, ok := cutSGR(row, i); ok {
+			for _, p := range strings.Split(seq, ";") {
+				switch p {
+				case "48":
+					on = true
+				case "49", "0", "":
+					on = false
+				}
+			}
+			i = next
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(row[i:])
+		if on {
+			cells += style.Width(string(r))
+		}
+		i += size
+	}
+	return cells
+}
+
+// cutSGR reads the color escape starting at i, returning its parameters. A 24-bit color spends its own parameters
+// on the channel values, so they are skipped rather than read as further attributes.
+func cutSGR(row string, i int) (seq string, next int, ok bool) {
+	if !strings.HasPrefix(row[i:], "\x1b[") {
+		return "", i, false
+	}
+	end := strings.IndexByte(row[i:], 'm')
+	if end < 0 {
+		return "", i, false
+	}
+	params := strings.Split(row[i+2:i+end], ";")
+	var kept []string
+	for j := 0; j < len(params); j++ {
+		kept = append(kept, params[j])
+		// 38;2;r;g;b and 48;2;r;g;b, or 38;5;n and 48;5;n.
+		if params[j] == "38" || params[j] == "48" {
+			switch {
+			case j+1 < len(params) && params[j+1] == "2":
+				j += 4
+			case j+1 < len(params) && params[j+1] == "5":
+				j += 2
+			}
+		}
+	}
+	return strings.Join(kept, ";"), i + end + 1, true
 }
 
 // TestConfirmReadsTheFindingsWhileTyping keeps the review readable while its opening is written: the message is

@@ -264,9 +264,7 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	// leaves that pointer in the copy it was made from.
 	c.message.FocusedStyle.Text, c.message.FocusedStyle.CursorLine = tint, tint
 	c.message.BlurredStyle.Text, c.message.BlurredStyle.CursorLine = tint, tint
-	faint := tint.Inherit(m.styles.Dim)
-	c.message.FocusedStyle.Placeholder, c.message.BlurredStyle.Placeholder = faint, faint
-	c.message.Placeholder = hint
+	c.message.FocusedStyle.EndOfBuffer, c.message.BlurredStyle.EndOfBuffer = tint, tint
 	if c.typing {
 		c.message.Focus()
 	} else {
@@ -283,8 +281,15 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	c.message.SetHeight(c.messageRows(pad))
 	c.message.SetPromptFunc(pad, prompt)
 	rows := strings.Split(c.message.View(), "\n")
+	// The hint is written over the empty row rather than given to the textarea as a placeholder: the placeholder
+	// path fills no row past its own text, and what pads the rest is the textarea's inner viewport, which takes no
+	// style, so a tinted box came out tinted in patches.
+	if c.message.Value() == "" {
+		rows[0] = style.Head(rows[0], pad+1) + tint.Inherit(m.styles.Dim).Render(hint)
+	}
+	// Every row is filled to the same width here for the same reason: only the rows carrying text fill themselves.
 	for i, r := range rows {
-		rows[i] = r + tint.Render(strings.Repeat(" ", pad))
+		rows[i] = r + tint.Render(strings.Repeat(" ", max(0, inner-style.Width(r))))
 	}
 	boxed := m.styles.Box(rows, boxWidth, messageTitle, way, kind)
 	c.inputRows = len(boxed)
