@@ -35,16 +35,23 @@ Sleep 1s
 Screenshot docs/assets/list.png
 Sleep 1800ms
 
-# f-002 is the blocking finding the cursor already sits on. Accept it; a decision advances by itself.
+# f-002 is the blocking finding the board opens on, since specs/014 orders the list by severity.
+# Accept it; a decision advances by itself, though it advances in the draft's own order and not the
+# list's, which is why the walk below is spelled out rather than assumed.
 Enter
 Sleep 2500ms
 Type "a"
 Sleep 2300ms
 
-# f-003 is where the send-back loop shows: the note, the agent's reply and the resolution. The still
-# comes after r, not before: while the note is open the footer carries r and d, wraps to a second row,
-# and takes the row the reply would render on.
-Sleep 2s
+# Right reaches f-003, three along from f-001, and that is where the send-back loop shows: the note,
+# the agent's reply and the resolution. The still comes after r, not before: while the note is open
+# the footer carries r and d, wraps to a second row, and takes the row the reply would render on.
+Right
+Sleep 800ms
+Right
+Sleep 800ms
+Right
+Sleep 1600ms
 Type "r"
 Sleep 2300ms
 Screenshot docs/assets/detail.png
@@ -52,7 +59,10 @@ Sleep 1800ms
 Type "a"
 Sleep 2200ms
 
-# f-004 is a question with no location, and the one worth dropping.
+# f-004 is a question with no location, and the one worth dropping. Accepting f-003 landed on f-005,
+# which is excluded already, so one step right reaches f-004.
+Right
+Sleep 1200ms
 Type "x"
 Sleep 2200ms
 
