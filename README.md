@@ -4,7 +4,7 @@
 
 loupe collects a review agent's findings into a local draft so you decide each one and publish a single GitHub review.
 
-![Accepting the blocking finding, closing out the agent's answer to an earlier send-back, dropping a finding, then writing the review's opening sentence into the body and sending it with one key.](docs/assets/walkthrough.gif)
+![Deciding each finding, then writing the review's opening sentence into the body where it will appear and sending it with one key.](docs/assets/walkthrough.gif)
 
 ## Why loupe
 
@@ -45,6 +45,10 @@ The board, one finding, and the last screen before anything is sent, where you w
 ### Plugin
 
 One plugin for Claude Code, Codex and Pi. Its `human-review` skill is the workflow a review skill or agent follows: capture the pull request, file findings, hand the run to you, and answer your send-back notes. It brings no review method of its own.
+
+Sending a finding back is how you use that last part: the agent answers, you resolve the note, and only then does the finding count as decided.
+
+![A finding with an open send-back note, the agent's reply to it, resolving the note and accepting the finding.](docs/assets/sendback.gif)
 
 ```sh
 # Claude Code
