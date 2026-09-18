@@ -278,7 +278,9 @@ func (m *Model) summaryBlock(cols listColumns) []string {
 		return []string{heading + m.styles.Dim.Render("none"), ""}
 	}
 	content := style.Content(m.width)
-	width := max(20, content-1-style.Width(hint)-2)
+	// The floor leaves the collapsed line room for its indent: below it the truncation width goes negative and the
+	// second line comes back empty.
+	width := max(len(indent)+10, content-1-style.Width(hint)-2)
 	lines := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(m.draft.Summary)), width, indent), "\n")
 	if m.summaryCollapsed && len(lines) > 2 {
 		// The rest of the summary is truncated once, by the helper that ends it with the ellipsis itself. Every

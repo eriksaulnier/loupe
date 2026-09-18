@@ -321,13 +321,15 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Co
 			return publish.Confirmation{}, lines.Err()
 		}
 		message := strings.TrimSpace(lines.Text())
-		// Nobody answers y to a body they were not shown, so a review that gained an opening is printed again.
+		// Nobody answers y to a body they were not shown, and "exact request payload" has to stay exact, so a
+		// review that gained an opening is printed again with the envelope that carries it.
 		if message != "" && preview.Compose != nil {
-			env, _, err := preview.Compose(message)
+			env, envJSON, err := preview.Compose(message)
 			if err != nil {
 				return publish.Confirmation{}, err
 			}
 			p.printf("\nReview body:\n\n%s\n", render.ForDisplay(markdown.OpenDetails(env.Body)))
+			p.printf("\nEnvelope JSON:\n\n%s\n", render.ForDisplay(envJSON))
 		}
 		p.printf("\nPublish this review? [y/N] ")
 		if p.err != nil {

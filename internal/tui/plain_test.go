@@ -323,14 +323,18 @@ func TestConfirmPlainReadsTheMessage(t *testing.T) {
 	if strings.Index(text, "I read every one of these.") > strings.Index(text, "Publish this review? [y/N]") {
 		t.Errorf("the composed body comes after the prompt:\n%s", text)
 	}
+	// The payload is labeled exact, so the one printed last must be the one the message is in.
+	if strings.Count(text, "Envelope JSON:") != 2 {
+		t.Errorf("the payload was not reprinted for the message:\n%s", text)
+	}
 
 	out.Reset()
 	answer, err = ConfirmPlain(strings.NewReader("   \ny\n"), &out)(confirmPreview())
 	if err != nil || !answer.Publish || answer.Message != "" {
 		t.Fatalf("a blank line is no message: answer %+v err %v", answer, err)
 	}
-	if strings.Count(out.String(), "Review body:") != 1 {
-		t.Errorf("an empty message reprinted the body:\n%s", out.String())
+	if strings.Count(out.String(), "Review body:") != 1 || strings.Count(out.String(), "Envelope JSON:") != 1 {
+		t.Errorf("an empty message reprinted the body or the payload:\n%s", out.String())
 	}
 }
 

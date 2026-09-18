@@ -330,6 +330,19 @@ func TestCollapsedSummaryHasNoSpaceRuns(t *testing.T) {
 	}
 }
 
+// The collapsed summary keeps its second line at the narrowest window the interface runs in; the heading's indent
+// nearly swallowed the width the truncation is given.
+func TestCollapsedSummaryKeepsItsSecondLineWhenNarrow(t *testing.T) {
+	for _, width := range []int{60, 80, 100} {
+		m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, width, 24)
+		m.draft.Summary = strings.Repeat("a summary long enough to wrap past two lines ", 6)
+		lines := m.summaryBlock(m.listColumns())
+		if len(lines) < 2 || strings.TrimSpace(strings.Split(lines[1], "tab expands")[0]) == "" {
+			t.Errorf("width %d: the collapsed summary lost its second line: %q", width, lines)
+		}
+	}
+}
+
 // A pull request reference too long for a narrow header keeps its number.
 func TestListHeaderKeepsThePullRequestNumber(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 20)
