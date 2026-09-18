@@ -131,7 +131,7 @@ A human opens a run captured last week whose findings carry `severity: "P2"`. `l
 
 #### The example integration and the plugin
 
-- **FR-017**: `.github/workflows/review.yml` MUST fail its capture step with a message naming `REVIEW_MODEL` when that variable is empty, and otherwise MUST pass `--source` naming the workflow and `--model` with the variable's value.
+- **FR-017**: `.github/workflows/review.yml` MUST fail its capture step with a message naming `REVIEW_MODEL` when that variable is empty, and otherwise MUST pass `--source` naming the workflow and `--model` with the variable's value. (Amended 2026-09-17: the capture step moved to `eriksaulnier/loupe-workflows/.github/workflows/review.yml@v1` in `667e6b9`, where it still refuses an empty model and names it in the message, and still passes both flags. Two names changed in the move: the value reaches it as the shared workflow's `model` input, which this repository's caller fills from `REVIEW_MODEL`, and `--source` is that workflow's `source` input, defaulting to `loupe-ci` rather than naming a review action. The requirement binds against that step.)
 - **FR-018**: The `human-review` skill MUST document the three finding fields and the severity enum, and MUST tell the agent to pass `--model` with its own model identifier to capture when it knows it, and to omit the flag when it does not.
 
 ### Key Entities
