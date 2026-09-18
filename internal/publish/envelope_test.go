@@ -141,7 +141,8 @@ func TestBuildCarriesFindingFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"**Severity:** major\\\n> **Verified:** plausible", "**Impact**\n\nBreaks.", "**References**\n\n- <https://github.com/o/r/issues/1>"} {
+	// The severity is on the summary line, not in the meta block, so the block carries verified alone.
+	for _, want := range []string{"<b>major · ", "> **Verified:** plausible", "**Impact**\n\nBreaks.", "**References**\n\n- <https://github.com/o/r/issues/1>"} {
 		if !strings.Contains(env.Body, want) {
 			t.Fatalf("missing %q in\n%s", want, env.Body)
 		}

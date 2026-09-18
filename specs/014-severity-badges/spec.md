@@ -27,6 +27,10 @@ The cost is paid on every review. A reader scanning ten collapsed rows has the l
 
 The terminal half has the same shape and needs no amendment: `loupe review`'s list carries id, blocking, note, title, label and location, and severity appears only after the human has committed to a finding. It belongs in this specification anyway, because the two surfaces MUST agree on one ordering rule. A human who decides findings in one order and then publishes a review that presents them in another has been given two different answers to "what matters most here".
 
+### One severity, in one place
+
+Putting the word on the summary line makes the meta line's `**Severity:** major` a repeat: every context that renders a meta block renders a summary line directly above it, so for a rated finding the same word lands twice within two lines. `docs/comment-format.md` already has the rule for this shape — an inline comment carries no location line, "the comment already sits on the line" — and this applies it to severity. The cost is that the word is no longer labeled anywhere in the review; a reader meets it as the first word of a bold prefix. That reader is the one who opened a collapsed finding, and they read the word on the line above either way, so the label was buying nothing they did not already have.
+
 ### What this deliberately costs
 
 `docs/comment-format.md` currently promises that findings within `Blocking` sort by label group, then by id. After this change severity outranks the label group, so that property is gone: two `issue` findings in `Blocking` MAY be separated by a `suggestion` between them. That is the point of the change rather than a side effect of it. The label group survives as the tie-break, so labels still cluster among findings of equal severity.
@@ -70,6 +74,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 6. **Given** a finding open in the detail view, **When** its chips are drawn, **Then** the severity chip is colored by how bad it is rather than dimmed like an incidental field.
 7. **Given** the line-by-line review mode, **When** findings are presented, **Then** they are in the same order the full-screen list uses.
 8. **Given** `loupe show`, **When** findings are printed, **Then** they are in that same order and the severity cell is colored.
+9. **Given** a finding with an enum severity, **When** its disclosure or inline comment is composed, **Then** the word appears on the summary line and nowhere else in that finding.
 
 ---
 
@@ -96,13 +101,13 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 
 - **FR-006**: A rated finding's summary line MUST lead its bold prefix with the severity word, separated from what follows by ` · `. Where the context carries no label word, the severity word is the whole prefix.
 - **FR-007**: The severity word MUST be a word, never a colored dot. The contract already reserves dots for labels and records that a label dot under the `⛔` heading reads as a severity.
-- **FR-008**: An unrated finding's summary line MUST be byte for byte what it was before this change, in every context.
+- **FR-008**: An unrated finding's summary line MUST be byte for byte what it was before this change, in every context. A finding with no severity at all MUST render byte for byte as before in the whole body, summary line and meta block together.
 - **FR-009**: Within `Blocking`, findings MUST sort by severity, then by label group, then by finding id. The label-grouping property the contract states MUST be amended to record that severity now outranks it.
 - **FR-010**: Within a label section and within `Other`, findings MUST sort by severity, then by finding id.
 - **FR-011**: An inline comment's summary line MUST carry the severity word on the same rule as the body, after its dot.
 - **FR-012**: The chips row MUST NOT change. It is an index of the headings below it, and every chip maps to a heading a reader can scroll to; severity counts would stack a second taxonomy on it and break that property.
 - **FR-013**: Section placement MUST NOT change. `blocking` alone decides `Blocking`, and the label alone decides the rest.
-- **FR-014**: The meta block MUST NOT change. Severity keeps its `**Severity:**` line, and a stored value outside the enum keeps its code span.
+- **FR-014**: The meta block MUST NOT repeat a severity the summary line already carries. Every context that renders a meta block renders a summary line directly above it, so an enum word would otherwise appear twice, two lines apart. A value stored before the enum cannot reach the summary line, so it keeps its `**Severity:**` line and its code span. Confidence and verified are untouched, and a meta block left with no parts is omitted as it is today.
 - **FR-015**: `docs/comment-format.md` MUST be amended where it states that severity never appears in the summary line, where it states the `Blocking` sort, and in its embedded example, which is pinned against the rendered golden.
 - **FR-016**: No external badge image MAY be introduced. The contract's existing ban stands: a badge is a color and a word in the terminal, and a word on GitHub.
 
@@ -134,7 +139,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 - **SC-001**: A reader of a collapsed review learns which findings are the bad ones without opening any of them.
 - **SC-002**: On every surface, the first finding a reader meets is the most severe one present.
 - **SC-003**: A draft whose findings carry no severity produces a review byte-identical to what it produced before this change.
-- **SC-004**: The four words and their order have one definition, and adding or reordering a word is a one-line change.
+- **SC-004**: The four words and their order have one definition. Reordering them is a one-line change; adding one is two, and the suite MUST name the second line rather than let a word ship with no color.
 - **SC-005**: The severity badge survives `NO_COLOR` and the ASCII tier with its rank intact, carried by the word and the ordering.
 - **SC-006**: A human decides findings in the same order the published review presents them.
 - **SC-007**: All automated repository checks pass after the final edit.

@@ -23,9 +23,9 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 - **Unknown labels are never refused.** An unrecognized label renders verbatim in the finding's own summary line (`perf-nit:`) and counts in the `Other` chip only when nonblocking. A finding with an unknown label and `blocking` set is placed and counted in `Blocking`, like every other blocking finding, while still counting under its own label in `loupe-meta`. `Other` is a bucket, never a rewrite of the label.
 - A label that is absent or empty is treated as no label: the finding counts as `other` and its summary line carries no label word. The same applies to an empty `confidence`, `severity` or `verified`, which render nothing.
 - **Confidence, severity and verified MUST NOT be computed, defaulted or inferred.** Each is a value the reviewer reports or omits. The reason for a confidence level belongs in the body.
-- **Severity is never mapped onto a label.** It leads the summary line and renders again as a labeled word on the meta line. It orders findings within a section and never decides which section one is placed in.
+- **Severity is never mapped onto a label.** It leads the summary line and orders findings within a section, and never decides which section one is placed in.
 - **Verified is not confidence.** Confidence is how sure the reviewer is; verified is whether it ran or observed the failure (`reproduced`) or reasoned to it (`plausible`).
-- **A stored severity outside the enum still renders.** Runs captured before the enum hold free text; it renders in the same place inside a code span, so it stays inert Markdown, and only a new or changed value is refused.
+- **A stored severity outside the enum still renders.** Runs captured before the enum hold free text. It cannot lead a summary line, which interpolates its prefix raw, so it renders on the meta line inside a code span, where it stays inert Markdown. Only a new or changed value is refused.
 
 | `severity` | What goes wrong if it ships |
 | :--- | :--- |
@@ -62,7 +62,6 @@ Tests were not executed in this read-only review.
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
 > **Confidence:** high\
-> **Severity:** major\
 > **Verified:** reproduced
 
 Reproduced against the recorded fixture. The catch re-enters the loop after a request
@@ -91,8 +90,7 @@ Return the original write error.
 <details>
 <summary><b>minor · perf-nit:</b> Redundant sort on every read</summary>
 
-> [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)\
-> **Severity:** minor
+> [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)
 
 …
 
@@ -138,7 +136,7 @@ The chips row leads the body, or the summary when there are no findings. The bod
 
 - **The severity word leads the bold prefix**, separated from what follows by ` · `. Where the context carries no label word, it is the whole prefix. A finding whose severity is absent, empty or free text captured before the enum renders byte for byte what it rendered before severity reached this line, which is what keeps an older review comparable to a newer one.
 - **It is a word, not a dot.** Dots are the label vocabulary, and a dot under the `⛔` heading already reads as a severity; a second dot vocabulary on the same line would make that worse. It is also not an image: the ban on external badge images applies here.
-- **Only the four enum words reach the line.** The prefix is interpolated outside a code span, so a stored severity that is not one of them stays on the meta line, where its code span makes it inert.
+- **Only the four enum words reach the line.** The prefix is interpolated outside a code span, so a stored severity that is not one of them stays on the meta line instead, where its code span makes it inert. Exactly one of the two places carries a finding's severity, never both.
 - The label is followed by ` (blocking)` when the finding blocks. That happens only in `Blocking` and on the inline surface, because a blocking finding is never placed in a label section. Inside `Blocking` it is redundant against the heading and kept anyway so the inline surface, which has no heading, keeps the signal.
 - `<b>` is the only tag loupe emits inside a `<summary>`. The title is HTML-escaped before interpolation.
 - A finding with no dot, label word or blocking decoration in its context renders the escaped title alone. An unlabeled nonblocking inline finding keeps the `⚪` dot. A finding that blocks but carries no label renders `<b>(blocking):</b>` before its title in `Blocking`, and `⛔ <b>(blocking):</b>` inline; with a severity those become `<b>major · (blocking):</b>` and `⛔ <b>major · (blocking):</b>`.
@@ -147,14 +145,14 @@ The chips row leads the body, or the summary when there are no findings. The bod
 
 A blockquote at the top of the disclosure body, present only when at least one part exists.
 
-- One part per line, each line separated from the next by a backslash hard break: the location first, then confidence, severity and verified, in that order. An absent part leaves no line.
+- One part per line, each line separated from the next by a backslash hard break: the location first, then confidence, severity and verified, in that order. An absent part leaves no line, and **an enum severity leaves none either**, because the summary line directly above already carries it.
 - A finding with no location starts at its first present part; one with only a location has that line alone.
 
 | Part | Rendering | Example |
 | :--- | :--- | :--- |
 | Location | Review body only. A Markdown code span, side included inside the span, as the text of a link to the PR's files view | `` [`src/a.go:88`](…/pull/7/files#diff-<sha256 of the path>R88) `` |
 | Confidence | the bold label `**Confidence:**` then the escaped level word | `**Confidence:** high` |
-| Severity | the bold label `**Severity:**` then the enum word; a stored value outside the enum goes in a code span instead | `**Severity:** minor`, `` **Severity:** `P2` `` |
+| Severity | **only a value outside the enum**, as the bold label `**Severity:**` then a code span. An enum word is on the summary line and is not repeated here | `` **Severity:** `P2` `` |
 | Verified | the bold label `**Verified:**` then the escaped word | `**Verified:** reproduced` |
 
 - **Location is rendered in full**, path and range, because with `--inline none` this is the only place it survives. `src/a.go:88` for a single line, `src/a.go:10–14` for a range. **The side is shown only when it is `LEFT`**, appended as ` (LEFT)`.
@@ -163,7 +161,7 @@ A blockquote at the top of the disclosure body, present only when at least one p
 - **A code span MUST be delimited by a backtick run longer than any run inside its content**, padded with a space when the content starts or ends with a backtick. This is the CommonMark rule and it applies to every generated code span, including the footer's.
 - **Code-span contents MUST NOT be HTML-escaped.** A code span is already inert, and GitHub shows character references inside one literally. Escaping is for text interpolated outside a span.
 - **Every generated inline field MUST be collapsed to a single line before interpolation**, with runs of whitespace becoming one space. A newline in a title breaks the summary line out of its tag; a newline in `severity` would end the meta block's blockquote and leave the rest of the line as body text.
-- Confidence, severity and verified render only when the reviewer supplied them. Confidence and verified appear nowhere else; severity also leads the summary line and orders the findings within a section. None of the three decides section placement.
+- Confidence, severity and verified render only when the reviewer supplied them. **Severity is carried by the summary line, not by this block**, on the same rule that keeps an inline comment's location out of it: the line above already says it. None of the three decides section placement.
 
 ### Impact
 
@@ -241,7 +239,7 @@ The renderer wraps each finding in a generated `<details>`. Authored content tha
 | Field | Why it cannot escape |
 | :--- | :--- |
 | `title`, `label`, `confidence`, `verified` | Collapsed to one line, then HTML-escaped before interpolation |
-| `severity` | Collapsed to one line; an enum word is interpolated as is, on the meta line and in the summary line's bold prefix, and anything else is emitted inside a code span on the meta line alone |
+| `severity` | Collapsed to one line; an enum word is interpolated as is in the summary line's bold prefix, and anything else is emitted inside a code span on the meta line |
 | Location, footer fields | Collapsed to one line and emitted inside a code span whose backtick run is longer than any run in the content |
 | `suggestedFix` | Emitted inside a fence longer than any backtick run in the content |
 | `references` | Refused at input, and again at composition, unless each is a URL free of whitespace, control and format characters, `<`, `>` and backticks; then emitted as an autolink |

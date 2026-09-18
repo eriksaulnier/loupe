@@ -3,7 +3,7 @@
     "path": "internal/b.go",
     "line": 24,
     "side": "LEFT",
-    "body": "⛔ <b>major · suggestion (blocking):</b> Removed guard\n\n> **Severity:** major\n\nBody f-002."
+    "body": "⛔ <b>major · suggestion (blocking):</b> Removed guard\n\nBody f-002."
   },
   {
     "path": "c.go",
@@ -23,6 +23,6 @@
     "side": "RIGHT",
     "start_line": 10,
     "start_side": "RIGHT",
-    "body": "⛔ <b>major · issue (blocking):</b> Range finding\n\n> **Confidence:** high\\\n> **Severity:** major\\\n> **Verified:** reproduced\n\nBody f-010.\n\n**Impact**\n\nImpact f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```\n\n**References**\n\n- <https://github.com/o/r/issues/1>"
+    "body": "⛔ <b>major · issue (blocking):</b> Range finding\n\n> **Confidence:** high\\\n> **Verified:** reproduced\n\nBody f-010.\n\n**Impact**\n\nImpact f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```\n\n**References**\n\n- <https://github.com/o/r/issues/1>"
   }
 ]

@@ -233,9 +233,11 @@ func TestBodyMetaLineParts(t *testing.T) {
 		in.Findings = []Finding{f}
 		return Body(in)
 	}
+	// An enum word leads the summary line, so the meta block does not repeat it; a general finding with nothing
+	// else to report has no meta block at all.
 	f.Severity = "minor"
-	if body := render(f); !strings.Contains(body, "\n\n> **Severity:** minor\n\nB.\n\n</details>") {
-		t.Fatalf("severity alone wrong\n%s", body)
+	if body := render(f); !strings.Contains(body, "<summary><b>minor:</b> T</summary>\n\nB.\n\n</details>") {
+		t.Fatalf("severity must not repeat on the meta line\n%s", body)
 	}
 	f.Severity, f.Verified = "", "plausible"
 	if body := render(f); !strings.Contains(body, "\n\n> **Verified:** plausible\n\nB.") {
@@ -420,5 +422,54 @@ func TestBodySectionSortsBySeverityThenID(t *testing.T) {
 		"### ⚪ Other", "Title f-004<", "Title f-005<")
 	if !slices.IsSorted(got) {
 		t.Fatalf("section offsets %v not in severity then id order\n%s", got, body)
+	}
+}
+
+// The summary line above a meta block always carries an enum severity, so the block repeats it only when the summary
+// line could not take it: a value stored before the enum, in the code span that keeps it inert.
+func TestMetaBlockRepeatsOnlyALegacySeverity(t *testing.T) {
+	in := exampleInput()
+	// Blocking, so the summary line keeps its label word and the ` · ` join is exercised too.
+	base := Finding{ID: "f-001", Title: "T", Body: "B.", General: true, Label: "issue", Blocking: true,
+		Confidence: "high", Verified: "reproduced"}
+	for _, word := range []string{"critical", "major", "minor", "trivial"} {
+		f := base
+		f.Severity = word
+		in.Findings = []Finding{f}
+		body := Body(in)
+		if !strings.Contains(body, "<b>"+word+" · issue (blocking):</b>") {
+			t.Errorf("%s did not lead the summary line\n%s", word, body)
+		}
+		if strings.Contains(body, "**Severity:**") {
+			t.Errorf("%s repeated on the meta line\n%s", word, body)
+		}
+		if !strings.Contains(body, "> **Confidence:** high\\\n> **Verified:** reproduced") {
+			t.Errorf("dropping severity broke the meta block's hard breaks\n%s", body)
+		}
+	}
+	f := base
+	f.Severity = "P2"
+	in.Findings = []Finding{f}
+	body := Body(in)
+	if strings.Contains(body, "<b>P2") {
+		t.Errorf("a legacy severity reached the summary line\n%s", body)
+	}
+	if !strings.Contains(body, "> **Confidence:** high\\\n> **Severity:** `P2`\\\n> **Verified:** reproduced") {
+		t.Errorf("a legacy severity lost its meta line\n%s", body)
+	}
+}
+
+// An inline comment's meta block follows the same rule, since its bold first line is the summary line.
+func TestInlineMetaBlockDropsARatedSeverity(t *testing.T) {
+	in := exampleInput()
+	in.Inline = "all"
+	in.Findings = []Finding{{ID: "f-001", Title: "T", Body: "B.", Label: "issue", Severity: "critical",
+		Confidence: "high", Location: &Location{Path: "a.go", Side: "RIGHT", Line: 3}}}
+	got := Comments(in)
+	if len(got) != 1 {
+		t.Fatalf("want one comment, got %d", len(got))
+	}
+	if want := "🟡 <b>critical · issue:</b> T\n\n> **Confidence:** high\n\nB."; got[0].Body != want {
+		t.Errorf("inline body\n got %q\nwant %q", got[0].Body, want)
 	}
 }
