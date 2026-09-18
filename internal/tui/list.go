@@ -264,20 +264,23 @@ func (m *Model) publishHint() style.Hint {
 	return style.Hint{Key: "p", Verb: "publish (not ready)", KeyKind: style.Dim, VerbKind: style.Dim}
 }
 
-// summaryBlock is the draft summary beside its heading, two lines by default so the findings stay on screen.
+// summaryBlock is the draft summary beside its heading, two lines by default so the findings stay on screen. The
+// heading names whose words they are: the reviewer wrote them, and an attended publication does not post them.
 func (m *Model) summaryBlock(cols listColumns) []string {
-	const label = " Summary  "
+	const label = " Reviewer's summary  "
 	indent := strings.Repeat(" ", len(label))
 	hint := "tab expands"
 	if !m.summaryCollapsed {
 		hint = "tab collapses"
 	}
-	heading := " " + m.styles.Heading("summary") + "  "
+	heading := " " + m.styles.Heading("reviewer's summary") + "  "
 	if strings.TrimSpace(m.draft.Summary) == "" {
 		return []string{heading + m.styles.Dim.Render("none"), ""}
 	}
 	content := style.Content(m.width)
-	width := max(20, content-1-style.Width(hint)-2)
+	// The floor leaves the collapsed line room for its indent: below it the truncation width goes negative and the
+	// second line comes back empty.
+	width := max(len(indent)+10, content-1-style.Width(hint)-2)
 	lines := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(m.draft.Summary)), width, indent), "\n")
 	if m.summaryCollapsed && len(lines) > 2 {
 		// The rest of the summary is truncated once, by the helper that ends it with the ellipsis itself. Every

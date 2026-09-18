@@ -50,7 +50,7 @@ func TestWaitFollowsTheSendBackLoop(t *testing.T) {
 
 	h.plainReview("a\na\nr\nq\n")
 	h.IsTerminal = true
-	h.Stdin = "y\n"
+	h.Stdin = confirmPublish("", "y")
 	if stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 {
 		t.Fatalf("publish exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}

@@ -9,7 +9,13 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
-const summaryHelp = `Set the review summary.
+const summaryHelp = `Set the summary the human reads while sorting findings.
+
+The summary orients whoever decides the findings: what kind of review this is, what was looked
+at, what could not be checked. An attended publication does not post it. The review's own
+opening prose is written by the human at the publish confirmation, in their words, so write the
+summary for the one person who reads it before deciding, not for the pull request's author.
+An unattended publication has no such person, and there the summary is the review's opening.
 
 Input (--from <file>, or --from - for stdin):
 
@@ -30,7 +36,7 @@ Result (--json):
 func newSummaryCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "summary",
-		Short:   "Set the review summary",
+		Short:   "Set the summary the human reads while sorting findings",
 		Long:    summaryHelp,
 		Example: "  loupe summary --run owner/repo#123 --from summary.json --expect-findings 2 --json\n  loupe summary --body \"Two issues, one blocking.\" --expect-findings 2",
 		Args:    cobra.NoArgs,

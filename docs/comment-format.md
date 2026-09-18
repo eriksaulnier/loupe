@@ -51,7 +51,7 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 `⛔ 1 blocking` `⚪ 1 other`
 
 The retry path can publish twice and the digest is not verified on reconcile.
-Tests were not executed in this read-only review.
+Worth fixing before this merges; the rest reads fine to me.
 
 ---
 
@@ -106,7 +106,11 @@ reviewed `d23632e`
 
 ### Opening
 
-The chips row leads the body, or the summary when there are no findings. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
+The chips row leads the body and the opening prose follows it, or the prose leads when there are no findings to count. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
+
+**Who writes the opening prose depends on who published.** An attended review carries a message the human typed at the publish confirmation, reading the body as they wrote it; the draft's summary is not published on that path and orients the human while they sort findings instead. An unattended review carries the draft's summary, because no human is there to type anything, and its footer already ends in ` · unattended` so a reader knows the prose was not read by a person before it appeared.
+
+The prose is optional in both modes. When there is none the body opens on the chips row, and nothing is rendered in its place. A review with neither prose nor a finding is refused rather than posted.
 
 ### Chips
 
@@ -245,11 +249,11 @@ The renderer wraps each finding in a generated `<details>`. Authored content tha
 | `suggestedFix` | Emitted inside a fence longer than any backtick run in the content |
 | `references` | Refused at input, and again at composition, unless each is a URL free of whitespace, control and format characters, `<`, `>` and backticks; then emitted as an autolink |
 | `body`, `impact` | Validated by the allowlist below; correction `loupe edit <id> --from -` |
-| `summary` | Validated by the allowlist below; correction `loupe summary --from -` |
+| `summary` | Validated by the allowlist below; correction `loupe summary --from -`, or a reword at the confirmation for a human's message |
 
 ### Allowlist
 
-A body or summary is accepted when all of the following hold. The check runs at write time in `add`, `edit` and `summary`, and again at publish for every included finding and the summary. Excluded and withdrawn findings are not checked.
+A body or summary is accepted when all of the following hold. The check runs at write time in `add`, `edit` and `summary`, and again at publish for every included finding and for whichever opening prose is being published: the human's message when attended, the draft's summary when not. Excluded and withdrawn findings are not checked.
 
 | Rule | Code |
 | :--- | :--- |

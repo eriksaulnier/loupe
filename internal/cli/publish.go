@@ -27,7 +27,8 @@ with or without a terminal. Then, before anything is shown, publish refuses, in 
                loupe capture <url> starts a new round
   own-pr       approve or request-changes on your own pull request; use --action comment
   blocking     approve while a publishable (accepted or pending) finding is blocking
-  empty        no summary and no publishable findings
+  empty        no summary and no publishable findings; and, after you confirm, no message and
+               no included findings, since your message is what an attended review opens on
   not-ready    pending findings or open notes; finish in loupe review
 
 A head that only gained commits since capture is not refused. The confirmation lists those
@@ -36,10 +37,18 @@ GitHub does not mark its comments outdated for those commits, so a comment on a 
 changed shows beside the new code. If the head moves again before y, nothing is sent.
 
 The confirmation shows the review body with every collapsed section open and each inline
-comment; j/k, up/down, pgup/pgdown and home/end scroll, and v or tab switches to the exact JSON
-payload. Only y sends. Any other key, Esc, Ctrl-C or end of input cancels and nothing is sent
-or written. Once the review is being sent, keys, Ctrl-C and SIGTERM do not stop loupe until
-the outcome is recorded.
+comment. The review opens on a message you type, in the body and where your words will appear,
+marked off from the rest; the cursor starts there, Enter adds a line, PgUp and PgDn page through
+the findings without leaving it, and leaving it empty publishes a body that opens on the chips
+row. The draft's summary is not published here: it is the reviewer's, for you to read while
+sorting. Esc and Tab move between the message and the review; neither cancels, so leaving the
+message and going back cannot throw away what you wrote. Inside loupe review it also survives a
+cancel and a refusal, in memory and no further: the next confirmation of that session opens on
+it, and quitting ends it. Outside it, j/k, up/down, pgup/pgdown
+and home/end scroll and v switches to the exact JSON payload. Only y sends, and only from
+outside the message, so a y you typed cannot publish. Any other key, Ctrl-C or end of input
+cancels and nothing is sent or written. Once the review is being sent, keys, Ctrl-C and SIGTERM
+do not stop loupe until the outcome is recorded.
 
 Once the review is posted, receipt.json records it and publish prints the review URL; every later
 publish prints that URL again without contacting GitHub, with or without a terminal. If a send
@@ -51,7 +60,8 @@ a new confirmation and sends once. A rejection because you have a pending review
 request asks you to submit or discard it on GitHub first.
 
 --plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 prints the
-review and asks Publish this review? [y/N] on one line instead.
+review, reads your message on one line, prints the review again with it, and asks Publish this
+review? [y/N] on one line instead. An empty line is no message.
 
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.
@@ -136,7 +146,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	ui := interactiveOutput(deps, jsonMode)
 	receipt, replayed, err := publish.Run(cmd.Context(), publish.Options{
 		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, Unattended: unattended, RetryUnknown: retryUnknown,
-		Confirm: func(preview publish.Preview) (bool, error) {
+		Confirm: func(preview publish.Preview) (publish.Confirmation, error) {
 			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
 			width, height := terminalSize(deps)
 			mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, Width: width, Height: height, RawProbe: func() error { return rawProbe(deps) }})

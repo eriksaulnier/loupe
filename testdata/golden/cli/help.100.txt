@@ -28,7 +28,7 @@ Workflow  capture → add → summary → review → publish
 Commands
   agent   capture   Capture a pull request into a new review round
           add       File findings into the draft
-          summary   Set the review summary
+          summary   Set the summary the human reads while sorting findings
           handoff   Open review for the human in a new pane
           wait      Block until the human hands notes back or publishes
           edit      Change, withdraw or restore a finding

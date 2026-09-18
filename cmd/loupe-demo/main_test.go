@@ -80,7 +80,7 @@ func TestSeedWritesRunsInTheirStates(t *testing.T) {
 		_, _, err = publish.Run(context.Background(), publish.Options{
 			Dir: dir, Target: target, GitHub: func() (github.Client, error) { return client, nil }, IsTerminal: true,
 			Action: action, Inline: "blocking", Now: time.Now, Getenv: func(k string) string { return map[string]string{"LOUPE_HOME": home}[k] },
-			Confirm:     func(p publish.Preview) (bool, error) { shown = &p; return false, nil },
+			Confirm:     func(p publish.Preview) (publish.Confirmation, error) { shown = &p; return publish.Confirmation{}, nil },
 			HoldSignals: func([]os.Signal) func() { return func() {} },
 		})
 		return shown, err

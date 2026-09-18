@@ -1,7 +1,7 @@
 `⛔ 1 blocking` `⚪ 1 other`
 
 The retry path can publish twice and the digest is not verified on reconcile.
-Tests were not executed in this read-only review.
+Worth fixing before this merges; the rest reads fine to me.
 
 ---
 

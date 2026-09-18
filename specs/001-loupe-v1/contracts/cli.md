@@ -56,7 +56,7 @@ Refusal or error (exit 1 or 2):
 | `own-pr` | approve or request-changes on the viewer's own pull request | `--action comment` |
 | `blocking` | approve while a finding in the publishable set is blocking | `--action comment` or `request-changes`, or exclude or unblock the finding in `loupe review` |
 | `not-ready` | Pending findings or open notes | `loupe review` |
-| `empty` | Draft has no summary and an empty publishable set | `loupe add` / `loupe summary` |
+| `empty` | Draft has no summary and an empty publishable set; or, after an attended confirmation, no message and no included findings | `loupe add` / `loupe summary`, or a message at the confirmation |
 | `attempt` | Unknown attempt not reconciled | inspect the pull request URL, then `--retry-unknown` |
 | `changed` | The draft's version, content or readiness changed while publish was confirming | `loupe review`, then `loupe publish` again |
 | `viewer` | The GitHub login changed between showing the confirmation and sending; or the token's kind at publish differs from the kind capture recorded | `loupe publish` again to confirm as the current login; for the kind mismatch, capture and publish with the same token kind |
@@ -109,6 +109,8 @@ Result payload: `finding` (`{id, rev, included}`), `version`, `clearedDecision` 
 
 Input: `{"summary": "Markdown"}`. `--expect-findings` is required for `--by agent` and compares `n` with the number of included findings inside the same lock; a mismatch leaves the summary unchanged and returns `details.included` as `[{id, title}]`.
 
+The summary orients the human while they sort findings, and is the opening prose of an unattended publication. An attended publication does not post it: the human types the review's opening at the confirmation instead (specs/013-human-message).
+
 Result payload: `version`, `includedCount`.
 
 ### `loupe wait [--timeout <duration>] [--json]`
@@ -152,6 +154,8 @@ Refuses with `tty` before reading the draft when stdin or stdout is not a termin
 ### `loupe publish [<ref>] --action comment|approve|request-changes [--inline none|blocking|all] [--retry-unknown] [--plain] [--unattended]` (human only, except `--unattended`)
 
 Runs the publication state machine in research.md. After a receipt replay or reconciliation, refuses with `tty` before reading the draft or GitHub credentials, with the same terminal rule as `review`. `--inline` defaults to `blocking`. When the head only gained commits since capture, the confirmation shows them and the findings on files they changed, and the review is sent at the captured head; there is no flag for this. Prints the review URL on success and on receipt replay.
+
+The confirmation is where the human writes the review's opening prose, in the body and at the place their words will appear. There is no command and no flag that sets it, because a command that writes the human's words is a command an agent can call. `loupe review` keeps it in memory for the life of the program, so a cancel or a refusal after `y` does not make the human write it twice; it reaches no file and does not outlive the process. An empty message publishes a body that opens on the chips row, as a draft with no summary does; an empty message with no included findings refuses with `empty`, because the gate before the confirmation judges that on the draft's summary, which an attended publication does not post. The plain fallback asks for the message on one line before its `[y/N]` prompt, prints the review again with it in place, and an empty line means none.
 
 `--unattended` publishes without a terminal, a confirmation or per-finding decisions, for a CI pipeline rather than a human (specs/007-unattended-publish). It requires a GitHub App installation token and refuses `token` for any other kind; publish without it refuses `token` for an installation token. It selects the run from `<ref>` or `LOUPE_RUN` only, and refuses `usage` rather than falling back to the current branch's pull request. `--action` defaults to `comment`, and any other action, or `--plain`, is a `usage` error. It composes from the publishable set rather than the accepted findings, skips the `tty`, `own-pr` and `not-ready` refusals, keeps `head-moved`, `empty`, replay and reconciliation, numbers the review from the pull request's bot reviews, and marks it unattended in the footer and `loupe-meta` per `docs/comment-format.md`.
 

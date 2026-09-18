@@ -76,6 +76,8 @@ type GlyphSet struct {
 	// Sep joins the parts of a header; Mark stands in the file diff's gutter for a line a finding is filed against.
 	Sep  string
 	Mark string
+	// BoxTL, BoxTR, BoxBL and BoxBR are the corners of an input's frame; its edges are HRule and Gutter.
+	BoxTL, BoxTR, BoxBL, BoxBR string
 	// Up, Down, Left and Right name the arrow keys in footers and help; the ASCII tier spells them out.
 	Up, Down, Left, Right string
 
@@ -106,6 +108,7 @@ var (
 		Cursor:    "\uf054", // nf-fa-chevron_right
 		Anchor:    "▎", Gutter: "│", Ellipsis: "…", HRule: "─", Quote: "┃",
 		Sep: "·", Mark: "◆", Up: "↑", Down: "↓", Left: "←", Right: "→",
+		BoxTL: "╭", BoxTR: "╮", BoxBL: "╰", BoxBR: "╯",
 		File:            "\uf016", // nf-fa-file_o
 		General:         "\uf0ac", // nf-fa-globe
 		PR:              "\uf407", // nf-oct-git_pull_request
@@ -124,6 +127,7 @@ var (
 		Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●", Note: "✎", Reply: "↳",
 		Cursor: "›", Anchor: "▎", Gutter: "│", Ellipsis: "…", HRule: "─", Quote: "┃",
 		Sep: "·", Mark: "◆", Up: "↑", Down: "↓", Left: "←", Right: "→",
+		BoxTL: "╭", BoxTR: "╮", BoxBL: "╰", BoxBR: "╯",
 		Published: "✓", Canceled: "–",
 	}
 	asciiGlyphs = GlyphSet{
@@ -131,6 +135,7 @@ var (
 		Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!", Note: "~", Reply: "->",
 		Cursor: ">", Anchor: ">", Gutter: "|", Ellipsis: "...", HRule: "-", Quote: "|",
 		Sep: "-", Mark: "*", Up: "up", Down: "down", Left: "left", Right: "right",
+		BoxTL: "+", BoxTR: "+", BoxBL: "+", BoxBR: "+",
 		Published: "+", Canceled: "-",
 	}
 )
@@ -528,6 +533,40 @@ func (s Style) hint(h Hint, next bool) string {
 }
 
 // Rule is a horizontal rule, optionally titled at its left edge and labeled at its right.
+// Box frames rows the human can type into, at width columns including the frame. A terminal has no form field, so
+// a border is what says one is here; the rest of loupe draws none, which is what makes this one unambiguous. title
+// names the field on the top edge and right names the way out, both dropped in that order when the width is short.
+// The frame takes its color from k, so focus is a color change rather than a second shape.
+func (s Style) Box(rows []string, width int, title, right string, k Kind) []string {
+	g, edge := s.Glyphs, s.Of(k)
+	inner := max(1, width-2)
+	head := g.BoxTL + s.boxEdge(inner, title, right) + g.BoxTR
+	out := make([]string, 0, len(rows)+2)
+	out = append(out, edge.Render(head))
+	for _, row := range rows {
+		out = append(out, edge.Render(g.Gutter)+Pad(row, inner)+edge.Render(g.Gutter))
+	}
+	return append(out, edge.Render(g.BoxBL+strings.Repeat(g.HRule, inner)+g.BoxBR))
+}
+
+// boxEdge is the top edge with what fits of the title and the way out, each given up whole rather than truncated.
+func (s Style) boxEdge(inner int, title, right string) string {
+	h := s.Glyphs.HRule
+	for _, parts := range [][2]string{{title, right}, {title, ""}, {"", ""}} {
+		left, tail := "", ""
+		if parts[0] != "" {
+			left = h + " " + parts[0] + " "
+		}
+		if parts[1] != "" {
+			tail = " " + parts[1] + " " + h
+		}
+		if fill := inner - ansi.StringWidth(left) - ansi.StringWidth(tail); fill >= 0 {
+			return left + strings.Repeat(h, fill) + tail
+		}
+	}
+	return strings.Repeat(h, inner)
+}
+
 func (s Style) Rule(width int, title, right string) string {
 	h := s.Glyphs.HRule
 	var b strings.Builder
@@ -600,6 +639,10 @@ func (s Style) TruncLeft(text string, width int) string {
 func Pad(text string, width int) string {
 	return text + strings.Repeat(" ", max(0, width-ansi.StringWidth(text)))
 }
+
+// Head is the first width cells of text with its styling intact and nothing added, for a caller that will put its
+// own content where the rest was. TruncRight is the one that marks what it dropped.
+func Head(text string, width int) string { return ansi.Truncate(text, max(0, width), "") }
 
 // Width is the printed width of text, ignoring escape sequences.
 func Width(text string) int { return ansi.StringWidth(text) }

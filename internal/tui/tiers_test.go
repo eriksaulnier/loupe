@@ -31,6 +31,16 @@ func withOpenNote(t *testing.T, dir string) {
 	}
 }
 
+// isConfirmation covers both publish confirmations: the one taking keys and the one taking the message.
+func isConfirmation(name string) bool { return strings.HasPrefix(name, "confirmation") }
+
+// showConfirmation opens the publish confirmation on a preview whose head moved, the widest this screen gets.
+func showConfirmation(m *Model) {
+	title := ConfirmTitle(m.ref(), "comment", "blocking", 1)
+	title.inFlow = true
+	m.confirm, m.view = newConfirmation(movedPreview(), title, ""), viewConfirm
+}
+
 // screen is one full-screen view and the footer tokens it must keep at every width. The footer wraps to a second line
 // before it gives a hint up, so at 60 columns and wider every hint these screens show stays.
 type screen struct {
@@ -48,10 +58,11 @@ var screens = []screen{
 	{"publish step 1", func(m *Model) { m.view, m.pick = viewAction, 0 }, []string{"enter", "esc", "?", "help"}},
 	{"publish step 2", func(m *Model) { m.view, m.action, m.pick = viewInline, "comment", 1 }, []string{"enter", "esc", "?", "help"}},
 	{"confirmation", func(m *Model) {
-		title := ConfirmTitle(m.ref(), "comment", "blocking", 1)
-		title.inFlow = true
-		m.confirm, m.view = newConfirmation(movedPreview(), title), viewConfirm
+		showConfirmation(m)
+		// The message input opens focused; the confirmation's own keys are live once it is blurred.
+		m.confirm.key(m, tea.KeyMsg{Type: tea.KeyEsc})
 	}, []string{"y", "publish", "this", "review"}},
+	{"confirmation message", showConfirmation, []string{"esc", "done", "enter", "new", "line", "ctrl+u", "clear"}},
 	{"help", func(m *Model) { mustOpen(m, "f-001"); m.help = true }, []string{"?", "close", "help"}},
 	{"edit row", func(m *Model) {
 		// The longest label a finding can carry, so the row has to wrap at 60 columns.
@@ -109,7 +120,7 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 				}
 				right := m.readiness()
 				switch {
-				case sc.name == "confirmation":
+				case isConfirmation(sc.name):
 					right = m.styles.Dim.Render(m.confirm.position(m))
 				case sc.name == "help" && strings.Contains(lines[0], "lines "):
 					right = ""
@@ -138,9 +149,9 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 					}
 				}
 				switch {
-				case sc.name == "confirmation" && ruled >= 0:
+				case isConfirmation(sc.name) && ruled >= 0:
 					t.Errorf("%s: the confirmation stacks a header rule on its own rules:\n%s", where, strings.Join(lines, "\n"))
-				case sc.name != "confirmation" && (ruled < 1 || strings.TrimSpace(ansi.Strip(lines[ruled-1])) == ""):
+				case !isConfirmation(sc.name) && (ruled < 1 || strings.TrimSpace(ansi.Strip(lines[ruled-1])) == ""):
 					t.Errorf("%s: no rule directly under the header block:\n%s", where, strings.Join(lines[:min(5, len(lines))], "\n"))
 				}
 				if view := strings.Join(lines, "\n"); strings.ContainsAny(view, "\ue0b0\ue0b1\ue0b2\ue0b3") {

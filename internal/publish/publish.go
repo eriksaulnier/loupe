@@ -34,8 +34,9 @@ type Options struct {
 	Unattended bool
 	// RetryUnknown sends again when an attempt's outcome is unknown and no review matches it.
 	RetryUnknown bool
-	// Confirm shows the preview and reports whether the human pressed y. It runs with no lock held.
-	Confirm func(Preview) (bool, error)
+	// Confirm shows the preview and reports what the human answered: whether they pressed y, and the opening prose
+	// they typed. It runs with no lock held.
+	Confirm func(Preview) (Confirmation, error)
 	Now     func() time.Time
 	Getenv  func(string) string
 	Stderr  io.Writer
@@ -44,7 +45,17 @@ type Options struct {
 	HoldSignals func(signals []os.Signal) (release func())
 }
 
+// Confirmation is what the human answered at the publish confirmation.
+type Confirmation struct {
+	// Publish is true only when they confirmed.
+	Publish bool
+	// Message is the opening prose they typed, empty when they typed none.
+	Message string
+}
+
 type Preview struct {
+	// Body, Comments and EnvelopeJSON are the review as it renders with no message, which is what the confirmation
+	// opens on.
 	Body         string
 	Comments     []Comment
 	EnvelopeJSON string
@@ -53,6 +64,10 @@ type Preview struct {
 	Dispositions map[string]string
 	// HeadMoved is set when the pull request gained commits since capture; the review is still sent at the captured head.
 	HeadMoved *HeadMoved
+	// Compose rebuilds the review around a message the human typed and returns it with its JSON. The confirmation
+	// renders what it returns and publication sends what it returns, so what was approved and what is sent cannot
+	// differ. Run always sets it.
+	Compose func(message string) (Envelope, string, error)
 }
 
 // Run publishes at most one review, or reports replayed when a receipt exists or reconciliation found the review. The
@@ -117,27 +132,52 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	env, err := Build(opts.Target, round, d, viewer, opts.Action, opts.Inline, opts.Unattended)
+	// The publication id is minted once, outside compose, because it is interpolated into the body's reconciliation
+	// marker and Reconcile searches GitHub for that exact string. A fresh id per composition would send a marker the
+	// human never approved, and an interrupted publish could then never be reconciled.
+	publicationID := newPublicationID()
+	compose := func(message string) (Envelope, string, error) {
+		env, err := Build(BuildInput{Target: opts.Target, Round: round, Draft: d, Viewer: viewer, Action: opts.Action,
+			Inline: opts.Inline, Unattended: opts.Unattended, PublicationID: publicationID, Message: message})
+		if err != nil {
+			return Envelope{}, "", err
+		}
+		envJSON, err := json.MarshalIndent(env, "", "  ")
+		if err != nil {
+			return Envelope{}, "", fmt.Errorf("encode envelope: %w", err)
+		}
+		return env, string(envJSON), nil
+	}
+	env, envJSON, err := compose("")
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	envJSON, err := json.MarshalIndent(env, "", "  ")
-	if err != nil {
-		return Receipt{}, false, fmt.Errorf("encode envelope: %w", err)
-	}
-	preview := Preview{Body: env.Body, Comments: env.Comments, EnvelopeJSON: string(envJSON), Version: d.Version, Digest: env.Digest,
-		Dispositions: draft.Dispositions(d), HeadMoved: moved}
+	preview := Preview{Body: env.Body, Comments: env.Comments, EnvelopeJSON: envJSON, Version: d.Version, Digest: env.Digest,
+		Dispositions: draft.Dispositions(d), HeadMoved: moved, Compose: compose}
 
 	if opts.Unattended {
 		return send(ctx, opts, client, env, preview, retryID)
 	}
 
-	confirmed, err := opts.Confirm(preview)
+	answer, err := opts.Confirm(preview)
 	if err != nil {
 		return Receipt{}, false, err
 	}
-	if !confirmed {
+	if !answer.Publish {
 		return Receipt{}, false, ErrDeclined
+	}
+	// Always through compose, even for an empty message, so the envelope that is sent came from the same call the
+	// confirmation rendered.
+	env, _, err = compose(answer.Message)
+	if err != nil {
+		return Receipt{}, false, err
+	}
+	// The gate before the confirmation reads the draft's summary, which an attended review does not post, so the
+	// only place the emptiness of what is actually being sent can be judged is here, once the message is known.
+	if strings.TrimSpace(answer.Message) == "" && len(env.Findings) == 0 {
+		return Receipt{}, false, refusal.New(refusal.Empty,
+			"the review has no message and no included findings; there is nothing to publish",
+			"write a message at the confirmation, or accept a finding in loupe review")
 	}
 	shownHead := opts.Target.HeadSHA
 	if moved != nil {

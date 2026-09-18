@@ -5,17 +5,21 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
+	"github.com/muesli/termenv"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
@@ -24,6 +28,11 @@ import (
 func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if !strings.Contains(m.View(), "your message") {
+		t.Errorf("the confirmation opens without the message input:\n%s", m.View())
+	}
+	// esc hands the keyboard back to the confirmation, which is where its own keys are live.
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	view := m.View()
 	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
 		"Publish - acme/widgets#42 - comment - inline blocking (1)", "review body", "inline comments (1)", "y publish this review"} {
@@ -39,23 +48,404 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 		t.Errorf("review view has a closed <details>, a raw hidden character or the JSON:\n%q", view)
 	}
 
-	for _, toggle := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune("v")}, {Type: tea.KeyTab}} {
-		if _, cmd := m.Update(toggle); cmd != nil {
-			t.Fatalf("toggle %v ended the program", toggle)
-		}
-		json := m.View()
-		if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") {
-			t.Errorf("JSON view after %v:\n%s", toggle, json)
-		}
-		if _, cmd := m.Update(toggle); cmd != nil {
-			t.Fatalf("toggle %v ended the program", toggle)
-		}
-		if m.View() != view {
-			t.Errorf("toggling %v twice did not return to the review:\n%s", toggle, m.View())
-		}
+	toggle := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}
+	if _, cmd := m.Update(toggle); cmd != nil {
+		t.Fatalf("toggle %v ended the program", toggle)
+	}
+	json := m.View()
+	if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") {
+		t.Errorf("JSON view after %v:\n%s", toggle, json)
+	}
+	if _, cmd := m.Update(toggle); cmd != nil {
+		t.Fatalf("toggle %v ended the program", toggle)
+	}
+	if m.View() != view {
+		t.Errorf("toggling %v twice did not return to the review:\n%s", toggle, m.View())
 	}
 	if m.Confirmed() {
 		t.Fatal("confirmed without y")
+	}
+}
+
+// TestConfirmTypesTheOpeningInPlace is FR-003: the message is written where it will be read, under the chips row
+// and above the findings it introduces, and every row of it is on screen.
+func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
+	typeInto(m, "The cache bug is the blocker here. The rest can land later.")
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	typeInto(m, "Fix the ETag path first.")
+	view := m.View()
+	// Wrapped at this width, so the first paragraph is matched by its ends.
+	for _, want := range []string{"The cache bug is the blocker", "later.", "Fix the ETag path first."} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the confirmation lost part of the message %q:\n%s", want, view)
+		}
+	}
+	chips, body := strings.Index(view, previewChips), strings.Index(view, "<details open>")
+	if opening := strings.Index(view, "The cache bug"); chips < 0 || body < 0 || opening < chips || opening > body {
+		t.Errorf("the message is not in the body's opening slot (chips %d, opening %d, body %d):\n%s", chips, opening, body, view)
+	}
+	want := "The cache bug is the blocker here. The rest can land later.\n\nFix the ETag path first."
+	if m.Message() != want {
+		t.Errorf("message %q", m.Message())
+	}
+	// The payload view shows the envelope the same closure produced, not the one the screen opened on.
+	_, wantJSON, err := m.confirm.preview.Compose(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.confirm.shown.EnvelopeJSON != wantJSON || m.confirm.shown.Body == m.confirm.preview.Body {
+		t.Errorf("the payload was not recomposed for the message:\n%s", m.confirm.shown.EnvelopeJSON)
+	}
+}
+
+// TestConfirmBoxIsEvenlySpaced: the renderer leaves blank lines on one side of the opening slot and not the other,
+// so the box sat one row closer to the chips than to the divider under it.
+func TestConfirmBoxIsEvenlySpaced(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	g := m.shell.glyphs
+	rows := strings.Split(m.confirm.content(m.shell), "\n")
+	// The ASCII tier draws every corner as +, so the edges are the first and last cornered rows, not two shapes.
+	top, bottom := -1, -1
+	for i, row := range rows {
+		trimmed := strings.TrimSpace(row)
+		if !strings.HasPrefix(trimmed, g.BoxTL) && !strings.HasPrefix(trimmed, g.BoxBL) {
+			continue
+		}
+		if top < 0 {
+			top = i
+		}
+		bottom = i
+	}
+	if top < 1 || bottom < top {
+		t.Fatalf("no box in the body (top %d, bottom %d):\n%s", top, bottom, strings.Join(rows, "\n"))
+	}
+	above, below := blanksBefore(rows, top), blanksAfter(rows, bottom)
+	if above != 1 || below != 1 {
+		t.Errorf("the box has %d blank rows above it and %d below:\n%s", above, below, strings.Join(rows[top-above-1:], "\n"))
+	}
+}
+
+func blanksBefore(rows []string, i int) int {
+	n := 0
+	for ; i-1-n >= 0 && strings.TrimSpace(rows[i-1-n]) == ""; n++ {
+	}
+	return n
+}
+
+func blanksAfter(rows []string, i int) int {
+	n := 0
+	for ; i+1+n < len(rows) && strings.TrimSpace(rows[i+1+n]) == ""; n++ {
+	}
+	return n
+}
+
+// TestConfirmFocusedInputSwallowsY is FR-010: one key confirms, and it is not a key the human is typing with.
+func TestConfirmFocusedInputSwallowsY(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "yes, y, and y again")
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd != nil {
+		t.Fatal("a keystroke in the message ended the program")
+	}
+	if m.Confirmed() {
+		t.Fatal("typing y into the message confirmed the review")
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd == nil {
+		t.Fatal("y did not confirm once the input was blurred")
+	}
+	if !m.Confirmed() || m.Message() != "yes, y, and y againy" {
+		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
+	}
+}
+
+// TestConfirmKeepsAMalformedMessageOnScreen is FR-009: the allowlist is checked before anything is sent, and the
+// human stays on the confirmation with their text.
+func TestConfirmKeepsAMalformedMessageOnScreen(t *testing.T) {
+	preview := confirmPreview()
+	preview.Compose = composeOpening(preview, refusal.New(refusal.Markdown, "the summary has a raw HTML tag on line 1", "reword the message at the publish confirmation"))
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "<script>bad</script>")
+	if view := m.View(); !strings.Contains(view, "raw HTML tag") || !strings.Contains(view, "reword the message") {
+		t.Errorf("the refusal is not on screen:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd != nil || m.Confirmed() {
+		t.Fatal("a malformed message was published")
+	}
+	if m.Message() != "<script>bad</script>" {
+		t.Errorf("the typed text was lost: %q", m.Message())
+	}
+}
+
+// TestConfirmMarksTheMessageBlock is what tells a human which part of the body is theirs: a hint while it is empty
+// and a gutter down every row of it once it is not.
+func TestConfirmMarksTheMessageBlock(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
+	if !strings.Contains(m.View(), messageHint) {
+		t.Errorf("the empty message says nothing about itself:\n%s", m.View())
+	}
+	typeInto(m, "The cache bug is the blocker here. The rest can land later.")
+	view := m.View()
+	if strings.Contains(view, messageHint) {
+		t.Errorf("the hint outlived the empty message:\n%s", view)
+	}
+	// The block is read on its own: the body's own blockquotes carry the ASCII tier's edge glyph too.
+	g := m.shell.glyphs
+	block := strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")
+	if len(block) < minMessageRows+2 {
+		t.Fatalf("the box is %d rows, want the frame and at least %d: %q", len(block), minMessageRows, block)
+	}
+	head, foot := strings.TrimSpace(block[0]), strings.TrimSpace(block[len(block)-1])
+	if !strings.HasPrefix(head, g.BoxTL) || !strings.HasSuffix(head, g.BoxTR) || !strings.Contains(head, messageTitle) || !strings.Contains(head, messageWay) {
+		t.Errorf("the top edge does not name the field or the way out: %q", head)
+	}
+	if !strings.HasPrefix(foot, g.BoxBL) || !strings.HasSuffix(foot, g.BoxBR) {
+		t.Errorf("the box is not closed: %q", foot)
+	}
+	for i, row := range block[1 : len(block)-1] {
+		if trimmed := strings.TrimSpace(row); !strings.HasPrefix(trimmed, g.Gutter) || !strings.HasSuffix(trimmed, g.Gutter) {
+			t.Errorf("row %d is outside the frame: %q", i+1, row)
+		}
+	}
+	if !strings.Contains(view, strings.TrimSpace(block[0])) {
+		t.Errorf("the framed block is not what the screen shows:\n%s", view)
+	}
+	// Blurring leaves the box drawn, and its top edge names the way back in.
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	blurred := strings.TrimSpace(strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")[0])
+	if !strings.HasPrefix(blurred, g.BoxTL) || !strings.Contains(blurred, messageWayBlurred) {
+		t.Errorf("the blurred box lost its frame or its way in: %q", blurred)
+	}
+}
+
+// TestConfirmBoxIsTintedWholeRows: the textarea fills the rows that carry text and leaves the placeholder's tail
+// and the empty rows under it bare, so the focused box came out tinted in patches.
+func TestConfirmBoxIsTintedWholeRows(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(map[string]string{"LANG": "en_US.UTF-8"}), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.shell.styles.R.SetColorProfile(termenv.TrueColor)
+	m.shell.styles.Color = true
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+
+	// An empty box is the worst case: a placeholder row whose tail the textarea never fills, then empty rows.
+	rows := strings.Split(m.confirm.messageView(m.shell, style.Content(80)-1), "\n")
+	content := rows[1 : len(rows)-1]
+	if len(content) < minMessageRows {
+		t.Fatalf("the box holds %d rows, want %d", len(content), minMessageRows)
+	}
+	for i, row := range content {
+		// Every cell between the frame glyphs, which carry no background of their own, nor does the margin left of
+		// the box: a row is one margin column, two frame columns and the field between them.
+		if want, got := style.Width(row)-3, tintedCells(row); got != want {
+			t.Errorf("row %d is tinted over %d of its %d cells: %q", i, got, want, row)
+		}
+	}
+
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	for i, row := range strings.Split(m.confirm.messageView(m.shell, style.Content(80)-1), "\n") {
+		if n := tintedCells(row); n != 0 {
+			t.Errorf("row %d of the blurred box is tinted over %d cells: %q", i, n, row)
+		}
+	}
+}
+
+// tintedCells is how many of a row's printed cells sit on a background, by tracking the SGR parameters that turn
+// one on and off. style.Width cannot see this: a bare cell and a tinted one are both one column wide.
+func tintedCells(row string) int {
+	cells, on := 0, false
+	for i := 0; i < len(row); {
+		if seq, next, ok := cutSGR(row, i); ok {
+			for _, p := range strings.Split(seq, ";") {
+				switch p {
+				case "48":
+					on = true
+				case "49", "0", "":
+					on = false
+				}
+			}
+			i = next
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(row[i:])
+		if on {
+			cells += style.Width(string(r))
+		}
+		i += size
+	}
+	return cells
+}
+
+// cutSGR reads the color escape starting at i, returning its parameters. A 24-bit color spends its own parameters
+// on the channel values, so they are skipped rather than read as further attributes.
+func cutSGR(row string, i int) (seq string, next int, ok bool) {
+	if !strings.HasPrefix(row[i:], "\x1b[") {
+		return "", i, false
+	}
+	end := strings.IndexByte(row[i:], 'm')
+	if end < 0 {
+		return "", i, false
+	}
+	params := strings.Split(row[i+2:i+end], ";")
+	var kept []string
+	for j := 0; j < len(params); j++ {
+		kept = append(kept, params[j])
+		// 38;2;r;g;b and 48;2;r;g;b, or 38;5;n and 48;5;n.
+		if params[j] == "38" || params[j] == "48" {
+			switch {
+			case j+1 < len(params) && params[j+1] == "2":
+				j += 4
+			case j+1 < len(params) && params[j+1] == "5":
+				j += 2
+			}
+		}
+	}
+	return strings.Join(kept, ";"), i + end + 1, true
+}
+
+// composeWithinLimit is a review close enough to the body-size limit that the confirmation's own sentinel pushes
+// it over while a shorter message still fits.
+func composeWithinLimit(base publish.Preview, room int, refuse error) func(string) (publish.Envelope, string, error) {
+	compose := composeOpening(base, nil)
+	return func(message string) (publish.Envelope, string, error) {
+		if len(message) > room {
+			return publish.Envelope{}, "", refuse
+		}
+		return compose(message)
+	}
+}
+
+// composeAtLimit is a review already at the body-size limit: anything added to its opening slot, a human's message
+// or the confirmation's own sentinel, pushes it over.
+func composeAtLimit(base publish.Preview, refuse error) func(string) (publish.Envelope, string, error) {
+	compose := composeOpening(base, nil)
+	return func(message string) (publish.Envelope, string, error) {
+		if message != "" {
+			return publish.Envelope{}, "", refuse
+		}
+		return compose(message)
+	}
+}
+
+// TestConfirmPublishesWhenThereIsNoRoomForAMessage: the slot probe composes a body one sentinel longer than the
+// review it stands in for, so a review near the size limit can fail it. That must not strand a publishable review.
+func TestConfirmPublishesWhenThereIsNoRoomForAMessage(t *testing.T) {
+	preview := confirmPreview()
+	limit := refusal.New(refusal.Markdown, "the composed review body is 65545 characters; at most 65536 characters are allowed",
+		"exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -")
+	preview.Compose = composeAtLimit(preview, limit)
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+
+	if m.confirm.inline() || m.confirm.typing {
+		t.Fatal("an input was offered for a review with nowhere to put one")
+	}
+	view := m.View()
+	if !strings.Contains(view, "this review has no room for a message: the composed review body is 65545") {
+		t.Errorf("the confirmation does not say why there is no input:\n%s", view)
+	}
+	if strings.Contains(view, "your message") {
+		t.Errorf("the footer offers a key for an input that is not there:\n%s", view)
+	}
+	// Tab has nothing to move to, and neither it nor the missing input may stand between the human and y.
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyTab}); cmd != nil {
+		t.Fatal("tab ended the program")
+	}
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd == nil {
+		t.Fatal("y did not confirm")
+	}
+	if !m.Confirmed() || m.Message() != "" {
+		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
+	}
+}
+
+// TestConfirmLeavesThePayloadToTypeTheMessage: the payload is drawn instead of the body, so returning to the
+// message from it has to bring the body back or the human types into a field that is not on screen.
+func TestConfirmLeavesThePayloadToTypeTheMessage(t *testing.T) {
+	for _, back := range []tea.KeyMsg{{Type: tea.KeyTab}, {Type: tea.KeyEsc}} {
+		m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+		m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+		if !strings.Contains(m.View(), `"event": "COMMENT"`) {
+			t.Fatalf("v did not show the payload:\n%s", m.View())
+		}
+		m.Update(back)
+		typeInto(m, "Mine to own.")
+		view := m.View()
+		if strings.Contains(view, `"event": "COMMENT"`) {
+			t.Errorf("%v left the payload on screen:\n%s", back.Type, view)
+		}
+		if !strings.Contains(view, "Mine to own.") || !strings.Contains(view, messageTitle) {
+			t.Errorf("%v typed into a field that is not on screen:\n%s", back.Type, view)
+		}
+	}
+}
+
+// TestConfirmKeepsTheMessageWhenThereIsNoRoomToEditIt: the words carried across a refusal MUST NOT be dropped
+// because the slot probe failed. Losing them silently and then publishing without them is worse than showing
+// them somewhere they cannot be edited.
+func TestConfirmKeepsTheMessageWhenThereIsNoRoomToEditIt(t *testing.T) {
+	preview := confirmPreview()
+	limit := refusal.New(refusal.Markdown, "the composed review body is 65545 characters; at most 65536 characters are allowed",
+		"exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -")
+	// Shorter than the sentinel, longer than nothing: the probe fails and the human's own message still fits.
+	preview.Compose = composeWithinLimit(preview, len(messageSlot)-1, limit)
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.confirm = newConfirmation(preview, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), "Mine to own.")
+
+	if m.confirm.inline() {
+		t.Fatal("an input was offered for a review with nowhere to put one")
+	}
+	if m.Message() != "Mine to own." {
+		t.Fatalf("the carried message was dropped: %q", m.Message())
+	}
+	if !strings.Contains(m.confirm.shown.Body, "Mine to own.") {
+		t.Errorf("the body on screen does not carry the message:\n%s", m.confirm.shown.Body)
+	}
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd == nil {
+		t.Fatal("y did not confirm")
+	}
+	if !m.Confirmed() || m.Message() != "Mine to own." {
+		t.Fatalf("published as %q", m.Message())
+	}
+}
+
+// TestConfirmReadsTheFindingsWhileTyping keeps the review readable while its opening is written: the message is
+// about the findings, so paging through them MUST NOT mean leaving the input.
+func TestConfirmReadsTheFindingsWhileTyping(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 14})
+	typeInto(m, "Mine.")
+	before := m.confirm.scroll.YOffset
+	m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	if m.confirm.scroll.YOffset <= before {
+		t.Fatalf("pgdown did not scroll the review: offset %d", m.confirm.scroll.YOffset)
+	}
+	if !m.confirm.typing || m.Confirmed() {
+		t.Fatalf("pgdown left the input (typing %v) or confirmed (%v)", m.confirm.typing, m.Confirmed())
+	}
+	typeInto(m, " More.")
+	c := &m.confirm
+	if c.inputTop < c.scroll.YOffset || c.inputTop+c.inputRows > c.scroll.YOffset+c.scroll.Height {
+		t.Errorf("typing did not bring the input back: rows %d-%d, window %d-%d", c.inputTop, c.inputTop+c.inputRows,
+			c.scroll.YOffset, c.scroll.YOffset+c.scroll.Height)
+	}
+	if m.Message() != "Mine. More." {
+		t.Errorf("message %q", m.Message())
+	}
+}
+
+// typeInto sends text to the confirmation one keystroke at a time, as a human types it.
+func typeInto(m *ConfirmModel, text string) {
+	for _, r := range text {
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 }
 
@@ -110,7 +500,9 @@ func TestConfirmCancelSentenceSurvivesSixtyColumns(t *testing.T) {
 	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "request-changes", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	lines := strings.Split(m.View(), "\n")
-	if !strings.Contains(lines[len(lines)-2], confirmCancel) || !strings.Contains(lines[len(lines)-1], "y publish this review") {
+	// At this width the footer takes two lines, and the cancel sentence moves to the notice line above them.
+	tail := strings.Join(lines[len(lines)-3:], "\n")
+	if !strings.Contains(tail, confirmCancel) || !strings.Contains(tail, "y publish this review") {
 		t.Errorf("60-column confirmation lost the cancel sentence or y:\n%s", strings.Join(lines, "\n"))
 	}
 }
@@ -143,7 +535,6 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 		{"Y", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Y")}, false},
 		{"q", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}, false},
 		{"enter", tea.KeyMsg{Type: tea.KeyEnter}, false},
-		{"esc", tea.KeyMsg{Type: tea.KeyEsc}, false},
 		{"ctrl+c", tea.KeyMsg{Type: tea.KeyCtrlC}, false},
 	}
 	for _, c := range cases {
@@ -151,7 +542,8 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 			tm := teatest.NewTestModel(t, NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1)),
 				teatest.WithInitialTermSize(100, 40))
 			waitFor(t, tm, "<details open>")
-			tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+			tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+			tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
 			waitFor(t, tm, `"event": "COMMENT"`)
 			tm.Send(c.key)
 			final, ok := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(*ConfirmModel)
@@ -159,6 +551,101 @@ func TestConfirmOnlyYConfirms(t *testing.T) {
 				t.Fatalf("confirmed %v, want %v", ok && final.Confirmed(), c.want)
 			}
 		})
+	}
+}
+
+// TestPublishFlowKeepsTheMessageAcrossACancel is FR-007: the words survive in the program's memory, so a cancel
+// or a refusal after y does not make the human write the opening twice. Nothing reaches disk, and publishing ends
+// them.
+func TestPublishFlowKeepsTheMessageAcrossACancel(t *testing.T) {
+	gh := newPublishFake(t)
+	dir := readyFixture(t, "reviewer", "author")
+	tm := startPublishApp(t, dir, gh)
+	waitFor(t, tm, "+ 3 accepted")
+	reachConfirmation(t, tm)
+	tm.Type("Mine to own.")
+	waitFor(t, tm, "Mine to own.")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Type("n")
+	waitFor(t, tm, "publish canceled; nothing was sent")
+
+	// Nothing wrote it down; only this process is holding it.
+	for _, name := range []string{"draft.json", "attempt.json", "receipt.json"} {
+		if data, err := os.ReadFile(filepath.Join(dir, name)); err == nil && strings.Contains(string(data), "Mine to own.") {
+			t.Fatalf("%s carries the message", name)
+		}
+	}
+
+	reachConfirmation(t, tm)
+	tm.Type(" And read again.")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Type("y")
+	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
+	tm.Type("q")
+	finalView(t, tm)
+
+	var posted string
+	for _, r := range gh.Requests() {
+		if body, ok := r.Body.(map[string]any); r.Method == "POST" && ok {
+			posted, _ = body["body"].(string)
+		}
+	}
+	if !strings.Contains(posted, "Mine to own. And read again.") {
+		t.Fatalf("the restored message was not published:\n%s", posted)
+	}
+}
+
+// TestConfirmOpensOnWhatWasTypedBefore is the rendering half of FR-007: the words the program held are in the box
+// and in the body the box sits in, so the human re-reads them rather than being told they were kept.
+func TestConfirmOpensOnWhatWasTypedBefore(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m.confirm = newConfirmation(confirmPreview(), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), "Mine to own.")
+	view := m.View()
+	if !strings.Contains(view, "Mine to own.") || strings.Contains(view, messageHint) {
+		t.Errorf("the confirmation did not open on the words it was given:\n%s", view)
+	}
+	if m.Message() != "Mine to own." {
+		t.Errorf("message %q", m.Message())
+	}
+	// The payload follows the box, so what is sent carries them too.
+	if !strings.Contains(m.confirm.shown.Body, "Mine to own.") {
+		t.Errorf("the body was not recomposed for the restored message:\n%s", m.confirm.shown.Body)
+	}
+}
+
+// reachConfirmation walks the two picker steps p opens, taking the default at each.
+func reachConfirmation(t *testing.T, tm *teatest.TestModel) {
+	t.Helper()
+	tm.Type("p")
+	waitFor(t, tm, "> comment")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	waitFor(t, tm, "> blocking")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	waitFor(t, tm, "your message")
+}
+
+// TestConfirmEscOnlyMovesToTheMessage: esc must not mean leave-the-input and throw-the-review-away one keystroke
+// apart, because the second of those discards everything typed.
+func TestConfirmEscOnlyMovesToTheMessage(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "Mine to own.")
+	// It toggles: out of the message, back into it, out again. None of the three ends the publication.
+	for i, want := range []bool{false, true, false} {
+		if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc}); cmd != nil {
+			t.Fatalf("esc %d ended the program", i+1)
+		}
+		if m.confirm.typing != want {
+			t.Fatalf("after esc %d, typing %v, want %v", i+1, m.confirm.typing, want)
+		}
+	}
+	if m.Confirmed() || m.Message() != "Mine to own." {
+		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
+	}
+	// Canceling is still one keystroke away, on every key that is not y.
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}); cmd == nil || m.Confirmed() {
+		t.Fatal("q did not cancel")
 	}
 }
 
@@ -175,8 +662,10 @@ func TestConfirmEndsAtEndOfInput(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				ok, err := Confirm(strings.NewReader(c.input), io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))(confirmPreview())
-				done <- result{ok, err}
+				// Tab blurs the message input, which opens focused; what follows is an answer. It stands in for esc,
+				// whose byte would join the key after it into one alt-key sequence.
+				answer, err := Confirm(strings.NewReader("\t"+c.input), io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))(confirmPreview())
+				done <- result{answer.Publish, err}
 			}()
 			select {
 			case r := <-done:
@@ -308,6 +797,7 @@ func TestPublishFlowDeclineSendsNothing(t *testing.T) {
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "<details open>", "multi.txt:3", "Publish - Step 3 of 3 - acme/widgets#42 - comment")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Type("n")
 	waitFor(t, tm, "publish canceled; nothing was sent")
 	tm.Type("q")
@@ -328,6 +818,7 @@ func TestPublishFlowSendsAndShowsURL(t *testing.T) {
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "<details open>", "inline blocking (1)")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Type("y")
 	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
 	tm.Type("q")
@@ -375,6 +866,7 @@ func TestPublishingViewIgnoresKeysWhileSending(t *testing.T) {
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, tm, "<details open>")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Type("y")
 	select {
 	case <-entered:

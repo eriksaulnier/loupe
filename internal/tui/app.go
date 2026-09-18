@@ -106,6 +106,9 @@ type Model struct {
 	session *publishSession
 	// sending is true from y until the outcome arrives; no key, not even ctrl+c, is acted on meanwhile.
 	sending bool
+	// message is the review's opening as the human last left it, kept for the life of this program so a cancel or
+	// a refusal does not make them write it again. It reaches no file, and nothing but the confirmation sets it.
+	message string
 	// settling is true right after a decision moved the view; decision keys are dropped until the new finding has
 	// had time to be seen.
 	settling bool
@@ -187,7 +190,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case previewMsg:
 		title := ConfirmTitle(m.ref(), m.action, publish.InlineModes[m.pick], len(msg.preview.Comments))
 		title.inFlow = true
-		m.confirm, m.view = newConfirmation(msg.preview, title), viewConfirm
+		m.confirm, m.view = newConfirmation(msg.preview, title, m.message), viewConfirm
 		return m, nil
 	case publishDone:
 		return m, m.publishFinished(msg)

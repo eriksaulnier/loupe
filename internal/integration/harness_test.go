@@ -83,6 +83,10 @@ func (h *harness) getenv(key string) string {
 	return h.Env[key]
 }
 
+// confirmPublish is what a human types at the plain publish confirmation: their opening prose on the first line,
+// then the answer. An empty first line means no message, which is what most of these tests publish with.
+func confirmPublish(message, answer string) string { return message + "\n" + answer + "\n" }
+
 func (h *harness) Run(args ...string) (stdout, stderr string, exit int) {
 	h.t.Helper()
 	stdin := h.Stdin
