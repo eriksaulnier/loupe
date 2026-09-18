@@ -36,10 +36,14 @@ GitHub does not mark its comments outdated for those commits, so a comment on a 
 changed shows beside the new code. If the head moves again before y, nothing is sent.
 
 The confirmation shows the review body with every collapsed section open and each inline
-comment; j/k, up/down, pgup/pgdown and home/end scroll, and v or tab switches to the exact JSON
-payload. Only y sends. Any other key, Esc, Ctrl-C or end of input cancels and nothing is sent
-or written. Once the review is being sent, keys, Ctrl-C and SIGTERM do not stop loupe until
-the outcome is recorded.
+comment. The review opens on a message you type, in the body and where your words will appear;
+the cursor starts there, Enter adds a line, and leaving it empty publishes a body that opens on
+the chips row. The draft's summary is not published here: it is the reviewer's, for you to read
+while sorting. Esc leaves the message; then j/k, up/down, pgup/pgdown and home/end scroll, v
+switches to the exact JSON payload, and Tab goes back to the message. Only y sends, and only
+from outside the message, so a y you typed cannot publish. Any other key, Ctrl-C or end of input
+cancels and nothing is sent or written. Once the review is being sent, keys, Ctrl-C and SIGTERM
+do not stop loupe until the outcome is recorded.
 
 Once the review is posted, receipt.json records it and publish prints the review URL; every later
 publish prints that URL again without contacting GitHub, with or without a terminal. If a send
@@ -51,7 +55,8 @@ a new confirmation and sends once. A rejection because you have a pending review
 request asks you to submit or discard it on GitHub first.
 
 --plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 prints the
-review and asks Publish this review? [y/N] on one line instead.
+review, reads your message on one line, prints the review again with it, and asks Publish this
+review? [y/N] on one line instead. An empty line is no message.
 
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.
