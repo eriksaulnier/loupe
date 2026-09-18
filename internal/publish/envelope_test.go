@@ -233,3 +233,45 @@ func TestBuildUnattendedStillRechecksMarkdown(t *testing.T) {
 		t.Fatalf("pending body: %#v", err)
 	}
 }
+
+// The human decides findings in draft.Ordered and the pull request reader receives render.Body. This is the seam
+// where the two meet, and the whole claim of the shared order is that the sequence is the same on both sides.
+func TestComposedBodyFollowsTheOrderTheHumanDecidedIn(t *testing.T) {
+	d := draft.NewEmpty()
+	d.Version = 7
+	d.Summary = "Looks mostly fine."
+	add := func(id, label, sev string, blocking bool) draft.Finding {
+		f := finding(id, label, blocking, nil)
+		f.Title, f.Body, f.Severity = "Title "+id, "Body "+id+".", sev
+		return f
+	}
+	// Section placement and severity disagree on purpose: a nonblocking critical outranks a blocking minor by
+	// severity alone, and the body puts the blocking one first regardless.
+	d.Findings = []draft.Finding{
+		add("f-001", "issue", "critical", false),
+		add("f-002", "issue", "minor", true),
+		add("f-003", "question", "critical", true),
+		add("f-004", "suggestion", "", false),
+		add("f-005", "perf-nit", "trivial", false),
+		add("f-006", "issue", "", false),
+		add("f-007", "suggestion", "major", true),
+	}
+	for _, f := range d.Findings {
+		accept(d, f.ID)
+	}
+	env, err := Build(fixtureTarget(), 1, d, "reviewer", "comment", "none", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := -1
+	for _, f := range draft.Ordered(d) {
+		i := strings.Index(env.Body, "Title "+f.ID+"<")
+		if i < 0 {
+			t.Fatalf("%s is not in the composed body:\n%s", f.ID, env.Body)
+		}
+		if i < at {
+			t.Fatalf("%s appears at %d, before a finding the human meets earlier:\n%s", f.ID, i, env.Body)
+		}
+		at = i
+	}
+}

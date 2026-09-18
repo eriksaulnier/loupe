@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/findingid"
+	"github.com/eriksaulnier/loupe/internal/section"
 	"github.com/eriksaulnier/loupe/internal/severity"
 )
 
@@ -58,25 +59,16 @@ type Location struct {
 // without needing that attempt's digest.
 const MetaPrefix = "<!-- loupe-meta "
 
-// Section and label-group order; groupOther collects every unknown or empty label.
+// The label groups are internal/section's, so the order this body emits and the order every terminal surface walks
+// have one definition rather than two that have to agree.
 const (
-	groupIssue = iota
-	groupSuggestion
-	groupQuestion
-	groupOther
+	groupIssue      = section.Issue
+	groupSuggestion = section.Suggestion
+	groupQuestion   = section.Question
+	groupOther      = section.Other
 )
 
-func group(label string) int {
-	switch label {
-	case "issue":
-		return groupIssue
-	case "suggestion":
-		return groupSuggestion
-	case "question":
-		return groupQuestion
-	}
-	return groupOther
-}
+func group(label string) int { return section.Group(label) }
 
 var dots = [...]string{groupIssue: "🟡", groupSuggestion: "🟣", groupQuestion: "🔵", groupOther: "⚪"}
 
@@ -119,7 +111,7 @@ func Body(in Input) string {
 	blocks := []string{strings.Join(head, "\n\n")}
 
 	if len(blocking) > 0 {
-		blocks = append(blocks, section("⛔ Blocking", blocking, inBlocking, in))
+		blocks = append(blocks, sectionBlock("⛔ Blocking", blocking, inBlocking, in))
 	}
 	for g, fs := range sections {
 		if len(fs) == 0 {
@@ -132,7 +124,7 @@ func Body(in Input) string {
 		if g == groupOther {
 			ctx = inOther
 		}
-		blocks = append(blocks, section(dots[g]+" "+sectionTitles[g], fs, ctx, in))
+		blocks = append(blocks, sectionBlock(dots[g]+" "+sectionTitles[g], fs, ctx, in))
 	}
 
 	census := [4]int{}
@@ -179,7 +171,7 @@ func chipsRow(blocking int, sections [4][]Finding) string {
 	return strings.Join(chips, " ")
 }
 
-func section(title string, fs []Finding, ctx summaryContext, in Input) string {
+func sectionBlock(title string, fs []Finding, ctx summaryContext, in Input) string {
 	parts := make([]string, len(fs))
 	for i, f := range fs {
 		parts[i] = "<details>\n<summary>" + summaryLine(f, ctx) + "</summary>\n\n" + disclosure(f, in, true) + "\n\n</details>"

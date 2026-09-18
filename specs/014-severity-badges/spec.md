@@ -72,7 +72,8 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 
 **Acceptance Scenarios**:
 
-1. **Given** a draft of mixed severities, **When** the review list is drawn, **Then** every rated finding precedes every unrated one, rated findings are in `critical`, `major`, `minor`, `trivial` order, and equal severities are in finding-id order.
+1. **Given** a draft of mixed severities, **When** the review list is drawn, **Then** findings appear in the order the published review puts them in: every blocking finding first, then each label section, and within each of those every rated finding before every unrated one, in `critical`, `major`, `minor`, `trivial` order, ties broken by finding id.
+1a. **Given** a nonblocking `critical` finding and a blocking `minor` one, **When** the list is drawn and the review composed, **Then** both put the blocking finding first.
 2. **Given** the review list, **When** a row is drawn for a rated finding, **Then** a severity column between the id and the title carries the word.
 3. **Given** a row for an unrated finding, **When** it is drawn, **Then** the severity column is blank rather than filled with a stand-in word.
 4. **Given** a window too narrow for every column, **When** the list is drawn, **Then** the label drops first, then the location shortens to a filename, and the severity column drops last of the three.
@@ -97,10 +98,13 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 
 ### The ordering rule
 
-- **FR-001**: One ordering rule MUST apply on every surface that presents a draft's findings to a reader: rated findings first in `critical`, `major`, `minor`, `trivial` order; then every unrated finding; then the surface's existing tie-break. The recap of an already-published round is the one exception: it reads a stored receipt whose findings carry no severity, so ordering it would mean changing a stored schema, which Principle III puts out of scope. It keeps the order it has today, and this specification does not claim otherwise.
+- **FR-001**: One ordering rule MUST apply on every surface that presents a draft's findings to a reader, and it MUST be the sequence the published review puts them in: the body's section first (`Blocking`, then `Issues`, `Suggestions`, `Questions`, `Other`), then severity in `critical`, `major`, `minor`, `trivial` order with every unrated finding after them, then the label group that breaks ties inside `Blocking`, then the finding id. Severity MUST NOT outrank the section: the review places a blocking finding above every nonblocking one whatever its severity, so a terminal order that led with severity would walk the human through a different review from the one their name goes on.
+- **FR-001a**: The section order and the label groups MUST have one definition, shared by the renderer that emits the sections and by the derivation every terminal surface reads.
+- **FR-001b**: The recap of an already-published round is outside FR-001. It reads a stored receipt whose findings carry no severity, so ordering it would mean changing a stored schema, which Principle III puts out of scope. It keeps the order it has today, and this specification does not claim otherwise.
 - **FR-002**: An absent severity, an empty severity and a stored severity outside the enum MUST all sort as unrated. None MAY be mapped onto an enum word for ordering.
 - **FR-003**: Unrated findings MUST sort among themselves by finding id, which is the order every surface uses today.
 - **FR-004**: The stored order of findings MUST NOT change, and the publishable digest MUST NOT change because of this feature.
+- **FR-004a**: Editing a finding's label or blocking flag in review MAY move its row, because both decide its section. The cursor MUST stay on the finding that was open, not on the position it held.
 - **FR-005**: The four words and their order MUST have exactly one definition in the codebase, shared by every surface that validates, sorts or colors them.
 
 ### The published review
@@ -144,7 +148,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 ## Success Criteria *(mandatory)*
 
 - **SC-001**: A reader of a collapsed review learns which findings are the bad ones without opening any of them.
-- **SC-002**: On every surface, the first finding a reader meets is the most severe one present.
+- **SC-002**: On every surface, the first finding a reader meets is the most severe one in the first section that has any — which is `Blocking` whenever anything blocks. Severity ranks findings within a section; it never moves one between sections.
 - **SC-003**: A draft whose findings carry no severity and no blocking flag produces a review byte-identical to what it produced before this change.
 - **SC-004**: The four words and their order have one definition. Reordering them is a one-line change; adding one is two, and the suite MUST name the second line rather than let a word ship with no color.
 - **SC-005**: The severity badge survives `NO_COLOR` and the ASCII tier with its rank intact, carried by the word and the ordering.
