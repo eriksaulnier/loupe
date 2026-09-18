@@ -82,16 +82,18 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		}
 		return strings.TrimSpace(lines.Text()), true
 	}
+	// Line-by-line mode walks the order the full-screen list draws, so the two never disagree about what comes next.
+	order := draft.Ordered(d)
 	i, notice := 0, ""
 	for {
 		if notice != "" {
 			p.printf("\n%s\n", notice)
 		}
-		if err := printFinding(p, s, d, dif, i, full, w); err != nil {
+		if err := printFinding(p, s, d, order, dif, i, full, w); err != nil {
 			return err
 		}
 		answers, _ := s.Footer(plainAnswers, w)
-		p.printf("\n%s\n%s %s ", answers, s.Accent.Render(d.Findings[i].ID), s.Cursor.Render(s.Glyphs.Cursor))
+		p.printf("\n%s\n%s %s ", answers, s.Accent.Render(order[i].ID), s.Cursor.Render(s.Glyphs.Cursor))
 		if p.err != nil {
 			return p.err
 		}
@@ -99,7 +101,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		if !ok {
 			return lines.Err()
 		}
-		f := d.Findings[i]
+		f := order[i]
 		var fn func(*draft.Draft) error
 		success, stay := "", false
 		now := time.Now()
@@ -201,7 +203,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 				return err
 			}
 		case "n":
-			i, notice = min(i+1, len(d.Findings)-1), ""
+			i, notice = min(i+1, len(order)-1), ""
 			continue
 		case "b":
 			i, notice = max(i-1, 0), ""
@@ -217,10 +219,10 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		if err != nil {
 			return err
 		}
-		d = next
+		d, order = next, draft.Ordered(next)
 		if refused != "" {
 			notice = refused
-			if i = findingIndex(d, f.ID); i < 0 {
+			if i = orderedIndex(order, f.ID); i < 0 {
 				return fmt.Errorf("finding %s is no longer in the draft", f.ID)
 			}
 			continue
@@ -228,17 +230,17 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 		notice = success
 		// An edit does not settle the finding, so it stays on screen to be decided.
 		if !stay {
-			i = min(i+1, len(d.Findings)-1)
-		} else if i = findingIndex(d, f.ID); i < 0 {
+			i = min(i+1, len(order)-1)
+		} else if i = orderedIndex(order, f.ID); i < 0 {
 			return fmt.Errorf("finding %s is no longer in the draft", f.ID)
 		}
 	}
 }
 
 // printFinding prints one finding: rules span full, the terminal; prose wraps at width, the content width.
-func printFinding(p *printer, s style.Style, d *draft.Draft, dif *diff.Diff, i, full, width int) error {
-	f := d.Findings[i]
-	p.printf("\n%s\n", s.Rule(full, "", fmt.Sprintf("%d of %d", i+1, len(d.Findings))))
+func printFinding(p *printer, s style.Style, d *draft.Draft, order []draft.Finding, dif *diff.Diff, i, full, width int) error {
+	f := order[i]
+	p.printf("\n%s\n", s.Rule(full, "", fmt.Sprintf("%d of %d", i+1, len(order))))
 	p.printf("%s  %s\n", s.Accent.Render(f.ID), s.Bold.Render(render.ForDisplay(render.OneLine(f.Title))))
 	p.printf("%s  %s\n", chipRow(s, chips(s, f, draft.Dispositions(d)[f.ID], false)), s.Dim.Render(plainLocation(s.Glyphs, f)))
 	p.printf("\n%s\n", s.Wrap(render.ForDisplay(f.Body), width, ""))

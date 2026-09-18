@@ -27,11 +27,11 @@ func (m *Model) openFinding(id string) error {
 }
 
 func (m *Model) openedFinding() (draft.Finding, int) {
-	i := findingIndex(m.draft, m.openID)
+	i := orderedIndex(m.order, m.openID)
 	if i < 0 {
 		return draft.Finding{}, -1
 	}
-	return m.draft.Findings[i], i
+	return m.order[i], i
 }
 
 // refreshDetail rebuilds the finding's document from the current draft, so a reload shows the finding as it now is.
@@ -303,14 +303,14 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		m.openFileDiff(f)
 		return nil
 	case "right", "n":
-		if i+1 < len(m.draft.Findings) {
+		if i+1 < len(m.order) {
 			m.notice = ""
-			return m.fail(m.openFinding(m.draft.Findings[i+1].ID))
+			return m.fail(m.openFinding(m.order[i+1].ID))
 		}
 	case "left", "N":
 		if i > 0 {
 			m.notice = ""
-			return m.fail(m.openFinding(m.draft.Findings[i-1].ID))
+			return m.fail(m.openFinding(m.order[i-1].ID))
 		}
 	case "j", "down":
 		m.body.ScrollDown(1)
@@ -496,12 +496,12 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 		return m.fail(m.refreshDetail())
 	}
 	m.say(style.Good, success())
-	i := findingIndex(m.draft, m.openID)
-	if i < 0 || i+1 >= len(m.draft.Findings) {
+	i := orderedIndex(m.order, m.openID)
+	if i < 0 || i+1 >= len(m.order) {
 		return m.fail(m.refreshDetail())
 	}
 	notice, kind := m.notice, m.noticeKind
-	cmd := m.fail(m.openFinding(m.draft.Findings[i+1].ID))
+	cmd := m.fail(m.openFinding(m.order[i+1].ID))
 	// The notice names what was just recorded, so it survives the move to the finding after it.
 	m.notice, m.noticeKind = notice, kind
 	m.settling = true
@@ -512,7 +512,7 @@ func (m *Model) detailView() string {
 	f, i := m.openedFinding()
 	header := []string{m.header(
 		style.HeaderPart{Text: f.ID, Kind: style.Dim},
-		style.HeaderPart{Text: fmt.Sprintf("%d of %d", i+1, len(m.draft.Findings))},
+		style.HeaderPart{Text: fmt.Sprintf("%d of %d", i+1, len(m.order))},
 	), m.headerRule()}
 	switch {
 	case m.noting:
@@ -526,7 +526,7 @@ func (m *Model) detailView() string {
 func (m *Model) detailHints() []style.Hint {
 	f, i := m.openedFinding()
 	_, hasOpenNote := firstOpenNote(m.draft, f.ID)
-	return detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote, i+1 < len(m.draft.Findings))
+	return detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote, i+1 < len(m.order))
 }
 
 // detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An

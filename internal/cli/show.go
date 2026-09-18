@@ -177,14 +177,14 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  (none)"))
 	}
 	for _, f := range findings {
-		meta := []string{}
+		meta := []metaCell{}
 		if f.Blocking {
-			meta = append(meta, "blocking")
+			meta = append(meta, dimCell("blocking"))
 		}
 		if f.Label != "" {
-			meta = append(meta, labelCell(s, f.Label))
+			meta = append(meta, dimCell(labelCell(s, f.Label)))
 		}
-		meta = append(meta, locationCell(s, f.Location))
+		meta = append(meta, dimCell(locationCell(s, f.Location)))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: s.Glyphs.Accepted, kind: style.Good, id: f.ID, blocking: f.Blocking,
 			title: f.Title, meta: meta, body: f.Body,
@@ -202,11 +202,32 @@ type findingBlock struct {
 	id       string
 	blocking bool
 	title    string
-	meta     []string
+	meta     []metaCell
 	body     string
 	impact   string
 	fix      string
 	refs     []string
+}
+
+// metaCell is one part of a finding's meta line and the role it paints in. Most parts are dim; severity carries its
+// rank's color, which is why the line is painted a cell at a time rather than dimmed whole.
+type metaCell struct {
+	text string
+	kind style.Kind
+}
+
+func dimCell(text string) metaCell { return metaCell{text, style.Dim} }
+
+// metaLine paints each cell and wraps the joined line. The space inside a cell is hidden from the wrapper, which
+// would otherwise break "severity major" across two lines and leave the second half unpainted.
+func metaLine(s style.Style, cells []metaCell, width int) []string {
+	const keepTogether = "\uE001"
+	parts := make([]string, len(cells))
+	for i, c := range cells {
+		parts[i] = s.Of(c.kind).Render(strings.ReplaceAll(c.text, " ", keepTogether))
+	}
+	joined := strings.Join(parts, s.Dim.Render(metaSep(s)))
+	return strings.Split(strings.ReplaceAll(s.Wrap(joined, width, findingIndent), keepTogether, " "), "\n")
 }
 
 const findingIndent = "         "
@@ -217,10 +238,8 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 		title = s.Bad.Render(s.Glyphs.Blocking) + " " + title
 	}
 	fmt.Fprintf(b, "%s %s  %s\n", s.Of(f.kind).Render(f.glyph), s.Accent.Render(oneLine(f.id)), title)
-	if len(f.meta) > 0 {
-		for _, line := range strings.Split(s.Wrap(strings.Join(f.meta, metaSep(s)), width, findingIndent), "\n") {
-			fmt.Fprintf(b, "%s\n", s.Dim.Render(line))
-		}
+	for _, line := range metaLine(s, f.meta, width) {
+		fmt.Fprintf(b, "%s\n", line)
 	}
 	if body := text(f.body); body != "" {
 		fmt.Fprintf(b, "%s\n", s.Wrap(body, width, findingIndent))
@@ -288,25 +307,27 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 	if len(d.Findings) == 0 {
 		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  (none)"))
 	}
-	for _, f := range d.Findings {
+	// The findings are shown in the order the review interface decides them and the published review presents them.
+	for _, f := range draft.Ordered(d) {
 		glyph, word, kind := s.Disposition(dispositions[f.ID])
-		meta := []string{word}
+		meta := []metaCell{dimCell(word)}
 		if f.Blocking {
-			meta = append(meta, "blocking")
+			meta = append(meta, dimCell("blocking"))
 		}
 		if f.Label != "" {
-			meta = append(meta, labelCell(s, f.Label))
+			meta = append(meta, dimCell(labelCell(s, f.Label)))
 		}
 		if f.Confidence != "" {
-			meta = append(meta, "confidence "+oneLine(f.Confidence))
+			meta = append(meta, dimCell("confidence "+oneLine(f.Confidence)))
 		}
 		if f.Severity != "" {
-			meta = append(meta, "severity "+oneLine(f.Severity))
+			word := oneLine(f.Severity)
+			meta = append(meta, metaCell{"severity " + word, style.Severity(word)})
 		}
 		if f.Verified != "" {
-			meta = append(meta, "verified "+oneLine(f.Verified))
+			meta = append(meta, dimCell("verified "+oneLine(f.Verified)))
 		}
-		meta = append(meta, locationCell(s, f.Location))
+		meta = append(meta, dimCell(locationCell(s, f.Location)))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
 			title: f.Title, meta: meta, body: f.Body, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,

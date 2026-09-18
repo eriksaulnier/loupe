@@ -2,6 +2,9 @@ package tui
 
 import (
 	"io"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -11,7 +14,9 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/muesli/termenv"
 
+	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
@@ -31,7 +36,7 @@ func TestListAtEightyColumnsDropsTheLabelColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
-	waitFor(t, tm, "acme/widgets#42", "round 1", "> . f-001  ! Title one", "multi.txt:3")
+	waitFor(t, tm, "acme/widgets#42", "round 1", "> . f-001            ! Title one", "multi.txt:3")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.Contains(view, "Label") || strings.Contains(view, "suggestion") {
@@ -54,14 +59,14 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(100, 24))
-	waitFor(t, tm, "> . f-001  ! Title one", "+ 0 accepted", "x 0 excluded")
+	waitFor(t, tm, "> . f-001            ! Title one", "+ 0 accepted", "x 0 excluded")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
 		t.Errorf("C locale view has a non-ASCII glyph:\n%s", view)
 	}
 
-	if got := modelOf(t, dir, utf8, 100, 24).View(); !strings.Contains(got, "› · f-001  ● Title one") {
+	if got := modelOf(t, dir, utf8, 100, 24).View(); !strings.Contains(got, "› · f-001            ● Title one") {
 		t.Errorf("UTF-8 view does not use the Unicode glyphs:\n%s", got)
 	}
 }
@@ -176,7 +181,7 @@ func TestInitialSelectionIsWhatNeedsTheHuman(t *testing.T) {
 		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdrawn, nil, draft.ByAgent, testNow)
 		return err
 	})
-	if m := modelOf(t, dir, env, 100, 24); m.cursor != findingIndex(m.draft, "f-002") || len(draft.ReadinessOf(m.draft).Pending) != 0 {
+	if m := modelOf(t, dir, env, 100, 24); m.cursor != orderedIndex(m.order, "f-002") || len(draft.ReadinessOf(m.draft).Pending) != 0 {
 		t.Errorf("nothing pending, withdrawn f-002 has an open note: cursor %d, pending %v", m.cursor, draft.ReadinessOf(m.draft).Pending)
 	}
 	decideAll(func(d *draft.Draft) error { return draft.ResolveNote(d, "n-001", testNow) })
@@ -345,5 +350,183 @@ func TestListFooterWrapsAndKeepsTheCursorRow(t *testing.T) {
 		if !strings.Contains(strings.Join(lines, "\n"), "Title three") {
 			t.Errorf("height %d: the selected last finding is not on screen:\n%s", height, strings.Join(lines, "\n"))
 		}
+	}
+}
+
+// severityFixture writes a run whose four findings cover a rated span and one the reviewer left unrated, so the
+// order the surfaces present is not the order the findings were filed in.
+func severityFixture(t *testing.T) string {
+	t.Helper()
+	dir := run.RunDir(t.TempDir(), "acme", "widgets", 42, 1)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	diffBytes, err := os.ReadFile(filepath.Join("..", "..", "testdata", "diffs", "multi-hunk.diff"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := diff.Parse(diffBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := draft.NewEmpty()
+	if _, err := draft.Add(d, []draft.FindingInput{
+		{Title: "Cosmetic one", Body: "Body one.", General: true, Label: "suggestion", Severity: "trivial"},
+		{Title: "Unrated two", Body: "Body two.", Location: &draft.Location{Path: "multi.txt", Line: 21}, Label: "question"},
+		{Title: "Data loss three", Body: "Body three.", Location: &draft.Location{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Severity: "critical"},
+		{Title: "Edge case four", Body: "Body four.", General: true, Label: "issue", Severity: "minor"},
+	}, parsed, draft.ByAgent, testNow); err != nil {
+		t.Fatal(err)
+	}
+	d.Summary = "Four findings."
+	d.Version = 2
+	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, Title: "Add widgets", DiffSHA256: run.DiffSHA256(diffBytes)}
+	for name, v := range map[string]any{"target.json": target, "draft.json": d} {
+		if err := run.WriteJSONAtomic(filepath.Join(dir, name), v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := run.WriteFileAtomic(filepath.Join(dir, "pr.diff"), diffBytes); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// severityOrder is critical, major, minor, trivial, then every unrated finding in finding-id order.
+func TestListOrdersBySeverityThenID(t *testing.T) {
+	m := modelOf(t, severityFixture(t), testEnv, 120, 24)
+	var got []string
+	for _, f := range m.order {
+		got = append(got, f.ID)
+	}
+	if want := []string{"f-003", "f-004", "f-001", "f-002"}; !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+	rows := listRows(m.View())
+	if len(rows) != 4 {
+		t.Fatalf("want 4 finding rows, got %d:\n%s", len(rows), m.View())
+	}
+	for i, id := range []string{"f-003", "f-004", "f-001", "f-002"} {
+		if !strings.Contains(ansi.Strip(rows[i]), id) {
+			t.Errorf("row %d is %q, want %s", i, rows[i], id)
+		}
+	}
+}
+
+// listRows is the finding rows of a rendered list, in the order they are drawn, with their escapes intact.
+func listRows(view string) []string {
+	var out []string
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(ansi.Strip(line), " f-0") {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// severityCell and rowID read a drawn row by column, since the fixed columns before each are a constant width.
+func severityCell(row string) string {
+	return cell(row, listFixed, listSeverityWidth)
+}
+
+func rowID(row string) string {
+	return cell(row, listFixed-listIDWidth-2, listIDWidth)
+}
+
+func cell(row string, at, width int) string {
+	return strings.TrimSpace(string([]rune(ansi.Strip(row))[at : at+width]))
+}
+
+func TestListRowCarriesTheSeverityColumn(t *testing.T) {
+	m := modelOf(t, severityFixture(t), testEnv, 120, 24)
+	view := m.View()
+	if !strings.Contains(ansi.Strip(view), "Severity") {
+		t.Errorf("list has no severity column head:\n%s", view)
+	}
+	// The unrated finding gets a blank column, never a stand-in word.
+	want := map[string]string{"f-003": "critical", "f-004": "minor", "f-001": "trivial", "f-002": ""}
+	for _, row := range listRows(view) {
+		id := rowID(row)
+		if got := severityCell(row); got != want[id] {
+			t.Errorf("severity cell for %s is %q, want %q: %q", id, got, want[id], ansi.Strip(row))
+		}
+	}
+}
+
+// The severity column is colored by how bad the finding is, and carries no glyph of its own.
+func TestListSeverityColumnIsColoredByRank(t *testing.T) {
+	m := modelOf(t, severityFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 120, 24)
+	m.styles.R.SetColorProfile(termenv.TrueColor)
+	m.styles.Color = true
+	seen := map[string]string{}
+	for _, row := range listRows(m.View()) {
+		word := severityCell(row)
+		if word == "" {
+			continue
+		}
+		i := strings.Index(row, word)
+		seen[word] = row[strings.LastIndex(row[:i], "\x1b"):i]
+	}
+	if len(seen) != 3 {
+		t.Fatalf("want three colored severity cells, got %v", seen)
+	}
+	for word, paint := range seen {
+		if strings.TrimSpace(ansi.Strip(paint)) != "" {
+			t.Errorf("the %s badge carries a glyph of its own: %q", word, ansi.Strip(paint))
+		}
+	}
+	if seen["critical"] == seen["minor"] || seen["minor"] == seen["trivial"] || seen["critical"] == seen["trivial"] {
+		t.Errorf("severity words share a color: %v", seen)
+	}
+}
+
+// The location shortens first, then the label drops, then the severity column.
+func TestListColumnsDropSeverityLast(t *testing.T) {
+	dir := severityFixture(t)
+	for _, c := range []struct {
+		width                           int
+		severity, label, location, wide int
+	}{
+		{140, listSeverityWidth, 12, 28, 0},
+		{100, listSeverityWidth, 12, 28, 0},
+		{99, listSeverityWidth, 0, 28, 0},
+		{80, listSeverityWidth, 0, 28, 0},
+		{79, listSeverityWidth, 0, 18, 1},
+		{60, listSeverityWidth, 0, 16, 1},
+	} {
+		got := modelOf(t, dir, testEnv, c.width, 24).listColumns()
+		if got.severity != c.severity || got.label != c.label || got.location != c.location || got.shortLocation != (c.wide == 1) {
+			t.Errorf("at %d columns: %+v, want severity %d label %d location %d short %v",
+				c.width, got, c.severity, c.label, c.location, c.wide == 1)
+		}
+		if got.title < listTitleFloor {
+			t.Errorf("at %d columns the title is %d, below the floor", c.width, got.title)
+		}
+	}
+	// Narrower than every column can fit, severity is what goes after the location has given up its width.
+	if got := modelOf(t, dir, testEnv, 40, 24).listColumns(); got.severity != 0 || got.location != 0 {
+		t.Errorf("at 40 columns severity survived the location: %+v", got)
+	}
+}
+
+// Walking the detail view moves through the order the list drew, and says so in its position.
+func TestDetailWalksTheListOrder(t *testing.T) {
+	m := modelOf(t, severityFixture(t), testEnv, 120, 24)
+	if err := m.openFinding("f-003"); err != nil {
+		t.Fatal(err)
+	}
+	if _, i := m.openedFinding(); i != 0 {
+		t.Fatalf("f-003 is at %d, want 0", i)
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "1 of 4") {
+		t.Errorf("detail does not say 1 of 4:\n%s", m.View())
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if m.openID != "f-004" {
+		t.Errorf("right moved to %s, want f-004", m.openID)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if m.openID != "f-003" {
+		t.Errorf("left moved to %s, want f-003", m.openID)
 	}
 }

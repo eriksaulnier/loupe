@@ -1,11 +1,30 @@
 package draft
 
+import (
+	"cmp"
+	"slices"
+
+	"github.com/eriksaulnier/loupe/internal/findingid"
+	"github.com/eriksaulnier/loupe/internal/severity"
+)
+
 const (
 	DispositionAccepted  = "accepted"
 	DispositionExcluded  = "excluded"
 	DispositionWithdrawn = "withdrawn"
 	DispositionPending   = "pending"
 )
+
+// Ordered is the findings as a reader meets them on every human-facing surface: by severity, most severe first, then
+// every finding the reviewer left unrated, and by finding id within each. It derives a view and never reorders the
+// stored slice, which keeps arrival order and is what the digest is built from.
+func Ordered(d *Draft) []Finding {
+	out := slices.Clone(d.Findings)
+	slices.SortFunc(out, func(a, b Finding) int {
+		return cmp.Or(severity.Compare(a.Severity, b.Severity), findingid.Compare(a.ID, b.ID))
+	})
+	return out
+}
 
 // Readiness holds id lists; counts are their lengths.
 type Readiness struct {

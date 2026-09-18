@@ -14,6 +14,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
+
+	"github.com/eriksaulnier/loupe/internal/severity"
 )
 
 // Kind is a semantic role; the palette maps it to a color so callers never name colors.
@@ -263,6 +265,20 @@ func (s Style) Of(k Kind) lipgloss.Style {
 		return s.Dim
 	}
 	return s.R.NewStyle()
+}
+
+// severityKinds paints a finding's severity by how bad it is, most severe first, reusing roles the palette already
+// maps so no surface names a color. There is no glyph: the word and its color are the badge, and under NO_COLOR the
+// word stands alone.
+var severityKinds = [...]Kind{Bad, Warn, Note, Dim}
+
+// Severity is the role a severity word paints in. A value captured before the enum stays dim, because nothing here
+// can say where it ranks.
+func Severity(word string) Kind {
+	if !severity.Rated(word) {
+		return Dim
+	}
+	return severityKinds[severity.Rank(word)]
 }
 
 // On paints a style onto a background, for the pieces of a row that is one painted band: an inner reset would

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -350,5 +351,31 @@ func TestPlainEditRefusesAStaleDraft(t *testing.T) {
 	}
 	if f := loadDraft(t, dir).Findings[0]; f.Label != "issue" || !f.Blocking || !strings.Contains(out.String(), staleNotice) {
 		t.Fatalf("finding %+v; output:\n%s", f, out.String())
+	}
+}
+
+// Line-by-line mode walks the order the full-screen list draws, so "next" means the same thing in both.
+func TestPlainPresentsFindingsInSeverityOrder(t *testing.T) {
+	dir := severityFixture(t)
+	var out bytes.Buffer
+	in := &lineReader{lines: []string{"n", "n", "n", "q"}}
+	if err := RunPlain(dir, in, &out, envOf(testEnv), 0); err != nil {
+		t.Fatal(err)
+	}
+	view := out.String()
+	var got []int
+	for _, id := range []string{"f-003", "f-004", "f-001", "f-002"} {
+		i := strings.Index(view, "\n"+id+" ")
+		if i < 0 {
+			t.Fatalf("plain output never prompts for %s:\n%s", id, view)
+		}
+		got = append(got, i)
+	}
+	if !slices.IsSorted(got) {
+		t.Errorf("plain prompts at offsets %v, not in severity then id order:\n%s", got, view)
+	}
+	// The position counts through the same order, so "1 of 4" is the most severe finding.
+	if i, j := strings.Index(view, "1 of 4"), strings.Index(view, "Data loss three"); i < 0 || j < i || j-i > 200 {
+		t.Errorf("1 of 4 is not the critical finding:\n%s", view)
 	}
 }

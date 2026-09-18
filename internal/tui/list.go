@@ -12,6 +12,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/eriksaulnier/loupe/internal/severity"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
@@ -19,16 +20,16 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 	m.notice = ""
 	switch msg.String() {
 	case "j", "down":
-		m.cursor = min(m.cursor+1, max(0, len(m.draft.Findings)-1))
+		m.cursor = min(m.cursor+1, max(0, len(m.order)-1))
 	case "k", "up":
 		m.cursor = max(m.cursor-1, 0)
 	case "tab":
 		m.summaryCollapsed = !m.summaryCollapsed
 	case "enter":
-		if len(m.draft.Findings) == 0 {
+		if len(m.order) == 0 {
 			return nil
 		}
-		return m.fail(m.openFinding(m.draft.Findings[m.cursor].ID))
+		return m.fail(m.openFinding(m.order[m.cursor].ID))
 	case "p":
 		if err := m.reload(); err != nil {
 			return m.fail(err)
@@ -173,9 +174,9 @@ func (m *Model) pickerRow(selected, disabled bool, name, description string) []s
 }
 
 // listColumns is the row layout for the current width: the title takes whatever the fixed columns leave. The label
-// goes first when the window narrows, then the location shrinks to a filename.
+// goes first when the window narrows, then the location shrinks to a filename, then the severity badge goes.
 type listColumns struct {
-	title, label, location int
+	title, severity, label, location int
 	// shortLocation drops the directories instead of truncating the path from the left.
 	shortLocation bool
 }
@@ -183,10 +184,16 @@ type listColumns struct {
 // listFixed is the lead space, cursor, glyph and id columns with the gaps between them.
 const listFixed = 1 + 1 + 1 + 1 + 1 + listIDWidth + 2
 
-const listIDWidth = 5
+const (
+	listIDWidth = 5
+	// listSeverityWidth fits the longest word, and the column head is exactly as wide.
+	listSeverityWidth = 8
+	// listTitleFloor is the narrowest a title can be and still identify a finding.
+	listTitleFloor = 20
+)
 
 func (m *Model) listColumns() listColumns {
-	c := listColumns{label: 12, location: 28}
+	c := listColumns{severity: listSeverityWidth, label: 12, location: 28}
 	switch {
 	case m.width >= wideWidth:
 	case m.width >= midWidth:
@@ -194,17 +201,27 @@ func (m *Model) listColumns() listColumns {
 	default:
 		c.label, c.location, c.shortLocation = 0, 18, true
 	}
-	gaps := 2
-	if c.label > 0 {
-		gaps += 2
-	}
-	c.title = style.Content(m.width) - listFixed - c.label - c.location - gaps
-	if c.title < 20 {
-		// Below the point where a title is readable, the location gives up the rest of its width.
-		c.location = max(0, c.location+c.title-20)
-		c.title = 20
+	// Below the point where a title is readable the location gives up the rest of its width, and only then does the
+	// severity badge go: it outranks the label, and the title outranks both.
+	if c.title = m.titleColumn(c); c.title < listTitleFloor {
+		c.location = max(0, c.location+c.title-listTitleFloor)
+		if c.title = m.titleColumn(c); c.title < listTitleFloor {
+			c.severity = 0
+			c.title = max(listTitleFloor, m.titleColumn(c))
+		}
 	}
 	return c
+}
+
+// titleColumn is what the row's one variable column has left once the fixed columns and their gaps are taken.
+func (m *Model) titleColumn(c listColumns) int {
+	gaps := 2
+	for _, w := range [...]int{c.severity, c.label} {
+		if w > 0 {
+			gaps += 2
+		}
+	}
+	return style.Content(m.width) - listFixed - c.severity - c.label - c.location - gaps
 }
 
 func (m *Model) listView() string {
@@ -216,11 +233,11 @@ func (m *Model) listView() string {
 	offset := max(0, m.cursor-rowsHeight+1)
 	dispositions, notes := draft.Dispositions(m.draft), openNotes(m.draft)
 	rows := []string{m.columnHeads(cols)}
-	if len(m.draft.Findings) == 0 {
+	if len(m.order) == 0 {
 		rows = append(rows, m.styles.Dim.Render(" No findings"))
 	}
-	for i := offset; i < len(m.draft.Findings) && i < offset+rowsHeight; i++ {
-		f := m.draft.Findings[i]
+	for i := offset; i < len(m.order) && i < offset+rowsHeight; i++ {
+		f := m.order[i]
 		rows = append(rows, m.row(f, dispositions[f.ID], notes, i == m.cursor, cols))
 	}
 	body := strings.Join(append(summary, rows...), "\n")
@@ -278,7 +295,11 @@ func (m *Model) summaryBlock(cols listColumns) []string {
 }
 
 func (m *Model) columnHeads(cols listColumns) string {
-	head := strings.Repeat(" ", listFixed-listIDWidth-2) + style.Pad("ID", listIDWidth+2) + style.Pad("Title", cols.title+2)
+	head := strings.Repeat(" ", listFixed-listIDWidth-2) + style.Pad("ID", listIDWidth+2)
+	if cols.severity > 0 {
+		head += style.Pad("Severity", cols.severity+2)
+	}
+	head += style.Pad("Title", cols.title+2)
 	if cols.label > 0 {
 		head += style.Pad("Label", cols.label+2)
 	}
@@ -312,6 +333,9 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 	var b strings.Builder
 	b.WriteString(" " + cursor + " " + m.styles.Of(kind).Render(glyph) + " ")
 	b.WriteString(m.styles.Dim.Render(style.Pad(f.ID, listIDWidth)) + "  ")
+	if cols.severity > 0 {
+		b.WriteString(style.Pad(m.severityBadge(f.Severity), cols.severity) + "  ")
+	}
 	if blocking != "" {
 		b.WriteString(m.styles.Bad.Render(blocking))
 	}
@@ -331,6 +355,15 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 		b.WriteString(m.styles.Dim.Render("  " + m.locationColumn(f, cols)))
 	}
 	return strings.TrimRight(b.String(), " ")
+}
+
+// severityBadge is the word in the color its rank paints, and nothing at all for a finding the reviewer left unrated:
+// a stand-in word there would read as a value that was never reported.
+func (m *Model) severityBadge(word string) string {
+	if !severity.Rated(word) {
+		return ""
+	}
+	return m.styles.Of(style.Severity(word)).Render(word)
 }
 
 // openNotes maps each finding with an open note to whether the agent has replied to one, which makes it the human's
