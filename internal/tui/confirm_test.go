@@ -151,24 +151,32 @@ func TestConfirmMarksTheMessageBlock(t *testing.T) {
 	if strings.Contains(view, messageHint) {
 		t.Errorf("the hint outlived the empty message:\n%s", view)
 	}
-	// The block is read on its own: the body's own blockquotes carry the ASCII tier's gutter glyph too.
-	bar := m.shell.glyphs.Anchor
+	// The block is read on its own: the body's own blockquotes carry the ASCII tier's edge glyph too.
+	g := m.shell.glyphs
 	block := strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")
-	if len(block) < 2 {
-		t.Fatalf("the message did not wrap, so a second row is untested: %q", block)
+	if len(block) < minMessageRows+2 {
+		t.Fatalf("the box is %d rows, want the frame and at least %d: %q", len(block), minMessageRows, block)
 	}
-	for i, row := range block {
-		if !strings.HasPrefix(strings.TrimSpace(row), bar) {
-			t.Errorf("row %d of the message is unmarked: %q", i, row)
+	head, foot := strings.TrimSpace(block[0]), strings.TrimSpace(block[len(block)-1])
+	if !strings.HasPrefix(head, g.BoxTL) || !strings.HasSuffix(head, g.BoxTR) || !strings.Contains(head, messageTitle) || !strings.Contains(head, messageWay) {
+		t.Errorf("the top edge does not name the field or the way out: %q", head)
+	}
+	if !strings.HasPrefix(foot, g.BoxBL) || !strings.HasSuffix(foot, g.BoxBR) {
+		t.Errorf("the box is not closed: %q", foot)
+	}
+	for i, row := range block[1 : len(block)-1] {
+		if trimmed := strings.TrimSpace(row); !strings.HasPrefix(trimmed, g.Gutter) || !strings.HasSuffix(trimmed, g.Gutter) {
+			t.Errorf("row %d is outside the frame: %q", i+1, row)
 		}
 	}
 	if !strings.Contains(view, strings.TrimSpace(block[0])) {
-		t.Errorf("the marked block is not what the screen shows:\n%s", view)
+		t.Errorf("the framed block is not what the screen shows:\n%s", view)
 	}
-	// Blurring leaves the block marked, since it is still the human's half of the body.
+	// Blurring leaves the box drawn, and its top edge names the way back in.
 	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if row := strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")[0]; !strings.HasPrefix(strings.TrimSpace(row), bar) {
-		t.Errorf("the blurred message is unmarked: %q", row)
+	blurred := strings.TrimSpace(strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")[0])
+	if !strings.HasPrefix(blurred, g.BoxTL) || !strings.Contains(blurred, messageWayBlurred) {
+		t.Errorf("the blurred box lost its frame or its way in: %q", blurred)
 	}
 }
 

@@ -222,32 +222,39 @@ func (c *confirmation) messageRows(promptWidth int) int {
 	})
 	c.message.SetHeight(1)
 	_ = c.message.View()
-	return max(1, rows-1)
+	return max(minMessageRows, rows-1)
 }
 
-// messageHint says what the empty input is for. The block is the only part of the body the human writes, and an
-// empty one is otherwise a blank line between the chips and the findings.
+// messageHint says what the empty input is for, and messageWay out of it. The box is the only part of the body the
+// human writes, and an empty one is otherwise a blank line between the chips and the findings.
+// minMessageRows keeps the box the shape of somewhere to write a paragraph. A frame around one row reads as a
+// field for a word, and the opening this is for is a sentence or two.
+const minMessageRows = 4
+
 const (
-	messageHint        = "write the sentence this review opens on"
-	messageHintBlurred = "tab to write the sentence this review opens on"
+	messageTitle       = "your message"
+	messageHint        = "the review opens on what you write here"
+	messageHintBlurred = "nothing opens this review yet"
+	messageWay         = "esc when done"
+	messageWayBlurred  = "tab to write it"
 )
 
-// messageView is the input where the opening prose goes. It is the one block of the body the human owns, so it is
-// marked as theirs on every row: a colored bar down its left edge, and, where the terminal has color, a tint behind
-// it while it holds the keyboard.
+// messageView is the input where the opening prose goes, framed. A terminal has no form field, so the border is
+// what says one is here, and its color is what says it holds the keyboard; loupe draws no other box, which is what
+// keeps this one from reading as decoration.
 func (c *confirmation) messageView(m *Model, width int) string {
-	mark, hint := m.styles.Note, messageHint
+	kind, hint, way := style.Note, messageHint, messageWay
 	if !c.typing {
-		mark, hint = m.styles.Dim, messageHintBlurred
+		kind, hint, way = style.Dim, messageHintBlurred, messageWayBlurred
+	}
+	tint := m.styles.R.NewStyle()
+	if c.typing {
+		tint = m.styles.Selected
 	}
 	// The tint goes on the textarea's own text style, not around its rendered rows: the rows carry resets of their
 	// own, and a background wrapped around them would end at the first one. Focus and Blur are what point the
 	// textarea at one style set or the other, and they are called again here because Update copies the model and
 	// leaves that pointer in the copy it was made from.
-	tint := m.styles.R.NewStyle()
-	if c.typing {
-		tint = m.styles.Selected
-	}
 	c.message.FocusedStyle.Text, c.message.FocusedStyle.CursorLine = tint, tint
 	c.message.BlurredStyle.Text, c.message.BlurredStyle.CursorLine = tint, tint
 	faint := tint.Inherit(m.styles.Dim)
@@ -258,22 +265,26 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	} else {
 		c.message.Blur()
 	}
-	// One style for the gutter rather than a tint wrapped around a colored bar, which would reset the background
-	// after the glyph and leave a gap before the text.
-	bar := tint.Inherit(mark).Render(m.glyphs.Anchor + " ")
-	gutterWidth := style.Width(m.glyphs.Anchor) + 1
-	prompt := func(int) string { return bar }
-	// The prompt comes first: SetWidth takes its width out of the width the text wraps to.
-	c.message.SetPromptFunc(gutterWidth, prompt)
-	c.message.SetWidth(max(gutterWidth+1, width-1))
-	c.message.SetHeight(c.messageRows(gutterWidth))
-	c.message.SetPromptFunc(gutterWidth, prompt)
+	// One column of padding inside each edge, so the text does not sit against the frame. SetWidth counts the
+	// prompt, which is the left one, and the right one is appended per row.
+	const pad = 1
+	boxWidth := width - 1
+	inner := max(2*pad+1, boxWidth-2)
+	prompt := func(int) string { return tint.Render(strings.Repeat(" ", pad)) }
+	c.message.SetPromptFunc(pad, prompt)
+	c.message.SetWidth(inner - pad)
+	c.message.SetHeight(c.messageRows(pad))
+	c.message.SetPromptFunc(pad, prompt)
 	rows := strings.Split(c.message.View(), "\n")
-	c.inputRows = len(rows)
 	for i, r := range rows {
-		rows[i] = " " + r
+		rows[i] = r + tint.Render(strings.Repeat(" ", pad))
 	}
-	return strings.Join(rows, "\n")
+	boxed := m.styles.Box(rows, boxWidth, messageTitle, way, kind)
+	c.inputRows = len(boxed)
+	for i, r := range boxed {
+		boxed[i] = " " + r
+	}
+	return strings.Join(boxed, "\n")
 }
 
 // sync lays the content out for the current window before a scroll or a render, since both depend on its line count,
