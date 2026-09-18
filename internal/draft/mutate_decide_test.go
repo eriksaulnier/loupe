@@ -42,6 +42,9 @@ func TestAcceptRefusesWithdrawnFinding(t *testing.T) {
 	if r.Message != "accept is for included findings only" {
 		t.Fatalf("message %q", r.Message)
 	}
+	if r.Fix != "reinstate f-002 to accept it, or exclude it instead" {
+		t.Fatalf("fix %q", r.Fix)
+	}
 	if len(d.Decisions) != 0 {
 		t.Fatalf("decisions %v", d.Decisions)
 	}
@@ -180,6 +183,7 @@ func TestUnknownIDsRefuseNotFound(t *testing.T) {
 		"Accept":      errOf(Accept(d, "f-009", decideNow)),
 		"Exclude":     errOf(Exclude(d, "f-009", decideNow)),
 		"Restore":     Restore(d, "f-009"),
+		"Reinstate":   errOf(Reinstate(d, "f-009", decideNow)),
 		"ResolveNote": ResolveNote(d, "n-009", decideNow),
 		"DismissNote": DismissNote(d, "n-009", decideNow),
 	}
@@ -216,6 +220,7 @@ func TestDecisionsThroughMutateWithStaleVersionWriteNothing(t *testing.T) {
 		"Exclude":     func(d *Draft) error { return errOf(Exclude(d, "f-003", decideNow)) },
 		"SendBack":    func(d *Draft) error { _, err := SendBack(d, "f-003", "again", decideNow); return err },
 		"Restore":     func(d *Draft) error { return Restore(d, "f-001") },
+		"Reinstate":   func(d *Draft) error { return errOf(Reinstate(d, "f-002", decideNow)) },
 		"ResolveNote": func(d *Draft) error { return ResolveNote(d, "n-001", decideNow) },
 		"DismissNote": func(d *Draft) error { return DismissNote(d, "n-001", decideNow) },
 	}
@@ -231,5 +236,105 @@ func TestDecisionsThroughMutateWithStaleVersionWriteNothing(t *testing.T) {
 		if !bytes.Equal(before, after) {
 			t.Errorf("%s changed draft.json", name)
 		}
+	}
+}
+
+func TestReinstateIncludesAndAcceptsWithdrawnFinding(t *testing.T) {
+	d := threeFindings()
+	later := decideNow.Add(time.Hour)
+	closed, err := Reinstate(d, "f-002", later)
+	if err != nil || len(closed) != 0 {
+		t.Fatalf("closed %v, %v", closed, err)
+	}
+	f := d.Findings[1]
+	if !f.Included || f.Rev != 2 || !f.UpdatedAt.Equal(later) {
+		t.Fatalf("finding %+v", f)
+	}
+	wantHistory := []HistoryEntry{{At: later, By: ByHuman, Changed: map[string]any{"included": false}}}
+	if !reflect.DeepEqual(f.History, wantHistory) {
+		t.Fatalf("history %+v", f.History)
+	}
+	want := Decision{FindingID: "f-002", Decision: DecisionAccepted, FindingRev: 2, At: later}
+	if !reflect.DeepEqual(d.Decisions["f-002"], want) || Dispositions(d)["f-002"] != DispositionAccepted {
+		t.Fatalf("decisions %v", d.Decisions)
+	}
+}
+
+func TestReinstateResolvesOpenNotes(t *testing.T) {
+	d := threeFindings()
+	for _, id := range []string{"f-002", "f-002", "f-003"} {
+		if _, err := SendBack(d, id, "Why?", decideNow); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := DismissNote(d, "n-002", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	later := decideNow.Add(time.Hour)
+	closed, err := Reinstate(d, "f-002", later)
+	if err != nil || !reflect.DeepEqual(closed, []string{"n-001"}) {
+		t.Fatalf("closed %v, %v", closed, err)
+	}
+	if n := d.Notes[0]; n.Status != NoteResolved || n.ClosedAt == nil || !n.ClosedAt.Equal(later) {
+		t.Errorf("n-001 %+v", n)
+	}
+	if n := d.Notes[1]; n.Status != NoteDismissed || !n.ClosedAt.Equal(decideNow) {
+		t.Errorf("already closed n-002 changed: %+v", n)
+	}
+	if n := d.Notes[2]; n.Status != NoteOpen {
+		t.Errorf("note on another finding changed: %+v", n)
+	}
+}
+
+func TestReinstateRefusesFindingThatIsNotWithdrawn(t *testing.T) {
+	for _, tc := range []struct {
+		disposition string
+		setUp       func(*Draft)
+	}{
+		{DispositionPending, func(*Draft) {}},
+		{DispositionAccepted, func(d *Draft) { _, _ = Accept(d, "f-001", decideNow) }},
+		{DispositionExcluded, func(d *Draft) { _, _ = Exclude(d, "f-001", decideNow) }},
+	} {
+		t.Run(tc.disposition, func(t *testing.T) {
+			d := threeFindings()
+			if _, err := SendBack(d, "f-001", "Why?", decideNow); err != nil {
+				t.Fatal(err)
+			}
+			tc.setUp(d)
+			before := append([]Note{}, d.Notes...)
+			closed, err := Reinstate(d, "f-001", decideNow)
+			r := wantRefusal(t, err, refusal.Input)
+			if r.Message != "reinstate is for withdrawn findings only; f-001 is "+tc.disposition {
+				t.Fatalf("message %q", r.Message)
+			}
+			if closed != nil || d.Findings[0].Rev != 1 || !reflect.DeepEqual(d.Notes, before) {
+				t.Fatalf("closed %v finding %+v notes %+v", closed, d.Findings[0], d.Notes)
+			}
+		})
+	}
+}
+
+// A withdrawn finding the human also excluded derives as excluded, and Accept refuses it too, so the fix has to send
+// the human through Restore rather than back to a decision.
+func TestReinstateRefusesAnExcludedWithdrawnFindingWithAReachableFix(t *testing.T) {
+	d := threeFindings()
+	if _, err := Exclude(d, "f-002", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	if got := Dispositions(d)["f-002"]; got != DispositionExcluded {
+		t.Fatalf("disposition %q", got)
+	}
+	r := wantRefusal(t, errOf(Reinstate(d, "f-002", decideNow)), refusal.Input)
+	if r.Fix != "restore f-002 first, then reinstate it" {
+		t.Fatalf("fix %q", r.Fix)
+	}
+	if err := Restore(d, "f-002"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Reinstate(d, "f-002", decideNow); err != nil {
+		t.Fatalf("the fix does not work: %v", err)
+	}
+	if Dispositions(d)["f-002"] != DispositionAccepted {
+		t.Fatalf("decisions %v", d.Decisions)
 	}
 }

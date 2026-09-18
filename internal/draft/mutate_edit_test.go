@@ -349,7 +349,7 @@ func TestRecalibrateRefusals(t *testing.T) {
 	}
 	_, err := Recalibrate(d, "f-002", "issue", false, multiHunk(t), editNow)
 	r := wantRefusal(t, err, refusal.Input)
-	if !strings.Contains(r.Fix, "loupe edit f-002 --include") {
+	if !strings.Contains(r.Fix, "reinstate f-002 first") {
 		t.Fatalf("fix %q", r.Fix)
 	}
 

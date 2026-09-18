@@ -469,7 +469,7 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"x", "exclude; dismisses its open notes", ""},
 			{"s", "send it back with a note", ""},
 			{"e", "edit label and blocking", ""},
-			{"u", "restore an excluded finding", ""},
+			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
 			{"esc", "back to the list", ""},
