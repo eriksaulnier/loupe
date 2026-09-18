@@ -74,33 +74,41 @@ func TestBuildOpensOnTheMessageWhenAttended(t *testing.T) {
 	}
 }
 
-// TestBuildEmptyMessageRendersWhatAnEmptySummaryRenders is SC-003: an empty message leaves the opening slot exactly
-// as an empty summary left it, so the common path costs nothing and no new branch reached the renderer.
+// TestBuildEmptyMessageRendersWhatAnEmptySummaryRenders is SC-003. The golden was rendered by the code before the
+// message existed, from a draft whose summary was empty, with the publication id fixed: a review published with no
+// message is that review, byte for byte, so the common path cost nothing and no new branch reached the renderer.
 func TestBuildEmptyMessageRendersWhatAnEmptySummaryRenders(t *testing.T) {
-	withSummary := readyDraft()
-	withSummary.Summary = "The agent wrote this."
-	in := buildInput(fixtureTarget(), withSummary, "comment", "all", false)
-	typed, err := Build(in)
-	if err != nil {
-		t.Fatal(err)
-	}
+	const id = "00000000-0000-4000-8000-000000000000"
 	blank := readyDraft()
 	blank.Summary = ""
-	in.Draft = blank
+	in := buildInput(fixtureTarget(), blank, "comment", "all", false)
+	in.PublicationID = id
 	empty, err := Build(in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The two drafts differ, so their digests do, and the digest is in the marker the footer ends on; everything
-	// above it is the review.
-	const marker = "<!-- loupe digest="
-	typedHead, _, _ := strings.Cut(typed.Body, marker)
-	emptyHead, _, _ := strings.Cut(empty.Body, marker)
-	if typedHead != emptyHead {
-		t.Fatalf("an empty message renders a different body than an empty summary:\n%q\n%q", typedHead, emptyHead)
+	want, err := os.ReadFile(filepath.Join("..", "..", "testdata", "golden", "publish", "no-opening-body.md"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if first, _, _ := strings.Cut(typed.Body, "\n"); !strings.Contains(first, "blocking") {
+	if empty.Body != string(want) {
+		t.Fatalf("a body with no opening changed:\n%s", empty.Body)
+	}
+	if first, _, _ := strings.Cut(empty.Body, "\n"); !strings.Contains(first, "blocking") {
 		t.Fatalf("the body does not begin at the chips row: %q", first)
+	}
+
+	// The same holds when the draft does have a summary, because an attended review never reads it.
+	in.Draft = readyDraft()
+	withSummary, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The two drafts differ, so their digests do, and the digest is in the marker the footer ends on.
+	const marker = "<!-- loupe digest="
+	head, _, _ := strings.Cut(withSummary.Body, marker)
+	if got, _, _ := strings.Cut(empty.Body, marker); got != head {
+		t.Fatalf("the stored summary reached an attended body:\n%q\n%q", head, got)
 	}
 }
 
