@@ -23,7 +23,7 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 - **Unknown labels are never refused.** An unrecognized label renders verbatim in the finding's own summary line (`perf-nit:`) and counts in the `Other` chip only when nonblocking. A finding with an unknown label and `blocking` set is placed and counted in `Blocking`, like every other blocking finding, while still counting under its own label in `loupe-meta`. `Other` is a bucket, never a rewrite of the label.
 - A label that is absent or empty is treated as no label: the finding counts as `other` and its summary line carries no label word. The same applies to an empty `confidence`, `severity` or `verified`, which render nothing.
 - **Confidence, severity and verified MUST NOT be computed, defaulted or inferred.** Each is a value the reviewer reports or omits. The reason for a confidence level belongs in the body.
-- **Severity is never mapped onto a label.** It renders as a labeled word on the meta line and never decides section placement.
+- **Severity is never mapped onto a label.** It leads the summary line and renders again as a labeled word on the meta line. It orders findings within a section and never decides which section one is placed in.
 - **Verified is not confidence.** Confidence is how sure the reviewer is; verified is whether it ran or observed the failure (`reproduced`) or reasoned to it (`plausible`).
 - **A stored severity outside the enum still renders.** Runs captured before the enum hold free text; it renders in the same place inside a code span, so it stays inert Markdown, and only a new or changed value is refused.
 
@@ -43,7 +43,9 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 - Section order is fixed: `Blocking`, `Issues`, `Suggestions`, `Questions`, `Other`. Empty sections are omitted.
 - Each heading is led by its chip's dot: `### ⛔ Blocking`, `### 🟡 Issues`, `### 🟣 Suggestions`, `### 🔵 Questions`, `### ⚪ Other`. A reader matches a chip to its section by the dot.
 - **Every included finding has exactly one home in the body.** A blocking finding lives in `Blocking` and nowhere else, regardless of its label. `--inline` decides only what additionally anchors to a line; it never changes what the body contains.
-- Within `Blocking`, findings sort by label in section order (`issue`, `suggestion`, `question`, then every unknown label as one group) and by finding id within each group. Within a label section and within `Other`, findings sort by id.
+- **Every section sorts by severity first**: `critical`, `major`, `minor`, `trivial`, then every finding whose severity is absent, empty or free text captured before the enum. An unrated finding sorts last rather than as `trivial`, because severity is reviewer-reported and placing it among the rated ones would infer the value the reviewer withheld.
+- Within `Blocking`, severity is followed by label in section order (`issue`, `suggestion`, `question`, then every unknown label as one group), then by finding id. Severity outranks the label group here, so two findings with the same label MAY be separated by a third between them; the section exists to be read first, and a `critical` question MUST NOT sit below a `minor` issue because the label groups say so.
+- Within a label section and within `Other`, severity is followed by finding id.
 
 ````markdown
 `⛔ 1 blocking` `⚪ 1 other`
@@ -56,7 +58,7 @@ Tests were not executed in this read-only review.
 ### ⛔ Blocking
 
 <details>
-<summary><b>issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary><b>major · issue (blocking):</b> Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
 > **Confidence:** high\
@@ -87,7 +89,7 @@ Return the original write error.
 ### ⚪ Other
 
 <details>
-<summary><b>perf-nit:</b> Redundant sort on every read</summary>
+<summary><b>minor · perf-nit:</b> Redundant sort on every read</summary>
 
 > [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)\
 > **Severity:** minor
@@ -119,23 +121,27 @@ The chips row leads the body, or the summary when there are no findings. The bod
 
 ### The summary line
 
-`<summary>` carries the title, and a label word only where it distinguishes one row from another. Only an inline comment puts a dot on a finding; in the body, dots lead the headings and chips alone:
+`<summary>` carries the title, the severity word wherever the reviewer supplied one, and a label word only where it distinguishes one row from another. Only an inline comment puts a dot on a finding; in the body, dots lead the headings and chips alone:
 
 ```
-<summary><b>issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary><b>major · issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary><b>minor:</b> Digest is not verified on reconcile</summary>
 <summary>Redundant sort on every read</summary>
 ```
 
-| Where | Dot | Label word | Why |
-| :--- | :--- | :--- | :--- |
-| `Blocking` | no | yes | Labels mix here, so the label word tells the rows apart. A label dot under the `⛔` heading would read as a lower severity |
-| `Issues` · `Suggestions` · `Questions` | no | no | The heading carries the dot and names the label; every row would repeat both |
-| `Other` | no | yes | The heading carries the constant dot but does not name the actual label |
-| Inline comment | yes | yes | No heading to lean on. A blocking finding takes `⛔`, whatever its label |
+| Where | Dot | Severity word | Label word | Why |
+| :--- | :--- | :--- | :--- | :--- |
+| `Blocking` | no | yes | yes | Labels mix here, so the label word tells the rows apart. A label dot under the `⛔` heading would read as a lower severity |
+| `Issues` · `Suggestions` · `Questions` | no | yes | no | The heading carries the dot and names the label; every row would repeat both |
+| `Other` | no | yes | yes | The heading carries the constant dot but does not name the actual label |
+| Inline comment | yes | yes | yes | No heading to lean on. A blocking finding takes `⛔`, whatever its label |
 
+- **The severity word leads the bold prefix**, separated from what follows by ` · `. Where the context carries no label word, it is the whole prefix. A finding whose severity is absent, empty or free text captured before the enum renders byte for byte what it rendered before severity reached this line, which is what keeps an older review comparable to a newer one.
+- **It is a word, not a dot.** Dots are the label vocabulary, and a dot under the `⛔` heading already reads as a severity; a second dot vocabulary on the same line would make that worse. It is also not an image: the ban on external badge images applies here.
+- **Only the four enum words reach the line.** The prefix is interpolated outside a code span, so a stored severity that is not one of them stays on the meta line, where its code span makes it inert.
 - The label is followed by ` (blocking)` when the finding blocks. That happens only in `Blocking` and on the inline surface, because a blocking finding is never placed in a label section. Inside `Blocking` it is redundant against the heading and kept anyway so the inline surface, which has no heading, keeps the signal.
 - `<b>` is the only tag loupe emits inside a `<summary>`. The title is HTML-escaped before interpolation.
-- A finding with no dot, label word or blocking decoration in its context renders the escaped title alone. An unlabeled nonblocking inline finding keeps the `⚪` dot. A finding that blocks but carries no label renders `<b>(blocking):</b>` before its title in `Blocking`, and `⛔ <b>(blocking):</b>` inline.
+- A finding with no dot, label word or blocking decoration in its context renders the escaped title alone. An unlabeled nonblocking inline finding keeps the `⚪` dot. A finding that blocks but carries no label renders `<b>(blocking):</b>` before its title in `Blocking`, and `⛔ <b>(blocking):</b>` inline; with a severity those become `<b>major · (blocking):</b>` and `⛔ <b>major · (blocking):</b>`.
 
 ### The meta block
 
@@ -157,7 +163,7 @@ A blockquote at the top of the disclosure body, present only when at least one p
 - **A code span MUST be delimited by a backtick run longer than any run inside its content**, padded with a space when the content starts or ends with a backtick. This is the CommonMark rule and it applies to every generated code span, including the footer's.
 - **Code-span contents MUST NOT be HTML-escaped.** A code span is already inert, and GitHub shows character references inside one literally. Escaping is for text interpolated outside a span.
 - **Every generated inline field MUST be collapsed to a single line before interpolation**, with runs of whitespace becoming one space. A newline in a title breaks the summary line out of its tag; a newline in `severity` would end the meta block's blockquote and leave the rest of the line as body text.
-- Confidence, severity and verified render only when the reviewer supplied them. None appears in the summary line or decides section placement.
+- Confidence, severity and verified render only when the reviewer supplied them. Confidence and verified appear nowhere else; severity also leads the summary line and orders the findings within a section. None of the three decides section placement.
 
 ### Impact
 
@@ -235,7 +241,7 @@ The renderer wraps each finding in a generated `<details>`. Authored content tha
 | Field | Why it cannot escape |
 | :--- | :--- |
 | `title`, `label`, `confidence`, `verified` | Collapsed to one line, then HTML-escaped before interpolation |
-| `severity` | Collapsed to one line; an enum word is interpolated as is, anything else is emitted inside a code span |
+| `severity` | Collapsed to one line; an enum word is interpolated as is, on the meta line and in the summary line's bold prefix, and anything else is emitted inside a code span on the meta line alone |
 | Location, footer fields | Collapsed to one line and emitted inside a code span whose backtick run is longer than any run in the content |
 | `suggestedFix` | Emitted inside a fence longer than any backtick run in the content |
 | `references` | Refused at input, and again at composition, unless each is a URL free of whitespace, control and format characters, `<`, `>` and backticks; then emitted as an autolink |

@@ -40,3 +40,16 @@ func TestCompareTiesUnratedValues(t *testing.T) {
 		}
 	}
 }
+
+func TestRatedIsTrueOnlyForTheEnum(t *testing.T) {
+	for _, word := range Order {
+		if !Rated(word) {
+			t.Errorf("Rated(%q) = false, want true", word)
+		}
+	}
+	for _, word := range []string{"", "P2", "Critical", "major ", "blocker"} {
+		if Rated(word) {
+			t.Errorf("Rated(%q) = true, want false", word)
+		}
+	}
+}

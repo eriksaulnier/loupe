@@ -302,3 +302,123 @@ func TestBodyDividersFollowBlankLine(t *testing.T) {
 		}
 	}
 }
+
+// A rated finding leads its bold prefix with the word; where the context carries no label, the word is the prefix.
+func TestSummaryLineLeadsWithSeverity(t *testing.T) {
+	cases := []struct {
+		name            string
+		severity, label string
+		blocking        bool
+		ctx             summaryContext
+		want            string
+	}{
+		{"blocking", "critical", "issue", true, inBlocking, "<b>critical · issue (blocking):</b> T"},
+		{"blocking unlabeled", "major", "", true, inBlocking, "<b>major · (blocking):</b> T"},
+		{"label section", "minor", "issue", false, inLabelSection, "<b>minor:</b> T"},
+		{"other", "trivial", "perf-nit", false, inOther, "<b>trivial · perf-nit:</b> T"},
+		{"other unlabeled", "trivial", "", false, inOther, "<b>trivial:</b> T"},
+		{"inline", "major", "issue", true, inInline, "⛔ <b>major · issue (blocking):</b> T"},
+		{"inline nonblocking", "minor", "question", false, inInline, "🔵 <b>minor · question:</b> T"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := Finding{ID: "f-001", Title: "T", Severity: c.severity, Label: c.label, Blocking: c.blocking}
+			if got := summaryLine(f, c.ctx); got != c.want {
+				t.Errorf("summaryLine = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// An unrated finding's summary line is byte for byte what it was before severity reached the line. This is what keeps
+// every review published before this change comparable to one published after it.
+func TestSummaryLineWithoutSeverityIsUnchanged(t *testing.T) {
+	cases := []struct {
+		name            string
+		severity, label string
+		blocking        bool
+		ctx             summaryContext
+		want            string
+	}{
+		{"absent", "", "issue", true, inBlocking, "<b>issue (blocking):</b> T"},
+		{"absent unlabeled", "", "", true, inBlocking, "<b>(blocking):</b> T"},
+		{"absent in label section", "", "issue", false, inLabelSection, "T"},
+		{"absent in other", "", "perf-nit", false, inOther, "<b>perf-nit:</b> T"},
+		{"absent inline", "", "issue", false, inInline, "🟡 <b>issue:</b> T"},
+		{"legacy free text", "P2", "issue", true, inBlocking, "<b>issue (blocking):</b> T"},
+		{"legacy free text in other", "P2", "", false, inOther, "T"},
+		{"wrong case", "Critical", "issue", false, inLabelSection, "T"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := Finding{ID: "f-001", Title: "T", Severity: c.severity, Label: c.label, Blocking: c.blocking}
+			if got := summaryLine(f, c.ctx); got != c.want {
+				t.Errorf("summaryLine = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// A legacy free-text severity stays out of the summary line, where the prefix is interpolated raw, and keeps its
+// code span on the meta line.
+func TestLegacySeverityStaysInItsCodeSpan(t *testing.T) {
+	in := exampleInput()
+	in.Findings = []Finding{{ID: "f-001", Title: "T", Body: "B", General: true, Label: "issue", Severity: "P2"}}
+	body := Body(in)
+	if strings.Contains(body, "<summary><b>P2") {
+		t.Errorf("free-text severity reached the summary line\n%s", body)
+	}
+	if !strings.Contains(body, "**Severity:** `P2`") {
+		t.Errorf("free-text severity lost its code span\n%s", body)
+	}
+}
+
+func rated(id, label, sev string, blocking bool) Finding {
+	f := general(id, label, blocking)
+	f.Severity = sev
+	return f
+}
+
+// Inside Blocking severity outranks the label group, which survives as the tie-break among equal severities.
+func TestBodyBlockingSortsBySeverityThenLabelGroup(t *testing.T) {
+	in := exampleInput()
+	in.Findings = []Finding{
+		rated("f-001", "issue", "minor", true),
+		rated("f-002", "question", "critical", true),
+		rated("f-003", "suggestion", "major", true),
+		rated("f-004", "issue", "major", true),
+		rated("f-005", "issue", "", true),
+		rated("f-006", "question", "", true),
+	}
+	body := Body(in)
+	got := indexes(t, body,
+		"Title f-002<", // critical
+		"Title f-004<", // major, issue
+		"Title f-003<", // major, suggestion
+		"Title f-001<", // minor
+		"Title f-005<", // unrated, issue
+		"Title f-006<", // unrated, question
+	)
+	if !slices.IsSorted(got) {
+		t.Fatalf("blocking offsets %v not in severity, label-group, id order\n%s", got, body)
+	}
+}
+
+// A label section and Other sort by severity, then by id, so a trivial f-001 sits below a critical f-007.
+func TestBodySectionSortsBySeverityThenID(t *testing.T) {
+	in := exampleInput()
+	in.Findings = []Finding{
+		rated("f-001", "issue", "trivial", false),
+		rated("f-007", "issue", "critical", false),
+		rated("f-003", "issue", "", false),
+		rated("f-002", "issue", "trivial", false),
+		rated("f-004", "perf-nit", "major", false),
+		rated("f-005", "perf-nit", "", false),
+	}
+	body := Body(in)
+	got := indexes(t, body, "Title f-007<", "Title f-001<", "Title f-002<", "Title f-003<",
+		"### ⚪ Other", "Title f-004<", "Title f-005<")
+	if !slices.IsSorted(got) {
+		t.Fatalf("section offsets %v not in severity then id order\n%s", got, body)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/findingid"
+	"github.com/eriksaulnier/loupe/internal/severity"
 )
 
 type Input struct {
@@ -101,8 +102,11 @@ func Body(in Input) string {
 		g := group(f.Label)
 		sections[g] = append(sections[g], f)
 	}
+	// Severity outranks the label group here: the section that exists to be read first is ordered by urgency, and
+	// the label group survives as the tie-break so labels still cluster among findings of equal severity.
 	slices.SortFunc(blocking, func(a, b Finding) int {
-		return cmp.Or(cmp.Compare(group(a.Label), group(b.Label)), findingid.Compare(a.ID, b.ID))
+		return cmp.Or(severity.Compare(a.Severity, b.Severity),
+			cmp.Compare(group(a.Label), group(b.Label)), findingid.Compare(a.ID, b.ID))
 	})
 
 	var head []string
@@ -121,7 +125,9 @@ func Body(in Input) string {
 		if len(fs) == 0 {
 			continue
 		}
-		slices.SortFunc(fs, func(a, b Finding) int { return findingid.Compare(a.ID, b.ID) })
+		slices.SortFunc(fs, func(a, b Finding) int {
+			return cmp.Or(severity.Compare(a.Severity, b.Severity), findingid.Compare(a.ID, b.ID))
+		})
 		ctx := inLabelSection
 		if g == groupOther {
 			ctx = inOther
@@ -190,9 +196,18 @@ func summaryLine(f Finding, ctx summaryContext) string {
 	if f.Blocking {
 		label = strings.TrimLeft(label+" (blocking)", " ")
 	}
-	var prefix string
+	var bold []string
+	// Only an enum word leads the line. The prefix is interpolated outside a code span, and a run captured before the
+	// enum can hold any text, so a free-text severity stays on the meta line where a code span makes it inert.
+	if word := OneLine(f.Severity); severity.Rated(word) {
+		bold = append(bold, word)
+	}
 	if label != "" && ctx != inLabelSection {
-		prefix = "<b>" + label + ":</b> "
+		bold = append(bold, label)
+	}
+	var prefix string
+	if len(bold) > 0 {
+		prefix = "<b>" + strings.Join(bold, " · ") + ":</b> "
 	}
 	if ctx == inInline {
 		dot := dots[group(f.Label)]
@@ -274,10 +289,9 @@ func metaBlock(f Finding, in Input, inBody bool) string {
 		// An enum word is inert as text. A run stored before the enum can hold any text, and nothing rechecks it at
 		// composition, so it stays in a code span where Markdown cannot run.
 		word := OneLine(f.Severity)
-		switch word {
-		case "critical", "major", "minor", "trivial":
+		if severity.Rated(word) {
 			lines = append(lines, "**Severity:** "+word)
-		default:
+		} else {
 			lines = append(lines, "**Severity:** "+CodeSpan(word))
 		}
 	}
