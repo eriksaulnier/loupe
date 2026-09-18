@@ -34,7 +34,7 @@ In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-me
 
 The board, one finding, and the last screen before anything is sent:
 
-![The findings board: seven findings with their decision, severity, label and location, worst first, over a summary that tab expands.](docs/assets/list.png)
+![The findings board: seven findings with their decision, severity, label and location, in the order the published review puts them, over a summary that tab expands.](docs/assets/list.png)
 
 ![One finding: the hunk it points at, why it matters, a suggested fix, and a send-back note the agent has answered and you have resolved.](docs/assets/detail.png)
 
