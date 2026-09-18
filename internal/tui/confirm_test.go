@@ -84,8 +84,17 @@ func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 	if opening := strings.Index(view, "The cache bug"); chips < 0 || body < 0 || opening < chips || opening > body {
 		t.Errorf("the message is not in the body's opening slot (chips %d, opening %d, body %d):\n%s", chips, opening, body, view)
 	}
-	if m.Message() != "The cache bug is the blocker here. The rest can land later.\n\nFix the ETag path first." {
+	want := "The cache bug is the blocker here. The rest can land later.\n\nFix the ETag path first."
+	if m.Message() != want {
 		t.Errorf("message %q", m.Message())
+	}
+	// The payload view shows the envelope the same closure produced, not the one the screen opened on.
+	_, wantJSON, err := m.confirm.preview.Compose(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.confirm.shown.EnvelopeJSON != wantJSON || m.confirm.shown.Body == m.confirm.preview.Body {
+		t.Errorf("the payload was not recomposed for the message:\n%s", m.confirm.shown.EnvelopeJSON)
 	}
 }
 
