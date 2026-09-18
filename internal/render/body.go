@@ -192,17 +192,15 @@ func summaryLine(f Finding, ctx summaryContext) string {
 	if ctx == inInline {
 		title = escapePunctuation(title)
 	}
-	label := EscapeHTML(OneLine(f.Label))
-	if f.Blocking {
-		label = strings.TrimLeft(label+" (blocking)", " ")
-	}
 	var bold []string
 	// Only an enum word leads the line. The prefix is interpolated outside a code span, and a run captured before the
 	// enum can hold any text, so a free-text severity stays on the meta line where a code span makes it inert.
 	if word := OneLine(f.Severity); severity.Rated(word) {
 		bold = append(bold, word)
 	}
-	if label != "" && ctx != inLabelSection {
+	// Blocking is not written here. The ⛔ heading says it in the body and the ⛔ dot says it inline, and a blocking
+	// finding never reaches a label section, so there is no context where the word would be the only carrier.
+	if label := EscapeHTML(OneLine(f.Label)); label != "" && ctx != inLabelSection {
 		bold = append(bold, label)
 	}
 	var prefix string

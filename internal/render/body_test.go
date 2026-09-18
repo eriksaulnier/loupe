@@ -314,12 +314,12 @@ func TestSummaryLineLeadsWithSeverity(t *testing.T) {
 		ctx             summaryContext
 		want            string
 	}{
-		{"blocking", "critical", "issue", true, inBlocking, "<b>critical · issue (blocking):</b> T"},
-		{"blocking unlabeled", "major", "", true, inBlocking, "<b>major · (blocking):</b> T"},
+		{"blocking", "critical", "issue", true, inBlocking, "<b>critical · issue:</b> T"},
+		{"blocking unlabeled", "major", "", true, inBlocking, "<b>major:</b> T"},
 		{"label section", "minor", "issue", false, inLabelSection, "<b>minor:</b> T"},
 		{"other", "trivial", "perf-nit", false, inOther, "<b>trivial · perf-nit:</b> T"},
 		{"other unlabeled", "trivial", "", false, inOther, "<b>trivial:</b> T"},
-		{"inline", "major", "issue", true, inInline, "⛔ <b>major · issue (blocking):</b> T"},
+		{"inline", "major", "issue", true, inInline, "⛔ <b>major · issue:</b> T"},
 		{"inline nonblocking", "minor", "question", false, inInline, "🔵 <b>minor · question:</b> T"},
 	}
 	for _, c := range cases {
@@ -332,9 +332,9 @@ func TestSummaryLineLeadsWithSeverity(t *testing.T) {
 	}
 }
 
-// An unrated finding's summary line is byte for byte what it was before severity reached the line. This is what keeps
-// every review published before this change comparable to one published after it.
-func TestSummaryLineWithoutSeverityIsUnchanged(t *testing.T) {
+// A finding that carries neither a severity nor the blocking flag renders its summary line byte for byte what it
+// rendered before either change. Blocking rows are covered by TestSummaryLineLeavesBlockingToTheDotAndHeading.
+func TestSummaryLineWithoutSeverityOrBlockingIsUnchanged(t *testing.T) {
 	cases := []struct {
 		name            string
 		severity, label string
@@ -342,12 +342,12 @@ func TestSummaryLineWithoutSeverityIsUnchanged(t *testing.T) {
 		ctx             summaryContext
 		want            string
 	}{
-		{"absent", "", "issue", true, inBlocking, "<b>issue (blocking):</b> T"},
-		{"absent unlabeled", "", "", true, inBlocking, "<b>(blocking):</b> T"},
+		{"absent in blocking", "", "issue", false, inBlocking, "<b>issue:</b> T"},
 		{"absent in label section", "", "issue", false, inLabelSection, "T"},
 		{"absent in other", "", "perf-nit", false, inOther, "<b>perf-nit:</b> T"},
+		{"absent unlabeled in other", "", "", false, inOther, "T"},
 		{"absent inline", "", "issue", false, inInline, "🟡 <b>issue:</b> T"},
-		{"legacy free text", "P2", "issue", true, inBlocking, "<b>issue (blocking):</b> T"},
+		{"legacy free text", "P2", "issue", false, inBlocking, "<b>issue:</b> T"},
 		{"legacy free text in other", "P2", "", false, inOther, "T"},
 		{"wrong case", "Critical", "issue", false, inLabelSection, "T"},
 	}
@@ -437,7 +437,7 @@ func TestMetaBlockRepeatsOnlyALegacySeverity(t *testing.T) {
 		f.Severity = word
 		in.Findings = []Finding{f}
 		body := Body(in)
-		if !strings.Contains(body, "<b>"+word+" · issue (blocking):</b>") {
+		if !strings.Contains(body, "<b>"+word+" · issue:</b>") {
 			t.Errorf("%s did not lead the summary line\n%s", word, body)
 		}
 		if strings.Contains(body, "**Severity:**") {
@@ -471,5 +471,42 @@ func TestInlineMetaBlockDropsARatedSeverity(t *testing.T) {
 	}
 	if want := "🟡 <b>critical · issue:</b> T\n\n> **Confidence:** high\n\nB."; got[0].Body != want {
 		t.Errorf("inline body\n got %q\nwant %q", got[0].Body, want)
+	}
+}
+
+// Blocking is said by the ⛔ heading in the body and by the ⛔ dot inline, so the summary line never repeats it. The
+// label word stays: the dot says a finding blocks, not what kind of remark it is.
+func TestSummaryLineLeavesBlockingToTheDotAndHeading(t *testing.T) {
+	cases := []struct {
+		name            string
+		severity, label string
+		ctx             summaryContext
+		want            string
+	}{
+		{"blocking", "major", "issue", inBlocking, "<b>major · issue:</b> T"},
+		{"blocking unrated", "", "suggestion", inBlocking, "<b>suggestion:</b> T"},
+		{"blocking unlabeled", "", "", inBlocking, "T"},
+		{"inline", "major", "issue", inInline, "⛔ <b>major · issue:</b> T"},
+		{"inline unrated", "", "question", inInline, "⛔ <b>question:</b> T"},
+		{"inline unlabeled", "", "", inInline, "⛔ T"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := Finding{ID: "f-001", Title: "T", Severity: c.severity, Label: c.label, Blocking: true}
+			got := summaryLine(f, c.ctx)
+			if got != c.want {
+				t.Errorf("summaryLine = %q, want %q", got, c.want)
+			}
+			if strings.Contains(got, "(blocking)") {
+				t.Errorf("the summary line still says (blocking): %q", got)
+			}
+		})
+	}
+	// The ⛔ dot is what carries it inline, whatever the label would otherwise have drawn.
+	for _, label := range []string{"issue", "suggestion", "question", "perf-nit", ""} {
+		f := Finding{ID: "f-001", Title: "T", Label: label, Blocking: true}
+		if got := summaryLine(f, inInline); !strings.HasPrefix(got, "⛔ ") {
+			t.Errorf("inline %q lost its blocking dot: %q", label, got)
+		}
 	}
 }

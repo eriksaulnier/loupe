@@ -19,7 +19,7 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 | `impact` | Markdown | What goes wrong and under what input. Optional, allowlist-checked like `body` |
 | `references` | list of `http` or `https` URLs | What the reviewer looked at. At most six, never fetched. Optional |
 
-- **Label and blocking are independent.** A small required mechanical change is `suggestion (blocking)`, not an `issue`. `question (blocking)` is valid: a question whose answer determines whether the change is correct does block.
+- **Label and blocking are independent.** A small required mechanical change is a blocking `suggestion`, not an `issue`. A blocking `question` is valid: a question whose answer determines whether the change is correct does block.
 - **Unknown labels are never refused.** An unrecognized label renders verbatim in the finding's own summary line (`perf-nit:`) and counts in the `Other` chip only when nonblocking. A finding with an unknown label and `blocking` set is placed and counted in `Blocking`, like every other blocking finding, while still counting under its own label in `loupe-meta`. `Other` is a bucket, never a rewrite of the label.
 - A label that is absent or empty is treated as no label: the finding counts as `other` and its summary line carries no label word. The same applies to an empty `confidence`, `severity` or `verified`, which render nothing.
 - **Confidence, severity and verified MUST NOT be computed, defaulted or inferred.** Each is a value the reviewer reports or omits. The reason for a confidence level belongs in the body.
@@ -58,7 +58,7 @@ Tests were not executed in this read-only review.
 ### ⛔ Blocking
 
 <details>
-<summary><b>major · issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary><b>major · issue:</b> Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
 > **Confidence:** high\
@@ -122,7 +122,7 @@ The chips row leads the body, or the summary when there are no findings. The bod
 `<summary>` carries the title, the severity word wherever the reviewer supplied one, and a label word only where it distinguishes one row from another. Only an inline comment puts a dot on a finding; in the body, dots lead the headings and chips alone:
 
 ```
-<summary><b>major · issue (blocking):</b> Retry loop can double-publish a review</summary>
+<summary><b>major · issue:</b> Retry loop can double-publish a review</summary>
 <summary><b>minor:</b> Digest is not verified on reconcile</summary>
 <summary>Redundant sort on every read</summary>
 ```
@@ -134,12 +134,13 @@ The chips row leads the body, or the summary when there are no findings. The bod
 | `Other` | no | yes | yes | The heading carries the constant dot but does not name the actual label |
 | Inline comment | yes | yes | yes | No heading to lean on. A blocking finding takes `⛔`, whatever its label |
 
+**No row says `(blocking)`.** The `⛔` heading says it in the body and the `⛔` dot says it inline, and a blocking finding is never placed in a label section, so there is no context where the word would be the only carrier. The label word stays either way: the dot says that a finding blocks, not what kind of remark it is.
+
 - **The severity word leads the bold prefix**, separated from what follows by ` · `. Where the context carries no label word, it is the whole prefix. A finding whose severity is absent, empty or free text captured before the enum renders byte for byte what it rendered before severity reached this line, which is what keeps an older review comparable to a newer one.
 - **It is a word, not a dot.** Dots are the label vocabulary, and a dot under the `⛔` heading already reads as a severity; a second dot vocabulary on the same line would make that worse. It is also not an image: the ban on external badge images applies here.
 - **Only the four enum words reach the line.** The prefix is interpolated outside a code span, so a stored severity that is not one of them stays on the meta line instead, where its code span makes it inert. Exactly one of the two places carries a finding's severity, never both.
-- The label is followed by ` (blocking)` when the finding blocks. That happens only in `Blocking` and on the inline surface, because a blocking finding is never placed in a label section. Inside `Blocking` it is redundant against the heading and kept anyway so the inline surface, which has no heading, keeps the signal.
 - `<b>` is the only tag loupe emits inside a `<summary>`. The title is HTML-escaped before interpolation.
-- A finding with no dot, label word or blocking decoration in its context renders the escaped title alone. An unlabeled nonblocking inline finding keeps the `⚪` dot. A finding that blocks but carries no label renders `<b>(blocking):</b>` before its title in `Blocking`, and `⛔ <b>(blocking):</b>` inline; with a severity those become `<b>major · (blocking):</b>` and `⛔ <b>major · (blocking):</b>`.
+- A finding with no severity word and no label word in its context renders the escaped title alone. An unlabeled nonblocking inline finding keeps the `⚪` dot, and an unlabeled blocking one keeps the `⛔` dot, so inline a row is never bare.
 
 ### The meta block
 

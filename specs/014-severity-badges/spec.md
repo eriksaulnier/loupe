@@ -27,6 +27,12 @@ The cost is paid on every review. A reader scanning ten collapsed rows has the l
 
 The terminal half has the same shape and needs no amendment: `loupe review`'s list carries id, blocking, note, title, label and location, and severity appears only after the human has committed to a finding. It belongs in this specification anyway, because the two surfaces MUST agree on one ordering rule. A human who decides findings in one order and then publishes a review that presents them in another has been given two different answers to "what matters most here".
 
+### One thing said once
+
+Two words on the summary line were saying what something else already said.
+
+`**Severity:** major` on the meta line repeated the word the summary line now leads with, two lines above it. And ` (blocking)` repeated the `### ⛔ Blocking` heading in the body and the `⛔` dot inline — the contract already called the first of those redundant and kept it "so the inline surface, which has no heading, keeps the signal", which does not survive contact with the inline surface leading with `⛔`.
+
 ### One severity, in one place
 
 Putting the word on the summary line makes the meta line's `**Severity:** major` a repeat: every context that renders a meta block renders a summary line directly above it, so for a rated finding the same word lands twice within two lines. `docs/comment-format.md` already has the rule for this shape — an inline comment carries no location line, "the comment already sits on the line" — and this applies it to severity. The cost is that the word is no longer labeled anywhere in the review; a reader meets it as the first word of a bold prefix. That reader is the one who opened a collapsed finding, and they read the word on the line above either way, so the label was buying nothing they did not already have.
@@ -47,7 +53,7 @@ Someone who did not run loupe opens the review on their pull request. Every find
 
 **Acceptance Scenarios**:
 
-1. **Given** a finding with `severity: major`, the label `issue` and `blocking` set, **When** the body is composed, **Then** its summary line reads `<b>major · issue (blocking):</b> ` before the title.
+1. **Given** a finding with `severity: major`, the label `issue` and `blocking` set, **When** the body is composed, **Then** its summary line reads `<b>major · issue:</b> ` before the title, and says `(blocking)` nowhere.
 2. **Given** a finding with `severity: trivial` and the label `perf-nit` in `Other`, **When** the body is composed, **Then** its summary line reads `<b>trivial · perf-nit:</b> ` before the title.
 3. **Given** a finding with `severity: minor` and no label word in its context, **When** the body is composed, **Then** its summary line reads `<b>minor:</b> ` before the title.
 4. **Given** findings of mixed severity in `Blocking`, **When** the body is composed, **Then** they are ordered by severity first and by label group only among equal severities.
@@ -101,7 +107,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 
 - **FR-006**: A rated finding's summary line MUST lead its bold prefix with the severity word, separated from what follows by ` · `. Where the context carries no label word, the severity word is the whole prefix.
 - **FR-007**: The severity word MUST be a word, never a colored dot. The contract already reserves dots for labels and records that a label dot under the `⛔` heading reads as a severity.
-- **FR-008**: An unrated finding's summary line MUST be byte for byte what it was before this change, in every context. A finding with no severity at all MUST render byte for byte as before in the whole body, summary line and meta block together.
+- **FR-008**: A finding that carries neither a severity nor the blocking flag MUST render byte for byte what it rendered before this change, summary line and meta block together, in every context. Blocking rows are excepted by FR-028 and only there.
 - **FR-009**: Within `Blocking`, findings MUST sort by severity, then by label group, then by finding id. The label-grouping property the contract states MUST be amended to record that severity now outranks it.
 - **FR-010**: Within a label section and within `Other`, findings MUST sort by severity, then by finding id.
 - **FR-011**: An inline comment's summary line MUST carry the severity word on the same rule as the body, after its dot.
@@ -110,6 +116,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 - **FR-014**: The meta block MUST NOT repeat a severity the summary line already carries. Every context that renders a meta block renders a summary line directly above it, so an enum word would otherwise appear twice, two lines apart. A value stored before the enum cannot reach the summary line, so it keeps its `**Severity:**` line and its code span. Confidence and verified are untouched, and a meta block left with no parts is omitted as it is today.
 - **FR-015**: `docs/comment-format.md` MUST be amended where it states that severity never appears in the summary line, where it states the `Blocking` sort, and in its embedded example, which is pinned against the rendered golden.
 - **FR-016**: No external badge image MAY be introduced. The contract's existing ban stands: a badge is a color and a word in the terminal, and a word on GitHub.
+- **FR-028**: The summary line MUST NOT carry ` (blocking)`. Blocking is already said by the `⛔ N blocking` chip, by the `### ⛔ Blocking` heading in the body and by the `⛔` dot inline, and a blocking finding is never placed in a label section, so no context is left where the word is the only carrier. The label word MUST stay: the dot says that a finding blocks, not what kind of remark it is. This amends the answer recorded in `specs/001-loupe-v1/spec.md`'s clarification log.
 
 ### The terminal
 
@@ -138,7 +145,7 @@ The human opens `loupe review`. The list shows a severity column beside each fin
 
 - **SC-001**: A reader of a collapsed review learns which findings are the bad ones without opening any of them.
 - **SC-002**: On every surface, the first finding a reader meets is the most severe one present.
-- **SC-003**: A draft whose findings carry no severity produces a review byte-identical to what it produced before this change.
+- **SC-003**: A draft whose findings carry no severity and no blocking flag produces a review byte-identical to what it produced before this change.
 - **SC-004**: The four words and their order have one definition. Reordering them is a one-line change; adding one is two, and the suite MUST name the second line rather than let a word ship with no color.
 - **SC-005**: The severity badge survives `NO_COLOR` and the ASCII tier with its rank intact, carried by the word and the ordering.
 - **SC-006**: A human decides findings in the same order the published review presents them.
