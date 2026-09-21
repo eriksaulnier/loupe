@@ -266,9 +266,8 @@ const (
 	messageWayBlurred  = "tab to write it"
 )
 
-// messageView is the input where the opening prose goes, framed. A terminal has no form field, so the border is
-// what says one is here, and its color is what says it holds the keyboard; loupe draws no other box, which is what
-// keeps this one from reading as decoration.
+// messageView is the input where the opening prose goes, in a style.Box whose color is what says it holds the
+// keyboard.
 func (c *confirmation) messageView(m *Model, width int) string {
 	kind, hint, way := style.Note, messageHint, messageWay
 	if !c.typing {

@@ -532,9 +532,9 @@ func (s Style) hint(h Hint, next bool) string {
 	return out
 }
 
-// Box frames rows the human can type into, at width columns including the frame. A terminal has no form field, so
-// a border is what says one is here; the rest of loupe draws none, which is what makes this one unambiguous. title
-// names the field on the top edge and right names the way out, both dropped in that order when the width is short.
+// Box frames rows the human types prose into, at width columns including the frame. A terminal has no form field,
+// so a border is what says one is here, and loupe frames nothing else so a frame stays unambiguous. title names the
+// field on the top edge and right names the way out, both dropped in that order when the width is short.
 // The frame takes its color from k, so focus is a color change rather than a second shape.
 func (s Style) Box(rows []string, width int, title, right string, k Kind) []string {
 	g, edge := s.Glyphs, s.Of(k)
