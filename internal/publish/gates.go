@@ -53,8 +53,8 @@ func Gates(ctx context.Context, in GateInput) (*HeadMoved, error) {
 			return nil, err
 		}
 	}
-	if strings.TrimSpace(in.Draft.Summary) == "" && len(included(in.Draft)) == 0 {
-		return nil, refusal.New(refusal.Empty, "the draft has no summary and no included findings; there is nothing to publish",
+	if strings.TrimSpace(in.Draft.Summary) == "" && len(draft.PublishableSet(in.Draft)) == 0 {
+		return nil, refusal.New(refusal.Empty, "the draft has no summary and no publishable findings; there is nothing to publish",
 			"file findings with loupe add or write a summary with loupe summary")
 	}
 	if in.Unattended {
@@ -97,7 +97,7 @@ type HeadMoved struct {
 	// Commits is the last maxMovedCommits GitHub listed, oldest first, each with a short sha and its subject line. The
 	// newest are kept because a merge from the base branch can fill the list with the base branch's older commits.
 	Commits []MovedCommit
-	// Touched is the ids of included located findings on a file the commits changed.
+	// Touched is the ids of publishable located findings on a file the commits changed.
 	Touched []string
 	// FilesTruncated means GitHub stopped listing changed files at its cap, so Touched can miss findings.
 	FilesTruncated bool
@@ -164,7 +164,7 @@ func headMoved(captured, live string, cmp github.Comparison, d *draft.Draft) *He
 			changed[f.PreviousFilename] = true
 		}
 	}
-	for _, f := range included(d) {
+	for _, f := range draft.PublishableSet(d) {
 		if f.Location != nil && changed[f.Location.Path] {
 			moved.Touched = append(moved.Touched, f.ID)
 		}
@@ -194,7 +194,7 @@ func ActionRefusal(action, viewer, author string, d *draft.Draft) error {
 		return nil
 	}
 	var blocking []string
-	for _, f := range included(d) {
+	for _, f := range draft.PublishableSet(d) {
 		if f.Blocking {
 			blocking = append(blocking, f.ID)
 		}
@@ -203,20 +203,8 @@ func ActionRefusal(action, viewer, author string, d *draft.Draft) error {
 		return nil
 	}
 	return refusal.New(refusal.Blocking,
-		fmt.Sprintf("cannot approve while included findings are blocking: %s", strings.Join(blocking, ", ")),
+		fmt.Sprintf("cannot approve while publishable findings are blocking: %s", strings.Join(blocking, ", ")),
 		"use --action comment or --action request-changes, or exclude or unblock the finding in loupe review")
-}
-
-// included is every finding the human has neither excluded nor seen withdrawn: accepted or still pending.
-func included(d *draft.Draft) []draft.Finding {
-	dispositions := draft.Dispositions(d)
-	var out []draft.Finding
-	for _, f := range d.Findings {
-		if disp := dispositions[f.ID]; disp == draft.DispositionAccepted || disp == draft.DispositionPending {
-			out = append(out, f)
-		}
-	}
-	return out
 }
 
 func ReadinessRefusal(d *draft.Draft) error {

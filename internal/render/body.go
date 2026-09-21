@@ -28,7 +28,7 @@ type Input struct {
 	Model string
 	// Unattended marks a review published without a human's confirmation, per constitution 2.0.0.
 	Unattended bool
-	// Findings are the included findings to publish; render does no filtering.
+	// Findings are the published findings; render does no filtering.
 	Findings []Finding
 }
 

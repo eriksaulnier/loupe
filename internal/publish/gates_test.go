@@ -96,7 +96,8 @@ func TestGatesRunInOrder(t *testing.T) {
 	in.Draft = empty
 	wantRefusal(t, gateErr(ctx, in), refusal.Empty, "loupe add", "loupe summary")
 
-	// A pending finding is included, so the draft is not empty, only not ready.
+	// A pending finding is publishable, so the draft is not empty, only not ready. The excluded one above
+	// carries the same included flag and does not count.
 	delete(empty.Decisions, "f-001")
 	wantRefusal(t, gateErr(ctx, in), refusal.NotReady, "loupe review")
 
