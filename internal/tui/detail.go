@@ -111,14 +111,6 @@ func (m *Model) partLines(parts []string, gap int) []string {
 	return append(lines, " "+line)
 }
 
-// hanging wraps a line of the note thread under an indent deeper than its first line, so a long note or reply is
-// read in full rather than clipped at the window edge.
-func (m *Model) hanging(lead, text, indent string) []string {
-	lines := strings.Split(m.styles.Wrap(text, style.Content(m.width)-1, indent), "\n")
-	lines[0] = lead + strings.TrimPrefix(lines[0], indent)
-	return lines
-}
-
 // impact is Markdown by contract, so it is rendered the way the body is, under its own heading.
 func (m *Model) impact(f draft.Finding) ([]string, error) {
 	if f.Impact == "" {
@@ -157,26 +149,43 @@ func (m *Model) references(f draft.Finding) []string {
 	return out
 }
 
-// noteThread lists the finding's notes with their replies indented under them, so a send-back reads as a conversation.
-// The thread is one block after a blank line; a closed note carries the glyph of how it closed.
+// noteThread draws each of the finding's notes as a conversation: the note, then its replies indented under it, each
+// a header and its body as written, with the note color's bar down the thread and an unbarred row between threads.
 func (m *Model) noteThread(f draft.Finding) []string {
 	var out []string
+	sep := " " + m.styles.Dim.Render(m.glyphs.Sep) + " "
 	for _, n := range m.draft.Notes {
 		if n.FindingID != f.ID {
 			continue
 		}
-		if len(out) == 0 {
-			out = append(out, "")
-		}
-		head := m.styles.Note.Render(m.glyphs.Note+" "+n.ID) + " " + m.styles.Dim.Render(noteStatus(m.glyphs, n.Status)) + ": "
-		out = append(out, m.hanging(" ", head+render.ForDisplay(render.OneLine(n.Body)), "   ")...)
+		out = append(out, "")
+		head := m.styles.Note.Render("you") + sep + m.styles.Dim.Render(n.ID) + sep + m.styles.Dim.Render(noteStatus(m.glyphs, n.Status))
+		out = append(out, m.threadBlock("", head, n.Body)...)
 		for _, r := range m.draft.Replies {
 			if r.NoteID != n.ID {
 				continue
 			}
-			reply := m.styles.Note.Render(m.glyphs.Reply+" "+render.ForDisplay(r.ID)) + " " + m.styles.Dim.Render("by "+render.ForDisplay(r.By)) + ": "
-			out = append(out, m.hanging("   ", reply+render.ForDisplay(render.OneLine(r.Body)), "     ")...)
+			out = append(out, " "+m.styles.Note.Render(m.glyphs.Quote))
+			head := m.styles.Note.Render(render.ForDisplay(r.By)) + sep + m.styles.Dim.Render(render.ForDisplay(r.ID))
+			out = append(out, m.threadBlock("  ", head, r.Body)...)
 		}
+	}
+	return out
+}
+
+// threadBlock is one note or reply under the thread's bar. The author's line breaks are kept; only the ends are
+// trimmed, so a block never opens or closes on an empty row.
+func (m *Model) threadBlock(indent, head, body string) []string {
+	bar := " " + m.styles.Note.Render(m.glyphs.Quote)
+	prefix := bar + " " + indent
+	out := []string{prefix + head}
+	body = strings.NewReplacer("\r\n", "\n", "\t", " ").Replace(body)
+	for _, line := range strings.Split(strings.Trim(body, "\n"), "\n") {
+		if strings.TrimSpace(line) == "" {
+			out = append(out, bar)
+			continue
+		}
+		out = append(out, strings.Split(m.styles.Wrap(render.ForDisplay(line), style.Content(m.width)-1, prefix), "\n")...)
 	}
 	return out
 }
