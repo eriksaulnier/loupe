@@ -498,4 +498,7 @@ func TestPlainRecordsPastAWriteToAnotherFinding(t *testing.T) {
 	if dec := loadDraft(t, dir).Decisions["f-001"]; dec.Decision != draft.DecisionAccepted {
 		t.Fatalf("f-001 not accepted after a write to f-003: %+v\n%s", dec, out.String())
 	}
+	if !strings.Contains(out.String(), "f-001 accepted; f-003 changed") {
+		t.Fatalf("the write to f-003 was not named:\n%s", out.String())
+	}
 }

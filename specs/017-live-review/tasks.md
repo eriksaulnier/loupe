@@ -88,7 +88,7 @@ description: "Task list for handing a send-back to the agent at once and showing
 - [X] T032 [US6] In `internal/tui/app.go`, make `Decide` take the decided finding id and `decide` check `FindingState` inside the `Mutate` callback instead of passing an expected version; on success, name the other findings' changes in the notice through `changeNotice` with the decided finding left out, in `decideAndStay` and `decideAndShow` in `internal/tui/detail.go`.
 - [X] T033 [US6] Add a failing test to `internal/tui/plain_test.go` that a decision after an outside write to another finding records, then pass the finding's displayed state from `internal/tui/plain.go`.
 - [X] T034 [US6] Amend `specs/001-loupe-v1/spec.md` FR-023 with a dated pointer to this specification.
-- [ ] T035 Run `mise run check`, have a read-only sub-agent review the change against FR-009 and FR-015, fix what holds up, and run `mise run check` again.
+- [X] T035 Run `mise run check`, have a read-only sub-agent review the change against FR-009 and FR-015, fix what holds up, and run `mise run check` again.
 
 ## Dependencies
 

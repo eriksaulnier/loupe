@@ -392,3 +392,18 @@ func TestDecisionIsStaleWhenItsOwnFindingChanged(t *testing.T) {
 		})
 	}
 }
+
+func TestDecisionNamesEveryKindOfWriteElsewhere(t *testing.T) {
+	m, dir := newAwaitingModel(t, 40)
+	if err := m.openFinding("f-002"); err != nil {
+		t.Fatal(err)
+	}
+	outside(t, dir, func(d *draft.Draft) error { _, err := draft.Exclude(d, "f-003", testNow); return err })
+	outside(t, dir, func(d *draft.Draft) error { return draft.DismissNote(d, "n-001", testNow) })
+	pressKeys(t, m, "a")
+	for _, want := range []string{"f-002 accepted", "f-003 decided", "n-001 closed"} {
+		if !strings.Contains(m.notice, want) {
+			t.Errorf("notice %q lacks %q", m.notice, want)
+		}
+	}
+}

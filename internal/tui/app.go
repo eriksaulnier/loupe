@@ -304,22 +304,38 @@ func changeNotice(before, after *draft.Draft, decided string) string {
 		noteFinding[n.ID] = n.FindingID
 	}
 	for _, r := range after.Replies {
-		if !replied[r.ID] && r.By == draft.ByAgent && noteFinding[r.NoteID] != decided {
+		if !replied[r.ID] && noteFinding[r.NoteID] != decided {
 			parts = append(parts, fmt.Sprintf("%s answered on %s", r.NoteID, noteFinding[r.NoteID]))
 		}
 	}
-	revs := map[string]int{}
+	status := map[string]string{}
+	for _, n := range before.Notes {
+		status[n.ID] = n.Status
+	}
+	for _, n := range after.Notes {
+		was, ok := status[n.ID]
+		switch {
+		case n.FindingID == decided:
+		case !ok:
+			parts = append(parts, fmt.Sprintf("%s sent back on %s", n.ID, n.FindingID))
+		case was != n.Status && n.Status != draft.NoteOpen:
+			parts = append(parts, n.ID+" closed")
+		}
+	}
+	shown := map[string]draft.Finding{}
 	for _, f := range before.Findings {
-		revs[f.ID] = f.Rev
+		shown[f.ID] = f
 	}
 	for _, f := range after.Findings {
-		rev, ok := revs[f.ID]
+		was, ok := shown[f.ID]
 		switch {
 		case f.ID == decided:
 		case !ok:
 			parts = append(parts, f.ID+" filed")
-		case rev != f.Rev:
+		case was.Rev != f.Rev || was.Included != f.Included:
 			parts = append(parts, f.ID+" changed")
+		case before.Decisions[f.ID].Decision != after.Decisions[f.ID].Decision:
+			parts = append(parts, f.ID+" decided")
 		}
 	}
 	if before.Summary != after.Summary {
@@ -470,13 +486,11 @@ func (m *Model) Decide(findingID string, fn func(*draft.Draft) error) (bool, err
 		return false, err
 	}
 	m.elsewhere = ""
-	if d.Version != m.version {
-		m.elsewhere = changeNotice(displayed, d, findingID)
-	}
 	m.setDraft(d)
 	if err := m.refreshAwaiting(); err != nil {
 		return false, err
 	}
+	m.elsewhere = elsewhereNotice(displayed, d, findingID)
 	if notice == "" {
 		return true, nil
 	}
@@ -485,11 +499,18 @@ func (m *Model) Decide(findingID string, fn func(*draft.Draft) error) (bool, err
 	return false, nil
 }
 
-// sayDecided is the notice for a recorded decision, followed by whatever changed elsewhere in the same step.
-func (m *Model) sayDecided(text string) {
-	if m.elsewhere != "" && m.elsewhere != draftChanged {
-		text += "; " + m.elsewhere
+// elsewhereNotice names what changed besides the decided finding between the draft the human saw and the one the
+// decision returned, or "". The decision's own write is on the decided finding, so it is never named here.
+func elsewhereNotice(displayed, next *draft.Draft, findingID string) string {
+	if changed := changeNotice(displayed, next, findingID); changed != draftChanged {
+		return changed
 	}
+	return ""
+}
+
+// sayDecided is the notice for a decision, followed by whatever changed elsewhere in the same step.
+func (m *Model) sayDecided(text string) {
+	text = joinNotice(text, m.elsewhere)
 	m.elsewhere = ""
 	m.say(style.Good, text)
 }

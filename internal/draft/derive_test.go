@@ -141,25 +141,29 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 	}
 
 	title, _ := json.Marshal("One, retitled")
-	for name, fn := range map[string]func(*Draft) error{
-		"accept":    func(d *Draft) error { _, err := Accept(d, "f-001", time.Now()); return err },
-		"send back": func(d *Draft) error { _, err := SendBack(d, "f-001", "Why?", time.Now()); return err },
-		"reply":     func(d *Draft) error { _, err := AddReply(d, "n-001", "Because.", ByAgent, time.Now()); return err },
-		"resolve":   func(d *Draft) error { return ResolveNote(d, "n-001", time.Now()) },
-		"edit": func(d *Draft) error {
+	// Each step builds on the one before it: the reply needs the note the send-back wrote.
+	for _, step := range []struct {
+		name string
+		fn   func(*Draft) error
+	}{
+		{"accept", func(d *Draft) error { _, err := Accept(d, "f-001", time.Now()); return err }},
+		{"send back", func(d *Draft) error { _, err := SendBack(d, "f-001", "Why?", time.Now()); return err }},
+		{"reply", func(d *Draft) error { _, err := AddReply(d, "n-001", "Because.", ByAgent, time.Now()); return err }},
+		{"resolve", func(d *Draft) error { return ResolveNote(d, "n-001", time.Now()) }},
+		{"edit", func(d *Draft) error {
 			_, _, err := Edit(d, "f-001", EditInput{Title: title}, nil, nil, ByAgent, time.Now())
 			return err
-		},
-		"withdraw": func(d *Draft) error {
+		}},
+		{"withdraw", func(d *Draft) error {
 			excluded := false
 			_, _, err := Edit(d, "f-001", EditInput{}, &excluded, nil, ByAgent, time.Now())
 			return err
-		},
+		}},
 	} {
 		before := state(loadStored(t, dir))
-		mutate(fn)
+		mutate(step.fn)
 		if state(loadStored(t, dir)) == before {
-			t.Errorf("%s did not change the finding's state", name)
+			t.Errorf("%s did not change the finding's state", step.name)
 		}
 	}
 }
