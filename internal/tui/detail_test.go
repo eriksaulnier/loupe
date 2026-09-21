@@ -371,6 +371,80 @@ func TestDetailEditRowStaysUnframed(t *testing.T) {
 	}
 }
 
+// noteBox opens the send-back box on id and types text into it.
+func noteBox(t *testing.T, m *Model, id, text string) {
+	t.Helper()
+	if err := m.openFinding(id); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if text != "" {
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)})
+	}
+}
+
+func TestDetailNoteAbandonedWithEscIsRestored(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	noteBox(t, m, "f-001", "why this name")
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.noting || m.notice != "" {
+		t.Fatalf("esc left the box open or the slot holding a notice: noting=%v notice=%q", m.noting, m.notice)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	if got := m.note.Value(); got != "why this name?" {
+		t.Fatalf("the reopened box holds %q, want the abandoned text with typing appended", got)
+	}
+}
+
+func TestDetailNoteKeptTextBelongsToItsFinding(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	noteBox(t, m, "f-001", "about f-001")
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	noteBox(t, m, "f-002", "   ")
+	if got := m.note.Value(); got != "   " {
+		t.Fatalf("f-002's box opened with %q, want only what was typed into it", got)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	noteBox(t, m, "f-002", "")
+	if got := m.note.Value(); got != "" {
+		t.Fatalf("whitespace abandoned on f-002 came back as %q", got)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	noteBox(t, m, "f-001", "")
+	if got := m.note.Value(); got != "about f-001" {
+		t.Fatalf("f-001's box opened with %q after visiting f-002", got)
+	}
+}
+
+func TestDetailNoteSentForgetsWhatWasKept(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	noteBox(t, m, "f-001", "first try")
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if n, ok := firstOpenNote(m.draft, "f-001"); !ok || n.Body != "first try" {
+		t.Fatalf("the restored note was not sent: %+v", n)
+	}
+	noteBox(t, m, "f-001", "")
+	if got := m.note.Value(); got != "" {
+		t.Fatalf("a sent note came back as %q", got)
+	}
+}
+
+func TestDetailNoteRefusedOnSendIsKept(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	noteBox(t, m, "f-001", "see <!-- here -->")
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if _, ok := firstOpenNote(m.draft, "f-001"); ok || !strings.Contains(m.notice, "HTML comments are not allowed") {
+		t.Fatalf("the note was not refused with its reason: notice %q", m.notice)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if got := m.note.Value(); got != "see <!-- here -->" {
+		t.Fatalf("the refused note came back as %q", got)
+	}
+}
+
 func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	if err := m.openFinding("f-001"); err != nil {

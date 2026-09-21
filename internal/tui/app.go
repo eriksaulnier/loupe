@@ -85,6 +85,9 @@ type Model struct {
 	body   viewport.Model
 	noting bool
 	note   textarea.Model
+	// keptNotes holds, per finding, text the human typed into a note and then left without it being recorded, so the
+	// next send-back on that finding starts from it. It lives only as long as the program.
+	keptNotes map[string]string
 	// editing is true while the label and blocking editor is open; editPick indexes editLabels.
 	editing      bool
 	editLabels   []string
@@ -143,16 +146,17 @@ func New(cfg Config) (*Model, error) {
 	note.FocusedStyle, note.BlurredStyle = textarea.Style{}, textarea.Style{}
 	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
-		cfg:    cfg,
-		target: target,
-		diff:   parsed,
-		glyphs: st.Glyphs,
-		styles: st,
-		width:  80,
-		height: 24,
-		note:   note,
-		body:   viewport.New(80, 10),
-		file:   viewport.New(80, 10),
+		cfg:       cfg,
+		target:    target,
+		diff:      parsed,
+		glyphs:    st.Glyphs,
+		styles:    st,
+		width:     80,
+		height:    24,
+		note:      note,
+		keptNotes: map[string]string{},
+		body:      viewport.New(80, 10),
+		file:      viewport.New(80, 10),
 		// The summary starts collapsed so the findings, not the prose, fill the first screen.
 		summaryCollapsed: true,
 	}

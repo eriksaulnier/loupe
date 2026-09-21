@@ -275,6 +275,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		m.noting, m.notice = true, ""
 		m.note.SetPromptFunc(notePad, func(int) string { return strings.Repeat(" ", notePad) })
 		m.note.Reset()
+		m.note.SetValue(m.keptNotes[f.ID])
 		m.note.Cursor.SetMode(cursor.CursorStatic)
 		cmd := m.note.Focus()
 		m.sizeNote(0)
@@ -332,17 +333,23 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 	case tea.KeyEsc:
 		m.noting = false
 		m.note.Blur()
+		m.keepNote(m.openID, m.note.Value())
 		return nil
 	case tea.KeyEnter:
 		m.noting = false
 		m.note.Blur()
 		id, body := m.openID, m.note.Value()
+		// Kept until the note is recorded, so a refusal hands the text back for correction rather than losing it.
+		m.keepNote(id, body)
 		var noteID string
 		return m.decideAndShow(func(d *draft.Draft) error {
 			n, err := draft.SendBack(d, id, body, m.cfg.Now())
 			noteID = n.ID
 			return err
-		}, func() string { return fmt.Sprintf("%s %s sent back as %s", m.glyphs.Note, id, noteID) })
+		}, func() string {
+			delete(m.keptNotes, id)
+			return fmt.Sprintf("%s %s sent back as %s", m.glyphs.Note, id, noteID)
+		})
 	}
 	if msg.Type == tea.KeyRunes {
 		// A note is one paragraph, so a pasted line break or tab becomes a space.
@@ -354,6 +361,15 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 	m.note, cmd = m.note.Update(msg)
 	m.sizeNote(0)
 	return cmd
+}
+
+// keepNote holds text left in the note box for its finding, and forgets a box left empty.
+func (m *Model) keepNote(id, text string) {
+	if strings.TrimSpace(text) == "" {
+		delete(m.keptNotes, id)
+		return
+	}
+	m.keptNotes[id] = text
 }
 
 // updateEdit drives the editor row. Arrows move the label rather than the finding, so the row cannot outlive the
