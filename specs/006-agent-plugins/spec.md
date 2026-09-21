@@ -83,7 +83,7 @@ The owner installs loupe's skill with the harness's own plugin command. Claude C
 - **Unusual paths.** The loupe executable's path or the ref contains characters a shell treats specially. Both MUST reach the pane's shell as literal words.
 - **Several panes in the tab.** The layout lists every pane in the tab. loupe MUST read the entry whose id is the agent's own.
 - **Review refuses in the pane.** The pane stays open with `error:` and `fix:` (spec 003 FR-015). `loupe handoff` has already succeeded; it does not watch the pane.
-- **A second handoff.** Each call opens a new split. loupe MUST NOT look for, reuse or close an earlier pane.
+- **A second handoff.** Each call that opens a split opens a new one. loupe MUST NOT look for, reuse or close an earlier pane. Since `specs/017-live-review` (2026-09-21) a call made while a review of the run is still open refuses `review-open` and opens nothing.
 - **Published run.** `loupe handoff` does not check readiness or publication. Review shows its own state or refusal in the pane.
 - **Stale `HERDR_ENV`.** A shell started from a Herdr pane into another terminal can inherit `HERDR_ENV`. Detection does not guard against it; the `herdr` call then fails and loupe refuses `pane-failed`.
 - **Sandboxed harness.** Codex's default sandbox blocks the Herdr socket. The skill's sandbox rule tells the agent to rerun `loupe handoff` with the harness's approval.

@@ -36,7 +36,7 @@ A human runs `/loupe <pr-url>` in Claude Code inside Herdr. When the agent has f
 
 1. **Given** the agent runs inside Herdr and has set the summary, **When** it hands off, **Then** a new split running `loupe review <ref>` for that run opens beside the agent pane with focus, and the agent then blocks on `loupe wait --run <ref> --json`.
 2. **Given** the review split is open, **When** the human quits review leaving a note for the agent, **Then** the review pane closes, `loupe wait` returns `reason: notes`, and the agent answers only the awaiting notes. Amended on 2026-09-21 by `specs/017-live-review`: a send-back reaches `loupe wait` as it is written, so the human need not quit.
-3. **Given** the agent has replied to every awaiting note, **When** it hands off again, **Then** it opens a new split for the same run rather than reusing or searching for the earlier pane.
+3. **Given** the agent has replied to every awaiting note, **When** it hands off again, **Then** it opens a new split for the same run rather than reusing or searching for the earlier pane. Amended on 2026-09-21 by `specs/017-live-review`: while the earlier review is still open, `loupe handoff` refuses `review-open` and no split opens.
 4. **Given** the human publishes from the review split, **When** `loupe wait` returns `reason: published`, **Then** the agent stops and opens no further pane.
 5. **Given** the agent does not run inside Herdr, **When** it hands off, **Then** it tells the human to run `loupe review <ref>` in their own terminal, exactly as today.
 

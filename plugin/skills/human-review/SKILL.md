@@ -68,7 +68,7 @@ When `error.code` is `review-open`, the human already has review open for this r
 
 On any other refusal, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.
 
-Each hand-off opens a new pane. You MUST NOT look for or reuse an earlier one.
+A hand-off that opens a pane always opens a new one. You MUST NOT look for or reuse an earlier one.
 
 ## 6. Wait
 

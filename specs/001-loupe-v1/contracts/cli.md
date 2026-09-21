@@ -64,7 +64,7 @@ Refusal or error (exit 1 or 2):
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
 | `pane-failed` | The terminal refused or garbled a `handoff` call | the same; the message carries the terminal's error |
-| `review-open` | `handoff` while a `review` of the run is running | tell the human the answers are in their open review, then `loupe wait` |
+| `review-open` | `handoff` while a `review` of the run is running | tell the human their review is already open, then `loupe wait` |
 | `internal` | A defect | file an issue; stack on stderr |
 
 ## Commands

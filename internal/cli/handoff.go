@@ -23,9 +23,9 @@ opens to the right of the agent's pane when that pane is at least 120 columns wi
 otherwise, takes focus, and runs this loupe's review for the run. It closes when review exits
 cleanly and stays open on a refusal so the human can read it.
 
-The agent MUST NOT send to, read, resize, close or reuse the pane; each hand-off opens a new
-one. A failed herdr call refuses pane-failed with Herdr's message and is not retried. On either
-refusal the agent tells the human to run loupe review.
+The agent MUST NOT send to, read, resize, close or reuse the pane; a hand-off that opens a pane
+opens a new one. A failed herdr call refuses pane-failed with Herdr's message and is not
+retried. On no-pane-host or pane-failed the agent tells the human to run loupe review.
 
 The run is <ref> or --run <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the
 pull request of the current branch in the working directory at its newest round.
@@ -68,7 +68,7 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	}
 	if open {
 		return refusal.New(refusal.ReviewOpen, fmt.Sprintf("loupe review is already open for %s, so no pane was opened", ref),
-			"tell the human the answers are in their open review, then run loupe wait --run "+shellQuote(ref.String())+" --json")
+			"tell the human their review is already open, then run loupe wait --run "+shellQuote(ref.String())+" --json")
 	}
 	fix := "ask the human to run loupe review " + shellQuote(ref.String())
 	host, ok := pane.Detect(deps.Getenv)

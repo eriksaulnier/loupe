@@ -195,7 +195,7 @@ func TestHandoffRefusesWhileReviewIsOpen(t *testing.T) {
 			errObj, _ := e["error"].(map[string]any)
 			if code != 1 || errObj["code"] != "review-open" ||
 				errObj["message"] != "loupe review is already open for o/r#1@1, so no pane was opened" ||
-				errObj["fix"] != "tell the human the answers are in their open review, then run loupe wait --run 'o/r#1@1' --json" {
+				errObj["fix"] != "tell the human their review is already open, then run loupe wait --run 'o/r#1@1' --json" {
 				t.Fatalf("exit %d envelope %v", code, e)
 			}
 			if calls := herdrCalls(t, log); calls != nil {
