@@ -72,11 +72,11 @@ description: "Task list for framing the send-back note the way the publish messa
 
 **Independent Test**: Seed two notes on one finding, one with a multi-line reply, open it, and read the thread against the Amendment input's target.
 
-- [ ] T016 [US5] In `internal/tui/detail_test.go`, rewrite `TestDetailViewShowsRepliesUnderNotes` to fail until the thread is drawn as blocks: `┃ you · n-001 · open` then the body on its own row, a bar-only row, `┃   agent · r-001` then its body indented, the escaped `\u202E` still shown escaped, and replies in draft order (FR-013, FR-014, FR-017, User Story 5 scenarios 1 and 2).
-- [ ] T017 [US5] In `internal/tui/detail_test.go`, add a failing test that a reply with line breaks, a blank line, `\r\n`, a tab and a leading and trailing newline is drawn line for line, the blank line as a bar-only row and nothing empty at either end, and that a line wider than the window wraps under the bar and indent (FR-015, spec Edge Cases).
-- [ ] T018 [US5] In `internal/tui/detail_test.go`, add a failing test that two notes on one finding are separated by a row without a bar, that a resolved note's header reads `✓ resolved`, and that under the ASCII tier the bar is `|`, the separator `-` and the resolved glyph `+` (FR-013, FR-016, User Story 5 scenarios 5 and 6).
-- [ ] T019 [US5] Rewrite `noteThread` in `internal/tui/detail.go` as the plan's Research describes: blocks, bodies split on line breaks and wrapped with the bar prefix as the indent, the tier's `Quote` as the bar in `style.Note`. T016 to T018 pass, and `internal/tui/plain.go` is untouched (FR-018).
-- [ ] T020 Run the demo through tmux on a finding with a note and reply and check the thread by eye in color, then `mise run check`, a read-only review, and atomic commits.
+- [x] T016 [US5] In `internal/tui/detail_test.go`, rewrite `TestDetailViewShowsRepliesUnderNotes` to fail until the thread is drawn as blocks: `┃ you · n-001 · open` then the body on its own row, a bar-only row, `┃   agent · r-001` then its body indented, the escaped `\u202E` still shown escaped, and replies in draft order (FR-013, FR-014, FR-017, User Story 5 scenarios 1 and 2).
+- [x] T017 [US5] In `internal/tui/detail_test.go`, add a failing test that a reply with line breaks, a blank line, `\r\n`, a tab and a leading and trailing newline is drawn line for line, the blank line as a bar-only row and nothing empty at either end, and that a line wider than the window wraps under the bar and indent (FR-015, spec Edge Cases).
+- [x] T018 [US5] In `internal/tui/detail_test.go`, add a failing test that two notes on one finding are separated by a row without a bar, that a resolved note's header reads `✓ resolved`, and that under the ASCII tier the bar is `|`, the separator `-` and the resolved glyph `+` (FR-013, FR-016, User Story 5 scenarios 5 and 6).
+- [x] T019 [US5] Rewrite `noteThread` in `internal/tui/detail.go` as the plan's Research describes: blocks, bodies split on line breaks and wrapped with the bar prefix as the indent, the tier's `Quote` as the bar in `style.Note`. T016 to T018 pass, and `internal/tui/plain.go` is untouched (FR-018).
+- [x] T020 Run the demo through tmux on a finding with a note and reply and check the thread by eye in color, then `mise run check`, a read-only review, and atomic commits.
 
 ## Dependencies
 
