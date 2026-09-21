@@ -273,13 +273,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		return m.decideAndStay(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
 		m.noting, m.notice = true, ""
-		prompt := m.styles.Note.Render(m.glyphs.Note+" send back "+f.ID) + " " + m.styles.Cursor.Render(m.glyphs.Cursor) + " "
-		m.note.SetPromptFunc(style.Width(prompt), func(row int) string {
-			if row == 0 {
-				return prompt
-			}
-			return ""
-		})
+		m.note.SetPromptFunc(notePad, func(int) string { return strings.Repeat(" ", notePad) })
 		m.note.Reset()
 		m.note.Cursor.SetMode(cursor.CursorStatic)
 		cmd := m.note.Focus()
@@ -447,24 +441,34 @@ func (m *Model) editView() string {
 	return strings.Join(m.partLines(parts, 2), "\n")
 }
 
-// sizeNote fits the note input inside its one-column margin, as tall as its wrapped text plus extra rows.
+// notePad is the column kept clear inside each edge of the note's frame, so the text does not sit against it. The
+// textarea's prompt is the left one.
+const notePad = 1
+
+// noteBoxWidth is the frame's width: the window less the one-column margin every view keeps on its left.
+func (m *Model) noteBoxWidth() int { return m.width - 1 }
+
+// sizeNote fits the note input inside its frame, as tall as its wrapped text plus extra rows.
 func (m *Model) sizeNote(extra int) {
-	m.note.SetWidth(max(1, m.width-1))
+	inner := max(2*notePad+1, m.noteBoxWidth()-2)
+	m.note.SetWidth(inner - notePad)
 	m.note.SetHeight(m.note.LineInfo().Height + extra)
 }
 
-// noteView is the wrapped note input capped at a third of the window; a taller note shows the rows ending at the
-// cursor's.
+// noteView is the note input framed as the publish message is, since both are prose the human authors. Its text is
+// capped at a third of the window; a taller note shows the rows ending at the cursor's.
 func (m *Model) noteView() string {
 	rows := strings.Split(m.note.View(), "\n")
 	if limit := max(1, m.height/3); len(rows) > limit {
 		start := min(max(0, m.note.LineInfo().RowOffset-limit+1), len(rows)-limit)
 		rows = rows[start : start+limit]
 	}
-	for i, r := range rows {
-		rows[i] = " " + r
+	way := "enter sends " + m.glyphs.Sep + " esc cancels"
+	boxed := m.styles.Box(rows, m.noteBoxWidth(), "send back "+m.openID, way, style.Note)
+	for i, r := range boxed {
+		boxed[i] = " " + r
 	}
-	return strings.Join(rows, "\n")
+	return strings.Join(boxed, "\n")
 }
 
 // decideAndStay records a change that does not settle the finding (a restore, a note resolved or dismissed, an

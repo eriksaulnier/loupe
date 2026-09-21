@@ -284,9 +284,31 @@ func TestDetailNoteInputNamesTheFinding(t *testing.T) {
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
 	view := m.View()
-	if !strings.Contains(view, "\u270e send back f-001 \u203a") || !strings.Contains(view, "enter send") ||
-		!strings.Contains(view, "esc cancel") || !strings.Contains(view, "ctrl+u clear") {
-		t.Fatalf("the send-back input is not labeled with its keys:\n%s", view)
+	if !regexp.MustCompile(`(?m)^ ╭─ send back f-001 ─+ enter sends · esc cancels ─╮$`).MatchString(view) ||
+		!regexp.MustCompile(`(?m)^ │ +│$`).MatchString(view) || !regexp.MustCompile(`(?m)^ ╰─+╯$`).MatchString(view) {
+		t.Fatalf("the send-back input is not framed with its title and way out:\n%s", view)
+	}
+	if strings.Contains(view, "\u203a") {
+		t.Errorf("the frame's title and the old prompt both name the finding:\n%s", view)
+	}
+	if !strings.Contains(view, "enter send") || !strings.Contains(view, "esc cancel") || !strings.Contains(view, "ctrl+u clear") {
+		t.Errorf("the footer no longer lists the note's keys:\n%s", view)
+	}
+}
+
+func TestDetailNoteFrameFollowsTheGlyphTierAndWidth(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if view := m.View(); !regexp.MustCompile(`(?m)^ \+- send back f-001 -+ enter sends - esc cancels -\+$`).MatchString(view) {
+		t.Fatalf("the ASCII frame is not drawn in the ASCII tier:\n%s", view)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 30})
+	view := m.View()
+	if !regexp.MustCompile(`(?m)^ \+- send back f-001 -+\+$`).MatchString(view) || strings.Contains(view, "esc cancels") {
+		t.Fatalf("a narrow frame does not give up its way out before its title:\n%s", view)
 	}
 }
 
@@ -297,21 +319,55 @@ func TestDetailNoteInputWrapsAndKeepsTheCursorInView(t *testing.T) {
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("short note")})
-	if view := m.View(); !strings.Contains(view, "send back f-001 \u203a short note") {
-		t.Fatalf("a short note is not on the prompt's line:\n%s", view)
+	if view := m.View(); !regexp.MustCompile(`(?m)^ │ short note +│$`).MatchString(view) {
+		t.Fatalf("a short note is not on the frame's first row:\n%s", view)
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat(" and more", 40) + " END")})
 	view := m.View()
-	if !strings.Contains(view, "END") || strings.Contains(view, "send back f-001") {
-		t.Fatalf("a note taller than its rows does not follow the cursor to its end:\n%s", view)
+	if !strings.Contains(view, "END") || strings.Contains(view, "short note") || !strings.Contains(view, "send back f-001") {
+		t.Fatalf("a note taller than its rows does not follow the cursor to its end inside the frame:\n%s", view)
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
-	if view := m.View(); !strings.Contains(view, "send back f-001 \u203a short note") || strings.Contains(view, "END") {
-		t.Fatalf("moving to the start does not bring the prompt back into view:\n%s", view)
+	if view := m.View(); !strings.Contains(view, "short note") || strings.Contains(view, "END") {
+		t.Fatalf("moving to the start does not bring the first row back into view:\n%s", view)
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if n, ok := firstOpenNote(m.draft, "f-001"); !ok || !strings.HasSuffix(n.Body, " END") {
 		t.Fatalf("the wrapped note was not sent back whole: %+v", n)
+	}
+}
+
+func TestDetailNoteBoxGrowsFromOneRowToAThirdOfTheWindow(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 15)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	textRows := regexp.MustCompile(`(?m)^ │.*│$`)
+	if n := len(textRows.FindAllString(m.View(), -1)); n != 1 {
+		t.Fatalf("an empty note box has %d text rows, want 1:\n%s", n, m.View())
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat(" and more", 60) + " END")})
+	view := m.View()
+	if n := len(textRows.FindAllString(view, -1)); n != 15/3 || !strings.Contains(view, "END") {
+		t.Fatalf("a long note box has %d text rows, want %d ending at the cursor:\n%s", n, 15/3, view)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 72, Height: 15})
+	top := regexp.MustCompile(`(?m)^ ╭.*╮$`).FindString(m.View())
+	if style.Width(top) != 72 {
+		t.Fatalf("after a resize the frame is %d columns, want 72:\n%s", style.Width(top), m.View())
+	}
+}
+
+func TestDetailEditRowStaysUnframed(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	view := m.View()
+	if !strings.Contains(view, "\u270e edit f-001") || strings.ContainsAny(view, "╭╮╰╯") {
+		t.Fatalf("the edit row is a picker and is not framed:\n%s", view)
 	}
 }
 
