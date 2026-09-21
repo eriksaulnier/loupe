@@ -28,18 +28,37 @@
 >
 > **Not in scope.** The publish confirmation, which 013 owns.
 
+**Amendment input**: Owner, 2026-09-21, extending this specification to the recorded thread: "also restyle the recorded note thread in the detail view. Today each note and reply is squashed to one line. The owner chose "conversation blocks": each note and each reply is its own block, a header line (who · id · status) with the full body underneath as written, not squashed; a bar down the left in the note color ties one thread together; replies are indented under their note; a blank line between threads." With this target:
+
+```text
+  ┃ you · n-001 · open
+  ┃ Why does this refuse on an empty
+  ┃ diff? Capture allows one.
+  ┃
+  ┃   agent · r-001
+  ┃   It shouldn't. Fixed in f-003:
+  ┃   empty now prints nothing.
+
+  ┃ you · n-002 · ✓ resolved
+  ┃ Rename the flag?
+```
+
+"you" is the human's note; a reply's header shows its By. The bar and glyphs follow the glyph tier.
+
 ## Relationship to earlier specifications
 
 - **Spec 013** introduced the framed input for the publish message and owns the publish confirmation. Nothing in that confirmation changes here. Its stated reason for the frame, that loupe draws no other box and so this one cannot read as decoration, becomes "loupe frames only what the human authors". That MUST stay true: this specification MUST NOT frame anything the human does not type into.
 - **Spec 002** owns the review interface and its notice slot, where the send-back note and the edit row open today.
 - **Spec 005** added the edit row. Whether it is framed is decided here, and nothing else about it changes.
-- The draft's stored shape, the send-back note's content rules, the `loupe` commands and the published review format are untouched. This is a change to how the note is typed, not to what a note is.
+- **Spec 001**'s detail view lists a finding's notes with their replies under them. User Story 5 changes how that thread is drawn in the full-screen interface; what it lists and in what order do not change.
+- The draft's stored shape, the send-back note's content rules, the `loupe` commands and the published review format are untouched. This is a change to how a note is typed and how a thread is read, not to what a note is.
 
 ## Clarifications
 
 ### Session 2026-09-21
 
 - Q: Which key model should the framed send-back note use? → A: The draft's option 2 (one paragraph, `enter` sends, `esc` cancels, way-out text `enter sends · esc cancels`, one-row floor), plus: text abandoned with `esc` is kept in memory for that finding until the process exits and restored by the next `s`. Once the frames match, `esc` is the trap: message-box habit says `esc when done`, and here it would throw the note away. A stray `enter` is recoverable, because the human can dismiss the sent note before the agent reads it.
+- Q: How should the recorded thread under a finding look? → A: Conversation blocks, as in the Amendment input: a header line per note and per reply, the full body under it as written, a bar in the note color down one thread, replies indented under their note, a blank line between threads.
 - Q: Should the edit row get a frame? → A: No. It is a picker, not prose, and the frame means "you are typing prose here". Framing a picker would weaken that.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -108,6 +127,25 @@ A human presses `e` to change a finding's label or blocking flag. The edit row o
 
 ---
 
+### User Story 5 - The recorded thread reads as a conversation (Priority: P2)
+
+A human opens a finding they sent back an hour ago. Under the finding, their question and the agent's answer read as two turns of a conversation: who said it, which note or reply it is, whether the note is still open, and every word of each body as it was written, with its line breaks. A second note on the same finding starts its own thread after a blank line.
+
+**Why this priority**: The send-back note now reads as a field when it is typed. Once recorded, it is squashed to one line with its reply, so the one place a human reads the agent's answer is the place its line breaks and length are thrown away.
+
+**Independent Test**: Seed a draft with two notes on one finding, one with a multi-line reply, open the finding, and read the thread against the Amendment input's target.
+
+**Acceptance Scenarios**:
+
+1. **Given** a note on the open finding, **When** the detail view is drawn, **Then** the note is a block whose first row is `you <sep> <note id> <sep> <status>`, with the closing glyph before the status when the note is resolved or dismissed, and whose body follows on the rows under it.
+2. **Given** a reply to that note, **When** the view is drawn, **Then** it is a block after a bar-only row, indented under the note, whose first row is `<by> <sep> <reply id>` and whose body follows.
+3. **Given** a body with line breaks, **When** it is drawn, **Then** each written line starts a new row, and a line wider than the window wraps under the same bar and indent.
+4. **Given** a thread, **When** it is drawn, **Then** every row of it, blank ones inside it included, starts with the bar in the note color.
+5. **Given** two notes on one finding, **When** the view is drawn, **Then** a row without a bar separates their threads.
+6. **Given** the ASCII glyph tier, **When** the thread is drawn, **Then** the bar, the separator and the closing glyphs are the tier's own.
+
+---
+
 ### Edge Cases
 
 - **A terminal narrower than the title and way-out text.** The top edge drops the way-out text first, then the title, as the message box does, and never truncates either mid-word. The frame itself still draws.
@@ -117,6 +155,10 @@ A human presses `e` to change a finding's label or blocking flag. The edit row o
 - **Only whitespace abandoned with `esc`.** Nothing worth restoring; the next `s` opens empty.
 - **The human leaves the detail view or moves to another finding with text kept.** The text stays kept for its finding until it is sent or the process exits.
 - **A pasted line break or tab.** It still becomes a space, as today.
+- **A body carrying hidden or bidirectional control characters.** They are shown escaped, as the one-line thread shows them today, and never reach the terminal raw.
+- **A body with blank lines, or trailing and leading line breaks.** A blank line inside the body is a bar-only row. Line breaks at either end are dropped, so a block never starts or ends on an empty row.
+- **A body with Windows line endings or tabs.** `\r\n` is a line break. A tab becomes a space, as the note input already does with a pasted one.
+- **A note with no reply, or several.** Each reply is its own block under the note, in the order recorded.
 - **The window resizes while the box is open.** The frame redraws at the new width, as the note input resizes today.
 
 ## Requirements *(mandatory)*
@@ -136,11 +178,18 @@ A human presses `e` to change a finding's label or blocking flag. The edit row o
 - **FR-010**: The publish confirmation, its message box and its keys MUST NOT change.
 - **FR-011**: The plain-terminal fallback MUST NOT change.
 - **FR-012**: The footer's key hints and the help screen MUST describe the send-back note's keys as FR-004 defines them.
+- **FR-013**: The detail view MUST draw each note on the open finding as a block: a header row, `you`, the note's id and its status joined by the tier's separator, with the closing glyph before a resolved or dismissed status; then the note's body.
+- **FR-014**: Each reply MUST be drawn as its own block under its note, after a bar-only row and indented by two columns, with a header row of the reply's `by` and its id joined by the separator, then its body.
+- **FR-015**: A body MUST be drawn in full as written: each of its lines starts a row and wraps within the window under its block's indent. It MUST NOT be squashed onto one line, truncated or rendered as Markdown. Hidden and bidirectional control characters MUST be shown escaped.
+- **FR-016**: Every row of a thread MUST start with the tier's bar glyph in the note color, and a row without a bar MUST separate one note's thread from the next.
+- **FR-017**: The thread's notes, replies and their order MUST NOT change: notes in draft order, each followed by its replies in draft order.
+- **FR-018**: The plain-terminal fallback's thread MUST NOT change (FR-011).
 
 ### Key Entities
 
 - **The send-back box**: the framed input the human types a send-back note into, in the detail view's notice slot. It is the second of loupe's two authoring surfaces, beside the publish message.
 - **The key model**: what `enter` and `esc` do in an authoring surface. The two surfaces keep opposite ones, and the frame's way-out text and height tell them apart.
+- **Note thread**: one note on a finding and the replies to it, drawn as conversation blocks under one bar.
 - **Kept note text**: text abandoned in the send-back box, held in memory per finding for the life of the process and restored by the next `s` on that finding.
 
 ## Success Criteria *(mandatory)*
@@ -152,6 +201,7 @@ A human presses `e` to change a finding's label or blocking flag. The edit row o
 - **SC-003**: Every note recorded after this change is byte-identical to what the same keystrokes recorded before it.
 - **SC-004**: No surface a human does not type prose into gains a frame.
 - **SC-005**: All automated repository checks pass after the final edit.
+- **SC-006**: Every word and line break of every note and reply on a finding can be read in the detail view without leaving it.
 
 ## Assumptions
 
@@ -160,4 +210,5 @@ A human presses `e` to change a finding's label or blocking flag. The edit row o
 - The note keeps the cap of a third of the window it has today. Only the floor is new.
 - Keeping abandoned text follows spec 013 FR-007, which keeps the publish message in memory across a cancelled confirmation for the same reason. The text is the human's own, from earlier in the same session, and it is read again before anything is sent.
 - The publish confirmation is out of scope, as the draft says. If the message box's `esc when done` would read better beside `enter sends · esc cancels` in other words, that is spec 013's surface and its own change.
+- Bodies are drawn as wrapped text, not rendered Markdown. A note is a sentence or two typed on one line, and a reply is an answer to it; rendering either as a document would put headings and margins inside a conversation. Markdown syntax in a reply shows as typed.
 - Whether the frame changes how humans write send-back notes is not measurable here and is not claimed.

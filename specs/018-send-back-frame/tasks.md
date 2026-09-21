@@ -68,9 +68,19 @@ description: "Task list for framing the send-back note the way the publish messa
 - [x] T014 Regenerate `docs/assets/` with `mise run screenshots` if `ttyd` and `ffmpeg` are installed, and read the stills' diff; otherwise record that `detail.png` and `sendback.gif` still show the unframed row. Done 2026-09-21: `ttyd`, `ffmpeg` and `vhs` are not installed here, so the images were not regenerated and still show the unframed row.
 - [x] T015 Run `mise run check`, which also runs the confirmation's and the plain fallback's existing tests unchanged (FR-010, FR-011), have a read-only sub-agent review the branch against spec.md's FR list, fix what holds up, re-run `mise run check`, and make atomic local commits. No push, pull request or live run.
 
+## Phase 6: User Story 5 - The recorded thread reads as a conversation (P2, amendment)
+
+**Independent Test**: Seed two notes on one finding, one with a multi-line reply, open it, and read the thread against the Amendment input's target.
+
+- [ ] T016 [US5] In `internal/tui/detail_test.go`, rewrite `TestDetailViewShowsRepliesUnderNotes` to fail until the thread is drawn as blocks: `┃ you · n-001 · open` then the body on its own row, a bar-only row, `┃   agent · r-001` then its body indented, the escaped `\u202E` still shown escaped, and replies in draft order (FR-013, FR-014, FR-017, User Story 5 scenarios 1 and 2).
+- [ ] T017 [US5] In `internal/tui/detail_test.go`, add a failing test that a reply with line breaks, a blank line, `\r\n`, a tab and a leading and trailing newline is drawn line for line, the blank line as a bar-only row and nothing empty at either end, and that a line wider than the window wraps under the bar and indent (FR-015, spec Edge Cases).
+- [ ] T018 [US5] In `internal/tui/detail_test.go`, add a failing test that two notes on one finding are separated by a row without a bar, that a resolved note's header reads `✓ resolved`, and that under the ASCII tier the bar is `|`, the separator `-` and the resolved glyph `+` (FR-013, FR-016, User Story 5 scenarios 5 and 6).
+- [ ] T019 [US5] Rewrite `noteThread` in `internal/tui/detail.go` as the plan's Research describes: blocks, bodies split on line breaks and wrapped with the bar prefix as the indent, the tier's `Quote` as the bar in `style.Note`. T016 to T018 pass, and `internal/tui/plain.go` is untouched (FR-018).
+- [ ] T020 Run the demo through tmux on a finding with a note and reply and check the thread by eye in color, then `mise run check`, a read-only review, and atomic commits.
+
 ## Dependencies
 
-Phase 1 comes first: T001 and T002 precede T003, and T004 follows T003. Phase 2 needs T003, because restoring text into the box is asserted through the framed view; T005 to T008 are independent of each other and precede T009. Phase 3 needs T003. Phase 4 depends on nothing. T012 depends on nothing; T013 to T015 are last.
+Phase 1 comes first: T001 and T002 precede T003, and T004 follows T003. Phase 2 needs T003, because restoring text into the box is asserted through the framed view; T005 to T008 are independent of each other and precede T009. Phase 3 needs T003. Phase 4 depends on nothing. T012 depends on nothing; T013 to T015 are last. Phase 6 depends on none of the earlier phases; T016 to T018 precede T019, and T020 is last.
 
 ## Parallel Opportunities
 
