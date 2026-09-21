@@ -108,7 +108,7 @@ func TestInlinePunctuationGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkGolden(t, "inline-punctuation.json", got.String())
-	if !strings.Contains(Body(in), "<summary>use `x` *now* [a](b)</summary>") {
+	if !strings.Contains(Body(in), "<summary>use <code>x</code> *now* [a](b)</summary>") {
 		t.Fatalf("the review body's summary was escaped:\n%s", Body(in))
 	}
 }

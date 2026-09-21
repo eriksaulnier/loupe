@@ -180,10 +180,7 @@ func sectionBlock(title string, fs []Finding, ctx summaryContext, in Input) stri
 }
 
 func summaryLine(f Finding, ctx summaryContext) string {
-	title := EscapeHTML(OneLine(f.Title))
-	if ctx == inInline {
-		title = escapePunctuation(title)
-	}
+	title := titleHTML(OneLine(f.Title), ctx == inInline)
 	var bold []string
 	// Only an enum word leads the line. The prefix is interpolated outside a code span, and a run captured before the
 	// enum can hold any text, so a free-text severity stays on the meta line where a code span makes it inert.
@@ -207,6 +204,62 @@ func summaryLine(f Finding, ctx summaryContext) string {
 		prefix = dot + " " + prefix
 	}
 	return prefix + title
+}
+
+// titleHTML turns each CommonMark code span in a title into <code>, because GitHub parses no Markdown inside
+// <summary>. The rest of the title stays plain text, so its other Markdown shows literally.
+func titleHTML(title string, inline bool) string {
+	escape := EscapeHTML
+	if inline {
+		escape = func(s string) string { return escapePunctuation(EscapeHTML(s)) }
+	}
+	var b strings.Builder
+	text := 0
+	for i := 0; i < len(title); {
+		if title[i] != '`' {
+			i++
+			continue
+		}
+		n := backtickRun(title, i)
+		end := closingRun(title, i+n, n)
+		if end < 0 {
+			i += n
+			continue
+		}
+		code := title[i+n : end]
+		if len(code) > 1 && code[0] == ' ' && code[len(code)-1] == ' ' && strings.Trim(code, " ") != "" {
+			code = code[1 : len(code)-1]
+		}
+		b.WriteString(escape(title[text:i]) + "<code>" + escape(code) + "</code>")
+		i = end + n
+		text = i
+	}
+	b.WriteString(escape(title[text:]))
+	return b.String()
+}
+
+func backtickRun(s string, i int) int {
+	n := 0
+	for i+n < len(s) && s[i+n] == '`' {
+		n++
+	}
+	return n
+}
+
+// closingRun finds the next run of exactly n backticks at or after from, or returns -1.
+func closingRun(s string, from, n int) int {
+	for j := from; j < len(s); {
+		if s[j] != '`' {
+			j++
+			continue
+		}
+		m := backtickRun(s, j)
+		if m == n {
+			return j
+		}
+		j += m
+	}
+	return -1
 }
 
 // escapePunctuation is for an inline comment's summary line, which GitHub renders as a Markdown paragraph rather than
