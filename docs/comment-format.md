@@ -42,7 +42,7 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 
 - Section order is fixed: `Blocking`, `Issues`, `Suggestions`, `Questions`, `Other`. Empty sections are omitted.
 - Each heading is led by its chip's dot: `### ⛔ Blocking`, `### 🟡 Issues`, `### 🟣 Suggestions`, `### 🔵 Questions`, `### ⚪ Other`. A reader matches a chip to its section by the dot.
-- **Every included finding has exactly one home in the body.** A blocking finding lives in `Blocking` and nowhere else, regardless of its label. `--inline` decides only what additionally anchors to a line; it never changes what the body contains.
+- **Every published finding has exactly one home in the body.** A blocking finding lives in `Blocking` and nowhere else, regardless of its label. `--inline` decides only what additionally anchors to a line; it never changes what the body contains.
 - **Every section sorts by severity first**: `critical`, `major`, `minor`, `trivial`, then every finding whose severity is absent, empty or free text captured before the enum. An unrated finding sorts last rather than as `trivial`, because severity is reviewer-reported and placing it among the rated ones would infer the value the reviewer withheld.
 - Within `Blocking`, severity is followed by label in section order (`issue`, `suggestion`, `question`, then every unknown label as one group), then by finding id. Severity outranks the label group here, so two findings with the same label MAY be separated by a third between them; the section exists to be read first, and a `critical` question MUST NOT sit below a `minor` issue because the label groups say so.
 - Within a label section and within `Other`, severity is followed by finding id.
@@ -116,7 +116,7 @@ The prose is optional in both modes. When there is none the body opens on the ch
 
 - One inline code span per non-zero count, zeros omitted, pluralized except `other` and `blocking`.
 - Each is led by a dot: ⛔ blocking, 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other.
-- Counts are derived from the final included findings at publish time, never from the summary prose.
+- Counts are derived from the final published findings at publish time, never from the summary prose.
 - **One chip per section that exists below, in the order the sections appear.** Blocking leads the row and is counted only there: a finding sits in exactly one section, so a blocking issue is `⛔ 1 blocking`, never also `🟡 1 issue`.
 - A reader who scans the row and finds no chip for a kind will find no heading for it either.
 - No external badge images. They are a network dependency and route through GitHub's camo proxy.
@@ -213,7 +213,7 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 ```
 
 - The first is the reconciliation marker: an unknown publication is resolved by finding a review whose body contains this exact comment. Its format MUST NOT change between versions that may need to reconcile each other's attempts.
-- **`loupe-meta`'s per-label counts are a census, not the chips row.** They count every included finding, blocking ones included, so a review whose only issue blocks records `blocking=1 issues=1` while the visible chips show no issue. The chips are an index of the headings a reader can scroll to; the marker is an inventory of what the review held.
+- **`loupe-meta`'s per-label counts are a census, not the chips row.** They count every published finding, blocking ones included, so a review whose only issue blocks records `blocking=1 issues=1` while the visible chips show no issue. The chips are an index of the headings a reader can scroll to; the marker is an inventory of what the review held.
 - **`unattended=1` follows `round=` only on a review `loupe publish --unattended` sent**, directly before `src=` when both are present (`specs/007-unattended-publish/spec.md` FR-016). It is also how `loupe publish --unattended` counts a pull request's earlier rounds for `N` (FR-015), alongside the review's author ending `[bot]`.
 - **`src=` follows `round=`, or `unattended=1` when present, only when capture recorded a source**, as given (`src=gadfly-review-pr@2.2.0`). It is never escaped, so capture refuses a source that does not match `^[a-z0-9][a-z0-9._-]*(@[0-9][0-9A-Za-z.+-]*)?$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. None of those can close the comment.
 - **`model=` follows `src=`, or sits where `src=` would, only when capture recorded a model** with `loupe capture --model`, as given (`model=anthropic/claude-sonnet-5`). It is never escaped, so capture refuses a model that does not match `^[a-z0-9][a-z0-9._/:-]*$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. The model is provenance for tooling and never appears in the footer.
@@ -229,8 +229,8 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 | Mode | `comments[]` contains |
 | :--- | :--- |
 | `none` | nothing |
-| `blocking` | every included, located, blocking finding |
-| `all` | every included, located finding |
+| `blocking` | every publishable, located, blocking finding |
+| `all` | every publishable, located finding |
 
 - The body is always complete regardless of mode.
 - General findings, those with no location, are never inline.
@@ -253,7 +253,7 @@ The renderer wraps each finding in a generated `<details>`. Authored content tha
 
 ### Allowlist
 
-A body or summary is accepted when all of the following hold. The check runs at write time in `add`, `edit` and `summary`, and again at publish for every included finding and for whichever opening prose is being published: the human's message when attended, the draft's summary when not. Excluded and withdrawn findings are not checked.
+A body or summary is accepted when all of the following hold. The check runs at write time in `add`, `edit` and `summary`, and again at publish for every publishable finding and for whichever opening prose is being published: the human's message when attended, the draft's summary when not. Excluded and withdrawn findings are not checked.
 
 | Rule | Code |
 | :--- | :--- |
@@ -275,6 +275,6 @@ A body or summary is accepted when all of the following hold. The check runs at 
 
 | Refusal | Correction |
 | :--- | :--- |
-| An included finding body that fails the allowlist | `loupe edit <id> --from -` |
+| A publishable finding body that fails the allowlist | `loupe edit <id> --from -` |
 | A review summary that fails the allowlist, with or without findings | `loupe summary --from -` |
 | A composed body, or an inline comment body, over 65,536 characters | exclude a finding in `loupe review` or shorten bodies with `loupe edit <id> --from -` |
