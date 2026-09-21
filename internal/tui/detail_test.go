@@ -155,6 +155,18 @@ func TestDetailThreadKeepsABodyAsWritten(t *testing.T) {
 	}
 }
 
+func TestDetailThreadTrimsOnlyBlankEndsAndEscapesControlLines(t *testing.T) {
+	view := threadView(t, utf8Env, 100,
+		[]draft.Note{{ID: "n-001", FindingID: "f-001", Body: "Why?", Status: draft.NoteOpen, At: testNow}},
+		[]draft.Reply{{ID: "r-001", NoteID: "n-001", Body: "  \nTop\n\f\n\u0085\nend\n   \n", By: draft.ByAgent, At: testNow}})
+	rows := threadRows(view, "n-001")
+	i := slices.Index(rows, " ┃   agent · r-001")
+	want := []string{" ┃   agent · r-001", " ┃   Top", ` ┃   \u000C`, ` ┃   \u0085`, " ┃   end", ""}
+	if i < 0 || len(rows) < i+len(want) || strings.Join(rows[i:i+len(want)], "\n") != strings.Join(want, "\n") {
+		t.Fatalf("blank ends are not trimmed or a control-only line is not shown escaped:\n%s", view)
+	}
+}
+
 func TestDetailThreadsAreSeparatedAndFollowTheTier(t *testing.T) {
 	notes := []draft.Note{
 		{ID: "n-001", FindingID: "f-001", Body: "One.", Status: draft.NoteOpen, At: testNow},

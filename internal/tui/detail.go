@@ -179,9 +179,17 @@ func (m *Model) threadBlock(indent, head, body string) []string {
 	bar := " " + m.styles.Note.Render(m.glyphs.Quote)
 	prefix := bar + " " + indent
 	out := []string{prefix + head}
-	body = strings.NewReplacer("\r\n", "\n", "\t", " ").Replace(body)
-	for _, line := range strings.Split(strings.Trim(body, "\n"), "\n") {
-		if strings.TrimSpace(line) == "" {
+	// Only spaces count as blank: TrimSpace would also take a form feed or U+0085, which ForDisplay shows escaped.
+	blank := func(line string) bool { return strings.Trim(line, " ") == "" }
+	lines := strings.Split(strings.NewReplacer("\r\n", "\n", "\t", " ").Replace(body), "\n")
+	for len(lines) > 0 && blank(lines[0]) {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && blank(lines[len(lines)-1]) {
+		lines = lines[:len(lines)-1]
+	}
+	for _, line := range lines {
+		if blank(line) {
 			out = append(out, bar)
 			continue
 		}
