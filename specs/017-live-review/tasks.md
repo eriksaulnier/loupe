@@ -76,7 +76,7 @@ description: "Task list for handing a send-back to the agent at once and showing
 ## Phase 8: By eye, review and close
 
 - [X] T027 Run `mise run demo` through tmux: send a finding back, write a reply to it with `loupe reply` from a second shell against the demo's `LOUPE_DEMO_HOME`, and watch it land within two seconds in the detail view and in the list; open the send-back editor and confirm nothing moves; press `ctrl+r`.
-- [ ] T028 Run `mise run check`, have a read-only sub-agent review the branch against spec.md's FR list, fix what holds up, and run `mise run check` again. Atomic local commits on `017-live-review`; no push, pull request, release or live run.
+- [X] T028 Run `mise run check`, have a read-only sub-agent review the branch against spec.md's FR list, fix what holds up, and run `mise run check` again. Atomic local commits on `017-live-review`; no push, pull request, release or live run.
 
 ## Dependencies
 
