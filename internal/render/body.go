@@ -180,10 +180,7 @@ func sectionBlock(title string, fs []Finding, ctx summaryContext, in Input) stri
 }
 
 func summaryLine(f Finding, ctx summaryContext) string {
-	title := EscapeHTML(OneLine(f.Title))
-	if ctx == inInline {
-		title = escapePunctuation(title)
-	}
+	title := titleHTML(OneLine(f.Title), ctx == inInline)
 	var bold []string
 	// Only an enum word leads the line. The prefix is interpolated outside a code span, and a run captured before the
 	// enum can hold any text, so a free-text severity stays on the meta line where a code span makes it inert.
@@ -209,6 +206,71 @@ func summaryLine(f Finding, ctx summaryContext) string {
 	return prefix + title
 }
 
+const asciiPunctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+
+// titleHTML applies a title's CommonMark code spans and backslash escapes itself, because GitHub parses no Markdown
+// inside <summary>. The title's other Markdown shows literally.
+func titleHTML(title string, inline bool) string {
+	escape := EscapeHTML
+	if inline {
+		escape = func(s string) string { return escapePunctuation(EscapeHTML(s)) }
+	}
+	var b, text strings.Builder
+	for i := 0; i < len(title); {
+		c := title[i]
+		if c == '\\' && i+1 < len(title) && strings.IndexByte(asciiPunctuation, title[i+1]) >= 0 {
+			text.WriteByte(title[i+1])
+			i += 2
+			continue
+		}
+		if c != '`' {
+			text.WriteByte(c)
+			i++
+			continue
+		}
+		n := backtickRun(title, i)
+		end := closingRun(title, i+n, n)
+		if end < 0 {
+			text.WriteString(title[i : i+n])
+			i += n
+			continue
+		}
+		code := title[i+n : end]
+		if len(code) > 1 && code[0] == ' ' && code[len(code)-1] == ' ' && strings.Trim(code, " ") != "" {
+			code = code[1 : len(code)-1]
+		}
+		b.WriteString(escape(text.String()) + "<code>" + escape(code) + "</code>")
+		text.Reset()
+		i = end + n
+	}
+	b.WriteString(escape(text.String()))
+	return b.String()
+}
+
+func backtickRun(s string, i int) int {
+	n := 0
+	for i+n < len(s) && s[i+n] == '`' {
+		n++
+	}
+	return n
+}
+
+// closingRun finds the next run of exactly n backticks at or after from, or returns -1.
+func closingRun(s string, from, n int) int {
+	for j := from; j < len(s); {
+		if s[j] != '`' {
+			j++
+			continue
+		}
+		m := backtickRun(s, j)
+		if m == n {
+			return j
+		}
+		j += m
+	}
+	return -1
+}
+
 // escapePunctuation is for an inline comment's summary line, which GitHub renders as a Markdown paragraph rather than
 // an HTML block. Character references from EscapeHTML are copied whole so they still decode.
 func escapePunctuation(s string) string {
@@ -222,7 +284,7 @@ func escapePunctuation(s string) string {
 				continue
 			}
 		}
-		if strings.IndexByte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", c) >= 0 {
+		if strings.IndexByte(asciiPunctuation, c) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(c)
