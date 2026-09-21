@@ -93,7 +93,7 @@ Every refusal fires on exactly the same input it fired on before, and every publ
 - **FR-010**: No published review MAY render differently. The only goldens that MAY move are `testdata/golden/cli/publish-help.80.txt` and `publish-help.100.txt`, and only the line carrying the reworded help.
 - **FR-011**: `specs/001-loupe-v1/tasks.md` MUST check off T123 to T127, and its "Remaining gaps" paragraph MUST stop linking `github.com/eriksaulnier/loupe/issues/22`, which does not exist: the repository has no issues, and the link survived the republish from `loupe-archive`. It MUST point at `specs/015-publishable-set/` instead.
 - **FR-012**: The `Included` field MUST keep its name and its JSON key, and no stored run MAY need migrating.
-- **FR-013**: `specs/001-loupe-v1/data-model.md` MUST define the published set as what publish sends — disposition `accepted` when attended, the whole publishable set under `--unattended` — with a dated pointer to this specification, and MUST limit its claim that readiness makes the two sets equal to an attended publish. FR-026 MUST say that under `--unattended` the published findings include pending ones.
+- **FR-013**: `specs/001-loupe-v1/data-model.md` MUST define the published set as what publish sends — disposition `accepted` when attended, the whole publishable set under `--unattended` — with a dated pointer to this specification, and MUST limit its claim that readiness makes the two sets equal to an attended publish, as MUST the same claim in `plan.md`'s digest bullet. FR-026 MUST say that under `--unattended` the published findings include pending ones.
 
 ### Key Entities
 
