@@ -229,8 +229,8 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 | Mode | `comments[]` contains |
 | :--- | :--- |
 | `none` | nothing |
-| `blocking` | every publishable, located, blocking finding |
-| `all` | every publishable, located finding |
+| `blocking` | every published, located, blocking finding |
+| `all` | every published, located finding |
 
 - The body is always complete regardless of mode.
 - General findings, those with no location, are never inline.

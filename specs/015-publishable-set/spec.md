@@ -13,7 +13,7 @@
 This specification amends the two documents `CONTRIBUTING.md` names as contracts, `docs/comment-format.md` and `specs/001-loupe-v1/contracts/cli.md`, and closes T123 to T127 of `specs/001-loupe-v1`. It changes no behavior. Every refusal fires on exactly the same condition afterwards, and no published review renders differently.
 
 - **Spec 001 T120** started this work and stopped halfway. It named the three sets apart in `data-model.md`, in `contracts/cli.md` and in the publish help, but it left one sentence of that help inconsistent with itself and left the prose everywhere else alone.
-- **`specs/001-loupe-v1/data-model.md:151-153`** already defines the vocabulary. This specification does not invent a word; it makes the rest of the repository use the words that are written down there.
+- **`specs/001-loupe-v1/data-model.md:151-153`** already defines the vocabulary. This specification does not invent a word; it makes the rest of the repository use the words that are written down there. It corrects one of them: the published set was defined as `accepted` alone before `specs/007-unattended-publish` let `--unattended` send pending findings, and the definition never caught up.
 - The `Included` field keeps its name and its JSON key. Renaming a persisted field is a data migration and a different piece of work.
 - Constitution 2.0.1 is unchanged. No principle is added, removed or redefined.
 
@@ -27,11 +27,11 @@ The three sets are distinct, and the distinction is the whole point:
 | :--- | :--- |
 | `included` flag | a finding the human has not withdrawn |
 | Publishable set | `included` and not human-excluded: disposition `accepted` or `pending` |
-| Published set | disposition `accepted` when publish sends |
+| Published set | what publish sends: disposition `accepted` when attended, the whole publishable set under `--unattended` |
 
-The publishable and published sets are equal only at publish, because readiness gates out `pending`. A reader who is told "included" for all three cannot tell which gate is being described, and `internal/cli/publish.go:31` currently says both words in one sentence: "no summary and no publishable findings; and, after you confirm, no included findings".
+The publishable and published sets differ until the moment publish sends. An attended publish reaches that moment only once readiness has gated out `pending`, so there they coincide; `--unattended` skips readiness and sends the publishable set whole. A reader who is told "included" for all three cannot tell which gate is being described, and `internal/cli/publish.go:31` currently says both words in one sentence: "no summary and no publishable findings; and, after you confirm, no included findings".
 
-`docs/comment-format.md` is what a human reading a review on GitHub is pointed at. Seven of its lines say "included" where they mean a set: three mean the published set — what the body actually carries — and four mean the publishable set that a gate reasons over. A format contract that names the wrong set is describing a different document from the one loupe sends.
+`docs/comment-format.md` is what a human reading a review on GitHub is pointed at. Seven of its lines say "included" where they mean a set: five mean the published set — what the body and its inline comments actually carry — and two mean the publishable set that the allowlist check at publish reasons over. A format contract that names the wrong set is describing a different document from the one loupe sends.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -49,7 +49,7 @@ Someone reading a refusal, the publish help, the format contract or spec 001 lea
 2. **Given** the `empty` refusal after the confirmation, **When** its message is read, **Then** it says `published`, because readiness has already run and the gate tests what the body will carry.
 3. **Given** the `blocking` refusal, **When** its message is read, **Then** it says `publishable`, because the gate reasons over the same set as the empty gate before it.
 4. **Given** `loupe publish --help`, **When** the `empty` row is read, **Then** its two clauses use the two different words, and each matches the refusal it describes.
-5. **Given** `docs/comment-format.md`, **When** a line naming a set is read, **Then** it says `published` for the body's contents and `publishable` for the `--inline` set, the publish-time Markdown check and the refusal that check raises.
+5. **Given** `docs/comment-format.md`, **When** a line naming a set is read, **Then** it says `published` for what the body and its inline comments carry, and `publishable` for the publish-time Markdown check and the refusal that check raises.
 6. **Given** `specs/001-loupe-v1/spec.md` FR-019, **When** readiness is read, **Then** it states the rule the code derives: no finding pending and no note open.
 
 ---
@@ -85,7 +85,7 @@ Every refusal fires on exactly the same input it fired on before, and every publ
 - **FR-002**: The `empty` refusal in `internal/publish/gates.go` and the `blocking` refusal in `ActionRefusal` MUST say `publishable`, because both gates reason over the publishable set.
 - **FR-003**: The `empty` refusal in `internal/publish/publish.go`, raised after the confirmation, MUST say `published`, because it tests the accepted-only envelope after readiness has run.
 - **FR-004**: `loupe publish`'s long help MUST mirror FR-002 and FR-003 in its `empty` row, with the two clauses carrying the two different words. The sentence MUST NOT use one word for both gates.
-- **FR-005**: `docs/comment-format.md` MUST say `published` where it names the body's contents, and `publishable` where it names the `--inline` set and the publish-time Markdown check, including the refusal that check raises. Lines where the word is ordinary English MUST be left alone.
+- **FR-005**: `docs/comment-format.md` MUST say `published` where it names what the body or its inline comments carry, and `publishable` where it names the publish-time Markdown check and the refusal that check raises. The `--inline` table and the body lines MUST use the same word, because both are filled from one slice and the contract says `--inline` never changes what the body contains. Lines where the word is ordinary English MUST be left alone.
 - **FR-006**: `specs/001-loupe-v1/spec.md` FR-019 MUST state readiness as the code derives it: no finding pending and no note open.
 - **FR-007**: `specs/001-loupe-v1/spec.md`, `plan.md` and `contracts/cli.md` MUST say `publishable` or `published` wherever they name a set, and MUST keep `included` wherever they name the flag or a count of it. Where spec 001's meaning is corrected rather than reworded — FR-019 and the lock edge case — it MUST carry a dated pointer to this specification, as FR-025 does for spec 007.
 - **FR-008**: `specs/001-loupe-v1/spec.md`'s dead-lock-holder edge case MUST match `internal/run/lock.go` and `plan.md`: the kernel releases a flock when its holder dies, so a timeout means a live holder; the refusal names the holder's pid and command and says to wait for it or stop it; loupe never removes the lock file. `plan.md`'s "stale-lock refusal text" MUST be corrected for the same reason.
@@ -93,12 +93,13 @@ Every refusal fires on exactly the same input it fired on before, and every publ
 - **FR-010**: No published review MAY render differently. The only goldens that MAY move are `testdata/golden/cli/publish-help.80.txt` and `publish-help.100.txt`, and only the line carrying the reworded help.
 - **FR-011**: `specs/001-loupe-v1/tasks.md` MUST check off T123 to T127, and its "Remaining gaps" paragraph MUST stop linking `github.com/eriksaulnier/loupe/issues/22`, which does not exist: the repository has no issues, and the link survived the republish from `loupe-archive`. It MUST point at `specs/015-publishable-set/` instead.
 - **FR-012**: The `Included` field MUST keep its name and its JSON key, and no stored run MAY need migrating.
+- **FR-013**: `specs/001-loupe-v1/data-model.md` MUST define the published set as what publish sends — disposition `accepted` when attended, the whole publishable set under `--unattended` — with a dated pointer to this specification, and MUST limit its claim that readiness makes the two sets equal to an attended publish. FR-026 MUST say that under `--unattended` the published findings include pending ones.
 
 ### Key Entities
 
 - **`included`**: a boolean on a finding saying the human has not withdrawn it. Unchanged, and after this change it is the only thing the word names.
 - **Publishable set**: the findings the human could still publish, `included` and not human-excluded. What the gates before the confirmation reason over.
-- **Published set**: the findings with disposition `accepted` when publish sends. What the body carries.
+- **Published set**: the findings publish sends: `accepted` when attended, the whole publishable set under `--unattended`. What the body and its inline comments carry.
 
 ## Success Criteria *(mandatory)*
 
@@ -112,5 +113,5 @@ Every refusal fires on exactly the same input it fired on before, and every publ
 ## Assumptions
 
 - `draft.PublishableSet` and `internal/publish/gates.go`'s `included()` compute the same thing. Both walk `d.Findings` in order and keep dispositions `accepted` and `pending`; `Dispositions` is a map built by calling the same private `disposition` over the same slice. Deleting one is a deduplication, not a change. The one input on which they differ is a draft holding two findings with the same id: `Dispositions` is keyed by id, so the last one's disposition applied to both, while `PublishableSet` judges each finding on its own. loupe's commands cannot write such a draft and `draft.Load` does not refuse a hand-edited one; the gates now agree with `Digest` and `Build`, which already used `PublishableSet`.
-- The three sets are the right vocabulary. They are already written down in `data-model.md`, already used in `envelope.go` and the publish help, and adding a fourth word would be a specification of its own.
+- The three sets are the right vocabulary, with the published set's definition brought up to date with spec 007. They are already written down in `data-model.md`, already used in `envelope.go` and the publish help, and adding a fourth word would be a specification of its own.
 - Whether the words make a reader faster is not claimed. It is a prose change with no test that can stand in for a reader.
