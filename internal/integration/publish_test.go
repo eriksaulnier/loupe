@@ -627,7 +627,7 @@ func TestReviewJSONPrintsOneObject(t *testing.T) {
 	h.Stdin = "a\nq\n"
 	stdout, stderr, exit := h.Run("review", runRef, "--plain", "--json")
 	var env map[string]any
-	if err := json.Unmarshal([]byte(stdout), &env); err != nil || exit != 0 || env["ok"] != true || env["command"] != "review" || len(env) != 4 {
+	if err := json.Unmarshal([]byte(stdout), &env); err != nil || exit != 0 || env["ok"] != true || env["command"] != "review" || env["dir"] != h.RunDir(1) || len(env) != 5 {
 		t.Fatalf("exit %d err %v stdout %q", exit, err, stdout)
 	}
 	if !strings.Contains(stderr, "Changed line") {

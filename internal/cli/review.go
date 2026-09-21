@@ -37,7 +37,8 @@ The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the 
 of the current branch in the working directory at its newest round.
 
 Result (--json), alone on stdout while the interface draws on stderr:
-  {"loupe": 1, "ok": true, "command": "review", "run": "owner/repo#123@1"}`
+  {"loupe": 1, "ok": true, "command": "review", "run": "owner/repo#123@1",
+   "dir": "/path/to/run"}`
 
 func newReviewCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -64,7 +65,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if len(args) == 1 {
 		positional = args[0]
 	}
-	dir, ref, err := resolveRun(cmd, deps, positional)
+	dir, _, err := resolveRun(cmd, deps, positional)
 	if err != nil {
 		return err
 	}
@@ -76,7 +77,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 		if err := tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width); err != nil {
 			return err
 		}
-		return reviewDone(cmd, deps, dir, ref.String(), jsonMode, ui)
+		return reviewDone(cmd, deps, dir, jsonMode, ui)
 	}
 	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub})
 	if err != nil {
@@ -95,12 +96,12 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if err := finalModel.Err(); err != nil {
 		return err
 	}
-	return reviewDone(cmd, deps, dir, ref.String(), jsonMode, ui)
+	return reviewDone(cmd, deps, dir, jsonMode, ui)
 }
 
 // reviewDone records the notes the human left open and unanswered so a blocked loupe wait picks them up. Only a
 // clean exit gets here; a crash mid-session records nothing until the next clean exit.
-func reviewDone(cmd *cobra.Command, deps Deps, dir, run string, jsonMode bool, ui io.Writer) error {
+func reviewDone(cmd *cobra.Command, deps Deps, dir string, jsonMode bool, ui io.Writer) error {
 	handed, err := draft.RecordHandBack(dir, deps.Getenv)
 	if err != nil {
 		return err
@@ -118,7 +119,7 @@ func reviewDone(cmd *cobra.Command, deps Deps, dir, run string, jsonMode bool, u
 	if !jsonMode {
 		return nil
 	}
-	return writeSuccess(deps.Stdout, commandName(cmd), run, nil, map[string]any{})
+	return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{})
 }
 
 // interactive requires stdin and stdout to be terminals, and stderr too under --json, where interactiveOutput draws.

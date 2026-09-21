@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -151,14 +153,13 @@ func testRoot(deps Deps, runErr error) *cobra.Command {
 			if len(args) == 1 {
 				positional = args[0]
 			}
-			dir, ref, err := resolveRun(cmd, deps, positional)
-			if err != nil {
+			if _, _, err := resolveRun(cmd, deps, positional); err != nil {
 				return err
 			}
 			if runErr != nil {
 				return runErr
 			}
-			return writeSuccess(deps.Stdout, "probe", ref.String(), nil, map[string]any{"dir": dir})
+			return writeSuccess(deps.Stdout, "probe", *invocationOf(cmd), nil, nil)
 		},
 	}
 	cmd.Flags().String("run", "", "")
@@ -206,6 +207,18 @@ func TestResolveRunOrder(t *testing.T) {
 				t.Fatalf("run %v, want %s", m["run"], c.want)
 			}
 		})
+	}
+}
+
+func TestResolveRunNamesAnAbsoluteDirUnderARelativeHome(t *testing.T) {
+	home := runsRoot(t)
+	t.Chdir(filepath.Dir(home))
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": filepath.Base(home)})
+	if code := execute(testRoot(deps, nil), deps, []string{"probe", "--run", "o/r#5@1", "--json"}); code != 0 {
+		t.Fatalf("exit %d: %s %s", code, s.stdout.String(), s.stderr.String())
+	}
+	if got, want := decodeOne(t, s.stdout.Bytes())["dir"], run.RunDir(home, "o", "r", 5, 1); got != want {
+		t.Fatalf("dir %v, want %s", got, want)
 	}
 }
 

@@ -76,7 +76,8 @@ current branch's pull request is never used. The review is posted by the App, nu
 pull request's own bot reviews, and marked unattended in its footer and loupe-meta.
 
 Result (--json), alone on stdout while the confirmation draws on stderr:
-  {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1", "reviewId": 123,
+  {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "reviewId": 123,
    "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true}
 A receipt replay has "sent": false and "replayed": true; a canceled publish has only "sent": false.`
 
@@ -165,7 +166,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 			return err
 		}
 		if jsonMode {
-			return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, map[string]any{"sent": false})
+			return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{"sent": false})
 		}
 		return nil
 	}
@@ -177,7 +178,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		if replayed {
 			payload["replayed"] = true
 		}
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, payload)
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, payload)
 	}
 	return printPublished(deps, ref, receipt, replayed)
 }

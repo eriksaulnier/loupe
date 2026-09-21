@@ -20,11 +20,11 @@ description: "Task list for handles a pipeline can hold"
 
 **Independent Test**: Every `--json` success result that carries `run` also carries `dir`, an absolute path to the directory holding the run's `target.json`, including after the data root is moved.
 
-- [ ] T001 [US1] Add cases to `internal/cli/envelope_test.go`: a success and a refusal with a run and a dir print `dir` directly after `run`; with neither, both are absent; a payload key `dir` is refused as colliding with the envelope; `writeSuccess` with a run but no dir, or a dir but no run, returns an error. Confirm they fail to compile, since `writeSuccess` takes a run string.
-- [ ] T002 [US1] In `internal/cli/root.go` add `dir` to `invocation`, and have `report` take the invocation; in `internal/cli/envelope.go` make `writeSuccess` and `writeRefusal` take the invocation, write `dir` after `run`, reserve `dir`, and return an error from `writeSuccess` unless `run` and `dir` are both set or both empty. Update every caller to pass `*invocationOf(cmd)` or `invocation{}` for help and `--version`, and rename the probe payload key in `internal/cli/root_test.go`. Confirm T001 passes.
-- [ ] T003 [US1] Add cases to the command tests: `dir` is present, absolute and equal to the run directory for `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait`, `show`, `show --diff --json`, `show --previous`, `handoff`, `review` and `publish`, and on a refusal that resolved a run; a relative `LOUPE_HOME` still yields an absolute `dir`. Put each case in that command's existing `internal/cli/*_test.go`. Confirm they fail.
-- [ ] T004 [US1] In `internal/cli/run.go` record `filepath.Abs(dir)` on the invocation in `resolveRun`, and in `internal/cli/capture.go` do the same beside `invocationOf(cmd).run`. Leave the `dir` every command operates on unchanged. Confirm T003 passes.
-- [ ] T005 [US1] Add a case to `internal/integration`: capture, copy the data root to a new path, point `LOUPE_HOME` at it, and assert `show --json` names a `dir` under the new root that holds the run (Story 1 AS3, SC-001).
+- [x] T001 [US1] Add cases to `internal/cli/envelope_test.go`: a success and a refusal with a run and a dir print `dir` directly after `run`; with neither, both are absent; a payload key `dir` is refused as colliding with the envelope; `writeSuccess` with a run but no dir, or a dir but no run, returns an error. Confirm they fail to compile, since `writeSuccess` takes a run string.
+- [x] T002 [US1] In `internal/cli/root.go` add `dir` to `invocation`, and have `report` take the invocation; in `internal/cli/envelope.go` make `writeSuccess` and `writeRefusal` take the invocation, write `dir` after `run`, reserve `dir`, and return an error from `writeSuccess` unless `run` and `dir` are both set or both empty. Update every caller to pass `*invocationOf(cmd)` or `invocation{}` for help and `--version`, and rename the probe payload key in `internal/cli/root_test.go`. Confirm T001 passes.
+- [x] T003 [US1] Add cases to the command tests: `dir` is present, absolute and equal to the run directory for `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait`, `show`, `show --diff --json`, `show --previous`, `handoff`, `review` and `publish`, and on a refusal that resolved a run; a relative `LOUPE_HOME` still yields an absolute `dir`. The commands run end to end in `internal/integration/handles_test.go`, and the relative root is a probe case in `internal/cli/root_test.go`. Confirm they fail.
+- [x] T004 [US1] In `internal/cli/run.go` record `filepath.Abs(dir)` on the invocation in `resolveRun`, and in `internal/cli/capture.go` do the same beside `invocationOf(cmd).run`. Leave the `dir` every command operates on unchanged. Confirm T003 passes.
+- [x] T005 [US1] Add a case to `internal/integration`: capture, copy the data root to a new path, point `LOUPE_HOME` at it, and assert `show --json` names a `dir` under the new root that holds the run (Story 1 AS3, SC-001).
 
 ## Phase 2: User Story 2 - A CI log says what was published and by whom (P2)
 
@@ -46,7 +46,7 @@ description: "Task list for handles a pipeline can hold"
 
 ## Phase 4: Contracts and documentation (FR-003, FR-006, FR-009)
 
-- [ ] T014 [P] Add `"dir": "/path/to/run"` after `"run"` in every `--json` example in `internal/cli/*.go` help text.
+- [x] T014 [P] Add `"dir": "/path/to/run"` after `"run"` in every `--json` example in `internal/cli/*.go` help text.
 - [ ] T015 [P] Document `unattended` and `author` in `loupe publish --help` in `internal/cli/publish.go`, and `details.entries` and the unchanged all-or-nothing rule in `loupe add --help` in `internal/cli/add.go`.
 - [ ] T016 [P] Amend `specs/001-loupe-v1/contracts/cli.md`: the envelope gains `dir` with its presence rule on success and refusal alike, its absolute-path rule, and a sentence that the directory's contents are not a contract; the `loupe add` entry gains `details.entries`; the `loupe publish` entry gains `unattended` and `author` with their absence rules.
 

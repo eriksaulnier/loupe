@@ -21,16 +21,16 @@ This is the agent-facing and human-facing command contract. `/speckit-plan` Phas
 Success:
 
 ```json
-{"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1", "version": 4, "...": "command payload"}
+{"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1", "dir": "/path/to/run", "version": 4, "...": "command payload"}
 ```
 
 Refusal or error (exit 1 or 2):
 
 ```json
-{"loupe": 1, "ok": false, "command": "add", "run": "owner/repo#123@1", "error": {"code": "location", "message": "src/a.ts:88 is not in the diff on side RIGHT", "fix": "use one of: src/a.ts:80-86, 90-97", "details": {"entry": 1, "nearest": [80, 81, 86, 90, 91, 97]}}}
+{"loupe": 1, "ok": false, "command": "add", "run": "owner/repo#123@1", "dir": "/path/to/run", "error": {"code": "location", "message": "src/a.ts:88 is not in the diff on side RIGHT", "fix": "use one of: src/a.ts:80-86, 90-97", "details": {"entry": 1, "nearest": [80, 81, 86, 90, 91, 97]}}}
 ```
 
-`run` is omitted when no run was resolved. `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait` and `show`. `list`, `handoff`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
+`run` is omitted when no run was resolved. `dir` is the absolute path of the directory holding the run `run` names, on a success and on a refusal alike, and is present exactly when `run` is. It is resolved under the data root in force for the invocation, so a data root restored elsewhere names its new location. It is a handle to archive, restore or carry between jobs, not a view into the run: the directory's contents and layout are not part of this contract (specs/016-pipeline-handles). `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait` and `show`. `list`, `handoff`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
 
 ## Error codes
 

@@ -30,7 +30,8 @@ summary is left unchanged and the refusal lists details.included as [{"id", "tit
 agent learns which of its findings did not land.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "summary", "run": "owner/repo#123@1", "version": 5,
+  {"loupe": 1, "ok": true, "command": "summary", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 5,
    "includedCount": 2}`
 
 func newSummaryCmd(deps Deps) *cobra.Command {
@@ -98,7 +99,7 @@ func runSummary(cmd *cobra.Command, deps Deps) error {
 	}
 	included := draft.IncludedCount(d)
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{"includedCount": included})
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{"includedCount": included})
 	}
 	s := deps.outStyle()
 	return printDone(deps, fmt.Sprintf("Summary set on %s with %d included %s", s.Accent.Render(ref.String()), included, plural(included, "finding")), d.Version)

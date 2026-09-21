@@ -50,7 +50,8 @@ MUST NOT carry included, decision, status or findingRev.
 The flags build a single finding instead and cannot be combined with --from.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1", "version": 4,
+  {"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 4,
    "findings": [{"id": "f-001", "rev": 1}]}`
 
 var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix"}
@@ -142,7 +143,7 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 		ordered = append(ordered, f.ID)
 	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{"findings": results})
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{"findings": results})
 	}
 	s := deps.outStyle()
 	return printDone(deps, fmt.Sprintf("Added %s to %s", ids(s, ordered...), s.Accent.Render(ref.String())), d.Version)

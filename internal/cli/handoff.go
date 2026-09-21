@@ -28,7 +28,8 @@ The run is <ref> or --run <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE
 pull request of the current branch in the working directory at its newest round.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "handoff", "run": "owner/repo#123@1", "host": "herdr",
+  {"loupe": 1, "ok": true, "command": "handoff", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "host": "herdr",
    "paneId": "w1:p2", "direction": "right"}
 
 direction is right or down.`
@@ -79,7 +80,7 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 		return err
 	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, map[string]any{
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{
 			"host": pane.Name, "paneId": opened.PaneID, "direction": opened.Direction,
 		})
 	}

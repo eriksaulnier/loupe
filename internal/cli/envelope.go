@@ -13,7 +13,7 @@ import (
 
 const envelopeVersion = 1
 
-var reservedKeys = map[string]bool{"loupe": true, "ok": true, "command": true, "run": true, "version": true, "error": true}
+var reservedKeys = map[string]bool{"loupe": true, "ok": true, "command": true, "run": true, "dir": true, "version": true, "error": true}
 
 type field struct {
 	key   string
@@ -22,11 +22,11 @@ type field struct {
 
 // writeSuccess puts payload keys at the top level after the envelope keys, which come first so a human reading the
 // object sees what it is before what it holds.
-func writeSuccess(w io.Writer, command, run string, version *int, payload map[string]any) error {
-	fields := []field{{"loupe", envelopeVersion}, {"ok", true}, {"command", command}}
-	if run != "" {
-		fields = append(fields, field{"run", run})
+func writeSuccess(w io.Writer, command string, inv invocation, version *int, payload map[string]any) error {
+	if (inv.run == "") != (inv.dir == "") {
+		return fmt.Errorf("result names run %q and dir %q; it must name both or neither", inv.run, inv.dir)
 	}
+	fields := append([]field{{"loupe", envelopeVersion}, {"ok", true}, {"command", command}}, runFields(inv)...)
 	if version != nil {
 		fields = append(fields, field{"version", *version})
 	}
@@ -44,7 +44,7 @@ func writeSuccess(w io.Writer, command, run string, version *int, payload map[st
 	return writeObject(w, fields)
 }
 
-func writeRefusal(w io.Writer, command, run string, r *refusal.Error) error {
+func writeRefusal(w io.Writer, command string, inv invocation, r *refusal.Error) error {
 	errFields := []field{{"code", string(r.Code)}, {"message", r.Message}, {"fix", r.Fix}}
 	if len(r.Details) > 0 {
 		errFields = append(errFields, field{"details", r.Details})
@@ -53,12 +53,20 @@ func writeRefusal(w io.Writer, command, run string, r *refusal.Error) error {
 	if err != nil {
 		return err
 	}
-	fields := []field{{"loupe", envelopeVersion}, {"ok", false}, {"command", command}}
-	if run != "" {
-		fields = append(fields, field{"run", run})
-	}
+	fields := append([]field{{"loupe", envelopeVersion}, {"ok", false}, {"command", command}}, runFields(inv)...)
 	fields = append(fields, field{"error", json.RawMessage(errObject)})
 	return writeObject(w, fields)
+}
+
+func runFields(inv invocation) []field {
+	var fields []field
+	if inv.run != "" {
+		fields = append(fields, field{"run", inv.run})
+	}
+	if inv.dir != "" {
+		fields = append(fields, field{"dir", inv.dir})
+	}
+	return fields
 }
 
 func writeObject(w io.Writer, fields []field) error {

@@ -30,7 +30,8 @@ call. It still MUST NOT run loupe review.
 deadline. Ctrl-C or SIGTERM ends the wait with an error.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "wait", "run": "owner/repo#123@1", "version": 6,
+  {"loupe": 1, "ok": true, "command": "wait", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 6,
    "reason": "notes", "awaiting": ["n-001"],
    "readiness": {"ready": false, "accepted": ["f-001"], "pending": ["f-002"], "excluded": [],
                  "withdrawn": [], "openNotes": ["n-001"]},
@@ -134,7 +135,7 @@ func writeWait(cmd *cobra.Command, deps Deps, ref string, d *draft.Draft, reason
 		payload := feedbackPayload(d)
 		payload["reason"] = reason
 		payload["awaiting"] = awaiting
-		return writeSuccess(deps.Stdout, commandName(cmd), ref, &d.Version, payload)
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}
 	s := deps.outStyle()
 	var line string
