@@ -480,7 +480,7 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"space", "scroll one page down", ""},
 			{"a", "accept; resolves its open notes", ""},
 			{"x", "exclude; dismisses its open notes", ""},
-			{"s", "send it back with a note", ""},
+			{"s", "send back; enter sends, esc cancels", ""},
 			{"e", "edit label and blocking", ""},
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},

@@ -445,6 +445,17 @@ func TestDetailNoteRefusedOnSendIsKept(t *testing.T) {
 	}
 }
 
+func TestHelpNamesTheNoteKeys(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 34)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.help = true
+	if !regexp.MustCompile(`(?m)^ +s +send back; enter sends, esc cancels`).MatchString(m.View()) {
+		t.Fatalf("help does not say how a send-back note is sent or canceled:\n%s", m.View())
+	}
+}
+
 func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	if err := m.openFinding("f-001"); err != nil {
