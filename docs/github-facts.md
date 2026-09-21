@@ -43,6 +43,7 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - `<script>`, `<style>` and `<pre>` are never inert inside a body; loupe's allowlist refuses raw HTML other than details/summary.
 - Inside a code span, `</details>` and other tags render as visible text, and character references render literally (an entity is not decoded). Do not HTML-escape code-span contents.
 - GitHub parses no Markdown inside `<summary>`, because the `<details>` and `<summary>` lines open an HTML block. In review 5268087354 a title's backtick code span showed its backticks literally. loupe emits `<code>` for a title's code spans instead.
+- Observed 2026-09-21 on an issue comment on `eriksaulnier/loupe#21`, read back as GitHub's rendered HTML: `<code>` inside `<summary>` survives the sanitizer and renders as code. So does `<code>` in a Markdown paragraph, where backslash escapes between and inside the tags decode. The same bytes in a review body or an inline review comment were not tried.
 - A backslash at the end of a line is a hard break inside a blockquote; a bare newline is a soft break.
 - The files view anchors a line as `#diff-<sha256 hex of the path>R<line>` (or `L` for the old side), with `R21-R24` for a range. This is observed, not documented; it rendered and landed in the boundary probe.
 - Images in review bodies are proxied through camo; external badge images add a network dependency and were rejected.
