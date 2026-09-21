@@ -166,7 +166,11 @@ func (m *Model) noteThread(f draft.Finding) []string {
 				continue
 			}
 			out = append(out, " "+m.styles.Note.Render(m.glyphs.Quote))
-			head := m.styles.Note.Render(render.ForDisplay(r.By)) + sep + m.styles.Dim.Render(render.ForDisplay(r.ID))
+			who := render.ForDisplay(r.By)
+			if r.By == draft.ByHuman {
+				who = "you"
+			}
+			head := m.styles.Note.Render(who) + sep + m.styles.Dim.Render(render.ForDisplay(r.ID))
 			out = append(out, m.threadBlock("  ", head, r.Body)...)
 		}
 	}

@@ -46,7 +46,7 @@ The send-back note is a `textarea` drawn in the detail view's notice slot behind
 
 - **The bar is the tier's `Quote` glyph.** Decision: `┃` in the Unicode and Nerd tiers and `|` in ASCII, drawn in `style.Note`, already defined and the glyph the owner's target draws. Rationale: FR-016. No new glyph.
 
-- **Headers.** Decision: a note's header is `you`, its id and `noteStatus` joined by `Sep` with spaces; a reply's is `render.ForDisplay(r.By)` and its id. `who` is drawn in `style.Note`, the rest dim. Rationale: FR-013 and FR-014. The owner said a reply shows its `By`, so a reply the human wrote reads `human`, not `you`; that is kept literal rather than guessed at.
+- **Headers.** Decision: a note's header is `you`, its id and `noteStatus` joined by `Sep` with spaces; a reply's is `you` when its `By` is the human and `render.ForDisplay(r.By)` otherwise, then its id. `who` is drawn in `style.Note`, the rest dim. Rationale: FR-013 and FR-014, and the owner's follow-up that the human is `you` everywhere in the thread.
 
 - **Plain mode does not change.** Decision: `internal/tui/plain.go:263-271` keeps its one-line records. Rationale: FR-011 and FR-018. The plain fallback prints a finding and asks for a key, line by line, for terminals that cannot run the full-screen interface; the bar and colors this story is about are a full-screen affordance, and changing its output would widen this branch into a second surface for no reported need.
 

@@ -123,7 +123,7 @@ func TestDetailViewShowsRepliesUnderNotes(t *testing.T) {
 		" ┃   agent · r-001",
 		` ┃   Added\u202E it.`,
 		" ┃",
-		" ┃   human · r-002",
+		" ┃   you · r-002",
 		" ┃   And a test.",
 	}
 	rows := threadRows(view, "n-001")

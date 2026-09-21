@@ -43,7 +43,7 @@
   ┃ Rename the flag?
 ```
 
-"you" is the human's note; a reply's header shows its By. The bar and glyphs follow the glyph tier.
+"you" is the human's note; a reply's header shows its By. The bar and glyphs follow the glyph tier. Owner follow-up, same day: "Show you for any reply whose By is the human, so the human is you everywhere in the thread."
 
 ## Relationship to earlier specifications
 
@@ -179,7 +179,7 @@ A human opens a finding they sent back an hour ago. Under the finding, their que
 - **FR-011**: The plain-terminal fallback MUST NOT change.
 - **FR-012**: The footer's key hints and the help screen MUST describe the send-back note's keys as FR-004 defines them.
 - **FR-013**: The detail view MUST draw each note on the open finding as a block: a header row, `you`, the note's id and its status joined by the tier's separator, with the closing glyph before a resolved or dismissed status; then the note's body.
-- **FR-014**: Each reply MUST be drawn as its own block under its note, after a bar-only row and indented by two columns, with a header row of the reply's `by` and its id joined by the separator, then its body.
+- **FR-014**: Each reply MUST be drawn as its own block under its note, after a bar-only row and indented by two columns, with a header row of `you` when the human wrote the reply and its `by` otherwise, and its id joined by the separator, then its body.
 - **FR-015**: A body MUST be drawn in full as written: each of its lines starts a row and wraps within the window under its block's indent. It MUST NOT be squashed onto one line, truncated or rendered as Markdown. Hidden and bidirectional control characters MUST be shown escaped.
 - **FR-016**: Every row of a thread MUST start with the tier's bar glyph in the note color, and a row without a bar MUST separate one note's thread from the next.
 - **FR-017**: The thread's notes, replies and their order MUST NOT change: notes in draft order, each followed by its replies in draft order.
