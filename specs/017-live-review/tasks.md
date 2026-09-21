@@ -78,9 +78,21 @@ description: "Task list for handing a send-back to the agent at once and showing
 - [X] T027 Run `mise run demo` through tmux: send a finding back, write a reply to it with `loupe reply` from a second shell against the demo's `LOUPE_DEMO_HOME`, and watch it land within two seconds in the detail view and in the list; open the send-back editor and confirm nothing moves; press `ctrl+r`.
 - [X] T028 Run `mise run check`, have a read-only sub-agent review the branch against spec.md's FR list, fix what holds up, and run `mise run check` again. Atomic local commits on `017-live-review`; no push, pull request, release or live run.
 
+## Phase 9: User Story 6 — The agent's work elsewhere does not refuse the human's decision (P1)
+
+**Independent Test**: With review on `f-002`, reply to a note on `f-001` from outside, then accept `f-002`; it records and the notice names the reply.
+
+- [ ] T029 [US6] Add failing tests to `internal/draft/derive_test.go`: `FindingState` is equal for two loads of one draft and for a draft returned by `Mutate` against its reload; it changes when the finding is edited, withdrawn or restored, when its decision changes, when a note on it is added or closed, and when a reply lands on such a note; it does not change for a write to another finding, a new finding or the summary.
+- [ ] T030 [US6] Add `FindingState(d, id) ([]byte, error)` to `internal/draft/derive.go`.
+- [ ] T031 [US6] Add failing tests to `internal/tui/poll_test.go`: accepting `f-002` after an outside reply on `f-001`, an edit to `f-003` or a new finding records and names them in the notice; after an edit, withdraw, reply or other-session decision on `f-002` it is refused with `staleNotice`; a send-back on `f-002` after a reply on `f-001` records. Move `TestRefusedSendBackKeepsTheTypedNote` to an outside write on `f-002` itself.
+- [ ] T032 [US6] In `internal/tui/app.go`, make `Decide` take the decided finding id and `decide` check `FindingState` inside the `Mutate` callback instead of passing an expected version; on success, name the other findings' changes in the notice through `changeNotice` with the decided finding left out, in `decideAndStay` and `decideAndShow` in `internal/tui/detail.go`.
+- [ ] T033 [US6] Add a failing test to `internal/tui/plain_test.go` that a decision after an outside write to another finding records, then pass the finding's displayed state from `internal/tui/plain.go`.
+- [ ] T034 [US6] Amend `specs/001-loupe-v1/spec.md` FR-023 with a dated pointer to this specification.
+- [ ] T035 Run `mise run check`, have a read-only sub-agent review the change against FR-009 and FR-015, fix what holds up, and run `mise run check` again.
+
 ## Dependencies
 
-Phase 1 first. Phase 2 needs nothing from Phase 1 except T006, whose handoff extension waits for T011. Phase 3 needs T002 and T003. Phase 4 needs T005 (a send-back from the window hands back, so `Awaiting` sees it). Phase 5 needs T016. Phase 6 needs T016. Phase 7's T021, T022, T024, T025 and T026 are independent of each other and of the code phases; T023 needs T010 and T022. Phase 8 is last.
+Phase 1 first. Phase 2 needs nothing from Phase 1 except T006, whose handoff extension waits for T011. Phase 3 needs T002 and T003. Phase 4 needs T005 (a send-back from the window hands back, so `Awaiting` sees it). Phase 5 needs T016. Phase 6 needs T016. Phase 7's T021, T022, T024, T025 and T026 are independent of each other and of the code phases; T023 needs T010 and T022. Phase 8 closed the first delivery; Phase 9 follows the owner's decision after its review and runs T029 before T030 before T031 before T032, T033 after T030, T034 independent, T035 last.
 
 ## Parallel opportunities
 

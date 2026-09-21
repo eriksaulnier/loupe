@@ -23,6 +23,10 @@ Asked under the rewritten premise:
 - Q: After answering every awaiting note, how should the agent continue? → A: Hand off again only when no review session is open. Review holds a session marker for its lifetime, `loupe handoff` refuses with a new `review-open` code while one is live, and the skill waits again on that refusal.
 - Q: When should the review window re-read the draft on its timer? → A: In the list and every detail view while any handed-back note awaits a reply; no timer when none does.
 
+Owner decision after the review round, 2026-09-21:
+
+- Q: Should an agent write elsewhere in the draft refuse the human's decision as stale? → A: No. A decision in review is refused only when that finding, or a note or reply on it, changed since it was shown. Readiness and the publish gates still read the whole draft.
+
 ## Premise
 
 The draft assumed a human sends a finding back and then waits in the review window for the agent's reply. Under the contract as it stands that cannot happen. The agent learns of a send-back only when the human quits review: `loupe review` records the hand-back set on a clean exit (spec 001 FR-039), `loupe wait` wakes only on a handed-back note or a receipt (FR-040), and the `human-review` skill tells the agent that an open note not handed to it "is the human's to hand back". After answering, the agent hands off again, which opens a new pane that loads the draft fresh. So no reply ever lands while a window is open, and a poll in the window would never fire.
@@ -31,13 +35,14 @@ The owner's call is to change the protocol, not only the window: a send-back han
 
 ## Relationship to earlier specifications
 
-This specification amends the wait and hand-back contract and adds one refusal to `loupe handoff`. It changes no `--json` envelope field that exists today, no existing refusal code, no exit code and no published byte.
+This specification amends the wait and hand-back contract, narrows the staleness check on a decision made in `loupe review` from the whole draft to the finding decided, and adds one refusal to `loupe handoff`. It changes no `--json` envelope field that exists today, no existing refusal code, no exit code and no published byte.
 
 - **Spec 001 FR-039** records the hand-back set on every clean exit. It is amended: a send-back records its note in the set when the note is written, and the clean-exit recording stays as a backstop for notes a session could not hand back (a note written by an older binary).
 - **Spec 001 FR-040** and `contracts/cli.md`'s `loupe wait` section say a return "proves the human quit `review` with those notes". That sentence becomes false and is rewritten: a return proves the human sent those notes back, and says nothing about whether a review session is open. `data-model.md`'s Hand-back set section is amended to match.
 - **Spec 003** User Story 1 scenario 2 ("the human quits review leaving a note, the review pane closes, `loupe wait` returns") and FR-004 ("after answering, the agent MUST open a new split for the next handoff") are amended by FR-010 below. The rules that the agent never reads, reuses, closes or sends keys to a review pane (FR-005) are unchanged.
 - **Spec 006 FR-014** and User Story scenario 3 require the skill to "hand off again" after answering. The skill's loop changes with FR-010.
 - **`contracts/cli.md`'s `loupe handoff` section** and its refusal table gain the `review-open` refusal (FR-012). `loupe handoff --help` and its goldens change with it. No existing refusal code changes meaning.
+- **Spec 001 FR-023** says every decision made in the interface MUST carry the draft version that was displayed. It is amended by FR-009 below: a decision carries the state of the finding as it was displayed, and only a change to that finding refuses it. The agent-facing `--expect-version`, `draft.Mutate`'s whole-draft version check and every refusal code are unchanged.
 - **Spec 002** owns the review interface. It gains a refresh key and a timed re-read of the draft; no view or key is removed or renamed.
 - **`loupe wait --help`**, the root help's send-back loop line, and the README's `wait` row describe the old trigger and are rewritten.
 - **`plugin/skills/human-review/SKILL.md`** is the one skill the Claude Code, Codex and Pi integrations all load. Its sections 6 and 7 change; no manifest changes.
@@ -127,11 +132,29 @@ The human is typing a send-back note, changing a label, or in the publish steps 
 
 ---
 
+### User Story 6 - The agent's work elsewhere does not refuse the human's decision (Priority: P1)
+
+The human is deciding `f-002` while the agent answers a note on `f-001`. The human accepts `f-002`. The acceptance is recorded, and the agent's answer is shown with it.
+
+**Why this priority**: Under the new protocol the agent writes while the human reviews, as a matter of course. Refusing every decision the human makes in that window, over a change to a different finding, turns the protocol's normal case into a stream of "nothing was recorded" notices.
+
+**Independent Test**: With review open on `f-002`, reply to a note on `f-001` from outside, then accept `f-002`. The decision is recorded and a notice names the reply.
+
+**Acceptance Scenarios**:
+
+1. **Given** the human is on `f-002`, **When** the agent replies to a note on `f-001`, edits `f-003` or files a finding, and the human then accepts `f-002`, **Then** the acceptance is recorded, the window shows the other changes, and the notice names them after the decision.
+2. **Given** the human is on `f-002`, **When** the agent edits `f-002`, withdraws or restores it, or replies to a note on it, and the human then decides `f-002`, **Then** the decision is refused with the existing stale notice, nothing is recorded, and `f-002` is shown as it now is.
+3. **Given** another review session decided `f-002` meanwhile, **When** this session decides `f-002`, **Then** it is refused as stale.
+4. **Given** a note typed as a send-back on `f-002`, **When** the agent wrote only elsewhere, **Then** the send-back is recorded.
+
+---
+
 ### Edge Cases
 
 - The agent answers a note and edits its finding in two writes. A poll between them shows the reply first and the edit on the next tick; each gets its notice. Nothing is lost.
 - Several agent writes land between two polls. One redraw shows all of them, and one notice summarizes them rather than firing once per write.
-- The human decides a finding after the agent changed it and before a poll showed the change. The existing version check refuses the decision with the existing stale notice; nothing is recorded against content the human has not seen.
+- The human decides a finding after the agent changed that finding and before a poll showed the change. The decision is refused with the existing stale notice; nothing is recorded against content the human has not seen. A change to any other finding does not refuse it (FR-009).
+- The human's decision records while the agent's changes to other findings are not yet shown. The window shows them with the decision and names them in the same notice, so nothing lands unannounced (FR-006).
 - The draft cannot be read during a timed re-read. The window fails the way an explicit reload fails today, with a descriptive error; it does not retry silently.
 - The hand-back file cannot be written. The send-back fails with that error and the note is not written, so the human never sees a send-back the agent cannot learn of (FR-001).
 - Two review sessions on one run. Both hand back what they send back and both hold the session marker; handoff refuses until both have exited. The existing lock and version check govern the rest, as spec 003 already says.
@@ -156,7 +179,8 @@ The human is typing a send-back note, changing a label, or in the publish steps 
 - **FR-006**: When a re-read finds a change, including the reloads the window already does on `p`, on leaving a finding and after a publish, the window MUST apply it: reload the draft and redraw in place, keeping the open finding open and its scroll position, keeping the list cursor on the same finding id, and showing a notice that says what changed (a reply arrived, a finding changed, or the draft changed). A change the human's own decision caused MUST NOT produce such a notice.
 - **FR-007**: The re-read MUST be held while the send-back note editor, the label and blocking editor, a finding's file diff, the publish steps, the confirmation or a publish in progress is on screen. On returning to the list or a detail view, the window MUST apply what the held re-read would have found, as FR-006 says.
 - **FR-008**: The list and detail views MUST offer a refresh key that reloads the draft immediately, listed in the help overlay. It MUST NOT collide with an existing key in either view; `r` is already resolve in the detail view.
-- **FR-009**: The version a decision is checked against MUST be the version whose content is on screen, and MUST advance only together with the redraw that shows it. The decision path itself (`draft.Mutate`'s version check, finding and decision revisions, refusal codes, the stale notice) MUST NOT change.
+- **FR-009**: A decision made in the review window, in either mode, MUST be refused as stale when, and only when, the finding it decides changed since the window displayed it: the finding's content, revision or inclusion, its decision, or any note on it or reply to such a note. A change anywhere else in the draft MUST NOT refuse it. The refusal keeps the `version` refusal code and the existing stale notice, and the finding is then shown as it now is. The agent-facing `--expect-version`, `draft.Mutate`'s whole-draft version check, readiness and the publish gates MUST keep reading the whole draft.
+- **FR-015**: When a decision records while other findings changed since they were shown, the window MUST show those changes with the decision and name them in the decision's notice, as FR-006 names them for a re-read.
 
 #### Agent loop
 
@@ -171,14 +195,15 @@ The human is typing a send-back note, changing a label, or in the publish steps 
 - **Hand-back set**: `handback.json`, the append-only list of note ids handed to the agent. Written at send-back from now on, and still at clean exit as a backstop. Its schema does not change.
 - **Awaiting note**: a note in the set that is open and has no reply. Unchanged in definition; what changes is how soon a note joins the set.
 - **Review session marker**: a run-local marker every running `loupe review` holds and the operating system releases when that process ends. `loupe handoff` reads it; nothing else does.
-- **Displayed version**: the draft version whose content the window shows, and against which the human's decisions are checked.
+- **Displayed version**: the draft version whose content the window shows. The timed re-read compares against it.
+- **Displayed finding state**: the finding as the window shows it, with its decision, its notes and their replies. A decision is checked against it, not against the displayed version.
 
 ## Success Criteria *(mandatory)*
 
 - **SC-001**: In an integration test, `loupe wait` returns `reason: notes` for a note sent back through the review interface while that interface is still running, with no quit.
 - **SC-002**: In a test that drives the interface with injected input and a controlled clock, a reply written from outside is on screen with its notice within one poll interval, with no key pressed.
 - **SC-003**: With an editor, the publish steps or the confirmation on screen, a draft written from outside changes nothing on screen across two poll intervals, in the same kind of test.
-- **SC-004**: A decision made after an outside write and before any redraw showed it is refused with the existing stale notice, in a test.
+- **SC-004**: In tests of both modes, a decision made after an outside write to its own finding, or to a note on it, is refused with the existing stale notice, and a decision made after an outside write to any other finding is recorded and names that write in its notice.
 - **SC-005**: In an integration test, `loupe handoff` refuses with `review-open` while a review session is running on the run, and does not refuse once that session has exited, including by a kill. Following the amended skill through two send-backs with review open opens exactly one pane; that half is checked by reading the skill, since no test runs an agent.
 - **SC-006**: `go.mod` gains no requirement, and the only goldens that move are the help text FR-004 and FR-012 rewrite, each diff read.
 - **SC-007**: `mise run check` passes after the final edit.

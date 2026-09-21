@@ -42,6 +42,8 @@
 - **`ctrl+r` reloads.** Decision: `ctrl+r` in the list and the detail view, listed in both help overlays. Rationale: FR-008. `r` is resolve in the detail view, so the obvious letter is taken, and a capital `R` one shift away from resolving a note is a hazard on a surface where every letter decides something. `ctrl+r` is the conventional reload chord and is unbound in both views. On an unchanged draft the notice says it is current.
 - **The send-back notice says where the note went.** Decision: `f-003 sent back as n-004` gains `; the agent has it` in both modes. Rationale: the protocol change is invisible otherwise, and a human who learned "quit to hand back" would quit. It is a notice string, pinned only by tests that assert it.
 - **The skill's loop.** Decision: section 6 describes `wait` as returning on a send-back; section 7's closing paragraph runs `loupe handoff` after the last reply and, on `review-open`, tells the user the answers are in their open review and waits again. The sentence about notes not handed back is removed. Section 5's "each hand-off opens a new pane" stays true and stays. Rationale: FR-010, FR-013, FR-014.
+- **A decision is checked against its finding, not the draft.** Decision: `draft.FindingState(d, id)` returns the JSON encoding of the finding, its decision, its notes and their replies; the review window's decide path runs `Mutate` without an expected version and, inside the lock, refuses with the existing `version` code when the stored state differs from the state computed from the displayed draft. Rationale: FR-009, the owner's decision after the review round. `Finding.Rev` alone was the obvious key and is part of the state, but it moves only on a content edit: a withdraw or restore, a new note or reply, and another session's decision all leave it where it was, and each of those changes what the human is deciding. `Decision.FindingRev` is part of the state too, which is where another session's decision shows. JSON rather than a struct comparison, because a draft that came back from `Mutate` still carries monotonic clock readings a loaded one does not. The whole-draft check stays in `Mutate` for `--expect-version` and is simply not asked for here.
+- **Changes elsewhere are named with the decision.** Decision: when a decision records, the window diffs the draft it displayed against the one `Mutate` returned, leaving out the decided finding, and adds what it finds to the decision's notice. Rationale: FR-015. Before this change a stale refusal was the only way a decision could meet an outside write; now it records past them, and without the notice the other changes would appear unannounced.
 - **What this change cannot check.** Decision: whether an agent following the amended skill opens exactly one pane across two send-backs is read, not run, and goes on `specs/001-loupe-v1/validation.md`'s Unverified list beside the other agent-behavior rows. Rationale: SC-005 and Principle VII.
 
 ## Constitution Check
@@ -75,7 +77,8 @@ internal/cli/help.go              # root help's wait and send-back loop lines
 internal/tui/app.go               # pollMsg, pollInterval, apply-with-notice, hold, ctrl+r, help overlay
 internal/tui/list.go              # ctrl+r; check on return from the publish flow
 internal/tui/detail.go            # ctrl+r; scroll kept; check on closing an editor; send-back notice
-internal/tui/plain.go             # send-back notice
+internal/tui/plain.go             # send-back notice; per-finding staleness
+internal/draft/derive.go          # FindingState
 plugin/skills/human-review/SKILL.md
 README.md                         # wait row
 specs/001-loupe-v1/spec.md        # FR-039, FR-040 with dated pointers
@@ -90,4 +93,4 @@ specs/006-agent-plugins/spec.md   # dated pointer on scenario 3
 
 ## Complexity Tracking
 
-No Constitution Check violations. Departures from contracts are the amendments this specification makes: spec 001's wait and hand-back passages, and a new refusal code on `loupe handoff`.
+No Constitution Check violations. Departures from contracts are the amendments this specification makes: spec 001's wait and hand-back passages and FR-023's per-decision version, and a new refusal code on `loupe handoff`.
