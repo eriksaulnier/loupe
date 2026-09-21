@@ -21,6 +21,9 @@ func TestMain(m *testing.M) {
 	if dir := os.Getenv(lockHelperEnv); dir != "" {
 		os.Exit(lockHelper(dir))
 	}
+	if dir := os.Getenv(sessionHelperEnv); dir != "" {
+		os.Exit(sessionHelper(dir))
+	}
 	os.Exit(m.Run())
 }
 
