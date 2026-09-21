@@ -532,7 +532,6 @@ func (s Style) hint(h Hint, next bool) string {
 	return out
 }
 
-// Rule is a horizontal rule, optionally titled at its left edge and labeled at its right.
 // Box frames rows the human can type into, at width columns including the frame. A terminal has no form field, so
 // a border is what says one is here; the rest of loupe draws none, which is what makes this one unambiguous. title
 // names the field on the top edge and right names the way out, both dropped in that order when the width is short.
@@ -567,6 +566,7 @@ func (s Style) boxEdge(inner int, title, right string) string {
 	return strings.Repeat(h, inner)
 }
 
+// Rule is a horizontal rule, optionally titled at its left edge and labeled at its right.
 func (s Style) Rule(width int, title, right string) string {
 	h := s.Glyphs.HRule
 	var b strings.Builder
