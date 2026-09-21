@@ -16,7 +16,7 @@ func Match(reviews []github.Review, attempt Attempt) (github.Review, bool) {
 	env := attempt.Envelope
 	marker := fmt.Sprintf("<!-- loupe digest=%s publication=%s -->", env.Digest, env.PublicationID)
 	for _, r := range reviews {
-		if !authorMatches(r.User, env.Viewer) || r.CommitID != env.CommitID || r.State == "PENDING" {
+		if !authorMatches(r.User, env) || r.CommitID != env.CommitID || r.State == "PENDING" {
 			continue
 		}
 		for _, line := range strings.Split(r.Body, "\n") {
@@ -29,11 +29,11 @@ func Match(reviews []github.Review, attempt Attempt) (github.Review, bool) {
 }
 
 // authorMatches is FR-017: an unattended attempt has no recorded viewer, so the App's bot login stands in for it.
-func authorMatches(user, viewer string) bool {
-	if viewer != "" {
-		return user == viewer
+func authorMatches(user string, env Envelope) bool {
+	if env.Unattended() {
+		return strings.HasSuffix(user, "[bot]")
 	}
-	return strings.HasSuffix(user, "[bot]")
+	return user == env.Viewer
 }
 
 // Reconcile returns nil when no review matches. The receipt's postedAt is the attempt's start, the closest time loupe

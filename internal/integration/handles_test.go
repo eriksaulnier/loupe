@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -61,4 +63,77 @@ func TestRestoredDataRootNamesTheNewDirectory(t *testing.T) {
 	h.capture()
 	h.Restore(t)
 	h.checkDir(h.mustOK("show", "--run", runRef), 1)
+}
+
+// payloadKeys is what a publish result carries beyond the envelope.
+func payloadKeys(env map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range env {
+		switch k {
+		case "loupe", "ok", "command", "run", "dir":
+		default:
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func TestUnattendedPublishSaysSoAndNamesThePoster(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
+
+	sent := h.mustOK("publish", runRef, "--unattended")
+	if sent["sent"] != true || sent["unattended"] != true || sent["author"] != "github-actions[bot]" {
+		t.Fatalf("sent %v", sent)
+	}
+	replay := h.mustOK("publish", runRef, "--unattended")
+	if replay["replayed"] != true || replay["unattended"] != true || replay["author"] != "github-actions[bot]" {
+		t.Fatalf("replay %v", replay)
+	}
+
+	receiptPath := filepath.Join(h.RunDir(1), "receipt.json")
+	var receipt map[string]any
+	if err := json.Unmarshal(readFile(t, receiptPath), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	delete(receipt, "author")
+	older, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(receiptPath, older, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	legacy := h.mustOK("publish", runRef, "--unattended")
+	if _, ok := legacy["author"]; ok || legacy["unattended"] != true {
+		t.Fatalf("a receipt with no author replayed as %v", legacy)
+	}
+	h.checkSends(1)
+}
+
+func TestAttendedPublishKeepsItsFieldsAndAddsTheNewOnes(t *testing.T) {
+	h := newHarness(t)
+	h.reviewed("a\na\nx\nq\n")
+
+	h.Stdin = confirmPublish("", "n")
+	canceled, _ := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
+	if got := payloadKeys(canceled); len(got) != 1 || got["sent"] != false {
+		t.Fatalf("a canceled publish carries %v, want sent false alone", got)
+	}
+
+	h.Stdin = confirmPublish("", "y")
+	sent, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
+	if exit != 0 {
+		t.Fatalf("publish exit %d envelope %v", exit, sent)
+	}
+	got := payloadKeys(sent)
+	if got["sent"] != true || got["reviewUrl"] == nil || got["reviewId"] == nil || got["unattended"] != false ||
+		got["author"] != "reviewer" || len(got) != 5 {
+		t.Fatalf("attended publish carries %v", got)
+	}
+	h.checkSends(1)
 }

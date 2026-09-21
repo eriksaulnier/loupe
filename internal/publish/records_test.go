@@ -138,3 +138,14 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(data)
 }
+
+func TestEnvelopeIsUnattendedExactlyWhenItNamesNoViewer(t *testing.T) {
+	env := sampleEnvelope()
+	if env.Unattended() {
+		t.Fatalf("an envelope with viewer %q is attended", env.Viewer)
+	}
+	env.Viewer = ""
+	if !env.Unattended() {
+		t.Fatal("an envelope with no viewer is unattended")
+	}
+}

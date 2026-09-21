@@ -30,10 +30,10 @@ description: "Task list for handles a pipeline can hold"
 
 **Independent Test**: An unattended `loupe publish --json` against the fake GitHub returns `"unattended": true` and the `author` the fake returned; an attended one returns `"unattended": false` and every field it had before.
 
-- [ ] T006 [P] [US2] Add a test to `internal/publish/records_test.go`: `Envelope.Unattended()` is true exactly when `Viewer` is empty. Confirm it fails to compile.
-- [ ] T007 [US2] Add `Envelope.Unattended()` to `internal/publish/records.go`, and have `Match` in `internal/publish/reconcile.go` pass `env.Unattended()` to `authorMatches` instead of testing the viewer itself. Confirm T006 and `go test ./internal/publish/` pass.
-- [ ] T008 [US2] Add cases to `internal/cli/publish_test.go`: unattended publish carries `unattended: true` and `author`; attended carries `unattended: false`, `author`, and `sent`, `reviewUrl`, `reviewId` unchanged; a replay repeats both; a receipt with no `author` replays without the key; a canceled publish is `{"sent": false}` and nothing more. Confirm they fail.
-- [ ] T009 [US2] In `internal/cli/publish.go` add `unattended` from `receipt.Envelope.Unattended()` and `author` when `receipt.Author` is non-empty to the sent and replayed payloads. Confirm T008 passes.
+- [x] T006 [P] [US2] Add a test to `internal/publish/records_test.go`: `Envelope.Unattended()` is true exactly when `Viewer` is empty. Confirm it fails to compile.
+- [x] T007 [US2] Add `Envelope.Unattended()` to `internal/publish/records.go`, and have `Match` in `internal/publish/reconcile.go` pass `env.Unattended()` to `authorMatches` instead of testing the viewer itself. Confirm T006 and `go test ./internal/publish/` pass.
+- [x] T008 [US2] Add cases to `internal/integration/handles_test.go`, which drives publish against the fake GitHub: unattended publish carries `unattended: true` and `author`; attended carries `unattended: false`, `author`, and `sent`, `reviewUrl`, `reviewId` unchanged; a replay repeats both; a receipt with no `author` replays without the key; a canceled publish is `{"sent": false}` and nothing more. Confirm they fail.
+- [x] T009 [US2] In `internal/cli/publish.go` add `unattended` from `receipt.Envelope.Unattended()` and `author` when `receipt.Author` is non-empty to the sent and replayed payloads. Confirm T008 passes.
 
 ## Phase 3: User Story 3 - A refused batch is fixed in one retry (P2)
 

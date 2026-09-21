@@ -42,6 +42,10 @@ type Envelope struct {
 	Findings      []EnvelopeFinding `json:"findings"`
 }
 
+// Unattended reports whether the envelope was composed by --unattended, which never records a viewer; an attended
+// publication always does.
+func (e Envelope) Unattended() bool { return e.Viewer == "" }
+
 type EnvelopeTarget struct {
 	Owner   string `json:"owner"`
 	Repo    string `json:"repo"`

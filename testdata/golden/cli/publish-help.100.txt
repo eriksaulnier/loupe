@@ -66,9 +66,12 @@ pull request's own bot reviews, and marked unattended in its footer and loupe-me
 
 Result (--json)  alone on stdout while the confirmation draws on stderr
   {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1",
-   "dir": "/path/to/run", "reviewId": 123,
-   "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true}
+   "dir": "/path/to/run", "author": "reviewer", "reviewId": 123,
+   "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true,
+   "unattended": false}
 A receipt replay has "sent": false and "replayed": true; a canceled publish has only "sent": false.
+unattended says whether --unattended composed the review. author is the login GitHub returned for
+it, absent when the receipt predates loupe recording it.
 
 Flags
       --action string   review action: comment, approve or request-changes
