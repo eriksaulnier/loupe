@@ -46,8 +46,8 @@ whitespace, control or format characters, <, > or backticks; an empty list is st
 they are never fetched.
 A batch is stored entirely or not at all. A refused batch checks every entry: code, message, fix
 and details describe the first invalid one, whose zero-based position is details.entry, and
-details.entries lists each invalid entry as {entry, code, message, fix, details}, so one retry
-can fix them all. Input MUST NOT carry included, decision, status or findingRev.
+details.entries lists each invalid entry as {entry, code, message, fix, details?}. Each entry
+reports its first defect only. Input MUST NOT carry included, decision, status or findingRev.
 
 The flags build a single finding instead and cannot be combined with --from.
 

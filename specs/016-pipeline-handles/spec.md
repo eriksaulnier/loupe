@@ -115,7 +115,7 @@ An unattended reviewer files ten findings and three have bad locations. loupe st
 - **SC-002**: Every command whose `--json` success result carries `run` also names an absolute directory, checked against the fake GitHub and a local remote.
 - **SC-003**: An unattended publish's `--json` result names the posting login and says it was unattended, on first send and on replay.
 - **SC-004**: An attended publish's `--json` result keeps every field it has today.
-- **SC-005**: A batch with any number of invalid entries is correctable in one retry: a resubmission that fixes every entry the refusal listed stores the whole batch.
+- **SC-005**: A batch with any number of invalid entries, each with one defect, is correctable in one retry: a resubmission that fixes every entry the refusal listed stores the whole batch. An entry reports its first defect only, as it does today, so an entry with two defects can still take a second retry.
 - **SC-006**: `mise run check` passes after the final edit.
 
 ## Assumptions

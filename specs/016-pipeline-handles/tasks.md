@@ -53,9 +53,9 @@ description: "Task list for handles a pipeline can hold"
 ## Phase 5: Review and close
 
 - [x] T017 Run `go test ./internal/cli/ -update` and read `git diff testdata/golden/cli`. Only `publish-help` and `handoff-help` goldens may move, and only on the lines T014 and T015 changed; any other change MUST be explained before it is accepted.
-- [ ] T018 Check by eye through `mise run demo` under tmux: `loupe show --json` names a `dir`, and a two-bad-entry `add` batch refuses naming both.
-- [ ] T019 Run `cleanup-comments` over the diff and `mise run check`, and commit on `016-pipeline-handles` in atomic Conventional Commits.
-- [ ] T020 Have a read-only sub-agent review the branch against spec.md, fix what holds up, and re-run `mise run check`. Name a live `loupe-workflows` run as unverified. No push, pull request, release or live run without the owner naming it.
+- [x] T018 Check by eye through `mise run demo` under tmux: `loupe show --json` names a `dir`, and a two-bad-entry `add` batch refuses naming both.
+- [x] T019 Run `cleanup-comments` over the diff and `mise run check`, and commit on `016-pipeline-handles` in atomic Conventional Commits.
+- [x] T020 Have a read-only sub-agent review the branch against spec.md, fix what holds up, and re-run `mise run check`. Name a live `loupe-workflows` run as unverified. No push, pull request, release or live run without the owner naming it.
 
 ## Dependencies
 
