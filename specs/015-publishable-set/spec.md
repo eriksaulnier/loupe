@@ -10,7 +10,7 @@
 
 ## Relationship to earlier specifications
 
-This specification amends `docs/comment-format.md`, which is a contract, and closes T123 to T127 of `specs/001-loupe-v1`. It changes no behavior. Every refusal fires on exactly the same condition afterwards, and no published review renders differently.
+This specification amends the two documents `CONTRIBUTING.md` names as contracts, `docs/comment-format.md` and `specs/001-loupe-v1/contracts/cli.md`, and closes T123 to T127 of `specs/001-loupe-v1`. It changes no behavior. Every refusal fires on exactly the same condition afterwards, and no published review renders differently.
 
 - **Spec 001 T120** started this work and stopped halfway. It named the three sets apart in `data-model.md`, in `contracts/cli.md` and in the publish help, but it left one sentence of that help inconsistent with itself and left the prose everywhere else alone.
 - **`specs/001-loupe-v1/data-model.md:151-153`** already defines the vocabulary. This specification does not invent a word; it makes the rest of the repository use the words that are written down there.
@@ -87,7 +87,7 @@ Every refusal fires on exactly the same input it fired on before, and every publ
 - **FR-004**: `loupe publish`'s long help MUST mirror FR-002 and FR-003 in its `empty` row, with the two clauses carrying the two different words. The sentence MUST NOT use one word for both gates.
 - **FR-005**: `docs/comment-format.md` MUST say `published` where it names the body's contents, and `publishable` where it names the `--inline` set and the publish-time Markdown check, including the refusal that check raises. Lines where the word is ordinary English MUST be left alone.
 - **FR-006**: `specs/001-loupe-v1/spec.md` FR-019 MUST state readiness as the code derives it: no finding pending and no note open.
-- **FR-007**: `specs/001-loupe-v1/spec.md`, `plan.md` and `contracts/cli.md` MUST say `publishable` or `published` wherever they name a set, and MUST keep `included` wherever they name the flag or a count of it.
+- **FR-007**: `specs/001-loupe-v1/spec.md`, `plan.md` and `contracts/cli.md` MUST say `publishable` or `published` wherever they name a set, and MUST keep `included` wherever they name the flag or a count of it. Where spec 001's meaning is corrected rather than reworded — FR-019 and the lock edge case — it MUST carry a dated pointer to this specification, as FR-025 does for spec 007.
 - **FR-008**: `specs/001-loupe-v1/spec.md`'s dead-lock-holder edge case MUST match `internal/run/lock.go` and `plan.md`: the kernel releases a flock when its holder dies, so a timeout means a live holder; the refusal names the holder's pid and command and says to wait for it or stop it; loupe never removes the lock file. `plan.md`'s "stale-lock refusal text" MUST be corrected for the same reason.
 - **FR-009**: No behavior MAY change. Every refusal MUST fire on exactly the same condition, no refusal code MAY change, and no exit code MAY change.
 - **FR-010**: No published review MAY render differently. The only goldens that MAY move are `testdata/golden/cli/publish-help.80.txt` and `publish-help.100.txt`, and only the line carrying the reworded help.
@@ -111,6 +111,6 @@ Every refusal fires on exactly the same input it fired on before, and every publ
 
 ## Assumptions
 
-- `draft.PublishableSet` and `internal/publish/gates.go`'s `included()` compute the same thing. Both walk `d.Findings` in order and keep dispositions `accepted` and `pending`; `Dispositions` is a map built by calling the same private `disposition` over the same slice. Deleting one is a deduplication, not a change.
+- `draft.PublishableSet` and `internal/publish/gates.go`'s `included()` compute the same thing. Both walk `d.Findings` in order and keep dispositions `accepted` and `pending`; `Dispositions` is a map built by calling the same private `disposition` over the same slice. Deleting one is a deduplication, not a change. The one input on which they differ is a draft holding two findings with the same id: `Dispositions` is keyed by id, so the last one's disposition applied to both, while `PublishableSet` judges each finding on its own. loupe's commands cannot write such a draft and `draft.Load` does not refuse a hand-edited one; the gates now agree with `Digest` and `Build`, which already used `PublishableSet`.
 - The three sets are the right vocabulary. They are already written down in `data-model.md`, already used in `envelope.go` and the publish help, and adding a fourth word would be a specification of its own.
 - Whether the words make a reader faster is not claimed. It is a prose change with no test that can stand in for a reader.

@@ -22,7 +22,7 @@
 
 **Project Type**: CLI.
 
-**Constraints**: Constitution 2.0.1 Boundaries — `docs/comment-format.md` is a contract, so this specification is the amendment `CONTRIBUTING.md:68` requires the pull request to name. The reconciliation marker, the `loupe-meta` keys and the body composition rules are untouched.
+**Constraints**: Constitution 2.0.1 Boundaries and `CONTRIBUTING.md:21` — `docs/comment-format.md` and `specs/001-loupe-v1/contracts/cli.md` are contracts, so this specification is the amendment `CONTRIBUTING.md:68` requires the pull request to name. The reconciliation marker, the `loupe-meta` keys and the body composition rules are untouched.
 
 **Scale/Scope**: One deleted function, three repointed call sites, four strings, one comment, one test assertion, seven lines of a contract, and the spec-001 amendments.
 

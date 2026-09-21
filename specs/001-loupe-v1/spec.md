@@ -203,7 +203,7 @@ A Claude Code user installs the loupe plugin. Typing the slash command with a pu
 - Finding text contains control or bidirectional override characters: they are escaped in every preview and never alter what is sent.
 - A finding body contains raw HTML beyond the allowed collapsible-section tags, an unclosed code fence, or exceeds the size limit: refused at write time with the line and the fix.
 - A run directory has a damaged or unreadable record: the command refuses naming the file, never repairs or deletes it.
-- The lock is still held when the timeout expires: the refusal names the lock file and the holder's pid and command, and says to wait for that process or stop it. The kernel releases a flock when its holder dies, so a timeout means a live holder rather than a leftover from a crash. loupe never removes the lock file and never steals the lock.
+- The lock is still held when the timeout expires: the refusal names the lock file and, once the holder has written them, its pid and command, and says to wait for that process or stop it. The kernel releases a flock when its holder dies, so a timeout means a live holder rather than a leftover from a crash. loupe never removes the lock file and never steals the lock. Corrected on 2026-09-21 by `specs/015-publishable-set`: it described a dead holder and a removal command, which flock rules out.
 
 ## Requirements *(mandatory)*
 
@@ -235,7 +235,7 @@ Human decisions
 
 - **FR-017**: Decisions, notes and replies MUST be stored outside the publishable content and MUST never appear in the published review.
 - **FR-018**: A decision MUST bind to the finding's content at the time it was made; any later change to a publishable field or to inclusion MUST remove the decision.
-- **FR-019**: The system MUST derive each finding's disposition as accepted, pending, excluded or withdrawn, and MUST derive readiness as: no finding pending and no note open. This rule applies regardless of who filed or last edited the finding; a finding filed or edited by the human is pending until accepted in the review interface, and the author flag is an audit record only.
+- **FR-019**: The system MUST derive each finding's disposition as accepted, pending, excluded or withdrawn, and MUST derive readiness as: no finding pending and no note open. This rule applies regardless of who filed or last edited the finding; a finding filed or edited by the human is pending until accepted in the review interface, and the author flag is an audit record only. Corrected on 2026-09-21 by `specs/015-publishable-set`: it read "every included finding accepted", which an excluded finding could never satisfy; the derivation has always been this one.
 - **FR-020**: A note MUST be tied to one finding, have a stable identifier and a status of open, resolved or dismissed; only a human decision in the review interface MAY change its status.
 - **FR-021**: A reply MUST reference a note, have a stable identifier and record its author, and MUST NOT change the note's status or any decision.
 - **FR-022**: The review interface MUST refuse to run without an interactive terminal, MUST make decisions only from a view that shows the whole finding, MUST show the diff hunk for a located finding, and MUST offer the full file diff with findings marked.
