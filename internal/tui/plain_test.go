@@ -476,3 +476,26 @@ func TestPlainPresentsFindingsInSeverityOrder(t *testing.T) {
 		t.Errorf("1 of 4 is not the critical finding:\n%s", view)
 	}
 }
+
+func TestPlainRecordsPastAWriteToAnotherFinding(t *testing.T) {
+	dir := newFixture(t)
+	var out bytes.Buffer
+	in := &lineReader{
+		lines: []string{"a", "q"},
+		before: map[int]func(){0: func() {
+			if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+				d.Findings[2].Title = "Retitled three"
+				d.Findings[2].Rev++
+				return nil
+			}); err != nil {
+				t.Error(err)
+			}
+		}},
+	}
+	if err := RunPlain(dir, in, &out, envOf(testEnv), 0); err != nil {
+		t.Fatal(err)
+	}
+	if dec := loadDraft(t, dir).Decisions["f-001"]; dec.Decision != draft.DecisionAccepted {
+		t.Fatalf("f-001 not accepted after a write to f-003: %+v\n%s", dec, out.String())
+	}
+}

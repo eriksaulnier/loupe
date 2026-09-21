@@ -244,7 +244,7 @@ Human decisions
 - **FR-020**: A note MUST be tied to one finding, have a stable identifier and a status of open, resolved or dismissed; only a human decision in the review interface MAY change its status.
 - **FR-021**: A reply MUST reference a note, have a stable identifier and record its author, and MUST NOT change the note's status or any decision.
 - **FR-022**: The review interface MUST refuse to run without an interactive terminal, MUST make decisions only from a view that shows the whole finding, MUST show the diff hunk for a located finding, and MUST offer the full file diff with findings marked.
-- **FR-023**: Every decision made in the interface MUST carry the draft version that was displayed; a stale write MUST be refused and the current finding shown.
+- **FR-023**: Every decision made in the interface MUST carry the state of its finding as displayed, and MUST be refused, with the current finding shown, when that finding or a note on it changed since. Amended on 2026-09-21 by `specs/017-live-review`: the check was the whole draft's version, which refused a decision over an agent's write to another finding.
 - **FR-024**: The interface MUST persist each decision immediately, hold no lock while waiting for input, and keep all decisions on quit.
 
 Publication

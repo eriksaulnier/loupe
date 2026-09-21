@@ -82,12 +82,12 @@ description: "Task list for handing a send-back to the agent at once and showing
 
 **Independent Test**: With review on `f-002`, reply to a note on `f-001` from outside, then accept `f-002`; it records and the notice names the reply.
 
-- [ ] T029 [US6] Add failing tests to `internal/draft/derive_test.go`: `FindingState` is equal for two loads of one draft and for a draft returned by `Mutate` against its reload; it changes when the finding is edited, withdrawn or restored, when its decision changes, when a note on it is added or closed, and when a reply lands on such a note; it does not change for a write to another finding, a new finding or the summary.
-- [ ] T030 [US6] Add `FindingState(d, id) ([]byte, error)` to `internal/draft/derive.go`.
-- [ ] T031 [US6] Add failing tests to `internal/tui/poll_test.go`: accepting `f-002` after an outside reply on `f-001`, an edit to `f-003` or a new finding records and names them in the notice; after an edit, withdraw, reply or other-session decision on `f-002` it is refused with `staleNotice`; a send-back on `f-002` after a reply on `f-001` records. Move `TestRefusedSendBackKeepsTheTypedNote` to an outside write on `f-002` itself.
-- [ ] T032 [US6] In `internal/tui/app.go`, make `Decide` take the decided finding id and `decide` check `FindingState` inside the `Mutate` callback instead of passing an expected version; on success, name the other findings' changes in the notice through `changeNotice` with the decided finding left out, in `decideAndStay` and `decideAndShow` in `internal/tui/detail.go`.
-- [ ] T033 [US6] Add a failing test to `internal/tui/plain_test.go` that a decision after an outside write to another finding records, then pass the finding's displayed state from `internal/tui/plain.go`.
-- [ ] T034 [US6] Amend `specs/001-loupe-v1/spec.md` FR-023 with a dated pointer to this specification.
+- [X] T029 [US6] Add failing tests to `internal/draft/derive_test.go`: `FindingState` is equal for two loads of one draft and for a draft returned by `Mutate` against its reload; it changes when the finding is edited, withdrawn or restored, when its decision changes, when a note on it is added or closed, and when a reply lands on such a note; it does not change for a write to another finding, a new finding or the summary.
+- [X] T030 [US6] Add `FindingState(d, id) ([]byte, error)` to `internal/draft/derive.go`.
+- [X] T031 [US6] Add failing tests to `internal/tui/poll_test.go`: accepting `f-002` after an outside reply on `f-001`, an edit to `f-003` or a new finding records and names them in the notice; after an edit, withdraw, reply or other-session decision on `f-002` it is refused with `staleNotice`; a send-back on `f-002` after a reply on `f-001` records. Move `TestRefusedSendBackKeepsTheTypedNote` to an outside write on `f-002` itself.
+- [X] T032 [US6] In `internal/tui/app.go`, make `Decide` take the decided finding id and `decide` check `FindingState` inside the `Mutate` callback instead of passing an expected version; on success, name the other findings' changes in the notice through `changeNotice` with the decided finding left out, in `decideAndStay` and `decideAndShow` in `internal/tui/detail.go`.
+- [X] T033 [US6] Add a failing test to `internal/tui/plain_test.go` that a decision after an outside write to another finding records, then pass the finding's displayed state from `internal/tui/plain.go`.
+- [X] T034 [US6] Amend `specs/001-loupe-v1/spec.md` FR-023 with a dated pointer to this specification.
 - [ ] T035 Run `mise run check`, have a read-only sub-agent review the change against FR-009 and FR-015, fix what holds up, and run `mise run check` again.
 
 ## Dependencies

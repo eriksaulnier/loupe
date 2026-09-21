@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"slices"
@@ -118,6 +119,8 @@ type Model struct {
 	awaiting bool
 	// polling is true while a poll tick is in flight, so there is never more than one.
 	polling bool
+	// elsewhere names what an outside process changed in other findings, found when a decision is recorded.
+	elsewhere string
 	// pollChanged is true when the last re-read found a change, which earns one more tick even with nothing
 	// awaiting: an agent that replies and then edits leaves the edit for the tick after the reply.
 	pollChanged bool
@@ -263,7 +266,7 @@ func (m *Model) reload() (string, error) {
 	if d.Version == m.version {
 		return "", m.refreshAwaiting()
 	}
-	changed := changeNotice(m.draft, d)
+	changed := changeNotice(m.draft, d, "")
 	id, offset := "", m.body.YOffset
 	if len(m.order) > 0 {
 		id = m.order[m.cursor].ID
@@ -285,8 +288,12 @@ func (m *Model) reload() (string, error) {
 	return changed, nil
 }
 
-// changeNotice names what another process changed between two versions of the draft, in one line.
-func changeNotice(before, after *draft.Draft) string {
+// draftChanged is changeNotice's answer when nothing it names changed.
+const draftChanged = "draft changed"
+
+// changeNotice names what another process changed between two versions of the draft, in one line, leaving out the
+// finding the human just decided.
+func changeNotice(before, after *draft.Draft, decided string) string {
 	var parts []string
 	replied := map[string]bool{}
 	for _, r := range before.Replies {
@@ -297,7 +304,7 @@ func changeNotice(before, after *draft.Draft) string {
 		noteFinding[n.ID] = n.FindingID
 	}
 	for _, r := range after.Replies {
-		if !replied[r.ID] && r.By == draft.ByAgent {
+		if !replied[r.ID] && r.By == draft.ByAgent && noteFinding[r.NoteID] != decided {
 			parts = append(parts, fmt.Sprintf("%s answered on %s", r.NoteID, noteFinding[r.NoteID]))
 		}
 	}
@@ -308,6 +315,7 @@ func changeNotice(before, after *draft.Draft) string {
 	for _, f := range after.Findings {
 		rev, ok := revs[f.ID]
 		switch {
+		case f.ID == decided:
 		case !ok:
 			parts = append(parts, f.ID+" filed")
 		case rev != f.Rev:
@@ -318,7 +326,7 @@ func changeNotice(before, after *draft.Draft) string {
 		parts = append(parts, "summary changed")
 	}
 	if len(parts) == 0 {
-		return "draft changed"
+		return draftChanged
 	}
 	return strings.Join(parts, ", ")
 }
@@ -452,24 +460,57 @@ func (m *Model) setDraft(d *draft.Draft) {
 	m.draft, m.version, m.order = d, d.Version, draft.Ordered(d)
 }
 
-// Decide applies fn at the displayed version and reports whether it was recorded. A refusal reloads the draft and
-// becomes the notice, so the human sees the finding as it now is.
-func (m *Model) Decide(fn func(*draft.Draft) error) (bool, error) {
-	d, notice, err := decide(m.cfg.Dir, m.version, m.cfg.Getenv, fn)
+// Decide applies fn to the finding as displayed and reports whether it was recorded. A refusal reloads the draft and
+// becomes the notice, so the human sees the finding as it now is. Other findings the draft brings with it are named
+// in m.elsewhere for the caller's notice.
+func (m *Model) Decide(findingID string, fn func(*draft.Draft) error) (bool, error) {
+	displayed := m.draft
+	d, notice, err := decide(m.cfg.Dir, displayed, findingID, m.cfg.Getenv, fn)
 	if err != nil {
 		return false, err
+	}
+	m.elsewhere = ""
+	if d.Version != m.version {
+		m.elsewhere = changeNotice(displayed, d, findingID)
 	}
 	m.setDraft(d)
 	if err := m.refreshAwaiting(); err != nil {
 		return false, err
 	}
-	m.say(style.Warn, notice)
-	return notice == "", nil
+	if notice == "" {
+		return true, nil
+	}
+	m.sayDecided(notice)
+	m.noticeKind = style.Warn
+	return false, nil
 }
 
-// decide is shared by both modes. It returns the draft to display next and, when nothing was recorded, the notice.
-func decide(dir string, displayed int, getenv func(string) string, fn func(*draft.Draft) error) (*draft.Draft, string, error) {
-	d, err := draft.Mutate(dir, "review", &displayed, getenv, fn)
+// sayDecided is the notice for a recorded decision, followed by whatever changed elsewhere in the same step.
+func (m *Model) sayDecided(text string) {
+	if m.elsewhere != "" && m.elsewhere != draftChanged {
+		text += "; " + m.elsewhere
+	}
+	m.elsewhere = ""
+	m.say(style.Good, text)
+}
+
+// decide is shared by both modes. A decision is stale only when its own finding changed since displayed, so the agent
+// writing elsewhere never refuses it. It returns the draft to display next and, when nothing was recorded, the notice.
+func decide(dir string, displayed *draft.Draft, findingID string, getenv func(string) string, fn func(*draft.Draft) error) (*draft.Draft, string, error) {
+	shown, err := draft.FindingState(displayed, findingID)
+	if err != nil {
+		return nil, "", err
+	}
+	d, err := draft.Mutate(dir, "review", nil, getenv, func(d *draft.Draft) error {
+		stored, err := draft.FindingState(d, findingID)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(stored, shown) {
+			return refusal.New(refusal.Version, findingID+" changed since it was displayed", "review it again as it now is")
+		}
+		return fn(d)
+	})
 	if err == nil {
 		return d, "", nil
 	}

@@ -1,8 +1,13 @@
 package draft
 
 import (
+	"encoding/json"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 func finding(id string, rev int, included bool, by string) Finding {
@@ -88,5 +93,73 @@ func TestDerive(t *testing.T) {
 				t.Fatalf("included %d, want %d", got, c.included)
 			}
 		})
+	}
+}
+
+func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
+	dir := t.TempDir()
+	d := NewEmpty()
+	if _, err := Add(d, []FindingInput{
+		{Title: "One", Body: "Body.", General: true, Label: "question"},
+		{Title: "Two", Body: "Body.", General: true, Label: "question"},
+	}, nil, ByAgent, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	state := func(d *Draft) string {
+		t.Helper()
+		b, err := FindingState(d, "f-001")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	mutate := func(fn func(*Draft) error) *Draft {
+		t.Helper()
+		d, err := Mutate(dir, "test", nil, noEnv, fn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	shown := state(loadStored(t, dir))
+
+	// time.Now carries a monotonic reading that a reload drops; the state must not see the difference.
+	returned := mutate(func(d *Draft) error { d.Summary = "Elsewhere."; return nil })
+	if state(returned) != shown || state(loadStored(t, dir)) != shown {
+		t.Fatal("a write elsewhere, or a reload, changed the finding's state")
+	}
+	mutate(func(d *Draft) error {
+		_, err := Add(d, []FindingInput{{Title: "Three", Body: "Body.", General: true, Label: "question"}}, nil, ByAgent, time.Now())
+		return err
+	})
+	mutate(func(d *Draft) error { _, err := Accept(d, "f-002", time.Now()); return err })
+	if state(loadStored(t, dir)) != shown {
+		t.Fatal("a new finding or a decision on another finding changed the state")
+	}
+
+	title, _ := json.Marshal("One, retitled")
+	for name, fn := range map[string]func(*Draft) error{
+		"accept":    func(d *Draft) error { _, err := Accept(d, "f-001", time.Now()); return err },
+		"send back": func(d *Draft) error { _, err := SendBack(d, "f-001", "Why?", time.Now()); return err },
+		"reply":     func(d *Draft) error { _, err := AddReply(d, "n-001", "Because.", ByAgent, time.Now()); return err },
+		"resolve":   func(d *Draft) error { return ResolveNote(d, "n-001", time.Now()) },
+		"edit": func(d *Draft) error {
+			_, _, err := Edit(d, "f-001", EditInput{Title: title}, nil, nil, ByAgent, time.Now())
+			return err
+		},
+		"withdraw": func(d *Draft) error {
+			excluded := false
+			_, _, err := Edit(d, "f-001", EditInput{}, &excluded, nil, ByAgent, time.Now())
+			return err
+		},
+	} {
+		before := state(loadStored(t, dir))
+		mutate(fn)
+		if state(loadStored(t, dir)) == before {
+			t.Errorf("%s did not change the finding's state", name)
+		}
 	}
 }

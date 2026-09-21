@@ -216,7 +216,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 			continue
 		}
 
-		next, refused, err := decide(dir, d.Version, getenv, fn)
+		next, refused, err := decide(dir, d, f.ID, getenv, fn)
 		if err != nil {
 			return err
 		}

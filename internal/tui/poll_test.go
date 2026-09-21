@@ -275,7 +275,7 @@ func TestRefusedSendBackKeepsTheTypedNote(t *testing.T) {
 		t.Fatal(err)
 	}
 	pressKeys(t, m, "s", "Second question")
-	agentReplies(t, dir, "n-001", "Because.")
+	agentRetitles(t, dir, "f-002", "Retitled two")
 	pressKeys(t, m, "enter")
 	if m.notice != staleNotice || !m.noting || m.note.Value() != "Second question" {
 		t.Fatalf("notice %q noting %v note %q", m.notice, m.noting, m.note.Value())
@@ -317,5 +317,78 @@ func TestReloadsTheHumanCausesAnnounceOutsideChanges(t *testing.T) {
 	pressKeys(t, m, "p")
 	if m.view != viewList || !strings.Contains(m.notice, "f-002 changed") {
 		t.Fatalf("p after an outside change: view %v notice %q", m.view, m.notice)
+	}
+}
+
+func TestDecisionIgnoresWritesToOtherFindings(t *testing.T) {
+	m, dir := newAwaitingModel(t, 40)
+	if err := m.openFinding("f-002"); err != nil {
+		t.Fatal(err)
+	}
+	agentReplies(t, dir, "n-001", "Because.")
+	agentRetitles(t, dir, "f-003", "Retitled three")
+	outside(t, dir, func(d *draft.Draft) error {
+		_, err := draft.Add(d, []draft.FindingInput{{Title: "Four", Body: "Body four.", General: true, Label: "nit"}}, nil, draft.ByAgent, testNow)
+		return err
+	})
+	pressKeys(t, m, "a")
+	if dec := loadDraft(t, dir).Decisions["f-002"]; dec.Decision != draft.DecisionAccepted {
+		t.Fatalf("f-002 was not accepted: %+v, notice %q", dec, m.notice)
+	}
+	for _, want := range []string{"f-002 accepted", "n-001 answered on f-001", "f-003 changed", "f-004 filed"} {
+		if !strings.Contains(m.notice, want) {
+			t.Errorf("notice %q lacks %q", m.notice, want)
+		}
+	}
+	if strings.Contains(m.notice, "f-002 changed") {
+		t.Errorf("the human's own decision was announced as a change: %q", m.notice)
+	}
+
+	if err := m.openFinding("f-003"); err != nil {
+		t.Fatal(err)
+	}
+	agentReplies(t, dir, "n-001", "And more.")
+	pressKeys(t, m, "s", "Is three right?", "enter")
+	if d := loadDraft(t, dir); len(d.Notes) != 2 || d.Notes[1].FindingID != "f-003" {
+		t.Fatalf("send-back after a write elsewhere: notes %+v, notice %q", d.Notes, m.notice)
+	}
+}
+
+func TestDecisionIsStaleWhenItsOwnFindingChanged(t *testing.T) {
+	excluded := false
+	for name, write := range map[string]func(d *draft.Draft) error{
+		"edit": func(d *draft.Draft) error {
+			d.Findings[0].Title, d.Findings[0].Rev = "Retitled one", d.Findings[0].Rev+1
+			return nil
+		},
+		"withdraw": func(d *draft.Draft) error {
+			_, _, err := draft.Edit(d, "f-001", draft.EditInput{}, &excluded, nil, draft.ByAgent, testNow)
+			return err
+		},
+		"reply": func(d *draft.Draft) error {
+			_, err := draft.AddReply(d, "n-001", "Because.", draft.ByAgent, testNow)
+			return err
+		},
+		"another session": func(d *draft.Draft) error {
+			_, err := draft.Exclude(d, "f-001", testNow)
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, dir := newAwaitingModel(t, 40)
+			if err := m.openFinding("f-001"); err != nil {
+				t.Fatal(err)
+			}
+			before := loadDraft(t, dir).Decisions["f-001"]
+			outside(t, dir, write)
+			after := loadDraft(t, dir).Decisions["f-001"]
+			pressKeys(t, m, "a")
+			if m.notice != staleNotice {
+				t.Fatalf("notice %q", m.notice)
+			}
+			if got := loadDraft(t, dir).Decisions["f-001"]; got != after || (name != "another session" && got != before) {
+				t.Fatalf("decision recorded: %+v", got)
+			}
+		})
 	}
 }

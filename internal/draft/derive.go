@@ -2,6 +2,7 @@ package draft
 
 import (
 	"cmp"
+	"encoding/json"
 	"slices"
 
 	"github.com/eriksaulnier/loupe/internal/findingid"
@@ -122,4 +123,36 @@ func hasReply(d *Draft, noteID string) bool {
 		}
 	}
 	return false
+}
+
+// FindingState is everything a human's decision on the finding rests on: the finding, its decision, its notes and
+// their replies. It is JSON so a draft Mutate returned compares equal to the same draft loaded, whose times carry no
+// monotonic reading.
+func FindingState(d *Draft, findingID string) ([]byte, error) {
+	f, err := findFinding(d, findingID)
+	if err != nil {
+		return nil, err
+	}
+	state := struct {
+		Finding  Finding
+		Decision *Decision
+		Notes    []Note
+		Replies  []Reply
+	}{Finding: *f}
+	if decision, ok := d.Decisions[findingID]; ok {
+		state.Decision = &decision
+	}
+	notes := map[string]bool{}
+	for _, n := range d.Notes {
+		if n.FindingID == findingID {
+			state.Notes = append(state.Notes, n)
+			notes[n.ID] = true
+		}
+	}
+	for _, r := range d.Replies {
+		if notes[r.NoteID] {
+			state.Replies = append(state.Replies, r)
+		}
+	}
+	return json.Marshal(state)
 }
