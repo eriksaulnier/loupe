@@ -324,7 +324,11 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		return m.checkDraft(true)
 	case "esc":
 		m.view, m.notice = viewList, ""
-		cmd := m.fail(m.reload())
+		changed, err := m.reload()
+		if changed != "" {
+			m.say(style.Note, m.changedNotice(changed))
+		}
+		cmd := m.fail(err)
 		// The cursor is found again after the reload, not before it: a finding the agent filed meanwhile can sort
 		// above the open one, which would leave the cursor on its neighbor.
 		if j := orderedIndex(m.order, m.openID); j >= 0 {
@@ -346,13 +350,20 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 		m.note.Blur()
 		id, body := m.openID, m.note.Value()
 		var noteID string
-		return m.decideAndShow(func(d *draft.Draft) error {
+		cmd := m.decideAndShow(func(d *draft.Draft) error {
 			n, err := draft.SendBack(d, id, body, m.cfg.Now())
 			noteID = n.ID
 			return err
 		}, func() string {
 			return fmt.Sprintf("%s %s sent back as %s; the agent has it", m.glyphs.Note, id, noteID)
 		})
+		// Refused, most often because the agent wrote meanwhile: the note stays as typed so sending it again is
+		// one key.
+		if noteID == "" && m.err == nil {
+			m.noting = true
+			return tea.Batch(cmd, m.note.Focus())
+		}
+		return cmd
 	}
 	if msg.Type == tea.KeyRunes {
 		// A note is one paragraph, so a pasted line break or tab becomes a space.

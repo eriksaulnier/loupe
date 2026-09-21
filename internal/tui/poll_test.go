@@ -181,8 +181,9 @@ func TestPollRunsOnlyWhileANoteAwaits(t *testing.T) {
 	}
 	agentReplies(t, dir, "n-001", "Because.")
 	update(t, m, pollMsg{})
+	update(t, m, pollMsg{})
 	if m.polling {
-		t.Fatal("the poll kept running after the last reply")
+		t.Fatal("the poll kept running after the last reply and a quiet tick")
 	}
 }
 
@@ -264,5 +265,57 @@ func TestReloadKey(t *testing.T) {
 			t.Errorf("help for view %v does not list ctrl+r:\n%s", v, m.View())
 		}
 		m.help = false
+	}
+}
+
+func TestRefusedSendBackKeepsTheTypedNote(t *testing.T) {
+	m, dir := newAwaitingModel(t, 40)
+	pressKeys(t, m, "enter")
+	if err := m.openFinding("f-002"); err != nil {
+		t.Fatal(err)
+	}
+	pressKeys(t, m, "s", "Second question")
+	agentReplies(t, dir, "n-001", "Because.")
+	pressKeys(t, m, "enter")
+	if m.notice != staleNotice || !m.noting || m.note.Value() != "Second question" {
+		t.Fatalf("notice %q noting %v note %q", m.notice, m.noting, m.note.Value())
+	}
+	pressKeys(t, m, "enter")
+	if d := loadDraft(t, dir); len(d.Notes) != 2 || d.Notes[1].Body != "Second question" {
+		t.Fatalf("notes %+v", d.Notes)
+	}
+}
+
+func TestPollShowsAnEditThatFollowsTheLastReply(t *testing.T) {
+	m, dir := newAwaitingModel(t, 40)
+	agentReplies(t, dir, "n-001", "Because.")
+	update(t, m, pollMsg{})
+	if !m.polling {
+		t.Fatal("the tick that showed the last reply stopped the poll")
+	}
+	agentRetitles(t, dir, "f-001", "Retitled one")
+	update(t, m, pollMsg{})
+	if !strings.Contains(m.notice, "f-001 changed") || !strings.Contains(m.View(), "Retitled one") {
+		t.Fatalf("notice %q", m.notice)
+	}
+	update(t, m, pollMsg{})
+	if m.polling {
+		t.Fatal("the poll kept running after a quiet tick with nothing awaiting")
+	}
+}
+
+func TestReloadsTheHumanCausesAnnounceOutsideChanges(t *testing.T) {
+	m, dir := newAwaitingModel(t, 40)
+	pressKeys(t, m, "enter")
+	agentReplies(t, dir, "n-001", "Because.")
+	pressKeys(t, m, "esc")
+	if m.view != viewList || !strings.Contains(m.notice, "n-001 answered on f-001") {
+		t.Fatalf("esc: view %v notice %q", m.view, m.notice)
+	}
+
+	agentRetitles(t, dir, "f-002", "Retitled two")
+	pressKeys(t, m, "p")
+	if m.view != viewList || !strings.Contains(m.notice, "f-002 changed") {
+		t.Fatalf("p after an outside change: view %v notice %q", m.view, m.notice)
 	}
 }

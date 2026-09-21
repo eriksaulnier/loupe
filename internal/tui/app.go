@@ -118,6 +118,9 @@ type Model struct {
 	awaiting bool
 	// polling is true while a poll tick is in flight, so there is never more than one.
 	polling bool
+	// pollChanged is true when the last re-read found a change, which earns one more tick even with nothing
+	// awaiting: an agent that replies and then edits leaves the edit for the tick after the reply.
+	pollChanged bool
 	// pollSkipped is true when a tick found the human writing or confirming; the draft is re-read as they leave.
 	pollSkipped bool
 }
@@ -221,28 +224,46 @@ func (m *Model) pollHeld() bool {
 }
 
 func (m *Model) schedulePoll() tea.Cmd {
-	if !m.awaiting || m.polling || m.err != nil {
+	if !m.awaiting && !m.pollChanged || m.polling || m.err != nil {
 		return nil
 	}
 	m.polling = true
 	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return pollMsg{} })
 }
 
-// checkDraft shows the draft as it is on disk when another process changed it, keeping the cursor on its finding
-// and the open finding where the human had scrolled it. asked is true for the reload key, which answers even when
-// nothing changed.
+// checkDraft shows the draft as it is on disk and says what another process changed. asked is true for the reload
+// key, which answers even when nothing changed.
 func (m *Model) checkDraft(asked bool) tea.Cmd {
-	d, err := draft.Load(m.cfg.Dir)
+	changed, err := m.reload()
 	if err != nil {
 		return m.fail(err)
 	}
-	if d.Version == m.version {
-		if asked {
-			m.say(style.Dim, "draft is current")
-		}
-		return nil
+	m.pollChanged = changed != ""
+	switch {
+	case changed != "":
+		m.say(style.Note, m.changedNotice(changed))
+	case asked:
+		m.say(style.Dim, "draft is current")
 	}
-	notice := changeNotice(m.draft, d)
+	return nil
+}
+
+func (m *Model) changedNotice(changed string) string {
+	return strings.TrimSpace(m.glyphs.Note + " " + changed)
+}
+
+// reload shows the draft as it is on disk, keeping the cursor on its finding and the open finding where the human
+// had scrolled it, and returns what another process changed, or "" when the draft is as displayed. Every write the
+// human makes moves the displayed version, so a difference is never theirs.
+func (m *Model) reload() (string, error) {
+	d, err := draft.Load(m.cfg.Dir)
+	if err != nil {
+		return "", err
+	}
+	if d.Version == m.version {
+		return "", m.refreshAwaiting()
+	}
+	changed := changeNotice(m.draft, d)
 	id, offset := "", m.body.YOffset
 	if len(m.order) > 0 {
 		id = m.order[m.cursor].ID
@@ -253,16 +274,15 @@ func (m *Model) checkDraft(asked bool) tea.Cmd {
 	}
 	m.cursor = max(min(m.cursor, len(m.order)-1), 0)
 	if err := m.refreshAwaiting(); err != nil {
-		return m.fail(err)
+		return "", err
 	}
 	if m.view == viewDetail {
 		if err := m.refreshDetail(); err != nil {
-			return m.fail(err)
+			return "", err
 		}
 		m.body.SetYOffset(offset)
 	}
-	m.say(style.Note, strings.TrimSpace(m.glyphs.Note+" "+notice))
-	return nil
+	return changed, nil
 }
 
 // changeNotice names what another process changed between two versions of the draft, in one line.
@@ -430,15 +450,6 @@ func (m *Model) layout() error {
 // setDraft takes a freshly loaded draft and rebuilds the order every surface reads, so the two can never disagree.
 func (m *Model) setDraft(d *draft.Draft) {
 	m.draft, m.version, m.order = d, d.Version, draft.Ordered(d)
-}
-
-func (m *Model) reload() error {
-	d, err := draft.Load(m.cfg.Dir)
-	if err != nil {
-		return err
-	}
-	m.setDraft(d)
-	return m.refreshAwaiting()
 }
 
 // Decide applies fn at the displayed version and reports whether it was recorded. A refusal reloads the draft and
