@@ -1,8 +1,7 @@
 # The send-back loop, which is the agent's half of a round: a note the human sent, the agent's answer,
-# and the human resolving it. It is its own gif rather than a beat in the hero one, which is about the
-# human's own decisions. See docs/tapes/walkthrough.tape for the settings these share and why.
-#
-# f-003 carries the answered note in the seed, five rows down once the board is ordered by severity.
+# the human resolving it, and the box the next note is typed into. It is its own gif rather than a beat
+# in the hero one, which is about the human's own decisions. See docs/tapes/walkthrough.tape for the
+# settings these share and why.
 
 Output docs/assets/sendback.gif
 
@@ -27,6 +26,7 @@ Show
 
 Sleep 1200ms
 
+# f-003 carries the answered note in the seed, five rows down once the board is ordered by severity.
 # One row at a time, so the note glyph on f-003 is visible before it is opened.
 Type "j"
 Sleep 300ms
@@ -43,8 +43,21 @@ Enter
 # reply would render on.
 Sleep 3s
 Type "r"
-Sleep 2200ms
+Sleep 1400ms
+# The thread is taller than the room left under the finding, so the still is taken scrolled to its end,
+# where the agent's reply is.
+PageDown
+Sleep 1200ms
 Screenshot docs/assets/detail.png
 Sleep 1600ms
 Type "a"
 Sleep 2500ms
+
+# Accepting moves on to the next finding in draft order, f-005, where a new note is started in the
+# send-back box and left, which keeps its text for the next s.
+Type "s"
+Sleep 900ms
+Type@60ms "Should the README name the flag too?"
+Sleep 2500ms
+Escape
+Sleep 1500ms
