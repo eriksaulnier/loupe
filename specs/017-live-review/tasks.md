@@ -20,7 +20,7 @@ description: "Task list for handing a send-back to the agent at once and showing
 
 - [X] T001 [P] Write `internal/run/session_test.go` first, failing: `SessionOpen` is false on a run with no holder; true while a `HoldSession` is held; true while two are held and after one is released; false after the last is released; false after a holder process is killed. The kill case runs the test binary as a helper process that takes the hold and blocks, and kills it; no pseudo-terminal, no network.
 - [X] T002 Add `internal/run/session.go`: `HoldSession(dir) (*Session, error)` opens `<run>/.review` (created empty, `0o644`) and takes `LOCK_SH`; `(*Session).Release() error`; `SessionOpen(dir) (bool, error)` opens the same file and tries `LOCK_EX|LOCK_NB`, releases at once, and reports open on `EWOULDBLOCK`. A missing file is not open. Confirm with `go test ./internal/run/`.
-- [ ] T003 [P] Add `ReviewOpen Code = "review-open"` to `internal/refusal/refusal.go` and to the code list in `internal/refusal/refusal_test.go`, test first.
+- [X] T003 [P] Add `ReviewOpen Code = "review-open"` to `internal/refusal/refusal.go` and to the code list in `internal/refusal/refusal_test.go`, test first.
 
 ## Phase 2: User Story 1 — A send-back wakes the agent while the human keeps reviewing (P1)
 
@@ -36,10 +36,10 @@ description: "Task list for handing a send-back to the agent at once and showing
 
 **Independent Test**: `loupe handoff` refuses `review-open` while a review session holds the marker, inside Herdr or not, and does not once it has exited.
 
-- [ ] T009 [US4] Add failing tests to `internal/cli/handoff_test.go`: with a `HoldSession` held on the run, handoff refuses `review-open` with `NO_COLOR` stderr `error:` and `fix:` lines naming `loupe wait --run <ref> --json`, both with the Herdr environment set and without it; with no holder, the existing `no-pane-host` refusal is unchanged; no pane is opened and no run file is written.
-- [ ] T010 [US4] In `internal/cli/handoff.go`, probe `run.SessionOpen` after resolving the run and before `pane.Detect`, refusing `refusal.ReviewOpen`. Rewrite `handoffHelp` to name the refusal and what the agent does on it.
-- [ ] T011 [US4] In `internal/cli/review.go`, take `run.HoldSession` after resolving the run and release it after the program or plain mode returns, around both modes and before `reviewDone`. Extend T006's integration test: handoff refuses `review-open` while the review goroutine runs and refuses `no-pane-host` after it returns.
-- [ ] T012 [US4] Rewrite sections 6 and 7 of `plugin/skills/human-review/SKILL.md`: `wait` returns when the human sends a finding back or publishes; after the last reply run `loupe handoff`, and on `review-open` tell the user the answers are in their open review and block on `loupe wait` again; drop "An open note that was not handed to you is the human's to hand back". Keep every prohibition (FR-014). Confirm the Claude Code, Codex and Pi manifests all point at this one skill and need no change.
+- [X] T009 [US4] Add failing tests to `internal/cli/handoff_test.go`: with a `HoldSession` held on the run, handoff refuses `review-open` with `NO_COLOR` stderr `error:` and `fix:` lines naming `loupe wait --run <ref> --json`, both with the Herdr environment set and without it; with no holder, the existing `no-pane-host` refusal is unchanged; no pane is opened and no run file is written.
+- [X] T010 [US4] In `internal/cli/handoff.go`, probe `run.SessionOpen` after resolving the run and before `pane.Detect`, refusing `refusal.ReviewOpen`. Rewrite `handoffHelp` to name the refusal and what the agent does on it.
+- [X] T011 [US4] In `internal/cli/review.go`, take `run.HoldSession` after resolving the run and release it after the program or plain mode returns, around both modes and before `reviewDone`. Extend T006's integration test: handoff refuses `review-open` while the review goroutine runs and refuses `no-pane-host` after it returns.
+- [X] T012 [US4] Rewrite sections 6 and 7 of `plugin/skills/human-review/SKILL.md`: `wait` returns when the human sends a finding back or publishes; after the last reply run `loupe handoff`, and on `review-open` tell the user the answers are in their open review and block on `loupe wait` again; drop "An open note that was not handed to you is the human's to hand back". Keep every prohibition (FR-014). Confirm the Claude Code, Codex and Pi manifests all point at this one skill and need no change.
 
 ## Phase 4: User Story 2 — The open review shows the agent's answer (P1)
 
@@ -70,7 +70,7 @@ description: "Task list for handing a send-back to the agent at once and showing
 - [X] T022 [P] Update the root help's `wait` line and `sendBackWhy` in `internal/cli/help.go`, and the README's `wait` row, to say "sends findings back" rather than "hands notes back".
 - [ ] T023 Run `go test ./internal/cli/ -update` and read the whole diff under `testdata/golden/cli/`. Only `help.*` and `handoff-help.*` may move, and only the lines T010 and T022 rewrote.
 - [ ] T024 [P] Amend `specs/001-loupe-v1/spec.md` FR-039 and FR-040, `specs/001-loupe-v1/contracts/cli.md`'s `loupe wait` and `loupe handoff` sections and refusal table (`review-open`), and `specs/001-loupe-v1/data-model.md`'s Hand-back set section and run file table (`.review`), each with a dated pointer to `specs/017-live-review`.
-- [ ] T025 [P] Add dated pointers to `specs/003-herdr-handoff/spec.md` (User Story 1 scenario 2, FR-004) and `specs/006-agent-plugins/spec.md` (User Story scenario 3) naming `specs/017-live-review` as what amends them.
+- [X] T025 [P] Add dated pointers to `specs/003-herdr-handoff/spec.md` (User Story 1 scenario 2, FR-004) and `specs/006-agent-plugins/spec.md` (User Story scenario 3) naming `specs/017-live-review` as what amends them.
 - [ ] T026 [P] Add a row to the Unverified list in `specs/001-loupe-v1/validation.md`: an agent following the amended skill across two send-backs with review open opens one pane (SC-005).
 
 ## Phase 8: By eye, review and close

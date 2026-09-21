@@ -94,6 +94,7 @@ func TestSendBackWakesWaitWhileReviewIsOpen(t *testing.T) {
 	default:
 	}
 	h.mustOK("reply", "n-001", "--run", runRef, "--body", "Because.")
+	h.mustRefuse("review-open", "handoff", "--run", runRef)
 
 	if _, err := io.WriteString(feed, "q\n"); err != nil {
 		t.Fatal(err)
@@ -109,6 +110,7 @@ func TestSendBackWakesWaitWhileReviewIsOpen(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("review did not exit after q")
 	}
+	h.mustRefuse("no-pane-host", "handoff", "--run", runRef)
 }
 
 func TestQuitStillHandsBackANoteNeverHandedBack(t *testing.T) {

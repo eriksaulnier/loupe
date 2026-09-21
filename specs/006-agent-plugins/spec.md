@@ -58,7 +58,7 @@ A review skill outside loupe, such as one that fans out reviewers, has findings 
 
 1. **Given** a run with findings and a summary, **When** an agent follows the `human-review` skill to its hand-off, **Then** it runs `loupe handoff --run <ref> --json`, and on a refusal tells the human to run `loupe review '<ref>'` in their own terminal.
 2. **Given** either outcome of the handoff, **When** it is done, **Then** the agent blocks on `loupe wait --run <ref> --json`, under a Monitor where the harness has one and in a foreground `--timeout` loop otherwise.
-3. **Given** `loupe wait` returns `reason: notes`, **When** the agent has replied to every awaiting note, **Then** it hands off again with a new `loupe handoff`.
+3. **Given** `loupe wait` returns `reason: notes`, **When** the agent has replied to every awaiting note, **Then** it hands off again with a new `loupe handoff`, and on a `review-open` refusal waits again without opening a pane (amended on 2026-09-21 by `specs/017-live-review`).
 4. **Given** `loupe wait` returns `reason: published`, **Then** the agent stops.
 
 ---

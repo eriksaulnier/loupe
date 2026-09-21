@@ -64,6 +64,7 @@ Refusal or error (exit 1 or 2):
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
 | `pane-failed` | The terminal refused or garbled a `handoff` call | the same; the message carries the terminal's error |
+| `review-open` | `handoff` while a `review` of the run is running | tell the human the answers are in their open review, then `loupe wait` |
 | `internal` | A defect | file an issue; stack on stderr |
 
 ## Commands
@@ -123,7 +124,7 @@ Result payload: `reason` (`notes` or `published`), `awaiting` (note ids to answe
 
 ### `loupe handoff [<ref>] [--json]`
 
-Opens `review` for the human in a new terminal pane beside the agent's and returns; it does not wait for review (`specs/006-agent-plugins`). Selects the run as `review` does. Works inside Herdr only: it needs `HERDR_ENV=1`, a non-empty `HERDR_PANE_ID` and `herdr` on `PATH`, and otherwise refuses `no-pane-host`. The pane opens to the right of the agent's pane when that pane is at least 120 columns wide and below it otherwise, takes focus, and runs the same loupe executable as `review '<ref>' && exit` with `LOUPE_HOME` set to the absolute data root. A failed `herdr` call refuses `pane-failed` with Herdr's message; nothing is retried, reused or closed. It writes no run state.
+Opens `review` for the human in a new terminal pane beside the agent's and returns; it does not wait for review (`specs/006-agent-plugins`). Selects the run as `review` does. While any `review` of the run is running, in either mode and any terminal, it refuses `review-open` before anything else and opens nothing (`specs/017-live-review`, 2026-09-21). Otherwise it works inside Herdr only: it needs `HERDR_ENV=1`, a non-empty `HERDR_PANE_ID` and `herdr` on `PATH`, and refuses `no-pane-host` without them. The pane opens to the right of the agent's pane when that pane is at least 120 columns wide and below it otherwise, takes focus, and runs the same loupe executable as `review '<ref>' && exit` with `LOUPE_HOME` set to the absolute data root. A failed `herdr` call refuses `pane-failed` with Herdr's message; nothing is retried, reused or closed. It writes no run state.
 
 Result payload: `host` (`herdr`), `paneId`, `direction` (`right` or `down`).
 

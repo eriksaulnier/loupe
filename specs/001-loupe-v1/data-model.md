@@ -15,6 +15,7 @@ Every record is a JSON file in one run directory. Field names are camelCase in J
 | `draft.json` | capture (empty), every mutation | the run exists |
 | `.lock` | any mutating command, publish | first mutation; content is `<pid> <command>` of the current holder |
 | `handback.json` | review, at each send-back and on a clean exit | the human sent a finding back at least once |
+| `.review` | review, for as long as it runs | a review was ever opened; empty, and meaningful only through the shared flock each running review holds on it (`specs/017-live-review`) |
 | `attempt.json` | publish | a send is in flight or its outcome is unknown |
 | `receipt.json` | publish | the review landed |
 

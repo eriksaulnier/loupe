@@ -35,6 +35,7 @@ const (
 	GitHub     Code = "github"
 	NoPaneHost Code = "no-pane-host"
 	PaneFailed Code = "pane-failed"
+	ReviewOpen Code = "review-open"
 	Internal   Code = "internal"
 )
 
