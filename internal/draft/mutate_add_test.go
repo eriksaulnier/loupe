@@ -281,3 +281,84 @@ func TestSeverityRefusalNamesEveryWord(t *testing.T) {
 		}
 	}
 }
+
+func entriesOf(t *testing.T, r *refusal.Error) []map[string]any {
+	t.Helper()
+	entries, ok := r.Details["entries"].([]map[string]any)
+	if !ok {
+		t.Fatalf("details.entries is %T, want a list: %v", r.Details["entries"], r.Details)
+	}
+	return entries
+}
+
+func TestAddBatchRefusalNamesEveryInvalidEntry(t *testing.T) {
+	d := NewEmpty()
+	inputs := make([]FindingInput, 10)
+	for i := range inputs {
+		inputs[i] = located("Good", 3)
+	}
+	inputs[2] = located("Off", 10)
+	inputs[5] = FindingInput{Title: "No body", General: true}
+	inputs[8] = located("Also off", 11)
+
+	_, err := Add(d, inputs, multiHunk(t), "", addNow)
+	r := wantRefusal(t, err, refusal.Location)
+	alone := wantRefusal(t, validateInput(inputs[2], multiHunk(t)), refusal.Location)
+	if r.Fix != alone.Fix || r.Details["entry"] != 2 || !reflect.DeepEqual(r.Details["nearest"], alone.Details["nearest"]) {
+		t.Fatalf("top level %+v, want entry 2's own refusal %+v", r, alone)
+	}
+	if want := "entry 2: " + alone.Message + "; entries 5 and 8 are refused too"; r.Message != want {
+		t.Fatalf("message %q, want %q", r.Message, want)
+	}
+	entries := entriesOf(t, r)
+	if len(entries) != 3 {
+		t.Fatalf("entries %v", entries)
+	}
+	for i, want := range []int{2, 5, 8} {
+		e := entries[i]
+		own := wantRefusal(t, validateInput(inputs[want], multiHunk(t)), refusal.Code(e["code"].(string)))
+		if e["entry"] != want || e["message"] != own.Message || e["fix"] != own.Fix {
+			t.Fatalf("entries[%d] %v, want entry %d with %+v", i, e, want, own)
+		}
+		if details, _ := e["details"].(map[string]any); !reflect.DeepEqual(details, own.Details) && len(own.Details) > 0 {
+			t.Fatalf("entries[%d] details %v, want %v", i, details, own.Details)
+		}
+	}
+	if entries[1]["code"] != string(refusal.Input) || entries[2]["details"].(map[string]any)["nearest"] == nil {
+		t.Fatalf("entries %v", entries)
+	}
+	if len(d.Findings) != 0 {
+		t.Fatalf("stored %+v", d.Findings)
+	}
+}
+
+func TestAddBatchRefusalWithOneInvalidEntryIsUnchanged(t *testing.T) {
+	d := NewEmpty()
+	_, err := Add(d, []FindingInput{located("Good", 3), located("Off", 10)}, multiHunk(t), "", addNow)
+	r := wantRefusal(t, err, refusal.Location)
+	alone := wantRefusal(t, validateInput(located("Off", 10), multiHunk(t)), refusal.Location)
+	if r.Message != "entry 1: "+alone.Message || r.Fix != alone.Fix || r.Details["entry"] != 1 {
+		t.Fatalf("refusal %+v", r)
+	}
+	if entries := entriesOf(t, r); len(entries) != 1 || entries[0]["entry"] != 1 {
+		t.Fatalf("entries %v", entries)
+	}
+}
+
+func TestCheckBatchMergesEarlierFailuresInEntryOrder(t *testing.T) {
+	decode := refusal.New(refusal.Input, `unknown field "titel"`, "see loupe add --help for the input shape")
+	inputs := []FindingInput{{}, located("Good", 3), located("Off", 10)}
+	err := CheckBatch(inputs, []EntryFailure{{Entry: 0, Err: decode, Decoding: true}}, multiHunk(t))
+	r := wantRefusal(t, err, refusal.Input)
+	if r.Message != `input entry 0: unknown field "titel"; entry 2 is refused too` {
+		t.Fatalf("message %q", r.Message)
+	}
+	entries := entriesOf(t, r)
+	if len(entries) != 2 || entries[0]["entry"] != 0 || entries[0]["message"] != decode.Message || entries[1]["entry"] != 2 ||
+		entries[1]["code"] != string(refusal.Location) {
+		t.Fatalf("entries %v", entries)
+	}
+	if err := CheckBatch([]FindingInput{located("Good", 3)}, nil, multiHunk(t)); err != nil {
+		t.Fatalf("a valid batch is refused: %v", err)
+	}
+}
