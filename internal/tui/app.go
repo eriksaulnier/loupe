@@ -114,6 +114,12 @@ type Model struct {
 	settling bool
 	// opening is true from the program's start until settleOnOpen has passed; every key but ctrl+c is dropped.
 	opening bool
+	// awaiting is true while a handed-back note has no reply, which is the only time the draft is re-read on a timer.
+	awaiting bool
+	// polling is true while a poll tick is in flight, so there is never more than one.
+	polling bool
+	// pollSkipped is true when a tick found the human writing or confirming; the draft is re-read as they leave.
+	pollSkipped bool
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -157,6 +163,9 @@ func New(cfg Config) (*Model, error) {
 		summaryCollapsed: true,
 	}
 	m.setDraft(d)
+	if err := m.refreshAwaiting(); err != nil {
+		return nil, err
+	}
 	m.cursor = initialCursor(d, m.order)
 	if st.Color {
 		m.darkBackground = st.R.HasDarkBackground()
@@ -176,13 +185,136 @@ type openedMsg struct{}
 
 func (m *Model) Init() tea.Cmd {
 	if settleOnOpen <= 0 {
-		return nil
+		return m.schedulePoll()
 	}
 	m.opening = true
-	return tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} })
+	return tea.Batch(tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} }), m.schedulePoll())
 }
 
+// pollInterval is how often the draft is re-read while a note awaits the agent's reply.
+var pollInterval = 2 * time.Second
+
+type pollMsg struct{}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if _, ok := msg.(pollMsg); ok {
+		m.polling = false
+		if m.pollHeld() {
+			m.pollSkipped = true
+		} else {
+			cmd = m.checkDraft(false)
+		}
+	} else {
+		_, cmd = m.update(msg)
+	}
+	if m.pollSkipped && !m.pollHeld() && m.err == nil {
+		m.pollSkipped = false
+		cmd = tea.Batch(cmd, m.checkDraft(false))
+	}
+	return m, tea.Batch(cmd, m.schedulePoll())
+}
+
+// pollHeld is true while redrawing would move something the human is writing or confirming.
+func (m *Model) pollHeld() bool {
+	return m.noting || m.editing || m.sending || (m.view != viewList && m.view != viewDetail)
+}
+
+func (m *Model) schedulePoll() tea.Cmd {
+	if !m.awaiting || m.polling || m.err != nil {
+		return nil
+	}
+	m.polling = true
+	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return pollMsg{} })
+}
+
+// checkDraft shows the draft as it is on disk when another process changed it, keeping the cursor on its finding
+// and the open finding where the human had scrolled it. asked is true for the reload key, which answers even when
+// nothing changed.
+func (m *Model) checkDraft(asked bool) tea.Cmd {
+	d, err := draft.Load(m.cfg.Dir)
+	if err != nil {
+		return m.fail(err)
+	}
+	if d.Version == m.version {
+		if asked {
+			m.say(style.Dim, "draft is current")
+		}
+		return nil
+	}
+	notice := changeNotice(m.draft, d)
+	id, offset := "", m.body.YOffset
+	if len(m.order) > 0 {
+		id = m.order[m.cursor].ID
+	}
+	m.setDraft(d)
+	if j := orderedIndex(m.order, id); j >= 0 {
+		m.cursor = j
+	}
+	m.cursor = max(min(m.cursor, len(m.order)-1), 0)
+	if err := m.refreshAwaiting(); err != nil {
+		return m.fail(err)
+	}
+	if m.view == viewDetail {
+		if err := m.refreshDetail(); err != nil {
+			return m.fail(err)
+		}
+		m.body.SetYOffset(offset)
+	}
+	m.say(style.Note, strings.TrimSpace(m.glyphs.Note+" "+notice))
+	return nil
+}
+
+// changeNotice names what another process changed between two versions of the draft, in one line.
+func changeNotice(before, after *draft.Draft) string {
+	var parts []string
+	replied := map[string]bool{}
+	for _, r := range before.Replies {
+		replied[r.ID] = true
+	}
+	noteFinding := map[string]string{}
+	for _, n := range after.Notes {
+		noteFinding[n.ID] = n.FindingID
+	}
+	for _, r := range after.Replies {
+		if !replied[r.ID] && r.By == draft.ByAgent {
+			parts = append(parts, fmt.Sprintf("%s answered on %s", r.NoteID, noteFinding[r.NoteID]))
+		}
+	}
+	revs := map[string]int{}
+	for _, f := range before.Findings {
+		revs[f.ID] = f.Rev
+	}
+	for _, f := range after.Findings {
+		rev, ok := revs[f.ID]
+		switch {
+		case !ok:
+			parts = append(parts, f.ID+" filed")
+		case rev != f.Rev:
+			parts = append(parts, f.ID+" changed")
+		}
+	}
+	if before.Summary != after.Summary {
+		parts = append(parts, "summary changed")
+	}
+	if len(parts) == 0 {
+		return "draft changed"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// refreshAwaiting reads the hand-back set, which lives beside the draft, to decide whether the poll has a reason to
+// run.
+func (m *Model) refreshAwaiting() error {
+	h, err := draft.LoadHandBack(m.cfg.Dir)
+	if err != nil {
+		return err
+	}
+	m.awaiting = len(draft.Awaiting(m.draft, h)) > 0
+	return nil
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -306,7 +438,7 @@ func (m *Model) reload() error {
 		return err
 	}
 	m.setDraft(d)
-	return nil
+	return m.refreshAwaiting()
 }
 
 // Decide applies fn at the displayed version and reports whether it was recorded. A refusal reloads the draft and
@@ -317,6 +449,9 @@ func (m *Model) Decide(fn func(*draft.Draft) error) (bool, error) {
 		return false, err
 	}
 	m.setDraft(d)
+	if err := m.refreshAwaiting(); err != nil {
+		return false, err
+	}
 	m.say(style.Warn, notice)
 	return notice == "", nil
 }
@@ -468,6 +603,7 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"enter", "open the finding", ""},
 			{"tab", "expand or collapse the summary", ""},
 			{"p", "publish once the review is ready", ""},
+			{"ctrl+r", "reload the draft from disk", ""},
 		}},
 		viewDetail: {"Finding detail", []helpKey{
 			{leftRight, "previous / next finding", "N/n"},
@@ -481,6 +617,7 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
+			{"ctrl+r", "reload the draft from disk", ""},
 			{"esc", "back to the list", ""},
 		}},
 		viewAction: {"Publish steps", []helpKey{

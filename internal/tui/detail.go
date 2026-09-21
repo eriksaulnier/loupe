@@ -320,6 +320,8 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		m.body.PageDown()
 	case "pgup":
 		m.body.PageUp()
+	case "ctrl+r":
+		return m.checkDraft(true)
 	case "esc":
 		m.view, m.notice = viewList, ""
 		cmd := m.fail(m.reload())
@@ -348,7 +350,9 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 			n, err := draft.SendBack(d, id, body, m.cfg.Now())
 			noteID = n.ID
 			return err
-		}, func() string { return fmt.Sprintf("%s %s sent back as %s", m.glyphs.Note, id, noteID) })
+		}, func() string {
+			return fmt.Sprintf("%s %s sent back as %s; the agent has it", m.glyphs.Note, id, noteID)
+		})
 	}
 	if msg.Type == tea.KeyRunes {
 		// A note is one paragraph, so a pasted line break or tab becomes a space.

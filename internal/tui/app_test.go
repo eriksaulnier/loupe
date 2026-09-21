@@ -143,7 +143,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	waitFor(t, tm, "send back f-003")
 	tm.Type("Needs a test.")
 	key(tm, tea.KeyEnter)
-	waitFor(t, tm, "f-003 sent back as n-001")
+	waitFor(t, tm, "f-003 sent back as n-001; the agent has it")
 	d := loadDraft(t, dir)
 	if len(d.Notes) != 1 || d.Notes[0].FindingID != "f-003" || d.Notes[0].Body != "Needs a test." || d.Notes[0].Status != draft.NoteOpen {
 		t.Fatalf("notes %+v", d.Notes)

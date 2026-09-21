@@ -30,6 +30,8 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return m.fail(m.openFinding(m.order[m.cursor].ID))
+	case "ctrl+r":
+		return m.checkDraft(true)
 	case "p":
 		if err := m.reload(); err != nil {
 			return m.fail(err)

@@ -148,7 +148,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 			}
 			fn = func(d *draft.Draft) error {
 				n, err := draft.SendBack(d, f.ID, body, now)
-				success = fmt.Sprintf("%s %s sent back as %s", s.Glyphs.Note, f.ID, n.ID)
+				success = fmt.Sprintf("%s %s sent back as %s; the agent has it", s.Glyphs.Note, f.ID, n.ID)
 				return err
 			}
 		case "e":
