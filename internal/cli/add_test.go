@@ -93,3 +93,24 @@ func TestAddWholeCallRefusalsCarryNoEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestAddBatchRefusalListsAForbiddenFieldWithTheOtherEntries(t *testing.T) {
+	home, _ := sendBackRun(t)
+	batch := `[
+  {"title": "Good", "body": "Evidence.", "general": true, "included": true},
+  {"title": "Off", "body": "Evidence.", "location": {"path": "multi.txt", "line": 10}}
+]`
+	code, env, _ := execIn(t, home, batch, "add", "--from", "-")
+	if code != 1 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if got := refusedEntries(t, env); len(got) != 2 || got[0] != 0 || got[1] != 1 {
+		t.Fatalf("entries %v, want [0 1]", got)
+	}
+	errObj := env["error"].(map[string]any)
+	details := errObj["details"].(map[string]any)
+	if errObj["message"] != `input entry 0: input field "included" is not allowed; only the human sets it in loupe review; entry 1 is refused too` ||
+		details["entry"] != float64(0) || details["field"] != "included" {
+		t.Fatalf("top level %v, want entry 0's forbidden-field refusal", errObj)
+	}
+}

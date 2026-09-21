@@ -160,21 +160,21 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, []draft.Ent
 	f := cmd.Flags()
 	if f.Changed("from") {
 		from, _ := f.GetString("from")
-		var raw json.RawMessage
-		if err := DecodeInput("add", from, deps.Stdin, &raw); err != nil {
+		raw, err := readInput("add", from, deps.Stdin)
+		if err != nil {
 			return nil, nil, err
 		}
-		// Decoding a second time from the validated bytes reuses DecodeInput's refusals for unknown fields and types.
 		trimmed := bytes.TrimSpace(raw)
 		if len(trimmed) > 0 && trimmed[0] == '[' {
 			var entries []json.RawMessage
-			if err := DecodeInput("add", "-", bytes.NewReader(trimmed), &entries); err != nil {
-				return nil, nil, err
+			if err := json.Unmarshal(trimmed, &entries); err != nil {
+				return nil, nil, malformed(err, len(trimmed), inputFix("add"))
 			}
 			if len(entries) == 0 {
 				return nil, nil, refusal.New(refusal.Input, "input is an empty array; it holds no findings", "see loupe add --help for the input shape")
 			}
-			// Each entry decodes on its own so an unknown field or a wrong type names the entry it is in.
+			// Each entry decodes on its own so a forbidden field, unknown field or wrong type names the entry it is in, and
+			// every invalid entry is collected rather than only the first.
 			inputs := make([]draft.FindingInput, len(entries))
 			var failures []draft.EntryFailure
 			for i, entry := range entries {
