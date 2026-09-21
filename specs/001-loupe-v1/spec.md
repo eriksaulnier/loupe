@@ -14,13 +14,13 @@
 
 - Q: When capture is run for a pull request whose newest round is already at the same head commit, what should happen? → A: Refuse when that round is unpublished, naming its run reference; create a new round when it is published.
 - Q: When the agent asks for the previous round's findings and the round immediately before was never published, which findings should it get? → A: The newest published round before this one, walking back past unpublished rounds; refuse only when no earlier round was published.
-- Q: Should publish refuse the approve action when an accepted, included finding is marked blocking? → A: Yes. Refuse and name the fixes: choose comment or request changes, or exclude or unblock the finding in review.
-- Q: When a human files or edits a finding through the command line, does it still need an explicit accept in the review interface before publish? → A: Yes. Readiness is one rule for every included finding regardless of author; the author flag is an audit record only.
+- Q: Should publish refuse the approve action when an accepted finding is marked blocking? → A: Yes. Refuse and name the fixes: choose comment or request changes, or exclude or unblock the finding in review.
+- Q: When a human files or edits a finding through the command line, does it still need an explicit accept in the review interface before publish? → A: Yes. Readiness is one rule for every publishable finding regardless of author; the author flag is an audit record only.
 
 ### Session 2026-09-14
 
 - Q: Should a published review name what filed its findings? → A: Yes, when the agent names it at capture. An optional `name[@version]` source is shown after the reviewed commit in the footer and recorded as `src=` in `loupe-meta`. Without one, the review is unchanged.
-- Q: Should the review body open with a callout naming the action? → A: No. GitHub's review header already shows the event. The body opens with an `IMPORTANT` callout stating only the blocking count, and only when blocking findings are included; otherwise the chips row leads the body, or the summary when there are no findings.
+- Q: Should the review body open with a callout naming the action? → A: No. GitHub's review header already shows the event. The body opens with an `IMPORTANT` callout stating only the blocking count, and only when blocking findings are published; otherwise the chips row leads the body, or the summary when there are no findings.
 - Q: Which dots should the finding labels carry? → A: 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other, with ⛔ kept for the blocking chip. A red dot on a nonblocking issue read as alarming. The dot still follows the label, so a blocking issue then read `🟡 issue (blocking):`; `specs/014-severity-badges` since dropped both the dot and the word from a body row.
 - Q: A round captured and abandoned unpublished, as when a rebase forces a second capture mid-review, left the pull request's first review reading `round 2`. What should the published review number? → A: Its position among the pull request's publications. The footer `round N` and `loupe-meta` `round=` both carry it; the run keeps its capture round, so run references, receipts and `show --previous` are unchanged.
 - Q: New commits landed on the pull request while the human was deciding findings, and publish refused `head-moved`; the only way forward was a new capture, whose empty draft lost every decision. What should publish do when the head moved? → A: When the captured commit is still an ancestor of the live head, publish at the captured commit, which the review's `commit_id` already pins, after a confirmation that shows the commits since capture and the findings on files they changed; GitHub does not mark its comments outdated for those commits, so a comment on a line they changed shows beside the new code (observed 2026-09-14). The confirmation is the acknowledgment, with no flag. Refuse when the captured commit has left the pull request's history, and refuse approve at a moved head. Findings are never remapped.
@@ -65,7 +65,7 @@ The human opens the review interface in their terminal. They see the summary and
 1. **Given** a draft with findings, **When** the human opens the interface, **Then** the list shows the summary, each finding's disposition, identifier, blocking marker, label, title and location, and counts of accepted, pending, excluded, withdrawn and open notes.
 2. **Given** a located finding, **When** the human opens it, **Then** its body is shown next to the diff hunk containing the anchor, with the anchored lines highlighted.
 3. **Given** an open finding, **When** the human asks for the file diff, **Then** the whole file's diff is shown, scrollable, with every finding on that file marked, and the human can jump between them.
-4. **Given** an open included finding, **When** the human accepts it, **Then** its disposition becomes accepted at its current content.
+4. **Given** a pending finding, **When** the human accepts it, **Then** its disposition becomes accepted at its current content.
 5. **Given** an open finding, **When** the human sends it back with a note, **Then** a note with a stable identifier is attached to the finding, the finding's acceptance is removed, and the note is open.
 6. **Given** a finding the human is viewing, **When** an agent edits that finding before the human decides, **Then** the decision is refused, the updated finding is shown, and no decision is recorded.
 7. **Given** decisions made, **When** the human quits, **Then** every decision persists and reopening shows the same dispositions.
@@ -75,7 +75,7 @@ The human opens the review interface in their terminal. They see the summary and
 
 ### User Story 3 - Human publishes one confirmed review (Priority: P1)
 
-Once every included finding is accepted and no note is open, the human publishes. They choose the review action (comment, approve or request changes) and which located findings also become inline comments. They see the review as it will read on GitHub and can switch to the exact payload that will be sent. A single confirmation sends one review. Publishing again afterward is a no-op that prints the review's URL.
+Once no finding is pending and no note is open, the human publishes. They choose the review action (comment, approve or request changes) and which located findings also become inline comments. They see the review as it will read on GitHub and can switch to the exact payload that will be sent. A single confirmation sends one review. Publishing again afterward is a no-op that prints the review's URL.
 
 **Why this priority**: The published review is the deliverable. The gates around it are what make the tool trustworthy.
 
@@ -84,14 +84,14 @@ Once every included finding is accepted and no note is open, the human publishes
 **Acceptance Scenarios**:
 
 1. **Given** a ready draft, **When** the human publishes, **Then** they see the rendered review, can switch to the exact payload, and only an explicit confirmation sends it.
-2. **Given** the human confirms, **When** the review is sent, **Then** exactly one review request is made with the action set, every included finding in the body, and inline comments per the chosen mode, and a receipt records the review identity.
+2. **Given** the human confirms, **When** the review is sent, **Then** exactly one review request is made with the action set, every published finding in the body, and inline comments per the chosen mode, and a receipt records the review identity.
 3. **Given** a receipt exists, **When** the human publishes again, **Then** nothing is sent and the review URL is printed.
 4. **Given** the pull request gained commits on top of the captured head, **When** the human publishes with comment or request changes, **Then** the confirmation states that the head moved and that the review is pinned to the captured commit, lists the commits since capture and the findings on files they changed, and a confirmed review is sent at the captured commit.
 5. **Given** the human authored the pull request, **When** they choose approve or request changes, **Then** the command refuses and offers comment.
 6. **Given** a draft with a pending finding or an open note, **When** the human publishes, **Then** the command refuses and directs them to the review interface.
 7. **Given** no interactive terminal, **When** publish is invoked, **Then** it refuses before showing anything.
 8. **Given** the human confirmed, **When** the draft changed between display and send, **Then** the send is refused and nothing is posted.
-9. **Given** an included finding marked blocking, **When** the human chooses approve, **Then** the command refuses and offers comment or request changes, or excluding or unblocking the finding.
+9. **Given** a publishable finding marked blocking, **When** the human chooses approve, **Then** the command refuses and offers comment or request changes, or excluding or unblocking the finding.
 10. **Given** the captured commit is no longer in the pull request's history, as after a force-push, **When** the human publishes, **Then** the command refuses and directs them to capture a new round.
 11. **Given** the pull request gained commits on top of the captured head, **When** the human chooses approve, **Then** the command refuses and offers comment or request changes, or a new capture.
 
@@ -187,7 +187,7 @@ A Claude Code user installs the loupe plugin. Typing the slash command with a pu
 
 - The pull request head moves between capture and publish: when the captured commit is still in the pull request's history, publish shows the commits since capture and sends the review at the captured commit, and GitHub does not mark its comments outdated for those commits, so a comment on a line they changed shows beside the new code; otherwise publish refuses and directs to a new capture round. Approve at a moved head is refused. Findings are never remapped.
 - The human authored the pull request: only the comment action is offered.
-- An included finding is blocking and the action is approve: publish refuses; the fixes are comment, request changes, or excluding or unblocking the finding.
+- A publishable finding is blocking and the action is approve: publish refuses; the fixes are comment, request changes, or excluding or unblocking the finding.
 - The draft is empty: publish refuses; a summary-only draft with no findings publishes.
 - An agent edits a finding while the human has it open: the decision is refused and the finding is redisplayed.
 - Two agents file findings at the same time: mutations are serialized under an exclusive lock and every batch is all-or-nothing.
@@ -203,7 +203,7 @@ A Claude Code user installs the loupe plugin. Typing the slash command with a pu
 - Finding text contains control or bidirectional override characters: they are escaped in every preview and never alter what is sent.
 - A finding body contains raw HTML beyond the allowed collapsible-section tags, an unclosed code fence, or exceeds the size limit: refused at write time with the line and the fix.
 - A run directory has a damaged or unreadable record: the command refuses naming the file, never repairs or deletes it.
-- The lock is held by a process that died: the refusal names the lock and the command to remove it after verifying no writer remains; the lock is never stolen automatically.
+- The lock is still held when the timeout expires: the refusal names the lock file and, once the holder has written them, its pid and command, and says to wait for that process or stop it. The kernel releases a flock when its holder dies, so a timeout means a live holder rather than a leftover from a crash. loupe never removes the lock file and never steals the lock. Corrected on 2026-09-21 by `specs/015-publishable-set`: it described a dead holder and a removal command, which flock rules out.
 
 ## Requirements *(mandatory)*
 
@@ -235,7 +235,7 @@ Human decisions
 
 - **FR-017**: Decisions, notes and replies MUST be stored outside the publishable content and MUST never appear in the published review.
 - **FR-018**: A decision MUST bind to the finding's content at the time it was made; any later change to a publishable field or to inclusion MUST remove the decision.
-- **FR-019**: The system MUST derive each finding's disposition as accepted, pending, excluded or withdrawn, and MUST derive readiness as: every included finding accepted and no note open. This rule applies regardless of who filed or last edited the finding; a finding filed or edited by the human is pending until accepted in the review interface, and the author flag is an audit record only.
+- **FR-019**: The system MUST derive each finding's disposition as accepted, pending, excluded or withdrawn, and MUST derive readiness as: no finding pending and no note open. This rule applies regardless of who filed or last edited the finding; a finding filed or edited by the human is pending until accepted in the review interface, and the author flag is an audit record only. Corrected on 2026-09-21 by `specs/015-publishable-set`: it read "every included finding accepted", which an excluded finding could never satisfy; the derivation has always been this one.
 - **FR-020**: A note MUST be tied to one finding, have a stable identifier and a status of open, resolved or dismissed; only a human decision in the review interface MAY change its status.
 - **FR-021**: A reply MUST reference a note, have a stable identifier and record its author, and MUST NOT change the note's status or any decision.
 - **FR-022**: The review interface MUST refuse to run without an interactive terminal, MUST make decisions only from a view that shows the whole finding, MUST show the diff hunk for a located finding, and MUST offer the full file diff with findings marked.
@@ -244,8 +244,8 @@ Human decisions
 
 Publication
 
-- **FR-025**: Publish MUST refuse without an interactive terminal, when the captured head is no longer in the pull request's history, when the action is approve and the pull request head differs from the captured head, when the viewer authored the pull request and the action is approve or request changes, when the action is approve and any included finding is blocking, when the draft is empty, and when the draft is not ready. Narrowed on 2026-09-15 by `specs/007-unattended-publish` for `loupe publish --unattended`, which drops the terminal, own-pull-request and readiness refusals.
-- **FR-026**: Publish MUST compose the review body from the summary and every included finding per `docs/comment-format.md`, and MUST add inline comments only for located findings according to the chosen mode (none, blocking only, all).
+- **FR-025**: Publish MUST refuse without an interactive terminal, when the captured head is no longer in the pull request's history, when the action is approve and the pull request head differs from the captured head, when the viewer authored the pull request and the action is approve or request changes, when the action is approve and any publishable finding is blocking, when the draft is empty, and when the draft is not ready. Narrowed on 2026-09-15 by `specs/007-unattended-publish` for `loupe publish --unattended`, which drops the terminal, own-pull-request and readiness refusals.
+- **FR-026**: Publish MUST compose the review body from the summary and every published finding per `docs/comment-format.md`, and MUST add inline comments only for located findings according to the chosen mode (none, blocking only, all). Under `loupe publish --unattended` the published findings include pending ones (`specs/007-unattended-publish` FR-013).
 - **FR-027**: Publish MUST show the review as it will read and the exact payload that will be sent, with control and bidirectional characters escaped, and MUST send only on an explicit confirmation.
 - **FR-028**: After confirmation, publish MUST recheck the viewer and refuse a pull request head other than the one the confirmation showed, take the draft lock, refuse if the draft version, content or readiness changed since display, record the attempt with the exact payload, and send exactly one review request with the action set.
 - **FR-029**: On success publish MUST write a receipt with the review's identity and URL; a receipt MUST make every later publish a no-op that prints the URL.
@@ -265,7 +265,7 @@ General
 - **FR-040**: An agent-facing command MUST block until a handed-back note awaits a reply or the run is published, MUST honor a timeout and cancellation, and MUST refuse with `timeout` when the timeout elapses.
 - **FR-041**: Capture MUST accept an optional source naming what filed the findings and MUST refuse one that could close a marker, as MUST loading a run that records one; publish MUST show a source in the footer and `loupe-meta` only when capture recorded one.
 - **FR-042**: Publish MUST number a review by its position among the pull request's publications: one more than the number of the pull request's other rounds holding a receipt or an attempt. The footer and `loupe-meta` MUST both carry that number; the run's round, its references and its records MUST keep the capture round. Narrowed on 2026-09-16 by `specs/009-review-footer`, which drops the number from the footer; `loupe-meta` still carries it, derived as before.
-- **FR-043**: When the pull request head differs from the captured head and the captured commit is an ancestor of it, publish MUST send the review at the captured commit and MUST first show, in the confirmation, how many commits the head moved, that the review is pinned to the captured commit, that GitHub will not mark its comments outdated for those commits, the newest 20 commits since capture with a count of the earlier ones, and the included located findings on files those commits changed, saying when GitHub's list of changed files was cut off. The confirmation MUST be the only acknowledgment; publish MUST NOT require a flag for it.
+- **FR-043**: When the pull request head differs from the captured head and the captured commit is an ancestor of it, publish MUST send the review at the captured commit and MUST first show, in the confirmation, how many commits the head moved, that the review is pinned to the captured commit, that GitHub will not mark its comments outdated for those commits, the newest 20 commits since capture with a count of the earlier ones, and the published located findings on files those commits changed, saying when GitHub's list of changed files was cut off. The confirmation MUST be the only acknowledgment; publish MUST NOT require a flag for it.
 
 ### Key Entities
 

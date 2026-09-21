@@ -28,7 +28,7 @@ with or without a terminal. Then, before anything is shown, publish refuses, in 
   own-pr       approve or request-changes on your own pull request; use --action comment
   blocking     approve while a publishable (accepted or pending) finding is blocking
   empty        no summary and no publishable findings; and, after you confirm, no message and
-               no included findings, since your message is what an attended review opens on
+               no published findings, since your message is what an attended review opens on
   not-ready    pending findings or open notes; finish in loupe review
 
 A head that only gained commits since capture is not refused. The confirmation lists those
