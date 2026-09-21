@@ -206,23 +206,32 @@ func summaryLine(f Finding, ctx summaryContext) string {
 	return prefix + title
 }
 
-// titleHTML turns each CommonMark code span in a title into <code>, because GitHub parses no Markdown inside
-// <summary>. The rest of the title stays plain text, so its other Markdown shows literally.
+const asciiPunctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+
+// titleHTML applies a title's CommonMark code spans and backslash escapes itself, because GitHub parses no Markdown
+// inside <summary>. The title's other Markdown shows literally.
 func titleHTML(title string, inline bool) string {
 	escape := EscapeHTML
 	if inline {
 		escape = func(s string) string { return escapePunctuation(EscapeHTML(s)) }
 	}
-	var b strings.Builder
-	text := 0
+	var b, text strings.Builder
 	for i := 0; i < len(title); {
-		if title[i] != '`' {
+		c := title[i]
+		if c == '\\' && i+1 < len(title) && strings.IndexByte(asciiPunctuation, title[i+1]) >= 0 {
+			text.WriteByte(title[i+1])
+			i += 2
+			continue
+		}
+		if c != '`' {
+			text.WriteByte(c)
 			i++
 			continue
 		}
 		n := backtickRun(title, i)
 		end := closingRun(title, i+n, n)
 		if end < 0 {
+			text.WriteString(title[i : i+n])
 			i += n
 			continue
 		}
@@ -230,11 +239,11 @@ func titleHTML(title string, inline bool) string {
 		if len(code) > 1 && code[0] == ' ' && code[len(code)-1] == ' ' && strings.Trim(code, " ") != "" {
 			code = code[1 : len(code)-1]
 		}
-		b.WriteString(escape(title[text:i]) + "<code>" + escape(code) + "</code>")
+		b.WriteString(escape(text.String()) + "<code>" + escape(code) + "</code>")
+		text.Reset()
 		i = end + n
-		text = i
 	}
-	b.WriteString(escape(title[text:]))
+	b.WriteString(escape(text.String()))
 	return b.String()
 }
 
@@ -275,7 +284,7 @@ func escapePunctuation(s string) string {
 				continue
 			}
 		}
-		if strings.IndexByte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", c) >= 0 {
+		if strings.IndexByte(asciiPunctuation, c) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(c)

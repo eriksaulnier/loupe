@@ -45,7 +45,7 @@ Run the review now, if it has not run, against `target.headSha`. Then file what 
 
 Write the findings to a JSON file, one object or an array, then run `loupe add --from <file> --run <ref> --json`. Each finding has:
 
-- `title` and `body` (required). `title` is plain text, and a backtick code span is the only Markdown it keeps. `body` is Markdown with the evidence and the correction; what goes wrong belongs in `impact`, not repeated here. It MUST pass loupe's Markdown allowlist and MUST NOT exceed 64 KiB.
+- `title` and `body` (required). `title` is plain text: backtick code spans and backslash escapes are the only Markdown it keeps. `body` is Markdown with the evidence and the correction; what goes wrong belongs in `impact`, not repeated here. It MUST pass loupe's Markdown allowlist and MUST NOT exceed 64 KiB.
 - Exactly one of `location` or `"general": true`. `location` is `{"path", "line", "side", "startLine"}`. `side` is `RIGHT` (the new file, the default) or `LEFT` (the old file). `line` MUST be in the captured diff, and `startLine` and `line` MUST be in the same hunk. A `location` refusal lists the nearest valid lines in `error.fix`.
 - Optional `label`: `issue`, `suggestion`, `question`, or any other word of letters, digits, `_`, `.` or `-`, at most 40 characters.
 - Optional `blocking` (default `false`), `confidence` (`high`, `medium` or `low`), `verified` (`reproduced` when you ran or observed the failure, `plausible` when you reasoned to it), `impact` (Markdown: what goes wrong and under what input, under the same allowlist as `body`), `references` (at most six `http` or `https` URLs you relied on, each at most 200 bytes, never fetched by loupe), and `suggestedFix`.

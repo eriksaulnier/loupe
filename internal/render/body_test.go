@@ -390,6 +390,34 @@ func TestSummaryLineRendersCodeSpans(t *testing.T) {
 	}
 }
 
+// A backslash before ASCII punctuation outside a code span shows the punctuation alone, as it would anywhere else on
+// GitHub, and an escaped backtick opens no span.
+func TestSummaryLineHonorsBackslashEscapes(t *testing.T) {
+	cases := []struct {
+		name, title, body, inline string
+	}{
+		{"escaped backticks", "\\`x\\`", "`x`", "\\`x\\`"},
+		{"escaped opener, later span", "a \\`b` c`", "a `b<code> c</code>", "a \\`b<code> c</code>"},
+		{"escaped backslash, then span", "\\\\`x`", "\\<code>x</code>", "\\\\<code>x</code>"},
+		{"escaped emphasis", "\\*not bold\\*", "*not bold*", "\\*not bold\\*"},
+		{"escaped tag", "\\<b>", "&lt;b&gt;", "&lt;b&gt;"},
+		{"before a letter", "C:\\path", "C:\\path", "C\\:\\\\path"},
+		{"inside a span", "`a\\`", "<code>a\\</code>", "<code>a\\\\</code>"},
+		{"trailing", "end\\", "end\\", "end\\\\"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := Finding{ID: "f-001", Title: c.title, Label: "issue"}
+			if got := summaryLine(f, inLabelSection); got != c.body {
+				t.Errorf("body summaryLine = %q, want %q", got, c.body)
+			}
+			if got, want := summaryLine(f, inInline), "🟡 <b>issue:</b> "+c.inline; got != want {
+				t.Errorf("inline summaryLine = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // A legacy free-text severity stays out of the summary line, where the prefix is interpolated raw, and keeps its
 // code span on the meta line.
 func TestLegacySeverityStaysInItsCodeSpan(t *testing.T) {

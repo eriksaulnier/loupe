@@ -143,7 +143,7 @@ The prose is optional in both modes. When there is none the body opens on the ch
 - **The severity word leads the bold prefix**, separated from what follows by ` · `. Where the context carries no label word, it is the whole prefix. A finding whose severity is absent, empty or free text captured before the enum renders byte for byte what it rendered before severity reached this line, which is what keeps an older review comparable to a newer one.
 - **It is a word, not a dot.** Dots are the label vocabulary, and a dot under the `⛔` heading already reads as a severity; a second dot vocabulary on the same line would make that worse. It is also not an image: the ban on external badge images applies here.
 - **Only the four enum words reach the line.** The prefix is interpolated outside a code span, so a stored severity that is not one of them stays on the meta line instead, where its code span makes it inert. Exactly one of the two places carries a finding's severity, never both.
-- `<b>` and `<code>` are the only tags loupe emits inside a `<summary>`. Each backtick code span in the title, found by the CommonMark rule, becomes `<code>`, because GitHub parses no Markdown inside a `<summary>`. The rest of the title is plain text: it is HTML-escaped, and emphasis, links and backslash escapes show literally.
+- `<b>` and `<code>` are the only tags loupe emits inside a `<summary>`. GitHub parses no Markdown inside a `<summary>`, so loupe applies two CommonMark rules to the title itself. Each backtick code span becomes `<code>`. A backslash before ASCII punctuation outside a span shows the punctuation alone, so an escaped backtick opens no span. The rest of the title is plain text: it is HTML-escaped, and emphasis and links show literally.
 - A finding with no severity word and no label word in its context renders the escaped title alone. An unlabeled nonblocking inline finding keeps the `⚪` dot, and an unlabeled blocking one keeps the `⛔` dot, so inline a row is never bare.
 
 ### The meta block
@@ -243,7 +243,7 @@ The renderer wraps each finding in a generated `<details>`. Authored content tha
 
 | Field | Why it cannot escape |
 | :--- | :--- |
-| `title` | Collapsed to one line. Each backtick code span becomes `<code>` around its HTML-escaped content, and the text between spans is HTML-escaped, so `<code>` is the only tag the title adds |
+| `title` | Collapsed to one line. Backslash escapes are applied, each backtick code span becomes `<code>` around its HTML-escaped content, and the text between spans is HTML-escaped, so `<code>` is the only tag the title adds |
 | `label`, `confidence`, `verified` | Collapsed to one line, then HTML-escaped before interpolation |
 | `severity` | Collapsed to one line; an enum word is interpolated as is in the summary line's bold prefix, and anything else is emitted inside a code span on the meta line |
 | Location, footer fields | Collapsed to one line and emitted inside a code span whose backtick run is longer than any run in the content |
