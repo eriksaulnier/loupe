@@ -42,7 +42,7 @@ var workflowSteps = []workflowStep{
 	{"loupe add --run owner/repo#123 --from findings.json --json", "file findings, one object or an array", false},
 	{"loupe summary --run owner/repo#123 --from summary.json --expect-findings 2 --json", "set the summary and confirm how many findings landed", false},
 	{"loupe handoff --run owner/repo#123 --json", "open review for the human in a new pane, where the terminal can", false},
-	{"loupe wait --run owner/repo#123 --json", "block until the human hands notes back or publishes", false},
+	{"loupe wait --run owner/repo#123 --json", "block until the human sends a finding back or publishes", false},
 	{"loupe review owner/repo#123", "the human decides each finding with the diff in view", true},
 	{"loupe publish owner/repo#123 --action comment", "the human confirms and posts one review", true},
 }

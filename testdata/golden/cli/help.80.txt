@@ -13,7 +13,7 @@ Workflow  capture → add → summary → review → publish
   4  loupe handoff --run owner/repo#123 --json
      open review for the human in a new pane, where the terminal can
   5  loupe wait --run owner/repo#123 --json
-     block until the human hands notes back or publishes
+     block until the human sends a finding back or publishes
   6  loupe review owner/repo#123                     human
      the human decides each finding with the diff in view
   7  loupe publish owner/repo#123 --action comment   human
@@ -30,7 +30,7 @@ Commands
           add       File findings into the draft
           summary   Set the summary the human reads while sorting findings
           handoff   Open review for the human in a new pane
-          wait      Block until the human hands notes back or publishes
+          wait      Block until the human sends a finding back or publishes
           edit      Change, withdraw or restore a finding
           reply     Answer a send-back note
           feedback  Read the human's notes, dispositions and readiness

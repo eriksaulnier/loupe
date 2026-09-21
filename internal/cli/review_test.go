@@ -86,10 +86,42 @@ func handBackNotes(t *testing.T, dir string) []string {
 	return h.Notes
 }
 
-func TestReviewRecordsHandBackOnQuit(t *testing.T) {
+func TestReviewHandsBackASendBackAsItIsWritten(t *testing.T) {
 	for name, answers := range map[string]string{"quit": "s\nNeeds work.\nq\n", "eof": "s\nNeeds work.\n"} {
 		t.Run(name, func(t *testing.T) {
 			home, dir := pendingRun(t)
+			code, s := plainReview(t, home, answers, false)
+			if code != 0 {
+				t.Fatalf("exit %d stderr %s", code, s.stderr.String())
+			}
+			if got := handBackNotes(t, dir); len(got) != 1 || got[0] != "n-001" {
+				t.Fatalf("handback notes %v", got)
+			}
+			if strings.Contains(s.stdout.String(), "note sent back;") {
+				t.Fatalf("exit reported a hand-back the send-back already made:\n%s", s.stdout.String())
+			}
+		})
+	}
+}
+
+// seedUnhandedNote writes an open note the way an older binary left it: in the draft, not in the hand-back set.
+func seedUnhandedNote(t *testing.T, dir string) {
+	t.Helper()
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Notes = append(d.Notes, draft.Note{ID: draft.NextNoteID(d), FindingID: d.Findings[0].ID, Body: "Older.", Status: draft.NoteOpen})
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReviewRecordsUnhandedNoteOnQuit(t *testing.T) {
+	for name, answers := range map[string]string{"quit": "q\n", "eof": ""} {
+		t.Run(name, func(t *testing.T) {
+			home, dir := pendingRun(t)
+			seedUnhandedNote(t, dir)
 			code, s := plainReview(t, home, answers, false)
 			if code != 0 {
 				t.Fatalf("exit %d stderr %s", code, s.stderr.String())
@@ -106,7 +138,8 @@ func TestReviewRecordsHandBackOnQuit(t *testing.T) {
 
 func TestReviewHandBackLineGoesToStderrUnderJSON(t *testing.T) {
 	home, dir := pendingRun(t)
-	code, s := plainReview(t, home, "s\nNeeds work.\nq\n", true)
+	seedUnhandedNote(t, dir)
+	code, s := plainReview(t, home, "q\n", true)
 	if code != 0 {
 		t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 	}

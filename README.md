@@ -90,7 +90,7 @@ loupe builds the pane's command from the run it resolves, so the rule lets an ag
 | agent | `add` | File findings into the draft |
 | agent | `summary` | Set the summary that orients you while you sort findings |
 | agent | `handoff` | Open review for the human in a new Herdr pane |
-| agent | `wait` | Block until the human hands notes back or publishes |
+| agent | `wait` | Block until the human sends a finding back or publishes |
 | agent | `edit` | Change, withdraw or restore a finding |
 | agent | `reply` | Answer a send-back note |
 | agent | `feedback` | Read the human's notes, dispositions and readiness |

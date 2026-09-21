@@ -15,16 +15,17 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
-const waitHelp = `Block until the human hands notes back from loupe review or publishes the run.
+const waitHelp = `Block until the human sends a finding back from loupe review or publishes the run.
 
-An agent runs this after the hand-off instead of polling. It returns when loupe review exits
-leaving a note open and unanswered (reason notes), or when the run has a receipt (reason
-published). A note stays awaiting until it has a reply, so a restarted wait returns at once
-while one is unanswered; answering with loupe reply clears it.
+An agent runs this after the hand-off instead of polling. It returns as soon as the human sends
+a finding back with a note, while review stays open (reason notes), or when the run has a
+receipt (reason published). A note stays awaiting until it has a reply, so a restarted wait
+returns at once while one is unanswered; answering with loupe reply clears it, and the open
+review shows the reply.
 
-This is cooperative turn-taking: a return proves the human quit review with those notes, not
-that no review session is open now. An agent MUST pass --run; with it wait makes no network
-call. It still MUST NOT run loupe review.
+A return proves the human sent those notes back, not whether review is still open; loupe
+handoff answers that. An agent MUST pass --run; with it wait makes no network call. It still
+MUST NOT run loupe review.
 
 --timeout <duration> refuses with timeout once it elapses; absent or 0 waits without a
 deadline. Ctrl-C or SIGTERM ends the wait with an error.
@@ -53,7 +54,7 @@ var waitInterval = time.Second
 func newWaitCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "wait",
-		Short:   "Block until the human hands notes back or publishes",
+		Short:   "Block until the human sends a finding back or publishes",
 		Long:    waitHelp,
 		Example: "  loupe wait --run owner/repo#123 --json\n  loupe wait --run owner/repo#123 --timeout 30m --json",
 		Args:    cobra.NoArgs,

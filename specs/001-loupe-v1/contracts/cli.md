@@ -115,9 +115,9 @@ Result payload: `version`, `includedCount`.
 
 ### `loupe wait [--timeout <duration>] [--json]`
 
-Blocks until there is something for the agent to do: `review` exited leaving a note open and unanswered (`reason: notes`), or the run has a receipt (`reason: published`). Re-reads the run files once a second and once before the first wait, so an already-handed-back run returns at once. A note stays awaiting until it has a reply, whatever else changed in the draft. `--timeout` absent or `0` waits without a deadline; a negative value is `usage`; once it elapses the command refuses with `timeout`. Ctrl-C or SIGTERM ends the wait with an error (exit 1). With `--run` it makes no network call; an agent MUST pass `--run`.
+Blocks until there is something for the agent to do: the human sent a finding back with a note that is still open and unanswered (`reason: notes`), or the run has a receipt (`reason: published`). A send-back hands its note back as it is written, so `wait` returns while review is still open (`specs/017-live-review`, 2026-09-21); a clean exit still hands back any open note an older binary left unrecorded. Re-reads the run files once a second and once before the first wait, so an already-handed-back run returns at once. A note stays awaiting until it has a reply, whatever else changed in the draft. `--timeout` absent or `0` waits without a deadline; a negative value is `usage`; once it elapses the command refuses with `timeout`. Ctrl-C or SIGTERM ends the wait with an error (exit 1). With `--run` it makes no network call; an agent MUST pass `--run`.
 
-Turn-taking is cooperative: a return proves the human quit `review` with those notes, not that no review session is open now. The draft's version check already refuses a decision made against a draft the agent changed in between.
+Turn-taking is cooperative: a return proves the human sent those notes back, and says nothing about whether a review session is open; `loupe handoff` answers that. The draft's version check already refuses a decision made against a draft the agent changed in between.
 
 Result payload: `reason` (`notes` or `published`), `awaiting` (note ids to answer, empty when published), plus the `feedback` payload (`readiness`, `notes`, `findings`).
 
