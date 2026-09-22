@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -45,8 +47,22 @@ func resolveRun(cmd *cobra.Command, deps Deps, positional string) (string, run.R
 	if err != nil {
 		return "", run.Ref{}, positionalFix(cmd, err)
 	}
-	invocationOf(cmd).run = resolved.String()
+	if err := recordRun(cmd, resolved, dir); err != nil {
+		return "", run.Ref{}, err
+	}
 	return dir, resolved, nil
+}
+
+// recordRun names the run for the result envelope. Only the recorded dir is made absolute; every command keeps
+// operating on dir as the data root spelled it.
+func recordRun(cmd *cobra.Command, ref run.Ref, dir string) error {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("resolve the run directory %s: %w", dir, err)
+	}
+	inv := invocationOf(cmd)
+	inv.run, inv.dir = ref.String(), abs
+	return nil
 }
 
 // positionalFix rewrites a fix naming --run for review and publish, which take the run reference as their argument.

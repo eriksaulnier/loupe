@@ -44,13 +44,16 @@ plausible (you reasoned to it). body and impact must pass the Markdown allowlist
 holds at most six http or https URLs with a host and no userinfo, each at most 200 bytes with no
 whitespace, control or format characters, <, > or backticks; an empty list is stored as absent;
 they are never fetched.
-A batch is stored entirely or not at all; a refusal names the zero-based details.entry. Input
-MUST NOT carry included, decision, status or findingRev.
+A batch is stored entirely or not at all. A refused batch checks every entry: code, message, fix
+and details describe the first invalid one, whose zero-based position is details.entry, and
+details.entries lists each invalid entry as {entry, code, message, fix, details?}. Each entry
+reports its first defect only. Input MUST NOT carry included, decision, status or findingRev.
 
 The flags build a single finding instead and cannot be combined with --from.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1", "version": 4,
+  {"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 4,
    "findings": [{"id": "f-001", "rev": 1}]}`
 
 var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix"}
@@ -118,7 +121,7 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	inputs, err := addInputs(cmd, deps)
+	inputs, failures, err := addInputs(cmd, deps)
 	if err != nil {
 		return err
 	}
@@ -128,6 +131,10 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	}
 	var added []draft.Finding
 	d, err := draft.Mutate(dir, "add", expectVersion, deps.Getenv, func(d *draft.Draft) error {
+		// Inside Mutate so a stale --expect-version is refused first, as it is for entries that fail validation.
+		if len(failures) > 0 {
+			return draft.CheckBatch(inputs, failures, dif)
+		}
 		var addErr error
 		added, addErr = draft.Add(d, inputs, dif, by, deps.Now().UTC())
 		return addErr
@@ -142,44 +149,47 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 		ordered = append(ordered, f.ID)
 	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{"findings": results})
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{"findings": results})
 	}
 	s := deps.outStyle()
 	return printDone(deps, fmt.Sprintf("Added %s to %s", ids(s, ordered...), s.Accent.Render(ref.String())), d.Version)
 }
 
-func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, error) {
+// addInputs returns the entries of a batch that could not be read as findings alongside the ones that could, so the
+// refusal can also name the entries that are invalid for other reasons.
+func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, []draft.EntryFailure, error) {
 	f := cmd.Flags()
 	if f.Changed("from") {
 		from, _ := f.GetString("from")
-		var raw json.RawMessage
-		if err := DecodeInput("add", from, deps.Stdin, &raw); err != nil {
-			return nil, err
+		raw, err := readInput("add", from, deps.Stdin)
+		if err != nil {
+			return nil, nil, err
 		}
-		// Decoding a second time from the validated bytes reuses DecodeInput's refusals for unknown fields and types.
 		trimmed := bytes.TrimSpace(raw)
 		if len(trimmed) > 0 && trimmed[0] == '[' {
 			var entries []json.RawMessage
-			if err := DecodeInput("add", "-", bytes.NewReader(trimmed), &entries); err != nil {
-				return nil, err
+			if err := json.Unmarshal(trimmed, &entries); err != nil {
+				return nil, nil, malformed(err, len(trimmed), inputFix("add"))
 			}
 			if len(entries) == 0 {
-				return nil, refusal.New(refusal.Input, "input is an empty array; it holds no findings", "see loupe add --help for the input shape")
+				return nil, nil, refusal.New(refusal.Input, "input is an empty array; it holds no findings", "see loupe add --help for the input shape")
 			}
-			// Each entry decodes on its own so an unknown field or a wrong type names the entry it is in.
+			// Each entry decodes on its own so a forbidden field, unknown field or wrong type names the entry it is in, and
+			// every invalid entry is collected rather than only the first.
 			inputs := make([]draft.FindingInput, len(entries))
+			var failures []draft.EntryFailure
 			for i, entry := range entries {
 				if err := DecodeInput("add", "-", bytes.NewReader(entry), &inputs[i]); err != nil {
-					return nil, inEntry(err, i)
+					failures = append(failures, draft.EntryFailure{Entry: i, Err: err, Decoding: true})
 				}
 			}
-			return inputs, nil
+			return inputs, failures, nil
 		}
 		var input draft.FindingInput
 		if err := DecodeInput("add", "-", bytes.NewReader(trimmed), &input); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return []draft.FindingInput{input}, nil
+		return []draft.FindingInput{input}, nil, nil
 	}
 
 	in := draft.FindingInput{}
@@ -202,23 +212,7 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, error) {
 		loc.Side, _ = f.GetString("side")
 		in.Location = loc
 	}
-	return []draft.FindingInput{in}, nil
-}
-
-func inEntry(err error, entry int) error {
-	r, ok := refusal.As(err)
-	if !ok {
-		return err
-	}
-	if _, named := r.Details["entry"]; named {
-		return r
-	}
-	if r.Details == nil {
-		r.Details = map[string]any{}
-	}
-	r.Details["entry"] = entry
-	r.Message = fmt.Sprintf("input entry %d: %s", entry, r.Message)
-	return r
+	return []draft.FindingInput{in}, nil, nil
 }
 
 // loadDiff reads pr.diff once per command; the diff is the only authority for locations.

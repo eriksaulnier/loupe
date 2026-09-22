@@ -22,7 +22,8 @@ pending and no note is open. The digest is the SHA-256 of the publishable set, t
 will appear in the published review's hidden marker.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1", "version": 5,
+  {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 5,
    "schema": 1,
    "summary": "Markdown",
    "findings": [{"id": "f-001", "rev": 1, "title": "...", "body": "...",
@@ -43,6 +44,7 @@ skipping unpublished rounds, and refuses with not-found when no earlier round wa
 
 Result (--previous --json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@2",
+   "dir": "/path/to/run",
    "round": 1, "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
    "findings": [{"id": "f-001", "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
@@ -55,7 +57,8 @@ reproduces the captured file exactly. With --previous it refuses, since a publis
 a capture.
 
 Result (--diff --json):
-  {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1", "version": 5,
+  {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 5,
    "diff": "diff --git a/src/a.go b/src/a.go\n..."}`
 
 func newShowCmd(deps Deps) *cobra.Command {
@@ -104,7 +107,7 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 	dispositions := draft.Dispositions(d)
 	readiness := draft.ReadinessOf(d)
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{
 			"schema":       d.Schema,
 			"summary":      d.Summary,
 			"findings":     d.Findings,
@@ -135,7 +138,7 @@ func runShowDiff(cmd *cobra.Command, deps Deps, dir string, ref run.Ref) error {
 		if err != nil {
 			return err
 		}
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{"diff": string(data)})
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{"diff": string(data)})
 	}
 	_, err = deps.Stdout.Write(data)
 	return err
@@ -162,7 +165,7 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 		findings = []publish.EnvelopeFinding{}
 	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, map[string]any{
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{
 			"round":     round,
 			"reviewUrl": receipt.ReviewURL,
 			"findings":  findings,

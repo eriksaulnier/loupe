@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -106,10 +107,8 @@ func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Ti
 	if by == "" {
 		by = ByAgent
 	}
-	for i, in := range inputs {
-		if err := validateInput(in, dif); err != nil {
-			return nil, atEntry(err, i)
-		}
+	if err := CheckBatch(inputs, nil, dif); err != nil {
+		return nil, err
 	}
 	added := make([]Finding, 0, len(inputs))
 	for _, in := range inputs {
@@ -200,17 +199,73 @@ func validateInput(in FindingInput, dif *diff.Diff) error {
 	return dif.Validate(in.Location.Path, side, in.Location.Line, in.Location.StartLine)
 }
 
-// atEntry names the zero-based batch entry a refusal came from.
-func atEntry(err error, entry int) error {
-	r, ok := refusal.As(err)
-	if !ok {
-		return err
+// EntryFailure is one batch entry that was refused before or during validation.
+type EntryFailure struct {
+	Entry int
+	Err   error
+	// Decoding marks a failure to read the entry as a finding at all, which the message names as an input entry.
+	Decoding bool
+}
+
+// CheckBatch validates every input not already in failed and refuses once, naming every invalid entry, so a caller
+// can fix the whole batch in one retry. The top level is the first invalid entry's own refusal.
+func CheckBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) error {
+	known := make(map[int]bool, len(failed))
+	for _, f := range failed {
+		known[f.Entry] = true
 	}
-	details := map[string]any{"entry": entry}
-	for k, v := range r.Details {
+	failures := slices.Clone(failed)
+	for i, in := range inputs {
+		if known[i] {
+			continue
+		}
+		if err := validateInput(in, dif); err != nil {
+			failures = append(failures, EntryFailure{Entry: i, Err: err})
+		}
+	}
+	if len(failures) == 0 {
+		return nil
+	}
+	slices.SortFunc(failures, func(a, b EntryFailure) int { return a.Entry - b.Entry })
+	entries := make([]map[string]any, 0, len(failures))
+	for _, f := range failures {
+		r, ok := refusal.As(f.Err)
+		if !ok {
+			return f.Err
+		}
+		entry := map[string]any{"entry": f.Entry, "code": string(r.Code), "message": r.Message, "fix": r.Fix}
+		if len(r.Details) > 0 {
+			entry["details"] = r.Details
+		}
+		entries = append(entries, entry)
+	}
+	first, _ := refusal.As(failures[0].Err)
+	details := map[string]any{}
+	for k, v := range first.Details {
 		details[k] = v
 	}
-	return &refusal.Error{Code: r.Code, Message: fmt.Sprintf("entry %d: %s", entry, r.Message), Fix: r.Fix, Details: details}
+	details["entry"], details["entries"] = failures[0].Entry, entries
+	prefix := "entry"
+	if failures[0].Decoding {
+		prefix = "input entry"
+	}
+	message := fmt.Sprintf("%s %d: %s%s", prefix, failures[0].Entry, first.Message, alsoRefused(failures[1:]))
+	return &refusal.Error{Code: first.Code, Message: message, Fix: first.Fix, Details: details}
+}
+
+// alsoRefused tells a reader of the message alone that the first refused entry is not the only one.
+func alsoRefused(rest []EntryFailure) string {
+	switch len(rest) {
+	case 0:
+		return ""
+	case 1:
+		return fmt.Sprintf("; entry %d is refused too", rest[0].Entry)
+	}
+	nums := make([]string, len(rest))
+	for i, f := range rest {
+		nums[i] = strconv.Itoa(f.Entry)
+	}
+	return fmt.Sprintf("; entries %s and %s are refused too", strings.Join(nums[:len(nums)-1], ", "), nums[len(nums)-1])
 }
 
 // SetSummary compares expectFindings with the included count so an agent cannot summarize a set of findings that

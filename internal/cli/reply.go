@@ -20,7 +20,8 @@ allowlist. A reply never changes the note's status or any decision: only the hum
 or dismisses a note in loupe review. Input MUST NOT carry status or decision.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "reply", "run": "owner/repo#123@1", "version": 7,
+  {"loupe": 1, "ok": true, "command": "reply", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 7,
    "reply": {"id": "r-001", "noteId": "n-001"}}`
 
 func newReplyCmd(deps Deps) *cobra.Command {
@@ -81,7 +82,7 @@ func runReply(cmd *cobra.Command, deps Deps, noteID string) error {
 		return err
 	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{
 			"reply": map[string]any{"id": reply.ID, "noteId": reply.NoteID},
 		})
 	}
