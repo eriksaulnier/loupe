@@ -17,7 +17,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `internal/gitx` | Runs the few git commands loupe needs against the user's clone |
 | `internal/integration` | Runs loupe's commands end to end against a local Git remote and a fake GitHub |
 | `internal/markdown` | Checks authored Markdown against the allowlist in `docs/comment-format.md` |
-| `internal/pane` | Opens review for the human in a new Herdr pane; the only package that runs Herdr |
+| `internal/pane` | Opens review for the human in a new Herdr or Orca pane; the only package that runs either |
 | `internal/publish` | The publication state machine: gates, envelope, confirmation, one review request, receipt |
 | `internal/refusal` | A leaf so every domain package can return refusals without importing `internal/cli` |
 | `internal/render` | Composes what loupe shows and sends |

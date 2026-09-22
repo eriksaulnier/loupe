@@ -63,7 +63,7 @@ Refusal or error (exit 1 or 2):
 | `timeout` | `wait --timeout` elapsed with no note handed back and no receipt | `loupe wait` again |
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
-| `pane-failed` | The terminal refused or garbled a `handoff` call | the same; the message carries the terminal's error |
+| `pane-failed` | The host refused or garbled a `handoff` call; `details.host` (`herdr` or `orca`) and `details.step` name where | the same; the message carries the host's error |
 | `review-open` | `handoff` while a `review` of the run is running | tell the human their review is already open, then `loupe wait` |
 | `internal` | A defect | file an issue; stack on stderr |
 
@@ -126,9 +126,9 @@ Result payload: `reason` (`notes` or `published`), `awaiting` (note ids to answe
 
 ### `loupe handoff [<ref>] [--json]`
 
-Opens `review` for the human in a new terminal pane beside the agent's and returns; it does not wait for review (`specs/006-agent-plugins`). Selects the run as `review` does. While any `review` of the run is running, in either mode and any terminal, it refuses `review-open` before anything else and opens nothing (`specs/017-live-review`, 2026-09-21). Otherwise it works inside Herdr only: it needs `HERDR_ENV=1`, a non-empty `HERDR_PANE_ID` and `herdr` on `PATH`, and refuses `no-pane-host` without them. The pane opens to the right of the agent's pane when that pane is at least 120 columns wide and below it otherwise, takes focus, and runs the same loupe executable as `review '<ref>' && exit` with `LOUPE_HOME` set to the absolute data root. A failed `herdr` call refuses `pane-failed` with Herdr's message; nothing is retried, reused or closed. It writes no run state.
+Opens `review` for the human in a new terminal pane beside the agent's and returns; it does not wait for review (`specs/006-agent-plugins`). Selects the run as `review` does. While any `review` of the run is running, in either mode and any terminal, it refuses `review-open` before anything else and opens nothing (`specs/017-live-review`, 2026-09-21). Otherwise it detects a host to open the pane in, trying Herdr first and Orca second, and refuses `no-pane-host` when neither is detected: Herdr needs `HERDR_ENV=1`, a non-empty `HERDR_PANE_ID` and `herdr` on `PATH`; Orca needs a non-empty `ORCA_TERMINAL_HANDLE` and `orca` on `PATH`. The pane opens below the agent's pane when that pane's width is known and under 120 columns, and to the right otherwise; the width is the host's own report of the agent pane (Herdr's `pane layout`; Orca has none), else the agent's own controlling terminal, and with neither the pane opens `right` (`specs/019-pane-hosts` FR-005, 2026-09-21). It takes focus, and runs the same loupe executable as `review '<ref>' && exit` with `LOUPE_HOME` set in the command line. Every host's first step, `probe`, only checks that the pane is reachable and opens nothing. A failed call at any step refuses `pane-failed`, whose `details.host` (`herdr` or `orca`) and `details.step` (`probe` onward) name where it happened, and whose message carries that host's own error; nothing is retried, reused or closed. It writes no run state.
 
-Result payload: `host` (`herdr`), `paneId`, `direction` (`right` or `down`).
+Result payload: `host` (`herdr` or `orca`), `paneId`, `direction` (`right` or `down`).
 
 ### `loupe show [--previous] [--diff] [--json]`
 

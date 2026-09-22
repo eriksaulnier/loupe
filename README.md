@@ -67,18 +67,18 @@ pi install git:github.com/eriksaulnier/loupe@v0.8.0 # x-release-please-version
 > Keep plugin and binary together. Claude Code and Codex install the plugin from `main`, so a skill can name a flag an older binary lacks.
 
 > [!IMPORTANT]
-> Inside the Codex sandbox, loupe cannot reach GitHub, the clone's `.git`, its data directory or the Herdr socket. Approve the skill's requests to run `loupe` outside the sandbox. Pi has no sandbox.
+> Inside the Codex sandbox, loupe cannot reach GitHub, the clone's `.git`, its data directory or the terminal host's socket. Approve the skill's requests to run `loupe` outside the sandbox. Pi has no sandbox.
 
-### Handing off in a Herdr pane
+### Handing off in a terminal pane
 
-Inside [Herdr](https://herdr.dev), `loupe handoff` opens `loupe review` in a split beside the agent's pane, and the pane closes when review exits cleanly. Elsewhere, or when the split fails, the skill asks you to run `loupe review` yourself.
+Inside [Herdr](https://herdr.dev) or Orca, `loupe handoff` opens `loupe review` in a split beside the agent's pane, and the pane closes when review exits cleanly. Elsewhere, or when the split fails, the skill asks you to run `loupe review` yourself.
 
 To skip the approval prompt at each hand-off, allow that one command:
 
 - Claude Code: `Bash(loupe handoff:*)`
 - Codex, in `~/.codex/rules/default.rules`: `prefix_rule(pattern=["loupe", "handoff"], decision="allow")`
 
-loupe builds the pane's command from the run it resolves, so the rule lets an agent open review and nothing else. Do not allow `herdr pane split` or `herdr pane run`: a blanket rule for either lets any command run in a new shell.
+loupe builds the pane's command from the run it resolves, so the rule lets an agent open review and nothing else. Do not allow `herdr pane split`, `herdr pane run` or `orca terminal split`: a blanket rule for any of them lets any command run in a new shell.
 
 ## Commands
 
@@ -89,7 +89,7 @@ loupe builds the pane's command from the run it resolves, so the rule lets an ag
 | agent | `capture` | Capture a pull request into a new review round |
 | agent | `add` | File findings into the draft |
 | agent | `summary` | Set the summary that orients you while you sort findings |
-| agent | `handoff` | Open review for the human in a new Herdr pane |
+| agent | `handoff` | Open review for the human in a new terminal pane |
 | agent | `wait` | Block until the human sends a finding back or publishes |
 | agent | `edit` | Change, withdraw or restore a finding |
 | agent | `reply` | Answer a send-back note |

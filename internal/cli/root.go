@@ -34,6 +34,8 @@ type Deps struct {
 	StderrIsTerminal func() bool
 	// TermWidth is the terminal width human output wraps to; nil means the default of 80 columns.
 	TermWidth func() int
+	// TTYWidth is the agent's own terminal width, which picks a handoff's split direction; nil means unreadable.
+	TTYWidth func() (int, bool)
 	// palettes is built once per invocation so color is detected once; a Deps built by a test has none and each
 	// caller builds its own.
 	palettes *palettes
