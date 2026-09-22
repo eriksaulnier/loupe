@@ -36,6 +36,8 @@ type Request struct {
 type Opened struct {
 	PaneID    string
 	Direction string
+	// Focused is false when the host opened the pane without moving the human's view to it.
+	Focused bool
 }
 
 // Detect tries Herdr before Orca because a Herdr session started inside an Orca terminal gives its panes both

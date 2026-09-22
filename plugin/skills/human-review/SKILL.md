@@ -62,7 +62,7 @@ Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findin
 
 ## 5. Hand off
 
-Run `loupe handoff --run <ref> --json`. On success, review is open for the human in a new pane beside yours and has focus. Tell the user it is open.
+Run `loupe handoff --run <ref> --json`. On success, review is open for the human in a new pane beside yours. When `focused` is `false`, it opened without taking focus because the user is looking elsewhere, so tell the user it is waiting beside your pane. Otherwise tell the user it is open.
 
 When `error.code` is `review-open`, the human already has review open for this run: tell them it is there and go on to section 6.
 
