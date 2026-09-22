@@ -129,11 +129,12 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	if len(failures) > 0 {
-		return draft.CheckBatch(inputs, failures, dif)
-	}
 	var added []draft.Finding
 	d, err := draft.Mutate(dir, "add", expectVersion, deps.Getenv, func(d *draft.Draft) error {
+		// Inside Mutate so a stale --expect-version is refused first, as it is for entries that fail validation.
+		if len(failures) > 0 {
+			return draft.CheckBatch(inputs, failures, dif)
+		}
 		var addErr error
 		added, addErr = draft.Add(d, inputs, dif, by, deps.Now().UTC())
 		return addErr

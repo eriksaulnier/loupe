@@ -114,3 +114,14 @@ func TestAddBatchRefusalListsAForbiddenFieldWithTheOtherEntries(t *testing.T) {
 		t.Fatalf("top level %v, want entry 0's forbidden-field refusal", errObj)
 	}
 }
+
+func TestAddStaleExpectVersionWinsOverUndecodableEntries(t *testing.T) {
+	home, _ := sendBackRun(t)
+	code, env, _ := execIn(t, home, `[{"titel": 1}, {"title": "Off", "body": "Evidence.", "location": {"path": "multi.txt", "line": 10}}]`,
+		"add", "--from", "-", "--expect-version", "99")
+	errObj, _ := env["error"].(map[string]any)
+	details, _ := errObj["details"].(map[string]any)
+	if _, listed := details["entries"]; code != 1 || errorCode(env) != "version" || listed {
+		t.Fatalf("exit %d envelope %v, want the whole-call version refusal", code, env)
+	}
+}
