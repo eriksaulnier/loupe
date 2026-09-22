@@ -19,25 +19,10 @@ var forbiddenInputKeys = []string{"included", "decision", "decisions", "status",
 
 // DecodeInput reads JSON from the file at from, or from stdin when from is "-".
 func DecodeInput(command, from string, stdin io.Reader, v any) error {
-	fix := fmt.Sprintf("see loupe %s --help for the input shape", command)
-	var data []byte
-	var err error
-	if from == "-" {
-		data, err = io.ReadAll(stdin)
-	} else {
-		data, err = os.ReadFile(from)
-	}
+	fix := inputFix(command)
+	raw, err := readInput(command, from, stdin)
 	if err != nil {
-		return refusal.New(refusal.Input, fmt.Sprintf("cannot read input from %s: %v", from, err), fix)
-	}
-
-	dec := json.NewDecoder(bytes.NewReader(data))
-	var raw json.RawMessage
-	if err := dec.Decode(&raw); err != nil {
-		return malformed(err, len(data), fix)
-	}
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return refusal.New(refusal.Input, fmt.Sprintf("input has unexpected data after the JSON value at byte %d", dec.InputOffset()), fix)
+		return err
 	}
 	if err := checkForbidden(raw, fix); err != nil {
 		return err
@@ -49,6 +34,35 @@ func DecodeInput(command, from string, stdin io.Reader, v any) error {
 		return malformed(err, len(raw), fix)
 	}
 	return nil
+}
+
+// readInput reads exactly one JSON value and checks nothing inside it, for a caller that checks a batch's entries
+// one by one.
+func readInput(command, from string, stdin io.Reader) (json.RawMessage, error) {
+	fix := inputFix(command)
+	var data []byte
+	var err error
+	if from == "-" {
+		data, err = io.ReadAll(stdin)
+	} else {
+		data, err = os.ReadFile(from)
+	}
+	if err != nil {
+		return nil, refusal.New(refusal.Input, fmt.Sprintf("cannot read input from %s: %v", from, err), fix)
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		return nil, malformed(err, len(data), fix)
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, refusal.New(refusal.Input, fmt.Sprintf("input has unexpected data after the JSON value at byte %d", dec.InputOffset()), fix)
+	}
+	return raw, nil
+}
+
+func inputFix(command string) string {
+	return fmt.Sprintf("see loupe %s --help for the input shape", command)
 }
 
 func malformed(err error, size int, fix string) error {

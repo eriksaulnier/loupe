@@ -27,7 +27,7 @@ func (e *cleanupError) Error() string { return e.err.Error() }
 func (e *cleanupError) Unwrap() error { return e.err }
 
 // report writes err per the output contract and returns the exit code. Any error that is not a refusal is a defect.
-func report(deps Deps, jsonMode bool, command, run string, err error) int {
+func report(deps Deps, jsonMode bool, command string, inv invocation, err error) int {
 	if err == nil {
 		return exitOK
 	}
@@ -53,7 +53,7 @@ func report(deps Deps, jsonMode bool, command, run string, err error) int {
 		r = &withCleanup
 	}
 	if jsonMode {
-		if writeErr := writeRefusal(stdout, command, run, r); writeErr != nil {
+		if writeErr := writeRefusal(stdout, command, inv, r); writeErr != nil {
 			_, _ = fmt.Fprintf(stderr, "error: write result: %v\n", writeErr)
 		}
 	} else {

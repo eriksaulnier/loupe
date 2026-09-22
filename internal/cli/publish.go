@@ -76,9 +76,13 @@ current branch's pull request is never used. The review is posted by the App, nu
 pull request's own bot reviews, and marked unattended in its footer and loupe-meta.
 
 Result (--json), alone on stdout while the confirmation draws on stderr:
-  {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1", "reviewId": 123,
-   "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true}
-A receipt replay has "sent": false and "replayed": true; a canceled publish has only "sent": false.`
+  {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "author": "reviewer", "reviewId": 123,
+   "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true,
+   "unattended": false}
+A receipt replay has "sent": false and "replayed": true; a canceled publish has only "sent": false.
+unattended says whether --unattended composed the review. author is the login GitHub returned for
+it, absent when the receipt predates loupe recording it.`
 
 const publishUsage = "loupe publish <ref> --action comment|approve|request-changes [--inline none|blocking|all]"
 
@@ -165,7 +169,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 			return err
 		}
 		if jsonMode {
-			return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, map[string]any{"sent": false})
+			return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{"sent": false})
 		}
 		return nil
 	}
@@ -173,11 +177,15 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		return err
 	}
 	if jsonMode {
-		payload := map[string]any{"sent": !replayed, "reviewUrl": receipt.ReviewURL, "reviewId": receipt.ReviewID}
+		payload := map[string]any{"sent": !replayed, "reviewUrl": receipt.ReviewURL, "reviewId": receipt.ReviewID,
+			"unattended": receipt.Envelope.Unattended()}
+		if receipt.Author != "" {
+			payload["author"] = receipt.Author
+		}
 		if replayed {
 			payload["replayed"] = true
 		}
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), nil, payload)
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, payload)
 	}
 	return printPublished(deps, ref, receipt, replayed)
 }

@@ -103,7 +103,7 @@ func runList(cmd *cobra.Command, deps Deps) error {
 	// Walk order is by reference, which makes the tie-break on equal capture times deterministic.
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].CapturedAt.After(rows[j].CapturedAt) })
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), "", nil, map[string]any{"runs": rows})
+		return writeSuccess(deps.Stdout, commandName(cmd), invocation{}, nil, map[string]any{"runs": rows})
 	}
 	return printList(deps, rows)
 }

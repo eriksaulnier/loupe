@@ -111,14 +111,6 @@ func (m *Model) partLines(parts []string, gap int) []string {
 	return append(lines, " "+line)
 }
 
-// hanging wraps a line of the note thread under an indent deeper than its first line, so a long note or reply is
-// read in full rather than clipped at the window edge.
-func (m *Model) hanging(lead, text, indent string) []string {
-	lines := strings.Split(m.styles.Wrap(text, style.Content(m.width)-1, indent), "\n")
-	lines[0] = lead + strings.TrimPrefix(lines[0], indent)
-	return lines
-}
-
 // impact is Markdown by contract, so it is rendered the way the body is, under its own heading.
 func (m *Model) impact(f draft.Finding) ([]string, error) {
 	if f.Impact == "" {
@@ -157,26 +149,55 @@ func (m *Model) references(f draft.Finding) []string {
 	return out
 }
 
-// noteThread lists the finding's notes with their replies indented under them, so a send-back reads as a conversation.
-// The thread is one block after a blank line; a closed note carries the glyph of how it closed.
+// noteThread draws each of the finding's notes as a conversation: the note, then its replies indented under it, each
+// a header and its body as written, with the note color's bar down the thread and an unbarred row between threads.
 func (m *Model) noteThread(f draft.Finding) []string {
 	var out []string
+	sep := " " + m.styles.Dim.Render(m.glyphs.Sep) + " "
 	for _, n := range m.draft.Notes {
 		if n.FindingID != f.ID {
 			continue
 		}
-		if len(out) == 0 {
-			out = append(out, "")
-		}
-		head := m.styles.Note.Render(m.glyphs.Note+" "+n.ID) + " " + m.styles.Dim.Render(noteStatus(m.glyphs, n.Status)) + ": "
-		out = append(out, m.hanging(" ", head+render.ForDisplay(render.OneLine(n.Body)), "   ")...)
+		out = append(out, "")
+		head := m.styles.Note.Render("you") + sep + m.styles.Dim.Render(n.ID) + sep + m.styles.Dim.Render(noteStatus(m.glyphs, n.Status))
+		out = append(out, m.threadBlock("", head, n.Body)...)
 		for _, r := range m.draft.Replies {
 			if r.NoteID != n.ID {
 				continue
 			}
-			reply := m.styles.Note.Render(m.glyphs.Reply+" "+render.ForDisplay(r.ID)) + " " + m.styles.Dim.Render("by "+render.ForDisplay(r.By)) + ": "
-			out = append(out, m.hanging("   ", reply+render.ForDisplay(render.OneLine(r.Body)), "     ")...)
+			out = append(out, " "+m.styles.Note.Render(m.glyphs.Quote))
+			who := render.ForDisplay(r.By)
+			if r.By == draft.ByHuman {
+				who = "you"
+			}
+			head := m.styles.Note.Render(who) + sep + m.styles.Dim.Render(render.ForDisplay(r.ID))
+			out = append(out, m.threadBlock("  ", head, r.Body)...)
 		}
+	}
+	return out
+}
+
+// threadBlock is one note or reply under the thread's bar. The author's line breaks are kept; only the ends are
+// trimmed, so a block never opens or closes on an empty row.
+func (m *Model) threadBlock(indent, head, body string) []string {
+	bar := " " + m.styles.Note.Render(m.glyphs.Quote)
+	prefix := bar + " " + indent
+	out := []string{prefix + head}
+	// Only spaces count as blank: TrimSpace would also take a form feed or U+0085, which ForDisplay shows escaped.
+	blank := func(line string) bool { return strings.Trim(line, " ") == "" }
+	lines := strings.Split(strings.NewReplacer("\r\n", "\n", "\t", " ").Replace(body), "\n")
+	for len(lines) > 0 && blank(lines[0]) {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && blank(lines[len(lines)-1]) {
+		lines = lines[:len(lines)-1]
+	}
+	for _, line := range lines {
+		if blank(line) {
+			out = append(out, bar)
+			continue
+		}
+		out = append(out, strings.Split(m.styles.Wrap(render.ForDisplay(line), style.Content(m.width)-1, prefix), "\n")...)
 	}
 	return out
 }
@@ -273,14 +294,9 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		return m.decideAndStay(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
 		m.noting, m.notice = true, ""
-		prompt := m.styles.Note.Render(m.glyphs.Note+" send back "+f.ID) + " " + m.styles.Cursor.Render(m.glyphs.Cursor) + " "
-		m.note.SetPromptFunc(style.Width(prompt), func(row int) string {
-			if row == 0 {
-				return prompt
-			}
-			return ""
-		})
+		m.note.SetPromptFunc(notePad, func(int) string { return strings.Repeat(" ", notePad) })
 		m.note.Reset()
+		m.note.SetValue(m.keptNotes[f.ID])
 		m.note.Cursor.SetMode(cursor.CursorStatic)
 		cmd := m.note.Focus()
 		m.sizeNote(0)
@@ -344,26 +360,23 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 	case tea.KeyEsc:
 		m.noting = false
 		m.note.Blur()
+		m.keepNote(m.openID, m.note.Value())
 		return nil
 	case tea.KeyEnter:
 		m.noting = false
 		m.note.Blur()
 		id, body := m.openID, m.note.Value()
+		// Kept until the note is recorded, so a refusal hands the text back for correction rather than losing it.
+		m.keepNote(id, body)
 		var noteID string
-		cmd := m.decideAndShow(func(d *draft.Draft) error {
+		return m.decideAndShow(func(d *draft.Draft) error {
 			n, err := draft.SendBack(d, id, body, m.cfg.Now())
 			noteID = n.ID
 			return err
 		}, func() string {
+			delete(m.keptNotes, id)
 			return fmt.Sprintf("%s %s sent back as %s; the agent has it", m.glyphs.Note, id, noteID)
 		})
-		// Refused, most often because the agent wrote meanwhile: the note stays as typed so sending it again is
-		// one key.
-		if noteID == "" && m.err == nil {
-			m.noting = true
-			return tea.Batch(cmd, m.note.Focus())
-		}
-		return cmd
 	}
 	if msg.Type == tea.KeyRunes {
 		// A note is one paragraph, so a pasted line break or tab becomes a space.
@@ -375,6 +388,15 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 	m.note, cmd = m.note.Update(msg)
 	m.sizeNote(0)
 	return cmd
+}
+
+// keepNote holds text left in the note box for its finding, and forgets a box left empty.
+func (m *Model) keepNote(id, text string) {
+	if strings.TrimSpace(text) == "" {
+		delete(m.keptNotes, id)
+		return
+	}
+	m.keptNotes[id] = text
 }
 
 // updateEdit drives the editor row. Arrows move the label rather than the finding, so the row cannot outlive the
@@ -462,24 +484,34 @@ func (m *Model) editView() string {
 	return strings.Join(m.partLines(parts, 2), "\n")
 }
 
-// sizeNote fits the note input inside its one-column margin, as tall as its wrapped text plus extra rows.
+// notePad is the column kept clear inside each edge of the note's frame, so the text does not sit against it. The
+// textarea's prompt is the left one.
+const notePad = 1
+
+// noteBoxWidth is the frame's width: the window less the one-column margin every view keeps on its left.
+func (m *Model) noteBoxWidth() int { return m.width - 1 }
+
+// sizeNote fits the note input inside its frame, as tall as its wrapped text plus extra rows.
 func (m *Model) sizeNote(extra int) {
-	m.note.SetWidth(max(1, m.width-1))
+	inner := max(2*notePad+1, m.noteBoxWidth()-2)
+	m.note.SetWidth(inner - notePad)
 	m.note.SetHeight(m.note.LineInfo().Height + extra)
 }
 
-// noteView is the wrapped note input capped at a third of the window; a taller note shows the rows ending at the
-// cursor's.
+// noteView is the note input framed as the publish message is, since both are prose the human authors. Its text is
+// capped at a third of the window; a taller note shows the rows ending at the cursor's.
 func (m *Model) noteView() string {
 	rows := strings.Split(m.note.View(), "\n")
 	if limit := max(1, m.height/3); len(rows) > limit {
 		start := min(max(0, m.note.LineInfo().RowOffset-limit+1), len(rows)-limit)
 		rows = rows[start : start+limit]
 	}
-	for i, r := range rows {
-		rows[i] = " " + r
+	way := "enter sends " + m.glyphs.Sep + " esc cancels"
+	boxed := m.styles.Box(rows, m.noteBoxWidth(), "send back "+m.openID, way, style.Note)
+	for i, r := range boxed {
+		boxed[i] = " " + r
 	}
-	return strings.Join(rows, "\n")
+	return strings.Join(boxed, "\n")
 }
 
 // decideAndStay records a change that does not settle the finding (a restore, a note resolved or dismissed, an

@@ -43,7 +43,8 @@ The flags edit a single finding instead of --from: the add flags, which replace 
 location when any location flag is given, plus the --clear-* flags and --not-blocking.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "edit", "run": "owner/repo#123@1", "version": 6,
+  {"loupe": 1, "ok": true, "command": "edit", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 6,
    "finding": {"id": "f-001", "rev": 2, "included": true}, "clearedDecision": true}`
 
 var (
@@ -159,7 +160,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 		return err
 	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, map[string]any{
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{
 			"finding":         map[string]any{"id": edited.ID, "rev": edited.Rev, "included": edited.Included},
 			"clearedDecision": cleared,
 		})

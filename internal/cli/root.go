@@ -108,9 +108,12 @@ func Execute(deps Deps, args []string) int {
 	return execute(NewRoot(deps), deps, args)
 }
 
-// invocation carries what a command resolved back to execute so a refusal envelope can name the run.
+// invocation carries what a command resolved back to execute so every result envelope, success or refusal, can name
+// the run.
 type invocation struct {
 	run string
+	// dir is the run's directory, absolute so a pipeline can archive or restore it without knowing the layout.
+	dir string
 }
 
 type invocationKey struct{}
@@ -151,7 +154,7 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 		if found, _, findErr := root.Find(args); findErr == nil && found != nil {
 			named = found
 		}
-		return report(deps, jsonMode, commandName(named), "", refusal.New(refusal.Usage, err.Error(), "set "+style.IconsEnv+" to ascii, unicode or nerd, or unset it"))
+		return report(deps, jsonMode, commandName(named), invocation{}, refusal.New(refusal.Usage, err.Error(), "set "+style.IconsEnv+" to ascii, unicode or nerd, or unset it"))
 	}
 	// Under --json cobra's output is held back so help can become the one result object and nothing else hits stdout.
 	var cobraOut bytes.Buffer
@@ -189,17 +192,17 @@ func execute(root *cobra.Command, deps Deps, args []string) int {
 	}
 	if helpShown && err == nil {
 		if jsonMode {
-			err = writeSuccess(deps.Stdout, commandName(cmd), "", nil, map[string]any{"help": cobraOut.String()})
+			err = writeSuccess(deps.Stdout, commandName(cmd), invocation{}, nil, map[string]any{"help": cobraOut.String()})
 		} else {
 			_, err = deps.Stdout.Write(cobraOut.Bytes())
 		}
 	} else if jsonMode && err == nil && root.Flags().Changed("version") {
 		// --version answers with the version alone, so under --json it is a result object like any other.
-		err = writeSuccess(deps.Stdout, commandName(cmd), "", nil, map[string]any{"loupeVersion": version})
+		err = writeSuccess(deps.Stdout, commandName(cmd), invocation{}, nil, map[string]any{"loupeVersion": version})
 	} else {
 		_, _ = deps.Stderr.Write(cobraOut.Bytes())
 	}
-	return report(deps, jsonMode, commandName(cmd), inv.run, err)
+	return report(deps, jsonMode, commandName(cmd), *inv, err)
 }
 
 func markCommandErrors(cmd *cobra.Command) {

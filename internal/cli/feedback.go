@@ -18,7 +18,8 @@ withdraw it with loupe edit <id> --exclude, then answer with loupe reply <note-i
 human resolves or dismisses a note, in loupe review.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "feedback", "run": "owner/repo#123@1", "version": 6,
+  {"loupe": 1, "ok": true, "command": "feedback", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 6,
    "readiness": {"ready": false, "accepted": ["f-001"], "pending": ["f-002"], "excluded": [],
                  "withdrawn": [], "openNotes": ["n-001"]},
    "notes": [{"id": "n-001", "findingId": "f-002", "status": "open", "body": "Show the evidence.",
@@ -53,7 +54,7 @@ func runFeedback(cmd *cobra.Command, deps Deps) error {
 	if !wantJSON(cmd) {
 		return printFeedback(deps, ref.String(), d)
 	}
-	return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &d.Version, feedbackPayload(d))
+	return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, feedbackPayload(d))
 }
 
 func feedbackPayload(d *draft.Draft) map[string]any {

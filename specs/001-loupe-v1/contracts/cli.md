@@ -21,16 +21,16 @@ This is the agent-facing and human-facing command contract. `/speckit-plan` Phas
 Success:
 
 ```json
-{"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1", "version": 4, "...": "command payload"}
+{"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1", "dir": "/path/to/run", "version": 4, "...": "command payload"}
 ```
 
 Refusal or error (exit 1 or 2):
 
 ```json
-{"loupe": 1, "ok": false, "command": "add", "run": "owner/repo#123@1", "error": {"code": "location", "message": "src/a.ts:88 is not in the diff on side RIGHT", "fix": "use one of: src/a.ts:80-86, 90-97", "details": {"entry": 1, "nearest": [80, 81, 86, 90, 91, 97]}}}
+{"loupe": 1, "ok": false, "command": "add", "run": "owner/repo#123@1", "dir": "/path/to/run", "error": {"code": "location", "message": "src/a.ts:88 is not in the diff on side RIGHT", "fix": "use one of: src/a.ts:80-86, 90-97", "details": {"entry": 1, "nearest": [80, 81, 86, 90, 91, 97]}}}
 ```
 
-`run` is omitted when no run was resolved. `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait` and `show`. `list`, `handoff`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
+`run` is omitted when no run was resolved. `dir` is the absolute path of the directory holding the run `run` names, on a success and on a refusal alike, and is present exactly when `run` is. It is resolved under the data root in force for the invocation, so a data root restored elsewhere names its new location. It is a handle to archive, restore or carry between jobs, not a view into the run: the directory's contents and layout are not part of this contract (specs/016-pipeline-handles). `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `reply`, `feedback`, `wait` and `show`. `list`, `handoff`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
 
 ## Error codes
 
@@ -100,6 +100,8 @@ Exactly one of `location` or `"general": true` is required. `side` defaults to `
 
 Result payload: `findings` (array of `{id, rev}`), `version`.
 
+A batch is stored entirely or not at all. A refusal caused by one or more invalid entries checks every entry, whether it failed to decode as a finding or failed validation: its `code`, `message`, `fix` and `details` are those of the first invalid entry, with that entry's zero-based position in `details.entry`, and `details.entries` lists every invalid entry in order as `{entry, code, message, fix, details?}`, where `message` carries no `entry N:` prefix and `details` is the entry's own. Each entry reports its first defect only, and an entry that failed to decode is not validated further. When more than one entry is invalid the top-level `message` ends by naming the others. A refusal of the whole call, such as input that is not JSON, an empty array or an `--expect-version` mismatch, carries no `entries` (specs/016-pipeline-handles).
+
 ### `loupe edit <finding-id> [--from <path>|-] [flags] [--include|--exclude] [--by a] [--expect-version n] [--json]`
 
 Input: an object with any subset of the fields above; `null` clears `location`, `label`, `confidence`, `severity`, `verified`, `impact`, `references` or `suggestedFix`, and an empty `references` list clears it too. Setting `location` clears `general` and vice versa. A `severity` is validated only when the edit changes it, so a finding stored with a value outside the enum stays editable. `--exclude` withdraws the finding, `--include` restores it; neither records a human decision. Any publishable change or inclusion change increments `rev` and removes the finding's decision. Flag equivalents: the `add` flags plus `--clear-location`, `--clear-label`, `--clear-confidence`, `--clear-severity`, `--clear-verified`, `--clear-impact`, `--clear-references`, `--clear-suggested-fix`, `--not-blocking`.
@@ -118,7 +120,7 @@ Result payload: `version`, `includedCount`.
 
 Blocks until there is something for the agent to do: the human sent a finding back with a note that is still open and unanswered (`reason: notes`), or the run has a receipt (`reason: published`). A send-back hands its note back as it is written, so `wait` returns while review is still open (`specs/017-live-review`, 2026-09-21); a clean exit still hands back any open note an older binary left unrecorded. Re-reads the run files once a second and once before the first wait, so an already-handed-back run returns at once. A note stays awaiting until it has a reply, whatever else changed in the draft. `--timeout` absent or `0` waits without a deadline; a negative value is `usage`; once it elapses the command refuses with `timeout`. Ctrl-C or SIGTERM ends the wait with an error (exit 1). With `--run` it makes no network call; an agent MUST pass `--run`.
 
-Turn-taking is cooperative: a return proves the human sent those notes back, and says nothing about whether a review session is open; `loupe handoff` answers that. The draft's version check already refuses a decision made against a draft the agent changed in between.
+Turn-taking is cooperative: a return proves the human sent those notes back, and says nothing about whether a review session is open; `loupe handoff` answers that. A decision in `review` is refused when the finding it decides, or a note on it, changed since it was shown, so the agent writing to other findings in between never refuses it (`specs/017-live-review`).
 
 Result payload: `reason` (`notes` or `published`), `awaiting` (note ids to answer, empty when published), plus the `feedback` payload (`readiness`, `notes`, `findings`).
 
@@ -154,7 +156,7 @@ Refuses with `tty` before reading the draft when stdin or stdout is not a termin
 
 ### `loupe publish [<ref>] --action comment|approve|request-changes [--inline none|blocking|all] [--retry-unknown] [--plain] [--unattended]` (human only, except `--unattended`)
 
-Runs the publication state machine in research.md. After a receipt replay or reconciliation, refuses with `tty` before reading the draft or GitHub credentials, with the same terminal rule as `review`. `--inline` defaults to `blocking`. When the head only gained commits since capture, the confirmation shows them and the findings on files they changed, and the review is sent at the captured head; there is no flag for this. Prints the review URL on success and on receipt replay.
+Runs the publication state machine in research.md. After a receipt replay or reconciliation, refuses with `tty` before reading the draft or GitHub credentials, with the same terminal rule as `review`. `--inline` defaults to `blocking`. When the head only gained commits since capture, the confirmation shows them and the findings on files they changed, and the review is sent at the captured head; there is no flag for this. Prints the review URL on success and on receipt replay. Under `--json`, a sent or replayed publication's payload is `sent`, `reviewUrl`, `reviewId`, `replayed` (on a replay only), `unattended` (always present: whether `--unattended` composed the review, read from the receipt) and `author` (the login GitHub returned for the review, absent when the receipt predates loupe recording it); a canceled publish's payload is `sent: false` alone (specs/016-pipeline-handles).
 
 The confirmation is where the human writes the review's opening prose, in the body and at the place their words will appear. There is no command and no flag that sets it, because a command that writes the human's words is a command an agent can call. `loupe review` keeps it in memory for the life of the program, so a cancel or a refusal after `y` does not make the human write it twice; it reaches no file and does not outlive the process. An empty message publishes a body that opens on the chips row, as a draft with no summary does; an empty message with no published findings refuses with `empty`, because the gate before the confirmation judges that on the draft's summary, which an attended publication does not post. The plain fallback asks for the message on one line before its `[y/N]` prompt, prints the review again with it in place, and an empty line means none.
 

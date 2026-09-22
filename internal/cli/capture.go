@@ -31,7 +31,8 @@ current branch and every other ref of the clone are left untouched.
 The clone is --repo, or the working directory.
 
 Result (--json):
-  {"loupe": 1, "ok": true, "command": "capture", "run": "owner/repo#123@1", "version": 0,
+  {"loupe": 1, "ok": true, "command": "capture", "run": "owner/repo#123@1",
+   "dir": "/path/to/run", "version": 0,
    "target": {"schema": 1, "owner": "owner", "repo": "repo", "number": 123,
               "url": "https://github.com/owner/repo/pull/123", "title": "...", "author": "...",
               "viewer": "...", "baseSha": "...", "headSha": "...", "round": 1,
@@ -244,7 +245,9 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if unlockErr != nil {
 		return unlockErr
 	}
-	invocationOf(cmd).run = ref.String()
+	if err := recordRun(cmd, ref, dir); err != nil {
+		return err
+	}
 
 	next := []string{
 		fmt.Sprintf("loupe add --run %s --from <file> --json", ref),
@@ -252,7 +255,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		fmt.Sprintf("then the human runs: loupe review %s", ref),
 	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), ref.String(), &empty.Version, map[string]any{
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &empty.Version, map[string]any{
 			"target":  target,
 			"refs":    map[string]string{"base": baseRef, "head": headRef},
 			"cleanup": cleanup,

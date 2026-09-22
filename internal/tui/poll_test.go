@@ -277,8 +277,12 @@ func TestRefusedSendBackKeepsTheTypedNote(t *testing.T) {
 	pressKeys(t, m, "s", "Second question")
 	agentRetitles(t, dir, "f-002", "Retitled two")
 	pressKeys(t, m, "enter")
-	if m.notice != staleNotice || !m.noting || m.note.Value() != "Second question" {
-		t.Fatalf("notice %q noting %v note %q", m.notice, m.noting, m.note.Value())
+	if m.notice != staleNotice {
+		t.Fatalf("notice %q", m.notice)
+	}
+	pressKeys(t, m, "s")
+	if !m.noting || m.note.Value() != "Second question" {
+		t.Fatalf("noting %v note %q", m.noting, m.note.Value())
 	}
 	pressKeys(t, m, "enter")
 	if d := loadDraft(t, dir); len(d.Notes) != 2 || d.Notes[1].Body != "Second question" {
@@ -405,5 +409,28 @@ func TestDecisionNamesEveryKindOfWriteElsewhere(t *testing.T) {
 		if !strings.Contains(m.notice, want) {
 			t.Errorf("notice %q lacks %q", m.notice, want)
 		}
+	}
+}
+
+func TestLiveReplyJoinsTheThreadAndKeepsTheNoteBeingWritten(t *testing.T) {
+	m, dir := newAwaitingModel(t, 60)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	pressKeys(t, m, "s", "Also check the tests")
+	pressKeys(t, m, "esc")
+	agentReplies(t, dir, "n-001", "Because the rename moved it.")
+	update(t, m, pollMsg{})
+
+	m.body.GotoBottom()
+	view := m.View()
+	for _, want := range []string{"you - n-001", "agent - r-001", "Because the rename moved it."} {
+		if !strings.Contains(view, want) {
+			t.Errorf("thread lacks %q after the live reply:\n%s", want, view)
+		}
+	}
+	pressKeys(t, m, "s")
+	if !m.noting || m.note.Value() != "Also check the tests" {
+		t.Fatalf("the kept note did not survive the re-read: noting %v note %q", m.noting, m.note.Value())
 	}
 }
