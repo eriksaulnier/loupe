@@ -16,16 +16,23 @@ const handoffHelp = `Open loupe review for the human in a new terminal pane besi
 
 An agent runs this at the hand-off, then blocks on loupe wait. While a loupe review of the run
 is already open, in any terminal, it refuses review-open and opens nothing: the human is still
-reviewing and sees the agent's replies there, so the agent tells them and waits again. Otherwise
-it works inside Herdr: it needs HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH, and refuses
-no-pane-host without them. The pane
-opens to the right of the agent's pane when that pane is at least 120 columns wide and below it
-otherwise, takes focus, and runs this loupe's review for the run. It closes when review exits
-cleanly and stays open on a refusal so the human can read it.
+reviewing and sees the agent's replies there, so the agent tells them and waits again.
+
+Otherwise it tries these terminal hosts first to last and opens the pane in the first detected:
+  herdr  HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH
+  orca   ORCA_TERMINAL_HANDLE, and orca on PATH
+A host whose conditions are met only in part is skipped. With no host it refuses no-pane-host.
+
+The pane opens below the agent's pane when that pane is known to be under 120 columns wide,
+and to the right otherwise. The width is the host's own report of the agent's pane (Herdr has
+one, Orca none), else the agent's own terminal; with neither it opens right. The pane takes
+focus and runs this loupe's review for the run. It closes when review exits cleanly and stays
+open on a refusal so the human can read it.
 
 The agent MUST NOT send to, read, resize, close or reuse the pane; a hand-off that opens a pane
-opens a new one. A failed herdr call refuses pane-failed with Herdr's message and is not
-retried. On no-pane-host or pane-failed the agent tells the human to run loupe review.
+opens a new one. A failed host call refuses pane-failed and is not retried; its details name
+the host and the step, and step probe is the one that opens nothing. On no-pane-host or
+pane-failed the agent tells the human to run loupe review.
 
 The run is <ref> or --run <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the
 pull request of the current branch in the working directory at its newest round.
@@ -35,7 +42,7 @@ Result (--json):
    "dir": "/path/to/run", "host": "herdr",
    "paneId": "w1:p2", "direction": "right"}
 
-direction is right or down.`
+host is herdr or orca. direction is right or down.`
 
 func newHandoffCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -61,8 +68,8 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	if err != nil {
 		return err
 	}
-	// Checked before Herdr: outside it the fallback tells the human to run review, which is wrong advice while one is
-	// already open.
+	// Checked before detecting a host: without one the fallback tells the human to run review, which is wrong advice
+	// while one is already open.
 	open, err := run.SessionOpen(dir)
 	if err != nil {
 		return err
@@ -74,27 +81,20 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	fix := "ask the human to run loupe review " + shellQuote(ref.String())
 	host, ok := pane.Detect(deps.Getenv)
 	if !ok {
-		return refusal.New(refusal.NoPaneHost, "no terminal pane can be opened here: HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH are all needed", fix)
+		return refusal.New(refusal.NoPaneHost, "no terminal pane can be opened here: HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH, "+
+			"or ORCA_TERMINAL_HANDLE and orca on PATH", fix)
 	}
 	command, err := reviewCommand(deps, ref)
 	if err != nil {
 		return err
 	}
-	root, err := run.DataRoot(deps.Getenv)
-	if err != nil {
-		return err
-	}
-	// The split's shell starts in its own directory, so a relative LOUPE_HOME would name a different root there.
-	if root, err = filepath.Abs(root); err != nil {
-		return err
-	}
-	opened, err := host.Open(cmd.Context(), root, command, fix)
+	opened, err := host.Open(cmd.Context(), pane.Request{Command: command, TTYWidth: deps.TTYWidth, Fix: fix})
 	if err != nil {
 		return err
 	}
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{
-			"host": pane.Name, "paneId": opened.PaneID, "direction": opened.Direction,
+			"host": host.Name(), "paneId": opened.PaneID, "direction": opened.Direction,
 		})
 	}
 	s := deps.outStyle()
@@ -107,11 +107,21 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	return err
 }
 
-// reviewCommand names this executable rather than loupe on PATH, so the pane runs the same build the agent ran.
+// reviewCommand names this executable rather than loupe on PATH, so the pane runs the same build the agent ran. The
+// pane's shell loads the user's profile rather than inheriting loupe's environment, and Orca's split takes no --env,
+// so the data root rides in the command line.
 func reviewCommand(deps Deps, ref run.Ref) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locating the loupe executable: %w", err)
 	}
-	return shellQuote(exe) + " review " + shellQuote(ref.String()) + " && exit", nil
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		return "", err
+	}
+	// The pane's shell starts in its own directory, so a relative LOUPE_HOME would name a different root there.
+	if root, err = filepath.Abs(root); err != nil {
+		return "", err
+	}
+	return "LOUPE_HOME=" + shellQuote(root) + " " + shellQuote(exe) + " review " + shellQuote(ref.String()) + " && exit", nil
 }

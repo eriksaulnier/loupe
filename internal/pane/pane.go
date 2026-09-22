@@ -1,33 +1,36 @@
-// Package pane opens loupe review for the human in a new Herdr split beside the agent's pane. It is the only package
-// that runs Herdr.
+// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr or Orca. It is
+// the only package that runs either.
 package pane
 
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
-// Name is the pane host a handoff result reports.
-const Name = "herdr"
-
 // wideEnough keeps both halves of a right split at the 60 columns review needs (spec 002).
 const wideEnough = 120
 
-type Runner func(ctx context.Context, path string, args ...string) ([]byte, error)
+// Host is a terminal that can split beside the agent's pane and run review in the new one.
+type Host interface {
+	Name() string
+	// Open refuses at the first failed step and never retries: a retry could open a second pane.
+	Open(ctx context.Context, req Request) (Opened, error)
+}
 
-type Herdr struct {
-	path   string
-	paneID string
-	run    Runner
+// Request carries LOUPE_HOME inside Command because a new pane's shell loads the user's profile rather than
+// inheriting loupe's environment. TTYWidth is injected so tests never read a real terminal; nil is unreadable.
+type Request struct {
+	Command  string
+	TTYWidth func() (int, bool)
+	Fix      string
 }
 
 type Opened struct {
@@ -35,113 +38,79 @@ type Opened struct {
 	Direction string
 }
 
-// Detect reads the variables Herdr injects into the panes it manages and finds herdr on getenv's PATH, not the
-// process's, so every input comes through the same getenv.
-func Detect(getenv func(string) string) (Herdr, bool) {
-	if getenv("HERDR_ENV") != "1" || getenv("HERDR_PANE_ID") == "" {
-		return Herdr{}, false
+// Detect tries Herdr before Orca because a Herdr session started inside an Orca terminal gives its panes both
+// environments, and the agent sits in the Herdr pane. A host whose conditions are met only in part is skipped.
+func Detect(getenv func(string) string) (Host, bool) {
+	if h, ok := detectHerdr(getenv); ok {
+		return h, true
 	}
-	for _, dir := range filepath.SplitList(getenv("PATH")) {
-		if dir == "" {
-			continue
-		}
-		path := filepath.Join(dir, Name)
-		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
-			return Herdr{path: path, paneID: getenv("HERDR_PANE_ID"), run: execRunner}, true
-		}
+	if o, ok := detectOrca(getenv); ok {
+		return o, true
 	}
-	return Herdr{}, false
+	return nil, false
 }
 
-// Open splits beside the agent's pane with focus and types command into the new shell. The split's shell loads the
-// user's profile rather than inheriting loupe's environment, so the data root is passed explicitly. A failed step
-// refuses at once: a retry could open a second pane.
-func (h Herdr) Open(ctx context.Context, dataRoot, command, fix string) (Opened, error) {
-	failed := func(step, message string) error {
-		return refusal.New(refusal.PaneFailed, fmt.Sprintf("herdr pane %s: %s", step, message), fix)
+// direction prefers the host's own report of the agent pane's width, then the agent's tty. An unknown width opens
+// right: from an agent's shell tool the tty is usually unreadable, and Orca reports no size, so down would be every
+// handoff there.
+func direction(hostWidth int, hostOK bool, tty func() (int, bool)) string {
+	width, ok := hostWidth, hostOK
+	if !ok && tty != nil {
+		width, ok = tty()
 	}
-
-	out, err := h.run(ctx, h.path, "pane", "layout", "--pane", h.paneID)
-	if err != nil {
-		return Opened{}, failed("layout", err.Error())
+	if ok && width < wideEnough {
+		return "down"
 	}
-	var layout struct {
-		Result struct {
-			Layout struct {
-				Panes []struct {
-					PaneID string `json:"pane_id"`
-					Rect   struct {
-						Width int `json:"width"`
-					} `json:"rect"`
-				} `json:"panes"`
-			} `json:"layout"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(out, &layout); err != nil {
-		return Opened{}, failed("layout", "unreadable result: "+err.Error())
-	}
-	width := -1
-	for _, p := range layout.Result.Layout.Panes {
-		if p.PaneID == h.paneID {
-			width = p.Rect.Width
-		}
-	}
-	if width < 0 {
-		return Opened{}, failed("layout", "the result does not list pane "+h.paneID)
-	}
-	direction := "down"
-	if width >= wideEnough {
-		direction = "right"
-	}
-
-	out, err = h.run(ctx, h.path, "pane", "split", "--pane", h.paneID, "--direction", direction, "--focus",
-		"--env", "LOUPE_HOME="+dataRoot)
-	if err != nil {
-		return Opened{}, failed("split", err.Error())
-	}
-	var split struct {
-		Result struct {
-			Pane struct {
-				PaneID string `json:"pane_id"`
-			} `json:"pane"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(out, &split); err != nil {
-		return Opened{}, failed("split", "unreadable result: "+err.Error())
-	}
-	if split.Result.Pane.PaneID == "" {
-		return Opened{}, failed("split", "the result has no pane_id")
-	}
-
-	if _, err := h.run(ctx, h.path, "pane", "run", split.Result.Pane.PaneID, command); err != nil {
-		return Opened{}, failed("run", err.Error())
-	}
-	return Opened{PaneID: split.Result.Pane.PaneID, Direction: direction}, nil
+	return "right"
 }
 
-func execRunner(ctx context.Context, path string, args ...string) ([]byte, error) {
+// TTYWidth reads the controlling terminal rather than stdout, which is a pipe under --json.
+func TTYWidth() (int, bool) {
+	f, err := os.Open("/dev/tty")
+	if err != nil {
+		return 0, false
+	}
+	defer func() { _ = f.Close() }()
+	w, _, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return 0, false
+	}
+	return w, true
+}
+
+type Runner func(ctx context.Context, path string, args ...string) (stdout, stderr []byte, err error)
+
+func execRunner(ctx context.Context, path string, args ...string) ([]byte, []byte, error) {
 	cmd := exec.CommandContext(ctx, path, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if message := herdrMessage(stderr.Bytes()); message != "" {
-			return nil, errors.New(message)
-		}
-		return nil, err
-	}
-	return stdout.Bytes(), nil
+	err := cmd.Run()
+	return stdout.Bytes(), stderr.Bytes(), err
 }
 
-// herdrMessage prefers the message in Herdr's JSON error object and falls back to whatever it printed.
-func herdrMessage(stderr []byte) string {
-	var e struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
+// failed keys the refusal by step so an agent can tell a probe, which opens nothing, from a later step that may have
+// opened a pane. The message says so too, because the fix text is pinned to "run loupe review" and a second review
+// of the same run is allowed.
+func failed(host, step, message, fix string) error {
+	if step != "probe" {
+		message += "; a pane may already be open"
 	}
-	if json.Unmarshal(stderr, &e) == nil && e.Error.Message != "" {
-		return e.Error.Message
+	r := refusal.New(refusal.PaneFailed, fmt.Sprintf("%s %s: %s", host, step, message), fix)
+	r.Details = map[string]any{"host": host, "step": step}
+	return r
+}
+
+// lookPath walks getenv's PATH, not the process's, so every detection input comes through the same getenv.
+func lookPath(getenv func(string) string, name string) (string, bool) {
+	for _, dir := range filepath.SplitList(getenv("PATH")) {
+		if dir == "" {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+			return path, true
+		}
 	}
-	return strings.TrimSpace(string(stderr))
+	return "", false
 }

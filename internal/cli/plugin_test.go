@@ -141,11 +141,15 @@ func TestPluginShipsNoReviewCommand(t *testing.T) {
 	}
 }
 
-// Every harness reads the same skill; a herdr command in it would be one an agent composes instead of loupe handoff.
-// The one herdr it may name is the prefix of loupe's own pane-failed message.
+// Every harness reads the same skill; a herdr or orca command in it would be one an agent composes instead of
+// loupe handoff. The skill names neither host's command anywhere.
 func TestPluginSkillNamesNoHerdrCommand(t *testing.T) {
-	if body := strings.ReplaceAll(skillBody(t, "human-review"), "`herdr pane layout`", ""); strings.Contains(body, "herdr") {
+	body := skillBody(t, "human-review")
+	if strings.Contains(body, "herdr") {
 		t.Error("human-review/SKILL.md names a herdr command; use loupe handoff")
+	}
+	if strings.Contains(body, "orca") {
+		t.Error("human-review/SKILL.md names an orca command; use loupe handoff")
 	}
 }
 
@@ -179,7 +183,7 @@ func TestPluginSkillProhibitions(t *testing.T) {
 		"- You MUST NOT create GitHub reviews or review comments by any other route, including `gh pr review`, `gh api`, and the GitHub MCP.",
 		"- You MUST NOT run the pull request's code, check out its branch in the user's clone, or modify the user's working tree.",
 		"- When a command refuses, the result has `\"ok\": false` and an `error` object. You SHOULD read `error.code` and follow `error.fix`, which names the corrective command. You MUST NOT work around a refusal by editing loupe's files.",
-		"- In a sandboxed shell, such as Codex's default, `loupe capture` needs the network and write access to the clone's `.git`, every loupe command needs write access to loupe's data directory outside the workspace, and `loupe handoff` needs the Herdr socket. When a `loupe` command fails because of the sandbox, rerun it with the host's approval to run outside the sandbox, even when loupe returns a refusal. For `loupe handoff` this holds only when `error.message` starts with `herdr pane layout`, because a later step can already have opened a pane. You MUST NOT work around the sandbox by setting `LOUPE_HOME` or `XDG_DATA_HOME`.",
+		"- In a sandboxed shell, such as Codex's default, `loupe capture` needs the network and write access to the clone's `.git`, every loupe command needs write access to loupe's data directory outside the workspace, and `loupe handoff` needs the terminal host's socket. When a `loupe` command fails because of the sandbox, rerun it with the host's approval to run outside the sandbox, even when loupe returns a refusal. For `loupe handoff` this holds only when `error.details.step` is `probe`, because a later step can already have opened a pane. You MUST NOT work around the sandbox by setting `LOUPE_HOME` or `XDG_DATA_HOME`.",
 		"When `error.code` is `review-open`, the human already has review open for this run: tell them it is there and go on to section 6.",
 		"On any other refusal, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.",
 	} {

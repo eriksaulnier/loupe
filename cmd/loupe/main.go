@@ -9,6 +9,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/cli"
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/pane"
 )
 
 func main() {
@@ -35,6 +36,7 @@ func main() {
 			return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 		},
 		StderrIsTerminal: func() bool { return term.IsTerminal(int(os.Stderr.Fd())) },
+		TTYWidth:         pane.TTYWidth,
 		TermWidth: func() int {
 			w, _, err := term.GetSize(int(os.Stdout.Fd()))
 			if err != nil {

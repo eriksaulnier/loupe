@@ -51,7 +51,7 @@ Inside the repository, mise puts `dist/` first on `PATH`, so `loupe` is the buil
 
 Codex has no per-session plugin flag. To check the Codex plugin, install it from the working tree into a scratch `CODEX_HOME` with `codex plugin marketplace add <path>` and `codex plugin add loupe@loupe`.
 
-`LOUPE_DEMO_HOME=<dir>` keeps the demo's data root: the first command seeds it, later ones reuse it with whatever was decided, and `rm -rf <dir>` starts over. It refuses a non-empty directory without the demo's marker, including one a failed seed left behind. It is also how to try the hand-off inside Herdr without a pull request: `LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42'` opens a split running `loupe-demo review`, which reuses that root and its own fake GitHub, so publishing there still sends nothing.
+`LOUPE_DEMO_HOME=<dir>` keeps the demo's data root: the first command seeds it, later ones reuse it with whatever was decided, and `rm -rf <dir>` starts over. It refuses a non-empty directory without the demo's marker, including one a failed seed left behind. It is also how to try the hand-off inside Herdr or Orca without a pull request: `LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42'` opens a split running `loupe-demo review`, which reuses that root and its own fake GitHub, so publishing there still sends nothing.
 
 ## Commits
 

@@ -95,28 +95,28 @@ The owner installs loupe's skill with the harness's own plugin command. Claude C
 #### `loupe handoff`
 
 - **FR-001**: loupe MUST provide an agent command `loupe handoff [<ref>]` with `--run <ref>` and `--json`, selecting the run exactly as `loupe review` does.
-- **FR-002**: The command MUST detect Herdr only when `HERDR_ENV` is `1`, `HERDR_PANE_ID` is non-empty and `herdr` is found on `PATH`. Otherwise it MUST refuse `no-pane-host`.
-- **FR-003**: The command MUST read the agent pane's width from Herdr's layout, matching the pane by `HERDR_PANE_ID`, and MUST choose `right` when it is at least 120 columns and `down` otherwise.
-- **FR-004**: The command MUST open one split beside the agent pane with focus, setting `LOUPE_HOME` in it to the absolute data root the command itself resolved.
+- **FR-002**: The command MUST detect Herdr only when `HERDR_ENV` is `1`, `HERDR_PANE_ID` is non-empty and `herdr` is found on `PATH`. Otherwise it MUST refuse `no-pane-host`. Superseded on 2026-09-21 by `specs/019-pane-hosts` FR-001 to FR-004, which add Orca as a second detected host and try Herdr first.
+- **FR-003**: The command MUST read the agent pane's width from Herdr's layout, matching the pane by `HERDR_PANE_ID`, and MUST choose `right` when it is at least 120 columns and `down` otherwise. Superseded on 2026-09-21 by `specs/019-pane-hosts` FR-005, which keeps Herdr's layout width as the first source and adds the fallbacks: the agent's own controlling terminal, then `right` when neither gives a width.
+- **FR-004**: The command MUST open one split beside the agent pane with focus, setting `LOUPE_HOME` in it to the absolute data root the command itself resolved. Superseded on 2026-09-21 by `specs/019-pane-hosts` FR-008, which sets `LOUPE_HOME` in the pane's command line instead of a split option.
 - **FR-005**: The command MUST start, in that split's shell, the running loupe executable with `review` and the resolved run's canonical reference, followed by `&& exit`. The executable path and the reference MUST each reach the shell as one literal word, single-quoted whenever it holds a character a shell could expand. The reference MUST come from the resolved run, never from agent text.
-- **FR-006**: Any `herdr` call that exits non-zero, prints unparsable output, or lacks a needed field MUST refuse `pane-failed`, carrying Herdr's message. The command MUST NOT retry, and MUST make no `herdr` call after the failed one.
+- **FR-006**: Any `herdr` call that exits non-zero, prints unparsable output, or lacks a needed field MUST refuse `pane-failed`, carrying Herdr's message. The command MUST NOT retry, and MUST make no `herdr` call after the failed one. Amended by `specs/019-pane-hosts` FR-010: "any `herdr` call" now reads "any host call", covering Orca too.
 - **FR-007**: Both refusals MUST exit 1 with the fix `ask the human to run loupe review '<ref>'`, naming the resolved reference when the run resolved.
 - **FR-008**: The command MUST NOT look for, reuse, resize, read or close any pane.
-- **FR-009**: On success the `--json` result MUST carry `host` (`herdr`), `paneId` and `direction`, in the standard envelope. Without `--json` it MUST print one line naming the run and the direction.
+- **FR-009**: On success the `--json` result MUST carry `host` (`herdr`), `paneId` and `direction`, in the standard envelope. Without `--json` it MUST print one line naming the run and the direction. Amended by `specs/019-pane-hosts` FR-013: the `host` value list gains `orca`.
 
 #### Contract and help
 
-- **FR-010**: Herdr logic MAY live only in one internal package of the binary. Outside that package and its tests, only the `handoff` command's file MAY name Herdr, in its help and its `no-pane-host` refusal. `scripts/check-tests.sh` MUST fail when any other non-test Go file under `cmd/` or `internal/`, or `go.mod`, names Herdr.
+- **FR-010**: Herdr logic MAY live only in one internal package of the binary. Outside that package and its tests, only the `handoff` command's file MAY name Herdr, in its help and its `no-pane-host` refusal. `scripts/check-tests.sh` MUST fail when any other non-test Go file under `cmd/` or `internal/`, or `go.mod`, names Herdr. Amended by `specs/019-pane-hosts` FR-015: the guard widens to cover Orca as well as Herdr.
 - **FR-011**: `contracts/cli.md` MUST list `handoff`, its result, and the `no-pane-host` and `pane-failed` codes. The refusal code table test MUST match.
 - **FR-012**: `loupe --help` MUST state that `review` and `publish` are human-only; that an agent MUST NOT operate them, pipe confirmation into them, drive them through a pseudo-terminal, or start `publish` by any route; that an agent MAY run `loupe handoff` to start review in a new pane, and MUST NOT then send to, read, resize, close or reuse that pane; and that otherwise it tells the human to run `loupe review`.
 - **FR-013**: `loupe review --help` MUST carry the same rule for review, and `loupe handoff --help` MUST describe detection, the direction rule, both refusals and the result.
 
 #### Skills
 
-- **FR-014**: The plugin MUST carry exactly one skill, `plugin/skills/human-review/SKILL.md`: the loupe workflow for a skill or agent that has review findings. It covers capture and the previous round before the caller's review, then filing findings, the summary, the hand-off through `loupe handoff`, the wait and send-back notes, with the rules on `loupe publish`, pseudo-terminals, confirmation, the review pane, other review routes, running the pull request's code and the user's checkout, refusals and the sandbox. Its sandbox rule MUST allow rerunning `loupe handoff` only after a failure at the layout step, which opens no pane.
+- **FR-014**: The plugin MUST carry exactly one skill, `plugin/skills/human-review/SKILL.md`: the loupe workflow for a skill or agent that has review findings. It covers capture and the previous round before the caller's review, then filing findings, the summary, the hand-off through `loupe handoff`, the wait and send-back notes, with the rules on `loupe publish`, pseudo-terminals, confirmation, the review pane, other review routes, running the pull request's code and the user's checkout, refusals and the sandbox. Its sandbox rule MUST allow rerunning `loupe handoff` only after a failure at the layout step, which opens no pane. Amended by `specs/019-pane-hosts` FR-017 and FR-018: "a failure at the layout step" becomes "`error.details.step` is `probe`", and the skill names no `herdr` or `orca` command.
 - **FR-015**: The skill MUST NOT prescribe a review method, and MUST NOT name any `herdr` command.
 - **FR-016**: The skill MUST meet the Agent Skills limits of spec 004 FR-002, and every line except the Monitor instruction MUST stay harness-neutral.
-- **FR-017**: The sandbox rule MUST name `loupe handoff` as the command that needs the Herdr socket, and MUST NOT name `herdr`.
+- **FR-017**: The sandbox rule MUST name `loupe handoff` as the command that needs the Herdr socket, and MUST NOT name `herdr`. Amended by `specs/019-pane-hosts` FR-017 and FR-018: "the Herdr socket" becomes "the terminal host's socket", and the rule MUST NOT name `orca` either.
 
 #### Plugins
 

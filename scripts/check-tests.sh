@@ -130,12 +130,12 @@ if [ "${sends:-0}" != 1 ]; then
 	violation "internal/publish/publish.go MUST reference CreateReview exactly once:" "found ${sends:-0}"
 fi
 
-# Herdr is run from internal/pane alone; beside it only handoff's help and refusal name it (specs/006-agent-plugins
-# FR-010). Tests are excluded because they fake it.
-herdr=$(tracked_grep -niI 'herdr' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go' \
+# Herdr and Orca are run from internal/pane alone; beside it only handoff's help and refusal name either
+# (specs/006-agent-plugins FR-010, specs/019-pane-hosts FR-015). Tests are excluded because they fake them.
+herdr=$(tracked_grep -niIE 'herdr|orca' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go' \
 	':(exclude)internal/pane/*' ':(exclude)internal/cli/handoff.go')
 if [ -n "$herdr" ]; then
-	violation "only internal/pane and internal/cli/handoff.go MAY name Herdr:" "$herdr"
+	violation "only internal/pane and internal/cli/handoff.go MAY name Herdr or Orca:" "$herdr"
 fi
 
 exit "$failed"
