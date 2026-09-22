@@ -584,6 +584,8 @@ func TestDecisionOpensTheNextFinding(t *testing.T) {
 func TestMain(m *testing.M) {
 	settleAfterDecision = 0
 	settleOnOpen = 0
+	// Poll tests deliver the tick themselves; a real one would race them.
+	pollInterval = time.Hour
 	os.Exit(m.Run())
 }
 

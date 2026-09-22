@@ -669,5 +669,9 @@ func (m *Model) publishFinished(done publishDone) tea.Cmd {
 	default:
 		return m.fail(done.err)
 	}
-	return m.fail(m.reload())
+	changed, err := m.reload()
+	if changed != "" {
+		m.notice += "; " + changed
+	}
+	return m.fail(err)
 }

@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 const herdrPaneMissing = `{"error":{"code":"pane_not_found","message":"pane w1:p1 not found"},"id":"cli:pane:split"}`
@@ -158,5 +160,65 @@ func TestHandoffResolvesTheRunBeforeHerdr(t *testing.T) {
 	}
 	if calls := herdrCalls(t, log); calls != nil {
 		t.Fatalf("herdr was run for a run that does not exist: %q", calls)
+	}
+}
+
+func runFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
+func TestHandoffRefusesWhileReviewIsOpen(t *testing.T) {
+	home, dir := sendBackRun(t)
+	session, err := run.HoldSession(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Release() })
+	before := runFiles(t, dir)
+	bin, log := fakeHerdrBin(t, "")
+	withoutHerdr := herdrEnv(home, bin)
+	delete(withoutHerdr, "HERDR_ENV")
+	for name, env := range map[string]map[string]string{"inside Herdr": herdrEnv(home, bin), "outside Herdr": withoutHerdr} {
+		t.Run(name, func(t *testing.T) {
+			deps, s := testDeps(t, env)
+			code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
+			e := decodeOne(t, s.stdout.Bytes())
+			errObj, _ := e["error"].(map[string]any)
+			if code != 1 || errObj["code"] != "review-open" ||
+				errObj["message"] != "loupe review is already open for o/r#1@1, so no pane was opened" ||
+				errObj["fix"] != "tell the human their review is already open, then run loupe wait --run 'o/r#1@1' --json" {
+				t.Fatalf("exit %d envelope %v", code, e)
+			}
+			if calls := herdrCalls(t, log); calls != nil {
+				t.Fatalf("herdr was run while review was open: %q", calls)
+			}
+		})
+	}
+	if after := runFiles(t, dir); !slices.Equal(before, after) {
+		t.Fatalf("run files changed from %v to %v", before, after)
+	}
+
+	deps, s := testDeps(t, withoutHerdr)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1"}); code != 1 ||
+		!strings.Contains(s.stderr.String(), "error: loupe review is already open") || !strings.Contains(s.stderr.String(), "fix: tell the human") {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+
+	if err := session.Release(); err != nil {
+		t.Fatal(err)
+	}
+	deps, s = testDeps(t, withoutHerdr)
+	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
+	if errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); code != 1 || errObj["code"] != "no-pane-host" {
+		t.Fatalf("after review exited: exit %d %v", code, errObj)
 	}
 }

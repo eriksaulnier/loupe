@@ -297,7 +297,7 @@ func TestHelpScrolls(t *testing.T) {
 		t.Errorf("scrolling help does not reach its end:\n%s", last)
 	}
 	m.Update(arrow(tea.KeyPgUp))
-	for range 10 {
+	for range 20 {
 		m.Update(runes("k"))
 	}
 	if m.View() != first {

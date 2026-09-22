@@ -150,3 +150,14 @@ func TestWaitHumanOutputNamesTheReason(t *testing.T) {
 		t.Fatalf("output:\n%s", out)
 	}
 }
+
+func TestWaitHelpNamesTheSendBackNotTheQuit(t *testing.T) {
+	for _, text := range []string{waitHelp, newWaitCmd(Deps{}).Short} {
+		if strings.Contains(text, "quit") || strings.Contains(text, "hands notes back") {
+			t.Errorf("wait help still says a hand-back needs the human to quit:\n%s", text)
+		}
+		if !strings.Contains(text, "sends a finding back") {
+			t.Errorf("wait help does not name the send-back:\n%s", text)
+		}
+	}
+}

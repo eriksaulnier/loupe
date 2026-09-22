@@ -336,9 +336,15 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		m.body.PageDown()
 	case "pgup":
 		m.body.PageUp()
+	case "ctrl+r":
+		return m.checkDraft(true)
 	case "esc":
 		m.view, m.notice = viewList, ""
-		cmd := m.fail(m.reload())
+		changed, err := m.reload()
+		if changed != "" {
+			m.say(style.Note, m.changedNotice(changed))
+		}
+		cmd := m.fail(err)
 		// The cursor is found again after the reload, not before it: a finding the agent filed meanwhile can sort
 		// above the open one, which would leave the cursor on its neighbor.
 		if j := orderedIndex(m.order, m.openID); j >= 0 {
@@ -369,7 +375,7 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 			return err
 		}, func() string {
 			delete(m.keptNotes, id)
-			return fmt.Sprintf("%s %s sent back as %s", m.glyphs.Note, id, noteID)
+			return fmt.Sprintf("%s %s sent back as %s; the agent has it", m.glyphs.Note, id, noteID)
 		})
 	}
 	if msg.Type == tea.KeyRunes {
@@ -512,12 +518,12 @@ func (m *Model) noteView() string {
 // edit), so the view stays where the result can be seen. success builds the notice after fn has run, so it can name
 // what fn created.
 func (m *Model) decideAndStay(fn func(*draft.Draft) error, success func() string) tea.Cmd {
-	recorded, err := m.Decide(fn)
+	recorded, err := m.Decide(m.openID, fn)
 	if err != nil {
 		return m.fail(err)
 	}
 	if recorded {
-		m.say(style.Good, success())
+		m.sayDecided(success())
 	}
 	return m.fail(m.refreshDetail())
 }
@@ -532,14 +538,14 @@ type settledMsg struct{}
 // decisions needs no key between them; the last finding stays on screen. success builds the notice after fn has
 // run, so it can name what fn created.
 func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string) tea.Cmd {
-	recorded, err := m.Decide(fn)
+	recorded, err := m.Decide(m.openID, fn)
 	if err != nil {
 		return m.fail(err)
 	}
 	if !recorded {
 		return m.fail(m.refreshDetail())
 	}
-	m.say(style.Good, success())
+	m.sayDecided(success())
 	i := orderedIndex(m.order, m.openID)
 	if i < 0 || i+1 >= len(m.order) {
 		return m.fail(m.refreshDetail())

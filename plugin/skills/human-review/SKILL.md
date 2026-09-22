@@ -64,13 +64,15 @@ Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findin
 
 Run `loupe handoff --run <ref> --json`. On success, review is open for the human in a new pane beside yours and has focus. Tell the user it is open.
 
-If it refuses, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.
+When `error.code` is `review-open`, the human already has review open for this run: tell them it is there and go on to section 6.
 
-Each hand-off opens a new pane. You MUST NOT look for or reuse an earlier one.
+On any other refusal, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.
+
+A hand-off that opens a pane always opens a new one. You MUST NOT look for or reuse an earlier one.
 
 ## 6. Wait
 
-Block on `loupe wait --run <ref> --json`. It returns when the human quits review leaving notes for you, or when the run is published.
+Block on `loupe wait --run <ref> --json`. It returns as soon as the human sends a finding back to you, while their review stays open, or when the run is published.
 
 - In Claude Code, when the Monitor tool is available, run `loupe wait` under a persistent Monitor so the session wakes when it prints.
 - Otherwise run `loupe wait` in the foreground with `--timeout` under the shell's limit, and run it again on a `timeout` refusal.
@@ -86,4 +88,4 @@ When the user asks you to handle feedback on a run, run `loupe feedback --run <r
 - To withdraw a finding, run `loupe edit <finding-id> --exclude --run <ref> --json`.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.
 
-Only the human resolves or dismisses a note. When every note you were asked to answer has a reply, tell the user the revisions are ready and hand off again from section 5. An open note that was not handed to you is the human's to hand back; the next wait returns it.
+Only the human resolves or dismisses a note. When every note you were asked to answer has a reply, tell the user the revisions are ready and hand off again from section 5. While their review is still open it shows your replies, and `loupe handoff` refuses `review-open`, so no second pane opens and you go straight back to waiting.

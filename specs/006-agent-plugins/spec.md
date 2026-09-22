@@ -58,7 +58,7 @@ A review skill outside loupe, such as one that fans out reviewers, has findings 
 
 1. **Given** a run with findings and a summary, **When** an agent follows the `human-review` skill to its hand-off, **Then** it runs `loupe handoff --run <ref> --json`, and on a refusal tells the human to run `loupe review '<ref>'` in their own terminal.
 2. **Given** either outcome of the handoff, **When** it is done, **Then** the agent blocks on `loupe wait --run <ref> --json`, under a Monitor where the harness has one and in a foreground `--timeout` loop otherwise.
-3. **Given** `loupe wait` returns `reason: notes`, **When** the agent has replied to every awaiting note, **Then** it hands off again with a new `loupe handoff`.
+3. **Given** `loupe wait` returns `reason: notes`, **When** the agent has replied to every awaiting note, **Then** it hands off again with a new `loupe handoff`, and on a `review-open` refusal waits again without opening a pane (amended on 2026-09-21 by `specs/017-live-review`).
 4. **Given** `loupe wait` returns `reason: published`, **Then** the agent stops.
 
 ---
@@ -83,7 +83,7 @@ The owner installs loupe's skill with the harness's own plugin command. Claude C
 - **Unusual paths.** The loupe executable's path or the ref contains characters a shell treats specially. Both MUST reach the pane's shell as literal words.
 - **Several panes in the tab.** The layout lists every pane in the tab. loupe MUST read the entry whose id is the agent's own.
 - **Review refuses in the pane.** The pane stays open with `error:` and `fix:` (spec 003 FR-015). `loupe handoff` has already succeeded; it does not watch the pane.
-- **A second handoff.** Each call opens a new split. loupe MUST NOT look for, reuse or close an earlier pane.
+- **A second handoff.** Each call that opens a split opens a new one. loupe MUST NOT look for, reuse or close an earlier pane. Since `specs/017-live-review` (2026-09-21) a call made while a review of the run is still open refuses `review-open` and opens nothing.
 - **Published run.** `loupe handoff` does not check readiness or publication. Review shows its own state or refusal in the pane.
 - **Stale `HERDR_ENV`.** A shell started from a Herdr pane into another terminal can inherit `HERDR_ENV`. Detection does not guard against it; the `herdr` call then fails and loupe refuses `pane-failed`.
 - **Sandboxed harness.** Codex's default sandbox blocks the Herdr socket. The skill's sandbox rule tells the agent to rerun `loupe handoff` with the harness's approval.

@@ -35,8 +35,8 @@ A human runs `/loupe <pr-url>` in Claude Code inside Herdr. When the agent has f
 **Acceptance Scenarios**:
 
 1. **Given** the agent runs inside Herdr and has set the summary, **When** it hands off, **Then** a new split running `loupe review <ref>` for that run opens beside the agent pane with focus, and the agent then blocks on `loupe wait --run <ref> --json`.
-2. **Given** the review split is open, **When** the human quits review leaving a note for the agent, **Then** the review pane closes, `loupe wait` returns `reason: notes`, and the agent answers only the awaiting notes.
-3. **Given** the agent has replied to every awaiting note, **When** it hands off again, **Then** it opens a new split for the same run rather than reusing or searching for the earlier pane.
+2. **Given** the review split is open, **When** the human quits review leaving a note for the agent, **Then** the review pane closes, `loupe wait` returns `reason: notes`, and the agent answers only the awaiting notes. Amended on 2026-09-21 by `specs/017-live-review`: a send-back reaches `loupe wait` as it is written, so the human need not quit.
+3. **Given** the agent has replied to every awaiting note, **When** it hands off again, **Then** it opens a new split for the same run rather than reusing or searching for the earlier pane. Amended on 2026-09-21 by `specs/017-live-review`: while the earlier review is still open, `loupe handoff` refuses `review-open` and no split opens.
 4. **Given** the human publishes from the review split, **When** `loupe wait` returns `reason: published`, **Then** the agent stops and opens no further pane.
 5. **Given** the agent does not run inside Herdr, **When** it hands off, **Then** it tells the human to run `loupe review <ref>` in their own terminal, exactly as today.
 
@@ -63,7 +63,7 @@ A human runs `/loupe <pr-url>` in Claude Code inside Herdr. When the agent has f
 - **FR-001**: The skill MUST detect Herdr only from the environment Herdr injects into managed panes, and MUST use the Herdr handoff only when detected.
 - **FR-002**: Inside Herdr, at each handoff the agent MAY open a new split beside its own pane running `loupe review <ref>` for the run, with focus on the new pane.
 - **FR-003**: The agent MUST open the split before blocking on `loupe wait`, and MUST block on `loupe wait --run <ref> --json` under the same Monitor or foreground rules as today.
-- **FR-004**: After answering send-back notes, the agent MUST open a new split for the next handoff and MUST NOT look for, reuse, or close an earlier review pane.
+- **FR-004**: After answering send-back notes, the agent MUST open a new split for the next handoff and MUST NOT look for, reuse, or close an earlier review pane. Amended on 2026-09-21 by `specs/017-live-review`: the agent runs `loupe handoff` again, and when it refuses `review-open` the human's review is still open, so no split opens and the agent waits again.
 - **FR-005**: The agent MUST NOT send keys or text to, read output from, resize, or close any pane running `loupe review` or `loupe publish`.
 - **FR-006**: The agent MUST NOT open `loupe publish` in a pane or by any other route. Publication happens only inside review or from a command the human types.
 - **FR-007**: The skill's blanket prohibition on running `loupe review` MUST be replaced by the narrower rules FR-002 to FR-006. The prohibitions on allocating a pseudo-terminal, piping confirmation, and posting reviews by other routes MUST remain, with the Herdr pane named as the only exception to the pseudo-terminal rule.

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"slices"
@@ -117,6 +118,17 @@ type Model struct {
 	settling bool
 	// opening is true from the program's start until settleOnOpen has passed; every key but ctrl+c is dropped.
 	opening bool
+	// awaiting is true while a handed-back note has no reply, which is the only time the draft is re-read on a timer.
+	awaiting bool
+	// polling is true while a poll tick is in flight, so there is never more than one.
+	polling bool
+	// elsewhere names what an outside process changed in other findings, found when a decision is recorded.
+	elsewhere string
+	// pollChanged is true when the last re-read found a change, which earns one more tick even with nothing
+	// awaiting: an agent that replies and then edits leaves the edit for the tick after the reply.
+	pollChanged bool
+	// pollSkipped is true when a tick found the human writing or confirming; the draft is re-read as they leave.
+	pollSkipped bool
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -161,6 +173,9 @@ func New(cfg Config) (*Model, error) {
 		summaryCollapsed: true,
 	}
 	m.setDraft(d)
+	if err := m.refreshAwaiting(); err != nil {
+		return nil, err
+	}
 	m.cursor = initialCursor(d, m.order)
 	if st.Color {
 		m.darkBackground = st.R.HasDarkBackground()
@@ -180,13 +195,174 @@ type openedMsg struct{}
 
 func (m *Model) Init() tea.Cmd {
 	if settleOnOpen <= 0 {
-		return nil
+		return m.schedulePoll()
 	}
 	m.opening = true
-	return tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} })
+	return tea.Batch(tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} }), m.schedulePoll())
 }
 
+// pollInterval is how often the draft is re-read while a note awaits the agent's reply.
+var pollInterval = 2 * time.Second
+
+type pollMsg struct{}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if _, ok := msg.(pollMsg); ok {
+		m.polling = false
+		if m.pollHeld() {
+			m.pollSkipped = true
+		} else {
+			cmd = m.checkDraft(false)
+		}
+	} else {
+		_, cmd = m.update(msg)
+	}
+	if m.pollSkipped && !m.pollHeld() && m.err == nil {
+		m.pollSkipped = false
+		cmd = tea.Batch(cmd, m.checkDraft(false))
+	}
+	return m, tea.Batch(cmd, m.schedulePoll())
+}
+
+// pollHeld is true while redrawing would move something the human is writing or confirming.
+func (m *Model) pollHeld() bool {
+	return m.noting || m.editing || m.sending || (m.view != viewList && m.view != viewDetail)
+}
+
+func (m *Model) schedulePoll() tea.Cmd {
+	if !m.awaiting && !m.pollChanged || m.polling || m.err != nil {
+		return nil
+	}
+	m.polling = true
+	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return pollMsg{} })
+}
+
+// checkDraft shows the draft as it is on disk and says what another process changed. asked is true for the reload
+// key, which answers even when nothing changed.
+func (m *Model) checkDraft(asked bool) tea.Cmd {
+	changed, err := m.reload()
+	if err != nil {
+		return m.fail(err)
+	}
+	m.pollChanged = changed != ""
+	switch {
+	case changed != "":
+		m.say(style.Note, m.changedNotice(changed))
+	case asked:
+		m.say(style.Dim, "draft is current")
+	}
+	return nil
+}
+
+func (m *Model) changedNotice(changed string) string {
+	return strings.TrimSpace(m.glyphs.Note + " " + changed)
+}
+
+// reload shows the draft as it is on disk, keeping the cursor on its finding and the open finding where the human
+// had scrolled it, and returns what another process changed, or "" when the draft is as displayed. Every write the
+// human makes moves the displayed version, so a difference is never theirs.
+func (m *Model) reload() (string, error) {
+	d, err := draft.Load(m.cfg.Dir)
+	if err != nil {
+		return "", err
+	}
+	if d.Version == m.version {
+		return "", m.refreshAwaiting()
+	}
+	changed := changeNotice(m.draft, d, "")
+	id, offset := "", m.body.YOffset
+	if len(m.order) > 0 {
+		id = m.order[m.cursor].ID
+	}
+	m.setDraft(d)
+	if j := orderedIndex(m.order, id); j >= 0 {
+		m.cursor = j
+	}
+	m.cursor = max(min(m.cursor, len(m.order)-1), 0)
+	if err := m.refreshAwaiting(); err != nil {
+		return "", err
+	}
+	if m.view == viewDetail {
+		if err := m.refreshDetail(); err != nil {
+			return "", err
+		}
+		m.body.SetYOffset(offset)
+	}
+	return changed, nil
+}
+
+// draftChanged is changeNotice's answer when nothing it names changed.
+const draftChanged = "draft changed"
+
+// changeNotice names what another process changed between two versions of the draft, in one line, leaving out the
+// finding the human just decided.
+func changeNotice(before, after *draft.Draft, decided string) string {
+	var parts []string
+	replied := map[string]bool{}
+	for _, r := range before.Replies {
+		replied[r.ID] = true
+	}
+	noteFinding := map[string]string{}
+	for _, n := range after.Notes {
+		noteFinding[n.ID] = n.FindingID
+	}
+	for _, r := range after.Replies {
+		if !replied[r.ID] && noteFinding[r.NoteID] != decided {
+			parts = append(parts, fmt.Sprintf("%s answered on %s", r.NoteID, noteFinding[r.NoteID]))
+		}
+	}
+	status := map[string]string{}
+	for _, n := range before.Notes {
+		status[n.ID] = n.Status
+	}
+	for _, n := range after.Notes {
+		was, ok := status[n.ID]
+		switch {
+		case n.FindingID == decided:
+		case !ok:
+			parts = append(parts, fmt.Sprintf("%s sent back on %s", n.ID, n.FindingID))
+		case was != n.Status && n.Status != draft.NoteOpen:
+			parts = append(parts, n.ID+" closed")
+		}
+	}
+	shown := map[string]draft.Finding{}
+	for _, f := range before.Findings {
+		shown[f.ID] = f
+	}
+	for _, f := range after.Findings {
+		was, ok := shown[f.ID]
+		switch {
+		case f.ID == decided:
+		case !ok:
+			parts = append(parts, f.ID+" filed")
+		case was.Rev != f.Rev || was.Included != f.Included:
+			parts = append(parts, f.ID+" changed")
+		case before.Decisions[f.ID].Decision != after.Decisions[f.ID].Decision:
+			parts = append(parts, f.ID+" decided")
+		}
+	}
+	if before.Summary != after.Summary {
+		parts = append(parts, "summary changed")
+	}
+	if len(parts) == 0 {
+		return draftChanged
+	}
+	return strings.Join(parts, ", ")
+}
+
+// refreshAwaiting reads the hand-back set, which lives beside the draft, to decide whether the poll has a reason to
+// run.
+func (m *Model) refreshAwaiting() error {
+	h, err := draft.LoadHandBack(m.cfg.Dir)
+	if err != nil {
+		return err
+	}
+	m.awaiting = len(draft.Awaiting(m.draft, h)) > 0
+	return nil
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -304,30 +480,62 @@ func (m *Model) setDraft(d *draft.Draft) {
 	m.draft, m.version, m.order = d, d.Version, draft.Ordered(d)
 }
 
-func (m *Model) reload() error {
-	d, err := draft.Load(m.cfg.Dir)
-	if err != nil {
-		return err
-	}
-	m.setDraft(d)
-	return nil
-}
-
-// Decide applies fn at the displayed version and reports whether it was recorded. A refusal reloads the draft and
-// becomes the notice, so the human sees the finding as it now is.
-func (m *Model) Decide(fn func(*draft.Draft) error) (bool, error) {
-	d, notice, err := decide(m.cfg.Dir, m.version, m.cfg.Getenv, fn)
+// Decide applies fn to the finding as displayed and reports whether it was recorded. A refusal reloads the draft and
+// becomes the notice, so the human sees the finding as it now is. Other findings the draft brings with it are named
+// in m.elsewhere for the caller's notice.
+func (m *Model) Decide(findingID string, fn func(*draft.Draft) error) (bool, error) {
+	displayed := m.draft
+	d, notice, err := decide(m.cfg.Dir, displayed, findingID, m.cfg.Getenv, fn)
 	if err != nil {
 		return false, err
 	}
+	m.elsewhere = ""
 	m.setDraft(d)
-	m.say(style.Warn, notice)
-	return notice == "", nil
+	if err := m.refreshAwaiting(); err != nil {
+		return false, err
+	}
+	m.elsewhere = elsewhereNotice(displayed, d, findingID)
+	if notice == "" {
+		return true, nil
+	}
+	m.sayDecided(notice)
+	m.noticeKind = style.Warn
+	return false, nil
 }
 
-// decide is shared by both modes. It returns the draft to display next and, when nothing was recorded, the notice.
-func decide(dir string, displayed int, getenv func(string) string, fn func(*draft.Draft) error) (*draft.Draft, string, error) {
-	d, err := draft.Mutate(dir, "review", &displayed, getenv, fn)
+// elsewhereNotice names what changed besides the decided finding between the draft the human saw and the one the
+// decision returned, or "". The decision's own write is on the decided finding, so it is never named here.
+func elsewhereNotice(displayed, next *draft.Draft, findingID string) string {
+	if changed := changeNotice(displayed, next, findingID); changed != draftChanged {
+		return changed
+	}
+	return ""
+}
+
+// sayDecided is the notice for a decision, followed by whatever changed elsewhere in the same step.
+func (m *Model) sayDecided(text string) {
+	text = joinNotice(text, m.elsewhere)
+	m.elsewhere = ""
+	m.say(style.Good, text)
+}
+
+// decide is shared by both modes. A decision is stale only when its own finding changed since displayed, so the agent
+// writing elsewhere never refuses it. It returns the draft to display next and, when nothing was recorded, the notice.
+func decide(dir string, displayed *draft.Draft, findingID string, getenv func(string) string, fn func(*draft.Draft) error) (*draft.Draft, string, error) {
+	shown, err := draft.FindingState(displayed, findingID)
+	if err != nil {
+		return nil, "", err
+	}
+	d, err := draft.Mutate(dir, "review", nil, getenv, func(d *draft.Draft) error {
+		stored, err := draft.FindingState(d, findingID)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(stored, shown) {
+			return refusal.New(refusal.Version, findingID+" changed since it was displayed", "review it again as it now is")
+		}
+		return fn(d)
+	})
 	if err == nil {
 		return d, "", nil
 	}
@@ -472,6 +680,7 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"enter", "open the finding", ""},
 			{"tab", "expand or collapse the summary", ""},
 			{"p", "publish once the review is ready", ""},
+			{"ctrl+r", "reload the draft from disk", ""},
 		}},
 		viewDetail: {"Finding detail", []helpKey{
 			{leftRight, "previous / next finding", "N/n"},
@@ -485,6 +694,7 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
+			{"ctrl+r", "reload the draft from disk", ""},
 			{"esc", "back to the list", ""},
 		}},
 		viewAction: {"Publish steps", []helpKey{

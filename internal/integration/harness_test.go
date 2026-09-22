@@ -98,9 +98,14 @@ func fixedNow() time.Time { return time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 
 // runWith leaves the harness unchanged, so concurrent commands can share it.
 func (h *harness) runWith(stdin string, now func() time.Time, args ...string) (stdout, stderr string, exit int) {
+	return h.runReading(strings.NewReader(stdin), now, args...)
+}
+
+// runReading is runWith for input that arrives while the command runs, such as a review answered step by step.
+func (h *harness) runReading(stdin io.Reader, now func() time.Time, args ...string) (stdout, stderr string, exit int) {
 	var out, errOut bytes.Buffer
 	deps := cli.Deps{
-		Stdin:   strings.NewReader(stdin),
+		Stdin:   stdin,
 		Stdout:  &out,
 		Stderr:  &errOut,
 		Getenv:  h.getenv,

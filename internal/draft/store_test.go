@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -234,4 +236,90 @@ func TestLoadRefusesIncompleteDraft(t *testing.T) {
 	if _, err := Load(newRunDir(t)); err != nil {
 		t.Fatalf("an empty draft must load: %v", err)
 	}
+}
+
+func newRunWithFinding(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	d := NewEmpty()
+	if _, err := Add(d, []FindingInput{{Title: "Title", Body: "Body.", General: true, Label: "question"}}, nil, ByAgent, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func sendBack(dir, body string) (*Draft, error) {
+	return Mutate(dir, "review", nil, noEnv, func(d *Draft) error {
+		_, err := SendBack(d, "f-001", body, time.Time{})
+		return err
+	})
+}
+
+func TestMutateHandsBackTheNoteASendBackAdds(t *testing.T) {
+	dir := newRunWithFinding(t)
+	d, err := sendBack(dir, "Why?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Version != 1 {
+		t.Fatalf("version %d, want 1: recording the hand-back must not move it", d.Version)
+	}
+	if _, err := sendBack(dir, "And this?"); err != nil {
+		t.Fatal(err)
+	}
+	h, err := LoadHandBack(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"n-001", "n-002"}; !slices.Equal(h.Notes, want) {
+		t.Fatalf("hand-back set %v, want %v", h.Notes, want)
+	}
+	if got := Awaiting(loadStored(t, dir), h); !slices.Equal(got, []string{"n-001", "n-002"}) {
+		t.Fatalf("awaiting %v", got)
+	}
+}
+
+func TestMutateWithoutANewNoteLeavesNoHandBack(t *testing.T) {
+	dir := newRunWithFinding(t)
+	if _, err := Mutate(dir, "review", nil, noEnv, func(d *Draft) error {
+		_, err := Accept(d, "f-001", time.Time{})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "handback.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("handback.json must not exist: %v", err)
+	}
+}
+
+func TestMutateThatFailsAfterASendBackWritesNeitherFile(t *testing.T) {
+	dir := newRunWithFinding(t)
+	failed := errors.New("later step failed")
+	_, err := Mutate(dir, "review", nil, noEnv, func(d *Draft) error {
+		if _, err := SendBack(d, "f-001", "Why?", time.Time{}); err != nil {
+			return err
+		}
+		return failed
+	})
+	if !errors.Is(err, failed) {
+		t.Fatalf("got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "handback.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("handback.json must not exist: %v", err)
+	}
+	if d := loadStored(t, dir); len(d.Notes) != 0 || d.Version != 0 {
+		t.Fatalf("draft changed: version %d, notes %v", d.Version, d.Notes)
+	}
+}
+
+func loadStored(t *testing.T, dir string) *Draft {
+	t.Helper()
+	d, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

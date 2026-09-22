@@ -148,7 +148,7 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 			}
 			fn = func(d *draft.Draft) error {
 				n, err := draft.SendBack(d, f.ID, body, now)
-				success = fmt.Sprintf("%s %s sent back as %s", s.Glyphs.Note, f.ID, n.ID)
+				success = fmt.Sprintf("%s %s sent back as %s; the agent has it", s.Glyphs.Note, f.ID, n.ID)
 				return err
 			}
 		case "e":
@@ -216,19 +216,20 @@ func RunPlain(dir string, in io.Reader, out io.Writer, getenv func(string) strin
 			continue
 		}
 
-		next, refused, err := decide(dir, d.Version, getenv, fn)
+		next, refused, err := decide(dir, d, f.ID, getenv, fn)
 		if err != nil {
 			return err
 		}
+		elsewhere := elsewhereNotice(d, next, f.ID)
 		d, order = next, draft.Ordered(next)
 		if refused != "" {
-			notice = refused
+			notice = joinNotice(refused, elsewhere)
 			if i = orderedIndex(order, f.ID); i < 0 {
 				return fmt.Errorf("finding %s is no longer in the draft", f.ID)
 			}
 			continue
 		}
-		notice = success
+		notice = joinNotice(success, elsewhere)
 		// An edit does not settle the finding, so it stays on screen to be decided.
 		if !stay {
 			i = min(i+1, len(order)-1)
@@ -354,4 +355,11 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Co
 		}
 		return publish.Confirmation{Publish: lines.Text() == "y", Message: message}, nil
 	}
+}
+
+func joinNotice(text, elsewhere string) string {
+	if elsewhere == "" {
+		return text
+	}
+	return text + "; " + elsewhere
 }

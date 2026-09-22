@@ -49,11 +49,19 @@ func Mutate(dir, command string, expectVersion *int, getenv func(string) string,
 				fmt.Sprintf("draft is at version %d, expected %d", loaded.Version, *expectVersion),
 				"re-read with loupe show --json and retry")
 		}
+		before := len(loaded.Notes)
 		if err := fn(loaded); errors.Is(err, ErrNoChange) {
 			d = loaded
 			return nil
 		} else if err != nil {
 			return err
+		}
+		// A note is handed to the agent as it is written, and before the draft, so no reader sees one without the other.
+		// An id whose draft write then fails is harmless: a note awaits only while it exists.
+		if len(loaded.Notes) > before {
+			if _, err := handBack(dir, loaded, loaded.Notes[before:]); err != nil {
+				return err
+			}
 		}
 		loaded.Version++
 		if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), loaded); err != nil {

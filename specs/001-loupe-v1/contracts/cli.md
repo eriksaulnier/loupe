@@ -64,6 +64,7 @@ Refusal or error (exit 1 or 2):
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
 | `pane-failed` | The terminal refused or garbled a `handoff` call | the same; the message carries the terminal's error |
+| `review-open` | `handoff` while a `review` of the run is running | tell the human their review is already open, then `loupe wait` |
 | `internal` | A defect | file an issue; stack on stderr |
 
 ## Commands
@@ -117,15 +118,15 @@ Result payload: `version`, `includedCount`.
 
 ### `loupe wait [--timeout <duration>] [--json]`
 
-Blocks until there is something for the agent to do: `review` exited leaving a note open and unanswered (`reason: notes`), or the run has a receipt (`reason: published`). Re-reads the run files once a second and once before the first wait, so an already-handed-back run returns at once. A note stays awaiting until it has a reply, whatever else changed in the draft. `--timeout` absent or `0` waits without a deadline; a negative value is `usage`; once it elapses the command refuses with `timeout`. Ctrl-C or SIGTERM ends the wait with an error (exit 1). With `--run` it makes no network call; an agent MUST pass `--run`.
+Blocks until there is something for the agent to do: the human sent a finding back with a note that is still open and unanswered (`reason: notes`), or the run has a receipt (`reason: published`). A send-back hands its note back as it is written, so `wait` returns while review is still open (`specs/017-live-review`, 2026-09-21); a clean exit still hands back any open note an older binary left unrecorded. Re-reads the run files once a second and once before the first wait, so an already-handed-back run returns at once. A note stays awaiting until it has a reply, whatever else changed in the draft. `--timeout` absent or `0` waits without a deadline; a negative value is `usage`; once it elapses the command refuses with `timeout`. Ctrl-C or SIGTERM ends the wait with an error (exit 1). With `--run` it makes no network call; an agent MUST pass `--run`.
 
-Turn-taking is cooperative: a return proves the human quit `review` with those notes, not that no review session is open now. The draft's version check already refuses a decision made against a draft the agent changed in between.
+Turn-taking is cooperative: a return proves the human sent those notes back, and says nothing about whether a review session is open; `loupe handoff` answers that. A decision in `review` is refused when the finding it decides, or a note on it, changed since it was shown, so the agent writing to other findings in between never refuses it (`specs/017-live-review`).
 
 Result payload: `reason` (`notes` or `published`), `awaiting` (note ids to answer, empty when published), plus the `feedback` payload (`readiness`, `notes`, `findings`).
 
 ### `loupe handoff [<ref>] [--json]`
 
-Opens `review` for the human in a new terminal pane beside the agent's and returns; it does not wait for review (`specs/006-agent-plugins`). Selects the run as `review` does. Works inside Herdr only: it needs `HERDR_ENV=1`, a non-empty `HERDR_PANE_ID` and `herdr` on `PATH`, and otherwise refuses `no-pane-host`. The pane opens to the right of the agent's pane when that pane is at least 120 columns wide and below it otherwise, takes focus, and runs the same loupe executable as `review '<ref>' && exit` with `LOUPE_HOME` set to the absolute data root. A failed `herdr` call refuses `pane-failed` with Herdr's message; nothing is retried, reused or closed. It writes no run state.
+Opens `review` for the human in a new terminal pane beside the agent's and returns; it does not wait for review (`specs/006-agent-plugins`). Selects the run as `review` does. While any `review` of the run is running, in either mode and any terminal, it refuses `review-open` before anything else and opens nothing (`specs/017-live-review`, 2026-09-21). Otherwise it works inside Herdr only: it needs `HERDR_ENV=1`, a non-empty `HERDR_PANE_ID` and `herdr` on `PATH`, and refuses `no-pane-host` without them. The pane opens to the right of the agent's pane when that pane is at least 120 columns wide and below it otherwise, takes focus, and runs the same loupe executable as `review '<ref>' && exit` with `LOUPE_HOME` set to the absolute data root. A failed `herdr` call refuses `pane-failed` with Herdr's message; nothing is retried, reused or closed. It writes no run state.
 
 Result payload: `host` (`herdr`), `paneId`, `direction` (`right` or `down`).
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/tui"
 )
 
@@ -69,15 +70,30 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Held for the whole session so loupe handoff can tell the agent the human is still here; released before
+	// reviewDone, which only records what the session left behind.
+	session, err := run.HoldSession(dir)
+	if err != nil {
+		return err
+	}
+	if err := reviewSession(cmd, deps, dir, jsonMode); err != nil {
+		_ = session.Release()
+		return err
+	}
+	if err := session.Release(); err != nil {
+		return err
+	}
+	return reviewDone(cmd, deps, dir, jsonMode, interactiveOutput(deps, jsonMode))
+}
+
+// reviewSession runs review in the mode the terminal allows and returns when the human leaves it.
+func reviewSession(cmd *cobra.Command, deps Deps, dir string, jsonMode bool) error {
 	ui := interactiveOutput(deps, jsonMode)
 	plain, _ := cmd.Flags().GetBool("plain")
 	width, height := terminalSize(deps)
 	mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, Width: width, Height: height, RawProbe: func() error { return rawProbe(deps) }})
 	if mode == tui.Plain {
-		if err := tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width); err != nil {
-			return err
-		}
-		return reviewDone(cmd, deps, dir, jsonMode, ui)
+		return tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width)
 	}
 	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub})
 	if err != nil {
@@ -93,10 +109,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if !ok {
 		return fmt.Errorf("review interface ended with an unexpected model %T", final)
 	}
-	if err := finalModel.Err(); err != nil {
-		return err
-	}
-	return reviewDone(cmd, deps, dir, jsonMode, ui)
+	return finalModel.Err()
 }
 
 // reviewDone records the notes the human left open and unanswered so a blocked loupe wait picks them up. Only a

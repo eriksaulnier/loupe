@@ -54,7 +54,7 @@ func TestPlainDecidesLikeFullScreen(t *testing.T) {
 	}
 
 	text := out.String()
-	for _, want := range []string{"acme/widgets#42", "Two issues to look at.", ". 3 pending", "~ 0 open notes"} {
+	for _, want := range []string{"acme/widgets#42", "Two issues to look at.", ". 3 pending", "~ 0 open notes", "f-003 sent back as n-001; the agent has it"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("output lacks %q:\n%s", want, text)
 		}
@@ -474,5 +474,31 @@ func TestPlainPresentsFindingsInSeverityOrder(t *testing.T) {
 	// The position counts through the same order, so "1 of 4" is the most severe finding.
 	if i, j := strings.Index(view, "1 of 4"), strings.Index(view, "Data loss three"); i < 0 || j < i || j-i > 200 {
 		t.Errorf("1 of 4 is not the critical finding:\n%s", view)
+	}
+}
+
+func TestPlainRecordsPastAWriteToAnotherFinding(t *testing.T) {
+	dir := newFixture(t)
+	var out bytes.Buffer
+	in := &lineReader{
+		lines: []string{"a", "q"},
+		before: map[int]func(){0: func() {
+			if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+				d.Findings[2].Title = "Retitled three"
+				d.Findings[2].Rev++
+				return nil
+			}); err != nil {
+				t.Error(err)
+			}
+		}},
+	}
+	if err := RunPlain(dir, in, &out, envOf(testEnv), 0); err != nil {
+		t.Fatal(err)
+	}
+	if dec := loadDraft(t, dir).Decisions["f-001"]; dec.Decision != draft.DecisionAccepted {
+		t.Fatalf("f-001 not accepted after a write to f-003: %+v\n%s", dec, out.String())
+	}
+	if !strings.Contains(out.String(), "f-001 accepted; f-003 changed") {
+		t.Fatalf("the write to f-003 was not named:\n%s", out.String())
 	}
 }

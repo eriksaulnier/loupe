@@ -14,7 +14,8 @@ Every record is a JSON file in one run directory. Field names are camelCase in J
 | `pr.diff` | capture, once | the run exists |
 | `draft.json` | capture (empty), every mutation | the run exists |
 | `.lock` | any mutating command, publish | first mutation; content is `<pid> <command>` of the current holder |
-| `handback.json` | review, on a clean exit | the human quit review at least once leaving a note open and unanswered |
+| `handback.json` | review, at each send-back and on a clean exit | the human sent a finding back at least once |
+| `.review` | review, for as long as it runs | a review was ever opened; empty, and meaningful only through the shared flock each running review holds on it (`specs/017-live-review`) |
 | `attempt.json` | publish | a send is in flight or its outcome is unknown |
 | `receipt.json` | publish | the review landed |
 
@@ -24,11 +25,11 @@ Derived run state: `published` if `receipt.json` exists, else `ready` if readine
 
 ## Hand-back set
 
-`handback.json` is `{"schema": 1, "notes": ["n-001", "n-003"]}`: the append-only set of note ids the human handed back. `review` adds every note that is open, has no reply and is not yet listed, under the run lock and only when something was added, so the draft version never moves. A downgraded binary never reads it.
+`handback.json` is `{"schema": 1, "notes": ["n-001", "n-003"]}`: the append-only set of note ids the human handed back. A send-back adds its note under the run lock before the draft is written, so a reader never sees the note without it; a clean exit of `review` then adds every note that is open, has no reply and is not yet listed. Both write only when something was added, so the draft version never moves for the set. Amended on 2026-09-21 by `specs/017-live-review`; before it, only the clean exit recorded. A downgraded binary never reads it.
 
 Derived: a note is awaiting the agent while it is in the set, open and without a reply. `wait` returns on any awaiting note or on a receipt; a reply to one of two handed-back notes leaves the other awaiting.
 
-Only a clean exit records: `q`, Ctrl-C in the full-screen program, and `q` or end of input in plain mode. A crash mid-session records nothing until the next clean exit.
+The exit's recording runs only on a clean exit: `q`, Ctrl-C in the full-screen program, and `q` or end of input in plain mode. A send-back is recorded whatever happens to the session afterwards.
 
 ## Target (immutable)
 
