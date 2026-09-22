@@ -35,14 +35,33 @@ func TestDirection(t *testing.T) {
 func width(w int) func() (int, bool) { return func() (int, bool) { return w, true } }
 
 func TestFailedNamesHostAndStep(t *testing.T) {
-	r, ok := refusal.As(failed("herdr", "probe", "boom", "fix"))
-	if !ok {
-		t.Fatal("failed did not return a refusal")
+	for _, c := range []struct{ step, message string }{
+		{"probe", "herdr probe: boom"},
+		{"split", "herdr split: boom; a pane may already be open"},
+	} {
+		r, ok := refusal.As(failed("herdr", c.step, "boom", "fix"))
+		if !ok {
+			t.Fatal("failed did not return a refusal")
+		}
+		want := &refusal.Error{Code: refusal.PaneFailed, Message: c.message, Fix: "fix",
+			Details: map[string]any{"host": "herdr", "step": c.step}}
+		if !reflect.DeepEqual(r, want) {
+			t.Fatalf("failed(%s) = %#v, want %#v", c.step, r, want)
+		}
 	}
-	want := &refusal.Error{Code: refusal.PaneFailed, Message: "herdr probe: boom", Fix: "fix",
-		Details: map[string]any{"host": "herdr", "step": "probe"}}
-	if !reflect.DeepEqual(r, want) {
-		t.Fatalf("failed = %#v, want %#v", r, want)
+}
+
+// An empty PATH element would otherwise resolve the host binary against the agent's working directory.
+func TestLookPathSkipsEmptyElements(t *testing.T) {
+	cwd := hostBins(t, "herdr")
+	t.Chdir(cwd)
+	env := map[string]string{"PATH": string(os.PathListSeparator) + t.TempDir()}
+	if path, ok := lookPath(func(k string) string { return env[k] }, "herdr"); ok {
+		t.Fatalf("lookPath found %q through the empty PATH element", path)
+	}
+	env["PATH"] += string(os.PathListSeparator) + cwd
+	if _, ok := lookPath(func(k string) string { return env[k] }, "herdr"); !ok {
+		t.Fatal("lookPath missed herdr on a real PATH element")
 	}
 }
 

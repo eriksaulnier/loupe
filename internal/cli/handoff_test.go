@@ -190,9 +190,9 @@ func TestHandoffRefusesPaneFailedAndStops(t *testing.T) {
 		env                 func(bin string) map[string]string
 		failAt              string
 	}{
-		{"herdr", "split", "herdr split: pane w1:p1 not found", fakeHerdrBin,
+		{"herdr", "split", "herdr split: pane w1:p1 not found; a pane may already be open", fakeHerdrBin,
 			func(bin string) map[string]string { return herdrEnv(home, bin) }, "split"},
-		{"orca", "switch", "orca switch: terminal handle term_agent is stale", fakeOrcaBin,
+		{"orca", "switch", "orca switch: terminal handle term_agent is stale; a pane may already be open", fakeOrcaBin,
 			func(bin string) map[string]string { return withHome(orcaEnv("term_agent", bin), home) }, "switch"},
 	} {
 		t.Run(c.host, func(t *testing.T) {

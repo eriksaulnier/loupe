@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
@@ -126,7 +127,7 @@ func TestOpenRefusesOnASplitWithoutAHandle(t *testing.T) {
 		"switch": {stdout: orcaSwitch, stderr: handshake},
 	}}
 	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertOrcaRefusal(t, err, "split", "orca split: the result has no handle")
+	assertOrcaRefusal(t, err, "split", "orca split: the result has no handle; a pane may already be open")
 	if len(f.calls) != 2 {
 		t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
 	}
@@ -139,9 +140,22 @@ func TestOpenRefusesOnASwitchFailureAfterASplit(t *testing.T) {
 		"switch": {stderr: handshake + "error: no such terminal\n", err: errExit1},
 	}}
 	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertOrcaRefusal(t, err, "switch", "orca switch: error: no such terminal")
+	assertOrcaRefusal(t, err, "switch", "orca switch: error: no such terminal; a pane may already be open")
 	if len(f.calls) != 3 {
 		t.Fatalf("made %d calls, want 3: %q", len(f.calls), f.calls)
+	}
+}
+
+// Orca's stdout carries the success envelope, so output that is not JSON refuses at the step that produced it.
+func TestOpenRefusesOnUnreadableOutput(t *testing.T) {
+	f := &fakeRunner{replies: map[string]reply{"show": {stdout: "nope", stderr: handshake}}}
+	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
+	r, ok := refusal.As(err)
+	if !ok || r.Details["step"] != "probe" || !strings.HasPrefix(r.Message, "orca probe: unreadable result: ") {
+		t.Fatalf("err = %#v, want pane-failed at probe with an unreadable result", err)
+	}
+	if len(f.calls) != 1 {
+		t.Fatalf("made %d calls, want 1: %q", len(f.calls), f.calls)
 	}
 }
 
@@ -158,7 +172,7 @@ func TestOpenRefusesWithTheMessageOfANotOKReplyOnExitZero(t *testing.T) {
 		"split": {stdout: `{"ok":false,"error":{"message":"split refused: tab is closing"}}`, stderr: handshake},
 	}}
 	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertOrcaRefusal(t, err, "split", "orca split: split refused: tab is closing")
+	assertOrcaRefusal(t, err, "split", "orca split: split refused: tab is closing; a pane may already be open")
 	if len(f.calls) != 2 {
 		t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
 	}

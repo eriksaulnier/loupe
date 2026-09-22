@@ -63,7 +63,7 @@ Refusal or error (exit 1 or 2):
 | `timeout` | `wait --timeout` elapsed with no note handed back and no receipt | `loupe wait` again |
 | `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
-| `pane-failed` | The host refused or garbled a `handoff` call; `details.host` (`herdr` or `orca`) and `details.step` name where | the same; the message carries the host's error |
+| `pane-failed` | The host refused or garbled a `handoff` call; `details.host` (`herdr` or `orca`) and `details.step` name where | the same; the message carries the host's error and, after any step but `probe`, says a pane may already be open |
 | `review-open` | `handoff` while a `review` of the run is running | tell the human their review is already open, then `loupe wait` |
 | `internal` | A defect | file an issue; stack on stderr |
 

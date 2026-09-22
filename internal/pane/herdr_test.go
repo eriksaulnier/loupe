@@ -148,9 +148,9 @@ func TestOpenRefusesAndStopsAtTheFailedStep(t *testing.T) {
 		{"probe fails", map[string]reply{"layout": {stderr: herdrErr, err: errExit1}}, "probe", 1, "herdr probe: pane w1:p1 not found"},
 		{"probe is not JSON", map[string]reply{"layout": {stdout: "nope"}}, "probe", 1, "herdr probe: unreadable result: "},
 		{"agent pane missing", map[string]reply{"layout": {stdout: strings.ReplaceAll(herdrLayout, "w1:p1", "w1:p7")}}, "probe", 1, "herdr probe: the result does not list pane w1:p1"},
-		{"split fails", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stderr: "socket unreachable\n", err: errExit1}}, "split", 2, "herdr split: socket unreachable"},
-		{"split lacks pane_id", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stdout: `{"result":{"pane":{}}}`}}, "split", 2, "herdr split: the result has no pane_id"},
-		{"run fails", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stdout: herdrSplit}, "run": {err: errExit1}}, "run", 3, "herdr run: exit status 1"},
+		{"split fails", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stderr: "socket unreachable\n", err: errExit1}}, "split", 2, "herdr split: socket unreachable; a pane may already be open"},
+		{"split lacks pane_id", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stdout: `{"result":{"pane":{}}}`}}, "split", 2, "herdr split: the result has no pane_id; a pane may already be open"},
+		{"run fails", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stdout: herdrSplit}, "run": {err: errExit1}}, "run", 3, "herdr run: exit status 1; a pane may already be open"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := &fakeRunner{replies: c.replies}

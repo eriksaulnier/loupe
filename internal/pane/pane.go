@@ -90,8 +90,12 @@ func execRunner(ctx context.Context, path string, args ...string) ([]byte, []byt
 }
 
 // failed keys the refusal by step so an agent can tell a probe, which opens nothing, from a later step that may have
-// opened a pane.
+// opened a pane. The message says so too, because the fix text is pinned to "run loupe review" and a second review
+// of the same run is allowed.
 func failed(host, step, message, fix string) error {
+	if step != "probe" {
+		message += "; a pane may already be open"
+	}
 	r := refusal.New(refusal.PaneFailed, fmt.Sprintf("%s %s: %s", host, step, message), fix)
 	r.Details = map[string]any{"host": host, "step": step}
 	return r
