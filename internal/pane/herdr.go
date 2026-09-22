@@ -86,7 +86,7 @@ func (h Herdr) Open(ctx context.Context, req Request) (Opened, error) {
 	if _, stderr, err := h.run(ctx, h.path, "pane", "run", paneID, req.Command); err != nil {
 		return Opened{}, fail("run", herdrMessage(stderr, err))
 	}
-	return Opened{PaneID: paneID, Direction: dir}, nil
+	return Opened{PaneID: paneID, Direction: dir, Focused: true}, nil
 }
 
 // herdrMessage prefers the message in Herdr's JSON error object on stderr and falls back to whatever it printed.

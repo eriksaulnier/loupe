@@ -13,7 +13,7 @@
 This specification builds on `specs/003-herdr-handoff` and `specs/006-agent-plugins`, and amends 006:
 
 - **`specs/006-agent-plugins`**: FR-002 (Herdr is the only detected host), FR-003 (width read from Herdr's layout) and FR-004 (`LOUPE_HOME` set on the split) are superseded by FR-001 to FR-008 here; FR-005 keeps Herdr's layout width as the first width source and adds the fallbacks. FR-009's `host` value list (`herdr`) gains `orca` (FR-013). FR-006's "any `herdr` call" now reads "any host call" (FR-010). FR-010's Herdr guard widens to Orca (FR-015). FR-014's "failure at the layout step" and FR-017's "the Herdr socket" are superseded by FR-017 and FR-018 here. Its Key Entity "Pane host: Herdr is the only one" no longer holds. Everything else in 006 stays in force, including FR-005's quoting, FR-007's fix, FR-008's "never look for, reuse, resize, read or close a pane", and the `review-open` amendment from `specs/017-live-review`.
-- **`specs/003-herdr-handoff`**: unchanged. FR-015's pane lifetime (close on success, stay open on a refusal) and the reasoning in "Why the human-only rule can relax" now apply to an Orca pane as well.
+- **`specs/003-herdr-handoff`**: FR-002's "with focus on the new pane" is narrowed on Orca by FR-024 here (2026-09-22): when the agent's tab is not the active tab of its group, the pane opens without focus. FR-015's pane lifetime (close on success, stay open on a refusal) and the reasoning in "Why the human-only rule can relax" now apply to an Orca pane as well.
 
 The CLI contract in `specs/001-loupe-v1/contracts/cli.md` changes in its `handoff` section and in the `pane-failed` row of the refusal table. No refusal code is added or removed. The draft model, the publication state machine and the published comment format are unchanged.
 
@@ -85,8 +85,8 @@ An owner inside Herdr hands off as before. The split opens beside the agent's pa
 - **Orca's handshake line.** Every `orca` call prints a relay handshake line on stderr, on success and on failure. It MUST NOT be reported as the error.
 - **No controlling terminal.** The agent's harness runs loupe without a readable terminal, or with one whose size cannot be read, and the host reports no width. Claude Code's Bash tool is this case (observed 2026-09-21, `research.md`, "Width sources"). The direction MUST be `right` and the handoff MUST go on.
 - **The agent's terminal is not the agent pane.** The tty width read is of the terminal loupe's process is attached to. If a harness attaches loupe to a terminal other than the agent's pane, the direction can be wrong in either way; the pane still opens. Herdr's layout width avoids this, which is why the host's report comes first.
-- **Split succeeds, a later step fails.** An Orca `switch` failure, or a Herdr `run` failure, leaves a pane open. loupe MUST still refuse `pane-failed` with that step, MUST NOT close the pane (006 FR-008), and the skill MUST NOT rerun.
-- **Split without focus.** Whether an Orca split takes focus is not known. loupe MUST switch focus explicitly so the pane has focus either way (003 acceptance scenario 1).
+- **Split succeeds, a later step fails.** An Orca `layout` or `switch` failure, or a Herdr `run` failure, leaves a pane open. loupe MUST still refuse `pane-failed` with that step, MUST NOT close the pane (006 FR-008), and the skill MUST NOT rerun.
+- **Split without focus.** An Orca split never moves the view (two splits into a background tab on 2026-09-22 changed no group's active tab), so focus is loupe's own `switch` step, and FR-024 decides when it runs: only when the agent's tab is already its group's active tab. 003 acceptance scenario 1 holds from an active tab; from a background tab the pane opens without focus and the result says so.
 - **Unusual data root.** The absolute data root holds characters a shell treats specially. It MUST reach the pane's shell as one literal word, like the executable path and the reference.
 
 ## Requirements *(mandatory)*
@@ -112,14 +112,14 @@ An owner inside Herdr hands off as before. The split opens beside the agent's pa
 
 #### Host steps
 
-- **FR-009**: Each host MUST open review in named steps, and the first step on every host MUST be `probe`: a call that checks the agent's pane or terminal exists and opens nothing. Herdr's steps MUST be `probe` (`herdr pane layout --pane <id>`, whose result MUST list the agent's pane and whose width for that pane feeds FR-005), `split` and `run`. Orca's steps MUST be `probe` (`orca terminal show --terminal <handle> --json`), `split` (`orca terminal split --terminal <handle> --direction <dir> --command <command> --json`) and `switch` (`orca terminal switch --terminal <new handle> --json`).
+- **FR-009**: Each host MUST open review in named steps, and the first step on every host MUST be `probe`: a call that checks the agent's pane or terminal exists and opens nothing. Herdr's steps MUST be `probe` (`herdr pane layout --pane <id>`, whose result MUST list the agent's pane and whose width for that pane feeds FR-005), `split` and `run`. Orca's steps MUST be `probe` (`orca terminal show --terminal <handle> --json`), `split` (`orca terminal split --terminal <handle> --direction <dir> --command <command> --json`), `layout` (`orca terminal list --include-visual-layouts --json`, amended 2026-09-22 by FR-024) and `switch` (`orca terminal switch --terminal <new handle> --json`), with `switch` run only as FR-024 allows.
 - **FR-010**: Any host call that exits non-zero, prints unparsable output, or lacks a needed field MUST refuse `pane-failed`. The command MUST NOT retry, and MUST make no host call after the failed one. An Orca split whose result carries no handle for the new terminal MUST refuse at `split`.
 - **FR-011**: A `pane-failed` refusal MUST carry `details.host` (the host's name) and `details.step` (the failing step). Its message MUST name the host and the step and carry the host's own error text: for Herdr the `error.message` from its stderr JSON, for Orca the `error.message` from its stdout JSON, and otherwise the last stderr line that is not Orca's relay handshake. After any step but `probe` the message MUST also say that a pane may already be open, because the fix still tells the human to run `loupe review` and a second review of one run is allowed.
 - **FR-012**: The fix for both refusals MUST remain 006 FR-007's `ask the human to run loupe review '<ref>'`.
 
 #### Result, help and contract
 
-- **FR-013**: On success the `--json` result MUST carry `host` as `herdr` or `orca`, `paneId` as the new pane's id (Herdr) or the new terminal's handle (Orca), and `direction`, in the standard envelope. Without `--json` it MUST print one line naming the run and the direction, as today.
+- **FR-013**: On success the `--json` result MUST carry `host` as `herdr` or `orca`, `paneId` as the new pane's id (Herdr) or the new terminal's handle (Orca), `direction`, and `focused` (amended 2026-09-22), in the standard envelope. `focused` MUST be `true` when the host moved focus to the new pane (every Herdr handoff, and an Orca handoff that ran `switch`) and `false` otherwise. Without `--json` it MUST print one line naming the run and the direction, as today, and that line MUST end "without focus" when `focused` is `false`.
 - **FR-014**: `loupe handoff --help` MUST describe the handoff without assuming a host, with one line per host giving its detection conditions, followed by the detection order, the direction rule, both refusals with `pane-failed`'s `details.step`, and the result. The `handoff-help` golden MUST be regenerated and its diff read.
 - **FR-015**: Host logic MAY live only in the one internal package that opens panes. Outside that package and its tests, only the `handoff` command's file MAY name Herdr or Orca, in its help and its `no-pane-host` refusal. `scripts/check-tests.sh` MUST fail when any other non-test Go file under `cmd/` or `internal/`, or `go.mod`, names Herdr or Orca, with the same exclusions as today.
 - **FR-016**: The `handoff` section of `contracts/cli.md` MUST name both hosts and their detection, the detection order, that the direction comes from the host's report of the agent pane's width, else the agent's terminal width, else `right`, the `host` values `herdr` and `orca`, and that `pane-failed` carries `details.host` and `details.step`, with `probe` as the step that opens nothing on every host. The `pane-failed` row of the refusal table MUST name those details.
@@ -137,11 +137,15 @@ An owner inside Herdr hands off as before. The split opens beside the agent's pa
 - **FR-022**: `specs/001-loupe-v1/validation.md` MUST record the new tests, and MUST record the live checks in this Orca session when they run: from an agent terminal at least 120 columns wide, `LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42' --json` returns `direction: right` and review opens in the split with focus; quitting review closes the pane; a refusal in the pane (review on a published run) leaves it open.
 - **FR-023**: The Unverified list in `specs/001-loupe-v1/validation.md` MUST gain: whether the controlling terminal is readable from Codex outside its sandbox (from Claude Code's Bash tool it is not, verified 2026-09-21); whether an Orca pane closes when review itself exits with `q` (a shell running `echo && exit` closed its pane on 2026-09-21, see `research.md`); a `down` split in Orca; and a Herdr handoff after `LOUPE_HOME` moved into the command line. Any FR-022 check not run MUST be listed there instead.
 
+#### Focus
+
+- **FR-024** (added 2026-09-22, owner's decision): On Orca, `loupe handoff` MUST read the agent's tab id from `ORCA_TAB_ID`. When it is non-empty, the `layout` step MUST find the tab group whose `tabs[]` holds that tab id in `result.visualLayouts[]`, and MUST run `switch` only when that group's `activeTabId` equals the agent's tab id; otherwise it MUST NOT run `switch`, and the result's `focused` is `false`. A tab in no group, and a listing that fails or cannot be parsed, MUST refuse `pane-failed` at step `layout`, with no `switch`. When `ORCA_TAB_ID` is empty the `layout` step MUST NOT run and `switch` MUST run as before. `ORCA_TAB_ID` MUST NOT be a detection condition (FR-002). Rationale: `switch` is Orca's only call that moves the view, and it brings a background tab to the front, which pulls the human away from whatever they are looking at; `split` never moves the view (research.md, "Focus"). Nothing reports which group's window is in front, so an active tab in a group that is not in front still gets `switch`.
+
 ### Key Entities
 
 - **Pane host**: A terminal that can open a pane beside the agent's for review. Herdr and Orca, detected in that order.
 - **Host step**: One named call in a host's handoff. `probe` opens nothing on every host; the other names are host-specific.
-- **Handoff result**: `host`, `paneId`, `direction`, and the run reference.
+- **Handoff result**: `host`, `paneId`, `direction`, `focused`, and the run reference.
 
 ## Success Criteria *(mandatory)*
 
@@ -166,7 +170,7 @@ Observed in Orca on 2026-09-21:
 Not yet observed, and settled by one live split the owner approves before the Orca result parser is written, recorded in the plan's research:
 
 - The split result carries the new terminal's handle at `result.split.handle`, as one live split recorded on 2026-09-21 in `research.md`. The parser MUST follow that recorded result.
-- Whether a split takes focus. FR-009's `switch` makes the answer irrelevant to behavior.
+- Whether a split takes focus. Observed on 2026-09-22 that it does not (research.md, "Focus"); FR-024 relies on it.
 - Whether an Orca pane closes when its shell exits. 003 FR-015's lifetime depends on it; if it does not, that is recorded as a gap, not worked around.
 
 Also:

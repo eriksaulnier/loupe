@@ -96,7 +96,7 @@ func TestOpenSendsProbeSplitAndRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opened != (Opened{PaneID: "w1:p2", Direction: "down"}) {
+	if opened != (Opened{PaneID: "w1:p2", Direction: "down", Focused: true}) {
 		t.Fatalf("opened = %+v", opened)
 	}
 	want := [][]string{

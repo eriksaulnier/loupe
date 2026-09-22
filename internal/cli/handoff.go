@@ -25,9 +25,10 @@ A host whose conditions are met only in part is skipped. With no host it refuses
 
 The pane opens below the agent's pane when that pane is known to be under 120 columns wide,
 and to the right otherwise. The width is the host's own report of the agent's pane (Herdr has
-one, Orca none), else the agent's own terminal; with neither it opens right. The pane takes
-focus and runs this loupe's review for the run. It closes when review exits cleanly and stays
-open on a refusal so the human can read it.
+one, Orca none), else the agent's own terminal; with neither it opens right. The pane runs
+this loupe's review for the run. It takes focus, except in Orca when the agent's tab is not
+the one its tab group shows: then it opens there and the human's view stays where it is. It
+closes when review exits cleanly and stays open on a refusal so the human can read it.
 
 The agent MUST NOT send to, read, resize, close or reuse the pane; a hand-off that opens a pane
 opens a new one. A failed host call refuses pane-failed and is not retried; its details name
@@ -40,9 +41,10 @@ pull request of the current branch in the working directory at its newest round.
 Result (--json):
   {"loupe": 1, "ok": true, "command": "handoff", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "host": "herdr",
-   "paneId": "w1:p2", "direction": "right"}
+   "paneId": "w1:p2", "direction": "right", "focused": true}
 
-host is herdr or orca. direction is right or down.`
+host is herdr or orca. direction is right or down. focused is false when the pane opened
+without taking focus.`
 
 func newHandoffCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -94,13 +96,16 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	}
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{
-			"host": host.Name(), "paneId": opened.PaneID, "direction": opened.Direction,
+			"host": host.Name(), "paneId": opened.PaneID, "direction": opened.Direction, "focused": opened.Focused,
 		})
 	}
 	s := deps.outStyle()
 	where := "below"
 	if opened.Direction == "right" {
 		where = "to the right"
+	}
+	if !opened.Focused {
+		where += " without focus"
 	}
 	_, err = fmt.Fprintf(deps.Stdout, "%s Opened loupe review for %s in a new pane %s\n",
 		s.Good.Bold(true).Render(s.Glyphs.Accepted), s.Accent.Render(ref.String()), where)
