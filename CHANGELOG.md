@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.0](https://github.com/eriksaulnier/loupe/compare/v0.8.0...v0.9.0) (2026-09-22)
+
+
+### Features
+
+* **cli:** name the run directory, publisher and every bad batch entry ([#23](https://github.com/eriksaulnier/loupe/issues/23)) ([c05b0b5](https://github.com/eriksaulnier/loupe/commit/c05b0b58c2486fc241b29ca828b417b1db900010))
+* **handoff:** open review in an Orca split behind a pane host seam ([#26](https://github.com/eriksaulnier/loupe/issues/26)) ([529027a](https://github.com/eriksaulnier/loupe/commit/529027aa68929997efaad020e1b1eb54f35ba8e7))
+* **handoff:** switch to the new pane only from an active Orca tab ([#27](https://github.com/eriksaulnier/loupe/issues/27)) ([357b6fc](https://github.com/eriksaulnier/loupe/commit/357b6fc81d4595dc9aeb7fe7f412e780ba408bf0))
+* **review:** hand send-backs to the agent while review stays open ([#25](https://github.com/eriksaulnier/loupe/issues/25)) ([e538eb8](https://github.com/eriksaulnier/loupe/commit/e538eb811cff0419784df857afdd1b8b4c96aeab))
+* **tui:** frame send-back notes and show note threads as conversations ([#24](https://github.com/eriksaulnier/loupe/issues/24)) ([55c8bc7](https://github.com/eriksaulnier/loupe/commit/55c8bc753c0fad4247cd2230a6dfc03d618aeacf))
+
+
+### Bug Fixes
+
+* **render:** render code spans in finding titles ([#21](https://github.com/eriksaulnier/loupe/issues/21)) ([259ed67](https://github.com/eriksaulnier/loupe/commit/259ed67edb99977f1380b52d62004ae39a6a9c6c))
+
 ## [0.8.0](https://github.com/eriksaulnier/loupe/compare/v0.7.0...v0.8.0) (2026-09-18)
 
 
