@@ -38,18 +38,14 @@ Type "j"
 Sleep 1200ms
 Enter
 
-# The open note and the agent's reply to it, then resolving it. The still comes after r, not before:
-# while the note is open the footer carries r and d, wraps to a second row, and takes the row the
-# reply would render on.
+# The open note and the agent's reply to it, then resolving it.
 Sleep 3s
 Type "r"
 Sleep 1400ms
-# The thread is taller than the room left under the finding, so the still is taken scrolled to its end,
-# where the agent's reply is.
+# The thread is taller than the room left under the finding, so it is scrolled to its end, where the
+# agent's reply is.
 PageDown
-Sleep 1200ms
-Screenshot docs/assets/detail.png
-Sleep 1600ms
+Sleep 2800ms
 Type "a"
 Sleep 2500ms
 

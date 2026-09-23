@@ -1,4 +1,4 @@
-# The README's hero gif and the board still. Redraw every tape with `mise run screenshots`.
+# The README's hero gif. Redraw every tape with `mise run screenshots`.
 #
 # One story, told in the time a reader will actually give it: an agent filed the findings, the human
 # decided the blocking one, and the human wrote what the review says. The send-back loop is its own
@@ -6,8 +6,6 @@
 #
 # Nothing overlays the keys being pressed; vhs cannot. The pauses are sized so the footer legend and
 # the notice loupe prints after each decision are both readable.
-#
-# vhs writes no file for a Screenshot taken in the last frame, so the tape MUST NOT end on one.
 
 Output docs/assets/walkthrough.gif
 
@@ -35,9 +33,7 @@ Type "dist/loupe-demo review acme/widgets#42" Enter
 Sleep 4s
 Show
 
-Sleep 1s
-Screenshot docs/assets/list.png
-Sleep 1400ms
+Sleep 2400ms
 
 # Publishing needs every finding decided AND every note resolved, so the hero cannot skip to the
 # confirmation: publish.ReadinessRefusal gates on both. The decisions are taken at speed here and the
