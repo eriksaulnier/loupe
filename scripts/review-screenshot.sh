@@ -37,8 +37,9 @@ pnpm add --dir "$tmp/pw" "playwright@$playwright_version" --silent >/dev/null
 "$tmp/pw/node_modules/.bin/playwright" install chromium >/dev/null
 
 go run ./cmd/loupe-demo body >"$tmp/body.md"
-# The first finding is opened so the picture shows one finding's contents under the collapsed rows.
-REF="$ref" perl -0pi -e 's{raw\.githubusercontent\.com/eriksaulnier/loupe/main/}{raw.githubusercontent.com/eriksaulnier/loupe/$ENV{REF}/}g; s{^<details>$}{<details open>}m' "$tmp/body.md"
+# Every finding stays collapsed: the rows are what the picture is for, and the terminal pictures show a finding's
+# contents. That also keeps it near the other README images' proportions.
+REF="$ref" perl -0pi -e 's{raw\.githubusercontent\.com/eriksaulnier/loupe/main/}{raw.githubusercontent.com/eriksaulnier/loupe/$ENV{REF}/}g' "$tmp/body.md"
 
 review=${LOUPE_SCREENSHOT_REVIEW:-}
 if [[ -z $review ]]; then
@@ -54,7 +55,9 @@ const { chromium } = require('playwright');
   const [url, review, out, scheme] = process.argv.slice(2);
   const browser = await chromium.launch();
   const page = await browser.newPage({ colorScheme: scheme, deviceScaleFactor: 2, viewport: { width: 1280, height: 900 } });
-  const body = page.locator(`#pullrequestreview-${review} .comment-body`).first();
+  // The whole comment card, header and border included, so the picture reads as a GitHub review and has an edge
+  // against the README's own background.
+  const body = page.locator(`#pullrequestreview-${review} .timeline-comment-group`).first();
   // GitHub keeps live connections open, so the page never goes network-idle, and a review posted a moment ago may
   // not be in the first render. One reload covers that.
   for (let attempt = 1; ; attempt++) {
