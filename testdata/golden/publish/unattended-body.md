@@ -1,6 +1,6 @@
-Looks mostly fine.
-
 `⛔ 1 blocking` `🟣 1 suggestion` `🔵 1 question`
+
+Looks mostly fine.
 
 ---
 

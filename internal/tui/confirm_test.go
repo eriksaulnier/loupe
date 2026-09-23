@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/muesli/termenv"
 
@@ -67,8 +68,8 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	}
 }
 
-// TestConfirmTypesTheOpeningInPlace is FR-003: the message is written where it will be read, leading the body above
-// the chips row and the findings it introduces, and every row of it is on screen.
+// TestConfirmTypesTheOpeningInPlace is FR-003: the message is written where it will be read, under the chips row
+// and above the findings it introduces, and every row of it is on screen.
 func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
@@ -84,7 +85,7 @@ func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 		}
 	}
 	chips, body := strings.Index(view, previewChips), strings.Index(view, "<details open>")
-	if opening := strings.Index(view, "The cache bug"); chips < 0 || body < 0 || opening < 0 || opening > chips || chips > body {
+	if opening := strings.Index(view, "The cache bug"); chips < 0 || body < 0 || opening < chips || opening > body {
 		t.Errorf("the message is not in the body's opening slot (chips %d, opening %d, body %d):\n%s", chips, opening, body, view)
 	}
 	want := "The cache bug is the blocker here. The rest can land later.\n\nFix the ETag path first."
@@ -98,6 +99,16 @@ func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 	}
 	if m.confirm.shown.EnvelopeJSON != wantJSON || m.confirm.shown.Body == m.confirm.preview.Body {
 		t.Errorf("the payload was not recomposed for the message:\n%s", m.confirm.shown.EnvelopeJSON)
+	}
+}
+
+// The full-screen confirmation shows each pill as its word, in the body and in the inline comment, as plain mode does.
+func TestConfirmShowsPillsAsWords(t *testing.T) {
+	m := NewConfirmModel(pillPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "all", 1))
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 60})
+	view := ansi.Strip(m.confirm.content(m.shell))
+	if strings.Contains(view, "<picture>") || strings.Count(view, "<b>issue</b> MAJOR: T") < 2 {
+		t.Errorf("want the pill shown as MAJOR in the body and the inline comment:\n%s", view)
 	}
 }
 

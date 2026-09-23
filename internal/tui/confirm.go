@@ -255,7 +255,7 @@ func (c *confirmation) messageRows(promptWidth int) int {
 const minMessageRows = 4
 
 // messageHint says what the empty input is for, and messageWay out of it. The box is the only part of the body the
-// human writes, and an empty one is otherwise a blank line above the chips.
+// human writes, and an empty one is otherwise a blank line between the chips and the findings.
 const (
 	messageTitle       = "your message"
 	messageHint        = "the review opens on what you write here"
@@ -423,8 +423,8 @@ func (c *confirmation) content(m *Model) string {
 	}
 	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
 	if c.inline() {
-		// The message leads the body, so nothing usually sits above the box. Wrap drops the blank lines the split left
-		// around it, so its sides are spaced here instead: one row each.
+		// The chips row sits above the box, and nothing does when there are no findings to count. Wrap drops the blank
+		// lines the split left around the box, so its sides are spaced here instead: one row each.
 		if strings.TrimSpace(c.before) != "" {
 			parts = append(parts, m.styles.Wrap(render.ForDisplay(c.before), width, " "))
 		}

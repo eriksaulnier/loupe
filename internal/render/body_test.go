@@ -152,7 +152,7 @@ func indexes(t *testing.T, body string, needles ...string) []int {
 
 func TestBodyChipsAndMeta(t *testing.T) {
 	body := Body(mixedInput())
-	if !strings.Contains(body, "\n\n`⛔ 6 blocking` `🟡 1 issue` `🟣 1 suggestion` `🔵 2 questions` `⚪ 2 other`\n\n---\n\n") {
+	if !strings.HasPrefix(body, "`⛔ 6 blocking` `🟡 1 issue` `🟣 1 suggestion` `🔵 2 questions` `⚪ 2 other`\n\n") {
 		t.Fatalf("chips row wrong\n%s", body)
 	}
 	if !strings.HasSuffix(body, "<!-- loupe-meta v=1 round=2 inline=blocking blocking=6 issues=3 suggestions=2 questions=3 other=4 -->\n") {
@@ -161,7 +161,7 @@ func TestBodyChipsAndMeta(t *testing.T) {
 	in := exampleInput()
 	in.Findings = []Finding{general("f-001", "issue", true)}
 	body = Body(in)
-	if !strings.Contains(body, "\n\n`⛔ 1 blocking`\n\n---") || !strings.Contains(body, "blocking=1 issues=1 suggestions=0") {
+	if !strings.HasPrefix(body, "`⛔ 1 blocking`\n\n") || !strings.Contains(body, "blocking=1 issues=1 suggestions=0") {
 		t.Fatalf("a blocking issue must count only in the blocking chip and in both census keys\n%s", body)
 	}
 }
@@ -465,15 +465,6 @@ func TestBodySectionsSortBySeverityThenLabelGroup(t *testing.T) {
 	}
 }
 
-// The chips row keeps its bytes: blocking first, then one chip per label group counting only nonblocking findings.
-func TestChipsRowCountsTheRowDots(t *testing.T) {
-	body := Body(mixedInput())
-	want := "\n\n`⛔ 6 blocking` `🟡 1 issue` `🟣 1 suggestion` `🔵 2 questions` `⚪ 2 other`\n\n---"
-	if !strings.Contains(body, want) {
-		t.Errorf("chips row changed: body lacks %q\n%s", want, body)
-	}
-}
-
 // An inline comment's meta block drops a rated severity, since the row above it carries the word.
 func TestInlineMetaBlockDropsARatedSeverity(t *testing.T) {
 	in := exampleInput()
@@ -678,14 +669,14 @@ var pinnedPills = map[string]string{
 	"trivial.svg":       "6701990c2187f74e149dd5160ccfc602100568a2f96219fd53ddb8db64e1e734",
 }
 
-// The opening prose leads and the chips row follows it, directly above the sections whose row dots it keys. With no
-// prose the body opens on the chips.
-func TestOpeningProseLeadsTheChips(t *testing.T) {
+// The chips row leads the body and the opening prose follows it, so the blocking count is the first thing a reader
+// meets. With no prose the body opens on the chips and goes straight to the sections.
+func TestChipsLeadTheOpeningProse(t *testing.T) {
 	in := exampleInput()
 	in.Findings = []Finding{general("f-001", "issue", true)}
 	in.Summary = "One blocker.\n"
-	if got := Body(in); !strings.HasPrefix(got, "One blocker.\n\n`⛔ 1 blocking`\n\n---\n\n### Must fix") {
-		t.Errorf("prose does not lead the chips:\n%s", got)
+	if got := Body(in); !strings.HasPrefix(got, "`⛔ 1 blocking`\n\nOne blocker.\n\n---\n\n### Must fix") {
+		t.Errorf("the chips do not lead the prose:\n%s", got)
 	}
 	in.Summary = ""
 	if got := Body(in); !strings.HasPrefix(got, "`⛔ 1 blocking`\n\n---\n\n### Must fix") {

@@ -45,7 +45,7 @@ The spike ran on 2026-09-22 against `eriksaulnier/loupe-format-spike`. It is rec
 
 ### User Story 1 - A pull-request reader scans a short review (Priority: P1)
 
-Someone who did not run loupe opens the review on their pull request. It holds one blocking finding and two others. They see the chips row, a `Must fix` section with one row and a `Worth a look` section with two. Each row shows, before anything is opened, the finding's mark, how bad it is, what kind of remark it is, its title and the file and line.
+Someone who did not run loupe opens the review on their pull request. It holds one blocking finding and two others. They see the chips row, a `Must fix` section with one row and a `Worth a look` section with two. Each row shows, before anything is opened, the finding's mark, what kind of remark it is, how bad it is and its title; the file and line are the first thing they see on opening it.
 
 **Why this priority**: It is the surface with the most readers and the least context, and it is what the contract amendment authorizes.
 
@@ -132,7 +132,7 @@ A reader expands a finding. They read what goes wrong first, then the reasoning,
 - **FR-001**: The body MUST hold at most two finding sections, in this order: `### Must fix`, holding every published blocking finding, then `### Worth a look`, holding every other published finding. A section with no findings MUST be omitted.
 - **FR-002**: Both sections MUST sort by severity (`critical`, `major`, `minor`, `trivial`, then unrated), then by label group (`issue`, `suggestion`, `question`, then every other or empty label as one group), then by finding id.
 - **FR-003**: Every surface that presents a draft's findings (the review list, detail navigation, line-by-line mode and `loupe show`) MUST follow the order of FR-001 and FR-002. This keeps spec 014 FR-001 and changes its section list. The section rule and the label groups MUST keep one shared definition.
-- **FR-004**: Dividers, the footer and both markers MUST keep their current rules. The opening changes only by FR-027.
+- **FR-004**: Dividers, the opening, the footer and both markers MUST keep their current rules.
 
 ### Chips
 
@@ -156,7 +156,7 @@ A reader expands a finding. They read what goes wrong first, then the reasoning,
 
 ### The opening
 
-- **FR-027**: The opening prose, when present, MUST lead the body, and the chips row MUST follow it in the same block, directly above the first divider. With no prose the body MUST open on the chips row, byte for byte as before.
+- **FR-027**: The chips row MUST keep leading the body, with the opening prose after it, as before. Owner, 2026-09-22 and 2026-09-23: prose first was built and then reverted, because `⛔ N blocking` is the fact an author most needs and a long unattended summary would push it down.
 - **FR-028**: The draft's summary MUST NOT be added to an attended review, collapsed or otherwise. Constitution Principle II requires the opening prose to be the human's, and `specs/013-human-message` cut the summary as stale after exclusions and redundant with the findings. Owner, 2026-09-22, asked about a collapsed summary; it is out of scope here and would need its own specification and a constitution amendment.
 
 ### Unchanged
@@ -193,4 +193,4 @@ A reader expands a finding. They read what goes wrong first, then the reasoning,
 - Two sections is the right cut because `blocking` is the one axis that changes what the author must do before merge. Severity already orders findings within each section.
 - The chips row is kept as a key for the dots, not an index of headings. Its bytes do not change, so tooling that reads it is unaffected.
 - The location is not needed on the row. It is the first line a reader sees on opening a finding, and leaving it off keeps the row short.
-- The row renders on GitHub the way the spike's variant N did, review 5286087452 on `eriksaulnier/loupe-format-spike#2`, checked by eye in light theme, and in both themes by `mise run review-screenshot` on 2026-09-23. Mobile and email rendering were not checked.
+- The row renders on GitHub the way the round-three spike did, review 5286315066 on `eriksaulnier/loupe-format-spike#3`, checked by eye in light theme, and in both themes by `mise run review-screenshot` on 2026-09-23. Mobile and email rendering were not checked and are on the Unverified list in `specs/001-loupe-v1/validation.md`.

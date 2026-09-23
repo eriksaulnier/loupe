@@ -77,6 +77,11 @@ plugin/skills/human-review/SKILL.md # suggestedFix is Markdown
 specs/001-loupe-v1/contracts/cli.md, data-model.md # suggestedFix is Markdown
 internal/render/body_test.go       # mixed, only-blocking, only-nonblocking, unrated, unlabeled, unknown, LEFT, range, general
 internal/render/inline_test.go     # the same row without location
+internal/markdown/allowlist.go     # lone CR as a line break; MapSummaryLines for the pill display
+internal/tui/confirm.go, plain.go  # pills shown as words; the message box leads
+cmd/loupe-demo/                    # loupe-demo body, the input to the README's review picture
+assets/review/v1/                  # the severity pill SVGs, pinned by hash
+scripts/review-screenshot.sh       # the README's picture of a published review
 testdata/golden/*.md               # regenerated, example.md from the doc
 testdata/golden/publish/*.md       # regenerated from renderer output
 testdata/golden/cli/*              # regenerated if they move
@@ -96,6 +101,5 @@ specs/001-loupe-v1/spec.md         # one clarification line
 | Chips index row dots, not headings | `specs/014-severity-badges` FR-012 rationale, `docs/comment-format.md` Chips | The headings no longer name labels. The chips' bytes do not change |
 | The severity pill is an external image | `docs/comment-format.md` ("No external badge images"), `specs/014-severity-badges` FR-007 and FR-016 | The second spike round met the bar the ban protected: legible, centered, no taller than text, and the click is kept. The alt word covers a pill that does not load |
 | Terminal order changes across labels | `specs/014-severity-badges` FR-001 section list | FR-001's rule (terminal order equals body order) is kept, and only the body order it points at changes |
-| The opening prose leads the chips row | `specs/013-human-message` FR-014 (body composition unchanged), `specs/001-loupe-v1/spec.md` clarification ("the body opens with the chips row"), `docs/comment-format.md` Opening | The prose is the person's words and should be met first; the chips then sit directly above the rows they key. A body with no prose still opens on the chips, byte for byte |
 | Impact before the body; fix and references reformatted | `specs/008-finding-fields` (impact after the body, fix always fenced, references as autolinks), `docs/comment-format.md` | Consequence first reads better, and a fenced sentence reads as code. Stored fixes that fail the allowlist keep the fence |
 | `suggestedFix` becomes allowlist-checked Markdown | `specs/001-loupe-v1/contracts/cli.md` ("prose or code") | Prose renders as prose. Writers fence code. A new fix with raw HTML is now refused |

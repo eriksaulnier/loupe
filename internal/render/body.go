@@ -92,14 +92,12 @@ func Body(in Input) string {
 		})
 	}
 
-	// The prose leads, so a reader meets the person's words first, and the chips follow it, directly above the rows
-	// whose dots they key.
 	var head []string
-	if in.Summary != "" {
-		head = append(head, strings.TrimRight(in.Summary, "\n"))
-	}
 	if chips := chipsRow(len(blocking), rest); chips != "" {
 		head = append(head, chips)
+	}
+	if in.Summary != "" {
+		head = append(head, strings.TrimRight(in.Summary, "\n"))
 	}
 	blocks := []string{strings.Join(head, "\n\n")}
 

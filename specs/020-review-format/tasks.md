@@ -26,18 +26,18 @@ description: "Task list for two sections and readable rows"
 
 **Independent Test**: Compose a mixed body, an only-blocking body and an only-nonblocking body. Read each.
 
-- [X] T004 [US1] Add failing tests to `internal/render/body_test.go`: a mixed body has `### ⛔ Must fix` then `### Worth a look` and no other `###`. An only-blocking body has no `Worth a look`, and an only-nonblocking body has no `Must fix`. Both sections sort severity, then label group, then id.
-- [X] T005 [US1] Add failing row tests to `internal/render/body_test.go`, each asserting the exact `<summary>` line: blocking major issue at `internal/publish/publish.go:88` RIGHT gives `⛔ <b>MAJOR</b> <code>issue</code> Retry loop can double-publish — <code>publish.go:88</code>`. Nonblocking dots 🟡 🟣 🔵 ⚪. Unrated gives no `<b>`. Free-text severity is absent from the row and present on the meta line. Empty label gives no `<code>` before the title. Unknown label `perf-nit` gives `<code>perf-nit</code>`. A label with `<` is HTML-escaped. LEFT range `src/a.go` 10–14 gives `<code>a.go:10–14 (LEFT)</code>`. A general finding has no ` — `. A path with no directory shows as is.
+- [X] T004 (superseded by Phases 8 and 9: the row and heading it specifies were revised) [US1] Add failing tests to `internal/render/body_test.go`: a mixed body has `### ⛔ Must fix` then `### Worth a look` and no other `###`. An only-blocking body has no `Worth a look`, and an only-nonblocking body has no `Must fix`. Both sections sort severity, then label group, then id.
+- [X] T005 (superseded by Phases 8 and 9: the row and heading it specifies were revised) [US1] Add failing row tests to `internal/render/body_test.go`, each asserting the exact `<summary>` line: blocking major issue at `internal/publish/publish.go:88` RIGHT gives `⛔ <b>MAJOR</b> <code>issue</code> Retry loop can double-publish — <code>publish.go:88</code>`. Nonblocking dots 🟡 🟣 🔵 ⚪. Unrated gives no `<b>`. Free-text severity is absent from the row and present on the meta line. Empty label gives no `<code>` before the title. Unknown label `perf-nit` gives `<code>perf-nit</code>`. A label with `<` is HTML-escaped. LEFT range `src/a.go` 10–14 gives `<code>a.go:10–14 (LEFT)</code>`. A general finding has no ` — `. A path with no directory shows as is.
 - [X] T006 [US1] Add a failing test to `internal/render/body_test.go`: the chips row for a mixed draft is byte-identical to the pre-change string (`⛔ N blocking` then nonblocking per-label counts).
 - [X] T007 [US1] In `internal/render/body.go`: partition on `Blocking`, sort both parts with one comparator (severity, group, id), and emit `⛔ Must fix` and `Worth a look` through `sectionBlock`. Delete `sectionTitles`. Collapse the summary contexts to body against inline.
-- [X] T008 [US1] In `internal/render/body.go`: rebuild `summaryLine` as dot, `<b>UPPER</b>`, `<code>label</code>`, title, then ` — <code>location</code>` in the body only. Escape the label and location with the same function `titleHTML` uses for its context. Extract the location text shared with `metaBlock` into one helper that takes the path to show. `metaBlock` output MUST NOT change.
+- [X] T008 (superseded by Phases 8 and 9: the row and heading it specifies were revised) [US1] In `internal/render/body.go`: rebuild `summaryLine` as dot, `<b>UPPER</b>`, `<code>label</code>`, title, then ` — <code>location</code>` in the body only. Escape the label and location with the same function `titleHTML` uses for its context. Extract the location text shared with `metaBlock` into one helper that takes the path to show. `metaBlock` output MUST NOT change.
 - [X] T009 [US1] Run `go test ./internal/render/` until T004–T006 pass. Then `go test ./internal/render/ -update` and read the diff of `testdata/golden/*.md` other than `example.md`.
 
 ## Phase 3: User Story 2 — Inline comments use the same row (P1)
 
 **Independent Test**: Compose inline comments with `--inline all` and read each first line.
 
-- [X] T010 [US2] Add failing tests to `internal/render/inline_test.go`: a blocking major issue's first line is `⛔ <b>MAJOR</b> <code>issue</code> Retry loop can double-publish`, with no location. An unlabeled unrated nonblocking finding is `⚪ ` plus the title. A label holding `*` or `_` is backslash-escaped. The rest of the comment body is unchanged.
+- [X] T010 (superseded by Phases 8 and 9: the row and heading it specifies were revised) [US2] Add failing tests to `internal/render/inline_test.go`: a blocking major issue's first line is `⛔ <b>MAJOR</b> <code>issue</code> Retry loop can double-publish`, with no location. An unlabeled unrated nonblocking finding is `⚪ ` plus the title. A label holding `*` or `_` is backslash-escaped. The rest of the comment body is unchanged.
 - [X] T011 [US2] Make T010 pass in `internal/render/body.go` or `internal/render/inline.go`. Expect this to fall out of T008.
 
 ## Phase 4: User Story 3 — The human decides findings in the review's order (P2)
@@ -85,6 +85,7 @@ description: "Task list for two sections and readable rows"
 - [X] T033 Center the pill: draw it in the top 14px of a 16px image with `height="16"`, and add 3 transparent pixels on its right so the colon does not touch it. Re-pin the hashes, and record round three in `docs/github-facts.md`.
 - [X] T034 Drop the `⛔` from the `Must fix` heading. Every row keeps its own.
 - [X] T035 Put the opening prose before the chips row (FR-027), with a failing test first in `internal/render/body_test.go`. Keep the confirmation's box evenly spaced now that nothing sits above it. Record FR-028: the draft summary stays out of attended reviews.
+- [X] T036 Revert T035 after review (FR-027): the chips row leads again and the prose follows it, as on `main`. The confirmation's box keeps its even spacing either way.
 
 ## Dependencies
 

@@ -174,7 +174,7 @@ func TestDemoBodyIsTheReviewPublishSends(t *testing.T) {
 	if first != second {
 		t.Errorf("the body depends on the time:\n%s\n---\n%s", first, second)
 	}
-	if !strings.HasPrefix(first, demoMessage+"\n\n`⛔ 1 blocking`") || !strings.Contains(first, "### Must fix") ||
+	if !strings.HasPrefix(first, "`⛔ 1 blocking`") || !strings.Contains(first, "\n\n"+demoMessage+"\n\n---") || !strings.Contains(first, "### Must fix") ||
 		!strings.Contains(first, "publication=00000000-0000-4000-8000-000000000000") {
 		t.Errorf("unexpected body:\n%s", first)
 	}

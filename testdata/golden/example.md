@@ -1,7 +1,7 @@
+`⛔ 1 blocking` `⚪ 1 other`
+
 The retry path can publish twice and the digest is not verified on reconcile.
 Worth fixing before this merges; the rest reads fine to me.
-
-`⛔ 1 blocking` `⚪ 1 other`
 
 ---
 

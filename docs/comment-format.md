@@ -20,7 +20,7 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 | `references` | list of `http` or `https` URLs | What the reviewer looked at. At most six, never fetched. Optional |
 
 - **Label and blocking are independent.** A small required mechanical change is a blocking `suggestion`, not an `issue`. A blocking `question` is valid: a question whose answer determines whether the change is correct does block.
-- **Unknown labels are never refused.** An unrecognized label renders verbatim in the finding's own summary line (`<b>perf-nit</b>`), and a nonblocking one leads its row with the `⚪` dot and counts in the `⚪ other` chip. A finding with an unknown label and `blocking` set is placed in `Must fix` and counted in the `⛔` chip, like every other blocking finding, while still counting under its own label in `loupe-meta`. `other` is a bucket, never a rewrite of the label.
+- **Unknown labels are never refused.** An unrecognized label renders verbatim in the finding's own summary line (`<b>perf-nit</b>`), and a nonblocking one leads its row with the `⚪` dot and counts in the `⚪ other` chip. A finding with an unknown label and `blocking` set is placed in `Must fix` and counted in the `⛔` chip, like every other blocking finding, while still counting in `loupe-meta`'s census under `other`, the group of every unknown label. `other` is a bucket, never a rewrite of the label.
 - A label that is absent or empty is treated as no label: the finding counts as `other` and its summary line carries no label word. The same applies to an empty `confidence`, `severity` or `verified`, which render nothing.
 - **Confidence, severity and verified MUST NOT be computed, defaulted or inferred.** Each is a value the reviewer reports or omits. The reason for a confidence level belongs in the body.
 - **Severity is never mapped onto a label.** It follows the dot on the summary line and orders findings within a section, and never decides which section one is placed in.
@@ -47,10 +47,10 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 - Two sections, not one per label, because real reviews hold zero to ten findings and usually one. `blocking` is the one axis that changes what the author must do before merge, and each row carries its own label (`specs/020-review-format`).
 
 ````markdown
+`⛔ 1 blocking` `⚪ 1 other`
+
 The retry path can publish twice and the digest is not verified on reconcile.
 Worth fixing before this merges; the rest reads fine to me.
-
-`⛔ 1 blocking` `⚪ 1 other`
 
 ---
 
@@ -97,7 +97,7 @@ reviewed `d23632e`
 
 ### Opening
 
-The opening prose leads the body and the chips row follows it, directly above the divider and the sections whose row dots it keys. With no prose the body opens on the chips row; with no findings it is the prose alone. The prose leads because on an attended review it is the person's own words, and a notification or preview then opens on a sentence rather than a row of code spans (`specs/020-review-format`). The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
+The chips row leads the body and the opening prose follows it, or the prose leads when there are no findings to count. The chips lead because `⛔ N blocking` is the one fact an author most needs, and a long unattended summary would otherwise push it down. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
 
 **Who writes the opening prose depends on who published.** An attended review carries a message the human typed at the publish confirmation, reading the body as they wrote it; the draft's summary is not published on that path and orients the human while they sort findings instead. An unattended review carries the draft's summary, because no human is there to type anything, and its footer already ends in ` · unattended` so a reader knows the prose was not read by a person before it appeared.
 

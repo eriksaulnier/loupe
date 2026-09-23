@@ -32,6 +32,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `specs/NNN-topic/` | One directory per feature: `spec.md`, then `plan.md` and `tasks.md`. `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
 | `docs/` | `comment-format.md` (the published review format, a contract) and `github-facts.md` (observed GitHub behavior). `tapes/` drives the README's terminal images in `assets/`, and `scripts/review-screenshot.sh` its picture of a published review; neither is read by the binary |
 | `testdata/` | Diff fixtures and goldens |
+| `assets/review/v1/` | The severity pill SVGs every published review hotlinks from `main`. A file here MUST NOT change once on `main`; a redesign adds `v2`. A test pins their hashes |
 | `scripts/` | `check-tests.sh`, the test-hygiene grep that `mise run check` runs, and `review-screenshot.sh`, which `mise run review-screenshot` runs |
 | `.github/workflows/` | `ci.yml` runs `mise run check`; `release.yml` runs release-please, then goreleaser |
 | `.github/workflows/review.yml` | The caller for `eriksaulnier/loupe-workflows`, the shared reusable workflow that captures a pull request, runs an agent over the captured head and diff, and publishes unattended. This file holds only what is loupe's own: the triggers, the `REVIEW_ENABLED` kill switch, the permissions the called jobs are capped by, and the model. A round runs unasked when a pull request is opened ready or marked ready for review, and by the `ai-review` label for every round after that |
