@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/eriksaulnier/loupe/compare/v0.9.0...v0.10.0) (2026-09-23)
+
+
+### Features
+
+* **render:** publish two sections with pill rows and readable findings ([#29](https://github.com/eriksaulnier/loupe/issues/29)) ([ee4b0a9](https://github.com/eriksaulnier/loupe/commit/ee4b0a9c9f0e893e45efb1093cf9391c58403e84))
+
 ## [0.9.0](https://github.com/eriksaulnier/loupe/compare/v0.8.0...v0.9.0) (2026-09-22)
 
 
