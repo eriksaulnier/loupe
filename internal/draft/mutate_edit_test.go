@@ -139,6 +139,22 @@ func TestEditKeepsALegacySeverity(t *testing.T) {
 	_ = wantRefusal(t, err, refusal.Input)
 }
 
+// A run stored before the suggested fix was allowlist-checked may hold raw HTML there; it publishes fenced, so an
+// edit that leaves it alone is not refused for it, and only an edit that changes it is checked.
+func TestEditKeepsALegacySuggestedFix(t *testing.T) {
+	d := editable()
+	d.Findings[0].SuggestedFix = "one<br>two"
+	f, _, err := Edit(d, "f-001", editInput(t, `{"title": "Renamed"}`), nil, multiHunk(t), ByAgent, editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.SuggestedFix != "one<br>two" || f.Title != "Renamed" {
+		t.Fatalf("finding %+v", f)
+	}
+	_, _, err = Edit(d, "f-001", editInput(t, `{"suggestedFix": "three<br>four"}`), nil, multiHunk(t), ByAgent, editNow)
+	_ = wantRefusal(t, err, refusal.Markdown)
+}
+
 func TestEditNullLocationMakesFindingGeneral(t *testing.T) {
 	d := editable()
 	f, _, err := Edit(d, "f-001", editInput(t, `{"location": null}`), nil, multiHunk(t), ByAgent, editNow)

@@ -186,7 +186,7 @@ Impact, the suggested fix and the references each render under a bold label. **A
 ### Suggested fix
 
 - Rendered after the body, as Markdown with trailing newlines trimmed. Code in it MUST be fenced by whoever writes it; bare code renders as prose.
-- It passes the same allowlist as `body` at write time. A stored fix that fails the allowlist, written before this rule, is instead rendered inside a fence whose length is `max(3, longest backtick run in the content + 1)` under a `**Suggested fix**` line, so it stays inert and still publishes.
+- It passes the same allowlist as `body` at write time, when `add` writes it or an `edit` changes it; an edit that leaves it unchanged does not recheck it. A stored fix that fails the allowlist, written before this rule, is instead rendered inside a fence whose length is `max(3, longest backtick run in the content + 1)` under a `**Suggested fix**` line, so it stays inert and still publishes.
 - It is prose or code the human reads, never a GitHub `suggestion` fence: an applicable suggestion MUST contain the exact replacement lines for the anchored range, and a suggested fix holds prose. Wrapping prose in a suggestion fence produces a broken apply button.
 
 ### References

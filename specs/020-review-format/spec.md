@@ -170,7 +170,7 @@ A reader expands a finding. They read what goes wrong first, then the reasoning,
 
 - **FR-022**: The disclosure MUST render the meta block, then impact, then the body, then the suggested fix, then references.
 - **FR-023**: Impact, suggested fix and references MUST each follow a bold label. A one-line value MUST sit on the label's line after `:`. A longer value MUST go below a bold label on its own line.
-- **FR-024**: A suggested fix MUST be Markdown, checked against the body allowlist by `loupe add` and `loupe edit`. A stored fix that fails the allowlist MUST render in a fence, as before, and MUST NOT make publish refuse.
+- **FR-024**: A suggested fix MUST be Markdown, checked against the body allowlist by `loupe add` and by a `loupe edit` that changes it. An edit that leaves a stored fix unchanged MUST NOT be refused for it, as with a legacy severity. A stored fix that fails the allowlist MUST render in a fence, as before, and MUST NOT make publish refuse.
 - **FR-025**: Each reference MUST be a link whose text is its host and path, without scheme, query or fragment, shortened to `host/…/last-segment` when over 50 characters and the path has more than one segment. The destination MUST be in `<…>`. Escaping MUST keep both the text and the destination exactly as the URL gives them.
 - **FR-026**: The help text for `--suggested-fix`, the agent skill, `contracts/cli.md` and the data model MUST say that the fix is Markdown and that code in it is fenced.
 

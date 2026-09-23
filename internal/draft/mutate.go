@@ -501,14 +501,18 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		return *stored, false, ErrNoChange
 	}
 	if publishable {
-		// A severity stored before the enum existed may be free text; it is checked only once an edit changes it.
-		severity := next.Severity
+		// A severity stored before the enum existed may be free text, and a suggested fix stored before the allowlist
+		// applied to it may hold raw HTML, which publishes fenced. Each is checked only once an edit changes it.
+		severity, fix := next.Severity, next.SuggestedFix
 		if severity == stored.Severity {
 			severity = ""
 		}
+		if fix == stored.SuggestedFix {
+			fix = ""
+		}
 		err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: next.Location, General: next.General, Label: next.Label,
 			Blocking: next.Blocking, Confidence: next.Confidence, Severity: severity, Verified: next.Verified, Impact: next.Impact,
-			References: next.References, SuggestedFix: next.SuggestedFix}, dif)
+			References: next.References, SuggestedFix: fix}, dif)
 		if err != nil {
 			return Finding{}, false, err
 		}
