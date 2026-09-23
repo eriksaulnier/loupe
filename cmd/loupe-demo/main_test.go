@@ -159,3 +159,23 @@ func TestPrepareSeedsAKeptRootOnce(t *testing.T) {
 		t.Fatalf("the second prepare rewrote the run: %q %v", data, err)
 	}
 }
+
+// loupe-demo body is the input to the README's picture of a published review, so it is the review #43 publishes and
+// the same bytes every run.
+func TestDemoBodyIsTheReviewPublishSends(t *testing.T) {
+	first, err := demoBody(time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := demoBody(time.Date(2026, 9, 23, 8, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Errorf("the body depends on the time:\n%s\n---\n%s", first, second)
+	}
+	if !strings.HasPrefix(first, demoMessage+"\n\n`⛔ 1 blocking`") || !strings.Contains(first, "### Must fix") ||
+		!strings.Contains(first, "publication=00000000-0000-4000-8000-000000000000") {
+		t.Errorf("unexpected body:\n%s", first)
+	}
+}
