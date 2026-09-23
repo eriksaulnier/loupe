@@ -46,8 +46,33 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - Observed 2026-09-21 in GitHub's rendered HTML for review 5272343580 on `eriksaulnier/loupe-probe#1`, published with `--inline all`, and for an issue comment on `eriksaulnier/loupe#21`: `<code>` inside `<summary>` survives the sanitizer and renders as code. So does `<code>` on an inline comment's first line, a Markdown paragraph, where backslash escapes between and inside the tags decode.
 - A backslash at the end of a line is a hard break inside a blockquote; a bare newline is a soft break.
 - The files view anchors a line as `#diff-<sha256 hex of the path>R<line>` (or `L` for the old side), with `R21-R24` for a range. This is observed, not documented; it rendered and landed in the boundary probe.
-- Images in review bodies are proxied through camo; external badge images add a network dependency and were rejected.
+- Images in review bodies are proxied through camo, so an external image is a network dependency of every reader. loupe rejected badge images on that ground until the spike under Image marks in a summary line; it now emits one severity pill per rated row.
 - A `suggestion` fence must contain the exact replacement lines for the anchored range; wrapping prose in one produces a broken apply button. loupe never emits suggestion fences automatically.
+
+### Image marks in a summary line
+
+Observed 2026-09-22 on `eriksaulnier/loupe-format-spike#1`, reviews 5284946104 to 5284957558, in GitHub's rendered HTML and in headless Chromium screenshots at 1280 pixels wide, light and dark. The images were SVG severity pills and label marks served from `raw.githubusercontent.com` and `github.com/<owner>/<repo>/raw/`, both pinned to a commit sha. The repository is kept because those reviews hotlink its files.
+
+- Both hosts rendered in both themes. Review 5284946104 was the text-only control.
+- A plain `<img>` inside a `<summary>` or on an inline comment's first line is wrapped by GitHub in `<a href>` to the image itself. Inside a `<summary>` that link takes the click, so a click on the mark opens the image instead of toggling the disclosure. An `<img>` inside `<picture>` is not wrapped.
+- `<picture>` with a `prefers-color-scheme: dark` `<source>` survives the sanitizer, wrapped in `<themed-picture>`, and switched sources with the theme.
+- `height` and `align` survive on `<img>`. GitHub adds `max-width: 100%; height: auto; max-height: <height>px` to a plain `<img>`.
+- At `height="18"` a summary row grew from 37 to about 41 pixels and the pill sat above the text line. At `height="16"` with `align="middle"` the row held its height and the pill sat below the text line. At `height="14"` with no `align` the row held its height, but an 11-pixel label drawn in an 18-pixel pill shrank to about 8.5 pixels and was hard to read.
+- The GitHub mobile app and email notifications were not checked.
+
+Round two, the same day, on `eriksaulnier/loupe-format-spike#2`, reviews 5286083005 to 5286111402, with pills drawn at 14 pixels and 10-pixel text, measured at device scale 2 in light theme:
+
+- At `height="14"` the text in the pill was readable, where the round-one pill scaled down to 14 was not.
+- `align="absmiddle"` centered the pill on the text line, and the rows stayed 37.4 pixels apart, the same as rows of text. With no `align` the pill sat about 3 pixels high, with `texttop` about 2 pixels high, and with `middle` in a 16-pixel canvas about 3 pixels low with the row 1.5 pixels taller.
+- `align="texttop"` and `align="absmiddle"` both survive the sanitizer.
+- `<br>` inside a `<summary>` survives, and the whole two-line row toggles the disclosure. The second line starts at the left edge under the disclosure triangle, not under the text.
+- The dark-theme capture did not switch themes in this round. The `<picture>` dark source switching rests on round one.
+
+Round three, the same day, on `eriksaulnier/loupe-format-spike#3`, review 5286315066: the same 14-pixel pill drawn in the top of a taller transparent image, all at `align="absmiddle"`.
+
+- With no padding (a 14-pixel image) the pill sat 1 to 2 pixels low of the text's center.
+- With 2 transparent pixels below (a 16-pixel image, `height="16"`) it sat centered. With 3 or 4 it sat visibly high.
+- Rows stayed about 37 pixels apart at every padding tried, the same as rows of text.
 
 ## Actions and unattended publication
 
