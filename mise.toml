@@ -54,6 +54,12 @@ ffmpeg -version >/dev/null 2>&1 || { echo "screenshots: vhs needs a working ffmp
 for tape in docs/tapes/*.tape; do vhs "$tape"; done
 '''
 
+# Redraws the README's picture of a published review from GitHub's own render: it posts the demo's review to a scratch
+# pull request and captures it, so it needs gh auth and the network. See scripts/review-screenshot.sh.
+[tasks.review-screenshot]
+confirm = "Post (or, with LOUPE_SCREENSHOT_REVIEW, recapture) a review on eriksaulnier/loupe-format-spike#3 and redraw docs/assets/review*.png?"
+run = "./scripts/review-screenshot.sh"
+
 # Links this worktree's build as github:eriksaulnier/loupe@dev and pins it globally, so every shell and agent session
 # runs it, not only those inside the repository. Run unlink before removing the worktree.
 [tasks.link]
