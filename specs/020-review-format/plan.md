@@ -78,7 +78,7 @@ specs/001-loupe-v1/contracts/cli.md, data-model.md # suggestedFix is Markdown
 internal/render/body_test.go       # mixed, only-blocking, only-nonblocking, unrated, unlabeled, unknown, LEFT, range, general
 internal/render/inline_test.go     # the same row without location
 internal/markdown/allowlist.go     # lone CR as a line break; MapSummaryLines for the pill display
-internal/tui/confirm.go, plain.go  # pills shown as words; the message box leads
+internal/tui/confirm.go, plain.go  # pills shown as words; the message box sits under the chips row
 cmd/loupe-demo/                    # loupe-demo body, the input to the README's review picture
 assets/review/v1/                  # the severity pill SVGs, pinned by hash
 scripts/review-screenshot.sh       # the README's picture of a published review
