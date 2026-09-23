@@ -13,7 +13,7 @@
 // LOUPE_DEMO_HOME=<dir> keeps the data root instead: the first command seeds it and later ones reuse it with whatever
 // was decided.
 //
-// loupe-demo body prints the review body #43 publishes with the publish tape's message, the input
+// loupe-demo body prints the review body #43 publishes with the walkthrough tape's message, the input
 // scripts/review-screenshot.sh posts to render the README's picture of a published review.
 package main
 
@@ -145,7 +145,7 @@ func prepare(home string, gh *fakegh.Server, now time.Time, keep bool) error {
 	return nil
 }
 
-// demoMessage is the opening docs/tapes/publish.tape types, so the terminal and GitHub pictures show one review.
+// demoMessage is the opening docs/tapes/walkthrough.tape types, so the terminal and GitHub pictures show one review.
 const demoMessage = "The cache bug blocks this one; the rest can land."
 
 // demoBody composes #43 as publish would send it with inline blocking, under a fixed publication id so the body is
