@@ -66,7 +66,7 @@ Round two, the same day, on `eriksaulnier/loupe-format-spike#2`, reviews 5286083
 - `align="absmiddle"` centered the pill on the text line, and the rows stayed 37.4 pixels apart, the same as rows of text. With no `align` the pill sat about 3 pixels high, with `texttop` about 2 pixels high, and with `middle` in a 16-pixel canvas about 3 pixels low with the row 1.5 pixels taller.
 - `align="texttop"` and `align="absmiddle"` both survive the sanitizer.
 - `<br>` inside a `<summary>` survives, and the whole two-line row toggles the disclosure. The second line starts at the left edge under the disclosure triangle, not under the text.
-- The dark-theme capture did not switch themes in this round. The `<picture>` dark source switching rests on round one.
+- The dark-theme capture did not switch themes in this round. On 2026-09-23 `mise run review-screenshot`, which emulates `prefers-color-scheme` in Playwright, captured the final pill switching to its dark source.
 
 Round three, the same day, on `eriksaulnier/loupe-format-spike#3`, review 5286315066: the same 14-pixel pill drawn in the top of a taller transparent image, all at `align="absmiddle"`.
 

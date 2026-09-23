@@ -193,4 +193,4 @@ A reader expands a finding. They read what goes wrong first, then the reasoning,
 - Two sections is the right cut because `blocking` is the one axis that changes what the author must do before merge. Severity already orders findings within each section.
 - The chips row is kept as a key for the dots, not an index of headings. Its bytes do not change, so tooling that reads it is unaffected.
 - The location is not needed on the row. It is the first line a reader sees on opening a finding, and leaving it off keeps the row short.
-- The row renders on GitHub the way the spike's variant N did, review 5286087452 on `eriksaulnier/loupe-format-spike#2`, checked by eye in light theme. Dark theme rests on round one. Mobile and email rendering were not checked.
+- The row renders on GitHub the way the spike's variant N did, review 5286087452 on `eriksaulnier/loupe-format-spike#2`, checked by eye in light theme, and in both themes by `mise run review-screenshot` on 2026-09-23. Mobile and email rendering were not checked.
