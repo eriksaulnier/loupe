@@ -69,6 +69,9 @@ const { chromium } = require('playwright');
       if (attempt === 2) throw e;
     }
   }
+  // The card's pointer sits 12px above it and the timeline's line runs behind it, so a capture of the card cuts
+  // both off at its top edge.
+  await page.addStyleTag({ content: '.timeline-comment-group::before, .timeline-comment-group::after, .TimelineItem::before { display: none !important; }' });
   // GitHub's sticky headers otherwise draw over the top of the element once it is scrolled into view. Hiding by
   // computed position does not depend on GitHub's class names.
   await page.evaluate(() => {
