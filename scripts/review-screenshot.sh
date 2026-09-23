@@ -83,7 +83,9 @@ const { chromium } = require('playwright');
   // A pill that fails to load renders as its alt text, which would ship a picture of the fallback.
   const missing = await body.evaluate(async (node) => {
     const imgs = [...node.querySelectorAll('img')];
-    await Promise.all(imgs.map((i) => (i.complete ? 0 : new Promise((r) => { i.onload = i.onerror = r; }))));
+    // An image that never settles would otherwise hang the capture; it is reported below as not loaded.
+    const settled = Promise.all(imgs.map((i) => (i.complete ? 0 : new Promise((r) => { i.onload = i.onerror = r; }))));
+    await Promise.race([settled, new Promise((r) => setTimeout(r, 15000))]);
     return imgs.filter((i) => i.naturalWidth === 0).map((i) => i.currentSrc || i.src);
   });
   if (missing.length > 0) throw new Error(`images did not load: ${missing.join(', ')}`);
