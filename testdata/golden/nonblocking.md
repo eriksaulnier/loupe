@@ -1,13 +1,13 @@
-`🔵 1 question`
-
 Summary.
+
+`🔵 1 question`
 
 ---
 
-### 🔵 Questions
+### Worth a look
 
 <details>
-<summary>Title f-001</summary>
+<summary>🔵 <b>question</b>: Title f-001</summary>
 
 Body f-001.
 

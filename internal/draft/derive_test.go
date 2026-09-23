@@ -167,3 +167,26 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 		}
 	}
 }
+
+// Worth a look is one section, so severity outranks the label there: a critical question comes before a minor
+// issue. A blocking finding still leads, whatever its severity.
+func TestOrderedSortsSeverityAcrossLabels(t *testing.T) {
+	f := func(id, label, sev string, blocking bool) Finding {
+		x := finding(id, 1, true, "agent")
+		x.Label, x.Severity, x.Blocking = label, sev, blocking
+		return x
+	}
+	d := &Draft{Findings: []Finding{
+		f("f-001", "issue", "minor", false),
+		f("f-002", "question", "critical", false),
+		f("f-003", "suggestion", "minor", true),
+		f("f-004", "suggestion", "minor", false),
+	}}
+	var got []string
+	for _, x := range Ordered(d) {
+		got = append(got, x.ID)
+	}
+	if want := []string{"f-003", "f-002", "f-001", "f-004"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Ordered = %v, want %v", got, want)
+	}
+}

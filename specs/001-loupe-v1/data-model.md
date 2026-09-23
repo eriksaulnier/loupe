@@ -88,7 +88,7 @@ draft:    { schema: 1, version, summary, findings[], decisions{}, notes[], repli
 | `verified` | string, optional | yes | `reproduced` or `plausible` when present (spec 008) |
 | `impact` | string, optional | yes | Markdown, allowlist-checked like `body` (spec 008) |
 | `references` | string[], optional | yes | at most six `http` or `https` URLs, each at most 200 bytes, no whitespace, control or format characters, `<`, `>` or backticks; empty stored as absent (spec 008) |
-| `suggestedFix` | string, optional | yes | prose or code; never a GitHub suggestion fence |
+| `suggestedFix` | string, optional | yes | Markdown, allowlist-checked like `body`, code fenced by the writer; never a GitHub suggestion fence (spec 020) |
 | `by` | string | | `agent` or `human`; audit only, does not affect readiness |
 | `included` | bool | | true on add; `edit --exclude` sets false (withdraw), `edit --include` sets true (restore); never settable from JSON input |
 | `createdAt`, `updatedAt` | time | | |

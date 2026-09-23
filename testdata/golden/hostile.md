@@ -1,13 +1,13 @@
-`🟡 1 issue`
-
 Summary.
+
+`🟡 1 issue`
 
 ---
 
-### 🟡 Issues
+### Worth a look
 
 <details>
-<summary>Closes &lt;/summary&gt; &amp; &lt;b&gt;early&lt;/b&gt;</summary>
+<summary>🟡 <b>issue</b>: Closes &lt;/summary&gt; &amp; &lt;b&gt;early&lt;/b&gt;</summary>
 
 > **Severity:** ```major`` `` second line```
 
@@ -15,11 +15,9 @@ Body.
 
 **Suggested fix**
 
-````
 ```go
 x := 1
 ```
-````
 
 </details>
 

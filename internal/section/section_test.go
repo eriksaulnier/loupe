@@ -2,7 +2,7 @@ package section
 
 import "testing"
 
-func TestGroupIsTheLabelSectionsInBodyOrder(t *testing.T) {
+func TestGroupIsTheLabelGroupsInTieBreakOrder(t *testing.T) {
 	cases := map[string]int{
 		"issue": Issue, "suggestion": Suggestion, "question": Question,
 		"perf-nit": Other, "": Other, "Issue": Other,
@@ -17,21 +17,15 @@ func TestGroupIsTheLabelSectionsInBodyOrder(t *testing.T) {
 	}
 }
 
-// Rank is the whole of the body's section order: Blocking, then Issues, Suggestions, Questions, Other.
-func TestRankPutsBlockingFirstWhateverItsLabel(t *testing.T) {
+// Rank is the whole of the body's section order: Must fix, then Worth a look. The label never moves a finding
+// between them; Group only breaks ties inside one.
+func TestRankIsBlockingAgainstTheRest(t *testing.T) {
 	for _, label := range []string{"issue", "suggestion", "question", "perf-nit", ""} {
 		if got := Rank(label, true); got != 0 {
 			t.Errorf("Rank(%q, blocking) = %d, want 0", label, got)
 		}
-	}
-	cases := map[string]int{"issue": 1, "suggestion": 2, "question": 3, "perf-nit": 4, "": 4}
-	for label, want := range cases {
-		if got := Rank(label, false); got != want {
-			t.Errorf("Rank(%q, nonblocking) = %d, want %d", label, got, want)
+		if got := Rank(label, false); got != 1 {
+			t.Errorf("Rank(%q, nonblocking) = %d, want 1", label, got)
 		}
-	}
-	// A blocking finding always precedes every nonblocking one, which is what the ⛔ heading says.
-	if Rank("perf-nit", true) >= Rank("issue", false) {
-		t.Error("a blocking unknown label must still outrank a nonblocking issue")
 	}
 }

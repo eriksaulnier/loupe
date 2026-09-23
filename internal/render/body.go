@@ -8,8 +8,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/eriksaulnier/loupe/internal/findingid"
+	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/section"
 	"github.com/eriksaulnier/loupe/internal/severity"
 )
@@ -72,59 +74,40 @@ func group(label string) int { return section.Group(label) }
 
 var dots = [...]string{groupIssue: "🟡", groupSuggestion: "🟣", groupQuestion: "🔵", groupOther: "⚪"}
 
-var sectionTitles = [...]string{groupIssue: "Issues", groupSuggestion: "Suggestions", groupQuestion: "Questions", groupOther: "Other"}
-
-type summaryContext int
-
-const (
-	inBlocking summaryContext = iota
-	inLabelSection
-	inOther
-	inInline
-)
-
 func Body(in Input) string {
-	var blocking []Finding
-	var sections [4][]Finding
+	var blocking, rest []Finding
 	for _, f := range in.Findings {
 		if f.Blocking {
 			blocking = append(blocking, f)
-			continue
+		} else {
+			rest = append(rest, f)
 		}
-		g := group(f.Label)
-		sections[g] = append(sections[g], f)
 	}
-	// Severity outranks the label group here: the section that exists to be read first is ordered by urgency, and
-	// the label group survives as the tie-break so labels still cluster among findings of equal severity.
-	slices.SortFunc(blocking, func(a, b Finding) int {
-		return cmp.Or(severity.Compare(a.Severity, b.Severity),
-			cmp.Compare(group(a.Label), group(b.Label)), findingid.Compare(a.ID, b.ID))
-	})
+	// Severity outranks the label group in both sections, since each exists to be read worst first, and the label
+	// group survives as the tie-break so labels still cluster among findings of equal severity.
+	for _, fs := range [][]Finding{blocking, rest} {
+		slices.SortFunc(fs, func(a, b Finding) int {
+			return cmp.Or(severity.Compare(a.Severity, b.Severity),
+				cmp.Compare(group(a.Label), group(b.Label)), findingid.Compare(a.ID, b.ID))
+		})
+	}
 
+	// The prose leads, so a reader meets the person's words first, and the chips follow it, directly above the rows
+	// whose dots they key.
 	var head []string
-	if chips := chipsRow(len(blocking), sections); chips != "" {
-		head = append(head, chips)
-	}
 	if in.Summary != "" {
 		head = append(head, strings.TrimRight(in.Summary, "\n"))
+	}
+	if chips := chipsRow(len(blocking), rest); chips != "" {
+		head = append(head, chips)
 	}
 	blocks := []string{strings.Join(head, "\n\n")}
 
 	if len(blocking) > 0 {
-		blocks = append(blocks, sectionBlock("⛔ Blocking", blocking, inBlocking, in))
+		blocks = append(blocks, sectionBlock("Must fix", blocking, in))
 	}
-	for g, fs := range sections {
-		if len(fs) == 0 {
-			continue
-		}
-		slices.SortFunc(fs, func(a, b Finding) int {
-			return cmp.Or(severity.Compare(a.Severity, b.Severity), findingid.Compare(a.ID, b.ID))
-		})
-		ctx := inLabelSection
-		if g == groupOther {
-			ctx = inOther
-		}
-		blocks = append(blocks, sectionBlock(dots[g]+" "+sectionTitles[g], fs, ctx, in))
+	if len(rest) > 0 {
+		blocks = append(blocks, sectionBlock("Worth a look", rest, in))
 	}
 
 	census := [4]int{}
@@ -140,7 +123,7 @@ func Body(in Input) string {
 		footer += " · via " + CodeSpan(OneLine(strings.Replace(in.Source, "@", " ", 1)))
 		meta += " src=" + in.Source
 	}
-	// The footer ends with unattended while the marker keeps it before src=, so the two no longer build in step.
+	// The footer ends with unattended while the marker keeps it before src=, so the two cannot build in step.
 	if in.Unattended {
 		footer += " · unattended"
 	}
@@ -156,54 +139,101 @@ func Body(in Input) string {
 	return strings.Join(blocks, "\n\n---\n\n")
 }
 
-func chipsRow(blocking int, sections [4][]Finding) string {
+// chipsRow is a key to the row dots below: a blocking row leads with ⛔, and every other row with its label group's dot.
+func chipsRow(blocking int, rest []Finding) string {
 	var chips []string
 	if blocking > 0 {
 		chips = append(chips, CodeSpan(fmt.Sprintf("⛔ %d blocking", blocking)))
 	}
+	var counts [4]int
+	for _, f := range rest {
+		counts[group(f.Label)]++
+	}
 	nouns := [...][2]string{groupIssue: {"issue", "issues"}, groupSuggestion: {"suggestion", "suggestions"},
 		groupQuestion: {"question", "questions"}, groupOther: {"other", "other"}}
-	for g, fs := range sections {
-		if n := len(fs); n > 0 {
+	for g, n := range counts {
+		if n > 0 {
 			chips = append(chips, CodeSpan(fmt.Sprintf("%s %d %s", dots[g], n, plural(n, nouns[g][0], nouns[g][1]))))
 		}
 	}
 	return strings.Join(chips, " ")
 }
 
-func sectionBlock(title string, fs []Finding, ctx summaryContext, in Input) string {
+func sectionBlock(title string, fs []Finding, in Input) string {
 	parts := make([]string, len(fs))
 	for i, f := range fs {
-		parts[i] = "<details>\n<summary>" + summaryLine(f, ctx) + "</summary>\n\n" + disclosure(f, in, true) + "\n\n</details>"
+		parts[i] = "<details>\n<summary>" + summaryLine(f, false) + "</summary>\n\n" + disclosure(f, in, true) + "\n\n</details>"
 	}
 	return "### " + title + "\n\n" + strings.Join(parts, "\n\n")
 }
 
-func summaryLine(f Finding, ctx summaryContext) string {
-	title := titleHTML(OneLine(f.Title), ctx == inInline)
-	var bold []string
-	// Only an enum word leads the line. The prefix is interpolated outside a code span, and a run captured before the
-	// enum can hold any text, so a free-text severity stays on the meta line where a code span makes it inert.
+// summaryLine is one row rule for the body and an inline comment. The location is left off, since it is the first
+// line of the meta block the row opens onto.
+func summaryLine(f Finding, inline bool) string {
+	dot := dots[group(f.Label)]
+	if f.Blocking {
+		dot = "⛔"
+	}
+	var meta []string
+	if label := OneLine(f.Label); label != "" {
+		meta = append(meta, "<b>"+textEscaper(inline)(label)+"</b>")
+	}
+	// Only an enum word reaches the row. A run captured before the enum can hold any text, so a free-text severity
+	// stays on the meta line where a code span makes it inert.
 	if word := OneLine(f.Severity); severity.Rated(word) {
-		bold = append(bold, word)
+		meta = append(meta, severityPill(word))
 	}
-	// Blocking is not written here. The ⛔ heading says it in the body and the ⛔ dot says it inline, and a blocking
-	// finding never reaches a label section, so there is no context where the word would be the only carrier.
-	if label := EscapeHTML(OneLine(f.Label)); label != "" && ctx != inLabelSection {
-		bold = append(bold, label)
+	title := titleHTML(OneLine(f.Title), inline)
+	if len(meta) == 0 {
+		return dot + " " + title
 	}
-	var prefix string
-	if len(bold) > 0 {
-		prefix = "<b>" + strings.Join(bold, " · ") + ":</b> "
+	return dot + " " + strings.Join(meta, " ") + ": " + title
+}
+
+// pillBase is hotlinked by every review loupe publishes, so a file under it MUST NOT change once on main; a redesign
+// adds v2.
+const pillBase = "https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/"
+
+// severityPill uses <picture> rather than a bare <img>, because GitHub wraps a bare <img> in a link to itself, which
+// takes the click on a <summary>. The pill fills the top 14 of the image's 16 pixels, so absmiddle centers it on the
+// text without growing the row, and transparent pixels to its right keep the colon off it (docs/github-facts.md).
+func severityPill(word string) string {
+	return `<picture><source media="(prefers-color-scheme: dark)" srcset="` + pillBase + word + `-dark.svg">` +
+		`<img src="` + pillBase + word + `.svg" alt="` + strings.ToUpper(word) + `" height="16" align="absmiddle"></picture>`
+}
+
+// PillsAsWords shows each severity pill in a body's rows as its word, for a terminal that shows the body as raw
+// Markdown, where a pill would otherwise be a line of HTML. Only the <summary> lines loupe generates are touched, so
+// authored text, fenced or not, keeps its bytes.
+func PillsAsWords(body string) string {
+	return markdown.MapSummaryLines(body, pillWords().Replace)
+}
+
+// CommentPillsAsWords is PillsAsWords for an inline comment, whose row is its first line.
+func CommentPillsAsWords(comment string) string {
+	row, rest, found := strings.Cut(comment, "\n")
+	row = pillWords().Replace(row)
+	if !found {
+		return row
 	}
-	if ctx == inInline {
-		dot := dots[group(f.Label)]
-		if f.Blocking {
-			dot = "⛔"
-		}
-		prefix = dot + " " + prefix
+	return row + "\n" + rest
+}
+
+func pillWords() *strings.Replacer {
+	pairs := make([]string, 0, 2*len(severity.Order))
+	for _, word := range severity.Order {
+		pairs = append(pairs, severityPill(word), strings.ToUpper(word))
 	}
-	return prefix + title
+	return strings.NewReplacer(pairs...)
+}
+
+// textEscaper is for generated text in a summary line. GitHub parses no Markdown inside a <summary>, so HTML escaping
+// is enough there; an inline comment's first line is a Markdown paragraph, where punctuation must be escaped too.
+func textEscaper(inline bool) func(string) string {
+	if inline {
+		return func(s string) string { return escapePunctuation(EscapeHTML(s)) }
+	}
+	return EscapeHTML
 }
 
 const asciiPunctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
@@ -211,10 +241,7 @@ const asciiPunctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 // titleHTML applies a title's CommonMark code spans and backslash escapes itself, because GitHub parses no Markdown
 // inside <summary>. The title's other Markdown shows literally.
 func titleHTML(title string, inline bool) string {
-	escape := EscapeHTML
-	if inline {
-		escape = func(s string) string { return escapePunctuation(EscapeHTML(s)) }
-	}
+	escape := textEscaper(inline)
 	var b, text strings.Builder
 	for i := 0; i < len(title); {
 		c := title[i]
@@ -298,26 +325,79 @@ func disclosure(f Finding, in Input, inBody bool) string {
 	if meta := metaBlock(f, in, inBody); meta != "" {
 		parts = append(parts, meta)
 	}
+	// Impact leads: a reader deciding whether to act wants the consequence before the reasoning.
+	if impact := strings.TrimRight(f.Impact, "\n"); strings.TrimSpace(impact) != "" {
+		parts = append(parts, labeled("Impact", impact))
+	}
 	if body := strings.TrimRight(f.Body, "\n"); body != "" {
 		parts = append(parts, body)
 	}
-	if impact := strings.TrimRight(f.Impact, "\n"); impact != "" {
-		parts = append(parts, "**Impact**\n\n"+impact)
-	}
-	if f.SuggestedFix != "" {
-		fix := strings.TrimRight(f.SuggestedFix, "\n")
-		fence := Fence(fix)
-		parts = append(parts, "**Suggested fix**\n\n"+fence+"\n"+fix+"\n"+fence)
+	if fix := strings.TrimRight(f.SuggestedFix, "\n"); strings.TrimSpace(fix) != "" {
+		// Input validation holds a fix to the body allowlist, but a draft written before it did may hold anything, so
+		// such a fix keeps the fence that made it inert.
+		if markdown.Check(fix, markdown.Body, "") == nil {
+			parts = append(parts, labeled("Suggested fix", fix))
+		} else {
+			fence := Fence(fix)
+			parts = append(parts, "**Suggested fix**\n\n"+fence+"\n"+fix+"\n"+fence)
+		}
 	}
 	if len(f.References) > 0 {
-		// Autolinks: input validation already refused anything that could end or break one.
 		lines := make([]string, 0, len(f.References))
 		for _, ref := range f.References {
-			lines = append(lines, "- <"+ref+">")
+			lines = append(lines, "["+referenceText(ref)+"](<"+referenceDestination(ref)+">)")
 		}
-		parts = append(parts, "**References**\n\n"+strings.Join(lines, "\n"))
+		if len(lines) == 1 {
+			parts = append(parts, "**References:** "+lines[0])
+		} else {
+			parts = append(parts, "**References**\n\n- "+strings.Join(lines, "\n- "))
+		}
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// labeled puts a one-line value on its label's line. A longer value goes below the label, since a list, a quote or a
+// fence can only open at the start of a line.
+func labeled(label, value string) string {
+	// CommonMark also ends a line at a lone carriage return.
+	if !strings.ContainsAny(value, "\r\n") {
+		return "**" + label + ":** " + value
+	}
+	return "**" + label + "**\n\n" + value
+}
+
+// referenceText is a reference's host and path, without scheme, query or fragment, shortened to its last segment
+// when long. Input validation already refused whitespace, angle brackets and backticks.
+func referenceText(ref string) string {
+	rest := ref[strings.Index(ref, "://")+3:]
+	if i := strings.IndexAny(rest, "?#"); i >= 0 {
+		rest = rest[:i]
+	}
+	rest = strings.TrimRight(rest, "/")
+	if segs := strings.Split(rest, "/"); utf8.RuneCountInString(rest) > maxReferenceText && len(segs) > 2 {
+		rest = segs[0] + "/…/" + segs[len(segs)-1]
+	}
+	var b strings.Builder
+	for _, r := range rest {
+		switch {
+		case r == '&':
+			b.WriteString("&amp;")
+		case strings.ContainsRune("\\`*_[]~$", r):
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+const maxReferenceText = 50
+
+// referenceDestination escapes the two things CommonMark still decodes inside <…>, so the link goes where the
+// reviewer said.
+func referenceDestination(ref string) string {
+	return strings.NewReplacer("\\", "\\\\", "&", "&amp;").Replace(ref)
 }
 
 // metaBlock is the blockquote of one part per line: the location first, in the review body only, since an inline
@@ -325,19 +405,12 @@ func disclosure(f Finding, in Input, inBody bool) string {
 func metaBlock(f Finding, in Input, inBody bool) string {
 	var lines []string
 	if loc := f.Location; loc != nil && inBody {
-		text := OneLine(loc.Path) + ":" + strconv.Itoa(loc.Line)
-		if isRange(loc) {
-			text = OneLine(loc.Path) + ":" + strconv.Itoa(loc.StartLine) + "–" + strconv.Itoa(loc.Line)
-		}
-		if loc.Side == "LEFT" {
-			text += " (LEFT)"
-		}
-		lines = append(lines, "["+CodeSpan(text)+"]("+filesURL(in, loc)+")")
+		lines = append(lines, "["+CodeSpan(locationText(loc, OneLine(loc.Path)))+"]("+filesURL(in, loc)+")")
 	}
 	if f.Confidence != "" {
 		lines = append(lines, "**Confidence:** "+EscapeHTML(OneLine(f.Confidence)))
 	}
-	// An enum word already leads the summary line above this block, the way an inline comment's line already carries
+	// An enum word is already on the summary line above this block, the way an inline comment's line already carries
 	// its location, so repeating it here would put the same word two lines from itself. A run stored before the enum
 	// cannot reach that line, so it is repeated here, in a code span where Markdown cannot run.
 	if word := OneLine(f.Severity); word != "" && !severity.Rated(word) {
@@ -350,6 +423,18 @@ func metaBlock(f Finding, in Input, inBody bool) string {
 		return ""
 	}
 	return "> " + strings.Join(lines, "\\\n> ")
+}
+
+// locationText is the path as the caller shows it, then the line or range, and the side only when it is LEFT.
+func locationText(loc *Location, shown string) string {
+	text := shown + ":" + strconv.Itoa(loc.Line)
+	if isRange(loc) {
+		text = shown + ":" + strconv.Itoa(loc.StartLine) + "–" + strconv.Itoa(loc.Line)
+	}
+	if loc.Side == "LEFT" {
+		text += " (LEFT)"
+	}
+	return text
 }
 
 func isRange(loc *Location) bool {

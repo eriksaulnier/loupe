@@ -41,8 +41,9 @@ func Check(text string, kind Kind, fix string) error {
 	if len(text) > maxBytes {
 		return s.refuse(ruleLimit, 1, fmt.Sprintf("it is %d bytes; at most %d bytes (64 KiB) are allowed", len(text), maxBytes))
 	}
-	for i, line := range strings.Split(text, "\n") {
-		if err := s.line(i+1, strings.TrimSuffix(line, "\r")); err != nil {
+	// CommonMark ends a line at \n, \r\n or a lone \r; splitting on \n alone would hide a fence opened after a lone \r.
+	for i, line := range strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n") {
+		if err := s.line(i+1, line); err != nil {
 			return err
 		}
 	}
@@ -353,7 +354,29 @@ func isPunct(c byte) bool { return strings.IndexByte("!\"#$%&'()*+,-./:;<=>?@[\\
 // OpenDetails rewrites each <details> tag line to <details open>, reading fences and HTML blocks as Check does, so a
 // <details> that is fence content stays as written.
 func OpenDetails(text string) string {
-	lines := strings.Split(text, "\n")
+	return mapTagLines(text, func(line, trimmed string) string {
+		if trimmed == "<details>" {
+			return strings.Replace(line, "<details>", "<details open>", 1)
+		}
+		return line
+	})
+}
+
+// MapSummaryLines applies fn to each line that opens a <summary>, reading fences and HTML blocks as Check does, so a
+// line that is fence content stays as written.
+func MapSummaryLines(text string, fn func(string) string) string {
+	return mapTagLines(text, func(line, trimmed string) string {
+		if strings.HasPrefix(trimmed, "<summary>") {
+			return fn(line)
+		}
+		return line
+	})
+}
+
+// mapTagLines applies fn to every structural line outside a fence. Line endings are normalized as Check normalizes
+// them, so the two agree on where a fence opens.
+func mapTagLines(text string, fn func(line, trimmed string) string) string {
+	lines := strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n")
 	var fenceChar byte
 	var fenceLen int
 	inHTMLBlock := false
@@ -378,9 +401,7 @@ func OpenDetails(text string) string {
 			fenceChar, fenceLen = c, length
 			continue
 		}
-		if trimmed == "<details>" {
-			lines[i] = strings.Replace(line, "<details>", "<details open>", 1)
-		}
+		lines[i] = fn(line, trimmed)
 	}
 	return strings.Join(lines, "\n")
 }

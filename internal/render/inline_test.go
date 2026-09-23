@@ -80,12 +80,12 @@ func TestInlineRangeSetsStart(t *testing.T) {
 
 func TestInlineBodyShape(t *testing.T) {
 	for _, c := range Comments(inlineInput("all")) {
-		if strings.Contains(c.Body, "<details>") || strings.Contains(c.Body, "<summary>") || strings.Contains(c.Body, "](") {
-			t.Errorf("%s: body has a disclosure wrapper or link:\n%s", c.Path, c.Body)
+		if strings.Contains(c.Body, "<details>") || strings.Contains(c.Body, "<summary>") || strings.Contains(c.Body, "/files#diff-") {
+			t.Errorf("%s: body has a disclosure wrapper or a location link:\n%s", c.Path, c.Body)
 		}
 	}
 	got := Comments(inlineInput("blocking"))
-	want := "⛔ <b>major · issue:</b> Range finding\n\n> **Confidence:** high\\\n> **Verified:** reproduced\n\nBody f-010.\n\n**Impact**\n\nImpact f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```\n\n**References**\n\n- <https://github.com/o/r/issues/1>"
+	want := "⛔ <b>issue</b> " + severityPill("major") + ": Range finding\n\n> **Confidence:** high\\\n> **Verified:** reproduced\n\n**Impact:** Impact f-010.\n\nBody f-010.\n\n**Suggested fix:** return err\n\n**References:** [github.com/o/r/issues/1](<https://github.com/o/r/issues/1>)"
 	if last := got[len(got)-1]; last.Body != want {
 		t.Fatalf("got\n%s\nwant\n%s", last.Body, want)
 	}
@@ -108,7 +108,7 @@ func TestInlinePunctuationGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkGolden(t, "inline-punctuation.json", got.String())
-	if !strings.Contains(Body(in), "<summary>use <code>x</code> *now* [a](b)</summary>") {
+	if !strings.Contains(Body(in), "<summary>🟡 <b>issue</b>: use <code>x</code> *now* [a](b)</summary>") {
 		t.Fatalf("the review body's summary was escaped:\n%s", Body(in))
 	}
 }

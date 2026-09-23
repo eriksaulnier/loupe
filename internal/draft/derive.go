@@ -17,11 +17,9 @@ const (
 	DispositionPending   = "pending"
 )
 
-// Ordered is the findings as a reader meets them on every human-facing surface, which is the sequence the published
-// review puts them in: the body's section first, then severity, then the label group that breaks ties inside
-// Blocking, then the finding id. Severity alone would disagree with the review, which places a blocking finding above
-// every nonblocking one whatever its severity. It derives a view and never reorders the stored slice, which keeps
-// arrival order and is what the digest is built from.
+// Ordered is the findings in the published review's order, which every human-facing surface shares. Severity alone
+// would disagree with the review, which places a blocking finding above every nonblocking one whatever its severity.
+// It never reorders the stored slice, which keeps arrival order and is what the digest is built from.
 func Ordered(d *Draft) []Finding {
 	out := slices.Clone(d.Findings)
 	slices.SortFunc(out, func(a, b Finding) int {

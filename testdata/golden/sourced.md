@@ -1,13 +1,13 @@
-`🟡 1 issue`
-
 Summary.
+
+`🟡 1 issue`
 
 ---
 
-### 🟡 Issues
+### Worth a look
 
 <details>
-<summary>Title f-001</summary>
+<summary>🟡 <b>issue</b>: Title f-001</summary>
 
 Body f-001.
 

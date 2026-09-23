@@ -34,7 +34,7 @@ func Comments(in Input) []github.ReviewComment {
 		loc := f.Location
 		c := github.ReviewComment{
 			Path: loc.Path, Line: loc.Line, Side: loc.Side,
-			Body: summaryLine(f, inInline) + "\n\n" + disclosure(f, in, false),
+			Body: summaryLine(f, true) + "\n\n" + disclosure(f, in, false),
 		}
 		if isRange(loc) {
 			c.StartLine, c.StartSide = loc.StartLine, loc.Side

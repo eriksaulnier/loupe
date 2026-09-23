@@ -11,6 +11,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -176,7 +177,7 @@ func TestPlainEndOfInputQuits(t *testing.T) {
 	}
 }
 
-// previewChips and previewRest are the review the confirmation fixtures show: a chips row, the opening slot beneath
+// previewChips and previewRest are the review the confirmation fixtures show: the opening slot, a chips row beneath
 // it as render.Body places it, and one finding. Each part carries text the display has to make safe.
 const (
 	previewChips = "`\u26d4 1 blocking`"
@@ -198,7 +199,7 @@ func confirmPreview() publish.Preview {
 }
 
 // composeOpening stands in for publish.Run's closure: it puts the message where render.Body puts the opening prose,
-// under the chips row. With refuse set it refuses a message carrying a raw tag, as the allowlist does.
+// above the chips row. With refuse set it refuses a message carrying a raw tag, as the allowlist does.
 func composeOpening(base publish.Preview, refuse error) func(string) (publish.Envelope, string, error) {
 	return func(message string) (publish.Envelope, string, error) {
 		if refuse != nil && strings.Contains(message, "<") {
@@ -206,7 +207,7 @@ func composeOpening(base publish.Preview, refuse error) func(string) (publish.En
 		}
 		head := previewChips
 		if message != "" {
-			head += "\n\n" + message
+			head = message + "\n\n" + head
 		}
 		return publish.Envelope{Body: head + "\n\n---\n\n" + previewRest, Comments: base.Comments}, base.EnvelopeJSON, nil
 	}
@@ -500,5 +501,28 @@ func TestPlainRecordsPastAWriteToAnotherFinding(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "f-001 accepted; f-003 changed") {
 		t.Fatalf("the write to f-003 was not named:\n%s", out.String())
+	}
+}
+
+// The confirmation prints the body as raw Markdown, where a severity pill would be a line of HTML, so it prints the
+// word. The payload view keeps the exact bytes.
+func TestConfirmPlainShowsPillsAsWords(t *testing.T) {
+	c := render.Comments(render.Input{Inline: "all", Findings: []render.Finding{{ID: "f-001", Title: "T", Body: "B.",
+		Label: "issue", Severity: "major", Location: &render.Location{Path: "a.go", Side: "RIGHT", Line: 3}}}})
+	row, _, _ := strings.Cut(c[0].Body, "\n")
+	p := confirmPreview()
+	p.Comments = []publish.Comment{{Path: "a.go", Line: 3, Side: "RIGHT", Body: c[0].Body}}
+	p.Compose = func(string) (publish.Envelope, string, error) {
+		return publish.Envelope{Body: "<details>\n<summary>" + row + "</summary>\n\nB.\n\n</details>\n", Comments: p.Comments}, p.EnvelopeJSON, nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	var out bytes.Buffer
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(p); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if strings.Contains(text, "<picture>") || strings.Count(text, "<b>issue</b> MAJOR: T") < 2 {
+		t.Errorf("want the pill shown as MAJOR in the body and the inline comment:\n%s", text)
 	}
 }

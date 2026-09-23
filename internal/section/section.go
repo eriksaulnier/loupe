@@ -2,7 +2,8 @@
 // order the published review will.
 package section
 
-// The label sections, in the order the body emits them. Other collects every unknown or empty label.
+// The label groups, in the order that breaks ties inside a section and that the chips row counts in. Other collects
+// every unknown or empty label.
 const (
 	Issue = iota
 	Suggestion
@@ -10,7 +11,7 @@ const (
 	Other
 )
 
-// Group is a finding's label section, ignoring whether it blocks.
+// Group is a finding's label group, ignoring whether it blocks.
 func Group(label string) int {
 	switch label {
 	case "issue":
@@ -23,11 +24,11 @@ func Group(label string) int {
 	return Other
 }
 
-// Rank is where a finding sits among the body's sections: Blocking first whatever its label, then the label sections
-// in Group order. It is the first key of the order every surface presents findings in.
-func Rank(label string, blocking bool) int {
+// Rank is where a finding sits among the body's two sections: Must fix for a blocking finding whatever its label,
+// then Worth a look for the rest. It is the first key of the order every surface presents findings in.
+func Rank(_ string, blocking bool) int {
 	if blocking {
 		return 0
 	}
-	return 1 + Group(label)
+	return 1
 }

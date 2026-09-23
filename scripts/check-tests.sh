@@ -21,6 +21,9 @@
 #     config key)
 #   - internal/github/client_test.go: https://github.com/<owner>/<repo>/pull/<number> (a fix text placeholder)
 #   - internal/markdown/allowlist_test.go: https://example.com (a link in Markdown input)
+#   - internal/draft/mutate_add_test.go: https://:80/x (a reference with no hostname, which validation refuses)
+#   - internal/render/body_test.go: the severity pill's two URLs under raw.githubusercontent.com (the published
+#     contract the test pins; the renderer only writes them into the body)
 # A bare api.github.com is allowed only in the refusal fix text "check network access to api.github.com".
 set -eu
 
@@ -100,7 +103,10 @@ while IFS= read -r hit; do
 		"internal/gitx/gitx_test.go https://github.com/o" | \
 		"internal/gitx/gitx_test.go https://github.com/.insteadOf" | \
 		"internal/github/client_test.go https://github.com/" | \
-		"internal/markdown/allowlist_test.go https://example.com")
+		"internal/markdown/allowlist_test.go https://example.com" | \
+		"internal/draft/mutate_add_test.go https://:80/x" | \
+		"internal/render/body_test.go https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" | \
+		"internal/render/body_test.go https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg")
 		continue
 		;;
 	esac

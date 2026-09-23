@@ -1,20 +1,20 @@
-`⛔ 2 blocking`
-
 Summary.
+
+`⛔ 2 blocking`
 
 ---
 
-### ⛔ Blocking
+### Must fix
 
 <details>
-<summary><b>issue:</b> Title f-001</summary>
+<summary>⛔ <b>issue</b>: Title f-001</summary>
 
 Body f-001.
 
 </details>
 
 <details>
-<summary><b>question:</b> Title f-002</summary>
+<summary>⛔ <b>question</b>: Title f-002</summary>
 
 Body f-002.
 

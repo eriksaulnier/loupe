@@ -308,10 +308,10 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Co
 		if preview.HeadMoved != nil {
 			p.printf("%s\n\n", strings.Join(headMovedLines(preview.HeadMoved), "\n"))
 		}
-		p.printf("Review body:\n\n%s\n", render.ForDisplay(markdown.OpenDetails(preview.Body)))
+		p.printf("Review body:\n\n%s\n", render.ForDisplay(render.PillsAsWords(markdown.OpenDetails(preview.Body))))
 		p.printf("\nInline comments: %d\n", len(preview.Comments))
 		for _, c := range preview.Comments {
-			p.printf("\n%s\n%s\n", render.ForDisplay(formatLocation(c.Path, c.Line, c.StartLine, c.Side)), render.ForDisplay(c.Body))
+			p.printf("\n%s\n%s\n", render.ForDisplay(formatLocation(c.Path, c.Line, c.StartLine, c.Side)), render.ForDisplay(render.CommentPillsAsWords(c.Body)))
 		}
 		p.printf("\nEnvelope JSON:\n\n%s\n", render.ForDisplay(preview.EnvelopeJSON))
 		lines := bufio.NewScanner(in)
@@ -342,7 +342,7 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Co
 			}
 			// Nobody answers y to a body they were not shown, and "exact request payload" has to stay exact, so a
 			// review that gained an opening is printed again with the envelope that carries it.
-			p.printf("\nReview body:\n\n%s\n", render.ForDisplay(markdown.OpenDetails(env.Body)))
+			p.printf("\nReview body:\n\n%s\n", render.ForDisplay(render.PillsAsWords(markdown.OpenDetails(env.Body))))
 			p.printf("\nEnvelope JSON:\n\n%s\n", render.ForDisplay(envJSON))
 			break
 		}

@@ -362,3 +362,26 @@ func TestCheckBatchMergesEarlierFailuresInEntryOrder(t *testing.T) {
 		t.Fatalf("a valid batch is refused: %v", err)
 	}
 }
+
+// A suggested fix is Markdown under the body allowlist, like impact, so an agent fences code itself.
+func TestAddRefusesSuggestedFixFailingAllowlist(t *testing.T) {
+	d := NewEmpty()
+	in := general("Bad fix")
+	in.SuggestedFix = "one<br>two"
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	r := wantRefusal(t, err, refusal.Markdown)
+	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
+		t.Fatalf("fix %q details %v", r.Fix, r.Details)
+	}
+}
+
+// Go's url.Parse gives a URL with a port and no host the Host ":80", which names no host at all.
+func TestAddRefusesReferenceWithoutAHostname(t *testing.T) {
+	d := NewEmpty()
+	in := general("No host")
+	in.References = []string{"https://:80/x"}
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	if r := wantRefusal(t, err, refusal.Input); !strings.Contains(r.Message, "with a host") {
+		t.Fatalf("message %q", r.Message)
+	}
+}

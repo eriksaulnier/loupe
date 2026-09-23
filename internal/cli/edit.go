@@ -94,7 +94,7 @@ func newEditCmd(deps Deps) *cobra.Command {
 	f.String("verified", "", "reproduced or plausible")
 	f.String("impact", "", "Markdown: what goes wrong and under what input")
 	f.StringArray("reference", nil, "an http or https URL the finding rests on; repeatable, replaces the list")
-	f.String("suggested-fix", "", "prose or code for the correction")
+	f.String("suggested-fix", "", "the correction, as Markdown; fence any code")
 	f.Bool("clear-location", false, "remove the location, making the finding general")
 	f.Bool("clear-label", false, "remove the label")
 	f.Bool("clear-confidence", false, "remove the confidence")
