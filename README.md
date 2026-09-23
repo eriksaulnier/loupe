@@ -84,7 +84,7 @@ Edit the review skill at <path> so it hands its findings to loupe through the `h
 
 ### Handing off in a terminal pane
 
-Inside [Herdr](https://herdr.dev) or Orca, `loupe handoff` opens `loupe review` in a split beside the agent's pane, and the pane closes when review exits cleanly. Elsewhere, or when the split fails, the skill asks you to run `loupe review` yourself.
+Inside [Herdr](https://herdr.dev) or [Orca](https://www.onorca.dev/), `loupe handoff` opens `loupe review` in a split beside the agent's pane, and the pane closes when review exits cleanly. Elsewhere, or when the split fails, the skill asks you to run `loupe review` yourself.
 
 To skip the approval prompt at each handoff, allow that one command:
 
