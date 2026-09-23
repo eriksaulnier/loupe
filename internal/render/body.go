@@ -408,10 +408,11 @@ func metaBlock(f Finding, in Input, inBody bool) string {
 	if f.Confidence != "" {
 		lines = append(lines, "**Confidence:** "+EscapeHTML(OneLine(f.Confidence)))
 	}
-	// An enum word is already on the summary line above this block, the way an inline comment's line already carries
-	// its location, so repeating it here would put the same word two lines from itself. A run stored before the enum
-	// cannot reach that line, so it is repeated here, in a code span where Markdown cannot run.
-	if word := OneLine(f.Severity); word != "" && !severity.Rated(word) {
+	// The row shows an enum word only as a pill image, which a text-only reader such as a terminal renderer drops, so
+	// the word is here as text too. A run stored before the enum can hold any text, so that stays in a code span.
+	if word := OneLine(f.Severity); severity.Rated(word) {
+		lines = append(lines, "**Severity:** "+word)
+	} else if word != "" {
 		lines = append(lines, "**Severity:** "+CodeSpan(word))
 	}
 	if f.Verified != "" {

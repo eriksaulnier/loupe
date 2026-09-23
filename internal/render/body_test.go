@@ -209,11 +209,11 @@ func TestBodyMetaLineParts(t *testing.T) {
 		in.Findings = []Finding{f}
 		return Body(in)
 	}
-	// An enum word leads the summary line, so the meta block does not repeat it; a general finding with nothing
-	// else to report has no meta block at all.
+	// An enum word is the row's pill, an image, so the meta block also carries it as text for readers that drop
+	// images.
 	f.Severity = "minor"
-	if body := render(f); !strings.Contains(body, "<summary>🟡 <b>issue</b> "+severityPill("minor")+": T</summary>\n\nB.\n\n</details>") {
-		t.Fatalf("severity must not repeat on the meta line\n%s", body)
+	if body := render(f); !strings.Contains(body, "<summary>🟡 <b>issue</b> "+severityPill("minor")+": T</summary>\n\n> **Severity:** minor\n\nB.\n\n</details>") {
+		t.Fatalf("an enum severity lost its meta line\n%s", body)
 	}
 	f.Severity, f.Verified = "", "plausible"
 	if body := render(f); !strings.Contains(body, "\n\n> **Verified:** plausible\n\nB.") {
@@ -358,9 +358,9 @@ func rated(id, label, sev string, blocking bool) Finding {
 	return f
 }
 
-// The summary line above a meta block always carries an enum severity, so the block repeats it only when the summary
-// line could not take it: a value stored before the enum, in the code span that keeps it inert.
-func TestMetaBlockRepeatsOnlyALegacySeverity(t *testing.T) {
+// The row carries an enum severity as a pill, an image that a text-only reader drops, so the meta block carries the
+// word as text too. A value stored before the enum gets no pill and stays in the code span that keeps it inert.
+func TestMetaBlockCarriesSeverityAsText(t *testing.T) {
 	in := exampleInput()
 	base := Finding{ID: "f-001", Title: "T", Body: "B.", General: true, Label: "issue", Blocking: true,
 		Confidence: "high", Verified: "reproduced"}
@@ -372,11 +372,8 @@ func TestMetaBlockRepeatsOnlyALegacySeverity(t *testing.T) {
 		if !strings.Contains(body, "<summary>⛔ <b>issue</b> "+severityPill(word)+": T</summary>") {
 			t.Errorf("%s did not lead the summary line\n%s", word, body)
 		}
-		if strings.Contains(body, "**Severity:**") {
-			t.Errorf("%s repeated on the meta line\n%s", word, body)
-		}
-		if !strings.Contains(body, "> **Confidence:** high\\\n> **Verified:** reproduced") {
-			t.Errorf("dropping severity broke the meta block's hard breaks\n%s", body)
+		if !strings.Contains(body, "> **Confidence:** high\\\n> **Severity:** "+word+"\\\n> **Verified:** reproduced") {
+			t.Errorf("%s is not on the meta line as text\n%s", word, body)
 		}
 	}
 	f := base
@@ -465,8 +462,8 @@ func TestBodySectionsSortBySeverityThenLabelGroup(t *testing.T) {
 	}
 }
 
-// An inline comment's meta block drops a rated severity, since the row above it carries the word.
-func TestInlineMetaBlockDropsARatedSeverity(t *testing.T) {
+// An inline comment's meta block carries a rated severity as text too, since its row carries only the pill.
+func TestInlineMetaBlockCarriesSeverityAsText(t *testing.T) {
 	in := exampleInput()
 	in.Inline = "all"
 	in.Findings = []Finding{{ID: "f-001", Title: "T", Body: "B.", Label: "issue", Severity: "critical",
@@ -475,7 +472,7 @@ func TestInlineMetaBlockDropsARatedSeverity(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("want one comment, got %d", len(got))
 	}
-	if want := "🟡 <b>issue</b> " + severityPill("critical") + ": T\n\n> **Confidence:** high\n\nB."; got[0].Body != want {
+	if want := "🟡 <b>issue</b> " + severityPill("critical") + ": T\n\n> **Confidence:** high\\\n> **Severity:** critical\n\nB."; got[0].Body != want {
 		t.Errorf("inline body\n got %q\nwant %q", got[0].Body, want)
 	}
 }

@@ -87,6 +87,10 @@ description: "Task list for two sections and readable rows"
 - [X] T035 Put the opening prose before the chips row (FR-027), with a failing test first in `internal/render/body_test.go`. Keep the confirmation's box evenly spaced now that nothing sits above it. Record FR-028: the draft summary stays out of attended reviews.
 - [X] T036 Revert T035 after review (FR-027): the chips row leads again and the prose follows it, as on `main`. The confirmation's box keeps its even spacing either way.
 
+## Phase 10: Severity as text
+
+- [X] T037 FR-029: write `**Severity:** <word>` on the meta line for an enum severity, test first in `internal/render/body_test.go`, regenerate goldens, amend `docs/comment-format.md` The meta block and the example, and record the glamour observation in `docs/github-facts.md`.
+
 ## Dependencies
 
 - T001–T003 come before everything, because the order is shared.

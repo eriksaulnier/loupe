@@ -76,6 +76,8 @@ Round three, the same day, on `eriksaulnier/loupe-format-spike#3`, review 528631
 
 Observed 2026-09-23 by `mise run review-screenshot`, which emulates `prefers-color-scheme` in Playwright on `eriksaulnier/loupe-format-spike#3`: the final pill switched to its dark source in the dark capture.
 
+Observed 2026-09-23 by rendering a published review body through glamour v1.0.0, the Markdown renderer `gh pr view` uses: the severity pill's `<picture>` renders as nothing, `alt` included, so the row read `⛔ issue : Cache entries never expire…` with no severity and a stray space before the colon. Inline tags such as `<b>` keep their text. `gh pr view --comments` itself could not be run that day; it failed on GitHub's Projects (classic) deprecation.
+
 ## Actions and unattended publication
 
 Observed on 2026-09-16 in `.github/workflows/review.yml` run 35049778372, on `eriksaulnier/loupe#18`.

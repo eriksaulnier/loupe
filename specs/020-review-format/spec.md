@@ -154,6 +154,10 @@ A reader expands a finding. They read what goes wrong first, then the reasoning,
 - **FR-015**: `<b>`, the title's `<code>`, and the pill's `<picture>`, `<source>` and `<img>` MUST be the only tags loupe emits in a summary line.
 - **FR-016**: Every generated field in the row MUST be collapsed to one line, and MUST be escaped so that it renders as the same text in a `<summary>` and in an inline comment's Markdown paragraph.
 
+### Severity as text
+
+- **FR-029**: The meta block MUST carry an enum severity as text, `**Severity:** <word>`, between confidence and verified, in the body and inline. The row carries it only as a pill image, and a text-only reader drops images: glamour, the renderer `gh pr view` uses, showed the row with no severity at all (`docs/github-facts.md`). This reverses `specs/014-severity-badges` FR-014 for enum words, whose reason, that the row already carried the word as text, no longer holds.
+
 ### The opening
 
 - **FR-027**: The chips row MUST keep leading the body, with the opening prose after it, as before. Owner, 2026-09-22 and 2026-09-23: prose first was built and then reverted, because `⛔ N blocking` is the fact an author most needs and a long unattended summary would push it down.

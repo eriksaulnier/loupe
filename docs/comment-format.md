@@ -61,6 +61,7 @@ Worth fixing before this merges; the rest reads fine to me.
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
 > **Confidence:** high\
+> **Severity:** major\
 > **Verified:** reproduced
 
 **Impact:** A 502 on the first send leaves two reviews on the pull request, and the receipt records only one.
@@ -81,7 +82,8 @@ that may already have succeeded, so a 502 produces two reviews.
 <details>
 <summary>⚪ <b>perf-nit</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/minor-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/minor.svg" alt="MINOR" height="16" align="absmiddle"></picture>: Redundant sort on every read</summary>
 
-> [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)
+> [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)\
+> **Severity:** minor
 
 …
 
@@ -133,7 +135,7 @@ One row rule serves the body's `<summary>` and an inline comment's first line. T
 
 - **The row has no location.** The meta block's first line is the full location, linked to the files view, and a click on the row opens onto it.
 - **The row says `blocking` nowhere.** The `⛔` dot says it on every row, body and inline, and the `Must fix` heading says it for the section. The label stays either way: the dot says that a finding blocks, not what kind of remark it is.
-- **Only the four enum words reach the row.** A stored severity that is not one of them stays on the meta line instead, where its code span makes it inert. Exactly one of the two places carries a finding's severity, never both.
+- **Only the four enum words reach the row.** A stored severity that is not one of them gets no pill and appears only on the meta line, where its code span makes it inert. An enum word appears in both places: as the pill on the row, and as text on the meta line (see The meta block).
 - `<b>`, `<code>` and the pill's `<picture>`, `<source>` and `<img>` are the only tags loupe emits inside a `<summary>`. GitHub parses no Markdown inside a `<summary>`, so loupe applies two CommonMark rules to the title itself. Each backtick code span becomes `<code>`. A backslash before ASCII punctuation outside a span shows the punctuation alone, so an escaped backtick opens no span. The rest of the title is plain text: it is HTML-escaped, and emphasis and links show literally.
 - **The label is HTML-escaped inside its `<b>`**, since a tag in a `<summary>` is raw HTML. An inline comment's first line is a Markdown paragraph, so there the title and the label are also backslash-escaped, and they render as the same text in both places.
 
@@ -156,14 +158,14 @@ The severity word is drawn as a colored pill, an SVG image. This is the one exce
 
 A blockquote at the top of the disclosure body, present only when at least one part exists.
 
-- One part per line, each line separated from the next by a backslash hard break: the location first, then confidence, severity and verified, in that order. An absent part leaves no line, and **an enum severity leaves none either**, because the summary line directly above already carries it.
+- One part per line, each line separated from the next by a backslash hard break: the location first, then confidence, severity and verified, in that order. An absent part leaves no line.
 - A finding with no location starts at its first present part; one with only a location has that line alone.
 
 | Part | Rendering | Example |
 | :--- | :--- | :--- |
 | Location | Review body only. A Markdown code span, side included inside the span, as the text of a link to the PR's files view | `` [`src/a.go:88`](…/pull/7/files#diff-<sha256 of the path>R88) `` |
 | Confidence | the bold label `**Confidence:**` then the escaped level word | `**Confidence:** high` |
-| Severity | **only a value outside the enum**, as the bold label `**Severity:**` then a code span. An enum word is on the summary line and is not repeated here | `` **Severity:** `P2` `` |
+| Severity | the bold label `**Severity:**` then the enum word as text, or a value outside the enum in a code span | `**Severity:** major`, `` **Severity:** `P2` `` |
 | Verified | the bold label `**Verified:**` then the escaped word | `**Verified:** reproduced` |
 
 - **Location is rendered in full**, path and range, because with `--inline none` this is the only place it survives. `src/a.go:88` for a single line, `src/a.go:10–14` for a range. **The side is shown only when it is `LEFT`**, appended as ` (LEFT)`.
@@ -172,7 +174,8 @@ A blockquote at the top of the disclosure body, present only when at least one p
 - **A code span MUST be delimited by a backtick run longer than any run inside its content**, padded with a space when the content starts or ends with a backtick. This is the CommonMark rule and it applies to every generated code span, including the footer's.
 - **Code-span contents MUST NOT be HTML-escaped.** A code span is already inert, and GitHub shows character references inside one literally. Escaping is for text interpolated outside a span.
 - **Every generated inline field MUST be collapsed to a single line before interpolation**, with runs of whitespace becoming one space. A newline in a title breaks the summary line out of its tag; a newline in `severity` would end the meta block's blockquote and leave the rest of the line as body text.
-- Confidence, severity and verified render only when the reviewer supplied them. **Severity is carried by the summary line, not by this block**, on the same rule that keeps an inline comment's location out of it: the line above already says it. None of the three decides section placement.
+- Confidence, severity and verified render only when the reviewer supplied them. None of the three decides section placement.
+- **An enum severity is repeated here as text.** The row carries it only as a pill image, and anything that reads the review as plain text drops images: a terminal Markdown renderer such as `gh pr view` shows the row with no severity at all (github-facts.md). So the meta line, which such a reader shows right under the row, carries the word.
 
 ### Field labels
 
@@ -259,7 +262,7 @@ The renderer wraps each finding in a generated `<details>`. Authored content tha
 | `title` | Collapsed to one line. Backslash escapes are applied, each backtick code span becomes `<code>` around its HTML-escaped content, and the text between spans is HTML-escaped, so `<code>` is the only tag the title adds |
 | `label` | Collapsed to one line, then HTML-escaped inside a `<b>` tag; inline, ASCII punctuation is also backslash-escaped |
 | `confidence`, `verified` | Collapsed to one line, then HTML-escaped before interpolation |
-| `severity` | Collapsed to one line; an enum word selects a fixed pill on the summary line, and anything else is emitted inside a code span on the meta line |
+| `severity` | Collapsed to one line; an enum word selects a fixed pill on the summary line and is written as text on the meta line, and anything else is emitted inside a code span on the meta line |
 | Location, footer fields | Collapsed to one line and emitted inside a code span whose backtick run is longer than any run in the content |
 | `references` | Refused at input, and again at composition, unless each is a URL free of whitespace, control and format characters, `<`, `>` and backticks; then emitted as a link with escaped text and a `<…>` destination |
 | `body`, `impact` | Validated by the allowlist below; correction `loupe edit <id> --from -` |
