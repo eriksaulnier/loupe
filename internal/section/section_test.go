@@ -17,15 +17,10 @@ func TestGroupIsTheLabelGroupsInTieBreakOrder(t *testing.T) {
 	}
 }
 
-// Rank is the whole of the body's section order: Must fix, then Worth a look. The label never moves a finding
-// between them; Group only breaks ties inside one.
+// Rank is the whole of the body's section order: Must fix, then Worth a look. Only blocking decides it; Group breaks
+// ties inside a section.
 func TestRankIsBlockingAgainstTheRest(t *testing.T) {
-	for _, label := range []string{"issue", "suggestion", "question", "perf-nit", ""} {
-		if got := Rank(label, true); got != 0 {
-			t.Errorf("Rank(%q, blocking) = %d, want 0", label, got)
-		}
-		if got := Rank(label, false); got != 1 {
-			t.Errorf("Rank(%q, nonblocking) = %d, want 1", label, got)
-		}
+	if Rank(true) != 0 || Rank(false) != 1 {
+		t.Errorf("Rank(true) = %d, Rank(false) = %d, want 0 and 1", Rank(true), Rank(false))
 	}
 }

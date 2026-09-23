@@ -24,7 +24,7 @@ func Ordered(d *Draft) []Finding {
 	out := slices.Clone(d.Findings)
 	slices.SortFunc(out, func(a, b Finding) int {
 		return cmp.Or(
-			cmp.Compare(section.Rank(a.Label, a.Blocking), section.Rank(b.Label, b.Blocking)),
+			cmp.Compare(section.Rank(a.Blocking), section.Rank(b.Blocking)),
 			severity.Compare(a.Severity, b.Severity),
 			cmp.Compare(section.Group(a.Label), section.Group(b.Label)),
 			findingid.Compare(a.ID, b.ID),

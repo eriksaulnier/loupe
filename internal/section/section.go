@@ -26,7 +26,7 @@ func Group(label string) int {
 
 // Rank is where a finding sits among the body's two sections: Must fix for a blocking finding whatever its label,
 // then Worth a look for the rest. It is the first key of the order every surface presents findings in.
-func Rank(_ string, blocking bool) int {
+func Rank(blocking bool) int {
 	if blocking {
 		return 0
 	}
