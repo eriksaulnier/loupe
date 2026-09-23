@@ -15,16 +15,21 @@ for tool in gh jq perl pnpm node go; do
 	command -v "$tool" >/dev/null || { echo "review-screenshot: needs $tool on PATH" >&2; exit 1; }
 done
 
-# The pills load from assets/review/v1 at a commit. main has them only once a change lands, so a branch renders at
-# its own head, which MUST be pushed or every pill shows its alt text.
-ref=${LOUPE_ASSETS_REF:-$(git rev-parse HEAD)}
-if [[ -z ${LOUPE_ASSETS_REF:-} ]] && { ! git diff --quiet HEAD -- assets/review || [[ -n $(git ls-files --others --exclude-standard assets/review) ]]; }; then
-	echo "review-screenshot: assets/review has changes not in HEAD, and the pills load from HEAD; commit and push them" >&2
-	exit 1
-fi
-if ! out=$(gh api "repos/eriksaulnier/loupe/commits/$ref" --silent 2>&1); then
-	echo "review-screenshot: cannot find $ref on github.com/eriksaulnier/loupe, which must have it pushed: $out" >&2
-	exit 1
+review=${LOUPE_SCREENSHOT_REVIEW:-}
+
+# A recapture posts nothing: the review already holds its pill URLs, so it needs neither a pushed commit nor the body.
+if [[ -z $review ]]; then
+	# The pills load from assets/review/v1 at a commit. main has them only once a change lands, so a branch renders at
+	# its own head, which MUST be pushed or every pill shows its alt text.
+	ref=${LOUPE_ASSETS_REF:-$(git rev-parse HEAD)}
+	if [[ -z ${LOUPE_ASSETS_REF:-} ]] && { ! git diff --quiet HEAD -- assets/review || [[ -n $(git ls-files --others --exclude-standard assets/review) ]]; }; then
+		echo "review-screenshot: assets/review has changes not in HEAD, and the pills load from HEAD; commit and push them" >&2
+		exit 1
+	fi
+	if ! out=$(gh api "repos/eriksaulnier/loupe/commits/$ref" --silent 2>&1); then
+		echo "review-screenshot: cannot find $ref on github.com/eriksaulnier/loupe, which must have it pushed: $out" >&2
+		exit 1
+	fi
 fi
 
 tmp=$(mktemp -d)
@@ -36,13 +41,11 @@ mkdir "$tmp/pw"
 pnpm add --dir "$tmp/pw" "playwright@$playwright_version" --silent >/dev/null
 "$tmp/pw/node_modules/.bin/playwright" install chromium >/dev/null
 
-go run ./cmd/loupe-demo body >"$tmp/body.md"
-# Every finding stays collapsed: the rows are what the picture is for, and the terminal pictures show a finding's
-# contents. That also keeps it near the other README images' proportions.
-REF="$ref" perl -0pi -e 's{raw\.githubusercontent\.com/eriksaulnier/loupe/main/}{raw.githubusercontent.com/eriksaulnier/loupe/$ENV{REF}/}g' "$tmp/body.md"
-
-review=${LOUPE_SCREENSHOT_REVIEW:-}
 if [[ -z $review ]]; then
+	go run ./cmd/loupe-demo body >"$tmp/body.md"
+	# Every finding stays collapsed: the rows are what the picture is for, and the terminal pictures show a finding's
+	# contents. That also keeps it near the other README images' proportions.
+	REF="$ref" perl -0pi -e 's{raw\.githubusercontent\.com/eriksaulnier/loupe/main/}{raw.githubusercontent.com/eriksaulnier/loupe/$ENV{REF}/}g' "$tmp/body.md"
 	head=$(gh api "repos/$scratch_repo/pulls/$scratch_pr" --jq .head.sha)
 	review=$(jq -n --rawfile body "$tmp/body.md" --arg sha "$head" '{commit_id: $sha, event: "COMMENT", body: $body}' |
 		gh api "repos/$scratch_repo/pulls/$scratch_pr/reviews" --input - --jq .id)
