@@ -12,6 +12,9 @@
 //
 // LOUPE_DEMO_HOME=<dir> keeps the data root instead: the first command seeds it and later ones reuse it with whatever
 // was decided.
+//
+// loupe-demo body prints the review body #43 publishes with the publish tape's message, the input
+// scripts/review-screenshot.sh posts to render the README's picture of a published review.
 package main
 
 import (
@@ -23,7 +26,9 @@ import (
 	"golang.org/x/term"
 
 	"github.com/eriksaulnier/loupe/internal/cli"
+	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/pane"
+	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
@@ -36,6 +41,14 @@ func main() {
 const demoMarker = ".loupe-demo"
 
 func demo(args []string) int {
+	if len(args) == 1 && args[0] == "body" {
+		body, err := demoBody(time.Now())
+		if err != nil {
+			return fail(err)
+		}
+		_, _ = fmt.Fprint(os.Stdout, body)
+		return 0
+	}
 	home, keep, err := demoHome(os.Getenv)
 	if err != nil {
 		return fail(err)
@@ -130,6 +143,28 @@ func prepare(home string, gh *fakegh.Server, now time.Time, keep bool) error {
 		return os.WriteFile(filepath.Join(home, demoMarker), nil, 0o600)
 	}
 	return nil
+}
+
+// demoMessage is the opening docs/tapes/publish.tape types, so the terminal and GitHub pictures show one review.
+const demoMessage = "The cache bug blocks this one; the rest can land."
+
+// demoBody composes #43 as publish would send it with inline blocking, under a fixed publication id so the body is
+// the same on every run.
+func demoBody(now time.Time) (string, error) {
+	parsed, err := diff.Parse([]byte(demoDiff))
+	if err != nil {
+		return "", fmt.Errorf("parse the demo diff: %w", err)
+	}
+	target, d, err := demoRun(parsed, 43, readyToPublish(now), now)
+	if err != nil {
+		return "", err
+	}
+	env, err := publish.Build(publish.BuildInput{Target: target, Round: 1, Draft: d, Viewer: viewer, Action: "comment",
+		Inline: "blocking", PublicationID: "00000000-0000-4000-8000-000000000000", Message: demoMessage})
+	if err != nil {
+		return "", err
+	}
+	return env.Body, nil
 }
 
 func fail(err error) int {

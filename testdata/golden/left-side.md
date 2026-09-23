@@ -4,10 +4,10 @@ Summary.
 
 ---
 
-### 🟡 Issues
+### Worth a look
 
 <details>
-<summary>Removed guard</summary>
+<summary>🟡 <b>issue</b>: Removed guard</summary>
 
 > [`a.go:21–24 (LEFT)`](https://github.com/o/r/pull/7/files#diff-ffc4fd9bc24722ba464194a85b255d4b50945f3e68a120122e11f6cdae4a8c19L21-L24)
 

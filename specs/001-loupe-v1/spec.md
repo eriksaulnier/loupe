@@ -35,6 +35,10 @@
 
 - Q: A published review showed a finding title's backticks literally, because GitHub parses no Markdown inside `<summary>` (review 5268087354). How should a title's Markdown render? → A: loupe applies two CommonMark rules to the title itself, in the review body and in an inline comment alike. Each backtick code span becomes `<code>` around its HTML-escaped content. A backslash before ASCII punctuation outside a span shows the punctuation alone, so an escaped backtick opens no span. The rest of the title stays plain text, so emphasis and links show literally.
 
+### Session 2026-09-22
+
+- Q: PR #24's review opened with `⛔ 1 blocking` directly above a `### ⛔ Blocking` heading holding that one finding, and its rows ran severity, label and title together as one string. Should the five label sections and the ` · ` prefix stay? → A: No. The body holds at most two sections, `Must fix` and `Worth a look`, each sorted by severity, then label group, then id. Every row, body and inline, leads with a dot, `⛔` when blocking and the label's dot otherwise, so the chips row is a key to the dots. It then carries the label in `<b>`, the severity as a colored pill image, a colon and the title; the file and line stay the meta block's first line. This amends the 2026-09-14 heading-dot answer and the 2026-09-15 row answer (`specs/020-review-format`).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Agent files findings against a captured pull request (Priority: P1)

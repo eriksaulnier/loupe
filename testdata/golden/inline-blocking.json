@@ -3,7 +3,7 @@
     "path": "internal/b.go",
     "line": 24,
     "side": "LEFT",
-    "body": "⛔ <b>major · suggestion:</b> Removed guard\n\nBody f-002."
+    "body": "⛔ <b>suggestion</b> <picture><source media=\"(prefers-color-scheme: dark)\" srcset=\"https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg\"><img src=\"https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg\" alt=\"MAJOR\" height=\"16\" align=\"absmiddle\"></picture>: Removed guard\n\n> **Severity:** major\n\nBody f-002."
   },
   {
     "path": "c.go",
@@ -17,6 +17,6 @@
     "side": "RIGHT",
     "start_line": 10,
     "start_side": "RIGHT",
-    "body": "⛔ <b>major · issue:</b> Range finding\n\n> **Confidence:** high\\\n> **Verified:** reproduced\n\nBody f-010.\n\n**Impact**\n\nImpact f-010.\n\n**Suggested fix**\n\n```\nreturn err\n```\n\n**References**\n\n- <https://github.com/o/r/issues/1>"
+    "body": "⛔ <b>issue</b> <picture><source media=\"(prefers-color-scheme: dark)\" srcset=\"https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg\"><img src=\"https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg\" alt=\"MAJOR\" height=\"16\" align=\"absmiddle\"></picture>: Range finding\n\n> **Confidence:** high\\\n> **Severity:** major\\\n> **Verified:** reproduced\n\n**Impact:** Impact f-010.\n\nBody f-010.\n\n**Suggested fix:** return err\n\n**References:** [github.com/o/r/issues/1](<https://github.com/o/r/issues/1>)"
   }
 ]

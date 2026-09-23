@@ -131,3 +131,18 @@ func TestOpenDetails(t *testing.T) {
 		})
 	}
 }
+
+// CommonMark ends a line at a lone carriage return, so a fence that opens after one is a fence.
+func TestCheckTreatsALoneCarriageReturnAsALineBreak(t *testing.T) {
+	if err := Check("Return the error\r```", Body, "fix"); err == nil {
+		t.Fatal("an unclosed fence after a lone CR passed")
+	}
+}
+
+// OpenDetails reads a fence opened after a lone CR the way Check does, so fenced <details> stays as written.
+func TestOpenDetailsTreatsALoneCarriageReturnAsALineBreak(t *testing.T) {
+	got := OpenDetails("a\r```\n<details>\n```")
+	if strings.Contains(got, "<details open>") {
+		t.Errorf("fenced <details> was opened: %q", got)
+	}
+}

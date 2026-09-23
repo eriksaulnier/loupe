@@ -4,10 +4,10 @@ Summary.
 
 ---
 
-### ⛔ Blocking
+### Must fix
 
 <details>
-<summary><b>suggestion:</b> Title f-001</summary>
+<summary>⛔ <b>suggestion</b>: Title f-001</summary>
 
 Body f-001.
 

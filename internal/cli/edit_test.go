@@ -181,3 +181,21 @@ func TestExcludeWithdrawnKeepsVersion(t *testing.T) {
 		t.Fatalf("exit %d envelope %v changed %v", code, env, string(before) != string(after))
 	}
 }
+
+// The long help is how an agent learns the JSON input, so it states that a suggested fix is allowlisted Markdown with
+// code fenced, the rule add and edit now enforce.
+func TestAddAndEditHelpDocumentSuggestedFixMarkdown(t *testing.T) {
+	// The fencing phrases are the long help's own; the flag help's "fence any code" would match a bare "fence".
+	for cmd, fenced := range map[string]string{"add": "code in a suggestedFix belongs in a fence", "edit": "with code in a suggestedFix fenced"} {
+		deps, s := testDeps(t, nil)
+		if code := Execute(deps, []string{cmd, "--help"}); code != 0 {
+			t.Fatalf("%s: exit %d", cmd, code)
+		}
+		help := strings.Join(strings.Fields(s.stdout.String()), " ")
+		for _, want := range []string{"suggestedFix must pass the Markdown allowlist", fenced} {
+			if !strings.Contains(help, want) {
+				t.Errorf("%s help lacks %q:\n%s", cmd, want, help)
+			}
+		}
+	}
+}

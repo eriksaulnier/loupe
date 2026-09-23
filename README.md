@@ -40,6 +40,13 @@ The board, one finding, and the last screen before anything is sent, where you w
 
 ![Step 3 of publish: the exact Markdown the review will carry, with your own opening typed into the body where it will appear, and one key that sends it.](docs/assets/publish.png)
 
+And the review it posts, as GitHub renders it:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/review-dark.png">
+  <img alt="The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title." src="docs/assets/review.png">
+</picture>
+
 ## Setting up an agent
 
 ### Plugin

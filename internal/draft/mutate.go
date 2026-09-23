@@ -39,7 +39,7 @@ type FindingInput struct {
 const inputFix = "see loupe add --help for the input shape"
 
 // LabelPattern keeps labels free of Markdown punctuation, because an inline comment's summary line is a Markdown
-// paragraph where the label is not escaped.
+// paragraph. The renderer escapes the label there too, so this is a second line of defense, not the only one.
 const LabelPattern = `^[\p{L}\p{N}][\p{L}\p{N}_.-]*$`
 
 const maxLabelRunes = 40
@@ -59,8 +59,8 @@ const maxReferences = 6
 
 const maxReferenceBytes = 200
 
-// ValidateReferences accepts an empty list. A reference is rendered as a Markdown autolink, <url>, so whitespace,
-// control characters, angle brackets and backticks are refused: any of them would end or break the autolink. fix
+// ValidateReferences accepts an empty list. A reference is rendered as a Markdown link to <url>, so whitespace,
+// control characters, angle brackets and backticks are refused: any of them would end or break the destination. fix
 // names the command that repairs the finding, which differs between add and a recheck at publish.
 func ValidateReferences(refs []string, fix string) error {
 	if len(refs) > maxReferences {
@@ -85,7 +85,8 @@ func validateReference(ref string) error {
 		}
 	}
 	u, err := url.Parse(ref)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	// Hostname, not Host: url.Parse gives https://:80 the Host ":80", which names no host.
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return errors.New("must be an http or https URL with a host")
 	}
 	// user@host reads as the user part's host to anyone who stops at the first slash.
@@ -182,6 +183,11 @@ func validateInput(in FindingInput, dif *diff.Diff) error {
 	}
 	if in.Impact != "" {
 		if err := markdown.Check(in.Impact, markdown.Body, "loupe edit <id> --from -"); err != nil {
+			return err
+		}
+	}
+	if in.SuggestedFix != "" {
+		if err := markdown.Check(in.SuggestedFix, markdown.Body, "loupe edit <id> --from -"); err != nil {
 			return err
 		}
 	}
@@ -495,14 +501,18 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		return *stored, false, ErrNoChange
 	}
 	if publishable {
-		// A severity stored before the enum existed may be free text; it is checked only once an edit changes it.
-		severity := next.Severity
+		// A severity stored before the enum existed may be free text, and a suggested fix stored before the allowlist
+		// applied to it may hold raw HTML, which publishes fenced. Each is checked only once an edit changes it.
+		severity, fix := next.Severity, next.SuggestedFix
 		if severity == stored.Severity {
 			severity = ""
 		}
+		if fix == stored.SuggestedFix {
+			fix = ""
+		}
 		err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: next.Location, General: next.General, Label: next.Label,
 			Blocking: next.Blocking, Confidence: next.Confidence, Severity: severity, Verified: next.Verified, Impact: next.Impact,
-			References: next.References, SuggestedFix: next.SuggestedFix}, dif)
+			References: next.References, SuggestedFix: fix}, dif)
 		if err != nil {
 			return Finding{}, false, err
 		}

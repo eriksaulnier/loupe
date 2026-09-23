@@ -11,6 +11,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -500,5 +501,38 @@ func TestPlainRecordsPastAWriteToAnotherFinding(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "f-001 accepted; f-003 changed") {
 		t.Fatalf("the write to f-003 was not named:\n%s", out.String())
+	}
+}
+
+// pillPreview is a confirmation fixture whose body row and inline comment each carry a real severity pill, and whose
+// Compose puts a message above the row as render.Body does.
+func pillPreview() publish.Preview {
+	c := render.Comments(render.Input{Inline: "all", Findings: []render.Finding{{ID: "f-001", Title: "T", Body: "B.",
+		Label: "issue", Severity: "major", Location: &render.Location{Path: "a.go", Side: "RIGHT", Line: 3}}}})
+	row, _, _ := strings.Cut(c[0].Body, "\n")
+	p := confirmPreview()
+	p.Comments = []publish.Comment{{Path: "a.go", Line: 3, Side: "RIGHT", Body: c[0].Body}}
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		body := "<details>\n<summary>" + row + "</summary>\n\nB.\n\n</details>\n"
+		if message != "" {
+			body = message + "\n\n" + body
+		}
+		return publish.Envelope{Body: body, Comments: p.Comments}, p.EnvelopeJSON, nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	return p
+}
+
+// The confirmation prints the body as raw Markdown, where a severity pill would be a line of HTML, so it prints the
+// word. The payload view keeps the exact bytes.
+func TestConfirmPlainShowsPillsAsWords(t *testing.T) {
+	var out bytes.Buffer
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(pillPreview()); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if strings.Contains(text, "<picture>") || strings.Count(text, "<b>issue</b> MAJOR: T") < 2 {
+		t.Errorf("want the pill shown as MAJOR in the body and the inline comment:\n%s", text)
 	}
 }

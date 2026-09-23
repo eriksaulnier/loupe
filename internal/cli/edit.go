@@ -29,10 +29,10 @@ general and "general": true clears location; clearing location makes the finding
 New values follow the add rules: location must be in the captured diff, label is issue,
 suggestion, question or any other word of letters, digits, _, . or -, at most 40 characters,
 confidence is high, medium or low, severity is critical, major, minor or trivial, verified is
-reproduced or plausible, references are at most six http or https URLs, and body and impact
-must pass the Markdown allowlist. A severity is checked only when the edit changes it, so a
-finding stored with an older free-text value stays editable. Input MUST NOT carry included,
-decision, status or findingRev.
+reproduced or plausible, references are at most six http or https URLs, and body, impact and
+suggestedFix must pass the Markdown allowlist, with code in a suggestedFix fenced. A severity or
+suggestedFix is checked only when the edit changes it, so a finding stored with an older value
+stays editable. Input MUST NOT carry included, decision, status or findingRev.
 
 --exclude withdraws the finding from the review and --include restores it; neither records a
 human decision. Any change to a published field or to inclusion increments rev and clears the
@@ -94,7 +94,7 @@ func newEditCmd(deps Deps) *cobra.Command {
 	f.String("verified", "", "reproduced or plausible")
 	f.String("impact", "", "Markdown: what goes wrong and under what input")
 	f.StringArray("reference", nil, "an http or https URL the finding rests on; repeatable, replaces the list")
-	f.String("suggested-fix", "", "prose or code for the correction")
+	f.String("suggested-fix", "", "the correction, as Markdown; fence any code")
 	f.Bool("clear-location", false, "remove the location, making the finding general")
 	f.Bool("clear-label", false, "remove the label")
 	f.Bool("clear-confidence", false, "remove the confidence")

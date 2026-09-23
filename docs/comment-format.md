@@ -20,12 +20,12 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 | `references` | list of `http` or `https` URLs | What the reviewer looked at. At most six, never fetched. Optional |
 
 - **Label and blocking are independent.** A small required mechanical change is a blocking `suggestion`, not an `issue`. A blocking `question` is valid: a question whose answer determines whether the change is correct does block.
-- **Unknown labels are never refused.** An unrecognized label renders verbatim in the finding's own summary line (`perf-nit:`) and counts in the `Other` chip only when nonblocking. A finding with an unknown label and `blocking` set is placed and counted in `Blocking`, like every other blocking finding, while still counting under its own label in `loupe-meta`. `Other` is a bucket, never a rewrite of the label.
+- **Unknown labels are never refused.** An unrecognized label renders verbatim in the finding's own summary line (`<b>perf-nit</b>`), and a nonblocking one leads its row with the `⚪` dot and counts in the `⚪ other` chip. A finding with an unknown label and `blocking` set is placed in `Must fix` and counted in the `⛔` chip, like every other blocking finding, while still counting in `loupe-meta`'s census under `other`, the group of every unknown label. `other` is a bucket, never a rewrite of the label.
 - A label that is absent or empty is treated as no label: the finding counts as `other` and its summary line carries no label word. The same applies to an empty `confidence`, `severity` or `verified`, which render nothing.
 - **Confidence, severity and verified MUST NOT be computed, defaulted or inferred.** Each is a value the reviewer reports or omits. The reason for a confidence level belongs in the body.
-- **Severity is never mapped onto a label.** It leads the summary line and orders findings within a section, and never decides which section one is placed in.
+- **Severity is never mapped onto a label.** It follows the dot on the summary line and orders findings within a section, and never decides which section one is placed in.
 - **Verified is not confidence.** Confidence is how sure the reviewer is; verified is whether it ran or observed the failure (`reproduced`) or reasoned to it (`plausible`).
-- **A stored severity outside the enum still renders.** Runs captured before the enum hold free text. It cannot lead a summary line, which interpolates its prefix raw, so it renders on the meta line inside a code span, where it stays inert Markdown. Only a new or changed value is refused.
+- **A stored severity outside the enum still renders.** Runs captured before the enum hold free text. It cannot reach the summary line, which interpolates the severity word raw, so it renders on the meta line inside a code span, where it stays inert Markdown. Only a new or changed value is refused.
 
 | `severity` | What goes wrong if it ships |
 | :--- | :--- |
@@ -40,12 +40,11 @@ Findings carry a reduced [Conventional Comments](https://conventionalcomments.or
 
 ## Body composition
 
-- Section order is fixed: `Blocking`, `Issues`, `Suggestions`, `Questions`, `Other`. Empty sections are omitted.
-- Each heading is led by its chip's dot: `### ⛔ Blocking`, `### 🟡 Issues`, `### 🟣 Suggestions`, `### 🔵 Questions`, `### ⚪ Other`. A reader matches a chip to its section by the dot.
-- **Every published finding has exactly one home in the body.** A blocking finding lives in `Blocking` and nowhere else, regardless of its label. `--inline` decides only what additionally anchors to a line; it never changes what the body contains.
-- **Every section sorts by severity first**: `critical`, `major`, `minor`, `trivial`, then every finding whose severity is absent, empty or free text captured before the enum. An unrated finding sorts last rather than as `trivial`, because severity is reviewer-reported and placing it among the rated ones would infer the value the reviewer withheld.
-- Within `Blocking`, severity is followed by label in section order (`issue`, `suggestion`, `question`, then every unknown label as one group), then by finding id. Severity outranks the label group here, so two findings with the same label MAY be separated by a third between them; the section exists to be read first, and a `critical` question MUST NOT sit below a `minor` issue because the label groups say so.
-- Within a label section and within `Other`, severity is followed by finding id.
+- The body holds at most two finding sections, in fixed order: `### Must fix`, then `### Worth a look`. An empty section is omitted. Neither heading carries a dot: every row leads with its own.
+- **Every published finding has exactly one home in the body.** A blocking finding lives in `Must fix` and nowhere else, regardless of its label. Every other finding lives in `Worth a look`. `--inline` decides only what additionally anchors to a line; it never changes what the body contains.
+- **Both sections sort by severity first**: `critical`, `major`, `minor`, `trivial`, then every finding whose severity is absent, empty or free text captured before the enum. An unrated finding sorts last rather than as `trivial`, because severity is reviewer-reported and placing it among the rated ones would infer the value the reviewer withheld.
+- Severity is followed by label group (`issue`, `suggestion`, `question`, then every other or empty label as one group), then by finding id. Severity outranks the label group, so two findings with the same label MAY be separated by a third between them; each section exists to be read worst first.
+- Two sections, not one per label, because real reviews hold zero to ten findings and usually one. `blocking` is the one axis that changes what the author must do before merge, and each row carries its own label (`specs/020-review-format`).
 
 ````markdown
 `⛔ 1 blocking` `⚪ 1 other`
@@ -55,42 +54,36 @@ Worth fixing before this merges; the rest reads fine to me.
 
 ---
 
-### ⛔ Blocking
+### Must fix
 
 <details>
-<summary><b>major · issue:</b> Retry loop can double-publish a review</summary>
+<summary>⛔ <b>issue</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>: Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
 > **Confidence:** high\
+> **Severity:** major\
 > **Verified:** reproduced
+
+**Impact:** A 502 on the first send leaves two reviews on the pull request, and the receipt records only one.
 
 Reproduced against the recorded fixture. The catch re-enters the loop after a request
 that may already have succeeded, so a 502 produces two reviews.
 
-**Impact**
+**Suggested fix:** Return the original write error.
 
-A 502 on the first send leaves two reviews on the pull request, and the receipt records only one.
-
-**Suggested fix**
-
-```
-Return the original write error.
-```
-
-**References**
-
-- <https://github.com/o/r/issues/12>
+**References:** [github.com/o/r/issues/12](<https://github.com/o/r/issues/12>)
 
 </details>
 
 ---
 
-### ⚪ Other
+### Worth a look
 
 <details>
-<summary><b>minor · perf-nit:</b> Redundant sort on every read</summary>
+<summary>⚪ <b>perf-nit</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/minor-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/minor.svg" alt="MINOR" height="16" align="absmiddle"></picture>: Redundant sort on every read</summary>
 
-> [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)
+> [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)\
+> **Severity:** minor
 
 …
 
@@ -106,7 +99,7 @@ reviewed `d23632e`
 
 ### Opening
 
-The chips row leads the body and the opening prose follows it, or the prose leads when there are no findings to count. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
+The chips row leads the body and the opening prose follows it, or the prose leads when there are no findings to count. The chips lead because `⛔ N blocking` is the one fact an author most needs, and a long unattended summary would otherwise push it down. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
 
 **Who writes the opening prose depends on who published.** An attended review carries a message the human typed at the publish confirmation, reading the body as they wrote it; the draft's summary is not published on that path and orients the human while they sort findings instead. An unattended review carries the draft's summary, because no human is there to type anything, and its footer already ends in ` · unattended` so a reader knows the prose was not read by a person before it appeared.
 
@@ -117,47 +110,62 @@ The prose is optional in both modes. When there is none the body opens on the ch
 - One inline code span per non-zero count, zeros omitted, pluralized except `other` and `blocking`.
 - Each is led by a dot: ⛔ blocking, 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other.
 - Counts are derived from the final published findings at publish time, never from the summary prose.
-- **One chip per section that exists below, in the order the sections appear.** Blocking leads the row and is counted only there: a finding sits in exactly one section, so a blocking issue is `⛔ 1 blocking`, never also `🟡 1 issue`.
-- A reader who scans the row and finds no chip for a kind will find no heading for it either.
-- No external badge images. They are a network dependency and route through GitHub's camo proxy.
+- **One chip per row dot below, in the order ⛔, 🟡, 🟣, 🔵, ⚪.** The chips row is a key to the dots that lead the rows. Blocking leads the row and is counted only there: a blocking row leads with `⛔` whatever its label, so a blocking issue is `⛔ 1 blocking`, never also `🟡 1 issue`. Every other chip counts the nonblocking findings of its label group.
+- A reader who scans the row and finds no chip for a dot will find no row with that dot either.
+- **The chips row is text.** It is one code span per count, and no chip is an image.
+- **The severity pill is the one image loupe emits.** See The summary line for how it is hosted and drawn.
 
 ### The summary line
 
-`<summary>` carries the title, the severity word wherever the reviewer supplied one, and a label word only where it distinguishes one row from another. Only an inline comment puts a dot on a finding; in the body, dots lead the headings and chips alone:
+One row rule serves the body's `<summary>` and an inline comment's first line. The two differ only by the inline escaping described below:
 
 ```
-<summary><b>major · issue:</b> Retry loop can double-publish a review</summary>
-<summary><b>minor:</b> Digest is not verified on reconcile</summary>
-<summary>Redundant sort on every read</summary>
+<summary>⛔ <b>issue</b> <picture>…MAJOR…</picture>: Retry loop can double-publish a review</summary>
+<summary>🟣 <b>suggestion</b>: Digest is not verified on reconcile</summary>
+<summary>⚪ Redundant sort on every read</summary>
 ```
 
-| Where | Dot | Severity word | Label word | Why |
-| :--- | :--- | :--- | :--- | :--- |
-| `Blocking` | no | yes | yes | Labels mix here, so the label word tells the rows apart. A label dot under the `⛔` heading would read as a lower severity |
-| `Issues` · `Suggestions` · `Questions` | no | yes | no | The heading carries the dot and names the label; every row would repeat both |
-| `Other` | no | yes | yes | The heading carries the constant dot but does not name the actual label |
-| Inline comment | yes | yes | yes | No heading to lean on. A blocking finding takes `⛔`, whatever its label |
+| Part | Rendering | Absent when |
+| :--- | :--- | :--- |
+| Dot | `⛔` for a blocking finding, whatever its label. Otherwise the label group's dot: 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ every other or empty label | Never |
+| Label | `<b>` around the label, verbatim apart from escaping, known or unknown | The label is absent or empty |
+| Severity | The pill below | Severity is absent, empty or free text captured before the enum |
+| Colon | `:` directly after the last of label and severity | Both are absent |
+| Title | The rules below | Never |
 
-**No row says `(blocking)`.** The `⛔` heading says it in the body and the `⛔` dot says it inline, and a blocking finding is never placed in a label section, so there is no context where the word would be the only carrier. The label word stays either way: the dot says that a finding blocks, not what kind of remark it is.
+- **The row has no location.** The meta block's first line is the full location, linked to the files view, and a click on the row opens onto it.
+- **The row says `blocking` nowhere.** The `⛔` dot says it on every row, body and inline, and the `Must fix` heading says it for the section. The label stays either way: the dot says that a finding blocks, not what kind of remark it is.
+- **Only the four enum words reach the row.** A stored severity that is not one of them gets no pill and appears only on the meta line, where its code span makes it inert. An enum word appears in both places: as the pill on the row, and as text on the meta line (see The meta block).
+- `<b>`, `<code>` and the pill's `<picture>`, `<source>` and `<img>` are the only tags loupe emits inside a `<summary>`. GitHub parses no Markdown inside a `<summary>`, so loupe applies two CommonMark rules to the title itself. Each backtick code span becomes `<code>`. A backslash before ASCII punctuation outside a span shows the punctuation alone, so an escaped backtick opens no span. The rest of the title is plain text: it is HTML-escaped, and emphasis and links show literally.
+- **The label is HTML-escaped inside its `<b>`**, since a tag in a `<summary>` is raw HTML. An inline comment's first line is a Markdown paragraph, so there the title and the label are also backslash-escaped, and they render as the same text in both places.
 
-- **The severity word leads the bold prefix**, separated from what follows by ` · `. Where the context carries no label word, it is the whole prefix. A finding whose severity is absent, empty or free text captured before the enum renders byte for byte what it rendered before severity reached this line, which is what keeps an older review comparable to a newer one.
-- **It is a word, not a dot.** Dots are the label vocabulary, and a dot under the `⛔` heading already reads as a severity; a second dot vocabulary on the same line would make that worse. It is also not an image: the ban on external badge images applies here.
-- **Only the four enum words reach the line.** The prefix is interpolated outside a code span, so a stored severity that is not one of them stays on the meta line instead, where its code span makes it inert. Exactly one of the two places carries a finding's severity, never both.
-- `<b>` and `<code>` are the only tags loupe emits inside a `<summary>`. GitHub parses no Markdown inside a `<summary>`, so loupe applies two CommonMark rules to the title itself. Each backtick code span becomes `<code>`. A backslash before ASCII punctuation outside a span shows the punctuation alone, so an escaped backtick opens no span. The rest of the title is plain text: it is HTML-escaped, and emphasis and links show literally.
-- A finding with no severity word and no label word in its context renders the escaped title alone. An unlabeled nonblocking inline finding keeps the `⚪` dot, and an unlabeled blocking one keeps the `⛔` dot, so inline a row is never bare.
+#### The severity pill
+
+The severity word is drawn as a colored pill, an SVG image. This is the one exception to text-only output, and it holds to these rules, each from an observation in github-facts.md:
+
+```
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>
+```
+
+- **It MUST be a `<picture>`, never a bare `<img>`.** GitHub wraps a bare `<img>` in a link to the image, which takes a click on the `<summary>` away from the disclosure. The dark `<source>` switches the pill with the reader's theme.
+- **`alt` MUST be the uppercase word.** A reader whose client does not load the image, such as an email client, reads the same word the pill shows.
+- **`height="16"` and `align="absmiddle"`, with the pill drawn in the top 14 of the image's 16 pixels and its text at 10.** `absmiddle` centers the image, so the 2 transparent pixels below raise the pill by 1, which centers it on the text, and the row stays the height of a text row. With no padding the pill sat 1 to 2 pixels low; with 3 or 4 it sat high. Other alignments sat 2 to 3 pixels off. The image also carries 3 transparent pixels to the right of the pill, so the colon after it does not touch it; a space in the Markdown instead would leave `MAJOR :` wherever the image does not load.
+- **The files live at `assets/review/v1/` in `eriksaulnier/loupe` and are linked through `main`.** Every review published hotlinks them forever, so a file under `v1` MUST NOT change once it is on `main`; a redesign adds `v2`. A test pins each file's hash. Until a version reaches `main`, its pills show as their alt text.
+- **Terminal surfaces show the word, not the HTML.** The publish confirmation shows the body as raw Markdown, and it replaces each pill with its word there, in the `<summary>` lines outside fences and on each inline comment's first line only, so authored text keeps its bytes. The payload view shows the exact bytes.
+- **This is a network dependency.** Every reader's client loads the pills through GitHub's camo proxy. When it cannot, the alt word stands in.
 
 ### The meta block
 
 A blockquote at the top of the disclosure body, present only when at least one part exists.
 
-- One part per line, each line separated from the next by a backslash hard break: the location first, then confidence, severity and verified, in that order. An absent part leaves no line, and **an enum severity leaves none either**, because the summary line directly above already carries it.
+- One part per line, each line separated from the next by a backslash hard break: the location first, then confidence, severity and verified, in that order. An absent part leaves no line.
 - A finding with no location starts at its first present part; one with only a location has that line alone.
 
 | Part | Rendering | Example |
 | :--- | :--- | :--- |
 | Location | Review body only. A Markdown code span, side included inside the span, as the text of a link to the PR's files view | `` [`src/a.go:88`](…/pull/7/files#diff-<sha256 of the path>R88) `` |
 | Confidence | the bold label `**Confidence:**` then the escaped level word | `**Confidence:** high` |
-| Severity | **only a value outside the enum**, as the bold label `**Severity:**` then a code span. An enum word is on the summary line and is not repeated here | `` **Severity:** `P2` `` |
+| Severity | the bold label `**Severity:**` then the enum word as text, or a value outside the enum in a code span | `**Severity:** major`, `` **Severity:** `P2` `` |
 | Verified | the bold label `**Verified:**` then the escaped word | `**Verified:** reproduced` |
 
 - **Location is rendered in full**, path and range, because with `--inline none` this is the only place it survives. `src/a.go:88` for a single line, `src/a.go:10–14` for a range. **The side is shown only when it is `LEFT`**, appended as ` (LEFT)`.
@@ -166,22 +174,30 @@ A blockquote at the top of the disclosure body, present only when at least one p
 - **A code span MUST be delimited by a backtick run longer than any run inside its content**, padded with a space when the content starts or ends with a backtick. This is the CommonMark rule and it applies to every generated code span, including the footer's.
 - **Code-span contents MUST NOT be HTML-escaped.** A code span is already inert, and GitHub shows character references inside one literally. Escaping is for text interpolated outside a span.
 - **Every generated inline field MUST be collapsed to a single line before interpolation**, with runs of whitespace becoming one space. A newline in a title breaks the summary line out of its tag; a newline in `severity` would end the meta block's blockquote and leave the rest of the line as body text.
-- Confidence, severity and verified render only when the reviewer supplied them. **Severity is carried by the summary line, not by this block**, on the same rule that keeps an inline comment's location out of it: the line above already says it. None of the three decides section placement.
+- Confidence, severity and verified render only when the reviewer supplied them. None of the three decides section placement.
+- **An enum severity is repeated here as text.** The row carries it only as a pill image, and anything that reads the review as plain text drops images: a terminal Markdown renderer such as `gh pr view` shows the row with no severity at all (github-facts.md). So the meta line, which such a reader shows right under the row, carries the word.
+
+### Field labels
+
+Impact, the suggested fix and the references each render under a bold label. **A value of one line follows its label on the same line**, as `**Impact:** …`. A longer value goes below a bold label on a line of its own, as `**Impact**`, because a list, a quote or a fence can only open at the start of a line. A one-line value that starts like one, such as `- Return the error`, shows that punctuation as text after the label. A lone carriage return ends a line as `\n` does, in this rule and in the allowlist.
 
 ### Impact
 
-- Rendered after the body and before the suggested fix, under a bold `**Impact**` line, as Markdown with trailing newlines trimmed.
+- Rendered first after the meta block, before the body, as Markdown with trailing newlines trimmed. A reader deciding whether to act wants the consequence before the reasoning.
 - It passes the same allowlist as `body` and is rechecked at composition, so it cannot unbalance the disclosure.
 
 ### Suggested fix
 
-- Rendered after the body and the impact under a bold `**Suggested fix**` line, inside a fence whose length is `max(3, longest backtick run in the content + 1)`, so its contents are inert.
+- Rendered after the body, as Markdown with trailing newlines trimmed. Code in it MUST be fenced by whoever writes it; bare code renders as prose.
+- It passes the same allowlist as `body` at write time, when `add` writes it or an `edit` changes it; an edit that leaves it unchanged does not recheck it. A stored fix that fails the allowlist, written before this rule, is instead rendered inside a fence whose length is `max(3, longest backtick run in the content + 1)` under a `**Suggested fix**` line, so it stays inert and still publishes.
 - It is prose or code the human reads, never a GitHub `suggestion` fence: an applicable suggestion MUST contain the exact replacement lines for the anchored range, and a suggested fix holds prose. Wrapping prose in a suggestion fence produces a broken apply button.
 
 ### References
 
-- Rendered last in the disclosure, under a bold `**References**` line, one `- <url>` autolink bullet per entry in input order.
-- Each entry MUST be an `http` or `https` URL with a host, at most 200 bytes, with no whitespace, control or format character (bidi overrides included), `<`, `>` or backtick, and there are at most six; `loupe add` refuses anything else and composition checks again. Those characters are what would end or break the autolink. loupe never fetches a reference.
+- Rendered last in the disclosure, in input order. One reference follows its label as `**References:** [text](<url>)`. Several go below a `**References**` line, one `- [text](<url>)` bullet each.
+- The link text is the host and path, without scheme, query or fragment and with trailing slashes trimmed. When that is over 50 characters and the path has more than one segment, it is shortened to `host/…/last-segment`. In the text, `&` is written as `&amp;`, and each of ``\ ` * _ [ ] ~ $`` is backslash-escaped, `$` because GitHub renders math between two of them. GitHub's emoji shortcodes, such as `:tada:` in a path, still render as emoji; escaping cannot stop that.
+- The destination is inside `<…>`, so parentheses in the URL cannot end the link. CommonMark still decodes backslash escapes and character references there, so `\` is doubled and `&` is written as `&amp;`, and the link goes to the URL as given.
+- Each entry MUST be an `http` or `https` URL with a host, at most 200 bytes, with no whitespace, control or format character (bidi overrides included), `<`, `>` or backtick, and there are at most six; `loupe add` refuses anything else and composition checks again. Those characters are what would end or break the link. loupe never fetches a reference.
 
 ### Dividers
 
@@ -213,7 +229,7 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 ```
 
 - The first is the reconciliation marker: an unknown publication is resolved by finding a review whose body contains this exact comment. Its format MUST NOT change between versions that may need to reconcile each other's attempts.
-- **`loupe-meta`'s per-label counts are a census, not the chips row.** They count every published finding, blocking ones included, so a review whose only issue blocks records `blocking=1 issues=1` while the visible chips show no issue. The chips are an index of the headings a reader can scroll to; the marker is an inventory of what the review held.
+- **`loupe-meta`'s per-label counts are a census, not the chips row.** They count every published finding, blocking ones included, so a review whose only issue blocks records `blocking=1 issues=1` while the visible chips show no issue. The chips are a key to the row dots a reader sees; the marker is an inventory of what the review held.
 - **`unattended=1` follows `round=` only on a review `loupe publish --unattended` sent**, directly before `src=` when both are present (`specs/007-unattended-publish/spec.md` FR-016). It is also how `loupe publish --unattended` counts a pull request's earlier rounds for `N` (FR-015), alongside the review's author ending `[bot]`.
 - **`src=` follows `round=`, or `unattended=1` when present, only when capture recorded a source**, as given (`src=gadfly-review-pr@2.2.0`). It is never escaped, so capture refuses a source that does not match `^[a-z0-9][a-z0-9._-]*(@[0-9][0-9A-Za-z.+-]*)?$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. None of those can close the comment.
 - **`model=` follows `src=`, or sits where `src=` would, only when capture recorded a model** with `loupe capture --model`, as given (`model=anthropic/claude-sonnet-5`). It is never escaped, so capture refuses a model that does not match `^[a-z0-9][a-z0-9._/:-]*$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. The model is provenance for tooling and never appears in the footer.
@@ -235,26 +251,27 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 - The body is always complete regardless of mode.
 - General findings, those with no location, are never inline.
 - Excluded and withdrawn findings appear in neither the body nor `comments[]`.
-- An inline comment's body is the finding rendered as it appears inside its disclosure (summary line as a bold first line, then the meta block without its location line, then the body, impact, suggested fix and references), without the `<details>` wrapper.
+- An inline comment's body is the finding rendered as it appears inside its disclosure (the summary line as the first line, then the meta block without its location line, then the impact, body, suggested fix and references), without the `<details>` wrapper.
 
 ## The supported Markdown boundary
 
-The renderer wraps each finding in a generated `<details>`. Authored content that closes it early restructures the published review. Three fields carry raw Markdown: a finding `body`, a finding `impact` and the review `summary`. Every other interpolated field is made structurally incapable of unbalancing the wrapper:
+The renderer wraps each finding in a generated `<details>`. Authored content that closes it early restructures the published review. Four fields carry raw Markdown: a finding `body`, `impact` and `suggestedFix`, and the review `summary`. Every other interpolated field is made structurally incapable of unbalancing the wrapper:
 
 | Field | Why it cannot escape |
 | :--- | :--- |
 | `title` | Collapsed to one line. Backslash escapes are applied, each backtick code span becomes `<code>` around its HTML-escaped content, and the text between spans is HTML-escaped, so `<code>` is the only tag the title adds |
-| `label`, `confidence`, `verified` | Collapsed to one line, then HTML-escaped before interpolation |
-| `severity` | Collapsed to one line; an enum word is interpolated as is in the summary line's bold prefix, and anything else is emitted inside a code span on the meta line |
+| `label` | Collapsed to one line, then HTML-escaped inside a `<b>` tag; inline, ASCII punctuation is also backslash-escaped |
+| `confidence`, `verified` | Collapsed to one line, then HTML-escaped before interpolation |
+| `severity` | Collapsed to one line; an enum word selects a fixed pill on the summary line and is written as text on the meta line, and anything else is emitted inside a code span on the meta line |
 | Location, footer fields | Collapsed to one line and emitted inside a code span whose backtick run is longer than any run in the content |
-| `suggestedFix` | Emitted inside a fence longer than any backtick run in the content |
-| `references` | Refused at input, and again at composition, unless each is a URL free of whitespace, control and format characters, `<`, `>` and backticks; then emitted as an autolink |
+| `references` | Refused at input, and again at composition, unless each is a URL free of whitespace, control and format characters, `<`, `>` and backticks; then emitted as a link with escaped text and a `<…>` destination |
 | `body`, `impact` | Validated by the allowlist below; correction `loupe edit <id> --from -` |
+| `suggestedFix` | Validated by the allowlist below at write time; correction `loupe edit <id> --from -`. A stored fix that fails it is emitted inside a fence longer than any backtick run in the content |
 | `summary` | Validated by the allowlist below; correction `loupe summary --from -`, or a reword at the confirmation for a human's message |
 
 ### Allowlist
 
-A body or summary is accepted when all of the following hold. The check runs at write time in `add`, `edit` and `summary`, and again at publish for every publishable finding and for whichever opening prose is being published: the human's message when attended, the draft's summary when not. Excluded and withdrawn findings are not checked.
+A body, impact, suggested fix or summary is accepted when all of the following hold. The check runs at write time in `add`, `edit` and `summary`, and again at publish for the body and impact of every publishable finding and for whichever opening prose is being published: the human's message when attended, the draft's summary when not. Excluded and withdrawn findings are not checked.
 
 | Rule | Code |
 | :--- | :--- |

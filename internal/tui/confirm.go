@@ -79,17 +79,15 @@ func newConfirmation(preview publish.Preview, title ConfirmHeading, message stri
 	env, _, err := preview.Compose(messageSlot)
 	if err == nil {
 		var found bool
-		if c.before, c.after, found = strings.Cut(markdown.OpenDetails(env.Body), messageSlot); !found {
+		if c.before, c.after, found = strings.Cut(render.PillsAsWords(markdown.OpenDetails(env.Body)), messageSlot); !found {
 			err = fmt.Errorf("the composed review has nowhere to put your message")
 		}
 	}
 	if err != nil {
-		// The probe composes a body one sentinel longer than the one it is standing in for, so a review within a
-		// sentinel of the size limit fails it while the review itself, and a shorter message, would be fine.
-		// Whatever the reason, the failure belongs to the probe and not to the human: they are told, they get no
-		// input, and y still publishes what they were shown. Words they typed before a refusal sent them back
-		// here are kept and composed into that body, because dropping them silently and publishing without them
-		// is worse than not being able to edit them.
+		// The probe body is one sentinel longer than the real one, so it can fail within a sentinel of the size limit
+		// where the review would not. A probe failure is not the human's: they are told, get no input, and y still
+		// publishes what they were shown. Words typed before a refusal sent them back are kept and composed into that
+		// body, since publishing without them silently is worse than not being able to edit them.
 		c.before, c.after, c.slotErr = "", "", err
 		c.restore(message)
 		return c
@@ -252,12 +250,12 @@ func (c *confirmation) messageRows(promptWidth int) int {
 	return max(minMessageRows, rows-1)
 }
 
-// messageHint says what the empty input is for, and messageWay out of it. The box is the only part of the body the
-// human writes, and an empty one is otherwise a blank line between the chips and the findings.
 // minMessageRows keeps the box the shape of somewhere to write a paragraph. A frame around one row reads as a
 // field for a word, and the opening this is for is a sentence or two.
 const minMessageRows = 4
 
+// messageHint says what the empty input is for, and messageWay out of it. The box is the only part of the body the
+// human writes, and an empty one is otherwise a blank line between the chips and the findings.
 const (
 	messageTitle       = "your message"
 	messageHint        = "the review opens on what you write here"
@@ -425,19 +423,22 @@ func (c *confirmation) content(m *Model) string {
 	}
 	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
 	if c.inline() {
-		// Wrap drops the blank lines the renderer left after the chips row but keeps the ones before the divider,
-		// so both sides of the box are spaced here instead: one row, whatever the split handed over.
-		parts = append(parts, m.styles.Wrap(render.ForDisplay(c.before), width, " "), "")
+		// The chips row sits above the box, and nothing does when there are no findings to count. Wrap drops the blank
+		// lines the split left around the box, so its sides are spaced here instead: one row each.
+		if strings.TrimSpace(c.before) != "" {
+			parts = append(parts, m.styles.Wrap(render.ForDisplay(c.before), width, " "))
+		}
+		parts = append(parts, "")
 		c.inputTop = strings.Count(strings.Join(parts, "\n"), "\n") + 1
 		after := strings.TrimLeft(c.after, "\n")
 		parts = append(parts, c.messageView(m, width), "", m.styles.Wrap(render.ForDisplay(after), width, " "))
 	} else {
-		parts = append(parts, m.styles.Wrap(render.ForDisplay(markdown.OpenDetails(c.shown.Body)), width, " "))
+		parts = append(parts, m.styles.Wrap(render.ForDisplay(render.PillsAsWords(markdown.OpenDetails(c.shown.Body))), width, " "))
 	}
 	parts = append(parts, "", m.styles.Rule(m.width, fmt.Sprintf("inline comments (%d)", len(c.shown.Comments)), ""))
 	for _, comment := range c.shown.Comments {
 		location := m.styles.Accent.Render(strings.TrimSpace(m.glyphs.File + " " + render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side))))
-		parts = append(parts, " "+location, m.styles.Wrap(render.ForDisplay(comment.Body), width, " "), "")
+		parts = append(parts, " "+location, m.styles.Wrap(render.ForDisplay(render.CommentPillsAsWords(comment.Body)), width, " "), "")
 	}
 	return strings.Join(parts, "\n")
 }

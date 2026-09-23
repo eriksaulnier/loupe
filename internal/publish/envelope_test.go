@@ -259,7 +259,7 @@ func TestBuildCarriesFindingFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The severity is on the summary line, not in the meta block, so the block carries verified alone.
-	for _, want := range []string{"<b>major · ", "> **Verified:** plausible", "**Impact**\n\nBreaks.", "**References**\n\n- <https://github.com/o/r/issues/1>"} {
+	for _, want := range []string{`⛔ <b>issue</b> <picture>`, `alt="MAJOR"`, "> **Verified:** plausible", "**Impact:** Breaks.", "**References:** [github.com/o/r/issues/1](<https://github.com/o/r/issues/1>)"} {
 		if !strings.Contains(env.Body, want) {
 			t.Fatalf("missing %q in\n%s", want, env.Body)
 		}
@@ -341,8 +341,8 @@ func TestBuildUnattendedComposesFromPublishableSet(t *testing.T) {
 	assertOnlyAccepted(t, mustJSON(t, env))
 }
 
-// TestBuildUnattendedBodyIsUnchanged is SC-004. The golden was produced by the code before the human's message
-// existed, with the publication id fixed; an unattended round posts what it has always posted.
+// TestBuildUnattendedBodyIsUnchanged is SC-004. The golden holds what an unattended round posted before the human's
+// message existed, re-rendered only for specs/020-review-format's rows, with the publication id fixed.
 func TestBuildUnattendedBodyIsUnchanged(t *testing.T) {
 	const id = "00000000-0000-4000-8000-000000000000"
 	in := buildInput(fixtureTarget(), readyDraft(), "comment", "all", true)

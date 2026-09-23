@@ -163,24 +163,15 @@ func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool) error {
 		{44, readyToPublish(now), movedSHA},
 	}
 	for _, r := range runs {
-		d := draft.NewEmpty()
-		if _, err := draft.Add(d, findings, parsed, draft.ByAgent, now); err != nil {
-			return fmt.Errorf("add the demo findings: %w", err)
-		}
-		d.Summary = summary
-		if err := r.decide(d); err != nil {
-			return fmt.Errorf("decide the demo findings for #%d: %w", r.number, err)
+		target, d, err := demoRun(parsed, r.number, r.decide, now)
+		if err != nil {
+			return err
 		}
 		data, err := json.Marshal(d)
 		if err != nil {
 			return err
 		}
-		url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, r.number)
-		target := run.Target{
-			Schema: run.TargetSchema, Owner: owner, Repo: repo, Number: r.number, URL: url, Title: prTitle,
-			Author: author, Viewer: viewer, BaseSHA: baseSHA, HeadSHA: headSHA, Round: 1, CapturedAt: now,
-			DiffSHA256: run.DiffSHA256([]byte(demoDiff)), Source: "loupe-demo", Model: "demo/reviewer-1",
-		}
+		url := target.URL
 		if writeRuns {
 			if err := run.CreateRun(run.RunDir(home, owner, repo, r.number, 1), target, []byte(demoDiff), data); err != nil {
 				return fmt.Errorf("create demo run #%d: %w", r.number, err)
@@ -202,6 +193,25 @@ func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool) error {
 		Files: []github.ComparedFile{{Filename: "internal/cache/store.go"}, {Filename: "README.md"}},
 	})
 	return nil
+}
+
+// demoRun is one seeded run's target and draft, decided by decide.
+func demoRun(parsed *diff.Diff, number int, decide func(d *draft.Draft) error, now time.Time) (run.Target, *draft.Draft, error) {
+	d := draft.NewEmpty()
+	if _, err := draft.Add(d, findings, parsed, draft.ByAgent, now); err != nil {
+		return run.Target{}, nil, fmt.Errorf("add the demo findings: %w", err)
+	}
+	d.Summary = summary
+	if err := decide(d); err != nil {
+		return run.Target{}, nil, fmt.Errorf("decide the demo findings for #%d: %w", number, err)
+	}
+	url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, number)
+	target := run.Target{
+		Schema: run.TargetSchema, Owner: owner, Repo: repo, Number: number, URL: url, Title: prTitle,
+		Author: author, Viewer: viewer, BaseSHA: baseSHA, HeadSHA: headSHA, Round: 1, CapturedAt: now,
+		DiffSHA256: run.DiffSHA256([]byte(demoDiff)), Source: "loupe-demo", Model: "demo/reviewer-1",
+	}
+	return target, d, nil
 }
 
 // midReview leaves something in every state: accepted, pending and blocking, pending with an answered note, excluded

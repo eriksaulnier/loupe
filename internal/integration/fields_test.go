@@ -40,10 +40,10 @@ func TestPublishRendersEveryFindingField(t *testing.T) {
 	}
 	body := h.lastReviewBody()
 	for _, want := range []string{
-		// An enum severity is on the summary line, so the meta block goes straight from confidence to verified.
-		"<b>major · issue:</b>",
-		"> **Confidence:** high\\\n> **Verified:** reproduced\n",
-		"Evidence for line 3.\n\n**Impact**\n\nA 502 leaves two reviews.\n\n**Suggested fix**\n\n```\nReturn the original error.\n```\n\n**References**\n\n- <https://github.com/o/r/issues/12>\n- <http://localhost/a?b=c>\n\n</details>",
+		// An enum severity is on the row as a pill and in the meta block as text, for readers that drop images.
+		`<b>issue</b> <picture>`, `alt="MAJOR" height="16" align="absmiddle"></picture>: `,
+		"> **Confidence:** high\\\n> **Severity:** major\\\n> **Verified:** reproduced\n",
+		"**Impact:** A 502 leaves two reviews.\n\nEvidence for line 3.\n\n**Suggested fix:** Return the original error.\n\n**References**\n\n- [github.com/o/r/issues/12](<https://github.com/o/r/issues/12>)\n- [localhost/a](<http://localhost/a?b=c>)\n\n</details>",
 		"· via `gadfly-review-pr 2.2.0` · unattended\n\n<!-- loupe digest=",
 		"src=gadfly-review-pr@2.2.0 model=anthropic/claude-sonnet-5 inline=",
 	} {

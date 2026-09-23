@@ -89,8 +89,8 @@ func Build(in BuildInput) (Envelope, error) {
 				return Envelope{}, err
 			}
 		}
-		// References render as autolinks that input validation keeps inert; a draft written by another version is
-		// checked again here for the same reason the body is.
+		// References render as links whose <url> destination input validation keeps inert; a draft written by another
+		// version is checked again here for the same reason the body is.
 		if err := draft.ValidateReferences(f.References, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
 			return Envelope{}, err
 		}

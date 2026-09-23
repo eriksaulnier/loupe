@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/muesli/termenv"
 
@@ -101,8 +102,18 @@ func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 	}
 }
 
+// The full-screen confirmation shows each pill as its word, in the body and in the inline comment, as plain mode does.
+func TestConfirmShowsPillsAsWords(t *testing.T) {
+	m := NewConfirmModel(pillPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "all", 1))
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 60})
+	view := ansi.Strip(m.confirm.content(m.shell))
+	if strings.Contains(view, "<picture>") || strings.Count(view, "<b>issue</b> MAJOR: T") < 2 {
+		t.Errorf("want the pill shown as MAJOR in the body and the inline comment:\n%s", view)
+	}
+}
+
 // TestConfirmBoxIsEvenlySpaced: the renderer leaves blank lines on one side of the opening slot and not the other,
-// so the box sat one row closer to the chips than to the divider under it.
+// so without respacing the box would sit one row closer to one neighbor than to the other.
 func TestConfirmBoxIsEvenlySpaced(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
