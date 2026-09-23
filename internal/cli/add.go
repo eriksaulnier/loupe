@@ -40,7 +40,8 @@ defaults to false. confidence is high, medium or low; severity is how bad the co
 it ships, highest that fits: critical (data loss, a security hole, an outage), major (a real
 defect on a normal path), minor (an edge case, or a cost paid later) or trivial (cosmetic:
 naming, style, a preference); verified is reproduced (you ran or observed the failure) or
-plausible (you reasoned to it). body and impact must pass the Markdown allowlist. references
+plausible (you reasoned to it). body, impact and suggestedFix must pass the Markdown allowlist,
+and code in a suggestedFix belongs in a fence, since the fix is published as Markdown. references
 holds at most six http or https URLs with a host and no userinfo, each at most 200 bytes with no
 whitespace, control or format characters, <, > or backticks; an empty list is stored as absent;
 they are never fetched.
