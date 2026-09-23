@@ -66,6 +66,22 @@ Sending a finding back with a note asks the agent about it: the agent answers, y
 
 ![A finding with an open send-back note, the agent's reply to it, resolving the note and accepting the finding.](docs/assets/sendback.gif)
 
+### Adapting a review skill you already have
+
+A review skill written before loupe usually ends by posting to GitHub or printing its findings. `human-review` forbids the first and replaces the second, so the old skill needs an edit before the two work together. Give your agent this prompt, with the path filled in:
+
+```text
+Edit the review skill at <path> so it hands its findings to loupe through the `human-review` skill instead of posting them.
+
+- Keep the review method unchanged: what the skill looks at, how it judges, and what it reports.
+- Remove every step that posts to GitHub, by `gh pr review`, `gh api`, the GitHub MCP or any other route, and every step that presents the findings as the final output.
+- Add a step before the review that follows `human-review` sections 1 and 2, and make the review read the change at the captured `target.headSha`.
+- Add a step after the review that follows `human-review` sections 3 to 7. Take the finding fields from that skill and from `loupe add --help`. MUST NOT copy the field list into this skill.
+- Map the skill's own severity or priority words onto loupe's `severity`, `blocking` and `label`. Where a word has no clear match, leave the field unset. MUST NOT guess.
+- If the skill also runs in CI, keep capture and filing shared, skip `handoff` and `wait` there, and write the summary for the pull request's author, because an unattended round publishes it as the review's opening.
+- Show me the diff and the severity mapping before you save anything.
+```
+
 ### Handing off in a terminal pane
 
 Inside [Herdr](https://herdr.dev) or Orca, `loupe handoff` opens `loupe review` in a split beside the agent's pane, and the pane closes when review exits cleanly. Elsewhere, or when the split fails, the skill asks you to run `loupe review` yourself.
