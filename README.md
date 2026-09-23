@@ -14,9 +14,9 @@ loupe collects a review agent's findings into a local draft so you decide each o
 
 ## How it works
 
-1. An agent captures the pull request into a local draft and files findings.
+1. An agent captures the pull request into a run, a local draft of one review round, and files findings.
 2. You decide each finding in `loupe review`.
-3. `loupe publish` shows the review it would send, you type its opening sentence into the body, and one key posts exactly one GitHub review.
+3. `loupe publish` shows the review it would send. You write its opening, and one key posts exactly one GitHub review. The agent's summary is only for you and is not published.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/review-dark.png">
@@ -31,11 +31,11 @@ loupe --version
 ```
 
 > [!NOTE]
-> mise hides releases younger than a day, so on a release day this fails with `matching date filter`. Wait, or run `mise settings add minimum_release_age_excludes "github:eriksaulnier/loupe"`.
+> mise hides releases younger than its `minimum_release_age`, so right after a release this fails with `no versions found for github:eriksaulnier/loupe matching date filter`. Wait, or run `mise settings add minimum_release_age_excludes "github:eriksaulnier/loupe"`.
 
 ## Try it
 
-In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub. You can try the interface and the whole publish flow end to end, `y` included, and nothing leaves the machine. `mise run demo -- <loupe args>` runs any other command: `acme/widgets#42` is mid-review, `#43` is ready to publish, and `#44` is ready with a moved head.
+In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub. You can try the interface and the whole publish flow end to end, the final `y` included, and nothing leaves the machine. `mise run demo -- <loupe args>` runs any other command: `acme/widgets#42` is mid-review, `#43` is ready to publish, and `#44` is ready but its pull request's head has moved since capture.
 
 ## Setting up an agent
 
@@ -57,12 +57,12 @@ pi install git:github.com/eriksaulnier/loupe@v0.10.0 # x-release-please-version
 ```
 
 > [!IMPORTANT]
-> Keep plugin and binary together. Claude Code and Codex install the plugin from `main`, so a skill can name a flag an older binary lacks.
+> Update the binary whenever you update the plugin. Claude Code and Codex install the plugin from `main`, so a skill can name a flag an older binary lacks.
 
 > [!IMPORTANT]
-> Inside the Codex sandbox, loupe cannot reach GitHub, the clone's `.git`, its data directory or the terminal host's socket. Approve the skill's requests to run `loupe` outside the sandbox. Pi has no sandbox.
+> Inside the Codex sandbox, loupe cannot reach GitHub, the clone's `.git`, its data directory or the terminal host's socket (Herdr or Orca, below). Approve the skill's requests to run `loupe` outside the sandbox. Pi has no sandbox.
 
-Sending a finding back with a note asks the agent about it: the agent answers, you resolve the note, and only then does the finding count as decided.
+Sending a finding back with a note asks the agent about the finding: the agent answers, you resolve the note, and only then does the finding count as decided.
 
 ![A finding with an open send-back note, the agent's reply to it, resolving the note and accepting the finding.](docs/assets/sendback.gif)
 
@@ -75,10 +75,10 @@ Edit the review skill at <path> so it hands its findings to loupe through the `h
 
 - Keep the review method unchanged: what the skill looks at, how it judges, and what it reports.
 - Remove every step that posts to GitHub, by `gh pr review`, `gh api`, the GitHub MCP or any other route, and every step that presents the findings as the final output.
-- Add a step before the review that follows `human-review` sections 1 and 2, and make the review read the change at the captured `target.headSha`.
-- Add a step after the review that follows `human-review` sections 3 to 7. Take the finding fields from that skill and from `loupe add --help`. MUST NOT copy the field list into this skill.
+- Add a step before the review that follows `human-review` sections 1 and 2, and make the review read the change at the `target.headSha` that `loupe capture --json` printed.
+- Add a step after the review that follows `human-review` sections 3 to 7. The edited skill MUST point at `human-review` and `loupe add --help` for the finding fields instead of listing them.
 - Map the skill's own severity or priority words onto loupe's `severity`, `blocking` and `label`. Where a word has no clear match, leave the field unset. MUST NOT guess.
-- If the skill also runs in CI, keep capture and filing shared, skip `handoff` and `wait` there, and write the summary for the pull request's author, because an unattended round publishes it as the review's opening.
+- If the skill also runs in CI, use the same capture and filing steps in CI and locally, skip `handoff` and `wait` when no human is present (for example when `CI` is set), and write the summary for the pull request's author, because an unattended round publishes it as the review's opening.
 - Show me the diff and the severity mapping before you save anything.
 ```
 
@@ -86,12 +86,12 @@ Edit the review skill at <path> so it hands its findings to loupe through the `h
 
 Inside [Herdr](https://herdr.dev) or Orca, `loupe handoff` opens `loupe review` in a split beside the agent's pane, and the pane closes when review exits cleanly. Elsewhere, or when the split fails, the skill asks you to run `loupe review` yourself.
 
-To skip the approval prompt at each hand-off, allow that one command:
+To skip the approval prompt at each handoff, allow that one command:
 
 - Claude Code: `Bash(loupe handoff:*)`
 - Codex, in `~/.codex/rules/default.rules`: `prefix_rule(pattern=["loupe", "handoff"], decision="allow")`
 
-loupe builds the pane's command from the run it resolves, so the rule lets an agent open review and nothing else. Do not allow `herdr pane split`, `herdr pane run` or `orca terminal split`. A blanket rule for any of them lets any command run in a new shell.
+loupe builds the pane's command itself from the run it is asked to open, so the rule lets an agent open review and nothing else. Do not allow `herdr pane split`, `herdr pane run` or `orca terminal split`. A blanket rule for any of them lets any command run in a new shell.
 
 ## Commands
 
@@ -131,8 +131,8 @@ A pipeline can review a pull request with no human and no terminal: capture, fil
 
 1. `loupe capture <pr-url> --json` creates the run and prints its reference as `run`. Pass that reference to the later steps as `--run <ref>` or in `LOUPE_RUN`. Unattended publish does not fall back to the current branch's pull request, because a pipeline's checkout is usually not on that branch.
 2. `loupe show --diff > review/pr.diff` writes the captured diff for the reviewer to read beside a checkout of the captured head. This is the supported way to get the diff. The run directory's layout is not a contract.
-3. File findings with one `loupe add` object or array, which is stored whole or not at all. A finding whose location is not in the captured diff is refused with the nearest valid lines. Then set `loupe summary`, even when there is nothing to report: it becomes the review's opening, and no human reads it first. You supply the adapter from your reviewer's output to this input.
-4. `loupe publish --unattended --json` posts exactly one comment review, with no confirmation. It needs a GitHub App installation token (prefix `ghs_`), which is what Actions' own `GITHUB_TOKEN` is, with `permissions: pull-requests: write`. A user token refuses with `token`. The run records each attempt and its receipt, so a pipeline that keeps `LOUPE_HOME` between steps can retry safely, even from another path or machine.
+3. File findings with one `loupe add` object or array, which is stored whole or not at all. A finding whose location is not in the captured diff is refused with the nearest valid lines. Then set `loupe summary`, even when there is nothing to report. In an unattended run it becomes the review's opening, and no human reads it first. You supply the adapter from your reviewer's output to `loupe add`'s input.
+4. `loupe publish --unattended --json` posts exactly one comment review, with no confirmation. It needs a GitHub App installation token (prefix `ghs_`, which is what Actions' own `GITHUB_TOKEN` is) with `permissions: pull-requests: write`. With a user token, publish refuses with `token`. The run records each attempt and its receipt, so a pipeline that keeps `LOUPE_HOME` between steps can retry safely, even from another path or machine.
 
 [`eriksaulnier/loupe-workflows`](https://github.com/eriksaulnier/loupe-workflows) is a worked example. It is a reusable workflow that installs a pinned loupe release, captures the pull request, runs an agent over the captured head and diff, and publishes unattended. Here, `.github/workflows/review.yml` is the caller, and `.github/review-instructions.md` tells the reviewer what to know about loupe's own code.
 
