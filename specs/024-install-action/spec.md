@@ -76,7 +76,7 @@ When the install cannot finish safely, the step fails with an error that says wh
 
 ### Edge Cases
 
-- The tag exists but goreleaser has not uploaded the archives yet (the draft's known gap). The download fails with a 404 and the error says the release may still be uploading. The action does not retry.
+- The tag exists but goreleaser has not uploaded the archives yet (the draft's known gap). The download fails with a 404 and the error says the release may still be uploading. The action does not retry a 404.
 - The input is given without the leading `v` (`0.10.0`). The action accepts it and resolves the same tag, `v0.10.0`.
 - The input is empty. The action fails with an error that asks for a release tag. It does not fall back to `latest`, because an unpinned install is what the action exists to remove.
 - The action runs twice in one job, for example at two versions. Each run installs into its own directory under `$RUNNER_TEMP`, so the second does not overwrite the first, and the later `PATH` entry wins.
@@ -94,7 +94,7 @@ When the install cannot finish safely, the step fails with an error that says wh
 - **FR-006**: The action MUST verify the archive's sha256 against its entry in `checksums.txt` before it extracts anything. It MUST fail when `checksums.txt` has no entry for the archive, and when the digest does not match.
 - **FR-007**: A failed download MUST fail the step with an error that names the URL and says that a release tagged in the last few minutes may still be uploading its archives.
 - **FR-008**: The action MUST extract only the `loupe` binary into a new directory under `$RUNNER_TEMP`, and MUST append that directory to `$GITHUB_PATH`. It MUST NOT write into the workspace.
-- **FR-009**: `ci.yml` MUST gain a job that runs on pull requests only, and not on release-please's own branch. It MUST run the action from the checkout on a runner for each supported target and check that `loupe --version` prints the action's default version. It MUST also run the action on a Windows runner and check that the step failed. On one Linux runner it MUST install `version: 0.9.0` and check `loupe version 0.9.0`, and it MUST check that `version: v0.0.0` fails.
+- **FR-009**: `ci.yml` MUST gain a job that runs on pull requests only, and not on release-please's own branch. It MUST run the action from the checkout on a runner for each supported target and check that `loupe --version` prints the action's default version. It MUST also run the action on a Windows runner and check that the step failed. On one Linux runner it MUST install `version: 0.9.0` and check `loupe version 0.9.0`, and it MUST check that `version: v0.0.0` fails. With a fake `curl` first on `PATH`, it MUST check that a `checksums.txt` without the archive's entry and one with a wrong digest each fail the step, after a correct one installs.
 - **FR-010**: `release.yml` MUST gain a job that runs after goreleaser has uploaded a release. It MUST run the action from the release commit on a runner for each supported target, with no inputs, and check that `loupe --version` prints the new tag without its `v`.
 - **FR-011**: A unit test MUST check that the action's default equals `v` plus the version in `.release-please-manifest.json`, and that `release-please-config.json` lists `action.yml` as a `generic` extra-file.
 - **FR-012**: The README MUST document the action beside the other install methods: the step, the sha pin with the tag in a comment, and the `version` input.
@@ -119,7 +119,7 @@ When the install cannot finish safely, the step fails with an error that says wh
 
 - The `version` input accepts a tag with or without the leading `v`. The action normalizes it to the tag.
 - The action has no outputs. Every later step reaches the binary through `PATH`.
-- The action does not retry a failed download. The known gap is a window of minutes, and a retry would hide a version that does not exist.
+- The action retries a transient download failure (a timeout, or HTTP 408, 429 or 5xx) up to three times and never retries a 404. The known gap is a window of minutes, and retrying a 404 would hide a version that does not exist.
 - The action does not set `LOUPE_HOME`. The second inline step in `loupe-workflows` sets it, but where run state lives is the caller's choice.
 - Release assets on a public repository download without a token. The action takes no token input.
 - release-please names its pull request branch `release-please--branches--main` (or with a `--components--` suffix), so a `release-please--` prefix identifies it. This follows release-please's documented naming and is not observed on this repository offline.

@@ -38,7 +38,7 @@ Phase 2 creates `action.yml`, which makes T001 pass.
   2. `tag="v${LOUPE_VERSION#v}"`.
   3. A `case` on `RUNNER_OS` (`Linux`→`linux`, `macOS`→`darwin`) and on `RUNNER_ARCH` (`X64`→`amd64`, `ARM64`→`arm64`). Anything else fails with `::error::loupe has no build for runner <RUNNER_OS>/<RUNNER_ARCH>. Supported: linux_amd64, linux_arm64, darwin_amd64, darwin_arm64.`, before any download.
   4. `archive="loupe_${tag#v}_${os}_${arch}.tar.gz"`, `base="https://github.com/eriksaulnier/loupe/releases/download/$tag"`, and two `mktemp -d "$RUNNER_TEMP/loupe.XXXXXX"` directories, one for downloads and one for the binary.
-  5. A download function around `curl -fsSL -o`. On failure: `::error::could not download <url>. If <tag> was released in the last few minutes, its archives may still be uploading. Retry shortly. Otherwise check that <tag> is a loupe release.`
+  5. A download function around `curl -fsSL --retry 3 -o`. On failure: `::error::could not download <url>. If <tag> was released in the last few minutes, its archives may still be uploading. Retry shortly. Otherwise check that <tag> is a loupe release.`
   6. `grep -F "  $archive" checksums.txt > archive.sha256`, failing with `::error::checksums.txt for loupe <tag> has no entry for <archive>`.
   7. `sha256sum -c archive.sha256` when `sha256sum` is on `PATH`, else `shasum -a 256 -c archive.sha256`.
   8. `tar -xzf "$archive" -C "$bin" loupe`, then append `$bin` to `$GITHUB_PATH`.
@@ -61,6 +61,8 @@ Phase 2 creates `action.yml`, which makes T001 pass.
 - [X] T009 [P] [US1] Add an `install-action` job to `.github/workflows/release.yml`: `needs: [release-please, goreleaser]`, `if: needs.release-please.outputs.release_created == 'true'`, `permissions: contents: read`, `fail-fast: false`, the same four-runner matrix, `actions/checkout@v7`, `uses: ./`, then a step that checks `loupe --version` equals `loupe version ${TAG#v}`, with `TAG: ${{ needs.release-please.outputs.tag_name }}` passed through `env`. Add a comment saying why it waits for goreleaser.
 
 - [X] T013 [US3] Add an `install-action-inputs` job to `.github/workflows/ci.yml` on `ubuntu-latest`, with the same `if` as T008. It installs `version: 0.9.0` and checks `loupe version 0.9.0`, then runs the action with `version: v0.0.0` behind `continue-on-error` and fails unless that step's `outcome` is `failure`. Added after review round 2.
+
+- [X] T014 [US3] Add an `install-action-checksums` job to `.github/workflows/ci.yml` on `ubuntu-latest`, with the same `if` as T008. A first step puts a fake `curl` on `$GITHUB_PATH` that serves a stand-in archive and a `checksums.txt` shaped by a mode file (`ok`, `missing`, `bad`). The `ok` install is a control, and the `missing` and `bad` installs run behind `continue-on-error` and MUST both fail. Add `--retry 3` to the action's `curl`, which retries only transient errors. Added after review round 3.
 
 ## Phase 5: Polish
 
