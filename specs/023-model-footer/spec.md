@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: Owner, 2026-09-24: a reader of an AI review cannot see which model wrote it. The footer MUST show the model whenever capture recorded one with `loupe capture --model`, raw, in a code span, after `via` and before ` · unattended`, with no opt-in flag and no word such as `by`. This gates the Traackr shared review workflow's switch to loupe, which passes `--model` and expects the id after the sha and the source.
+**Input**: Owner, 2026-09-24: a reader of an AI review cannot see which model wrote it. The footer MUST show the model whenever capture recorded one with `loupe capture --model`, raw, in a code span, after `via` and before ` · unattended`, with no opt-in flag and no word such as `by`.
 
 ## Relationship to earlier specifications
 
@@ -37,7 +37,7 @@ This specification amends the Footer section of `docs/comment-format.md`, which 
 
 A pipeline captures a pull request with `--source claude-ci@1.2.0 --model anthropic/claude-sonnet-5` and publishes unattended. A co-worker opens the pull request and reads the footer: ``reviewed `a1b2c3d` · via `claude-ci 1.2.0` · `anthropic/claude-sonnet-5` · unattended``. They know the commit, the pipeline, the model and that nobody read it first.
 
-**Why this priority**: It is the feature, and it gates the Traackr shared review workflow's switch to loupe.
+**Why this priority**: It is the feature.
 
 **Independent Test**: Render a published body for a run captured with a source and a model, published unattended, and assert the exact footer line. The attended form with a source is also a body golden.
 

@@ -74,4 +74,4 @@ plugin/skills/human-review/SKILL.md   # --model shows in the published footer
 
 | Departure | From | Why |
 | :--- | :--- | :--- |
-| The model shows in the footer | `specs/008-finding-fields/spec.md` ("Why these fields": model in `loupe-meta`, not the footer) and `docs/comment-format.md` Footer "Nothing else" | Owner, 2026-09-24: for an AI review the model is part of how a reader weighs the findings, and the Traackr workflow's switch to loupe needs it |
+| The model shows in the footer | `specs/008-finding-fields/spec.md` ("Why these fields": model in `loupe-meta`, not the footer) and `docs/comment-format.md` Footer "Nothing else" | Owner, 2026-09-24: for an AI review the model is part of how a reader weighs the findings |
