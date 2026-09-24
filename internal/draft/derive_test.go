@@ -190,3 +190,170 @@ func TestOrderedSortsSeverityAcrossLabels(t *testing.T) {
 		t.Errorf("Ordered = %v, want %v", got, want)
 	}
 }
+
+func TestGateCountsOf(t *testing.T) {
+	entry := func(by string, changed map[string]any) HistoryEntry {
+		return HistoryEntry{By: by, Changed: changed}
+	}
+	withdraw := func(by string) HistoryEntry { return entry(by, map[string]any{"included": true}) }
+	reinstate := func(by string) HistoryEntry { return entry(by, map[string]any{"included": false}) }
+	accept := func(rev int) *Decision {
+		return &Decision{FindingID: "f-001", Decision: DecisionAccepted, FindingRev: rev}
+	}
+	exclude := func(rev int) *Decision {
+		return &Decision{FindingID: "f-001", Decision: DecisionExcluded, FindingRev: rev}
+	}
+
+	cases := []struct {
+		name     string
+		finding  Finding
+		decision *Decision
+		want     GateCounts
+	}{
+		{
+			name:     "withdrawn by the agent, then reinstated and accepted",
+			finding:  withHistory(finding("f-001", 3, true, ByAgent), withdraw(ByAgent), reinstate(ByHuman)),
+			decision: accept(3),
+			want:     GateCounts{Reinstated: 1},
+		},
+		{
+			name:    "reinstated, then withdrawn by the agent",
+			finding: withHistory(finding("f-001", 4, false, ByAgent), withdraw(ByAgent), reinstate(ByHuman), withdraw(ByAgent)),
+			want:    GateCounts{Withdrawn: 1, Reinstated: 1},
+		},
+		{
+			name:    "reinstated, then withdrawn by a human",
+			finding: withHistory(finding("f-001", 4, false, ByAgent), withdraw(ByAgent), reinstate(ByHuman), withdraw(ByHuman)),
+			want:    GateCounts{Excluded: 1, Reinstated: 1},
+		},
+		{
+			name:    "withdrawn by a human is excluded, not reinstated",
+			finding: withHistory(finding("f-001", 2, false, ByAgent), withdraw(ByHuman)),
+			want:    GateCounts{Excluded: 1},
+		},
+		{
+			name:    "withdrawn by a human, then included and withdrawn again by the agent",
+			finding: withHistory(finding("f-001", 4, false, ByAgent), withdraw(ByHuman), reinstate(ByAgent), withdraw(ByAgent)),
+			want:    GateCounts{Withdrawn: 1},
+		},
+		{
+			name:     "withdrawn by the agent, then excluded",
+			finding:  withHistory(finding("f-001", 2, false, ByAgent), withdraw(ByAgent)),
+			decision: exclude(2),
+			want:     GateCounts{Excluded: 1},
+		},
+		{
+			name:     "relabeled by a human, then excluded",
+			finding:  withHistory(finding("f-001", 2, true, ByAgent), entry(ByHuman, map[string]any{"label": "issue"})),
+			decision: exclude(2),
+			want:     GateCounts{Excluded: 1, Regraded: 1},
+		},
+		{
+			name:     "blocking changed by a human",
+			finding:  withHistory(finding("f-001", 2, true, ByAgent), entry(ByHuman, map[string]any{"blocking": true})),
+			decision: accept(2),
+			want:     GateCounts{Regraded: 1},
+		},
+		{
+			name:     "severity changed by a human",
+			finding:  withHistory(finding("f-001", 2, true, ByAgent), entry(ByHuman, map[string]any{"severity": "low"})),
+			decision: accept(2),
+			want:     GateCounts{Regraded: 1},
+		},
+		{
+			name: "blocking and severity changed by a human count once",
+			finding: withHistory(finding("f-001", 3, true, ByAgent),
+				entry(ByHuman, map[string]any{"blocking": true}), entry(ByHuman, map[string]any{"severity": "low", "label": "issue"})),
+			decision: accept(3),
+			want:     GateCounts{Regraded: 1},
+		},
+		{
+			name:     "relabeled by the agent",
+			finding:  withHistory(finding("f-001", 2, true, ByAgent), entry(ByAgent, map[string]any{"label": "issue"})),
+			decision: accept(2),
+			want:     GateCounts{},
+		},
+		{
+			name:     "a stale exclusion on an included finding counts for nothing",
+			finding:  withHistory(finding("f-001", 2, true, ByAgent), entry(ByAgent, map[string]any{"title": "old"})),
+			decision: exclude(1),
+			want:     GateCounts{},
+		},
+		{
+			name:     "a stale exclusion on a finding a human withdrew counts by the withdrawal rule",
+			finding:  withHistory(finding("f-001", 2, false, ByAgent), withdraw(ByHuman)),
+			decision: exclude(1),
+			want:     GateCounts{Excluded: 1},
+		},
+		{
+			name:     "a current accept on a finding the agent withdrew",
+			finding:  withHistory(finding("f-001", 2, false, ByAgent), withdraw(ByAgent)),
+			decision: accept(2),
+			want:     GateCounts{Withdrawn: 1},
+		},
+		{
+			name:     "a current exclusion on a finding a human withdrew counts once",
+			finding:  withHistory(finding("f-001", 2, false, ByAgent), withdraw(ByHuman)),
+			decision: exclude(2),
+			want:     GateCounts{Excluded: 1},
+		},
+		{
+			name:    "not included with no history",
+			finding: finding("f-001", 1, false, ByAgent),
+			want:    GateCounts{Withdrawn: 1},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := NewEmpty()
+			d.Findings = append(d.Findings, c.finding)
+			if c.decision != nil {
+				d.Decisions["f-001"] = *c.decision
+			}
+			if got := GateCountsOf(roundTrip(t, d)); got != c.want {
+				t.Fatalf("got %+v, want %+v", got, c.want)
+			}
+		})
+	}
+}
+
+// The filed identity: every finding either publishes or counts in exactly one of Excluded and Withdrawn.
+func TestGateCountsPartitionTheFiledFindings(t *testing.T) {
+	d := NewEmpty()
+	d.Findings = []Finding{
+		finding("f-001", 1, true, ByAgent),
+		finding("f-002", 1, true, ByAgent),
+		withHistory(finding("f-003", 2, false, ByAgent), HistoryEntry{By: ByAgent, Changed: map[string]any{"included": true}}),
+		withHistory(finding("f-004", 2, false, ByAgent), HistoryEntry{By: ByHuman, Changed: map[string]any{"included": true}}),
+		finding("f-005", 1, true, ByAgent),
+	}
+	d.Decisions["f-001"] = Decision{FindingID: "f-001", Decision: DecisionAccepted, FindingRev: 1}
+	d.Decisions["f-002"] = Decision{FindingID: "f-002", Decision: DecisionExcluded, FindingRev: 1}
+	r, g := ReadinessOf(d), GateCountsOf(roundTrip(t, d))
+	if got := len(r.Accepted) + len(r.Pending) + g.Excluded + g.Withdrawn; got != len(d.Findings) {
+		t.Fatalf("accepted %d + pending %d + excluded %d + withdrawn %d = %d, want %d",
+			len(r.Accepted), len(r.Pending), g.Excluded, g.Withdrawn, got, len(d.Findings))
+	}
+	if want := (GateCounts{Excluded: 2, Withdrawn: 1}); g != want {
+		t.Fatalf("got %+v, want %+v", g, want)
+	}
+}
+
+func withHistory(f Finding, history ...HistoryEntry) Finding {
+	f.History = history
+	return f
+}
+
+// roundTrip passes the draft through its stored JSON, so history values are what a loaded draft holds.
+func roundTrip(t *testing.T, d *Draft) *Draft {
+	t.Helper()
+	b, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Draft
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	return &out
+}
