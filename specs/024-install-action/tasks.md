@@ -22,8 +22,8 @@ description: "Task list for the loupe install action"
 
 **Independent Test**: `go test ./internal/cli/ -run TestInstallAction`.
 
-- [ ] T001 [US2] Add a failing `TestInstallAction` to a new `internal/cli/action_test.go`. Reuse `readRepoFile` and `releaseVersion` from `internal/cli/plugin_test.go`. Assert that `action.yml` contains the line fragment `default: v<releaseVersion> # x-release-please-version`, and that `release-please-config.json` lists `{"type": "generic", "path": "action.yml"}` under `packages["."].extra-files`. Run it and see it fail because `action.yml` does not exist.
-- [ ] T002 [US2] Add `{"type": "generic", "path": "action.yml"}` to `extra-files` in `release-please-config.json`, after the `README.md` entry.
+- [X] T001 [US2] Add a failing `TestInstallAction` to a new `internal/cli/action_test.go`. Reuse `readRepoFile` and `releaseVersion` from `internal/cli/plugin_test.go`. Assert that `action.yml` contains the line fragment `default: v<releaseVersion> # x-release-please-version`, and that `release-please-config.json` lists `{"type": "generic", "path": "action.yml"}` under `packages["."].extra-files`. Run it and see it fail because `action.yml` does not exist.
+- [X] T002 [US2] Add `{"type": "generic", "path": "action.yml"}` to `extra-files` in `release-please-config.json`, after the `README.md` entry.
 
 Phase 2 creates `action.yml`, which makes T001 pass.
 
@@ -33,18 +33,18 @@ Phase 2 creates `action.yml`, which makes T001 pass.
 
 **Independent Test**: the script, extracted from `action.yml` and run with `RUNNER_OS=Linux RUNNER_ARCH=X64` and a scratch `RUNNER_TEMP` and `GITHUB_PATH`, installs a binary whose `--version` prints the manifest version.
 
-- [ ] T003 [US1] Create `action.yml` at the repository root: `name`, `description`, `inputs.version` (description: a loupe release tag such as `v0.10.0`, with or without the `v`; `required: false`; `default: v0.10.0 # x-release-please-version`), and `runs.using: composite` with one step, `shell: bash`, `env: LOUPE_VERSION: ${{ inputs.version }}`. The script, `set -euo pipefail`, in order:
+- [X] T003 [US1] Create `action.yml` at the repository root: `name`, `description`, `inputs.version` (description: a loupe release tag such as `v0.10.0`, with or without the `v`; `required: false`; `default: v0.10.0 # x-release-please-version`), and `runs.using: composite` with one step, `shell: bash`, `env: LOUPE_VERSION: ${{ inputs.version }}`. The script, `set -euo pipefail`, in order:
   1. An empty `LOUPE_VERSION` fails with `::error::` asking for a loupe release tag such as `v0.10.0`.
   2. `tag="v${LOUPE_VERSION#v}"`.
   3. A `case` on `RUNNER_OS` (`Linux`→`linux`, `macOS`→`darwin`) and on `RUNNER_ARCH` (`X64`→`amd64`, `ARM64`→`arm64`). Anything else fails with `::error::loupe has no build for runner <RUNNER_OS>/<RUNNER_ARCH>. Supported: linux_amd64, linux_arm64, darwin_amd64, darwin_arm64.`, before any download.
   4. `archive="loupe_${tag#v}_${os}_${arch}.tar.gz"`, `base="https://github.com/eriksaulnier/loupe/releases/download/$tag"`, and two `mktemp -d "$RUNNER_TEMP/loupe.XXXXXX"` directories, one for downloads and one for the binary.
-  5. A download function around `curl -fsSL -o`. On failure: `::error::could not download <url>. If <tag> was released in the last few minutes, its archives may still be uploading; retry shortly. Otherwise check that <tag> is a loupe release.`
+  5. A download function around `curl -fsSL -o`. On failure: `::error::could not download <url>. If <tag> was released in the last few minutes, its archives may still be uploading. Retry shortly. Otherwise check that <tag> is a loupe release.`
   6. `grep -F "  $archive" checksums.txt > archive.sha256`, failing with `::error::checksums.txt for loupe <tag> has no entry for <archive>`.
   7. `sha256sum -c archive.sha256` when `sha256sum` is on `PATH`, else `shasum -a 256 -c archive.sha256`.
   8. `tar -xzf "$archive" -C "$bin" loupe`, then append `$bin` to `$GITHUB_PATH`.
   The script MUST NOT `cd` anywhere but the download directory, and MUST NOT use `${{ }}` inside `run:`.
-- [ ] T004 [US1] Run `go test ./internal/cli/ -run TestInstallAction` and see it pass.
-- [ ] T005 [US1] By hand, extract the script from `action.yml` into the scratchpad and run it under `RUNNER_OS=Linux RUNNER_ARCH=X64`, a scratch `RUNNER_TEMP` and `GITHUB_PATH`, and a working directory that is a scratch git repository. Check: the binary's `--version` prints `loupe version <manifest version>`; `GITHUB_PATH` names a directory under `RUNNER_TEMP`; the working directory is untouched; `LOUPE_VERSION=0.10.0` (no `v`) also installs; `LOUPE_VERSION=v0.9.0` installs a binary that prints `loupe version 0.9.0` (spec US1 scenario 2). Run `shellcheck` on the extracted script through `mise exec shellcheck@0.11.0 --`.
+- [X] T004 [US1] Run `go test ./internal/cli/ -run TestInstallAction` and see it pass.
+- [X] T005 [US1] By hand, extract the script from `action.yml` into the scratchpad and run it under `RUNNER_OS=Linux RUNNER_ARCH=X64`, a scratch `RUNNER_TEMP` and `GITHUB_PATH`, and a working directory that is a scratch git repository. Check: the binary's `--version` prints `loupe version <manifest version>`; `GITHUB_PATH` names a directory under `RUNNER_TEMP`; the working directory is untouched; `LOUPE_VERSION=0.10.0` (no `v`) also installs; `LOUPE_VERSION=v0.9.0` installs a binary that prints `loupe version 0.9.0` (spec US1 scenario 2). Run `shellcheck` on the extracted script through `mise exec shellcheck@0.11.0 --`.
 
 **Checkpoint**: T001 passes and the happy path runs on Linux amd64.
 
@@ -52,19 +52,19 @@ Phase 2 creates `action.yml`, which makes T001 pass.
 
 **Independent Test**: each failure path of the extracted script, run by hand.
 
-- [ ] T006 [US3] By hand, run the extracted script with `RUNNER_OS=Windows RUNNER_ARCH=X64` and with `RUNNER_OS=Linux RUNNER_ARCH=ARM` and check that each fails before any download, naming the runner and the four targets. Run it with an empty `LOUPE_VERSION`, and with `LOUPE_VERSION=v0.0.0` for the uploading hint. For each run, check that `GITHUB_PATH` stays empty.
-- [ ] T007 [US3] By hand, copy the extracted script with `base` pointed at a `file://` scratch directory that holds a real archive, then: remove its line from `checksums.txt` and check the missing-entry error; alter its digest and check the checksum failure. For each run, check that `GITHUB_PATH` stays empty.
+- [X] T006 [US3] By hand, run the extracted script with `RUNNER_OS=Windows RUNNER_ARCH=X64` and with `RUNNER_OS=Linux RUNNER_ARCH=ARM` and check that each fails before any download, naming the runner and the four targets. Run it with an empty `LOUPE_VERSION`, and with `LOUPE_VERSION=v0.0.0` for the uploading hint. For each run, check that `GITHUB_PATH` stays empty.
+- [X] T007 [US3] By hand, copy the extracted script with `base` pointed at a `file://` scratch directory that holds a real archive, then: remove its line from `checksums.txt` and check the missing-entry error; alter its digest and check the checksum failure. For each run, check that `GITHUB_PATH` stays empty.
 
 ## Phase 4: CI and release checks (FR-009, FR-010)
 
-- [ ] T008 [P] [US1] Add an `install-action` job to `.github/workflows/ci.yml` with `if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')`, `fail-fast: false`, and a matrix of `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-15-intel` and `macos-latest`. Each leg: `actions/checkout@v7`, `uses: ./`, then one step with `set -euo pipefail` that reads `want` from `.release-please-manifest.json` with `jq -r '."."'` and checks `loupe --version` equals `loupe version $want`, `command -v loupe` starts with `$RUNNER_TEMP/`, and `git status --porcelain` is empty. Add a separate `install-action-unsupported` job on `windows-latest` with the same `if`: checkout, `uses: ./` with `id: install` and `continue-on-error: true`, then a step that fails unless `steps.install.outcome == 'failure'`. The error's wording is checked by hand in T006, not by this job.
-- [ ] T009 [P] [US1] Add an `install-action` job to `.github/workflows/release.yml`: `needs: [release-please, goreleaser]`, `if: needs.release-please.outputs.release_created == 'true'`, `permissions: contents: read`, `fail-fast: false`, the same four-runner matrix, `actions/checkout@v7`, `uses: ./`, then a step that checks `loupe --version` equals `loupe version ${TAG#v}`, with `TAG: ${{ needs.release-please.outputs.tag_name }}` passed through `env`. Add a comment saying why it waits for goreleaser.
+- [X] T008 [P] [US1] Add an `install-action` job to `.github/workflows/ci.yml` with `if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')`, `fail-fast: false`, and a matrix of `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-15-intel` and `macos-latest`. Each leg: `actions/checkout@v7`, `uses: ./`, then one step with `set -euo pipefail` that reads `want` from `.release-please-manifest.json` with `jq -r '."."'` and checks `loupe --version` equals `loupe version $want`, `command -v loupe` starts with `$RUNNER_TEMP/`, and `git status --porcelain` is empty. Add a separate `install-action-unsupported` job on `windows-latest` with the same `if`: checkout, `uses: ./` with `id: install` and `continue-on-error: true`, then a step that fails unless `steps.install.outcome == 'failure'`. The error's wording is checked by hand in T006, not by this job.
+- [X] T009 [P] [US1] Add an `install-action` job to `.github/workflows/release.yml`: `needs: [release-please, goreleaser]`, `if: needs.release-please.outputs.release_created == 'true'`, `permissions: contents: read`, `fail-fast: false`, the same four-runner matrix, `actions/checkout@v7`, `uses: ./`, then a step that checks `loupe --version` equals `loupe version ${TAG#v}`, with `TAG: ${{ needs.release-please.outputs.tag_name }}` passed through `env`. Add a comment saying why it waits for goreleaser.
 
 ## Phase 5: Polish
 
-- [ ] T010 [P] Add a `### GitHub Actions` subsection under `## Install` in `README.md`: the step `- uses: eriksaulnier/loupe@<sha> # <tag>`, one sentence on pinning the release commit's sha with its tag in a comment so Dependabot moves the action and the binary together, and the `version` input for installing another release. No literal version, so release-please has nothing new to stamp in the README.
-- [ ] T011 [P] Add an `action.yml` row to the Layout table in `AGENTS.md`: the composite action that installs a released loupe in a GitHub Actions job, its default stamped by release-please.
-- [ ] T012 Run `mise run check` and show its result. It MUST pass.
+- [X] T010 [P] Add a `### GitHub Actions` subsection under `## Install` in `README.md`: the step `- uses: eriksaulnier/loupe@<sha> # <tag>`, one sentence on pinning the release commit's sha with its tag in a comment so Dependabot moves the action and the binary together, and the `version` input for installing another release. No literal version, so release-please has nothing new to stamp in the README.
+- [X] T011 [P] Add an `action.yml` row to the Layout table in `AGENTS.md`: the composite action that installs a released loupe in a GitHub Actions job, its default stamped by release-please.
+- [X] T012 Run `mise run check` and show its result. It MUST pass.
 
 ## Dependencies
 
