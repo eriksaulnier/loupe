@@ -1,0 +1,181 @@
+package render
+
+import (
+	"strings"
+	"testing"
+)
+
+func stickyInput(round int, sha string, findings ...Finding) Input {
+	in := exampleInput()
+	in.Round, in.HeadSHA, in.Inline, in.Summary, in.Findings = round, sha, "none", "", findings
+	in.Digest = strings.Repeat(string(rune('0'+round)), 64)
+	in.PublicationID = "00000000-0000-4000-8000-00000000000" + string(rune('0'+round))
+	return in
+}
+
+// firstRound is a sticky body holding one round, as the first sticky publication posts it.
+func firstRound() string {
+	in := stickyInput(1, "aaaaaaa111", general("f-001", "issue", true))
+	in.Sticky = &StickyInput{Rounds: 1}
+	return Body(in)
+}
+
+// stickyGoldenInput is a second round edited over a first, each with a finding and the second with a source.
+func stickyGoldenInput(t *testing.T) Input {
+	t.Helper()
+	earlier, rounds, err := ReadSticky(firstRound())
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := stickyInput(2, "bbbbbbb222", general("f-001", "question", false))
+	in.Summary, in.Source = "The blocking issue is fixed; one question left.", "gadfly-review-pr@2.2.0"
+	in.Sticky = &StickyInput{Rounds: rounds + 1, Earlier: earlier}
+	return in
+}
+
+func TestStickyOffLeavesBodyUnchanged(t *testing.T) {
+	in := exampleInput()
+	plain := Body(in)
+	in.Sticky = &StickyInput{Rounds: 1}
+	sticky := Body(in)
+	if want := strings.Replace(plain, " regraded=0 -->", " regraded=0 sticky=1 -->", 1); sticky != want {
+		t.Fatalf("a one-round sticky body must differ only by sticky=1\n--- got ---\n%s\n--- want ---\n%s", sticky, want)
+	}
+	if strings.Contains(plain, "sticky=") {
+		t.Fatal("a non-sticky body carries sticky=")
+	}
+}
+
+func TestStickyBodyHoldsEarlierRoundsBeforeTheFooter(t *testing.T) {
+	earlier, rounds, err := ReadSticky(firstRound())
+	if err != nil || rounds != 1 || len(earlier) != 1 {
+		t.Fatalf("ReadSticky: %d blocks, rounds %d, err %v", len(earlier), rounds, err)
+	}
+	in := stickyInput(2, "bbbbbbb222", general("f-001", "question", false))
+	in.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
+	body := Body(in)
+	at := indexes(t, body, "### Worth a look", "\n\n---\n\n<!-- loupe-earlier -->\n\n### Earlier rounds\n\n<!-- loupe-round -->\n\n<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code></summary>",
+		"</details>\n\n---\n\nreviewed `bbbbbbb`", "sticky=2 -->")
+	if at[0] > at[1] || at[1] > at[2] || at[2] > at[3] {
+		t.Fatalf("sections out of order %v:\n%s", at, body)
+	}
+	if strings.Contains(body, "dropped") {
+		t.Fatalf("no round was dropped:\n%s", body)
+	}
+}
+
+func TestStickyBodyCountsDroppedRounds(t *testing.T) {
+	for _, c := range []struct {
+		rounds, kept int
+		note         string
+	}{
+		{3, 1, "The oldest round was dropped to fit GitHub's length limit."},
+		{5, 1, "The 3 oldest rounds were dropped to fit GitHub's length limit."},
+		{3, 0, "The 2 oldest rounds were dropped to fit GitHub's length limit."},
+	} {
+		earlier, _, err := ReadSticky(firstRound())
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := stickyInput(c.rounds, "ccccccc333")
+		in.Summary = "Prose."
+		in.Sticky = &StickyInput{Rounds: c.rounds, Earlier: earlier[:c.kept]}
+		body := Body(in)
+		if !strings.Contains(body, "### Earlier rounds\n\n"+c.note+"\n\n") {
+			t.Errorf("rounds %d kept %d: note missing:\n%s", c.rounds, c.kept, body)
+		}
+	}
+}
+
+func TestReadStickyDemotesTheCurrentRound(t *testing.T) {
+	first := firstRound()
+	earlier, _, err := ReadSticky(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := first[:strings.Index(first, "\n\n---\n\nreviewed ")]
+	want := "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code></summary>\n\n" + part +
+		"\n\n---\n\nreviewed `aaaaaaa`\n\n<!-- loupe digest=" + strings.Repeat("1", 64) + " publication=00000000-0000-4000-8000-000000000001 -->\n\n</details>"
+	if earlier[0] != want {
+		t.Fatalf("demoted round\n--- got ---\n%s\n--- want ---\n%s", earlier[0], want)
+	}
+}
+
+func TestReadStickyKeepsOlderBlocksNewestFirst(t *testing.T) {
+	earlier, _, err := ReadSticky(firstRound())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := stickyInput(2, "bbbbbbb222", general("f-001", "question", false))
+	second.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
+	// A dropped-rounds note in the body being read is regenerated, never carried.
+	second.Sticky.Rounds = 4
+	again, rounds, err := ReadSticky(Body(second))
+	if err != nil || rounds != 4 {
+		t.Fatalf("rounds %d err %v", rounds, err)
+	}
+	if len(again) != 2 || !strings.Contains(again[0], "Round 2 · reviewed <code>bbbbbbb</code>") || again[1] != earlier[0] {
+		t.Fatalf("blocks %d:\n%s", len(again), strings.Join(again, "\n=====\n"))
+	}
+	for _, b := range again {
+		if strings.Contains(b, "dropped") || strings.Contains(b, MetaPrefix) || strings.Contains(b, "loupe-round") {
+			t.Fatalf("block carries a generated line it must not:\n%s", b)
+		}
+	}
+}
+
+// A finding that quotes the delimiters inside a fence, as a review of loupe itself might, moves no boundary.
+func TestReadStickyIgnoresFencedDelimiters(t *testing.T) {
+	quoted := "```\n<!-- loupe-earlier -->\n<!-- loupe-round -->\n" + MetaPrefix + "v=1 round=9 sticky=9 -->\n```"
+	in := stickyInput(1, "aaaaaaa111", Finding{ID: "f-001", Title: "Quotes markers", Body: quoted, General: true})
+	in.Sticky = &StickyInput{Rounds: 1}
+	earlier, rounds, err := ReadSticky(Body(in))
+	if err != nil || rounds != 1 || len(earlier) != 1 || !strings.Contains(earlier[0], quoted) {
+		t.Fatalf("rounds %d blocks %d err %v", rounds, len(earlier), err)
+	}
+	if got := StickyRounds(quoted); got != 0 {
+		t.Fatalf("StickyRounds of a fenced marker = %d, want 0", got)
+	}
+}
+
+func TestReadStickyReadsCRLF(t *testing.T) {
+	first := firstRound()
+	lf, _, err := ReadSticky(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	crlf, _, err := ReadSticky(strings.ReplaceAll(first, "\n", "\r\n"))
+	if err != nil || len(crlf) != 1 || crlf[0] != lf[0] {
+		t.Fatalf("CRLF read differs: err %v", err)
+	}
+}
+
+func TestReadStickyRefusesAnUnreadableBody(t *testing.T) {
+	first := firstRound()
+	cases := map[string]string{
+		"not sticky":      strings.Replace(first, " sticky=1", "", 1),
+		"no marker":       first[:strings.Index(first, "<!-- loupe digest=")],
+		"footer replaced": strings.Replace(first, "reviewed `aaaaaaa`", "edited by hand", 1),
+		"no divider":      strings.Replace(first, "\n\n---\n\nreviewed", "\n\nreviewed", 1),
+		"text after meta": first + "\nA note added on GitHub.\n",
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, _, err := ReadSticky(body); err == nil {
+				t.Fatalf("ReadSticky accepted:\n%s", body)
+			}
+		})
+	}
+}
+
+func TestStickyRounds(t *testing.T) {
+	if got := StickyRounds(firstRound()); got != 1 {
+		t.Errorf("sticky body: %d, want 1", got)
+	}
+	if got := StickyRounds(Body(exampleInput())); got != 0 {
+		t.Errorf("non-sticky body: %d, want 0", got)
+	}
+	if got := StickyRounds("no marker at all"); got != 0 {
+		t.Errorf("no marker: %d, want 0", got)
+	}
+}
