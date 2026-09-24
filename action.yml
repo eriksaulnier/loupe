@@ -47,7 +47,8 @@ runs:
         cd "$dl"
 
         download() {
-          if ! curl -fsSL -o "$1" "$base/$1"; then
+          # curl retries only timeouts and 408, 429 and 5xx responses, so a 404 still fails at once.
+          if ! curl -fsSL --retry 3 -o "$1" "$base/$1"; then
             # release-please creates the tag before goreleaser uploads the archives.
             echo "::error::could not download $base/$1. If $tag was released in the last few minutes, its archives may still be uploading. Retry shortly. Otherwise check that $tag is a loupe release."
             exit 1
