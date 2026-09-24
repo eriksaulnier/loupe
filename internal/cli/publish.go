@@ -45,8 +45,9 @@ sorting. Esc and Tab move between the message and the review; neither cancels, s
 message and going back cannot throw away what you wrote. Inside loupe review it also survives a
 cancel and a refusal, in memory and no further: the next confirmation of that session opens on
 it, and quitting ends it. Outside it, j/k, up/down, pgup/pgdown
-and home/end scroll and v switches to the exact JSON payload. Only y sends, and only from
-outside the message, so a y you typed cannot publish. Any other key, Ctrl-C or end of input
+and home/end scroll and v switches to the exact JSON payload. y sends, and so does p when the
+review has room for a message; neither sends from inside the message, so a y or p you typed
+cannot publish. Where there is no room, p does nothing. Any other key, Ctrl-C or end of input
 cancels and nothing is sent or written. Once the review is being sent, keys, Ctrl-C and SIGTERM
 do not stop loupe until the outcome is recorded.
 

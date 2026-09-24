@@ -127,8 +127,9 @@ func ConfirmTitle(ref, action, inline string, comments int) ConfirmHeading {
 	return ConfirmHeading{ref: ref, action: action, inline: inline, comments: comments}
 }
 
-// key reports whether the human answered, and the command the message input asked for. Only y confirms, and every
-// key other than scrolling, the toggles and the input is an answer, so a stray key can never send.
+// key reports whether the human answered, and the command the message input asked for. y confirms, and so does p when
+// there is a message input. Every key other than scrolling, the toggles, the input and a p with no input is an answer,
+// so a stray key can never send.
 func (c *confirmation) key(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
 	c.sync(m)
 	if c.typing {
@@ -185,7 +186,12 @@ func (c *confirmation) key(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
 			c.blur()
 		}
 		c.scroll.GotoTop()
-	case "y":
+	case "y", "p":
+		// p starts publishing, so it gets pressed by reflex. With an input the screen opens focused on it and a
+		// reflexive p is typed; without one it would publish unread, so p neither sends nor cancels there.
+		if msg.String() == "p" && !c.inline() {
+			return false, nil
+		}
 		// A message the allowlist refused is not sent and not silently dropped; the human stays here with their text.
 		if c.composeErr != nil {
 			return false, nil
@@ -479,6 +485,7 @@ func (m *Model) confirmKeys() (keys, notice string) {
 	hints := []style.Hint{{Key: "y", Verb: "publish this review", KeyKind: style.Good, VerbKind: style.Good}}
 	// A review with no room for a message has no input to offer the key for.
 	if m.view == viewConfirm && m.confirm.inline() {
+		hints[0].Key = "y/p"
 		hints = append(hints, style.Hint{Key: "tab/esc", Verb: "your message", Role: style.RoleNav})
 	}
 	hints = append(hints,
@@ -510,7 +517,7 @@ func NewConfirmModel(preview publish.Preview, getenv func(string) string, output
 	return &ConfirmModel{shell: shell, confirm: &shell.confirm}
 }
 
-// Confirmed is true only when the program ended on y.
+// Confirmed is true only when the program ended on y or p.
 func (c *ConfirmModel) Confirmed() bool { return c.confirm.yes }
 
 // Message is the opening prose the human typed, empty when they typed none.

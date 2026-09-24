@@ -61,7 +61,7 @@ var screens = []screen{
 		showConfirmation(m)
 		// The message input opens focused; the confirmation's own keys are live once it is blurred.
 		m.confirm.key(m, tea.KeyMsg{Type: tea.KeyEsc})
-	}, []string{"y", "publish", "this", "review"}},
+	}, []string{"y/p", "publish", "this", "review"}},
 	{"confirmation message", showConfirmation, []string{"esc", "done", "enter", "new", "line", "ctrl+u", "clear"}},
 	{"help", func(m *Model) { mustOpen(m, "f-001"); m.help = true }, []string{"?", "close", "help"}},
 	{"edit row", func(m *Model) {

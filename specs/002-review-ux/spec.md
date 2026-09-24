@@ -281,7 +281,7 @@ The choice screens MUST use `↑` and `↓` as their advertised controls and ret
 
 The final confirmation MUST remain visually distinct because it is the only screen that can publish.
 
-Only `y` MUST publish, scrolling and payload-toggle keys MUST retain their current behavior, and every other answer MUST continue to cancel without sending.
+Only `y` and `p` MUST publish, and neither MAY publish while the message input holds the keyboard. `p` MUST publish only when the confirmation has a message input, because that screen opens with the input focused, so a `p` pressed by reflex is typed, not sent. Without an input the screen opens on its own keys, where a reflexive `p` would publish before anything was read, so there `p` MUST do nothing, neither publishing nor canceling. The footer MUST name the key as `y/p` where `p` publishes and as `y` where it does not. Scrolling and payload-toggle keys MUST retain their current behavior, and every other answer MUST continue to cancel without sending.
 
 The confirmation MUST continue to show the review as it will read, inline comments, moved-head information when applicable, and the exact request payload through the existing toggle.
 
@@ -308,7 +308,7 @@ These follow the agreed mockup and stay within the intent of the sections above.
 - The file diff marks a line carrying a finding with a one-cell glyph (`◆`, ASCII `*`) instead of the identifier, and its header names the finding under the cursor, with `+N` when the line carries more.
 - The list's counts line keeps three-space gaps when it fits; narrower, zero counts drop and the gaps shrink to two; if it still does not fit, it splits over two lines and the header grows with it.
 - Help taller than the window scrolls with `↑`, `↓`, `Page Up` and `Page Down`; its header then shows `lines a–b of n` and its footer adds `↑/↓ scroll`.
-- When `y publish this review` and `any other key cancels, nothing is sent` do not fit the confirmation footer together, the cancel sentence moves, word for word, to the line above it.
+- When `y/p publish this review` (or `y publish this review` without a message input) and `any other key cancels, nothing is sent` do not fit the confirmation footer together, the cancel sentence moves, word for word, to the line above it.
 - A disabled publish action wraps its reason under the description column rather than clipping it.
 - The final confirmation reads `Publish · Step 3 of 3` inside the review program's publish flow. Opened by `loupe publish`, whose flags replace the two choice steps, it reads `Publish` with no step count.
 
