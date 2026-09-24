@@ -4,7 +4,7 @@ How to check this feature. The behavior is in [spec.md](spec.md); the contract c
 
 ## Automated
 
-1. `go test ./internal/pane/ ./internal/cli/ -run 'Handoff|Open|Detect|Direction|Skill'`. Expected: with the fake `orca` on the injected `PATH`, the calls are `show`, `split`, `switch` in order and the result carries `host: orca`; a stale handle refuses `pane-failed` with `details.step: probe` and makes no further call; on Orca tty widths 120, 119 and unreadable give `right`, `down`, `right`, and on Herdr the layout width decides over the tty; with both environments set, only `herdr` runs.
+1. `go test ./internal/pane/ ./internal/cli/ -run 'Handoff|Open|Detect|Direction|Skill'`. Expected: with the fake `orca` on the injected `PATH`, the calls are `show` then `split`, with no `switch` (FR-025) and the result carries `host: orca`; a stale handle refuses `pane-failed` with `details.step: probe` and makes no further call; on Orca tty widths 120, 119 and unreadable give `right`, `down`, `right`, and on Herdr the layout width decides over the tty; with both environments set, only `herdr` runs.
 2. `go test ./internal/cli/ -update`, then `git diff testdata/golden/cli`. Expected: only `handoff-help.80.txt` and `handoff-help.100.txt` move.
 3. `mise run check`. Expected: green, including the widened `herdr|orca` guard in `scripts/check-tests.sh`.
 
