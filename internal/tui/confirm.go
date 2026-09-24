@@ -56,6 +56,9 @@ type confirmation struct {
 	// before and after are the review either side of the opening slot, which the input is drawn into. They are empty
 	// when the preview carries no closure, and the recomposed body is then shown whole instead.
 	before, after string
+	// rawBefore is before as composed, so after can be cut again from each recomposed body: a sticky review drops
+	// earlier rounds by the message's length, so what follows the message can change as it is typed.
+	rawBefore string
 	// inputTop and inputRows are where the input sits in the scrolling content, so typing can keep it on screen.
 	inputTop, inputRows int
 	// follow pulls the input back into view on the next layout. It is set by a keystroke that changed the message
@@ -79,16 +82,20 @@ func newConfirmation(preview publish.Preview, title ConfirmHeading, message stri
 	env, _, err := preview.Compose(messageSlot)
 	if err == nil {
 		var found bool
-		if c.before, c.after, found = strings.Cut(render.PillsAsWords(markdown.OpenDetails(env.Body)), messageSlot); !found {
+		if c.rawBefore, _, found = strings.Cut(env.Body, messageSlot); !found {
 			err = fmt.Errorf("the composed review has nowhere to put your message")
 		}
+		c.before = displayBody(c.rawBefore)
+	}
+	if err == nil {
+		err = c.cutAfter(preview.Body, "")
 	}
 	if err != nil {
 		// The probe body is one sentinel longer than the real one, so it can fail within a sentinel of the size limit
 		// where the review would not. A probe failure is not the human's: they are told, get no input, and y still
 		// publishes what they were shown. Words typed before a refusal sent them back are kept and composed into that
 		// body, since publishing without them silently is worse than not being able to edit them.
-		c.before, c.after, c.slotErr = "", "", err
+		c.before, c.after, c.rawBefore, c.slotErr = "", "", "", err
 		c.restore(message)
 		return c
 	}
@@ -233,7 +240,26 @@ func (c *confirmation) recompose() {
 	}
 	c.shown = c.preview
 	c.shown.Body, c.shown.Comments, c.shown.EnvelopeJSON = env.Body, env.Comments, envJSON
+	if c.inline() {
+		if err := c.cutAfter(env.Body, c.value()); err != nil {
+			// Drawn whole instead, so the screen never shows a tail the body does not carry.
+			c.before, c.after, c.rawBefore, c.slotErr = "", "", "", err
+		}
+	}
 }
+
+// cutAfter sets after to what body carries past the message. Fences in the message are balanced, as the allowlist
+// requires, so the tail is displayed on its own as it would be within the whole body.
+func (c *confirmation) cutAfter(body, message string) error {
+	rest, ok := strings.CutPrefix(body, c.rawBefore+message)
+	if !ok {
+		return fmt.Errorf("the composed review does not open where your message goes")
+	}
+	c.after = displayBody(rest)
+	return nil
+}
+
+func displayBody(body string) string { return render.PillsAsWords(markdown.OpenDetails(body)) }
 
 // messageRows is how many rows the input's text takes. The textarea pads its view out to the height it was given and
 // never reports the text's own height, but it asks its prompt function for one row at a time, the text's rows first

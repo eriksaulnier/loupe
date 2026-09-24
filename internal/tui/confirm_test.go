@@ -934,3 +934,33 @@ func TestConfirmNamesTheReviewItEdits(t *testing.T) {
 		t.Fatal("a new review shows the edit notice")
 	}
 }
+
+// A sticky review near the length limit drops more earlier rounds for a longer message, so what follows the message
+// depends on it. The screen MUST draw the body the typed message composes, not the one the sentinel probe composed.
+func TestConfirmRedrawsWhatFollowsTheMessage(t *testing.T) {
+	p := confirmPreview()
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		rest := "Round 1 kept"
+		if len(message) > 30 {
+			rest = "The oldest round was dropped"
+		}
+		head := previewChips
+		if message != "" {
+			head += "\n\n" + message
+		}
+		return publish.Envelope{Body: head + "\n\n---\n\n" + rest}, p.EnvelopeJSON, nil
+	}
+	// publish.Run's preview body is what the closure composes with no message.
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	m := NewConfirmModel(p, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if view := m.View(); !strings.Contains(view, "Round 1 kept") {
+		t.Fatalf("before typing:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A message long enough to drop a round.")})
+	view := m.View()
+	if strings.Contains(view, "Round 1 kept") || !strings.Contains(view, "The oldest round was dropped") {
+		t.Fatalf("after typing, the screen does not match the body y sends:\n%s", view)
+	}
+}
