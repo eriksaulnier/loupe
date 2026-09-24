@@ -98,7 +98,7 @@ func newPublishCmd(deps Deps) *cobra.Command {
 		},
 	}
 	cmd.Flags().String("action", "", "review action: comment, approve or request-changes")
-	cmd.Flags().String("inline", "blocking", "located findings that also become inline comments: none, blocking or all")
+	cmd.Flags().String("inline", "none", "located findings that also become inline comments: none, blocking or all")
 	cmd.Flags().Bool("retry-unknown", false, "send again after an unknown outcome that matches no review on the pull request")
 	cmd.Flags().Bool("plain", false, "confirm on one line instead of the full-screen view")
 	cmd.Flags().Bool("unattended", false, "publish with no terminal, confirmation or viewer recheck, from a GitHub App installation token")

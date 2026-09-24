@@ -242,7 +242,7 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 
 ## Inline modes
 
-`loupe publish --action <action> --inline none|blocking|all`, default `blocking`.
+`loupe publish --action <action> --inline none|blocking|all`, default `none` (specs/026-inline-default-none).
 
 | Mode | `comments[]` contains |
 | :--- | :--- |

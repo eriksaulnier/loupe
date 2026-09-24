@@ -148,8 +148,8 @@ func prepare(home string, gh *fakegh.Server, now time.Time, keep bool) error {
 // demoMessage is the opening docs/tapes/walkthrough.tape types, so the terminal and GitHub pictures show one review.
 const demoMessage = "The cache bug blocks this one; the rest can land."
 
-// demoBody composes #43 as publish would send it with inline blocking, under a fixed publication id so the body is
-// the same on every run.
+// demoBody composes #43 as publish would send it by default, under a fixed publication id so the body is the same
+// on every run.
 func demoBody(now time.Time) (string, error) {
 	parsed, err := diff.Parse([]byte(demoDiff))
 	if err != nil {
@@ -160,7 +160,7 @@ func demoBody(now time.Time) (string, error) {
 		return "", err
 	}
 	env, err := publish.Build(publish.BuildInput{Target: target, Round: 1, Draft: d, Viewer: viewer, Action: "comment",
-		Inline: "blocking", PublicationID: "00000000-0000-4000-8000-000000000000", Message: demoMessage})
+		Inline: "none", PublicationID: "00000000-0000-4000-8000-000000000000", Message: demoMessage})
 	if err != nil {
 		return "", err
 	}

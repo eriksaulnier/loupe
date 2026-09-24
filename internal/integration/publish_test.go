@@ -65,8 +65,54 @@ func TestPublishSendsCapturedSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	if body := receipt.Envelope.Body; !strings.Contains(body, " · via `gadfly-review-pr 2.2.0`\n") ||
-		!strings.Contains(body, "<!-- loupe-meta v=1 round=1 src=gadfly-review-pr@2.2.0 inline=blocking ") {
+		!strings.Contains(body, "<!-- loupe-meta v=1 round=1 src=gadfly-review-pr@2.2.0 inline=none ") {
 		t.Fatalf("sent body lacks the source:\n%s", body)
+	}
+}
+
+// lastPostComments is the inline comments of the last review request the fake GitHub received.
+func lastPostComments(h *harness) []any {
+	var comments []any
+	for _, r := range h.GH.Requests() {
+		if r.Method == "POST" {
+			m, _ := r.Body.(map[string]any)
+			comments, _ = m["comments"].([]any)
+		}
+	}
+	return comments
+}
+
+// Without --inline a blocking finding lives only in the body's Must fix section, not also as a line comment
+// (specs/026-inline-default-none).
+func TestPublishDefaultsToNoInlineComments(t *testing.T) {
+	for _, tc := range []struct {
+		flags    []string
+		comments int
+		mode     string
+	}{
+		{nil, 0, "none"},
+		{[]string{"--inline", "blocking"}, 1, "blocking"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			h := newHarness(t)
+			h.reviewed("a\na\nx\nq\n")
+			h.Stdin = confirmPublish("", "y")
+			if _, stderr, exit := h.Run(append([]string{"publish", runRef, "--action", "comment", "--plain"}, tc.flags...)...); exit != 0 {
+				t.Fatalf("publish exit %d stderr %q", exit, stderr)
+			}
+			h.checkSends(1)
+			if got := len(lastPostComments(h)); got != tc.comments {
+				t.Errorf("sent %d inline comments, want %d", got, tc.comments)
+			}
+			body := lastPostBody(t, h)
+			mustFix, _, _ := strings.Cut(body, "Worth a look")
+			if !strings.Contains(mustFix, "Must fix") || !strings.Contains(mustFix, "Changed line") {
+				t.Errorf("the blocking finding is not under Must fix:\n%s", body)
+			}
+			if !strings.Contains(body, " inline="+tc.mode+" ") {
+				t.Errorf("marker lacks inline=%s:\n%s", tc.mode, body)
+			}
+		})
 	}
 }
 
@@ -407,6 +453,29 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 	}
 	if receipt.Author != "github-actions[bot]" {
 		t.Fatalf("receipt author %q, want the bot login", receipt.Author)
+	}
+}
+
+// The review pipeline publishes with no --inline, so an unattended review takes the same default as an attended one
+// (specs/026-inline-default-none).
+func TestPublishUnattendedDefaultsToNoInlineComments(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
+	h.IsTerminal = false
+
+	if stdout, stderr, exit := h.Run("publish", runRef, "--unattended", "--json"); exit != 0 {
+		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
+	}
+	h.checkSends(1)
+	if got := len(lastPostComments(h)); got != 0 {
+		t.Errorf("sent %d inline comments, want 0", got)
+	}
+	if body := lastPostBody(t, h); !strings.Contains(body, " unattended=1 inline=none ") {
+		t.Errorf("marker lacks inline=none:\n%s", body)
 	}
 }
 
