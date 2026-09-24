@@ -40,4 +40,4 @@ Body of f-005
 reviewed `1111111` · unattended
 
 <!-- loupe digest=cf8b957c87630ec2d1965103c3e3675a3fcfe6afddfc9e195521e991a957c884 publication=00000000-0000-4000-8000-000000000000 -->
-<!-- loupe-meta v=1 round=1 unattended=1 inline=all blocking=1 issues=1 suggestions=1 questions=1 other=0 -->
+<!-- loupe-meta v=1 round=1 unattended=1 inline=all blocking=1 issues=1 suggestions=1 questions=1 other=0 excluded=1 withdrawn=1 reinstated=0 regraded=0 -->

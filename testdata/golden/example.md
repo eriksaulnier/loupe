@@ -45,4 +45,4 @@ that may already have succeeded, so a 502 produces two reviews.
 reviewed `d23632e`
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
-<!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 -->
+<!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 excluded=1 withdrawn=1 reinstated=0 regraded=1 -->

@@ -38,4 +38,4 @@ Body of f-005
 reviewed `1111111`
 
 <!-- loupe digest=93d92a7b1eb916445c26bc30b4fe77d8349e321979bf22ac5572730106662d53 publication=00000000-0000-4000-8000-000000000000 -->
-<!-- loupe-meta v=1 round=1 inline=all blocking=1 issues=1 suggestions=1 questions=1 other=0 -->
+<!-- loupe-meta v=1 round=1 inline=all blocking=1 issues=1 suggestions=1 questions=1 other=0 excluded=1 withdrawn=1 reinstated=0 regraded=0 -->

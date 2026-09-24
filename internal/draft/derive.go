@@ -91,6 +91,64 @@ func ReadinessOf(d *Draft) Readiness {
 	return r
 }
 
+// GateCounts is what the human gate did to the round's findings. Excluded and Withdrawn split the findings that do
+// not publish, so published + Excluded + Withdrawn is every finding filed. Reinstated and Regraded are flags that can
+// overlap either and can count published findings.
+type GateCounts struct {
+	Excluded   int
+	Withdrawn  int
+	Reinstated int
+	Regraded   int
+}
+
+func GateCountsOf(d *Draft) GateCounts {
+	var c GateCounts
+	for _, f := range d.Findings {
+		switch disposition(d, f) {
+		case DispositionExcluded:
+			c.Excluded++
+		case DispositionWithdrawn:
+			// A human who withdrew a finding rejected it, so Withdrawn is left with only the agent's own cuts.
+			if lastIncludedChangeBy(f) == ByHuman {
+				c.Excluded++
+			} else {
+				c.Withdrawn++
+			}
+		}
+		reinstated, regraded := false, false
+		for _, h := range f.History {
+			if h.By != ByHuman {
+				continue
+			}
+			// Changed holds the previous value, so false is a withdrawn finding put back, not a withdrawal.
+			if was, ok := h.Changed["included"].(bool); ok && !was {
+				reinstated = true
+			}
+			for _, field := range []string{"label", "blocking", "severity"} {
+				if _, ok := h.Changed[field]; ok {
+					regraded = true
+				}
+			}
+		}
+		if reinstated {
+			c.Reinstated++
+		}
+		if regraded {
+			c.Regraded++
+		}
+	}
+	return c
+}
+
+func lastIncludedChangeBy(f Finding) string {
+	for i := len(f.History) - 1; i >= 0; i-- {
+		if _, ok := f.History[i].Changed["included"]; ok {
+			return f.History[i].By
+		}
+	}
+	return ""
+}
+
 func IncludedCount(d *Draft) int {
 	n := 0
 	for _, f := range d.Findings {

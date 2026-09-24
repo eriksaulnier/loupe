@@ -137,7 +137,8 @@ func TestBuildComposesEnvelope(t *testing.T) {
 	}
 	// An attended review opens on the human's message, never on the draft's summary.
 	want := render.Input{Owner: "acme", Repo: "widgets", Number: 42, Round: 1, HeadSHA: headSHA, Inline: "all",
-		Summary: "Mine to own.", Digest: draft.Digest(d), PublicationID: env.PublicationID, Findings: fs}
+		Summary: "Mine to own.", Digest: draft.Digest(d), PublicationID: env.PublicationID, Findings: fs,
+		Excluded: 1, Withdrawn: 1}
 	if env.Body != render.Body(want) {
 		t.Fatalf("body differs from render.Body:\n%s", env.Body)
 	}
@@ -169,6 +170,25 @@ func assertOnlyAccepted(t *testing.T, payload string) {
 		if strings.Contains(payload, banned) {
 			t.Errorf("payload contains %q:\n%s", banned, payload)
 		}
+	}
+}
+
+// gateDraft is readyDraft with f-003 excluded by the human, f-004 withdrawn by the agent and the accepted f-001
+// relabeled by the human.
+func gateDraft() *draft.Draft {
+	d := readyDraft()
+	d.Findings[0].History = []draft.HistoryEntry{{At: fixtureNow, By: draft.ByHuman, Changed: map[string]any{"label": "suggestion"}}}
+	d.Findings[3].History = []draft.HistoryEntry{{At: fixtureNow, By: draft.ByAgent, Changed: map[string]any{"included": true}}}
+	return d
+}
+
+func TestBuildCarriesGateCounts(t *testing.T) {
+	env, err := Build(buildInput(fixtureTarget(), gateDraft(), "comment", "none", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(env.Body, " excluded=1 withdrawn=1 reinstated=0 regraded=1 -->\n") {
+		t.Fatalf("gate counts wrong\n%s", env.Body)
 	}
 }
 
@@ -339,6 +359,39 @@ func TestBuildUnattendedComposesFromPublishableSet(t *testing.T) {
 		t.Fatalf("findings %+v, want the pending f-002 included", ids)
 	}
 	assertOnlyAccepted(t, mustJSON(t, env))
+}
+
+// Unattended publication keeps the human's decisions and the finding history, so its counts are derived the same way
+// and never forced to 0 (FR-005).
+func TestBuildUnattendedCarriesGateCounts(t *testing.T) {
+	counts := func(d *draft.Draft, unattended bool) string {
+		t.Helper()
+		env, err := Build(buildInput(fixtureTarget(), d, "comment", "none", unattended))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, meta, _ := strings.Cut(env.Body, " other=")
+		return meta
+	}
+	if attended, unattended := counts(gateDraft(), false), counts(gateDraft(), true); attended != unattended {
+		t.Fatalf("attended %q, unattended %q", attended, unattended)
+	}
+
+	untouched := draft.NewEmpty()
+	withdrawn := finding("f-002", "issue", false, nil)
+	withdrawn.Included = false
+	withdrawn.History = []draft.HistoryEntry{{At: fixtureNow, By: draft.ByAgent, Changed: map[string]any{"included": true}}}
+	untouched.Findings = []draft.Finding{finding("f-001", "issue", false, nil), withdrawn}
+	if got := counts(untouched, true); !strings.HasSuffix(got, " excluded=0 withdrawn=1 reinstated=0 regraded=0 -->\n") {
+		t.Fatalf("a draft no human touched: %q", got)
+	}
+
+	excluded := draft.NewEmpty()
+	excluded.Findings = []draft.Finding{finding("f-001", "issue", false, nil), finding("f-002", "issue", false, nil)}
+	excluded.Decisions["f-002"] = draft.Decision{FindingID: "f-002", Decision: draft.DecisionExcluded, FindingRev: 1, At: fixtureNow}
+	if got := counts(excluded, true); !strings.HasSuffix(got, " excluded=1 withdrawn=0 reinstated=0 regraded=0 -->\n") {
+		t.Fatalf("a human exclusion before an unattended publication: %q", got)
+	}
 }
 
 // TestBuildUnattendedBodyIsUnchanged is SC-004. The golden holds what an unattended round posted before the human's
