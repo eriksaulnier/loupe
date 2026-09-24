@@ -22,7 +22,7 @@
 
 **Project Type**: CLI.
 
-**Constraints**: Constitution 2.0.1 Boundaries — `docs/comment-format.md` is a contract, so this specification is the amendment. Principle II is amended to 2.0.2 by FR-019. The confirmation's one-key guarantee and the single GitHub request are not negotiable and constrain the key model below.
+**Constraints**: Constitution 2.0.1 Boundaries — `docs/comment-format.md` is a contract, so this specification is the amendment. Principle II is amended to 2.0.2 by FR-019. The confirmation's one-keypress guarantee and the single GitHub request are not negotiable and constrain the key model below.
 
 **Scale/Scope**: One conditional in `envelope.go`, a closure and a return type in `internal/publish/publish.go`, a focused input in `internal/tui/confirm.go`, one prompt in `internal/tui/plain.go`, one label in `internal/tui/list.go`, and the documents FR-014 through FR-017 name.
 
@@ -55,7 +55,7 @@
 ## Constitution Check
 
 - **I. A tool for agents, not a tool that uses agents.** PASS with a departure recorded below. No agent command, flag, input, refusal or `--json` envelope changes, and `loupe summary` is untouched. The message has no command, which is in tension with "every workflow MUST be completable from `loupe --help` alone"; see Complexity Tracking.
-- **II. Nothing posts unread under a human's name.** PASS, and this is the principle driving the feature. Per-finding acceptance, readiness, the terminal requirement, the one-key confirmation and the single request are all unchanged. The principle's reach extends from the findings to the body's prose, which is the 2.0.2 amendment FR-019 requires.
+- **II. Nothing posts unread under a human's name.** PASS, and this is the principle driving the feature. Per-finding acceptance, readiness, the terminal requirement, the one-keypress confirmation and the single request are all unchanged. The confirming key is `y`, or `p` where there is a message input, since `specs/002-review-ux` §5.5 was amended; see Complexity Tracking. The principle's reach extends from the findings to the body's prose, which is the 2.0.2 amendment FR-019 requires.
 - **III. Local files, no service.** PASS. No new file, no new key, no daemon, no network call. The message is recorded only inside the envelope already written.
 - **IV. Never touch the user's checkout.** PASS. No git or filesystem behavior in scope.
 - **V. Machine contract first.** PASS. Refusal codes and exit codes are unchanged, and no `--json` envelope gains or loses a field. `docs/comment-format.md` is amended from this specification rather than redesigned, and body composition is untouched.
@@ -94,4 +94,5 @@ README.md                                  # the command table and the pipeline
 | :--- | :--- | :--- |
 | FR-008 leaves the message with no command, against Principle I's "every workflow MUST be completable from `loupe --help` alone" | The human's workflow is still completable from `--help`: `loupe review` and `loupe publish` both reach the confirmation, and the message is typed there. What has no command is one authored field, and deliberately — a command that writes the human's words is a command an agent can call, which is the hole Principle II's amendment closes | Adding `loupe message --from -` and relying on `--by human` to keep agents out. `--by` is self-reported and unenforced, so it documents an intention rather than preventing anything |
 | `Options.Confirm` changes shape, from `func(Preview) (bool, error)` to returning the message with the decision | The confirmation is the only place the message exists, so it is the only thing that can return it | Passing a pointer or a channel into `Preview` for the confirmation to write through, which hides an output in an input and leaves the zero value meaning both "no message" and "never ran" |
+| `p` confirms alongside `y` where there is a message input, against research item 5's "Only `y` sends" (`specs/001-loupe-v1/research.md`; `specs/002-review-ux` §5.5, amended 2026-09-24) | `p` starts publishing, so a human presses it again by reflex once the message is written, and it canceled the review. The screen with an input opens with the input focused, so a reflexive `p` is typed there rather than sent | Making `p` a no-op, which still makes the human press `y` after a `p` that did nothing. Making `p` confirm everywhere, which lets a reflexive `p` publish a screen with no input before anything on it was read |
 | An attended publication stops refusing on a malformed stored summary | That summary is not published on that path. Refusing over text no reader will see is a refusal about nothing | Checking both regardless, which makes a hand-edited draft block a publication whose output it cannot affect |
