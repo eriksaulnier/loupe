@@ -174,6 +174,20 @@ func TestConfirmFocusedInputSwallowsY(t *testing.T) {
 	}
 }
 
+// TestConfirmFooterFollowsTheInput: loupe publish runs the confirmation outside the review program, and its footer
+// has to say which keys are live there too, or it offers y while y is being typed into the message.
+func TestConfirmFooterFollowsTheInput(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if view := m.View(); !strings.Contains(view, "esc done") || strings.Contains(view, "publish this review") {
+		t.Errorf("the footer does not say the message has the keyboard:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if view := m.View(); !strings.Contains(view, "tab/esc your message") || !strings.Contains(view, "publish this review") {
+		t.Errorf("the footer does not offer the confirmation keys once the message is left:\n%s", view)
+	}
+}
+
 // TestConfirmKeepsAMalformedMessageOnScreen is FR-009: the allowlist is checked before anything is sent, and the
 // human stays on the confirmation with their text.
 func TestConfirmKeepsAMalformedMessageOnScreen(t *testing.T) {
@@ -409,7 +423,7 @@ func TestConfirmKeepsTheMessageWhenThereIsNoRoomToEditIt(t *testing.T) {
 	preview.Compose = composeWithinLimit(preview, len(messageSlot)-1, limit)
 	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	m.confirm = newConfirmation(preview, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), "Mine to own.")
+	*m.confirm = newConfirmation(preview, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), "Mine to own.")
 
 	if m.confirm.inline() {
 		t.Fatal("an input was offered for a review with nowhere to put one")
@@ -443,7 +457,7 @@ func TestConfirmReadsTheFindingsWhileTyping(t *testing.T) {
 		t.Fatalf("pgdown left the input (typing %v) or confirmed (%v)", m.confirm.typing, m.Confirmed())
 	}
 	typeInto(m, " More.")
-	c := &m.confirm
+	c := m.confirm
 	if c.inputTop < c.scroll.YOffset || c.inputTop+c.inputRows > c.scroll.YOffset+c.scroll.Height {
 		t.Errorf("typing did not bring the input back: rows %d-%d, window %d-%d", c.inputTop, c.inputTop+c.inputRows,
 			c.scroll.YOffset, c.scroll.YOffset+c.scroll.Height)
@@ -510,6 +524,8 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 func TestConfirmCancelSentenceSurvivesSixtyColumns(t *testing.T) {
 	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "request-changes", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	// The message input opens focused; the cancel sentence belongs to the confirmation's own keys.
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	lines := strings.Split(m.View(), "\n")
 	// At this width the footer takes two lines, and the cancel sentence moves to the notice line above them.
 	tail := strings.Join(lines[len(lines)-3:], "\n")
@@ -611,7 +627,7 @@ func TestPublishFlowKeepsTheMessageAcrossACancel(t *testing.T) {
 func TestConfirmOpensOnWhatWasTypedBefore(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
-	m.confirm = newConfirmation(confirmPreview(), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), "Mine to own.")
+	*m.confirm = newConfirmation(confirmPreview(), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), "Mine to own.")
 	view := m.View()
 	if !strings.Contains(view, "Mine to own.") || strings.Contains(view, messageHint) {
 		t.Errorf("the confirmation did not open on the words it was given:\n%s", view)

@@ -495,8 +495,9 @@ func (m *Model) confirmKeys() (keys, notice string) {
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
 type ConfirmModel struct {
-	shell   *Model
-	confirm confirmation
+	shell *Model
+	// confirm is the shell's own confirmation, because the footer and the body's sizing read that one.
+	confirm *confirmation
 }
 
 // confirmTyping reports whether the confirmation on screen has the keyboard in its message input, which the footer
@@ -505,10 +506,8 @@ func (m *Model) confirmTyping() bool { return m.view == viewConfirm && m.confirm
 
 func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer, title ConfirmHeading) *ConfirmModel {
 	st := style.New(output, getenv)
-	return &ConfirmModel{
-		shell:   &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24, view: viewConfirm},
-		confirm: newConfirmation(preview, title, ""),
-	}
+	shell := &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24, view: viewConfirm, confirm: newConfirmation(preview, title, "")}
+	return &ConfirmModel{shell: shell, confirm: &shell.confirm}
 }
 
 // Confirmed is true only when the program ended on y.
@@ -554,7 +553,7 @@ func (e *eofReader) Read(p []byte) (int, error) {
 }
 
 func (c *ConfirmModel) View() string {
-	return c.shell.confirmView(&c.confirm)
+	return c.shell.confirmView(c.confirm)
 }
 
 // Confirm runs the confirmation view full screen for loupe publish. title is what the header names, which loupe
