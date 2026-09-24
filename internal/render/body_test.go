@@ -75,6 +75,8 @@ func TestBodyGoldens(t *testing.T) {
 	})
 	sourced := base(general("f-001", "issue", false))
 	sourced.Source = "gadfly-review-pr@2.2.0"
+	modeled := base(general("f-001", "issue", false))
+	modeled.Source, modeled.Model = "gadfly-review-pr@2.2.0", "anthropic/claude-sonnet-5"
 	// Only the example carries gate counts, which the doc shows. Every other golden builds on exampleInput with none.
 	example := exampleInput()
 	example.Excluded, example.Withdrawn, example.Regraded = 1, 1, 1
@@ -89,6 +91,7 @@ func TestBodyGoldens(t *testing.T) {
 			Location: &Location{Path: "a.go", Side: "LEFT", Line: 24, StartLine: 21}}),
 		"hostile.md": hostile,
 		"sourced.md": sourced,
+		"modeled.md": modeled,
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -202,22 +205,23 @@ func TestBodyFooterNamesSource(t *testing.T) {
 	}
 }
 
-func TestBodyMetaNamesModel(t *testing.T) {
+func TestBodyNamesModel(t *testing.T) {
 	in := exampleInput()
 	in.Model = "anthropic/claude-sonnet-5"
 	body := Body(in)
-	if !strings.Contains(body, "\n\nreviewed `d23632e`\n\n") ||
+	if !strings.Contains(body, "\n\nreviewed `d23632e` · `anthropic/claude-sonnet-5`\n\n") ||
 		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 model=anthropic/claude-sonnet-5 inline=blocking ") {
 		t.Fatalf("model without source wrong\n%s", body)
 	}
 	in.Source = "gadfly-review-pr@2.2.0"
 	body = Body(in)
-	if !strings.Contains(body, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0`\n\n") ||
+	if !strings.Contains(body, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`\n\n") ||
 		!strings.Contains(body, "round=2 src=gadfly-review-pr@2.2.0 model=anthropic/claude-sonnet-5 inline=") {
 		t.Fatalf("model with source wrong\n%s", body)
 	}
 	in.Unattended, in.Source = true, ""
-	if body = Body(in); !strings.Contains(body, "round=2 unattended=1 model=anthropic/claude-sonnet-5 inline=") {
+	if body = Body(in); !strings.Contains(body, "reviewed `d23632e` · `anthropic/claude-sonnet-5` · unattended\n\n") ||
+		!strings.Contains(body, "round=2 unattended=1 model=anthropic/claude-sonnet-5 inline=") {
 		t.Fatalf("model with unattended wrong\n%s", body)
 	}
 }
@@ -273,17 +277,25 @@ func TestBodyFooterSegmentOrder(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		source     string
+		model      string
 		unattended bool
 		want       string
 	}{
-		{"bare", "", false, "reviewed `d23632e`"},
-		{"source", "gadfly-review-pr@2.2.0", false, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0`"},
-		{"unattended", "", true, "reviewed `d23632e` · unattended"},
-		{"source and unattended", "gadfly-review-pr@2.2.0", true, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · unattended"},
+		{"bare", "", "", false, "reviewed `d23632e`"},
+		{"source", "gadfly-review-pr@2.2.0", "", false, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0`"},
+		{"unattended", "", "", true, "reviewed `d23632e` · unattended"},
+		{"source and unattended", "gadfly-review-pr@2.2.0", "", true, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · unattended"},
+		{"model", "", "anthropic/claude-sonnet-5", false, "reviewed `d23632e` · `anthropic/claude-sonnet-5`"},
+		{"model and unattended", "", "anthropic/claude-sonnet-5", true, "reviewed `d23632e` · `anthropic/claude-sonnet-5` · unattended"},
+		{"source and model", "gadfly-review-pr@2.2.0", "anthropic/claude-sonnet-5", false,
+			"reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`"},
+		{"source, model and unattended", "gadfly-review-pr@2.2.0", "anthropic/claude-sonnet-5", true,
+			"reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5` · unattended"},
+		{"longest model", "", strings.Repeat("m", 64), false, "reviewed `d23632e` · `" + strings.Repeat("m", 64) + "`"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := exampleInput()
-			in.Source, in.Unattended = tc.source, tc.unattended
+			in.Source, in.Model, in.Unattended = tc.source, tc.model, tc.unattended
 			if body := Body(in); !strings.Contains(body, "\n\n"+tc.want+"\n\n<!-- loupe digest=") {
 				t.Fatalf("footer wrong, want %q\n%s", tc.want, body)
 			}

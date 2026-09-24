@@ -64,7 +64,7 @@ func newCaptureCmd(deps Deps) *cobra.Command {
 	}
 	cmd.Flags().String("repo", "", "path to a clone of the pull request's repository (default: the working directory)")
 	cmd.Flags().String("source", "", "the tool filing the findings, as name[@version]; shown in the published review's footer")
-	cmd.Flags().String("model", "", "the model that produces the findings, as you name it, matching "+run.ModelPattern+", at most 64 characters, no --; recorded in the published review's loupe-meta, never required")
+	cmd.Flags().String("model", "", "the model that produces the findings, as you name it, matching "+run.ModelPattern+", at most 64 characters, no --; recorded in the published review's footer and loupe-meta, never required")
 	return cmd
 }
 

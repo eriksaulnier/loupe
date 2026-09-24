@@ -27,7 +27,7 @@ Every automated reviewer worth reading already reports more than a title and a b
 - **Impact** is a section because it is the one part of a finding a reader skims for: what breaks, with what input. It is Markdown, so it can hold the failing case.
 - **Verified** is separate from confidence because they answer different questions. Confidence is how sure the reviewer is. Verified is whether it ran the failure or reasoned to it.
 - **References** are a list because URLs in prose are lost, and a list of autolinks is the one form GitHub renders without escaping surprises.
-- **Model** is per run, not per finding, because one run has one reviewer. It goes in `loupe-meta` and not the footer, because a pull request reader has the reviewer's name from `via` and the model is provenance for tooling.
+- **Model** is per run, not per finding, because one run has one reviewer. It goes in `loupe-meta` and not the footer, because a pull request reader has the reviewer's name from `via` and the model is provenance for tooling. Amended by `specs/023-model-footer`, which also shows the model in the footer, since for an AI review it is part of how a reader weighs the findings.
 
 ## User Scenarios & Testing *(mandatory)*
 
