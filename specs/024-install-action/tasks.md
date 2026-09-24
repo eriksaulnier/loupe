@@ -64,6 +64,8 @@ Phase 2 creates `action.yml`, which makes T001 pass.
 
 - [X] T014 [US3] Add an `install-action-checksums` job to `.github/workflows/ci.yml` on `ubuntu-latest`, with the same `if` as T008. A first step puts a fake `curl` on `$GITHUB_PATH` that serves a stand-in archive and a `checksums.txt` shaped by a mode file (`ok`, `missing`, `bad`). The `ok` install is a control, and the `missing` and `bad` installs run behind `continue-on-error` and MUST both fail. Add `--retry 3` to the action's `curl`, which retries only transient errors. Added after review round 3.
 
+- [X] T015 [US3] Extend `install-action-inputs` in `.github/workflows/ci.yml`: install the default first, then `0.9.0`, and check that `loupe` prints `loupe version 0.9.0` while the first directory's binary still prints the manifest version. Add a `version: ''` step behind `continue-on-error` that MUST fail. Added after review round 4.
+
 ## Phase 5: Polish
 
 - [X] T010 [P] Add a `### GitHub Actions` subsection under `## Install` in `README.md`: the step `- uses: eriksaulnier/loupe@<sha> # <tag>`, one sentence on pinning the release commit's sha with its tag in a comment so Dependabot moves the action and the binary together, and the `version` input for installing another release. No literal version, so release-please has nothing new to stamp in the README.

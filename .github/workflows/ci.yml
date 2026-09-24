@@ -53,12 +53,29 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./
+      - run: dirname "$(command -v loupe)" > "$RUNNER_TEMP/first-install"
+      # A second install in the same job: the later PATH entry wins, and the first binary stays in place.
+      - uses: ./
         with:
           version: 0.9.0
       - run: |
           set -euo pipefail
           got="$(loupe --version)"
           [ "$got" = "loupe version 0.9.0" ] || { echo "::error::loupe --version printed '$got', want 'loupe version 0.9.0'"; exit 1; }
+          first="$(cat "$RUNNER_TEMP/first-install")/loupe"
+          want="loupe version $(jq -r '."."' .release-please-manifest.json)"
+          got="$("$first" --version)"
+          [ "$got" = "$want" ] || { echo "::error::the first install now prints '$got', want '$want'"; exit 1; }
+      # An explicit empty input reaches the action as empty. The runner applies the default only to an unset input.
+      - id: empty
+        uses: ./
+        continue-on-error: true
+        with:
+          version: ''
+      - if: steps.empty.outcome != 'failure'
+        run: |
+          echo "::error::the action accepted an empty version"
+          exit 1
       - id: missing
         uses: ./
         continue-on-error: true
