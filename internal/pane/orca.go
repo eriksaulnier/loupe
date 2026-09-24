@@ -3,21 +3,16 @@ package pane
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"maps"
-	"slices"
 	"strings"
 )
 
 type Orca struct {
 	path   string
 	handle string
-	tabID  string
 	run    Runner
 }
 
-// detectOrca ignores TERM_PROGRAM, which tmux overwrites; the agent's handle and orca on PATH survive it. The tab id
-// only gates focus, so its absence does not stop detection.
+// detectOrca ignores TERM_PROGRAM, which tmux overwrites; the agent's handle and orca on PATH survive it.
 func detectOrca(getenv func(string) string) (Orca, bool) {
 	handle := getenv("ORCA_TERMINAL_HANDLE")
 	if handle == "" {
@@ -27,7 +22,7 @@ func detectOrca(getenv func(string) string) (Orca, bool) {
 	if !ok {
 		return Orca{}, false
 	}
-	return Orca{path: path, handle: handle, tabID: getenv("ORCA_TAB_ID"), run: execRunner}, true
+	return Orca{path: path, handle: handle, run: execRunner}, true
 }
 
 func (Orca) Name() string { return "orca" }
@@ -42,13 +37,12 @@ type orcaReply struct {
 		Split struct {
 			Handle string `json:"handle"`
 		} `json:"split"`
-		VisualLayouts []json.RawMessage `json:"visualLayouts"`
 	} `json:"result"`
 }
 
-// Open has no --focus or --env on Orca's split, so focus takes its own switch step and LOUPE_HOME rides in the
-// command. Switch is the only Orca call that moves the view, and it also brings a background tab to the front, so it
-// runs only when the agent's tab is already the one its group shows.
+// Open never focuses the split. Orca's only focus call, switch, also moves the view to the pane's worktree, and no call
+// reports which worktree the human is on, so it could pull them off another agent. Split has no --env, so LOUPE_HOME
+// rides in the command.
 func (o Orca) Open(ctx context.Context, req Request) (Opened, error) {
 	call := func(step string, args ...string) (orcaReply, error) {
 		stdout, stderr, err := o.run(ctx, o.path, append(append([]string{"terminal"}, args...), "--json")...)
@@ -89,67 +83,7 @@ func (o Orca) Open(ctx context.Context, req Request) (Opened, error) {
 	if handle == "" {
 		return Opened{}, failed("orca", "split", "the result has no handle", req.Fix)
 	}
-	if o.tabID != "" {
-		listing, err := call("layout", "list", "--include-visual-layouts")
-		if err != nil {
-			return Opened{}, err
-		}
-		active, err := tabActive(listing.Result.VisualLayouts, o.tabID)
-		if err != nil {
-			return Opened{}, failed("orca", "layout", err.Error(), req.Fix)
-		}
-		if !active {
-			return Opened{PaneID: handle, Direction: dir}, nil
-		}
-	}
-	if _, err := call("switch", "switch", "--terminal", handle); err != nil {
-		return Opened{}, err
-	}
-	return Opened{PaneID: handle, Direction: dir, Focused: true}, nil
-}
-
-// tabActive walks each layout whole because a worktree's root can hold several groups; the first node, in listing
-// order and then key order, whose tabs carry tabID is the agent's group. The order is fixed so that a tab listed
-// twice resolves the same way every run.
-func tabActive(layouts []json.RawMessage, tabID string) (bool, error) {
-	var group map[string]any
-	var walk func(v any) bool
-	walk = func(v any) bool {
-		switch n := v.(type) {
-		case map[string]any:
-			if tabs, ok := n["tabs"].([]any); ok {
-				for _, t := range tabs {
-					if tab, ok := t.(map[string]any); ok && tab["tabId"] == tabID {
-						group = n
-						return true
-					}
-				}
-			}
-			for _, key := range slices.Sorted(maps.Keys(n)) {
-				if walk(n[key]) {
-					return true
-				}
-			}
-		case []any:
-			for _, child := range n {
-				if walk(child) {
-					return true
-				}
-			}
-		}
-		return false
-	}
-	for _, raw := range layouts {
-		var v any
-		if json.Unmarshal(raw, &v) == nil && walk(v) {
-			active, ok := group["activeTabId"].(string)
-			if !ok {
-				return false, fmt.Errorf("the group holding tab %s has no activeTabId", tabID)
-			}
-			return active == tabID, nil
-		}
-	}
-	return false, fmt.Errorf("no tab group holds tab %s", tabID)
+	return Opened{PaneID: handle, Direction: dir}, nil
 }
 
 // orcaMessage reads Orca's error from stdout, where it prints it, and skips the handshake line every call writes to

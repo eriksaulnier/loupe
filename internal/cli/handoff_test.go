@@ -61,21 +61,13 @@ func fakeHerdrBinWithRect(t *testing.T, failAt, rect string) (bin, log string) {
 	}, failAt, herdrPaneMissing, ">&2", "")
 }
 
-// fakeOrcaBin answers like Orca with the agent's tab active in its group, with the handshake on stderr on every call;
-// at failAt it prints Orca's error shape on stdout and exits 1.
+// fakeOrcaBin answers like Orca, with the handshake on stderr on every call; at failAt it prints Orca's error shape on
+// stdout and exits 1. It answers no switch, so a hand-off that runs one fails.
 func fakeOrcaBin(t *testing.T, failAt string) (bin, log string) {
-	t.Helper()
-	return fakeOrcaBinWithActiveTab(t, failAt, "tab_agent")
-}
-
-func fakeOrcaBinWithActiveTab(t *testing.T, failAt, active string) (bin, log string) {
 	t.Helper()
 	return fakeHostBin(t, "orca", map[string]string{
 		"show":  `{"ok":true,"result":{"terminal":{"handle":"term_agent","connected":true}}}`,
 		"split": `{"id":"r1","ok":true,"result":{"split":{"handle":"` + orcaNewHandle + `","tabId":"t1","paneRuntimeId":1,"leafId":"l1"}},"_meta":{"runtimeId":"rt"}}`,
-		"list": `{"ok":true,"result":{"visualLayouts":[{"worktreeId":"w1","root":{"type":"group","groupId":"g1","activeTabId":"` + active +
-			`","tabs":[{"tabId":"tab_other"},{"tabId":"tab_agent"}]}}]}}`,
-		"switch": `{"ok":true}`,
 	}, failAt, orcaStale, "", orcaHandshake)
 }
 
@@ -100,7 +92,7 @@ func herdrEnv(home, bin string) map[string]string {
 }
 
 func orcaEnv(handle, bin string) map[string]string {
-	return map[string]string{"ORCA_TERMINAL_HANDLE": handle, "ORCA_TAB_ID": "tab_agent", "PATH": bin}
+	return map[string]string{"ORCA_TERMINAL_HANDLE": handle, "PATH": bin}
 }
 
 func withHome(env map[string]string, home string) map[string]string {
@@ -199,8 +191,8 @@ func TestHandoffRefusesPaneFailedAndStops(t *testing.T) {
 	}{
 		{"herdr", "split", "herdr split: pane w1:p1 not found; a pane may already be open", fakeHerdrBin,
 			func(bin string) map[string]string { return herdrEnv(home, bin) }, "split"},
-		{"orca", "switch", "orca switch: terminal handle term_agent is stale; a pane may already be open", fakeOrcaBin,
-			func(bin string) map[string]string { return withHome(orcaEnv("term_agent", bin), home) }, "switch"},
+		{"orca", "split", "orca split: terminal handle term_agent is stale; a pane may already be open", fakeOrcaBin,
+			func(bin string) map[string]string { return withHome(orcaEnv("term_agent", bin), home) }, "split"},
 	} {
 		t.Run(c.host, func(t *testing.T) {
 			bin, log := c.bin(t, c.failAt)
@@ -220,54 +212,38 @@ func TestHandoffRefusesPaneFailedAndStops(t *testing.T) {
 	}
 }
 
-func TestHandoffOpensReviewInAnOrcaSplit(t *testing.T) {
-	home, _ := sendBackRun(t)
-	bin, log := fakeOrcaBin(t, "")
-	deps, s := testDeps(t, withHome(orcaEnv("term_agent", bin), home))
-	deps.TTYWidth = ttyWidth(150)
-	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
-		t.Fatalf("exit %d stdout %s stderr %s", code, s.stdout.String(), s.stderr.String())
-	}
-	env := decodeOne(t, s.stdout.Bytes())
-	if env["command"] != "handoff" || env["run"] != "o/r#1@1" || env["host"] != "orca" || env["paneId"] != orcaNewHandle ||
-		env["direction"] != "right" || env["focused"] != true {
-		t.Fatalf("envelope %v", env)
-	}
-	want := [][]string{
-		{"terminal", "show", "--terminal", "term_agent", "--json"},
-		{"terminal", "split", "--terminal", "term_agent", "--direction", "vertical", "--command", paneCommand(t, home), "--json"},
-		{"terminal", "list", "--include-visual-layouts", "--json"},
-		{"terminal", "switch", "--terminal", orcaNewHandle, "--json"},
-	}
-	if calls := hostCalls(t, log); !slices.EqualFunc(calls, want, slices.Equal) {
-		t.Fatalf("orca calls:\n%q\nwant:\n%q", calls, want)
-	}
-}
-
-func TestHandoffLeavesTheViewAloneFromABackgroundOrcaTab(t *testing.T) {
+// Orca can focus the pane only by switching the human's view to the agent's worktree, so the split never takes focus.
+func TestHandoffOpensReviewInAnOrcaSplitWithoutFocus(t *testing.T) {
 	home, _ := sendBackRun(t)
 	for _, asJSON := range []bool{true, false} {
-		bin, log := fakeOrcaBinWithActiveTab(t, "", "tab_other")
-		deps, s := testDeps(t, withHome(orcaEnv("term_agent", bin), home))
-		deps.TTYWidth = ttyWidth(150)
-		args := []string{"handoff", "--run", "o/r#1"}
-		if asJSON {
-			args = append(args, "--json")
-		}
-		if code := Execute(deps, args); code != 0 {
-			t.Fatalf("exit %d stdout %s stderr %s", code, s.stdout.String(), s.stderr.String())
-		}
-		if asJSON {
-			if env := decodeOne(t, s.stdout.Bytes()); env["focused"] != false || env["paneId"] != orcaNewHandle {
-				t.Fatalf("envelope %v", env)
+		t.Run(fmt.Sprintf("json=%v", asJSON), func(t *testing.T) {
+			bin, log := fakeOrcaBin(t, "")
+			deps, s := testDeps(t, withHome(orcaEnv("term_agent", bin), home))
+			deps.TTYWidth = ttyWidth(150)
+			args := []string{"handoff", "--run", "o/r#1"}
+			if asJSON {
+				args = append(args, "--json")
 			}
-		} else if got := s.stdout.String(); !strings.Contains(got, "in a new pane to the right without focus") {
-			t.Fatalf("stdout %q", got)
-		}
-		calls := hostCalls(t, log)
-		if len(calls) != 3 || calls[2][1] != "list" {
-			t.Fatalf("orca calls from a background tab, want show, split and list with no switch: %q", calls)
-		}
+			if code := Execute(deps, args); code != 0 {
+				t.Fatalf("exit %d stdout %s stderr %s", code, s.stdout.String(), s.stderr.String())
+			}
+			if asJSON {
+				env := decodeOne(t, s.stdout.Bytes())
+				if env["command"] != "handoff" || env["run"] != "o/r#1@1" || env["host"] != "orca" || env["paneId"] != orcaNewHandle ||
+					env["direction"] != "right" || env["focused"] != false {
+					t.Fatalf("envelope %v", env)
+				}
+			} else if got := s.stdout.String(); !strings.Contains(got, "in a new pane to the right without focus") {
+				t.Fatalf("stdout %q", got)
+			}
+			want := [][]string{
+				{"terminal", "show", "--terminal", "term_agent", "--json"},
+				{"terminal", "split", "--terminal", "term_agent", "--direction", "vertical", "--command", paneCommand(t, home), "--json"},
+			}
+			if calls := hostCalls(t, log); !slices.EqualFunc(calls, want, slices.Equal) {
+				t.Fatalf("orca calls:\n%q\nwant:\n%q", calls, want)
+			}
+		})
 	}
 }
 
