@@ -75,8 +75,11 @@ func TestBodyGoldens(t *testing.T) {
 	})
 	sourced := base(general("f-001", "issue", false))
 	sourced.Source = "gadfly-review-pr@2.2.0"
+	// Only the example carries gate counts, which the doc shows. Every other golden builds on exampleInput with none.
+	example := exampleInput()
+	example.Excluded, example.Withdrawn, example.Regraded = 1, 1, 1
 	cases := map[string]Input{
-		"example.md":            exampleInput(),
+		"example.md":            example,
 		"blocking.md":           base(general("f-001", "suggestion", true)),
 		"blocking-mixed.md":     base(general("f-001", "issue", true), general("f-002", "question", true)),
 		"nonblocking.md":        base(general("f-001", "question", false)),
@@ -155,7 +158,7 @@ func TestBodyChipsAndMeta(t *testing.T) {
 	if !strings.HasPrefix(body, "`⛔ 6 blocking` `🟡 1 issue` `🟣 1 suggestion` `🔵 2 questions` `⚪ 2 other`\n\n") {
 		t.Fatalf("chips row wrong\n%s", body)
 	}
-	if !strings.HasSuffix(body, "<!-- loupe-meta v=1 round=2 inline=blocking blocking=6 issues=3 suggestions=2 questions=3 other=4 -->\n") {
+	if !strings.HasSuffix(body, "<!-- loupe-meta v=1 round=2 inline=blocking blocking=6 issues=3 suggestions=2 questions=3 other=4 excluded=0 withdrawn=0 reinstated=0 regraded=0 -->\n") {
 		t.Fatalf("loupe-meta census wrong\n%s", body)
 	}
 	in := exampleInput()
@@ -163,6 +166,14 @@ func TestBodyChipsAndMeta(t *testing.T) {
 	body = Body(in)
 	if !strings.HasPrefix(body, "`⛔ 1 blocking`\n\n") || !strings.Contains(body, "blocking=1 issues=1 suggestions=0") {
 		t.Fatalf("a blocking issue must count only in the blocking chip and in both census keys\n%s", body)
+	}
+}
+
+func TestBodyMetaCarriesGateCounts(t *testing.T) {
+	in := mixedInput()
+	in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded = 5, 6, 7, 8
+	if body := Body(in); !strings.HasSuffix(body, " other=4 excluded=5 withdrawn=6 reinstated=7 regraded=8 -->\n") {
+		t.Fatalf("gate counts must follow other= in order\n%s", body)
 	}
 }
 

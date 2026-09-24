@@ -94,7 +94,7 @@ that may already have succeeded, so a 502 produces two reviews.
 reviewed `d23632e`
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
-<!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 -->
+<!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 excluded=1 withdrawn=1 reinstated=0 regraded=1 -->
 ````
 
 ### Opening
@@ -225,7 +225,7 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 
 ```text
 <!-- loupe digest=<sha256 of the publishable draft> publication=<uuid> -->
-<!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 -->
+<!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 excluded=1 withdrawn=1 reinstated=0 regraded=1 -->
 ```
 
 - The first is the reconciliation marker: an unknown publication is resolved by finding a review whose body contains this exact comment. Its format MUST NOT change between versions that may need to reconcile each other's attempts.

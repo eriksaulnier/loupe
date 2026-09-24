@@ -111,6 +111,8 @@ func Build(in BuildInput) (Envelope, error) {
 	}
 	r := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: in.Round, HeadSHA: target.HeadSHA,
 		Inline: in.Inline, Summary: opening, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source, Model: target.Model, Unattended: in.Unattended}
+	gate := draft.GateCountsOf(d)
+	r.Excluded, r.Withdrawn, r.Reinstated, r.Regraded = gate.Excluded, gate.Withdrawn, gate.Reinstated, gate.Regraded
 	for _, f := range included {
 		rf := render.Finding{ID: f.ID, Title: f.Title, Body: f.Body, General: f.General, Label: f.Label, Blocking: f.Blocking,
 			Confidence: f.Confidence, Severity: f.Severity, Verified: f.Verified, Impact: f.Impact, References: f.References, SuggestedFix: f.SuggestedFix}

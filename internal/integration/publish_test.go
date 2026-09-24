@@ -157,6 +157,49 @@ func TestPublishEndToEnd(t *testing.T) {
 	h.checkSends(1)
 }
 
+// lastPostBody is the body of the last review loupe posted.
+func (h *harness) lastPostBody() string {
+	h.t.Helper()
+	var body string
+	for _, r := range h.GH.Requests() {
+		if r.Method == "POST" {
+			post, _ := r.Body.(map[string]any)
+			body, _ = post["body"].(string)
+		}
+	}
+	return body
+}
+
+// TestPublishCarriesGateCounts is SC-001: one finding of each kind the gate counts, published attended.
+func TestPublishCarriesGateCounts(t *testing.T) {
+	h := newHarness(t)
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", `[
+  {"title": "Withdrawn", "body": "B.", "general": true, "label": "issue"},
+  {"title": "Reinstated", "body": "B.", "general": true, "label": "issue"},
+  {"title": "Excluded", "body": "B.", "general": true, "label": "issue"},
+  {"title": "Relabeled", "body": "B.", "general": true, "label": "issue"},
+  {"title": "Accepted", "body": "B.", "general": true, "label": "question"}
+]`))
+	h.mustOK("summary", "--run", runRef, "--body", "Five things.", "--expect-findings", "5")
+	h.mustOK("edit", "f-001", "--run", runRef, "--exclude")
+	h.mustOK("edit", "f-002", "--run", runRef, "--exclude")
+	h.IsTerminal = true
+	// Skip f-001, reinstate f-002, exclude f-003, relabel f-004 a nonblocking suggestion and accept it, accept f-005.
+	h.Stdin = "n\nu\nx\ne\nsuggestion\nn\na\na\nq\n"
+	if _, stderr, exit := h.Run("review", runRef, "--plain"); exit != 0 {
+		t.Fatalf("review exit %d stderr %q", exit, stderr)
+	}
+	h.Stdin = confirmPublish("", "y")
+	if _, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 {
+		t.Fatalf("publish exit %d stderr %q", exit, stderr)
+	}
+	body := h.lastPostBody()
+	if !strings.HasSuffix(body, " issues=1 suggestions=1 questions=1 other=0 excluded=1 withdrawn=1 reinstated=1 regraded=1 -->\n") {
+		t.Fatalf("marker wrong; published 3 + excluded 1 + withdrawn 1 must be the 5 filed:\n%s", body)
+	}
+}
+
 func TestPublishRefusesWithoutTerminalBeforePrinting(t *testing.T) {
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
@@ -348,7 +391,9 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 	if post["event"] != "COMMENT" {
 		t.Fatalf("event %v, want COMMENT", post["event"])
 	}
-	for _, want := range []string{"Changed line", "Second change", " · unattended", "unattended=1", "via `gadfly-review-pr 2.2.0`"} {
+	// No human touched the draft, and all three findings publish.
+	for _, want := range []string{"Changed line", "Second change", " · unattended", "unattended=1", "via `gadfly-review-pr 2.2.0`",
+		" excluded=0 withdrawn=0 reinstated=0 regraded=0 -->\n"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body lacks %q:\n%s", want, body)
 		}

@@ -32,6 +32,9 @@ type Input struct {
 	Unattended bool
 	// Findings are the published findings; render does no filtering.
 	Findings []Finding
+	// Excluded, Withdrawn, Reinstated and Regraded are draft.GateCountsOf, over the whole draft, published findings
+	// included.
+	Excluded, Withdrawn, Reinstated, Regraded int
 }
 
 type Finding struct {
@@ -129,9 +132,10 @@ func Body(in Input) string {
 		meta += " model=" + in.Model
 	}
 	blocks = append(blocks, fmt.Sprintf("%s\n\n<!-- loupe digest=%s publication=%s -->\n"+
-		MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d -->\n",
+		MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d excluded=%d withdrawn=%d reinstated=%d regraded=%d -->\n",
 		footer, in.Digest, in.PublicationID,
-		meta, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther]))
+		meta, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther],
+		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded))
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
 	return strings.Join(blocks, "\n\n---\n\n")
