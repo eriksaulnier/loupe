@@ -10,7 +10,7 @@ How to check this feature. The behavior is in [spec.md](spec.md); the contract c
 
 ## Live, in Orca (owner-approved)
 
-1. From an agent terminal at least 120 columns wide: `LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42' --json`. Expected: `host: orca`, `direction: right`, and review opens in the split with focus.
+1. From an agent terminal at least 120 columns wide: `LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42' --json`. Expected: `host: orca`, `direction: right` and `focused: false`. Review opens in the split beside the agent, and the view stays where it is (FR-025).
 2. Press `q` in review. Expected: the pane closes, as the probe split's `exit` did (research, "Live probe").
 3. Hand off a published run so `loupe-demo review` refuses in the pane. Expected: the pane stays open showing `error:` and `fix:`.
 
