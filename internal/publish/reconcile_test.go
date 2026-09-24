@@ -175,3 +175,34 @@ func TestRunReconcilesReviewOnSecondPage(t *testing.T) {
 	}
 	fx.check(0)
 }
+
+// An edit cannot move a review's commit_id, so an edit attempt matches on the review it edited instead.
+func TestMatchEditByReviewID(t *testing.T) {
+	edit := unknownAttempt()
+	edit.Envelope.EditReviewID = 7
+	body := markedBody(testDigest, testPublication)
+	edited := github.Review{ID: 7, User: "reviewer", CommitID: "0000000", State: "COMMENTED", Body: body, HTMLURL: prLink + "#pullrequestreview-7"}
+	other := github.Review{ID: 8, User: "reviewer", CommitID: headSHA, State: "COMMENTED", Body: body, HTMLURL: prLink + "#pullrequestreview-8"}
+	if got, ok := Match([]github.Review{other, edited}, edit); !ok || got.ID != 7 {
+		t.Fatalf("got %+v %v, want review 7", got, ok)
+	}
+	if _, ok := Match([]github.Review{other}, edit); ok {
+		t.Fatal("matched a review the attempt did not edit")
+	}
+	stranger := edited
+	stranger.User = "someone"
+	if _, ok := Match([]github.Review{stranger}, edit); ok {
+		t.Fatal("matched another author's review")
+	}
+}
+
+func TestReconcileEditRecordsEdited(t *testing.T) {
+	gh, client := newFake(t)
+	edit := unknownAttempt()
+	edit.Envelope.EditReviewID = 1001
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: "0000000", State: "COMMENTED", Body: markedBody(testDigest, testPublication)})
+	receipt, err := Reconcile(context.Background(), client, edit)
+	if err != nil || receipt == nil || receipt.ReviewID != 1001 || !receipt.Edited {
+		t.Fatalf("receipt %+v err %v", receipt, err)
+	}
+}

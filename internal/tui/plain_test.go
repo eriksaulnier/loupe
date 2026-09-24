@@ -536,3 +536,25 @@ func TestConfirmPlainShowsPillsAsWords(t *testing.T) {
 		t.Errorf("want the pill shown as MAJOR in the body and the inline comment:\n%s", text)
 	}
 }
+
+const editedURL = "https://github.com/acme/widgets/pull/42#pullrequestreview-77"
+
+func TestConfirmPlainNamesTheReviewItEdits(t *testing.T) {
+	preview := confirmPreview()
+	preview.Edits = editedURL
+	var out bytes.Buffer
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(preview); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if i := strings.Index(text, editLine(editedURL)); i < 0 || i > strings.Index(text, "Review body:") {
+		t.Fatalf("the edit line is missing or after the body:\n%s", text)
+	}
+	out.Reset()
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(confirmPreview()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "in place") {
+		t.Fatalf("a new review shows the edit line:\n%s", out.String())
+	}
+}

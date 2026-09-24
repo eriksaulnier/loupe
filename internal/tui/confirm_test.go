@@ -911,3 +911,26 @@ func TestSendingFooterDoesNotOfferQuit(t *testing.T) {
 		t.Fatalf("the sending view offers to quit:\n%s", view)
 	}
 }
+
+// An edit replaces text already published, so the header says so at every width and the body names the review.
+func TestConfirmNamesTheReviewItEdits(t *testing.T) {
+	preview := confirmPreview()
+	preview.Edits = editedURL
+	for _, width := range []int{60, 100} {
+		m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("my-organization/my-repository#1234", "comment", "none", 0))
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+		view := m.View()
+		if header := strings.Split(view, "\n")[0]; !strings.Contains(header, "edits in place") || !strings.Contains(header, "comment") {
+			t.Errorf("width %d: header %q", width, header)
+		}
+		// A narrow window breaks the URL across lines, so only its unbreakable head is looked for.
+		if !strings.Contains(view, "#pullrequestreview-") || !strings.Contains(view, "earlier rounds included") {
+			t.Errorf("width %d: the edited review's URL is not shown:\n%s", width, view)
+		}
+	}
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if strings.Contains(m.View(), "in place") {
+		t.Fatal("a new review shows the edit notice")
+	}
+}

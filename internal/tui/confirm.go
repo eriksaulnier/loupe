@@ -366,11 +366,23 @@ func (c *confirmation) header(m *Model) string {
 		parts = append(parts, style.HeaderPart{Text: text, Kind: style.Warn})
 		required += 3 + style.Width(text)
 	}
+	if c.preview.Edits != "" {
+		parts = append(parts, style.HeaderPart{Text: editsHeader, Kind: style.Warn})
+		required += 3 + style.Width(editsHeader)
+	}
 	position := c.position(m)
 	if 2+required+2+style.Width(position) > m.width {
 		position = c.shortPosition(m)
 	}
 	return m.styles.Header(parts, m.styles.Dim.Render(position), m.width)
+}
+
+// editsHeader never gives way: an edit overwrites words already published, which y alone must not do unannounced.
+const editsHeader = "edits in place"
+
+// editLine is what both confirmations say about a sticky edit, before the body it describes.
+func editLine(url string) string {
+	return render.ForDisplay("This replaces the whole body of " + url + " with the body below, earlier rounds included. An edit sends no notification.")
 }
 
 // headMovedLines escapes every line for display because commit text is untrusted.
@@ -420,6 +432,10 @@ func (c *confirmation) content(m *Model) string {
 			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(line, width, " ")))
 		}
 		parts = append(parts, "")
+	}
+	if c.preview.Edits != "" {
+		parts = append(parts, m.styles.Rule(m.width, "edits a published review", ""),
+			m.styles.Warn.Render(m.styles.Wrap(editLine(c.preview.Edits), width, " ")), "")
 	}
 	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
 	if c.inline() {

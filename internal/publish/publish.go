@@ -34,6 +34,8 @@ type Options struct {
 	Unattended bool
 	// RetryUnknown sends again when an attempt's outcome is unknown and no review matches it.
 	RetryUnknown bool
+	// Sticky edits the publisher's sticky review on the pull request instead of creating a review, or creates it.
+	Sticky bool
 	// Confirm shows the preview and reports what the human answered: whether they pressed y, and the opening prose
 	// they typed. It runs with no lock held.
 	Confirm func(Preview) (Confirmation, error)
@@ -64,6 +66,8 @@ type Preview struct {
 	Dispositions map[string]string
 	// HeadMoved is set when the pull request gained commits since capture; the review is still sent at the captured head.
 	HeadMoved *HeadMoved
+	// Edits is the URL of the review whose body this publication replaces, empty when it creates one.
+	Edits string
 	// Compose rebuilds the review around a message the human typed and returns it with its JSON. The confirmation
 	// renders what it returns and publication sends what it returns, so what was approved and what is sent cannot
 	// differ. Run always sets it.
@@ -79,6 +83,11 @@ func Run(ctx context.Context, opts Options) (receipt Receipt, replayed bool, err
 	if opts.Unattended && opts.Action != "comment" {
 		return Receipt{}, false, refusal.New(refusal.Usage,
 			fmt.Sprintf("--unattended publishes as comment, not %s", opts.Action), "--action comment")
+	}
+	if opts.Sticky && (opts.Action != "comment" || opts.Inline != "none") {
+		return Receipt{}, false, refusal.New(refusal.Usage,
+			fmt.Sprintf("--sticky publishes as comment with no inline comments, not --action %s --inline %s", opts.Action, opts.Inline),
+			"--sticky --action comment --inline none")
 	}
 	receipt, replay, retryID, err := firstCheck(ctx, opts)
 	if err != nil || replay {
@@ -123,14 +132,24 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	if err != nil {
 		return Receipt{}, false, err
 	}
+	// One list serves both the round number and the sticky review, so the two describe the same pull request.
+	var reviews []github.Review
+	if opts.Unattended || opts.Sticky {
+		if reviews, err = listReviews(ctx, client, opts.Target, "publish this round"); err != nil {
+			return Receipt{}, false, err
+		}
+	}
 	round := 0
 	if opts.Unattended {
-		round, err = unattendedRound(ctx, client, opts.Target)
-	} else {
-		round, err = publishedRound(root, opts.Target)
-	}
-	if err != nil {
+		round = unattendedRound(reviews)
+	} else if round, err = publishedRound(root, opts.Target); err != nil {
 		return Receipt{}, false, err
+	}
+	var sticky *StickyBuild
+	if opts.Sticky {
+		if sticky, err = stickyInput(reviews, viewer); err != nil {
+			return Receipt{}, false, err
+		}
 	}
 	// The publication id is minted once, outside compose, because it is interpolated into the body's reconciliation
 	// marker and Reconcile searches GitHub for that exact string. A fresh id per composition would send a marker the
@@ -138,7 +157,7 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	publicationID := newPublicationID()
 	compose := func(message string) (Envelope, string, error) {
 		env, err := Build(BuildInput{Target: opts.Target, Round: round, Draft: d, Viewer: viewer, Action: opts.Action,
-			Inline: opts.Inline, Unattended: opts.Unattended, PublicationID: publicationID, Message: message})
+			Inline: opts.Inline, Unattended: opts.Unattended, PublicationID: publicationID, Message: message, Sticky: sticky})
 		if err != nil {
 			return Envelope{}, "", err
 		}
@@ -154,6 +173,9 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	}
 	preview := Preview{Body: env.Body, Comments: env.Comments, EnvelopeJSON: envJSON, Version: d.Version, Digest: env.Digest,
 		Dispositions: draft.Dispositions(d), HeadMoved: moved, Compose: compose}
+	if sticky != nil {
+		preview.Edits = sticky.Review.HTMLURL
+	}
 
 	if opts.Unattended {
 		return send(ctx, opts, client, env, preview, retryID)
@@ -185,6 +207,11 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	}
 	if err := recheckLive(ctx, opts, client, viewer, shownHead); err != nil {
 		return Receipt{}, false, err
+	}
+	if sticky != nil {
+		if err := recheckSticky(ctx, client, opts.Target, viewer, sticky.Review); err != nil {
+			return Receipt{}, false, err
+		}
 	}
 	return send(ctx, opts, client, env, preview, retryID)
 }
@@ -345,8 +372,14 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	for _, c := range env.Comments {
 		comments = append(comments, github.ReviewComment{Path: c.Path, Line: c.Line, Side: c.Side, StartLine: c.StartLine, StartSide: c.StartSide, Body: c.Body})
 	}
-	review, sendErr := client.CreateReview(ctx, env.Target.Owner, env.Target.Repo, env.Target.Number,
-		github.ReviewRequest{CommitID: env.CommitID, Body: env.Body, Event: env.Event, Comments: comments})
+	var review github.Review
+	var sendErr error
+	if env.EditReviewID != 0 {
+		review, sendErr = client.UpdateReview(ctx, env.Target.Owner, env.Target.Repo, env.Target.Number, env.EditReviewID, env.Body)
+	} else {
+		review, sendErr = client.CreateReview(ctx, env.Target.Owner, env.Target.Repo, env.Target.Number,
+			github.ReviewRequest{CommitID: env.CommitID, Body: env.Body, Event: env.Event, Comments: comments})
+	}
 	if sendErr == nil && (review.ID == 0 || review.HTMLURL == "") {
 		sendErr = fmt.Errorf("GitHub accepted the review but its response has no id or html_url (id %d, html_url %q)", review.ID, review.HTMLURL)
 	}
@@ -355,7 +388,8 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	r, isRefusal := refusal.As(sendErr)
 	switch {
 	case sendErr == nil:
-		receipt = Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: env.Action, PostedAt: opts.Now(), Envelope: env, Author: review.User}
+		receipt = Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: env.Action, PostedAt: opts.Now(), Envelope: env,
+			Author: review.User, Edited: env.EditReviewID != 0}
 		if err := SaveReceipt(opts.Dir, receipt); err != nil {
 			return Receipt{}, false, receiptLost(opts, attempt, review, err)
 		}
@@ -418,7 +452,11 @@ func holdSignals(signals []os.Signal) func() {
 // receiptLost keeps the posted review's id and URL somewhere the human can find them once receipt.json cannot be
 // written, because GitHub cannot be asked to post it again.
 func receiptLost(opts Options, attempt Attempt, review github.Review, saveErr error) error {
-	message := fmt.Sprintf("review %d was created at %s but receipt.json could not be written: %v", review.ID, review.HTMLURL, saveErr)
+	verb := "created"
+	if attempt.Envelope.EditReviewID != 0 {
+		verb = "edited"
+	}
+	message := fmt.Sprintf("review %d was %s at %s but receipt.json could not be written: %v", review.ID, verb, review.HTMLURL, saveErr)
 	attempt.UpdatedAt, attempt.LastError = opts.Now(), message
 	if err := SaveAttempt(opts.Dir, attempt); err != nil {
 		message += fmt.Sprintf("; attempt.json could not be updated either: %v", err)

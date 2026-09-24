@@ -42,7 +42,9 @@ func (h *harness) checkSends(want int) {
 		h.t.Errorf("CreateCount %d, want %d", got, want)
 	}
 	for _, r := range h.GH.Requests() {
-		if r.Method != "GET" && (r.Method != "POST" || r.Path != "/repos/acme/widgets/pulls/42/reviews") {
+		create := r.Method == "POST" && r.Path == "/repos/acme/widgets/pulls/42/reviews"
+		edit := r.Method == "PUT" && strings.HasPrefix(r.Path, "/repos/acme/widgets/pulls/42/reviews/")
+		if r.Method != "GET" && !create && !edit {
 			h.t.Errorf("unexpected write %s %s", r.Method, r.Path)
 		}
 	}

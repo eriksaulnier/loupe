@@ -232,6 +232,18 @@ func (s *Server) AddReview(owner, repo string, number int, review github.Review)
 	s.storeReview(prKey{owner, repo, number}, review)
 }
 
+// EditReview replaces a stored review's body, as another round or the author on GitHub would.
+func (s *Server) EditReview(owner, repo string, number int, id int64, body string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reviews := s.reviews[prKey{owner, repo, number}]
+	for i := range reviews {
+		if reviews[i].ID == id {
+			reviews[i].Body = body
+		}
+	}
+}
+
 // OnCreate runs fn on every review creation request before the server stores or responds to anything. fn may read
 // the request body.
 func (s *Server) OnCreate(fn func(*http.Request)) {

@@ -1,13 +1,16 @@
 package publish
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -463,5 +466,37 @@ func TestComposedBodyFollowsTheOrderTheHumanDecidedIn(t *testing.T) {
 			t.Fatalf("%s appears at %d, before a finding the human meets earlier:\n%s", f.ID, i, env.Body)
 		}
 		at = i
+	}
+}
+
+// Earlier rounds give way oldest first until the body fits; the round being published never does.
+func TestBuildStickyDropsTheOldestRoundsToFit(t *testing.T) {
+	block := func(n int) string {
+		return fmt.Sprintf("<details>\n<summary>Round %d</summary>\n\n%s\n\n</details>", n, strings.Repeat("x", 30000))
+	}
+	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", false)
+	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 5, Earlier: []string{block(4), block(3), block(2), block(1)}}
+	env, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := utf8.RuneCountInString(env.Body); n > maxBodyChars {
+		t.Fatalf("body is %d characters", n)
+	}
+	if !strings.Contains(env.Body, "Round 4") || !strings.Contains(env.Body, "Round 3") || strings.Contains(env.Body, "Round 2") ||
+		!strings.Contains(env.Body, "The 2 oldest rounds were dropped") || !strings.Contains(env.Body, " sticky=5 -->") || env.EditReviewID != 77 {
+		t.Fatalf("kept the wrong rounds:\n%s", env.Body[:200])
+	}
+	if len(in.Sticky.Earlier) != 4 {
+		t.Fatal("Build changed the caller's rounds")
+	}
+
+	d := readyDraft()
+	d.Summary = strings.Repeat(strings.Repeat("a", 99)+"\n", 700)
+	in = buildInput(fixtureTarget(), d, "comment", "none", true)
+	in.Sticky = &StickyBuild{Rounds: 2, Earlier: []string{block(1)}}
+	_, err = Build(in)
+	if r, ok := refusal.As(err); !ok || r.Details["rule"] != "limit" {
+		t.Fatalf("a round over the limit alone must refuse with limit, got %#v", err)
 	}
 }

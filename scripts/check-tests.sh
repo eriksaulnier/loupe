@@ -122,19 +122,22 @@ if [ -n "$api" ]; then
 	violation "api.github.com MUST appear in tests only under internal/github/ and internal/testutil/fakegh/:" "$api"
 fi
 
-# A word match also catches method values (post := c.CreateReview) and unformatted calls. The client declares it, and
-# only the client's and the fake's own tests call it directly.
-creates=$(tracked_grep -nw 'CreateReview' -- '*.go' ':(exclude)internal/publish/publish.go' \
-	':(exclude)internal/github/client.go' ':(exclude)internal/github/client_test.go' \
-	':(exclude)internal/testutil/fakegh/fakegh_test.go')
-if [ -n "$creates" ]; then
-	violation "CreateReview MUST be called only from internal/publish/publish.go:" "$creates"
-fi
-sends=$(tracked_grep -cw 'CreateReview' -- internal/publish/publish.go)
-sends=${sends##*:}
-if [ "${sends:-0}" != 1 ]; then
-	violation "internal/publish/publish.go MUST reference CreateReview exactly once:" "found ${sends:-0}"
-fi
+# A word match also catches method values (post := c.CreateReview) and unformatted calls. The client declares each
+# write, and only the client's and the fake's own tests call one directly. A publication sends one of the two, so
+# publish.go names each exactly once (specs/025-sticky-review FR-023).
+for write in CreateReview UpdateReview; do
+	callers=$(tracked_grep -nw "$write" -- '*.go' ':(exclude)internal/publish/publish.go' \
+		':(exclude)internal/github/client.go' ':(exclude)internal/github/client_test.go' \
+		':(exclude)internal/testutil/fakegh/fakegh_test.go')
+	if [ -n "$callers" ]; then
+		violation "$write MUST be called only from internal/publish/publish.go:" "$callers"
+	fi
+	sends=$(tracked_grep -cw "$write" -- internal/publish/publish.go)
+	sends=${sends##*:}
+	if [ "${sends:-0}" != 1 ]; then
+		violation "internal/publish/publish.go MUST reference $write exactly once:" "found ${sends:-0}"
+	fi
+done
 
 # Herdr and Orca are run from internal/pane alone; beside it only handoff's help and refusal name either
 # (specs/006-agent-plugins FR-010, specs/019-pane-hosts FR-015). Tests are excluded because they fake them.

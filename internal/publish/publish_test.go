@@ -103,8 +103,17 @@ func (fx *fixture) exists(name string) bool {
 // written.
 func (fx *fixture) check(creates int) {
 	fx.t.Helper()
+	fx.checkWrites(creates, 0)
+}
+
+// checkWrites is check for a sticky round, which may edit a review instead of creating one.
+func (fx *fixture) checkWrites(creates, updates int) {
+	fx.t.Helper()
 	if got := fx.gh.CreateCount(); got != creates {
 		fx.t.Errorf("CreateCount %d, want %d", got, creates)
+	}
+	if got := fx.gh.UpdateCount(); got != updates {
+		fx.t.Errorf("UpdateCount %d, want %d", got, updates)
 	}
 	assertOnlyCreateWrites(fx.t, fx.gh)
 	if !bytes.Equal(fx.readDraft(), fx.draft) {
