@@ -39,7 +39,7 @@ A pipeline captures a pull request with `--source claude-ci@1.2.0 --model anthro
 
 **Why this priority**: It is the feature, and it gates the Traackr shared review workflow's switch to loupe.
 
-**Independent Test**: Render a published body for a run captured with a source and a model, published unattended, and compare the footer against a golden.
+**Independent Test**: Render a published body for a run captured with a source and a model, published unattended, and assert the exact footer line. The attended form with a source is also a body golden.
 
 **Acceptance Scenarios**:
 

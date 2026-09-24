@@ -6,7 +6,7 @@
 
 ## Summary
 
-`render.Body` appends `` · `MODEL` `` to the footer after the source segment and before ` · unattended`, whenever `Input.Model` is set. `loupe-meta` is untouched. The Footer and Markers sections of `docs/comment-format.md`, the `--model` help, `contracts/cli.md` and the `human-review` skill drop "the footer never shows it". Three tests that assert the model's absence from the footer flip to assert its presence, and one new body golden pins the full form.
+`render.Body` appends `` · `MODEL` `` to the footer after the source segment and before ` · unattended`, whenever `Input.Model` is set. `loupe-meta` is untouched. The Footer and Markers sections of `docs/comment-format.md`, the `--model` help, `contracts/cli.md` and the `human-review` skill drop "the footer never shows it". Three tests that assert the model's absence from the footer flip to assert its presence, one new body golden pins the attended form with a source, and literal footer assertions pin the rest.
 
 ## Technical Context
 

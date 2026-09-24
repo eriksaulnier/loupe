@@ -150,7 +150,7 @@ A human opens a run captured last week whose findings carry `severity: "P2"`. `l
 - **SC-002**: Each rejected value for severity, verified, references and model is refused with `input` and zero writes, with a fix a reader can act on without loupe's source.
 - **SC-003**: A run captured before this feature, with a free-text severity, loads, shows, edits by title and publishes unchanged.
 - **SC-004**: A run without a model and findings without the new fields publish a body byte for byte identical to the goldens before this feature, footer included.
-- **SC-005**: A capture with `--model` publishes a body whose `loupe-meta` carries the value and whose footer does not.
+- **SC-005**: A capture with `--model` publishes a body whose `loupe-meta` carries the value and whose footer does not. Amended by `specs/023-model-footer`: the footer carries it too.
 - **SC-006**: The example workflow's capture step fails without the model variable, and the next live run on a pull request the maintainer names carries `model=` in its marker. The live check is unverified until that run.
 - **SC-007**: All automated repository checks pass after the final edit.
 
