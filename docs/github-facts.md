@@ -14,6 +14,18 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - A pull request author cannot approve or request changes on their own pull request; the API rejects it with 422. loupe refuses before sending.
 - `GET /repos/{owner}/{repo}/pulls/{number}/reviews` lists submitted reviews with `user.login`, `commit_id`, `state` and `body`. Pending reviews of the viewer appear with state `PENDING`; they MUST NOT count as submitted during reconciliation.
 
+## Review edits
+
+Unverified. `loupe publish --sticky` (`specs/025-sticky-review`) relies on the facts below, and none has been observed yet. The plan's table lists the probe for each, to run on a pull request the owner names on a repository the owner controls. Until one runs, the code MUST treat any response as possible.
+
+- Assumed: `PUT /repos/{owner}/{repo}/pulls/{number}/reviews/{review_id}` with `{"body": …}` replaces a submitted `COMMENTED` review's body, keeps its `state` and `commit_id`, and returns the review.
+- Assumed: the same works with an installation token, such as a workflow's `GITHUB_TOKEN`.
+- Assumed: the edit is not refused because time has passed since the review was submitted.
+- Assumed: the edit sends no notification to the pull request's participants.
+- Assumed: an edit to a review the caller did not author is refused with a 4xx. Whether that is 403 or 404 is unknown. loupe's fake answers 403.
+- Assumed: a body of 65,536 characters is accepted and a longer one is refused with 422, as for review creation.
+- Assumed: a `<details>` nested 17 levels deep, which a collapsed round can reach, renders.
+
 ## Inline review comments
 
 - Each entry in `comments[]` takes `path`, `line`, `side` (`RIGHT` for the new file, `LEFT` for the old) and optionally `start_line` and `start_side` for a range. `position` is the deprecated alternative; loupe uses `line`.
