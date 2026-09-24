@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: Owner draft, 2026-09-24 ("024 install action"). A GitHub Actions workflow that uses loupe installs it by hand. `eriksaulnier/loupe-workflows` does so inline twice (`.github/workflows/review.yml`, the two "Install loupe" steps), and the Traackr shared review workflow would vendor a third copy. A version pinned inside a `run:` script is invisible to Dependabot. The draft's proposal, its known gap and its scope are settled and are requirements here.
+**Input**: Owner draft, 2026-09-24 ("024 install action"). A GitHub Actions workflow that uses loupe installs it by hand. `eriksaulnier/loupe-workflows` does so inline twice (`.github/workflows/review.yml`, the two "Install loupe" steps), and each new workflow that uses loupe would add another copy. A version pinned inside a `run:` script is invisible to Dependabot. The draft's proposal, its known gap and its scope are settled and are requirements here.
 
 ## Relationship to earlier specifications
 
@@ -30,7 +30,7 @@ This feature adds a distribution file and a CI job. It changes no command, no fl
 
 The author of a GitHub Actions workflow adds `uses: eriksaulnier/loupe@<sha>` as a step. After the step, `loupe` is on `PATH` for every later step in the job, at the release that the pinned commit shipped in. The author writes no download, checksum or `PATH` code.
 
-**Why this priority**: It is the reason for the feature. It removes the two inline copies in `loupe-workflows` and the third copy Traackr would vendor.
+**Why this priority**: It is the reason for the feature. It removes the two inline copies in `loupe-workflows` and the copy each new workflow would otherwise add.
 
 **Independent Test**: A CI job on pull requests runs the action from the repository checkout, then runs `loupe --version` and compares the printed version with the action's default. A job after each release does the same against the new tag.
 
