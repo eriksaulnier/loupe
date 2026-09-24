@@ -16,8 +16,10 @@ jobs:
       - uses: jdx/mise-action@v4
       - run: mise run check
 
-  # Pull requests only: a release pull request, and the push that merges it, stamp a default whose archives
-  # goreleaser has not uploaded yet. release.yml runs the same check once they exist.
+  # Pull requests only, and each install job checks out the pull request's head rather than its merge with main. A
+  # release stamps main's default before goreleaser uploads its archives, so the release pull request, the push that
+  # merges it and any merge commit built in that window name archives that do not exist yet. release.yml runs the
+  # same check once they do.
   install-action:
     if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
     strategy:
@@ -28,6 +30,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: ./
       # TestInstallAction pins the action's default to the manifest version.
       - run: |
@@ -45,13 +49,14 @@ jobs:
             exit 1
           fi
 
-  # The version input's override and bare form, and the download failure. The checksum failures stay by-hand checks,
-  # because the action's release URL is fixed (plan, Verification).
+  # A second install in one job, the version input's bare form, an empty version and a tag with no release.
   install-action-inputs:
     if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: ./
       - run: dirname "$(command -v loupe)" > "$RUNNER_TEMP/first-install"
       # A second install in the same job: the later PATH entry wins, and the first binary stays in place.
@@ -93,6 +98,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Put a fake curl first on PATH
         run: |
           set -euo pipefail
@@ -154,6 +161,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - id: install
         uses: ./
         continue-on-error: true
