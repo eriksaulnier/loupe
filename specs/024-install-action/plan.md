@@ -61,9 +61,9 @@ A composite `action.yml` at the repository root takes one input, `version`, whos
 - **IV. Never touch the user's checkout.** PASS. The action writes only under `$RUNNER_TEMP`, and the CI job checks the workspace is clean afterward.
 - **V. Machine contract first.** PASS. No command, envelope or refusal changes.
 - **VI. Simplicity over ceremony.** PASS. One file, one step, no new dependency, no new abstraction.
-- **VII. Verified means ran.** PASS with a stated gap. The Go test reads repository files only and touches no network. The CI jobs and the by-hand run are smoke checks of a distribution file, not tests of loupe. They download a public release asset, make no GitHub API call and publish nothing, so the fake-GitHub rule, which governs loupe's own API use, does not reach them. The script runs by hand on Linux amd64 only. The other legs run only on GitHub and are reported as unverified. The Windows leg proves that the step fails. The wording of its error is checked by hand only.
+- **VII. Verified means ran.** JUSTIFIED DEPARTURE, recorded in Complexity Tracking. The Go test reads repository files only and touches no network. The CI install jobs download a real release, which departs from "Tests MUST use a fake GitHub" if they count as tests. The plan takes that stricter reading. The jobs make no GitHub API call and publish nothing. The script runs by hand on Linux amd64 only. The other legs run only on GitHub and are reported as unverified. The Windows leg proves that the step fails. The wording of its error is checked by hand only.
 
-Post-design re-check: PASS, unchanged.
+Post-design re-check: unchanged. Every principle passes except VII, whose departure is justified below.
 
 ## Project Structure
 
