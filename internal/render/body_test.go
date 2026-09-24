@@ -177,6 +177,16 @@ func TestBodyMetaCarriesGateCounts(t *testing.T) {
 	}
 }
 
+// The pickup skill, outside this repository, reads the blocking count with this pattern, so no other key may match it.
+func TestBodyMetaBlockingPatternMatchesOnce(t *testing.T) {
+	in := mixedInput()
+	in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded = 5, 6, 7, 8
+	m := regexp.MustCompile(`\bblocking=(\d+)`).FindAllStringSubmatch(Body(in), -1)
+	if len(m) != 1 || m[0][1] != "6" {
+		t.Fatalf("matches %v, want one with the blocking count 6", m)
+	}
+}
+
 func TestBodyFooterNamesSource(t *testing.T) {
 	in := exampleInput()
 	in.Source = "gadfly-review-pr@2.2.0"

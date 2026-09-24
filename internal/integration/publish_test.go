@@ -445,7 +445,7 @@ func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
 	h.GH.AddReview(owner, repo, number, github.Review{User: "github-actions[bot]", CommitID: h.Repo.HeadSHA(), State: "COMMENTED",
-		Body: "an earlier round\n\n<!-- loupe-meta v=1 round=1 unattended=1 -->"})
+		Body: "an earlier round\n\n<!-- loupe-meta v=1 round=1 unattended=1 inline=blocking blocking=0 issues=1 suggestions=0 questions=0 other=0 excluded=1 withdrawn=1 reinstated=0 regraded=0 -->"})
 	h.GH.AddReview(owner, repo, number, github.Review{User: "reviewer", CommitID: h.Repo.HeadSHA(), State: "COMMENTED",
 		Body: "a human's loupe review\n\n<!-- loupe-meta v=1 round=1 -->"})
 	h.capture()

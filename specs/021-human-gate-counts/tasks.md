@@ -65,25 +65,25 @@ Both stories go through the same `publish.Build` call, so their failing tests ar
 
 These tests pin behavior that already holds after Phase 2, because they guard readers the change must not break. Each MUST be seen to fail once: run it against a marker with a second `blocking=` key, or without `render.MetaPrefix`, then restore.
 
-- [ ] T014 [P] [US3] Add a test to `internal/render/body_test.go`: on a body whose marker carries non-zero gate counts, ``regexp.MustCompile(`\bblocking=(\d+)`)`` finds exactly one match, and its group is the blocking count (SC-003). Name the pickup skill in the test's comment as the reader it pins.
-- [ ] T015 [P] [US3] In `TestPublishUnattendedNumbersFromBotReviews` in `internal/integration/publish_test.go`, make the seeded earlier bot review's marker carry the four new keys. It MUST still count toward `N`, so the new review is still `round=2 unattended=1`.
+- [X] T014 [P] [US3] Add a test to `internal/render/body_test.go`: on a body whose marker carries non-zero gate counts, ``regexp.MustCompile(`\bblocking=(\d+)`)`` finds exactly one match, and its group is the blocking count (SC-003). Name the pickup skill in the test's comment as the reader it pins.
+- [X] T015 [P] [US3] In `TestPublishUnattendedNumbersFromBotReviews` in `internal/integration/publish_test.go`, make the seeded earlier bot review's marker carry the four new keys. It MUST still count toward `N`, so the new review is still `round=2 unattended=1`.
 
 ## Phase 4: The contract
 
-- [ ] T016 Add one Markers bullet to `docs/comment-format.md`, after the census bullet. List the four keys in order, each with what it counts, from the spec's table. State that they are always present, so `excluded=0` means none and a missing key means an older loupe. State the filed identity: published census + `excluded` + `withdrawn` is every finding the round filed. State that `reinstated` and `regraded` are flags that overlap the others and can count published findings. Then give the FR-006 caveats:
+- [X] T016 Add one Markers bullet to `docs/comment-format.md`, after the census bullet. List the four keys in order, each with what it counts, from the spec's table. State that they are always present, so `excluded=0` means none and a missing key means an older loupe. State the filed identity: published census + `excluded` + `withdrawn` is every finding the round filed. State that `reinstated` and `regraded` are flags that overlap the others and can count published findings. Then give the FR-006 caveats:
   - The counts are self-reported, because `loupe edit --by human` and `loupe edit --exclude --by human` write the same history as the review screen.
   - `loupe add --by human` can put findings the human wrote into the denominator.
   - `regraded` counts an edit even when a later edit reverts it.
   - The review screen edits label and blocking but not severity.
   - The counts sit outside the digest, so `--retry-unknown` after a change outside the publishable set MAY post different counts under the same digest (FR-002).
   - Counts are per round, never cumulative.
-- [ ] T017 Run `go test ./internal/render/`. The Markers prose is outside the example, so `TestExampleGoldenMatchesDoc` MUST still pass. Commit.
+- [X] T017 Run `go test ./internal/render/`. The Markers prose is outside the example, so `TestExampleGoldenMatchesDoc` MUST still pass. Commit.
 
 ## Phase 5: Polish and verification
 
-- [ ] T018 Run `go test ./internal/cli/`. `testdata/golden/cli/` names the marker in `publish-help` but carries no marker line, so the test MUST pass without `-update`. A failure there is a finding to report, not a golden to regenerate.
-- [ ] T019 Search for stale marker examples: `grep -rn "other=[0-9]* -->" --include='*.go' --include='*.md' internal docs plugin README.md testdata`. Fix live references. Leave `specs/001-loupe-v1/tasks.md` and other older specs alone.
-- [ ] T020 Run `cleanup-comments` over the diff.
+- [X] T018 Run `go test ./internal/cli/`. `testdata/golden/cli/` names the marker in `publish-help` but carries no marker line, so the test MUST pass without `-update`. A failure there is a finding to report, not a golden to regenerate.
+- [X] T019 Search for stale marker examples: `grep -rn "other=[0-9]* -->" --include='*.go' --include='*.md' internal docs plugin README.md testdata`. Fix live references. Leave `specs/001-loupe-v1/tasks.md` and other older specs alone.
+- [X] T020 Run `cleanup-comments` over the diff.
 - [ ] T021 Run `mise run check` after the last edit and keep its output for the completion claim.
 
 ## Dependencies & Execution Order
