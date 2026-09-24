@@ -51,6 +51,8 @@ A composite `action.yml` at the repository root takes one input, `version`, whos
 - `mise run check` passes, which runs actionlint over both workflows and the local action.
 - By hand, with the step's script extracted from `action.yml` and run under a fake `RUNNER_TEMP`, `GITHUB_PATH` and runner variables: `Linux`/`X64` at the default installs a binary whose `--version` prints the manifest version, `Windows`/`X64` and `Linux`/`ARM` fail with the targets listed, an unknown tag fails with the uploading hint, and an empty version fails. The missing-entry and bad-digest paths run against a copy whose base URL points at a local directory with a doctored `checksums.txt`. The download of the real release is a public asset, not a GitHub API call.
 - `shellcheck` over the extracted script, through `mise exec`.
+- Rechecked on every pull request by `install-action-inputs`: a pinned older release in the bare form (`0.9.0`), and a tag with no release (`v0.0.0`), which must fail. The empty input stays a by-hand check, because whether GitHub passes an explicit `''` through or substitutes the default is not confirmed offline.
+- The missing-entry and bad-digest paths stay by-hand checks. `base` is a fixed URL, and a knob to point it at a doctored `checksums.txt` would exist only for a test (Principle VI). Anyone who edits the checksum lines in `action.yml` MUST rerun the doctored-copy check from T007.
 - Unverified until GitHub runs them: the CI legs on `ubuntu-24.04-arm`, `macos-15-intel`, `macos-latest` and `windows-latest`, and the post-release job, which first runs at the next release.
 
 ## Constitution Check

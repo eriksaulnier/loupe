@@ -45,6 +45,30 @@ jobs:
             exit 1
           fi
 
+  # The version input's override and bare form, and the download failure. The checksum failures stay by-hand checks,
+  # because the action's release URL is fixed (plan, Verification).
+  install-action-inputs:
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./
+        with:
+          version: 0.9.0
+      - run: |
+          set -euo pipefail
+          got="$(loupe --version)"
+          [ "$got" = "loupe version 0.9.0" ] || { echo "::error::loupe --version printed '$got', want 'loupe version 0.9.0'"; exit 1; }
+      - id: missing
+        uses: ./
+        continue-on-error: true
+        with:
+          version: v0.0.0
+      - if: steps.missing.outcome != 'failure'
+        run: |
+          echo "::error::the action installed v0.0.0, which is not a loupe release"
+          exit 1
+
   install-action-unsupported:
     if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
     runs-on: windows-latest

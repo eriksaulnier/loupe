@@ -14,7 +14,7 @@ This feature adds a distribution file and a CI job. It changes no command, no fl
 
 - `specs/001-loupe-v1/contracts/cli.md` and `docs/comment-format.md` do not change.
 - Constitution 2.0.2 is unchanged. Principle I holds because the action installs the binary and runs nothing else. Principle III holds because the action runs in a consumer's workflow, not in loupe, and it downloads only from the loupe release on GitHub.
-- The release pipeline (`release.yml`, `.goreleaser.yaml`) does not change. The action consumes the archives and `checksums.txt` that goreleaser already publishes.
+- The build and upload do not change. `.goreleaser.yaml` and the existing release-please and goreleaser jobs stay as they are, and `release.yml` only gains a check after goreleaser (FR-010). The action consumes the archives and `checksums.txt` that goreleaser already publishes.
 
 ## Clarifications
 
@@ -94,7 +94,7 @@ When the install cannot finish safely, the step fails with an error that says wh
 - **FR-006**: The action MUST verify the archive's sha256 against its entry in `checksums.txt` before it extracts anything. It MUST fail when `checksums.txt` has no entry for the archive, and when the digest does not match.
 - **FR-007**: A failed download MUST fail the step with an error that names the URL and says that a release tagged in the last few minutes may still be uploading its archives.
 - **FR-008**: The action MUST extract only the `loupe` binary into a new directory under `$RUNNER_TEMP`, and MUST append that directory to `$GITHUB_PATH`. It MUST NOT write into the workspace.
-- **FR-009**: `ci.yml` MUST gain a job that runs on pull requests only, and not on release-please's own branch. It MUST run the action from the checkout on a runner for each supported target and check that `loupe --version` prints the action's default version. It MUST also run the action on a Windows runner and check that the step failed.
+- **FR-009**: `ci.yml` MUST gain a job that runs on pull requests only, and not on release-please's own branch. It MUST run the action from the checkout on a runner for each supported target and check that `loupe --version` prints the action's default version. It MUST also run the action on a Windows runner and check that the step failed. On one Linux runner it MUST install `version: 0.9.0` and check `loupe version 0.9.0`, and it MUST check that `version: v0.0.0` fails.
 - **FR-010**: `release.yml` MUST gain a job that runs after goreleaser has uploaded a release. It MUST run the action from the release commit on a runner for each supported target, with no inputs, and check that `loupe --version` prints the new tag without its `v`.
 - **FR-011**: A unit test MUST check that the action's default equals `v` plus the version in `.release-please-manifest.json`, and that `release-please-config.json` lists `action.yml` as a `generic` extra-file.
 - **FR-012**: The README MUST document the action beside the other install methods: the step, the sha pin with the tag in a comment, and the `version` input.
