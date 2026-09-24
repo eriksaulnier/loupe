@@ -84,7 +84,7 @@ These tests pin behavior that already holds after Phase 2, because they guard re
 - [X] T018 Run `go test ./internal/cli/`. `testdata/golden/cli/` names the marker in `publish-help` but carries no marker line, so the test MUST pass without `-update`. A failure there is a finding to report, not a golden to regenerate.
 - [X] T019 Search for stale marker examples: `grep -rn "other=[0-9]* -->" --include='*.go' --include='*.md' internal docs plugin README.md testdata`. Fix live references. Leave `specs/001-loupe-v1/tasks.md` and other older specs alone.
 - [X] T020 Run `cleanup-comments` over the diff.
-- [ ] T021 Run `mise run check` after the last edit and keep its output for the completion claim.
+- [X] T021 Run `mise run check` after the last edit and keep its output for the completion claim.
 
 ## Dependencies & Execution Order
 
