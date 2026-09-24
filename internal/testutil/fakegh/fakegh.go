@@ -80,8 +80,10 @@ type Server struct {
 	viewer        string
 	userForbidden bool
 	outcomes      []Outcome
+	updates       []Outcome
 	requests      []Request
 	createCount   int
+	updateCount   int
 	nextID        int64
 	onCreate      func(*http.Request)
 }
@@ -110,6 +112,7 @@ func Start() (s *Server, stop func()) {
 	mux.HandleFunc("GET /user", s.getUser)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}/reviews", s.listReviews)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{number}/reviews", s.createReview)
+	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{number}/reviews/{id}", s.updateReview)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/compare/{basehead}", s.getComparison)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := s.record(r); err != nil {
@@ -242,6 +245,21 @@ func (s *Server) QueueCreate(outcomes ...Outcome) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.outcomes = append(s.outcomes, outcomes...)
+}
+
+// QueueUpdate sets the outcomes of the next review body edits in order; once empty, edits succeed. A rejection or a
+// dropped edit leaves the body as it was, and ServerErrorAfterRecord replaces it.
+func (s *Server) QueueUpdate(outcomes ...Outcome) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.updates = append(s.updates, outcomes...)
+}
+
+// UpdateCount is the number of review edit requests received, whatever their outcome.
+func (s *Server) UpdateCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.updateCount
 }
 
 func (s *Server) Requests() []Request {
@@ -433,6 +451,54 @@ func (s *Server) createReview(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, body)
 	case outcomeErrorAfterRecord:
 		s.storeReview(key, review)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
+	case outcomeErrorDrop:
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
+	}
+}
+
+// updateReview refuses an edit to another author's review with 403. That GitHub refuses it, and with which status, is
+// assumed until specs/025-sticky-review's probe runs.
+func (s *Server) updateReview(w http.ResponseWriter, r *http.Request) {
+	key, ok := keyOf(r)
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.updateCount++
+	outcome := OK()
+	if len(s.updates) > 0 {
+		outcome, s.updates = s.updates[0], s.updates[1:]
+	}
+	index := -1
+	for i, rv := range s.reviews[key] {
+		if rv.ID == id {
+			index = i
+		}
+	}
+	if !ok || err != nil || index < 0 {
+		notFound(w)
+		return
+	}
+	var req struct {
+		Body *string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Body == nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "body is required"})
+		return
+	}
+	review := &s.reviews[key][index]
+	if review.User != s.viewer {
+		writeJSON(w, http.StatusForbidden, map[string]any{"message": "Resource not accessible by integration"})
+		return
+	}
+	switch outcome.kind {
+	case outcomeOK:
+		review.Body = *req.Body
+		writeJSON(w, http.StatusOK, wireReview(*review))
+	case outcomeReject422:
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": outcome.message})
+	case outcomeErrorAfterRecord:
+		review.Body = *req.Body
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
 	case outcomeErrorDrop:
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})

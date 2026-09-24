@@ -29,6 +29,8 @@ type Client interface {
 	Viewer(ctx context.Context) (string, error)
 	ListReviews(ctx context.Context, owner, repo string, number int) ([]Review, error)
 	CreateReview(ctx context.Context, owner, repo string, number int, req ReviewRequest) (Review, error)
+	// UpdateReview replaces a submitted review's body, and nothing else about it.
+	UpdateReview(ctx context.Context, owner, repo string, number int, id int64, body string) (Review, error)
 	Compare(ctx context.Context, owner, repo, base, head string) (Comparison, error)
 	TokenKind() TokenKind
 }
@@ -281,6 +283,21 @@ func (c *REST) CreateReview(ctx context.Context, owner, repo string, number int,
 	}
 	var w wireReview
 	if err := c.do(ctx, http.MethodPost, pullsPath(owner, repo)+"/"+strconv.Itoa(number)+"/reviews", body, &w); err != nil {
+		return Review{}, err
+	}
+	return w.review(), nil
+}
+
+func (c *REST) UpdateReview(ctx context.Context, owner, repo string, number int, id int64, body string) (Review, error) {
+	data, err := json.Marshal(struct {
+		Body string `json:"body"`
+	}{body})
+	if err != nil {
+		return Review{}, fmt.Errorf("encode review body: %w", err)
+	}
+	var w wireReview
+	path := pullsPath(owner, repo) + "/" + strconv.Itoa(number) + "/reviews/" + strconv.FormatInt(id, 10)
+	if err := c.do(ctx, http.MethodPut, path, data, &w); err != nil {
 		return Review{}, err
 	}
 	return w.review(), nil

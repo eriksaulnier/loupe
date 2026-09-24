@@ -168,3 +168,50 @@ func TestCreateReviewOutcomes(t *testing.T) {
 		t.Fatal("start_line must be omitted when zero")
 	}
 }
+
+func TestUpdateReviewOutcomes(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	s.SetPR("o", "r", samplePR())
+	s.SetViewer("bob")
+	s.AddReview("o", "r", 3, github.Review{User: "bob", CommitID: "h1", State: "COMMENTED", Body: "v1"})
+	s.AddReview("o", "r", 3, github.Review{User: "carol", CommitID: "h1", State: "COMMENTED", Body: "hers"})
+	reviews, err := c.ListReviews(ctx, "o", "r", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine, hers := reviews[0].ID, reviews[1].ID
+	body := func() string {
+		t.Helper()
+		reviews, err := c.ListReviews(ctx, "o", "r", 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return reviews[0].Body
+	}
+
+	s.QueueUpdate(OK(), Reject422("Body is too long"), ServerErrorDrop(), ServerErrorAfterRecord())
+	review, err := c.UpdateReview(ctx, "o", "r", 3, mine, "v2")
+	if err != nil || review.ID != mine || review.Body != "v2" || review.CommitID != "h1" || review.State != "COMMENTED" || body() != "v2" {
+		t.Fatalf("OK: %+v, %v", review, err)
+	}
+	var he *github.HTTPError
+	if _, err := c.UpdateReview(ctx, "o", "r", 3, mine, "v3"); !errors.As(err, &he) || he.Status != 422 || body() != "v2" {
+		t.Fatalf("422: %v, body %q", err, body())
+	}
+	if _, err := c.UpdateReview(ctx, "o", "r", 3, mine, "v3"); !errors.As(err, &he) || he.Status != 500 || body() != "v2" {
+		t.Fatalf("drop: %v, body %q", err, body())
+	}
+	if _, err := c.UpdateReview(ctx, "o", "r", 3, mine, "v4"); !errors.As(err, &he) || he.Status != 500 || body() != "v4" {
+		t.Fatalf("after record: %v, body %q", err, body())
+	}
+	if _, err := c.UpdateReview(ctx, "o", "r", 3, hers, "taken"); !errors.As(err, &he) || he.Status != http.StatusForbidden {
+		t.Fatalf("another author's review: %v", err)
+	}
+	if _, err := c.UpdateReview(ctx, "o", "r", 3, 1, "none"); !errors.As(err, &he) || he.Status != http.StatusNotFound {
+		t.Fatalf("unknown review: %v", err)
+	}
+	if s.UpdateCount() != 6 || s.CreateCount() != 0 {
+		t.Fatalf("update count %d, create count %d", s.UpdateCount(), s.CreateCount())
+	}
+}

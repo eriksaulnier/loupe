@@ -315,3 +315,38 @@ func TestNewRESTSetsDefaultTimeout(t *testing.T) {
 		t.Fatalf("deadline %v after start, set %v", deadline.Sub(start), hasDeadline)
 	}
 }
+
+func TestUpdateReviewSendsOnlyTheBody(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, `{"id": 99, "user": {"login": "me"}, "commit_id": "h1", "state": "COMMENTED", "body": "new", "html_url": "https://github.com/o/r/pull/7#pullrequestreview-99"}`)
+	})
+	review, err := c.UpdateReview(context.Background(), "o", "r", 7, 99, "new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Review{ID: 99, User: "me", CommitID: "h1", State: "COMMENTED", Body: "new", HTMLURL: "https://github.com/o/r/pull/7#pullrequestreview-99"}
+	if review != want {
+		t.Fatalf("got %+v", review)
+	}
+	got := (*reqs)[0]
+	if got.Method != "PUT" || got.Path != "/repos/o/r/pulls/7/reviews/99" || got.Body != `{"body":"new"}` {
+		t.Fatalf("request %+v", got)
+	}
+}
+
+func TestUpdateReviewErrorClassification(t *testing.T) {
+	status := 403
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, status, `{"message": "Resource not accessible by integration"}`)
+	})
+	_, err := c.UpdateReview(context.Background(), "o", "r", 7, 99, "new")
+	var he *HTTPError
+	if !errors.As(err, &he) || he.Status != 403 || !he.Definite() {
+		t.Fatalf("got %#v", err)
+	}
+	status = 401
+	_, err = c.UpdateReview(context.Background(), "o", "r", 7, 99, "new")
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Auth {
+		t.Fatalf("got %#v", err)
+	}
+}
