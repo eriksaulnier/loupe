@@ -115,12 +115,6 @@ func Body(in Input) string {
 		blocks = append(blocks, sectionBlock("Worth a look", rest, in))
 	}
 
-	if in.Sticky != nil {
-		if earlier := earlierSection(*in.Sticky); earlier != "" {
-			blocks = append(blocks, earlier)
-		}
-	}
-
 	census := [4]int{}
 	for _, f := range in.Findings {
 		census[group(f.Label)]++
@@ -148,13 +142,21 @@ func Body(in Input) string {
 	if in.Sticky != nil {
 		sticky = fmt.Sprintf(" sticky=%d", in.Sticky.Rounds)
 	}
-	blocks = append(blocks, fmt.Sprintf("%s\n\n<!-- loupe digest=%s publication=%s -->\n", footer, in.Digest, in.PublicationID))
+	// Each round's footer sits under the round, so the earlier rounds follow the newest one's footer, and a round
+	// demoted later carries its footer into its collapse.
+	blocks = append(blocks, footer)
+	if in.Sticky != nil {
+		if earlier := earlierSection(*in.Sticky); earlier != "" {
+			blocks = append(blocks, earlier)
+		}
+	}
 	metaLine := fmt.Sprintf(MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d excluded=%d withdrawn=%d reinstated=%d regraded=%d%s -->\n",
 		meta, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther],
 		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded, sticky)
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
-	return withRecord(strings.Join(blocks, "\n\n---\n\n"), metaLine, in.Findings, in.OmitRecord)
+	body := strings.Join(blocks, "\n\n---\n\n") + fmt.Sprintf("\n\n<!-- loupe digest=%s publication=%s -->\n", in.Digest, in.PublicationID)
+	return withRecord(body, metaLine, in.Findings, in.OmitRecord)
 }
 
 // chipsRow is a key to the row dots below: a blocking row leads with ⛔, and every other row with its label group's dot.

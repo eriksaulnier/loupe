@@ -51,7 +51,7 @@ func TestStickyOffLeavesBodyUnchanged(t *testing.T) {
 	}
 }
 
-func TestStickyBodyHoldsEarlierRoundsBeforeTheFooter(t *testing.T) {
+func TestStickyBodyKeepsEachFooterUnderItsRound(t *testing.T) {
 	earlier, rounds, err := ReadSticky(firstRound())
 	if err != nil || rounds != 1 || len(earlier) != 1 {
 		t.Fatalf("ReadSticky: %d blocks, rounds %d, err %v", len(earlier), rounds, err)
@@ -59,12 +59,9 @@ func TestStickyBodyHoldsEarlierRoundsBeforeTheFooter(t *testing.T) {
 	in := stickyInput(2, "bbbbbbb222", general("f-001", "question", false))
 	in.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
 	body := Body(in)
-	at := indexes(t, body, "### Worth a look", "\n\n---\n\n<!-- loupe-earlier -->\n\n### Earlier rounds\n\n<!-- loupe-round -->\n\n<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>",
-		"</details>\n\n---\n\nreviewed `bbbbbbb`", "sticky=2 -->")
-	if strings.Contains(body, "reviewed `aaaaaaa`") {
-		t.Fatalf("the earlier round kept its footer:\n%s", body)
-	}
-	if at[0] > at[1] || at[1] > at[2] || at[2] > at[3] {
+	at := indexes(t, body, "### Worth a look", "</details>\n\n---\n\nreviewed `bbbbbbb`\n\n---\n\n<!-- loupe-earlier -->\n\n### Earlier rounds\n\n<!-- loupe-round -->\n\n<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>",
+		"</details>\n\n---\n\nreviewed `aaaaaaa`\n\n<!-- loupe digest=1", "</details>\n\n<!-- loupe digest=2", "sticky=2 -->")
+	if at[0] > at[1] || at[1] > at[2] || at[2] > at[3] || at[3] > at[4] {
 		t.Fatalf("sections out of order %v:\n%s", at, body)
 	}
 	if strings.Contains(body, "dropped") {
@@ -100,11 +97,11 @@ func TestReadStickyDemotesTheCurrentRound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The chips move into the summary and the footer goes, since the summary names the commit; the reconciliation
-	// marker stays so an interrupted publish of this round still reconciles.
+	// The chips move into the summary and the footer stays under the round; the reconciliation marker stays too, so an
+	// interrupted publish of this round still reconciles.
 	want := "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>\n\n" +
 		"### Must fix\n\n<details>\n<summary>⛔ <b>issue</b>: Title f-001</summary>\n\nBody f-001.\n\n</details>\n\n" +
-		"<!-- loupe digest=" + strings.Repeat("1", 64) + " publication=00000000-0000-4000-8000-000000000001 -->\n\n</details>"
+		"---\n\nreviewed `aaaaaaa`\n\n<!-- loupe digest=" + strings.Repeat("1", 64) + " publication=00000000-0000-4000-8000-000000000001 -->\n\n</details>"
 	if earlier[0] != want {
 		t.Fatalf("demoted round\n--- got ---\n%s\n--- want ---\n%s", earlier[0], want)
 	}
@@ -129,7 +126,7 @@ func TestReadStickyNumbersRoundsInTheReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(again[0], "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · no findings</summary>\n\nNothing left.\n\n<!-- loupe digest=") ||
+	if !strings.HasPrefix(again[0], "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · no findings</summary>\n\nNothing left.\n\n---\n\nreviewed `bbbbbbb`\n\n<!-- loupe digest=") ||
 		!strings.HasPrefix(again[1], "<details>\n<summary>Round 1 · ") {
 		t.Fatalf("blocks:\n%s", strings.Join(again, "\n=====\n"))
 	}
@@ -190,7 +187,8 @@ func TestReadStickyIgnoresFencedDelimiters(t *testing.T) {
 	}
 }
 
-// The footer can carry a source, a model and the unattended mark after the commit; only the commit reaches the summary.
+// The footer can carry a source, a model and the unattended mark after the commit. Only the commit reaches the summary,
+// and the demoted round keeps the whole footer, so the history shows which source and model reviewed each round.
 func TestReadStickyReadsAFullFooter(t *testing.T) {
 	in := stickyInput(1, "aaaaaaa111", general("f-001", "issue", true))
 	in.Source, in.Model, in.Unattended = "gadfly-review-pr@2.2.0", "anthropic/claude-opus-5.5", true
@@ -200,7 +198,7 @@ func TestReadStickyReadsAFullFooter(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>") ||
-		strings.Contains(earlier[0], "claude-opus") || strings.Contains(earlier[0], "· unattended") {
+		!strings.Contains(earlier[0], "\n\n---\n\nreviewed `aaaaaaa` · via `gadfly-review-pr 2.2.0` · `anthropic/claude-opus-5.5` · unattended\n\n<!-- loupe digest=") {
 		t.Fatalf("demoted round:\n%s", earlier[0])
 	}
 }
@@ -321,11 +319,13 @@ func TestReadStickyRefusesUnbalancedRounds(t *testing.T) {
 	cases := []struct{ name, body string }{
 		{"stray </details> in a round with no findings", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.\n\n</details>\n\nOutside.", 1)},
 		{"extra <details> in an earlier round", strings.Replace(two, "### Must fix\n", "<details>\n<summary>Mine</summary>\n\n### Must fix\n", 1)},
-		{"missing </details> in an earlier round", strings.Replace(two, "Body f-001.\n\n</details>\n\n<!-- loupe digest=1", "Body f-001.\n\n<!-- loupe digest=1", 1)},
+		{"missing </details> in an earlier round", strings.Replace(two, "Body f-001.\n\n</details>\n\n---\n\nreviewed `aaaaaaa`", "Body f-001.\n\n---\n\nreviewed `aaaaaaa`", 1)},
 		{"close tag after text in the shown round", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.</details>\n\nOutside.", 1)},
 		{"round closed early, then a second disclosure", strings.Replace(two, "\n\n<!-- loupe digest=1", "\n\n</details>\n\nOutside.\n\n<details>\n<summary>Mine</summary>\n\n<!-- loupe digest=1", 1)},
 		{"close tag after a span that spans lines", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix. `a\nb` </details> `c`\n\nOutside.", 1)},
 		{"comment left open before an earlier round's close", regexp.MustCompile(`(<!-- loupe digest=1[^\n]*-->\n\n)</details>`).ReplaceAllString(two, "$1<!--\n\n</details>")},
+		// A footer appended after the earlier rounds would make the round's own footer read as text in its collapse.
+		{"a second footer after the earlier rounds", strings.Replace(two, "\n\n<!-- loupe digest=2", "\n\n---\n\nreviewed `ddddddd`\n\n<!-- loupe digest=2", 1)},
 		// An open fence also hides the generated tail, so the structure checks refused this before the balance check.
 		{"unclosed fence in the shown round", strings.Replace(two, "Body f-002.", "Body f-002.\n\n```", 1)},
 	}
@@ -391,5 +391,35 @@ func TestReadStickyRefusesARecordOutsideTheTail(t *testing.T) {
 	fenced := strings.Replace(body, "### Must fix", "```\n"+record+"\n```\n\n### Must fix", 1)
 	if _, _, err := ReadSticky(fenced); err != nil && strings.Contains(err.Error(), "findings record") {
 		t.Fatalf("a fenced record was refused: %v", err)
+	}
+}
+
+// A body in the v0.11.0 layout, footer after the earlier rounds and collapsed rounds without one, reads back and the
+// next round writes the new layout. The round it showed keeps its footer, and the older round has none to recover.
+func TestStickyMovesAV0110BodyToTheNewLayout(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-v0.11.0-layout.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	earlier, rounds, err := ReadSticky(string(data))
+	if err != nil || rounds != 2 || len(earlier) != 2 {
+		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
+	}
+	if !strings.Contains(earlier[0], "\n\n---\n\nreviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`\n\n<!-- loupe digest=2") ||
+		strings.Contains(earlier[1], "reviewed `aaaaaaa`") {
+		t.Fatalf("blocks:\n%s", strings.Join(earlier, "\n=====\n"))
+	}
+	next := stickyInput(3, "ccccccc333", general("f-001", "question", false))
+	next.Source = "gadfly-review-pr@2.3.0"
+	next.Sticky = &StickyInput{Rounds: rounds + 1, Earlier: earlier}
+	body := Body(next)
+	indexes(t, body, "Body f-001.\n\n</details>\n\n---\n\nreviewed `ccccccc` · via `gadfly-review-pr 2.3.0`\n\n---\n\n<!-- loupe-earlier -->",
+		"<summary>Round 2 · reviewed <code>bbbbbbb</code>", "reviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`", "<summary>Round 1 · reviewed <code>aaaaaaa</code>")
+	if _, err := ReadRecord(body); err != nil {
+		t.Fatalf("ReadRecord: %v", err)
+	}
+	again, rounds, err := ReadSticky(body)
+	if err != nil || rounds != 3 || len(again) != 3 || again[1] != earlier[0] || again[2] != earlier[1] {
+		t.Fatalf("rounds %d err %v blocks:\n%s", rounds, err, strings.Join(again, "\n=====\n"))
 	}
 }

@@ -40,8 +40,8 @@ var (
 	roundNumber = regexp.MustCompile(`^<details>\n<summary>Round [0-9]+ · `)
 	digestLine  = regexp.MustCompile(`^<!-- loupe digest=\S+ publication=\S+ -->$`)
 	// footerLine is the whole footer Body writes: the commit, then the source, the model and the unattended mark when
-	// present, each held to the rule capture validates it by. The collapsed round does not keep the footer, so a footer
-	// with anything else on it is refused rather than dropped.
+	// present, each held to the rule capture validates it by. Read-back finds the footer by it, so a footer with
+	// anything else on it is refused rather than guessed at.
 	footerLine = regexp.MustCompile("^reviewed `([0-9a-f]+)`" +
 		"( · via `[a-z0-9][a-z0-9._-]*( [0-9][0-9A-Za-z.+-]*)?`)?" +
 		"( · `[a-z0-9][a-z0-9._/:-]*`)?" +
@@ -148,13 +148,19 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 		return nil, 0, errors.New("its loupe-meta marker has no sticky= key")
 	}
 	rounds, _ = strconv.Atoi(sticky[1])
-	digest, footer := lines[n-1], lines[n-3]
-	sha := footerLine.FindStringSubmatch(footer)
-	if !digestLine.MatchString(digest) || lines[n-2] != "" || sha == nil || lines[n-4] != "" || lines[n-5] != "---" || lines[n-6] != "" {
-		return nil, 0, errors.New("it does not end with loupe's divider, footer and reconciliation marker")
+	digest := lines[n-1]
+	if !digestLine.MatchString(digest) || lines[n-2] != "" {
+		return nil, 0, errors.New("it does not end with loupe's reconciliation marker")
 	}
-
-	region := lines[:n-6]
+	// The footer sits under the round it describes, before any earlier rounds. A body written before that layout
+	// ends with its divider and footer after them, and reads back the same way.
+	footer, region := "", lines[:n-2]
+	if footerLine.MatchString(lines[n-3]) {
+		if lines[n-4] != "" || lines[n-5] != "---" || lines[n-6] != "" {
+			return nil, 0, errors.New("its footer does not follow a divider")
+		}
+		footer, region = lines[n-3], lines[:n-6]
+	}
 	part := region
 	var blocks []string
 	dropped := 0
@@ -166,7 +172,17 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 		if len(part) == 0 || part[len(part)-1] != "---" {
 			return nil, 0, errors.New("its earlier rounds do not follow a divider")
 		}
-		part = part[:len(part)-1]
+		part = trimBlank(part[:len(part)-1])
+		ownFooter := len(part) >= 3 && footerLine.MatchString(part[len(part)-1]) && part[len(part)-2] == "" && part[len(part)-3] == "---"
+		switch {
+		case footer != "" && ownFooter:
+			// Only one layout writes each, so a body with both was edited, and either could be the round's own.
+			return nil, 0, errors.New("it carries a footer both under the round it shows and after the earlier rounds")
+		case footer == "" && !ownFooter:
+			return nil, 0, errors.New("the round it shows does not end with loupe's divider and footer")
+		case footer == "":
+			footer, part = part[len(part)-1], part[:len(part)-3]
+		}
 		var current []string
 		inBlock := false
 		for j := i + 1; j < len(region); j++ {
@@ -197,6 +213,9 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 			return nil, 0, errors.New("an earlier round is not one collapsed section under loupe's summary line")
 		}
 	}
+	if footer == "" {
+		return nil, 0, errors.New("it does not end with loupe's divider, footer and reconciliation marker")
+	}
 	if len(blocks)+dropped != rounds-1 {
 		return nil, 0, fmt.Errorf("it holds %d earlier rounds and says %d were dropped, but sticky=%d", len(blocks), dropped, rounds)
 	}
@@ -208,14 +227,15 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	content := digest
+	// The demoted round keeps its footer as it read on top, so the history shows each round's source and model.
+	content := footer + "\n\n" + digest
 	if len(rest) > 0 {
-		content = strings.Join(rest, "\n") + "\n\n" + digest
+		content = strings.Join(rest, "\n") + "\n\n---\n\n" + content
 	}
 	// Each round is numbered by its place in the review, so the newest earlier round is rounds and the ones below it
 	// count down. A body written before this numbering carried loupe's round count, which is renumbered here too.
 	demoted := fmt.Sprintf("<details>\n<summary>Round %d · reviewed <code>%s</code> · %s</summary>\n\n%s\n\n</details>",
-		rounds, shortSHA(sha[1]), chips, content)
+		rounds, shortSHA(footerLine.FindStringSubmatch(footer)[1]), chips, content)
 	for i, block := range blocks {
 		blocks[i] = roundNumber.ReplaceAllString(block, fmt.Sprintf("<details>\n<summary>Round %d · ", rounds-1-i))
 	}

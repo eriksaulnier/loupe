@@ -288,6 +288,10 @@ The blocking issue is fixed; one question left.
 
 ---
 
+reviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`
+
+---
+
 <!-- loupe-earlier -->
 
 ### Earlier rounds
@@ -301,25 +305,26 @@ The blocking issue is fixed; one question left.
 
 <details>…</details>
 
+---
+
+reviewed `aaaaaaa` · via `gadfly-review-pr 2.1.0`
+
 <!-- loupe digest=<sha256> publication=<uuid> -->
 
 </details>
-
----
-
-reviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
 <!-- loupe-findings v=1 sha256=<sha256> <data> -->
 <!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=none blocking=0 issues=0 suggestions=0 questions=1 other=0 excluded=0 withdrawn=0 reinstated=0 regraded=0 sticky=2 -->
 ````
 
-- **The newest round is composed exactly as an ordinary review with `--inline none`**: chips, opening prose, `Must fix`, `Worth a look`. The footer and both markers end the body as on any review, and describe the newest round.
-- **`### Earlier rounds` sits between the newest round and the footer's divider**, only when the review holds an earlier round or dropped one. It holds one `<details>` per earlier round, newest first.
-- **An earlier round's `<summary>` reads `Round N · reviewed <code>SHA</code> · CHIPS`.** `N` is the round's place in the sticky review, 1 for the first sticky round, never loupe's `round=`, which can start above 1. `SHA` is its footer's commit. `CHIPS` is its chips row as text, each chip joined by ` · `, or `no findings` when the round published none. Its section holds the rest of the round as it read when it was on top: its prose and sections, then its reconciliation marker. Its chips row and footer line are dropped, since the summary carries both, and so is the divider that separated the chips from the first section when no prose sat between. Its `loupe-meta` and its findings record are dropped too, so a body carries one of each, and both describe the round on top. The reconciliation marker stays, so an interrupted publish of that round still reconciles after a later round edited over it.
+- **The newest round is composed exactly as an ordinary review with `--inline none`**: chips, opening prose, `Must fix`, `Worth a look`, then a divider and its footer. The hidden markers end the body as on any review, and describe the newest round.
+- **`### Earlier rounds` follows the newest round's footer, after a divider**, only when the review holds an earlier round or dropped one. It holds one `<details>` per earlier round, newest first.
+- **An earlier round's `<summary>` reads `Round N · reviewed <code>SHA</code> · CHIPS`.** `N` is the round's place in the sticky review, 1 for the first sticky round, never loupe's `round=`, which can start above 1. `SHA` is its footer's commit. `CHIPS` is its chips row as text, each chip joined by ` · `, or `no findings` when the round published none. Its section holds the rest of the round as it read when it was on top: its prose and sections, then a divider and its footer line exactly as it read, then its reconciliation marker. The footer stays so the history shows which source and model reviewed each round. Its chips row is dropped, since the summary carries it, and so is the divider that separated the chips from the first section when no prose sat between. Its `loupe-meta` and its findings record are dropped too, so a body carries one of each, and both describe the round on top. The reconciliation marker stays, so an interrupted publish of that round still reconciles after a later round edited over it.
 - **A loupe released before the findings record cannot continue a sticky series that carries one.** It finds the record where it expects the reconciliation marker and refuses with `sticky`, whose fix, publishing once without `--sticky`, still works. Every loupe from spec 027 on reads bodies with and without a record.
+- **A body in the v0.11.0 layout** (the newest round's footer after the earlier rounds, and collapsed rounds without a footer) still reads back, and the next round writes this layout. The round it showed keeps its footer. The rounds v0.11.0 collapsed have no footer to recover and are carried as they are.
 - **A body published before this format** (its collapsed rounds keep their footer and a chips line inside) still reads back. Its collapsed rounds are carried as they are, and only their `Round N` is renumbered by place.
-- **Two hidden comment lines delimit the rounds**: `<!-- loupe-earlier -->` opens the section, and `<!-- loupe-round -->` precedes each round. loupe reads a sticky body back by these lines and by the generated tail (divider, footer, reconciliation marker, findings record when present, `loupe-meta`), and only on lines outside a fence. The allowlist refuses an HTML comment outside a fence in every authored field, so authored text can quote a delimiter but never move a round boundary. A body that has lost that structure, such as one reworded on GitHub, is refused with `sticky` rather than guessed at. That includes text added to the footer or before the first collapsed round, a findings record anywhere but the tail, which the next body would otherwise carry as a second record, a collapsed round that is not one `<details>` under loupe's `<summary>Round N · …</summary>` line, a round that is not exactly one `<details>` whose tags inside pair up and nest, or whose fence or HTML comment is left open, and collapsed rounds plus dropped ones that do not add up to `K − 1`, since the next edit would otherwise lose a round without saying so.
+- **Two hidden comment lines delimit the rounds**: `<!-- loupe-earlier -->` opens the section, and `<!-- loupe-round -->` precedes each round. loupe reads a sticky body back by these lines and by the generated tail (reconciliation marker, findings record when present, `loupe-meta`) and by the newest round's divider and footer, and only on lines outside a fence. The allowlist refuses an HTML comment outside a fence in every authored field, so authored text can quote a delimiter but never move a round boundary. A body that has lost that structure, such as one reworded on GitHub, is refused with `sticky` rather than guessed at. That includes text added to the footer or before the first collapsed round, a findings record anywhere but the tail, which the next body would otherwise carry as a second record, a collapsed round that is not one `<details>` under loupe's `<summary>Round N · …</summary>` line, a round that is not exactly one `<details>` whose tags inside pair up and nest, or whose fence or HTML comment is left open, and collapsed rounds plus dropped ones that do not add up to `K − 1`, since the next edit would otherwise lose a round without saying so.
 - **When the earlier rounds would take the body past 65,536 characters, the oldest are dropped first**. GitHub was observed to accept an edit of up to 262,144 UTF-8 bytes, and 65,536 characters never exceed that, so the bound is conservative by design, and the section opens with `The oldest round was dropped to fit GitHub's length limit.` or `The N oldest rounds were dropped to fit GitHub's length limit.` A dropped round's reconciliation marker goes with it. When the newest round alone is over the limit, publish refuses with `limit` as for any review.
 - **Two publications that edit the same review at once race.** Each reads the same body and the later edit wins, so the earlier one's round is lost from the history. loupe sends no precondition with the edit and does not lock across machines. The attended recheck after `y` narrows the window but cannot close it, and a pipeline's concurrency group is the guard.
 - **An edit is silent.** GitHub sends no notification for a body edit, and a round posts nothing to announce itself. Whether GitHub notifies is unverified (`docs/github-facts.md`).
