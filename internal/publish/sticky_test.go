@@ -2,6 +2,8 @@ package publish
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -371,12 +373,13 @@ func TestRunStickyRefusedEditNamesTheSource(t *testing.T) {
 // An attended round finds the viewer's own review whatever its source, so a refused attended edit keeps the general fix.
 func TestRunStickyRefusedAttendedEditKeepsTheGeneralFix(t *testing.T) {
 	first := newAttendedStickyRun(t, nil)
-	if _, err := first.run(); err != nil {
+	created, err := first.run()
+	if err != nil {
 		t.Fatal(err)
 	}
 	second := newAttendedStickyRun(t, first.gh)
-	second.gh.QueueUpdate(fakegh.Reject422("Not Found"))
-	_, err := second.run()
+	second.gh.Fail("PUT", fmt.Sprintf("/repos/acme/widgets/pulls/42/reviews/%d", created.ReviewID), http.StatusForbidden)
+	_, err = second.run()
 	r, ok := refusal.As(err)
 	if !ok || r.Code != refusal.GitHub || strings.Contains(r.Fix, "--source") {
 		t.Fatalf("got %#v", err)
