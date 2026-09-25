@@ -6,7 +6,7 @@ Each task is test first: the failing test, then the change, then `mise run check
 
 ## Phase 1: Foundational
 
-- [x] T001 `draft`: `EarlierFinding`, `FiledIn`, `Assessment`, `Draft.Assessments` (omitted when empty), load validation, and `SetAssessments`.
+- [x] T001 `draft`: `EarlierFinding`, `FiledIn`, `Assessment`, `Draft.Assessments` (omitted when empty), load validation, and `Assess`.
 - [x] T002 `render`: record version 2 written only with assessments; `ReadRecord` reads both versions; the stand-in names the open and addressed counts.
 - [x] T003 `publish`: `Envelope.Assessments` from the draft into the record; `Previous` gains `commit` and `assessments`; `ReadPrevious` reads both; `Earlier` builds the list.
 

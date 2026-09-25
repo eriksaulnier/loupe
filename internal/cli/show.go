@@ -60,7 +60,8 @@ Result (--previous --json):
    "earlier": [{"ref": "e-1", "id": "f-001", "title": "...", "body": "...", "location": null,
                 "label": "issue", "blocking": true,
                 "filedIn": {"round": 1, "reviewUrl": "https://...", "commit": "..."}}]}
-  commit is absent when a sticky review's round could not be read back.
+  commit is absent when a sticky review's round could not be read back, or when the run was
+  captured by a loupe older than earlier.
 
 --comments shows instead the feedback capture read from everyone else on the pull request:
 submitted reviews, inline review threads and top-level comments. It leaves out loupe's own
