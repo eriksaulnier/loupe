@@ -456,3 +456,24 @@ func TestStickyV0110BodyKeepsFooterShapedProse(t *testing.T) {
 		t.Fatalf("demoted round:\n%s", earlier[0])
 	}
 }
+
+// A body in the format before 025 keeps its footer at the tail and in its collapsed rounds, like a new-layout body
+// with a footer added on GitHub. When its round's prose also ends in a footer-shaped line it is refused with sticky,
+// which the format allows, since only pre-release probe reviews carry that format.
+func TestStickyPre025BodyWithFooterShapedProseIsRefused(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-before-025-format.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, rest, _ := strings.Cut(string(data), "\n\n---\n\n<!-- loupe-earlier -->")
+	if rest == "" || !strings.Contains(rest, " questions=1 ") {
+		t.Fatalf("the fixture changed:\n%s", data)
+	}
+	body := "Prose.\n\n---\n\nreviewed `abcdef`\n\n---\n\n<!-- loupe-earlier -->" + strings.Replace(rest, " questions=1 ", " questions=0 ", 1)
+	if _, _, err := ReadSticky(body); err == nil {
+		t.Fatalf("ReadSticky accepted:\n%s", body)
+	}
+	if _, _, err := ReadSticky(string(data)); err != nil {
+		t.Fatalf("the fixture itself no longer reads back: %v", err)
+	}
+}
