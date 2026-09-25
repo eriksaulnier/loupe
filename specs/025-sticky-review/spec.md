@@ -32,6 +32,10 @@ This specification amends `docs/comment-format.md`, which is a contract (constit
 - Q: When the earlier rounds push a sticky body past GitHub's 65,536-character limit, what does loupe do? → A: Drop the oldest collapsed rounds until the body fits, and say under `### Earlier rounds` how many of the oldest rounds were dropped. `sticky=K` keeps counting every round published into the review.
 - Q: The constitution's preamble says loupe posts exactly one GitHub review per publication, and a sticky follow-up posts none and edits one. Does this need an amendment? → A: Yes. Constitution 3.0.0 (2026-09-24, owner-approved) says a publication creates or edits exactly one review. Principle II lets the one request replace the body of a review published earlier under the same identity, requires the confirmation to show the whole replacement body, and limits an unattended edit to a review a GitHub App published.
 
+### Amendment 2026-09-25
+
+- Owner: each round keeps its footer. The newest round's footer sits directly under it, and a demoted round carries its footer into its collapse unchanged, so the history shows when the source or model changed between rounds. This reverses the earlier decision of the same day to drop the footer (FR-009, FR-010).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A pipeline keeps one review current (Priority: P1)
@@ -134,8 +138,8 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 
 #### The body
 
-- **FR-009**: The new round's part of a sticky body MUST be composed exactly as a non-sticky body with `--inline none` is: chips, opening prose, `Must fix`, `Worth a look`. The footer and both markers MUST end the body as today.
-- **FR-010**: When the edited review holds earlier rounds, the body MUST carry, between the new round's part and the footer's divider, a `### Earlier rounds` section holding one `<details>` per earlier round, newest first. Each `<summary>` MUST read `Round N · reviewed <code>SHA</code> · CHIPS`, where `N` is the round's place in the sticky review (1 for the first sticky round), `SHA` is its footer commit, and `CHIPS` is its chips row as text joined by ` · `, or `no findings`. Each section MUST hold that round's part without its chips row, then its reconciliation marker, as they read in the edited body. The footer line is not kept (owner, 2026-09-25, after reading the live render). A body published before this format MUST still read back, with its collapsed rounds renumbered by place.
+- **FR-009**: The new round's part of a sticky body MUST be composed exactly as a non-sticky body with `--inline none` is: chips, opening prose, `Must fix`, `Worth a look`. Its divider and footer MUST follow it as on a non-sticky body. The reconciliation marker, findings record and `loupe-meta` MUST end the body.
+- **FR-010**: When the edited review holds earlier rounds, the body MUST carry, after the new round's footer and a divider, a `### Earlier rounds` section holding one `<details>` per earlier round, newest first. Each `<summary>` MUST read `Round N · reviewed <code>SHA</code> · CHIPS`, where `N` is the round's place in the sticky review (1 for the first sticky round), `SHA` is its footer commit, and `CHIPS` is its chips row as text joined by ` · `, or `no findings`. Each section MUST hold that round's part without its chips row, then a divider and its footer line unchanged, then its reconciliation marker, as they read in the edited body. A body in the v0.11.0 layout, whose footer follows the earlier rounds and whose collapsed rounds have no footer, MUST read back, and the next round MUST write this layout. Its collapsed rounds stay as they are. A body published before this format MUST still read back, with its collapsed rounds renumbered by place, except that one whose shown round has no findings and ends its prose in a divider and a footer-shaped line MAY be refused with `sticky` (2026-09-25: only pre-release probe reviews carry that format).
 - **FR-025**: `loupe publish --unattended --sticky` on a run whose capture recorded no source MUST be refused with `usage`, fix `loupe capture <url> --source <name>`, after replay and reconciliation (FR-005) and before the sticky review is looked up.
 - **FR-026**: A definite 403 or 404 on an unattended edit MUST refuse with `github` and a fix that names `--source` and publishing without `--sticky`, since only the review's author can edit it.
 - **FR-028**: Each unattended pipeline on a repository MUST use its own `--source` name (owner, 2026-09-25). Two Apps that share one make a round pick the other App's review, which GitHub refuses. Two jobs of one App that share one edit one review in turn and mix two reviewers' rounds without a word. People are matched by login, so the rule does not apply to them.
@@ -169,7 +173,7 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 
 - **Sticky review**: a submitted loupe review whose `loupe-meta` carries `sticky=K`. It holds the newest round on top and up to `K − 1` earlier rounds collapsed below.
 - **Round part**: the chips row, opening prose and sections one round composed, without footer or markers.
-- **Earlier round**: a round part without its chips row, plus its reconciliation marker, wrapped in one `<details>` under `### Earlier rounds` whose `<summary>` carries the round's place, commit and chips.
+- **Earlier round**: a round part without its chips row, then a divider and the round's footer line unchanged, then its reconciliation marker, wrapped in one `<details>` under `### Earlier rounds` whose `<summary>` carries the round's place, commit and chips. A round the v0.11.0 layout collapsed has no footer and is carried as it is.
 - **Receipt**: gains the edited review's id and whether this round edited it.
 
 ## Success Criteria *(mandatory)*
@@ -186,7 +190,7 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 
 - The earlier rounds are read back from the review on GitHub, not from local receipts, because an unattended pipeline starts from a fresh data root and has no local history.
 - A sticky round edits only a sticky review. Mixing sticky and non-sticky rounds on one pull request leaves the non-sticky reviews in the timeline, which is accepted.
-- The review stays pinned to the first round's commit, because an edit cannot change `commit_id`. The footer names the newest round's commit.
+- The review stays pinned to the first round's commit, because an edit cannot change `commit_id`. The footer under the newest round names its commit.
 - A demoted round nests its findings' `<details>` one level deeper than the allowlist's bound assumes. GitHub was observed to render 17 levels on 2026-09-25 (`docs/github-facts.md`).
 - The drop-oldest bound stays at 65,536 characters. GitHub's 422 names that number, but an edit was observed to accept up to 262,144 UTF-8 bytes. A character takes at most 4 bytes, so a body within the bound can never be refused for length, and a looser bound would need a byte count loupe does not keep. Raising it is the owner's call.
 - The downstream pipeline's follow-up review posts no inline comments today, so body-only matches what it has.
