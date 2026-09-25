@@ -37,6 +37,8 @@ type Options struct {
 	RetryUnknown bool
 	// Sticky edits the publisher's sticky review on the pull request instead of creating a review, or creates it.
 	Sticky bool
+	// Note is shown on an unattended sticky round while it is the newest. See BuildInput.Note.
+	Note string
 	// Confirm shows the preview and reports what the human answered: whether they pressed y, and the opening prose
 	// they typed. It runs with no lock held.
 	Confirm func(Preview) (Confirmation, error)
@@ -89,6 +91,11 @@ func Run(ctx context.Context, opts Options) (receipt Receipt, replayed bool, err
 		return Receipt{}, false, refusal.New(refusal.Usage,
 			fmt.Sprintf("--sticky publishes as comment with no inline comments, not --action %s --inline %s", opts.Action, opts.Inline),
 			"--sticky --action comment --inline none")
+	}
+	// A note is words no human confirmed, so only a pipeline may set one, and only on a round that a later round
+	// collapses.
+	if strings.TrimSpace(opts.Note) != "" && (!opts.Unattended || !opts.Sticky) {
+		return Receipt{}, false, refusal.New(refusal.Usage, "--note needs --unattended --sticky", "--unattended --sticky --note <markdown>")
 	}
 	receipt, replay, retryID, err := firstCheck(ctx, opts)
 	if err != nil || replay {
@@ -164,7 +171,7 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	publicationID := newPublicationID()
 	compose := func(message string) (Envelope, string, error) {
 		env, err := Build(BuildInput{Target: opts.Target, Round: round, Draft: d, Viewer: viewer, Action: opts.Action,
-			Inline: opts.Inline, Unattended: opts.Unattended, PublicationID: publicationID, Message: message, Sticky: sticky})
+			Inline: opts.Inline, Unattended: opts.Unattended, PublicationID: publicationID, Message: message, Sticky: sticky, Note: opts.Note})
 		if err != nil {
 			return Envelope{}, "", err
 		}

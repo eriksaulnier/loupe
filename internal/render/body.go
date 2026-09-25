@@ -145,6 +145,9 @@ func Body(in Input) string {
 	if in.Sticky != nil {
 		sticky = fmt.Sprintf(" sticky=%d", in.Sticky.Rounds)
 	}
+	if in.Sticky != nil && in.Sticky.Note != "" {
+		footer += "\n\n" + noteStart + "\n\n" + strings.Trim(in.Sticky.Note, "\n") + "\n\n" + noteEnd
+	}
 	// Each round's footer sits under the round, so the earlier rounds follow the newest one's footer, and a round
 	// demoted later carries its footer into its collapse.
 	blocks = append(blocks, footer)

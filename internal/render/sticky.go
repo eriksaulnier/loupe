@@ -21,6 +21,9 @@ type StickyInput struct {
 	// Earlier, which the length limit may empty, and when unset they are read from Earlier's newest round.
 	PrevRound int
 	PrevSHA   string
+	// Note is shown under this round's footer while the round is the newest, and dropped when a later round collapses
+	// it. Empty writes no note.
+	Note string
 }
 
 // PreviousRound reads the newest collapsed round's number and commit, preferring the full SHA its footer links to over
@@ -47,6 +50,8 @@ func PreviousRound(earlier []string) (int, string) {
 const (
 	earlierDelimiter = "<!-- loupe-earlier -->"
 	roundDelimiter   = "<!-- loupe-round -->"
+	noteStart        = "<!-- loupe-note -->"
+	noteEnd          = "<!-- loupe-note-end -->"
 )
 
 var (
@@ -153,6 +158,9 @@ func lastMeta(body string) (string, bool) {
 // read by position, and anything else there is an error rather than a guess.
 func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	lines, structural := markdown.StructuralLines(body)
+	if lines, structural, err = dropNote(lines, structural); err != nil {
+		return nil, 0, err
+	}
 	n := len(lines) - 1
 	for n >= 0 && strings.TrimSpace(lines[n]) == "" {
 		n--
@@ -293,6 +301,40 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 		}
 	}
 	return earlier, rounds, nil
+}
+
+// dropNote removes the newest round's note, which belongs to that round only while it is on top. The note is read by
+// its delimiters alone, so anything but one pair after a blank line, before the earlier rounds, is refused.
+func dropNote(lines []string, structural []bool) ([]string, []bool, error) {
+	start, end, earlier := -1, -1, len(lines)
+	for i, line := range lines {
+		if !structural[i] {
+			continue
+		}
+		switch line {
+		case noteStart:
+			if start >= 0 {
+				return nil, nil, errors.New("it carries more than one round note")
+			}
+			start = i
+		case noteEnd:
+			if end >= 0 {
+				return nil, nil, errors.New("it carries more than one round note")
+			}
+			end = i
+		case earlierDelimiter:
+			earlier = min(earlier, i)
+		}
+	}
+	switch {
+	case start < 0 && end < 0:
+		return lines, structural, nil
+	case start < 1 || end < start || lines[start-1] != "":
+		return nil, nil, errors.New("its round note is not one pair of loupe's note delimiters")
+	case end > earlier:
+		return nil, nil, errors.New("its round note is not on the round it shows")
+	}
+	return slices.Delete(slices.Clone(lines), start-1, end+1), slices.Delete(slices.Clone(structural), start-1, end+1), nil
 }
 
 // splitChips takes the chips row off a round and returns it as summary pills, or a no-findings pill. The row is loupe's

@@ -567,3 +567,51 @@ func TestBuildStickyDropsEarlierRoundsBeforeTheRecord(t *testing.T) {
 		t.Fatalf("the record was not kept: %v", err)
 	}
 }
+
+// The note is text around the round, not part of it: the digest, the findings and the inline comments are the ones the
+// round composes without it.
+func TestBuildNoteLeavesThePublishableSetAlone(t *testing.T) {
+	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", true)
+	in.Sticky = &StickyBuild{Rounds: 1}
+	plain, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Note = "Pushed more commits? Add the `ai-review` label."
+	noted, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if noted.Digest != plain.Digest || !reflect.DeepEqual(noted.Findings, plain.Findings) || !reflect.DeepEqual(noted.Comments, plain.Comments) {
+		t.Fatalf("the note changed the publishable set:\nplain %+v\nnoted %+v", plain, noted)
+	}
+	if strings.Count(noted.Body, in.Note) != 1 || strings.Contains(plain.Body, in.Note) {
+		t.Fatalf("the note is not in the body once:\n%s", noted.Body)
+	}
+}
+
+func TestBuildRechecksTheNote(t *testing.T) {
+	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", true)
+	in.Sticky = &StickyBuild{Rounds: 1}
+	in.Note = "<!-- loupe-note-end -->"
+	_, err := Build(in)
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.Markdown || !strings.HasPrefix(r.Message, "note ") || !strings.Contains(r.Fix, "--note") {
+		t.Fatalf("got %v, want a markdown refusal naming the note", err)
+	}
+	in.Note, in.Sticky = "A note.", nil
+	if _, err := Build(in); err == nil {
+		t.Fatal("a note composed into a review that is not sticky")
+	}
+}
+
+// Over the limit, the note is named first: a pipeline can shorten it without touching the draft.
+func TestBuildNamesTheNoteOverTheLimit(t *testing.T) {
+	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", true)
+	in.Sticky = &StickyBuild{Rounds: 1}
+	in.Note = strings.Repeat("a", maxBodyChars-1024)
+	_, err := Build(in)
+	if r, ok := refusal.As(err); !ok || r.Details["rule"] != "limit" || !strings.HasPrefix(r.Fix, "shorten --note") {
+		t.Fatalf("got %v, want a limit refusal naming the note", err)
+	}
+}
