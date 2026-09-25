@@ -10,24 +10,28 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
-// findSticky is the newest sticky loupe review by the publisher: the viewer's own, or when viewer is empty, a [bot]'s
-// from the same source. An installation token cannot read its own login, so the source capture recorded is what tells
-// one App's review from another's, which GitHub would refuse to let this one edit. Its version is left out, so a
-// release keeps editing the same review.
+// findSticky is the publisher's newest loupe review when that review is sticky: the viewer's own, or when viewer is
+// empty, a [bot]'s from the same source. An installation token cannot read its own login, so the source capture
+// recorded is what tells one App's review from another's, which GitHub would refuse to let this one edit. Its version
+// is left out, so a release keeps editing the same review. A plain loupe review from the same publisher ends the
+// series, so publishing once without --sticky is how a sticky review loupe cannot read back is left behind.
 func findSticky(reviews []github.Review, viewer, source string) (github.Review, bool) {
-	var found github.Review
+	var newest github.Review
 	for _, r := range reviews {
-		if _, sticky := render.StickyRounds(r.Body); r.State == "PENDING" || !authorMatches(r.User, Envelope{Viewer: viewer}) || !sticky {
+		if r.State == "PENDING" || !authorMatches(r.User, Envelope{Viewer: viewer}) || !render.IsLoupe(r.Body) {
 			continue
 		}
 		if viewer == "" && sourceName(render.MetaSource(r.Body)) != sourceName(source) {
 			continue
 		}
-		if r.ID > found.ID {
-			found = r
+		if r.ID > newest.ID {
+			newest = r
 		}
 	}
-	return found, found.ID != 0
+	if _, sticky := render.StickyRounds(newest.Body); newest.ID == 0 || !sticky {
+		return github.Review{}, false
+	}
+	return newest, true
 }
 
 func sourceName(source string) string {
@@ -46,7 +50,7 @@ func stickyInput(reviews []github.Review, viewer, source string) (*StickyBuild, 
 	if err != nil {
 		return nil, refusal.New(refusal.Sticky,
 			"the sticky review to edit, "+review.HTMLURL+", cannot be read back: "+err.Error(),
-			"loupe publish without --sticky to post a new review")
+			"loupe publish without --sticky once; that ends the series, and the next sticky round starts a new review")
 	}
 	return &StickyBuild{Review: review, Rounds: rounds + 1, Earlier: earlier}, nil
 }

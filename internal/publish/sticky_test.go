@@ -20,6 +20,15 @@ func stickyMeta(rounds int) string {
 	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 inline=none sticky=" + string(rune('0'+rounds)) + " -->\n"
 }
 
+// plainMeta is an ordinary loupe review's tail, from src when it is not empty.
+func plainMeta(src string) string {
+	meta := "v=1 round=1"
+	if src != "" {
+		meta += " unattended=1 src=" + src
+	}
+	return "reviewed `x`\n\n" + render.MetaPrefix + meta + " inline=none -->\n"
+}
+
 func sourcedMeta(src string) string {
 	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 unattended=1 src=" + src + " inline=none sticky=1 -->\n"
 }
@@ -58,11 +67,28 @@ func TestFindSticky(t *testing.T) {
 		{ID: 3, User: "reviewer", State: "COMMENTED", Body: stickyMeta(1)},
 		{ID: 9, User: "someone", State: "COMMENTED", Body: stickyMeta(1)},
 		{ID: 8, User: "reviewer", State: "PENDING", Body: stickyMeta(1)},
-		{ID: 7, User: "reviewer", State: "COMMENTED", Body: "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 -->\n"},
+		{ID: 2, User: "reviewer", State: "COMMENTED", Body: plainMeta("")},
+		{ID: 6, User: "reviewer", State: "COMMENTED", Body: "A review of their own, not loupe's."},
 		{ID: 10, User: "app[bot]", State: "COMMENTED", Body: stickyMeta(1)},
 	}
 	if got, ok := findSticky(reviews, "reviewer", ""); !ok || got.ID != 5 {
 		t.Fatalf("attended: got %d %v, want 5", got.ID, ok)
+	}
+	// A plain loupe review after the sticky one ends the series, so the next sticky round starts a new review.
+	ended := append(reviews, github.Review{ID: 7, User: "reviewer", State: "COMMENTED", Body: plainMeta("")})
+	if got, ok := findSticky(ended, "reviewer", ""); ok {
+		t.Fatalf("attended: a plain review after the sticky one still found %d", got.ID)
+	}
+	bots := []github.Review{
+		{ID: 1, User: "loupe-ci[bot]", State: "COMMENTED", Body: sourcedMeta("loupe-ci@1.0.0")},
+		{ID: 2, User: "other[bot]", State: "COMMENTED", Body: plainMeta("other-review")},
+		{ID: 3, User: "loupe-ci[bot]", State: "COMMENTED", Body: plainMeta("loupe-ci@1.1.0")},
+	}
+	if got, ok := findSticky(bots[:2], "", "loupe-ci"); !ok || got.ID != 1 {
+		t.Fatalf("unattended: another source's plain review must not end this series, got %d %v", got.ID, ok)
+	}
+	if got, ok := findSticky(bots, "", "loupe-ci"); ok {
+		t.Fatalf("unattended: a plain review from the same source still found %d", got.ID)
 	}
 	if _, ok := findSticky(reviews, "", "loupe-ci"); ok {
 		t.Fatal("unattended: found a review from no source for source loupe-ci")

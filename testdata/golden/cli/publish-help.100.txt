@@ -66,19 +66,22 @@ pull request's own bot reviews, and marked unattended in its footer and loupe-me
 
 --sticky keeps one review per pull request current, with or without --unattended. The first
 sticky round posts a review. Each later round replaces that review's body: the new round on top,
-and every earlier round collapsed below it, newest first. The review edited is your newest sticky
-loupe review on the pull request, or unattended, the newest one a [bot] posted from the same
-loupe capture --source, version aside; unattended --sticky refuses a run captured without one, and
-an unattended edit GitHub refuses as not its own names --source as the fix. An edit sends no
-notification, and the review keeps the first round's commit. The confirmation shows the whole new
-body, earlier rounds included, and names the review it edits. If that review changes on GitHub
-before y, nothing is sent and publish refuses with changed. When the earlier rounds would take the
-body past GitHub's length limit, the oldest are dropped and the body says how many. --action
-defaults to comment, --inline stays at its default none, and any other value of either refuses
-with usage: an edit cannot change a review's state, and an inline comment stays on the review that
-created it. A sticky review loupe cannot read back, such as one reworded on GitHub, refuses with
-sticky; publish without --sticky to post a new review. loupe review's own publish step never
-edits a review.
+and every earlier round collapsed below it, newest first. The review edited is your newest loupe
+review on the pull request when it is sticky, or unattended, the newest one a [bot] posted from
+the same loupe capture --source, version aside. A plain loupe review you post after a sticky one
+ends that series, and the next sticky round starts a new review. Each unattended pipeline on a
+repository MUST use its own --source name: two sharing one pick or mix each other's reviews.
+Unattended --sticky refuses a run captured without one, and an unattended edit GitHub refuses as
+not its own names --source as the fix. An edit sends no notification, and the review keeps the
+first round's commit. The confirmation shows the whole new body, earlier rounds included, and
+names the review it edits. If that review changes on GitHub before y, nothing is sent and publish
+refuses with changed. When the earlier rounds would take the body past GitHub's length limit, the
+oldest are dropped and the body says how many. --action defaults to comment, --inline stays at its
+default none, and any other value of either refuses with usage: an edit cannot change a review's
+state, and an inline comment stays on the review that created it. A sticky review loupe cannot
+read back, such as one reworded on GitHub, refuses with sticky; publish once without --sticky,
+which ends the series, and the next sticky round starts a new review. loupe review's own publish
+step never edits a review.
 
 Result (--json)  alone on stdout while the confirmation draws on stderr
   {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1",

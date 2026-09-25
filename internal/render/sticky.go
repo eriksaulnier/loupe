@@ -87,13 +87,33 @@ func stickyMeta(body string) (string, bool) {
 	return "", false
 }
 
-// MetaSource is the src= value on the marker line StickyRounds reads, empty when there is none.
+// MetaSource is the src= value on the marker line StickyRounds reads, or on a plain review's last marker line, empty
+// when there is none.
 func MetaSource(body string) string {
-	line, _ := stickyMeta(body)
+	line, ok := stickyMeta(body)
+	if !ok {
+		line, _ = lastMeta(body)
+	}
 	if m := srcKey.FindStringSubmatch(line); m != nil {
 		return m[1]
 	}
 	return ""
+}
+
+// IsLoupe reports whether body carries a loupe-meta line outside a fence, which is how loupe knows its own reviews.
+func IsLoupe(body string) bool {
+	_, ok := lastMeta(body)
+	return ok
+}
+
+func lastMeta(body string) (string, bool) {
+	lines, structural := markdown.StructuralLines(body)
+	for i := len(lines) - 1; i >= 0; i-- {
+		if structural[i] && strings.HasPrefix(lines[i], MetaPrefix) {
+			return lines[i], true
+		}
+	}
+	return "", false
 }
 
 // ReadSticky reads a sticky body back into the collapsed rounds the next body holds, newest first: the round the body

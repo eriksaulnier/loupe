@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -183,4 +184,46 @@ func TestStickyNeverEditsAnOrdinaryReview(t *testing.T) {
 	}
 	holdsOnly(t, "alice's ordinary", by["alice"][0], []string{"Plain review."}, []string{"sticky=", "Sticky"})
 	holdsOnly(t, "alice's sticky", by["alice"][1], []string{"Sticky one.", "Sticky two.", " sticky=2 -->"}, []string{"Plain review."})
+}
+
+// A sticky review loupe cannot read back is refused, and the refusal's advice works: one plain publish ends the series,
+// so the next sticky round starts a new review instead of refusing again on every run.
+func TestStickyUnreadableReviewIsLeftBehindByAPlainPublish(t *testing.T) {
+	h := newHarness(t)
+	alice := human(t, "alice")
+	first := h.publishAs(alice, "Sticky one.", "--sticky")
+	id, err := first["reviewId"].(json.Number).Int64()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reviews, err := h.GH.Client(t).ListReviews(context.Background(), owner, repo, number)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.GH.EditReview(owner, repo, number, id, reviews[0].Body+"\nA note added on GitHub.\n")
+
+	alice.round++
+	h.captureRound(alice.round)
+	ref := roundRef(alice.round)
+	h.mustOK("add", "--run", ref, "--from", h.WriteFile("finding.json", oneFinding))
+	h.IsTerminal = true
+	h.Stdin = "a\nq\n"
+	if _, stderr, exit := h.Run("review", ref, "--plain"); exit != 0 {
+		t.Fatalf("review exit %d stderr %q", exit, stderr)
+	}
+	refused := h.mustRefuse("sticky", "publish", ref, "--sticky", "--plain")
+	if fix, _ := refused["fix"].(string); !strings.Contains(fix, "without --sticky") {
+		t.Fatalf("fix %q", fix)
+	}
+	h.Stdin = confirmPublish("Plain review.", "y")
+	h.mustOK("publish", ref, "--action", "comment", "--plain")
+	h.IsTerminal = false
+
+	h.publishAs(alice, "Sticky again.", "--sticky")
+	by := h.reviewsBy()
+	if len(by["alice"]) != 3 || h.GH.CreateCount() != 3 || h.GH.UpdateCount() != 0 {
+		t.Fatalf("reviews %d creates %d updates %d, want 3, 3 and 0", len(by["alice"]), h.GH.CreateCount(), h.GH.UpdateCount())
+	}
+	holdsOnly(t, "alice's unreadable", by["alice"][0], []string{"A note added on GitHub."}, []string{"Sticky again."})
+	holdsOnly(t, "alice's new sticky", by["alice"][2], []string{"Sticky again.", " sticky=1 -->"}, []string{"Sticky one.", "Plain review."})
 }

@@ -113,3 +113,8 @@ MVP is Phase 1 plus US1: what the downstream pipeline needs. US2 makes the human
 - [X] T029 Match an unattended round's review by its `src=` name as well as `[bot]` (FR-006), refuse `--unattended --sticky` with no source (FR-025), and name `--source` in the fix for a 403 or 404 on an edit (FR-026). Tests in `internal/publish/sticky_test.go`.
 - [X] T030 Add `internal/integration/multi_test.go`: two people, a person and the pipeline, two Apps (including the unsourced refusal and the documented `round=`), and ordinary reviews never edited. `fakegh` gains `AllowUser`.
 - [X] T031 Document the cases, numbering, `--previous` and FR-027 in the spec, plan, `contracts/cli.md`, `docs/comment-format.md` and `publish --help`.
+
+## Phase 8: Before merge (owner, 2026-09-25)
+
+- [X] T032 End a sticky series at the publisher's newest plain loupe review in `findSticky`, so the `sticky` refusal's fix (publish once without `--sticky`) clears the condition. Update FR-006, FR-011, the edge case, `contracts/cli.md`, `docs/comment-format.md` and `--help`. Test in `internal/publish/sticky_test.go` and `internal/integration/multi_test.go`.
+- [X] T033 State FR-028 (each unattended pipeline MUST use its own `--source` name) in the spec, `contracts/cli.md`, `docs/comment-format.md` and `--help`.
