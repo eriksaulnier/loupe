@@ -715,6 +715,32 @@ func TestReadStickyCarriesAnOlderRoundThatOpensOnAQuote(t *testing.T) {
 	}
 }
 
+// A round with no prose and no findings is quoted down to its footer, so that footer is the only line that can lose
+// its marker, and the round is still carried.
+func TestReadStickyCarriesAnEmptyQuotedRoundThatLostItsMarker(t *testing.T) {
+	in := stickyInput(1, "aaaaaaa111")
+	in.Sticky = &StickyInput{Rounds: 1}
+	earlier, rounds, err := ReadSticky(Body(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := stickyInput(2, "bbbbbbb222")
+	next.Summary = "Round two."
+	next.Sticky = &StickyInput{Rounds: rounds + 1, Earlier: earlier}
+	body := Body(next)
+	quoted := "\n\n> reviewed [`aaaaaaa`]"
+	if strings.Count(body, quoted) != 1 {
+		t.Fatalf("the empty round is not one quoted footer:\n%s", body)
+	}
+	carried, _, err := ReadSticky(strings.Replace(body, quoted, "\n\nreviewed [`aaaaaaa`]", 1))
+	if err != nil {
+		t.Fatalf("ReadSticky: %v", err)
+	}
+	if !strings.Contains(carried[1], "</summary>\n\nreviewed [`aaaaaaa`]") {
+		t.Fatalf("the round was not carried as it was:\n%s", carried[1])
+	}
+}
+
 // A round collapsed in the v0.11.0 layout carries no footer, so its prose MAY end in lines shaped like a quoted footer.
 // It is carried as it is, since nothing but a hidden marker could tell it from a quoted round.
 func TestReadStickyCarriesLegacyProseShapedLikeAQuotedFooter(t *testing.T) {

@@ -401,25 +401,22 @@ func endsWithFooter(lines []string) bool {
 	return n >= 3 && footerLine.MatchString(lines[n-1]) && lines[n-2] == "" && lines[n-3] == "---"
 }
 
-// keepsFooter reports whether a collapsed round ends with its footer, then its reconciliation marker: quoted, or
-// unquoted with a divider between the two. A round demoted before that divider existed ends with its footer straight
-// above the marker. A quoted footer that lost its marker on GitHub is still the footer, so it is kept, not refused.
+// keepsFooter reports whether a collapsed round's last line, past the divider that closes an unquoted one, is its
+// footer, with or without a quote marker. A marker lost on GitHub leaves the footer in place, so it is kept, not refused.
 func keepsFooter(block string) bool {
 	lines, ok := roundContent(block)
 	if !ok {
 		return false
 	}
-	m := len(lines)
-	if last, quoted := strings.CutPrefix(lines[m-1], "> "); quoted {
-		return footerLine.MatchString(last)
-	}
-	if m >= 2 && strings.HasPrefix(lines[m-2], ">") && footerLine.MatchString(lines[m-1]) {
-		return true
-	}
-	if m >= 2 && lines[m-1] == "---" && lines[m-2] == "" {
+	lines = trimBlank(lines)
+	if m := len(lines); m >= 2 && lines[m-1] == "---" && lines[m-2] == "" {
 		lines = lines[:m-2]
 	}
-	return endsWithFooter(lines)
+	if len(lines) == 0 {
+		return false
+	}
+	last := strings.TrimPrefix(strings.TrimPrefix(lines[len(lines)-1], ">"), " ")
+	return footerLine.MatchString(last)
 }
 
 // roundContent is what a collapsed round holds between its summary line and its reconciliation marker, or false when
