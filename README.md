@@ -63,7 +63,7 @@ codex plugin marketplace add eriksaulnier/loupe
 codex plugin add loupe@loupe
 
 # Pi, pinned to the release. Use the version loupe --version prints.
-pi install git:github.com/eriksaulnier/loupe@v0.10.0 # x-release-please-version
+pi install git:github.com/eriksaulnier/loupe@v0.11.0 # x-release-please-version
 ```
 
 > [!IMPORTANT]
