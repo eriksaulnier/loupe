@@ -175,3 +175,24 @@ func TestStructuralLines(t *testing.T) {
 		})
 	}
 }
+
+func TestOneDisclosure(t *testing.T) {
+	cases := []struct {
+		name, in string
+		ok       bool
+	}{
+		{"nested pairs", "<details>\n<summary><b>x</b></summary>\n\n<details>\n<summary>y</summary>\n\n</details>\n\n</details>", true},
+		{"tags inside a fence are text", "<details>\n<summary>x</summary>\n\n```\n</details>\n```\n\n</details>", true},
+		{"close before open", "</details>\n\n<details>", false},
+		{"left open", "<details>\n<summary>x</summary>\n\ntext", false},
+		{"open fence", "<details>\n<summary>x</summary>\n\n```\n</details>", false},
+		{"closed early, then another", "<details>\n<summary>x</summary>\n\n</details>\n\ntext\n\n<details>\n<summary>y</summary>\n\n</details>", false},
+		{"text after the close", "<details>\n<summary>x</summary>\n\n</details>\n\ntext", false},
+		{"text before the open", "text\n\n<details>\n<summary>x</summary>\n\n</details>", false},
+	}
+	for _, c := range cases {
+		if err := OneDisclosure(c.in); (err == nil) != c.ok {
+			t.Errorf("%s: OneDisclosure = %v, want ok %v", c.name, err, c.ok)
+		}
+	}
+}

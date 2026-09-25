@@ -204,7 +204,15 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	for i, block := range blocks {
 		blocks[i] = roundNumber.ReplaceAllString(block, fmt.Sprintf("<details>\n<summary>Round %d · ", rounds-1-i))
 	}
-	return append([]string{demoted}, blocks...), rounds, nil
+	earlier = append([]string{demoted}, blocks...)
+	// Every round carried into the next body passes here, so a hand edit that unbalances one is refused rather than
+	// republished with text outside its collapse.
+	for _, block := range earlier {
+		if err := markdown.OneDisclosure(block); err != nil {
+			return nil, 0, fmt.Errorf("a collapsed round is not one balanced disclosure: %w", err)
+		}
+	}
+	return earlier, rounds, nil
 }
 
 // splitChips takes the chips row off a round and returns it as summary text, or "no findings". The row is loupe's

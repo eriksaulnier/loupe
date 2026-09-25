@@ -3,6 +3,7 @@
 package markdown
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -376,7 +377,7 @@ func MapSummaryLines(text string, fn func(string) string) string {
 // mapTagLines applies fn to every structural line outside a fence.
 func mapTagLines(text string, fn func(line, trimmed string) string) string {
 	lines := splitLines(text)
-	walkStructural(lines, func(i int, trimmed string) { lines[i] = fn(lines[i], trimmed) })
+	_ = walkStructural(lines, func(i int, trimmed string) { lines[i] = fn(lines[i], trimmed) })
 	return strings.Join(lines, "\n")
 }
 
@@ -386,7 +387,7 @@ func mapTagLines(text string, fn func(line, trimmed string) string) string {
 func StructuralLines(text string) (lines []string, structural []bool) {
 	lines = splitLines(text)
 	structural = make([]bool, len(lines))
-	walkStructural(lines, func(i int, _ string) { structural[i] = true })
+	_ = walkStructural(lines, func(i int, _ string) { structural[i] = true })
 	return lines, structural
 }
 
@@ -395,8 +396,40 @@ func splitLines(text string) []string {
 	return strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n")
 }
 
-// walkStructural calls fn for every structural line outside a fence.
-func walkStructural(lines []string, fn func(i int, trimmed string)) {
+// OneDisclosure reports why text is not exactly one disclosure: it MUST open on a <details> tag line, stay open until
+// its last line outside a fence, close there, with every <details> inside pairing up and nesting, and leave no fence
+// open. Lines are read as Check reads them. It checks generated text, which may carry tags Check refuses, such as a
+// summary's <b>.
+func OneDisclosure(text string) error {
+	depth, seen, closed := 0, false, false
+	var err error
+	open := walkStructural(splitLines(text), func(i int, trimmed string) {
+		switch {
+		case err != nil:
+		case closed:
+			err = fmt.Errorf("line %d follows the disclosure's close", i+1)
+		case !seen && trimmed != "<details>" && trimmed != "<details open>":
+			err = fmt.Errorf("line %d comes before the disclosure opens", i+1)
+		case trimmed == "<details>" || trimmed == "<details open>":
+			depth, seen = depth+1, true
+		case trimmed == "</details>":
+			depth--
+			closed = depth == 0
+		}
+	})
+	switch {
+	case err != nil:
+		return err
+	case open:
+		return errors.New("a fence is left open")
+	case !closed:
+		return fmt.Errorf("%d <details> left open", depth)
+	}
+	return nil
+}
+
+// walkStructural calls fn for every structural line outside a fence, and reports whether a fence is left open.
+func walkStructural(lines []string, fn func(i int, trimmed string)) bool {
 	var fenceChar byte
 	var fenceLen int
 	inHTMLBlock := false
@@ -423,4 +456,5 @@ func walkStructural(lines []string, fn func(i int, trimmed string)) {
 		}
 		fn(i, trimmed)
 	}
+	return fenceChar != 0
 }
