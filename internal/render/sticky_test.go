@@ -235,11 +235,13 @@ func TestReadStickyRefusesAnUnreadableBody(t *testing.T) {
 		"no divider":      strings.Replace(first, "\n\n---\n\nreviewed", "\n\nreviewed", 1),
 		"text after meta": first + "\nA note added on GitHub.\n",
 		// An earlier round whose delimiter was deleted on GitHub would otherwise vanish from the next edit.
-		"round delimiter removed":   strings.Replace(second, "<!-- loupe-round -->\n\n", "", 1),
-		"text before the rounds":    strings.Replace(second, "### Earlier rounds\n\n", "### Earlier rounds\n\nA note added on GitHub.\n\n", 1),
-		"block is not a disclosure": strings.Replace(second, "<!-- loupe-round -->\n\n<details>", "<!-- loupe-round -->\n\nloose text\n\n<details>", 1),
-		"sticky count too high":     strings.Replace(second, " sticky=2 -->", " sticky=3 -->", 1),
-		"dropped count wrong":       strings.Replace(third, "The 2 oldest rounds", "The 5 oldest rounds", 1),
+		"round delimiter removed":    strings.Replace(second, "<!-- loupe-round -->\n\n", "", 1),
+		"text before the rounds":     strings.Replace(second, "### Earlier rounds\n\n", "### Earlier rounds\n\nA note added on GitHub.\n\n", 1),
+		"collapsed summary broken":   strings.Replace(second, "⛔ 1 blocking</summary>", "⛔ 1 blocking", 1),
+		"collapsed summary reworded": strings.Replace(second, "<summary>Round 1 · reviewed", "<summary>First pass · reviewed", 1),
+		"block is not a disclosure":  strings.Replace(second, "<!-- loupe-round -->\n\n<details>", "<!-- loupe-round -->\n\nloose text\n\n<details>", 1),
+		"sticky count too high":      strings.Replace(second, " sticky=2 -->", " sticky=3 -->", 1),
+		"dropped count wrong":        strings.Replace(third, "The 2 oldest rounds", "The 5 oldest rounds", 1),
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {

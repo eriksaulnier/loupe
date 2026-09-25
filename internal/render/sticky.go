@@ -28,6 +28,9 @@ const (
 var (
 	stickyKey = regexp.MustCompile(` sticky=([0-9]+) -->$`)
 	srcKey    = regexp.MustCompile(` src=(\S+)`)
+	// roundSummary is a collapsed round's summary line as loupe writes it, with its chips or no findings after the
+	// commit, or, in a body written before that format, with nothing after it.
+	roundSummary = regexp.MustCompile(`^<summary>Round [0-9]+ · reviewed <code>[0-9a-f]+</code>( · [^<]+)?</summary>$`)
 	// stickyAny finds the key anywhere on the line, so a marker edited around it is still read back and refused by
 	// stickyKey's strict form rather than skipped for a second review.
 	stickyAny   = regexp.MustCompile(` sticky=(\S*)`)
@@ -153,8 +156,10 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	// Every earlier round is either held or counted as dropped, so a round whose delimiter was edited away on GitHub
 	// is refused rather than silently left out of the next edit.
 	for _, block := range blocks {
-		if !strings.HasPrefix(block, "<details>\n<summary>Round ") || !strings.HasSuffix(block, "\n</details>") {
-			return nil, 0, errors.New("an earlier round is not one collapsed section")
+		first, rest, _ := strings.Cut(block, "\n")
+		summary, _, _ := strings.Cut(rest, "\n")
+		if first != "<details>" || !roundSummary.MatchString(summary) || !strings.HasSuffix(block, "\n</details>") {
+			return nil, 0, errors.New("an earlier round is not one collapsed section under loupe's summary line")
 		}
 	}
 	if len(blocks)+dropped != rounds-1 {
