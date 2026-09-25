@@ -7,8 +7,8 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-scratch_repo=${LOUPE_SCREENSHOT_REPO:-eriksaulnier/loupe-format-spike}
-scratch_pr=${LOUPE_SCREENSHOT_PR:-3}
+scratch_repo=${LOUPE_SCREENSHOT_REPO:-eriksaulnier/loupe-sandbox}
+scratch_pr=${LOUPE_SCREENSHOT_PR:-1}
 playwright_version=1.56.1
 
 for tool in gh jq perl pnpm node go; do
