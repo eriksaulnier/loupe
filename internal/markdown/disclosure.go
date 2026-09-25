@@ -106,8 +106,11 @@ func balanced(s string) error {
 				}
 				depth, seen = depth+1, true
 			} else {
-				if !seen {
+				switch {
+				case !seen:
 					return errors.New("a </details> comes before the disclosure opens")
+				case closed:
+					return errors.New("a </details> follows the disclosure's close")
 				}
 				depth--
 				closed = depth == 0

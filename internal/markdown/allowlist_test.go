@@ -223,6 +223,8 @@ func TestOneDisclosure(t *testing.T) {
 		// HTML also ends a comment at --!>, so the close after it renders though a later --> would pair with the <!--.
 		{"close after a comment ended by --!>", "<details>\n<summary>x</summary>\n\n<!-- a --!>\n\n</details>\n\n<!-- b -->\n\n</details>", false},
 		{"<!--!> leaves a comment open", "<details>\n<summary>x</summary>\n\n<!--!>\n\n</details>", false},
+		// The browser ends the round at the first extra close, so later tags cannot bring the count back to zero.
+		{"extra close, then reopened", "<details>\n<summary>x</summary>\n\n</details></details><details><details>\n\n</details>", false},
 		{"closed declaration", "<details>\n<summary>x</summary>\n\n<!x> and <?y>\n\n</details>", true},
 	}
 	for _, c := range cases {
