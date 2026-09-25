@@ -3,9 +3,7 @@
 package markdown
 
 import (
-	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
@@ -378,7 +376,7 @@ func MapSummaryLines(text string, fn func(string) string) string {
 // mapTagLines applies fn to every structural line outside a fence.
 func mapTagLines(text string, fn func(line, trimmed string) string) string {
 	lines := splitLines(text)
-	_ = walkStructural(lines, func(i int, trimmed, _ string, _ bool) { lines[i] = fn(lines[i], trimmed) })
+	walkStructural(lines, func(i int, trimmed string) { lines[i] = fn(lines[i], trimmed) })
 	return strings.Join(lines, "\n")
 }
 
@@ -388,7 +386,7 @@ func mapTagLines(text string, fn func(line, trimmed string) string) string {
 func StructuralLines(text string) (lines []string, structural []bool) {
 	lines = splitLines(text)
 	structural = make([]bool, len(lines))
-	_ = walkStructural(lines, func(i int, _, _ string, _ bool) { structural[i] = true })
+	walkStructural(lines, func(i int, _ string) { structural[i] = true })
 	return lines, structural
 }
 
@@ -397,80 +395,11 @@ func splitLines(text string) []string {
 	return strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n")
 }
 
-var detailsTag = regexp.MustCompile(`(?i)</?details(\s|/|>|$)`)
-
-// OneDisclosure reports why text is not exactly one disclosure: it MUST open on a <details> tag line, stay open until
-// its last line outside a fence, close there, with every <details> inside pairing up and nesting, and leave no fence
-// or HTML comment open. Lines are read as Check reads them. It checks generated text, which may carry tags Check refuses, such as a
-// summary's <b>.
-func OneDisclosure(text string) error {
-	depth, seen, closed := 0, false, false
-	var err error
-	open := walkStructural(splitLines(text), func(i int, trimmed, visible string, html bool) {
-		switch {
-		case err != nil:
-		case closed:
-			err = fmt.Errorf("line %d follows the disclosure's close", i+1)
-		case !seen && trimmed != "<details>" && trimmed != "<details open>":
-			err = fmt.Errorf("line %d comes before the disclosure opens", i+1)
-		case trimmed == "<details>" || trimmed == "<details open>":
-			depth, seen = depth+1, true
-		case trimmed == "</details>":
-			depth--
-			closed = depth == 0
-		default:
-			// GitHub matches a details tag anywhere in a line, so one this count would skip is refused instead.
-			switch {
-			case detailsTag.MatchString(visible):
-				err = fmt.Errorf("line %d carries a <details> tag that is not alone on its line", i+1)
-			case opensHiddenText(visible, html):
-				err = fmt.Errorf("line %d opens an HTML comment it does not close", i+1)
-			}
-		}
-	})
-	switch {
-	case err != nil:
-		return err
-	case open:
-		return errors.New("a fence is left open")
-	case !closed:
-		return fmt.Errorf("%d <details> left open", depth)
-	}
-	return nil
-}
-
-// opensHiddenText reports whether line opens a comment it does not close: <!-- with no --> after it, or <? or another
-// <! with no > after it, which HTML reads as a comment up to the next >. A browser reads such a comment on past the
-// line, hiding any details tag it reaches from the count. <!--> and <!---> close themselves, as they do in HTML. Outside
-// an HTML block, a <! before anything but a letter or [ is text, as findHTML reads it.
-func opensHiddenText(line string, html bool) bool {
-	for i := strings.IndexByte(line, '<'); i >= 0; i = strings.IndexByte(line, '<') {
-		rest, end := line[i+1:], ">"
-		switch {
-		case strings.HasPrefix(rest, "!--"):
-			rest, end = rest[1:], "-->"
-		case strings.HasPrefix(rest, "?"),
-			strings.HasPrefix(rest, "!") && (html || len(rest) > 1 && (isLetter(rest[1]) || rest[1] == '[')):
-		default:
-			line = rest
-			continue
-		}
-		j := strings.Index(rest, end)
-		if j < 0 {
-			return true
-		}
-		line = rest[j+len(end):]
-	}
-	return false
-}
-
-// walkStructural calls fn for every structural line outside a fence, and reports whether a fence is left open. fn also
-// gets whether the line sits in an HTML block, and the line as GitHub shows it, read as Check reads it: escapes and
-// code spans blanked, except in an HTML block or after a line that leaves a code span open, up to the next blank line.
-func walkStructural(lines []string, fn func(i int, trimmed, visible string, html bool)) bool {
+// walkStructural calls fn for every structural line outside a fence.
+func walkStructural(lines []string, fn func(i int, trimmed string)) {
 	var fenceChar byte
 	var fenceLen int
-	inHTMLBlock, openSpan := false, false
+	inHTMLBlock := false
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		structural := inHTMLBlock || !indented(line)
@@ -481,25 +410,17 @@ func walkStructural(lines []string, fn func(i int, trimmed, visible string, html
 			}
 			continue
 		case trimmed == "":
-			inHTMLBlock, openSpan = false, false
+			inHTMLBlock = false
+			continue
+		case !structural:
 			continue
 		}
-		if structural && opensHTMLBlock(trimmed) {
-			inHTMLBlock, openSpan = true, false
+		if opensHTMLBlock(trimmed) {
+			inHTMLBlock = true
+		} else if c, length, ok := opensFence(trimmed); ok && !inHTMLBlock {
+			fenceChar, fenceLen = c, length
+			continue
 		}
-		visible := trimmed
-		if !inHTMLBlock {
-			if c, length, ok := opensFence(trimmed); ok && structural {
-				fenceChar, fenceLen, openSpan = c, length, false
-				continue
-			}
-			text, unclosed := textOnly(trimmed, !openSpan)
-			openSpan = openSpan || unclosed
-			visible = strings.TrimSpace(text)
-		}
-		if structural {
-			fn(i, trimmed, visible, inHTMLBlock)
-		}
+		fn(i, trimmed)
 	}
-	return fenceChar != 0
 }
