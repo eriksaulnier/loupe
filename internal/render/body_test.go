@@ -198,13 +198,13 @@ func TestBodyFooterNamesSource(t *testing.T) {
 	in := exampleInput()
 	in.Source = "gadfly-review-pr@2.2.0"
 	body := Body(in)
-	if !strings.Contains(body, "\n\nreviewed `d23632e` · via `gadfly-review-pr 2.2.0`\n\n") ||
+	if !strings.Contains(body, "\n\nreviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0`\n\n") ||
 		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=blocking ") {
 		t.Fatalf("versioned source wrong\n%s", body)
 	}
 	in.Source = "loupe"
 	body = Body(in)
-	if !strings.Contains(body, "reviewed `d23632e` · via `loupe`\n\n") || !strings.Contains(body, "round=2 src=loupe inline=") {
+	if !strings.Contains(body, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `loupe`\n\n") || !strings.Contains(body, "round=2 src=loupe inline=") {
 		t.Fatalf("unversioned source wrong\n%s", body)
 	}
 }
@@ -213,18 +213,18 @@ func TestBodyNamesModel(t *testing.T) {
 	in := exampleInput()
 	in.Model = "anthropic/claude-sonnet-5"
 	body := Body(in)
-	if !strings.Contains(body, "\n\nreviewed `d23632e` · `anthropic/claude-sonnet-5`\n\n") ||
+	if !strings.Contains(body, "\n\nreviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `anthropic/claude-sonnet-5`\n\n") ||
 		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 model=anthropic/claude-sonnet-5 inline=blocking ") {
 		t.Fatalf("model without source wrong\n%s", body)
 	}
 	in.Source = "gadfly-review-pr@2.2.0"
 	body = Body(in)
-	if !strings.Contains(body, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`\n\n") ||
+	if !strings.Contains(body, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`\n\n") ||
 		!strings.Contains(body, "round=2 src=gadfly-review-pr@2.2.0 model=anthropic/claude-sonnet-5 inline=") {
 		t.Fatalf("model with source wrong\n%s", body)
 	}
 	in.Unattended, in.Source = true, ""
-	if body = Body(in); !strings.Contains(body, "reviewed `d23632e` · `anthropic/claude-sonnet-5` · unattended\n\n") ||
+	if body = Body(in); !strings.Contains(body, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `anthropic/claude-sonnet-5` · unattended\n\n") ||
 		!strings.Contains(body, "round=2 unattended=1 model=anthropic/claude-sonnet-5 inline=") {
 		t.Fatalf("model with unattended wrong\n%s", body)
 	}
@@ -262,7 +262,7 @@ func TestBodyUnattendedMarker(t *testing.T) {
 	in := exampleInput()
 	in.Unattended = true
 	body := Body(in)
-	if !strings.Contains(body, "\n\nreviewed `d23632e` · unattended\n\n") {
+	if !strings.Contains(body, "\n\nreviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · unattended\n\n") {
 		t.Fatalf("unattended footer wrong\n%s", body)
 	}
 	if !strings.Contains(body, "<!-- loupe-meta v=1 round=2 unattended=1 inline=") {
@@ -271,7 +271,7 @@ func TestBodyUnattendedMarker(t *testing.T) {
 
 	in.Source = "gadfly-review-pr@2.2.0"
 	body = Body(in)
-	if !strings.Contains(body, "\n\nreviewed `d23632e` · via `gadfly-review-pr 2.2.0` · unattended\n\n") ||
+	if !strings.Contains(body, "\n\nreviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · unattended\n\n") ||
 		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 unattended=1 src=gadfly-review-pr@2.2.0 inline=") {
 		t.Fatalf("unattended with source wrong\n%s", body)
 	}
@@ -285,17 +285,17 @@ func TestBodyFooterSegmentOrder(t *testing.T) {
 		unattended bool
 		want       string
 	}{
-		{"bare", "", "", false, "reviewed `d23632e`"},
-		{"source", "gadfly-review-pr@2.2.0", "", false, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0`"},
-		{"unattended", "", "", true, "reviewed `d23632e` · unattended"},
-		{"source and unattended", "gadfly-review-pr@2.2.0", "", true, "reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · unattended"},
-		{"model", "", "anthropic/claude-sonnet-5", false, "reviewed `d23632e` · `anthropic/claude-sonnet-5`"},
-		{"model and unattended", "", "anthropic/claude-sonnet-5", true, "reviewed `d23632e` · `anthropic/claude-sonnet-5` · unattended"},
+		{"bare", "", "", false, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2)"},
+		{"source", "gadfly-review-pr@2.2.0", "", false, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0`"},
+		{"unattended", "", "", true, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · unattended"},
+		{"source and unattended", "gadfly-review-pr@2.2.0", "", true, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · unattended"},
+		{"model", "", "anthropic/claude-sonnet-5", false, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `anthropic/claude-sonnet-5`"},
+		{"model and unattended", "", "anthropic/claude-sonnet-5", true, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `anthropic/claude-sonnet-5` · unattended"},
 		{"source and model", "gadfly-review-pr@2.2.0", "anthropic/claude-sonnet-5", false,
-			"reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`"},
+			"reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`"},
 		{"source, model and unattended", "gadfly-review-pr@2.2.0", "anthropic/claude-sonnet-5", true,
-			"reviewed `d23632e` · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5` · unattended"},
-		{"longest model", "", strings.Repeat("m", 64), false, "reviewed `d23632e` · `" + strings.Repeat("m", 64) + "`"},
+			"reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5` · unattended"},
+		{"longest model", "", strings.Repeat("m", 64), false, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `" + strings.Repeat("m", 64) + "`"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := exampleInput()
@@ -715,5 +715,15 @@ func TestChipsLeadTheOpeningProse(t *testing.T) {
 	in.Summary = ""
 	if got := Body(in); !strings.HasPrefix(got, "`⛔ 1 blocking`\n\n---\n\n### Must fix") {
 		t.Errorf("no-prose body does not open on the chips:\n%s", got)
+	}
+}
+
+// Without the repository there is nothing to link to, so the commit stays a bare code span.
+func TestBodyFooterWithoutRepositoryIsBare(t *testing.T) {
+	in := exampleInput()
+	in.Owner, in.Repo = "", ""
+	body := Body(in)
+	if !strings.Contains(body, "\n\nreviewed `"+in.HeadSHA[:7]+"`") || strings.Contains(body, "/commit/") {
+		t.Fatalf("footer is not a bare code span:\n%s", body)
 	}
 }

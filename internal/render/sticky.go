@@ -40,10 +40,15 @@ var (
 	chipSpan    = regexp.MustCompile("^`(⛔|🟡|🟣|🔵|⚪) ([0-9]+) [a-z]+`$")
 	roundNumber = regexp.MustCompile(`^<details>\n<summary>Round [0-9]+ · `)
 	digestLine  = regexp.MustCompile(`^<!-- loupe digest=\S+ publication=\S+ -->$`)
+	// earlierHead reads a collapsed round's number and commit off its summary line.
+	earlierHead = regexp.MustCompile(`^<details>\n<summary>Round ([0-9]+) · reviewed <code>([0-9a-f]+)</code>`)
 	// footerLine is the whole footer Body writes: the commit, then the source, the model and the unattended mark when
 	// present, each held to the rule capture validates it by. Read-back finds the footer by it, so a footer with
 	// anything else on it is refused rather than guessed at.
-	footerLine = regexp.MustCompile("^reviewed `([0-9a-f]+)`" +
+	// The commit is a bare code span, as before spec 025's links, or one linked to it, and a sticky footer MAY name
+	// the comparison with the round before.
+	footerLine = regexp.MustCompile("^reviewed (?:`([0-9a-f]+)`|\\[`([0-9a-f]+)`\\]\\(https://github\\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/commit/[0-9a-f]+\\))" +
+		"( · \\[changes since round [0-9]+\\]\\(https://github\\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/compare/[0-9a-f]+\\.\\.\\.[0-9a-f]+\\))?" +
 		"( · via `[a-z0-9][a-z0-9._-]*( [0-9][0-9A-Za-z.+-]*)?`)?" +
 		"( · `[a-z0-9][a-z0-9._/:-]*`)?" +
 		"( · unattended)?$")
@@ -248,7 +253,7 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	// Each round is numbered by its place in the review, so the newest earlier round is rounds and the ones below it
 	// count down. A body written before this numbering carried loupe's round count, which is renumbered here too.
 	demoted := fmt.Sprintf("<details>\n<summary>Round %d · reviewed <code>%s</code> · %s</summary>\n\n%s\n\n</details>",
-		rounds, shortSHA(footerLine.FindStringSubmatch(footer)[1]), chips, content)
+		rounds, shortSHA(footerSHA(footer)), chips, content)
 	for i, block := range blocks {
 		blocks[i] = roundNumber.ReplaceAllString(block, fmt.Sprintf("<details>\n<summary>Round %d · ", rounds-1-i))
 	}
@@ -263,7 +268,7 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	return earlier, rounds, nil
 }
 
-// splitChips takes the chips row off a round and returns it as summary text, or "no findings". The row is loupe's
+// splitChips takes the chips row off a round and returns it as summary pills, or a no-findings pill. The row is loupe's
 // first line exactly when meta counts a finding, and its chips MUST add up to that count, so prose that looks like a
 // chips row is never taken for one. The divider that followed the row goes with it when no prose sat between.
 func splitChips(part []string, meta string) (string, []string, error) {
@@ -409,4 +414,13 @@ func sectionHeadings(lines []string) []int {
 		}
 	}
 	return headings
+}
+
+// footerSHA is the commit a footer names, bare or linked.
+func footerSHA(footer string) string {
+	m := footerLine.FindStringSubmatch(footer)
+	if m[1] != "" {
+		return m[1]
+	}
+	return m[2]
 }

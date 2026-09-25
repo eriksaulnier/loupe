@@ -39,6 +39,7 @@ This specification amends `docs/comment-format.md`, which is a contract (constit
 ## User Scenarios & Testing *(mandatory)*
 
 - An earlier round's `<summary>` draws its chips as `<code>` pills separated by spaces, matching the scoreboard, or a `<code>✓ no findings</code>` pill. A divider follows each collapsed round's footer, and loupe's section headings inside a collapsed round drop to `####` (owner, 2026-09-25). Rounds as earlier builds wrote them still read back and are carried as they are.
+- Every footer links its commit, and a sticky round with an earlier round adds a `changes since round N` compare link after it (owner, 2026-09-25). This also changes the ordinary review's footer; see `docs/comment-format.md` Footer.
 
 ### User Story 1 - A pipeline keeps one review current (Priority: P1)
 

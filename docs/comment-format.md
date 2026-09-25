@@ -91,7 +91,7 @@ that may already have succeeded, so a 502 produces two reviews.
 
 ---
 
-reviewed `d23632e`
+reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2)
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
 <!-- loupe-findings v=1 sha256=<sha256> <data> -->
@@ -219,7 +219,8 @@ reviewed `SHA` · via `NAME VERSION` · `MODEL` · unattended
 ```
 
 - The footer answers only what a reader who never installed loupe can act on: which commit, who reviewed it, which model produced the findings, and whether anybody read it before it posted (`specs/009-review-footer`, `specs/023-model-footer`).
-- `SHA` is the abbreviated captured head commit, a generated code span subject to the backtick rule.
+- `SHA` is the abbreviated captured head commit, a generated code span subject to the backtick rule, linked to that commit on GitHub: ``[`SHA`](https://github.com/OWNER/REPO/commit/FULLSHA)``. The forms above show it bare for reading; the link is always there when the pull request's repository is known.
+- **A sticky round with an earlier round** adds `` · [changes since round N](https://github.com/OWNER/REPO/compare/PREV...FULLSHA)`` right after the SHA, where `N` and `PREV` are the newest earlier round's number and commit. An edit sends no notification and keeps the review's first timestamp, so this link is how a reader sees what changed between rounds. A plain review, and a sticky review's first round, have no such segment. Read-back accepts a footer with or without these links, since earlier releases wrote the SHA bare.
 - The ` · via ` suffix MUST appear only when capture recorded a source, and is otherwise absent, leaving the first form byte for byte. `NAME VERSION` is that source with its `@` rendered as a space, or `NAME` alone when it has no version, in a generated code span.
 - The `` · `MODEL` `` segment MUST appear only when capture recorded a model, and is otherwise absent, leaving the forms above it byte for byte. It follows ` · via ` when there is one, and otherwise the SHA. `MODEL` is the id exactly as capture recorded it, in a generated code span, with no display name and no label such as `by`: on an attended review the human is the author, and a model id names itself (`specs/023-model-footer`).
 - **` · unattended` MUST come last**, after ` · via ` and the model when there are any, only on a review `loupe publish --unattended` sent (`specs/007-unattended-publish/spec.md` FR-016, amended by `specs/009-review-footer`). A review published without `--unattended` is unchanged byte for byte.

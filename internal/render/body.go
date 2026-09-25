@@ -119,7 +119,10 @@ func Body(in Input) string {
 	for _, f := range in.Findings {
 		census[group(f.Label)]++
 	}
-	footer := "reviewed " + CodeSpan(OneLine(shortSHA(in.HeadSHA)))
+	footer := "reviewed " + commitLink(in)
+	if since := sinceLink(in); since != "" {
+		footer += " · " + since
+	}
 	meta := fmt.Sprintf("v=1 round=%d", in.Round)
 	if in.Unattended {
 		meta += " unattended=1"
@@ -488,4 +491,28 @@ func plural(n int, one, many string) string {
 		return one
 	}
 	return many
+}
+
+// commitLink is the reviewed commit as a code span linked to it on GitHub, so a reader can open exactly what was
+// reviewed. Without the repository it stays a bare code span.
+func commitLink(in Input) string {
+	span := CodeSpan(OneLine(shortSHA(in.HeadSHA)))
+	if in.Owner == "" || in.Repo == "" {
+		return span
+	}
+	return fmt.Sprintf("[%s](https://github.com/%s/%s/commit/%s)", span, in.Owner, in.Repo, in.HeadSHA)
+}
+
+// sinceLink compares the newest earlier round's commit with this one, so a reader of a sticky review sees in one
+// click what the author changed between rounds. An edit sends no notification and keeps the review's first
+// timestamp, so the footer is where a reader learns the review moved on. It is empty without an earlier round.
+func sinceLink(in Input) string {
+	if in.Sticky == nil || len(in.Sticky.Earlier) == 0 || in.Owner == "" || in.Repo == "" {
+		return ""
+	}
+	m := earlierHead.FindStringSubmatch(in.Sticky.Earlier[0])
+	if m == nil {
+		return ""
+	}
+	return fmt.Sprintf("[changes since round %s](https://github.com/%s/%s/compare/%s...%s)", m[1], in.Owner, in.Repo, m[2], in.HeadSHA)
 }

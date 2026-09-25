@@ -42,8 +42,8 @@ that may already have succeeded, so a 502 produces two reviews.
 
 ---
 
-reviewed `d23632e`
+reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2)
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
-<!-- loupe-findings v=1 sha256=09d8b148e66330da12ab8c30c2b07418a4c57ccd29e2318e3cda261edc583b92 hJDBauMwEIZfZZiznDhhF4JfYHdhT0tumx7G0jgWVSV3NEpqQqBP0wfrkxS7KU0u7UkIZub//u//Cb3DBruqrldoUL0Gxgb/scoIIaUBLEVwqbSBq6G0weceCIQPno9osE1unOcHSa5YdkB78jEraM8gbJM4dtD5Jy3CC9j2DJbU9iBccVSWPE/OUdQpy3z9sXDWXdSeFB5oBArC5Ebo6cCQi7XMjp2BnIDgZ72GS3wGPaYLXV7sIhoMyZL6FLE54UDaY4N+yo0UlpdCH+9in9Bg9m5W8OfX7+207yNjs9mcDQZqOUz7OReeyodk733cY6NS+GyuZK5vZLoSHUWFnEQhReADywhTpU+Fr88v39A6oU6XWZPwF6SrHwazkujf9299BT6wdFX0esPeUch8vnsLAAD//w== -->
+<!-- loupe-findings v=1 sha256=89b329eaa63ab51de4c6f90a19c14b50406f292c4d18a2e166f2dc5095c7c758 hJDBauMwEIZfZZiznDhhF4JfYHdhT0tumx7G0jgWVSV3NEpqQqBP0wfrkxS7KU0u7UkIZub//u//Cb3DBruqrldoUL0Gxgb/scoIIaUBLEVwqbSBq6G0weceCIQPno9osE1unOcHSa5YdkB78jEraM8gbJM4dtD5Jy3CC9j2DJbU9iBccVSWPE/OUdQpy3z9sXDWXdSeFB5oBArC5Ebo6cCQi7XMjp2BnIDgZ72GS3wGPaYLXV7sIhoMyZL6FLE54UDaY4N+yo0UlpdCH+9in9Bg9m5W8OfX7+207yNjs9mcDQZqOUz7OReeyodk733cY6NS+GyuZK5vZLoSHUWFnEQhReADywhTpU+Fr88v39A6oU6XWZPwF6SrHwazkujf9299BT6wdFX0esPeUch8vnsLAAD//w== -->
 <!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 excluded=1 withdrawn=1 reinstated=0 regraded=1 -->
