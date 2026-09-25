@@ -189,6 +189,11 @@ func TestOneDisclosure(t *testing.T) {
 		{"closed early, then another", "<details>\n<summary>x</summary>\n\n</details>\n\ntext\n\n<details>\n<summary>y</summary>\n\n</details>", false},
 		{"text after the close", "<details>\n<summary>x</summary>\n\n</details>\n\ntext", false},
 		{"text before the open", "text\n\n<details>\n<summary>x</summary>\n\n</details>", false},
+		// GitHub matches a details tag anywhere in a line, so one that is not alone on its line is refused, not skipped.
+		{"close tag after text", "<details>\n<summary>x</summary>\n\ntext</details>\n\n</details>", false},
+		{"close tag with a space", "<details>\n<summary>x</summary>\n\n</details >\n\n</details>", false},
+		{"upper-case tag", "<details>\n<summary>x</summary>\n\n<DETAILS>\n\n</details>", false},
+		{"tag in a code span is text", "<details>\n<summary>x</summary>\n\nsee `</details>` here\n\n</details>", true},
 	}
 	for _, c := range cases {
 		if err := OneDisclosure(c.in); (err == nil) != c.ok {

@@ -5,6 +5,7 @@ package markdown
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
@@ -396,6 +397,8 @@ func splitLines(text string) []string {
 	return strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n")
 }
 
+var detailsTag = regexp.MustCompile(`(?i)</?details(\s|/|>|$)`)
+
 // OneDisclosure reports why text is not exactly one disclosure: it MUST open on a <details> tag line, stay open until
 // its last line outside a fence, close there, with every <details> inside pairing up and nesting, and leave no fence
 // open. Lines are read as Check reads them. It checks generated text, which may carry tags Check refuses, such as a
@@ -415,6 +418,11 @@ func OneDisclosure(text string) error {
 		case trimmed == "</details>":
 			depth--
 			closed = depth == 0
+		default:
+			// GitHub matches a details tag anywhere in a line, so one this count would skip is refused instead.
+			if text, _ := textOnly(trimmed, true); detailsTag.MatchString(text) {
+				err = fmt.Errorf("line %d carries a <details> tag that is not alone on its line", i+1)
+			}
 		}
 	})
 	switch {

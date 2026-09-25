@@ -319,6 +319,7 @@ func TestReadStickyRefusesUnbalancedRounds(t *testing.T) {
 		{"stray </details> in a round with no findings", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.\n\n</details>\n\nOutside.", 1)},
 		{"extra <details> in an earlier round", strings.Replace(two, "### Must fix\n", "<details>\n<summary>Mine</summary>\n\n### Must fix\n", 1)},
 		{"missing </details> in an earlier round", strings.Replace(two, "Body f-001.\n\n</details>\n\n<!-- loupe digest=1", "Body f-001.\n\n<!-- loupe digest=1", 1)},
+		{"close tag after text in the shown round", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.</details>\n\nOutside.", 1)},
 		{"round closed early, then a second disclosure", strings.Replace(two, "\n\n<!-- loupe digest=1", "\n\n</details>\n\nOutside.\n\n<details>\n<summary>Mine</summary>\n\n<!-- loupe digest=1", 1)},
 		// An open fence also hides the generated tail, so the structure checks refused this before the balance check.
 		{"unclosed fence in the shown round", strings.Replace(two, "Body f-002.", "Body f-002.\n\n```", 1)},
