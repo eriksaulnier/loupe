@@ -26,8 +26,11 @@ const (
 )
 
 var (
-	stickyKey   = regexp.MustCompile(` sticky=([0-9]+) -->$`)
-	stickyAny   = regexp.MustCompile(` sticky=(\S*) -->$`)
+	stickyKey = regexp.MustCompile(` sticky=([0-9]+) -->$`)
+	srcKey    = regexp.MustCompile(` src=(\S+)`)
+	// stickyAny finds the key anywhere on the line, so a marker edited around it is still read back and refused by
+	// stickyKey's strict form rather than skipped for a second review.
+	stickyAny   = regexp.MustCompile(` sticky=(\S*)`)
 	countKey    = regexp.MustCompile(` (blocking|issues|suggestions|questions|other)=([0-9]+)`)
 	chipSpan    = regexp.MustCompile("^`(⛔|🟡|🟣|🔵|⚪) ([0-9]+) [a-z]+`$")
 	roundNumber = regexp.MustCompile(`^<details>\n<summary>Round [0-9]+ · `)
@@ -74,6 +77,21 @@ func StickyRounds(body string) (rounds int, sticky bool) {
 		}
 	}
 	return 0, false
+}
+
+// MetaSource is the src= value on body's loupe-meta line, empty when there is none. Like StickyRounds it reads only the
+// last marker line outside a fence.
+func MetaSource(body string) string {
+	lines, structural := markdown.StructuralLines(body)
+	for i := len(lines) - 1; i >= 0; i-- {
+		if structural[i] && strings.HasPrefix(lines[i], MetaPrefix) {
+			if m := srcKey.FindStringSubmatch(lines[i]); m != nil {
+				return m[1]
+			}
+			return ""
+		}
+	}
+	return ""
 }
 
 // ReadSticky reads a sticky body back into the collapsed rounds the next body holds, newest first: the round the body
