@@ -72,10 +72,11 @@ notification, and the review keeps the first round's commit. The confirmation sh
 body, earlier rounds included, and names the review it edits. If that review changes on GitHub
 before y, nothing is sent and publish refuses with changed. When the earlier rounds would take the
 body past GitHub's length limit, the oldest are dropped and the body says how many. --action
-defaults to comment and --inline to none, and any other value refuses with usage: an edit cannot
-change a review's state, and an inline comment stays on the review that created it. A sticky
-review loupe cannot read back, such as one reworded on GitHub, refuses with sticky; publish
-without --sticky to post a new review. loupe review's own publish step never edits a review.
+defaults to comment, --inline stays at its default none, and any other value of either refuses
+with usage: an edit cannot change a review's state, and an inline comment stays on the review that
+created it. A sticky review loupe cannot read back, such as one reworded on GitHub, refuses with
+sticky; publish without --sticky to post a new review. loupe review's own publish step never
+edits a review.
 
 Result (--json)  alone on stdout while the confirmation draws on stderr
   {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1",

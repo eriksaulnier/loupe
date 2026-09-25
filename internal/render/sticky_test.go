@@ -187,6 +187,21 @@ func TestReadStickyIgnoresFencedDelimiters(t *testing.T) {
 	}
 }
 
+// The footer can carry a source, a model and the unattended mark after the commit; only the commit reaches the summary.
+func TestReadStickyReadsAFullFooter(t *testing.T) {
+	in := stickyInput(1, "aaaaaaa111", general("f-001", "issue", true))
+	in.Source, in.Model, in.Unattended = "gadfly-review-pr@2.2.0", "anthropic/claude-opus-5.5", true
+	in.Sticky = &StickyInput{Rounds: 1}
+	earlier, _, err := ReadSticky(Body(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>") ||
+		strings.Contains(earlier[0], "claude-opus") || strings.Contains(earlier[0], "· unattended") {
+		t.Fatalf("demoted round:\n%s", earlier[0])
+	}
+}
+
 func TestReadStickyReadsCRLF(t *testing.T) {
 	first := firstRound()
 	lf, _, err := ReadSticky(first)

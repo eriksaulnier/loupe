@@ -72,7 +72,7 @@ description: "Task list for sticky review"
 
 ## Phase 4: User Story 3 — misuse is refused before anything is read (P2)
 
-- [X] T019 [US3] Add failing tests to `internal/cli/publish_test.go`: `--sticky --action approve` and `--sticky --action request-changes` refuse `usage` with fix naming `--action comment`. `--sticky --inline blocking` and `--sticky --inline all` refuse `usage` with fix naming `--inline none`. Each refuses before the run is resolved (no run needed) and without a GitHub request. `--sticky` alone publishes `comment` with `none`, attended (with `--action` omitted) and unattended. Implement it in `internal/cli/publish.go`, using `cmd.Flags().Changed("inline")` to tell an explicit `--inline blocking` from the default.
+- [X] T019 [US3] Add failing tests to `internal/cli/publish_test.go`: `--sticky --action approve` and `--sticky --action request-changes` refuse `usage` with fix naming `--action comment`. `--sticky --inline blocking` and `--sticky --inline all` refuse `usage` with fix naming `--inline none`. Each refuses before the run is resolved (no run needed) and without a GitHub request. `--sticky` alone publishes `comment` with `none`, attended (with `--action` omitted) and unattended. Implement it in `internal/cli/publish.go`, refusing any `--inline` other than `none`, which is every publish's default since `specs/026-inline-default-none`.
 - [X] T020 [US3] Add a failing test to `internal/publish/publish_test.go` that `Run` with `Sticky` refuses `usage` for an action other than `comment` or an inline other than `none`, before any request. Add the rule beside the unattended rule at the top of `Run`.
 
 **Checkpoint**: Commit.

@@ -121,7 +121,7 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 
 - **FR-001**: `loupe publish` MUST accept `--sticky`, with and without `--unattended`.
 - **FR-002**: With `--sticky`, `--action` MUST default to `comment`, and `approve` or `request-changes` MUST be refused with `usage`, fix `--action comment`. `Run` MUST keep the same rule beside the code that sends, for any caller, as it does for `--unattended`.
-- **FR-003**: With `--sticky`, `--inline` MUST default to `none`, and `blocking` or `all` MUST be refused with `usage`, fix `--inline none`.
+- **FR-003**: With `--sticky`, `--inline` MUST be `none`, which is its default for every publish since `specs/026-inline-default-none`, and `blocking` or `all` MUST be refused with `usage`, fix `--inline none`.
 - **FR-004**: The `usage` refusals of FR-002 and FR-003 MUST come before the run is resolved and before GitHub is contacted.
 - **FR-005**: Receipt replay and reconciliation MUST run before the sticky review is looked up and before any GitHub read that sticky mode adds, so a round with a receipt prints its URL again with or without `--sticky`. Only the flag refusals of FR-004 come first, as `--unattended`'s flag refusals do today.
 
