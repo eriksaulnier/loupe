@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.0](https://github.com/eriksaulnier/loupe/compare/v0.12.0...v0.13.0) (2026-09-25)
+
+
+### Features
+
+* **cli:** read other reviewers' feedback at capture ([#53](https://github.com/eriksaulnier/loupe/issues/53)) ([df45f75](https://github.com/eriksaulnier/loupe/commit/df45f753be17a1cea1bae4b70c2618a46733ed26))
+* **render:** quote each collapsed sticky round ([#54](https://github.com/eriksaulnier/loupe/issues/54)) ([2705fa8](https://github.com/eriksaulnier/loupe/commit/2705fa859b44df565f1c39fdc87b0789e2e351fb))
+
 ## [0.12.0](https://github.com/eriksaulnier/loupe/compare/v0.11.0...v0.12.0) (2026-09-25)
 
 
