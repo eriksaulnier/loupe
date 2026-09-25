@@ -209,7 +209,7 @@ func demoRun(parsed *diff.Diff, number int, decide func(d *draft.Draft) error, n
 	target := run.Target{
 		Schema: run.TargetSchema, Owner: owner, Repo: repo, Number: number, URL: url, Title: prTitle,
 		Author: author, Viewer: viewer, BaseSHA: baseSHA, HeadSHA: headSHA, Round: 1, CapturedAt: now,
-		DiffSHA256: run.DiffSHA256([]byte(demoDiff)), Source: "loupe-demo", Model: "demo/reviewer-1",
+		DiffSHA256: run.DiffSHA256([]byte(demoDiff)), Source: "code-review@1.4.0", Model: "anthropic/claude-opus-5.5",
 	}
 	return target, d, nil
 }
