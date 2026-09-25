@@ -316,7 +316,12 @@ func TestReadStickyRefusesUnbalancedRounds(t *testing.T) {
 	next := stickyInput(2, "bbbbbbb222", general("f-002", "question", false))
 	next.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
 	two := Body(next)
+	droppedOnly := stickyInput(3, "ccccccc333")
+	droppedOnly.Summary = "Nothing to fix."
+	droppedOnly.Sticky = &StickyInput{Rounds: 3}
 	cases := []struct{ name, body string }{
+		// With every earlier round dropped nothing tells the layouts apart, so a second footer is refused.
+		{"a second footer after dropped rounds", strings.Replace(Body(droppedOnly), "\n\n<!-- loupe digest=3", "\n\n---\n\nreviewed `ddddddd`\n\n<!-- loupe digest=3", 1)},
 		{"stray </details> in a round with no findings", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.\n\n</details>\n\nOutside.", 1)},
 		{"extra <details> in an earlier round", strings.Replace(two, "### Must fix\n", "<details>\n<summary>Mine</summary>\n\n### Must fix\n", 1)},
 		{"missing </details> in an earlier round", strings.Replace(two, "Body f-001.\n\n</details>\n\n---\n\nreviewed `aaaaaaa`", "Body f-001.\n\n---\n\nreviewed `aaaaaaa`", 1)},

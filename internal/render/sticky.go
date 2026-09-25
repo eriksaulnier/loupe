@@ -217,8 +217,9 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	}
 	// A footer at the tail is the v0.11.0 layout's, whose round prose MAY end in a line shaped like a footer. That
 	// layout collapsed rounds without one, while this one keeps it, so a newest collapsed round with a footer marks a
-	// footer at the tail as a hand edit rather than the round's own.
-	if atTail && underRound && len(blocks) > 0 && keepsFooter(blocks[0]) {
+	// footer at the tail as a hand edit rather than the round's own. With every earlier round dropped nothing tells
+	// the two apart, and the body is refused rather than guessed at.
+	if atTail && underRound && (len(blocks) == 0 || keepsFooter(blocks[0])) {
 		return nil, 0, errors.New("it carries a footer both under the round it shows and after the earlier rounds")
 	}
 	if len(blocks)+dropped != rounds-1 {
