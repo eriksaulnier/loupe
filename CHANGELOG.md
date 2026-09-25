@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/eriksaulnier/loupe/compare/v0.11.0...v0.12.0) (2026-09-25)
+
+
+### Features
+
+* **capture:** read the previous round back from GitHub ([#48](https://github.com/eriksaulnier/loupe/issues/48)) ([01e2e92](https://github.com/eriksaulnier/loupe/commit/01e2e928f92447fa0e6e596a39703eda95fb0e50))
+* **render:** keep each sticky round's footer with the round ([#50](https://github.com/eriksaulnier/loupe/issues/50)) ([e34b76c](https://github.com/eriksaulnier/loupe/commit/e34b76ce4fc1550bdf45784dd3e7e947e6bfa68e))
+* **render:** polish sticky rounds and link the footer's commit ([#52](https://github.com/eriksaulnier/loupe/issues/52)) ([b55ae60](https://github.com/eriksaulnier/loupe/commit/b55ae60ad10cbfe767001ea805ee0324a3ab9e12))
+
+
+### Bug Fixes
+
+* **render:** refuse a sticky round whose disclosures do not balance ([#46](https://github.com/eriksaulnier/loupe/issues/46)) ([a11247e](https://github.com/eriksaulnier/loupe/commit/a11247ec408b090fc0f53881564ddf7c6634fbf4))
+
 ## [0.11.0](https://github.com/eriksaulnier/loupe/compare/v0.10.0...v0.11.0) (2026-09-25)
 
 
