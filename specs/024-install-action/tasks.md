@@ -66,6 +66,8 @@ Phase 2 creates `action.yml`, which makes T001 pass.
 
 - [X] T015 [US3] Extend `install-action-inputs` in `.github/workflows/ci.yml`: install the default first, then `0.9.0`, and check that `loupe` prints `loupe version 0.9.0` while the first directory's binary still prints the manifest version. Add a `version: ''` step behind `continue-on-error` that MUST fail. Added after review round 4.
 
+- [X] T016 [US3] In `install-action-inputs` and `install-action-checksums`, record `PATH` after the last successful install and fail if it differs after the refused installs, so a refused install that still adds to `PATH` turns CI red. Added after review round 6.
+
 ## Phase 5: Polish
 
 - [X] T010 [P] Add a `### GitHub Actions` subsection under `## Install` in `README.md`: the step `- uses: eriksaulnier/loupe@<sha> # <tag>`, one sentence on pinning the release commit's sha with its tag in a comment so Dependabot moves the action and the binary together, and the `version` input for installing another release. No literal version, so release-please has nothing new to stamp in the README.
