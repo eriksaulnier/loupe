@@ -182,7 +182,7 @@ func TestReadStickyIgnoresFencedDelimiters(t *testing.T) {
 	if err != nil || rounds != 1 || len(earlier) != 1 || !strings.Contains(earlier[0], quoted) {
 		t.Fatalf("rounds %d blocks %d err %v", rounds, len(earlier), err)
 	}
-	if got := StickyRounds(quoted); got != 0 {
+	if got, sticky := StickyRounds(quoted); got != 0 || sticky {
 		t.Fatalf("StickyRounds of a fenced marker = %d, want 0", got)
 	}
 }
@@ -251,14 +251,28 @@ func TestReadStickyRefusesAnUnreadableBody(t *testing.T) {
 }
 
 func TestStickyRounds(t *testing.T) {
-	if got := StickyRounds(firstRound()); got != 1 {
-		t.Errorf("sticky body: %d, want 1", got)
+	cases := []struct {
+		name   string
+		body   string
+		rounds int
+		sticky bool
+	}{
+		{"sticky body", firstRound(), 1, true},
+		{"non-sticky body", Body(exampleInput()), 0, false},
+		{"no marker", "no marker at all", 0, false},
+		// A key edited on GitHub still marks the review as sticky, so it is read back and refused rather than skipped.
+		{"sticky=0", strings.Replace(firstRound(), " sticky=1 -->", " sticky=0 -->", 1), 0, true},
+		{"sticky=x", strings.Replace(firstRound(), " sticky=1 -->", " sticky=x -->", 1), 0, true},
 	}
-	if got := StickyRounds(Body(exampleInput())); got != 0 {
-		t.Errorf("non-sticky body: %d, want 0", got)
+	for _, c := range cases {
+		if rounds, sticky := StickyRounds(c.body); rounds != c.rounds || sticky != c.sticky {
+			t.Errorf("%s: StickyRounds = %d, %v; want %d, %v", c.name, rounds, sticky, c.rounds, c.sticky)
+		}
 	}
-	if got := StickyRounds("no marker at all"); got != 0 {
-		t.Errorf("no marker: %d, want 0", got)
+	for _, k := range []string{"0", "x"} {
+		if _, _, err := ReadSticky(strings.Replace(firstRound(), " sticky=1 -->", " sticky="+k+" -->", 1)); err == nil {
+			t.Errorf("ReadSticky accepted sticky=%s", k)
+		}
 	}
 }
 

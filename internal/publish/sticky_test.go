@@ -312,3 +312,13 @@ func TestRunStickyReplaysWithoutListing(t *testing.T) {
 		t.Fatal("a replay contacted GitHub")
 	}
 }
+
+// A count edited to 0 on GitHub still marks the review as the one to edit, so the round refuses rather than posting a
+// second sticky review beside it.
+func TestRunStickyRefusesAZeroCountRatherThanPostingASecondReview(t *testing.T) {
+	fx, created := secondRound(t)
+	fx.gh.EditReview("acme", "widgets", 42, created.ReviewID, strings.Replace(created.Envelope.Body, " sticky=1 -->", " sticky=0 -->", 1))
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Sticky, "without --sticky")
+	fx.checkWrites(1, 0)
+}

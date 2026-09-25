@@ -15,7 +15,7 @@ import (
 func findSticky(reviews []github.Review, viewer string) (github.Review, bool) {
 	var found github.Review
 	for _, r := range reviews {
-		if r.State == "PENDING" || !authorMatches(r.User, Envelope{Viewer: viewer}) || render.StickyRounds(r.Body) == 0 {
+		if _, sticky := render.StickyRounds(r.Body); r.State == "PENDING" || !authorMatches(r.User, Envelope{Viewer: viewer}) || !sticky {
 			continue
 		}
 		if r.ID > found.ID {

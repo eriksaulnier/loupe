@@ -27,6 +27,7 @@ const (
 
 var (
 	stickyKey   = regexp.MustCompile(` sticky=([0-9]+) -->$`)
+	stickyAny   = regexp.MustCompile(` sticky=(\S*) -->$`)
 	countKey    = regexp.MustCompile(` (blocking|issues|suggestions|questions|other)=([0-9]+)`)
 	chipSpan    = regexp.MustCompile("^`(⛔|🟡|🟣|🔵|⚪) ([0-9]+) [a-z]+`$")
 	roundNumber = regexp.MustCompile(`^<details>\n<summary>Round [0-9]+ · `)
@@ -57,20 +58,22 @@ func earlierSection(s StickyInput) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// StickyRounds is the sticky= count on body's loupe-meta line, or 0 when the body is not a sticky review. Only the
-// last marker line outside a fence counts, since a finding may quote one.
-func StickyRounds(body string) int {
+// StickyRounds is the sticky= count on body's loupe-meta line, and whether the line carries the key at all. A key
+// whose count is not a number still marks the review as sticky, so it is read back and refused rather than skipped.
+// Only the last marker line outside a fence counts, since a finding may quote one.
+func StickyRounds(body string) (rounds int, sticky bool) {
 	lines, structural := markdown.StructuralLines(body)
 	for i := len(lines) - 1; i >= 0; i-- {
 		if structural[i] && strings.HasPrefix(lines[i], MetaPrefix) {
-			if m := stickyKey.FindStringSubmatch(lines[i]); m != nil {
-				n, _ := strconv.Atoi(m[1])
-				return n
+			m := stickyAny.FindStringSubmatch(lines[i])
+			if m == nil {
+				return 0, false
 			}
-			return 0
+			rounds, _ = strconv.Atoi(m[1])
+			return rounds, true
 		}
 	}
-	return 0
+	return 0, false
 }
 
 // ReadSticky reads a sticky body back into the collapsed rounds the next body holds, newest first: the round the body

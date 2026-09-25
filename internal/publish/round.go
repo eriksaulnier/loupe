@@ -51,7 +51,8 @@ func unattendedRound(reviews []github.Review) int {
 	count := 1
 	for _, r := range reviews {
 		if r.State != "PENDING" && strings.HasSuffix(r.User, "[bot]") && strings.Contains(r.Body, render.MetaPrefix) {
-			count += max(render.StickyRounds(r.Body), 1)
+			rounds, _ := render.StickyRounds(r.Body)
+			count += max(rounds, 1)
 		}
 	}
 	return count
