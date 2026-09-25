@@ -78,7 +78,7 @@ func (m *Model) updateAction(msg tea.KeyMsg) tea.Cmd {
 			m.say(style.Warn, refusalNotice(err))
 			return nil
 		}
-		m.action, m.view, m.pick = action, viewInline, slices.Index(publish.InlineModes, "blocking")
+		m.action, m.view, m.pick = action, viewInline, slices.Index(publish.InlineModes, "none")
 	}
 	return nil
 }

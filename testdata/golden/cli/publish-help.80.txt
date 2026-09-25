@@ -76,7 +76,7 @@ it, absent when the receipt predates loupe recording it.
 Flags
       --action string   review action: comment, approve or request-changes
   -h, --help            help for publish
-      --inline string   located findings that also become inline comments: none, blocking or all (default "blocking")
+      --inline string   located findings that also become inline comments: none, blocking or all (default "none")
       --plain           confirm on one line instead of the full-screen view
       --retry-unknown   send again after an unknown outcome that matches no review on the pull request
       --unattended      publish with no terminal, confirmation or viewer recheck, from a GitHub App installation token

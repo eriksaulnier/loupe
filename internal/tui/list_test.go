@@ -112,6 +112,22 @@ func TestNoColorEmitsNoEscapes(t *testing.T) {
 	}
 }
 
+// The picker starts where the --inline flag defaults, so Enter publishes with no inline comments
+// (specs/026-inline-default-none).
+func TestInlinePickerStartsOnNone(t *testing.T) {
+	m := modelOf(t, readyFixture(t, "author", "author"), map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, 24)
+	m.view, m.pick = viewAction, 0
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	cursor := " " + m.glyphs.Cursor + " "
+	if view := m.View(); m.view != viewInline || !strings.Contains(view, cursor+"none ") {
+		t.Fatalf("enter on comment did not open step 2 on none:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if view := m.View(); !strings.Contains(view, cursor+"blocking ") {
+		t.Errorf("down from none did not reach blocking:\n%s", view)
+	}
+}
+
 func TestPublishStepsAreUnboxed(t *testing.T) {
 	dir := readyFixture(t, "author", "author")
 	for _, env := range []map[string]string{{"NO_COLOR": "1", "LANG": "C"}, {"NO_COLOR": "1", "LANG": "en_US.UTF-8"}} {
