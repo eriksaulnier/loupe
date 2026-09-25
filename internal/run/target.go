@@ -140,6 +140,9 @@ func LoadDiff(dir string, target Target) (*diff.Diff, error) {
 // PreviousFile holds the round capture read back from GitHub. See publish.Previous.
 const PreviousFile = "previous.json"
 
+// CommentsFile holds the feedback capture read from other reviewers. See publish.Comments.
+const CommentsFile = "comments.json"
+
 // CreateRun takes the draft and the previous round as bytes because run must not import draft or publish. The run
 // appears complete or not at all: files are written to a sibling temp directory that is renamed into place. A nil
 // previous writes no PreviousFile.
