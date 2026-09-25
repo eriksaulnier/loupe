@@ -320,6 +320,8 @@ func TestReadStickyRefusesUnbalancedRounds(t *testing.T) {
 	droppedOnly.Summary = "Nothing to fix."
 	droppedOnly.Sticky = &StickyInput{Rounds: 3}
 	cases := []struct{ name, body string }{
+		// This layout writes every collapsed round with its footer, so one without it was edited on GitHub.
+		{"footer removed from the newest collapsed round", strings.Replace(two, "\n\n---\n\nreviewed `aaaaaaa`\n\n<!-- loupe digest=1", "\n\n<!-- loupe digest=1", 1)},
 		// With every earlier round dropped nothing tells the layouts apart, so a second footer is refused.
 		{"a second footer after dropped rounds", strings.Replace(Body(droppedOnly), "\n\n<!-- loupe digest=3", "\n\n---\n\nreviewed `ddddddd`\n\n<!-- loupe digest=3", 1)},
 		{"stray </details> in a round with no findings", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.\n\n</details>\n\nOutside.", 1)},

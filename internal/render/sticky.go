@@ -222,6 +222,11 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	if atTail && underRound && (len(blocks) == 0 || keepsFooter(blocks[0])) {
 		return nil, 0, errors.New("it carries a footer both under the round it shows and after the earlier rounds")
 	}
+	// This layout demotes every round with its footer, so the newest collapsed round without one was edited on GitHub.
+	// Older collapsed rounds MAY lack it, since they came from the v0.11.0 layout.
+	if !atTail && len(blocks) > 0 && !keepsFooter(blocks[0]) {
+		return nil, 0, errors.New("its newest collapsed round has lost its footer")
+	}
 	if len(blocks)+dropped != rounds-1 {
 		return nil, 0, fmt.Errorf("it holds %d earlier rounds and says %d were dropped, but sticky=%d", len(blocks), dropped, rounds)
 	}
