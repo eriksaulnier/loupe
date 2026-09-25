@@ -26,14 +26,8 @@ Show
 
 Sleep 1200ms
 
-# f-003 carries the answered note in the seed, five rows down once the board is ordered by severity.
-# One row at a time, so the note glyph on f-003 is visible before it is opened.
-Type "j"
-Sleep 300ms
-Type "j"
-Sleep 300ms
-Type "j"
-Sleep 300ms
+# f-003 carries the answered note in the seed, the second row once the board is ordered by severity.
+# The cursor stops on it, so the note glyph on f-003 is visible before it is opened.
 Type "j"
 Sleep 1200ms
 Enter
@@ -49,11 +43,11 @@ Sleep 2800ms
 Type "a"
 Sleep 2500ms
 
-# Accepting moves on to the next finding in draft order, f-005, where a new note is started in the
+# Accepting moves on to the next finding in the list's order, f-001, where a new note is started in the
 # send-back box and left, which keeps its text for the next s.
 Type "s"
 Sleep 900ms
-Type@60ms "Should the README name the flag too?"
+Type@60ms "Could the network call move outside the lock?"
 Sleep 2500ms
 Escape
 Sleep 1500ms

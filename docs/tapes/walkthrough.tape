@@ -40,25 +40,26 @@ Sleep 2400ms
 # send-back loop is passed through in one keypress; docs/tapes/sendback.tape is where it is explained.
 #
 # f-002 is the blocking finding the board opens on, since specs/014 orders the list by severity. A
-# decision advances by itself, in the draft's order rather than the list's, which is why the walk to
-# f-003 is spelled out.
+# decision advances by itself to the next finding in the list's order: f-003, whose note is resolved and
+# which is then accepted, then f-001. f-004, the last pending finding, is the list's last row, which is
+# why the walk to it is spelled out.
 Enter
 Sleep 1600ms
 Type "a"
+Sleep 1600ms
+Type "r"
+Sleep 1400ms
+Type "a"
 Sleep 1300ms
+Right
+Sleep 400ms
 Right
 Sleep 400ms
 Right
 Sleep 400ms
 Right
 Sleep 900ms
-Type "r"
-Sleep 1400ms
 Type "a"
-Sleep 1300ms
-Right
-Sleep 600ms
-Type "x"
 Sleep 1500ms
 
 # The board again: nothing pending, no note open, publish now available. Steps 1 and 2 take their
