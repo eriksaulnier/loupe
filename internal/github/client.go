@@ -90,8 +90,8 @@ type Review struct {
 	SubmittedAt time.Time
 }
 
-// ReviewThread is one inline conversation. Line is 0 when the thread is outdated or on a whole file, and OriginalLine is
-// the line it was left on.
+// ReviewThread is one inline conversation. Line is 0 when the thread is outdated or on a whole file, and OriginalLine
+// is the line it was left on.
 type ReviewThread struct {
 	Path         string
 	Line         int

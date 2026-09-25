@@ -143,9 +143,9 @@ const PreviousFile = "previous.json"
 // CommentsFile holds the feedback capture read from other reviewers. See publish.Comments.
 const CommentsFile = "comments.json"
 
-// CreateRun takes the draft and the optional files, such as PreviousFile and CommentsFile, as bytes because run must not
-// import draft or publish. The run appears complete or not at all: files are written to a sibling temp directory that is
-// renamed into place.
+// CreateRun takes the draft and the optional files, such as PreviousFile and CommentsFile, as bytes because run must
+// not import draft or publish. The run appears complete or not at all: files are written to a sibling temp directory
+// that is renamed into place.
 func CreateRun(dir string, target Target, diff, draftJSON []byte, optional map[string][]byte) (err error) {
 	if _, statErr := os.Lstat(dir); !errors.Is(statErr, fs.ErrNotExist) {
 		return refusal.New(refusal.Internal, fmt.Sprintf("run directory %s already exists", dir), "file an issue")

@@ -1,5 +1,5 @@
-// Package fakegh is an in-memory GitHub REST and GraphQL server for the endpoints loupe calls, reached through the production
-// client so request encoding is exercised end to end.
+// Package fakegh is an in-memory GitHub REST and GraphQL server for the endpoints loupe calls, reached through the
+// production client so request encoding is exercised end to end.
 package fakegh
 
 import (

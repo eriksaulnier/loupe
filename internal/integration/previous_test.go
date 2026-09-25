@@ -115,7 +115,8 @@ func TestStickyRoundReadsTheReviewsCurrentRound(t *testing.T) {
 	}
 }
 
-// The reviews are still listed once, for the other reviewers' feedback (spec 029), but the receipt answers --previous.
+// The receipt answers --previous, and capture lists the reviews once regardless, for the other reviewers' feedback
+// (specs/029-reviewer-comments).
 func TestLocalReceiptWinsOverTheReviews(t *testing.T) {
 	h := newHarness(t)
 	h.captureRound(1)
