@@ -12,7 +12,7 @@
 
 **Language/Version**: Go 1.25.
 
-**Primary Dependencies**: None added.
+**Primary Dependencies**: `yuin/goldmark`, promoted from indirect (via glamour) to direct: `markdown.OneDisclosure` parses each carried round with it, since it is already installed, follows CommonMark with GitHub's GFM extensions, and a hand reading of block structure kept missing cases.
 
 **Storage**: `attempt.json` and `receipt.json` keep schema 1. The envelope gains `editReviewId` (omitted when 0), and the receipt gains `edited` (omitted when false). A record written before this feature reads as a create, which is what it was.
 
@@ -71,7 +71,7 @@ None of these can be confirmed offline. The owner ran the probes marked observed
 - **III. Local files, no service.** PASS. No new file kinds and no network access beyond the GitHub API.
 - **IV. Never touch the user's checkout.** PASS. Not in scope.
 - **V. Machine contract first.** PASS. `--help` documents the flag, the refusals name their fix, and the `--json` result gains one always-present key. The new `sticky` code is added to the contract table.
-- **VI. Simplicity over ceremony.** PASS. No new dependency. One new file in `internal/publish`. The read-back is a line scanner over the structure loupe itself writes, not a Markdown parser. There is a refusal in place of recovery for a body loupe cannot read.
+- **VI. Simplicity over ceremony.** PASS, with one departure below. goldmark becomes a direct dependency, with its reason under Primary Dependencies. One new file in `internal/publish`. The read-back is a line scanner over the structure loupe itself writes. Only the balance check on each carried round parses Markdown. There is a refusal in place of recovery for a body loupe cannot read.
 - **VII. Verified means ran.** PASS. Every behavior is tested against `fakegh` and local repositories, the goldens are regenerated deliberately and read, and `mise run check` runs after the last edit. Each live API fact above is marked observed only where the owner's probe ran, and the rest stay assumed.
 
 Post-design re-check: PASS, unchanged.
@@ -115,4 +115,5 @@ specs/001-loupe-v1/contracts/cli.md   # --sticky, sticky code, widened changed, 
 | :--- | :--- | :--- |
 | Constitution amended to 3.0.0 | 2.0.2's "posts exactly one GitHub review per publication" | Owner, 2026-09-24, in clarify: amend rather than read the preamble loosely. Committed as its own change before planning |
 | A collapsed round nests its findings one `<details>` level deeper than the allowlist's bound assumes | `docs/comment-format.md` depth rule (15 in a body, 16 in a summary) | Owner's draft asks for one `<details>` per round. The allowlist still checks authored text at its own bounds. GitHub was observed to render 17 levels |
+| A carried round's balance is checked by parsing it with goldmark | Principle VI, "the standard library to a dependency" | A hand reading of CommonMark block and inline structure missed a new case in each of four review rounds. goldmark was already in the module graph through glamour, so no new module is fetched. Owner, 2026-09-25 |
 | `changed` also covers the edited review's body changing during confirmation | `contracts/cli.md` `changed`: the draft changed | Same meaning to the human (what you confirmed is no longer what would be sent), same fix. A new code would add a second name for one situation |

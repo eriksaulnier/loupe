@@ -3,6 +3,7 @@ package render
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -301,6 +302,39 @@ func TestReadStickyKeepsProseThatLooksLikeASection(t *testing.T) {
 		if !strings.Contains(earlier[0], want) {
 			t.Errorf("prose %q was cut:\n%s", prose, earlier[0])
 		}
+	}
+}
+
+// Every round carried into the next body MUST balance its disclosures, or text a person edited on GitHub would land
+// outside its collapse. These are hand edits a person could make; each is refused rather than republished.
+func TestReadStickyRefusesUnbalancedRounds(t *testing.T) {
+	clean := stickyInput(1, "aaaaaaa111")
+	clean.Summary = "Nothing to fix."
+	clean.Sticky = &StickyInput{Rounds: 1}
+	earlier, _, err := ReadSticky(firstRound())
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := stickyInput(2, "bbbbbbb222", general("f-002", "question", false))
+	next.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
+	two := Body(next)
+	cases := []struct{ name, body string }{
+		{"stray </details> in a round with no findings", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.\n\n</details>\n\nOutside.", 1)},
+		{"extra <details> in an earlier round", strings.Replace(two, "### Must fix\n", "<details>\n<summary>Mine</summary>\n\n### Must fix\n", 1)},
+		{"missing </details> in an earlier round", strings.Replace(two, "Body f-001.\n\n</details>\n\n<!-- loupe digest=1", "Body f-001.\n\n<!-- loupe digest=1", 1)},
+		{"close tag after text in the shown round", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.</details>\n\nOutside.", 1)},
+		{"round closed early, then a second disclosure", strings.Replace(two, "\n\n<!-- loupe digest=1", "\n\n</details>\n\nOutside.\n\n<details>\n<summary>Mine</summary>\n\n<!-- loupe digest=1", 1)},
+		{"close tag after a span that spans lines", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix. `a\nb` </details> `c`\n\nOutside.", 1)},
+		{"comment left open before an earlier round's close", regexp.MustCompile(`(<!-- loupe digest=1[^\n]*-->\n\n)</details>`).ReplaceAllString(two, "$1<!--\n\n</details>")},
+		// An open fence also hides the generated tail, so the structure checks refused this before the balance check.
+		{"unclosed fence in the shown round", strings.Replace(two, "Body f-002.", "Body f-002.\n\n```", 1)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if _, _, err := ReadSticky(c.body); err == nil {
+				t.Fatalf("ReadSticky accepted:\n%s", c.body)
+			}
+		})
 	}
 }
 
