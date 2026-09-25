@@ -28,10 +28,13 @@ jobs:
       pull-requests: write
       checks: read
       actions: read
-    uses: eriksaulnier/loupe-workflows/.github/workflows/review.yml@fb1d243e8423a19a1472671e3c9083f934a1bf8b # v1.4.0
+    uses: eriksaulnier/loupe-workflows/.github/workflows/review.yml@7365da6ea92b2da97cc663ef810fd425d6f18806 # v2.0.0
     with:
       pull_request: ${{ inputs.pull_request || github.event.pull_request.number }}
       model: ${{ vars.REVIEW_MODEL }}
       debug: ${{ vars.REVIEW_DEBUG == 'true' }}
+      # loupe dogfoods its own sticky review. Sticky finds the review to edit by its source name, so
+      # source MUST stay at its default for every round.
+      sticky: true
     secrets:
       openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}

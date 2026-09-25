@@ -1,6 +1,8 @@
 package publish
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -498,5 +500,52 @@ func TestBuildStickyDropsTheOldestRoundsToFit(t *testing.T) {
 	_, err = Build(in)
 	if r, ok := refusal.As(err); !ok || r.Details["rule"] != "limit" {
 		t.Fatalf("a round over the limit alone must refuse with limit, got %#v", err)
+	}
+}
+
+// noise is n characters that deflate poorly, so a finding carrying it makes the record nearly as long as the finding.
+func noise(n int) string {
+	var b strings.Builder
+	sum := sha256.Sum256([]byte("seed"))
+	for b.Len() < n {
+		b.WriteString(hex.EncodeToString(sum[:]))
+		sum = sha256.Sum256(sum[:])
+	}
+	return b.String()[:n]
+}
+
+func TestBuildLeavesTheRecordOutWhenItDoesNotFit(t *testing.T) {
+	d := readyDraft()
+	d.Findings[0].Body = noise(40000)
+	env, err := Build(buildInput(fixtureTarget(), d, "comment", "none", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := utf8.RuneCountInString(env.Body); n > maxBodyChars {
+		t.Fatalf("body is %d characters", n)
+	}
+	if !strings.Contains(env.Body, "\n<!-- loupe-findings v=1 omitted=length -->\n") {
+		t.Fatalf("a body that fits only without its record does not say it was left out:\n%s", env.Body[len(env.Body)-400:])
+	}
+	if _, err := render.ReadRecord(env.Body); err != render.ErrRecordOmitted {
+		t.Fatalf("ReadRecord: %v", err)
+	}
+}
+
+func TestBuildStickyDropsEarlierRoundsBeforeTheRecord(t *testing.T) {
+	d := readyDraft()
+	d.Findings[0].Body = noise(30000)
+	in := buildInput(fixtureTarget(), d, "comment", "none", false)
+	earlier := fmt.Sprintf("<details>\n<summary>Round 1</summary>\n\n%s\n\n</details>", strings.Repeat("x", 20000))
+	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []string{earlier}}
+	env, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(env.Body, "Round 1") {
+		t.Fatal("the earlier round was kept")
+	}
+	if _, err := render.ReadRecord(env.Body); err != nil {
+		t.Fatalf("the record was not kept: %v", err)
 	}
 }

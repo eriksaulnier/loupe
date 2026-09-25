@@ -16,7 +16,7 @@ func TestListHumanOutputEscapesTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := run.Target{Schema: run.TargetSchema, Owner: "o", Repo: "r", Number: 1, Round: 1, Title: "ti\x1b[2Jtle \u202egnp.exe"}
-	if err := run.CreateRun(run.RunDir(home, "o", "r", 1, 1), target, nil, draftJSON); err != nil {
+	if err := run.CreateRun(run.RunDir(home, "o", "r", 1, 1), target, nil, draftJSON, nil); err != nil {
 		t.Fatal(err)
 	}
 	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})

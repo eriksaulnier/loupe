@@ -37,6 +37,8 @@ type Input struct {
 	Excluded, Withdrawn, Reinstated, Regraded int
 	// Sticky marks a body that later rounds edit in place; nil is an ordinary review.
 	Sticky *StickyInput
+	// OmitRecord writes the findings record's omission line in its place, for a body too long to carry it.
+	OmitRecord bool
 }
 
 type Finding struct {
@@ -146,14 +148,13 @@ func Body(in Input) string {
 	if in.Sticky != nil {
 		sticky = fmt.Sprintf(" sticky=%d", in.Sticky.Rounds)
 	}
-	blocks = append(blocks, fmt.Sprintf("%s\n\n<!-- loupe digest=%s publication=%s -->\n"+
-		MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d excluded=%d withdrawn=%d reinstated=%d regraded=%d%s -->\n",
-		footer, in.Digest, in.PublicationID,
+	blocks = append(blocks, fmt.Sprintf("%s\n\n<!-- loupe digest=%s publication=%s -->\n", footer, in.Digest, in.PublicationID))
+	metaLine := fmt.Sprintf(MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d excluded=%d withdrawn=%d reinstated=%d regraded=%d%s -->\n",
 		meta, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther],
-		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded, sticky))
+		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded, sticky)
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
-	return strings.Join(blocks, "\n\n---\n\n")
+	return withRecord(strings.Join(blocks, "\n\n---\n\n"), metaLine, in.Findings, in.OmitRecord)
 }
 
 // chipsRow is a key to the row dots below: a blocking row leads with ⛔, and every other row with its label group's dot.

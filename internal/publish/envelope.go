@@ -158,6 +158,11 @@ func Build(in BuildInput) (Envelope, error) {
 		r.Sticky.Earlier = r.Sticky.Earlier[:len(r.Sticky.Earlier)-1]
 		env.Body = render.Body(r)
 	}
+	// The record only lets the next round read this one back, so it gives way after the earlier rounds a reader sees.
+	if utf8.RuneCountInString(env.Body) > maxBodyChars {
+		r.OmitRecord = true
+		env.Body = render.Body(r)
+	}
 	if n := utf8.RuneCountInString(env.Body); n > maxBodyChars {
 		return Envelope{}, limitRefusal(fmt.Sprintf("the composed review body is %d characters; at most %d characters are allowed", n, maxBodyChars))
 	}
