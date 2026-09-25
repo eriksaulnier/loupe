@@ -273,7 +273,7 @@ func splitChips(part []string, meta string) (string, []string, error) {
 	}
 	total := counts["issues"] + counts["suggestions"] + counts["questions"] + counts["other"]
 	if total == 0 {
-		return "no findings", part, nil
+		return "<code>✓ no findings</code>", part, nil
 	}
 	var chips []string
 	sum := 0
@@ -298,6 +298,14 @@ func splitChips(part []string, meta string) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
+	// A collapsed round's sections drop a heading level, so an opened round reads as history under the round on top
+	// and its headings stay out of the page outline's top level. Only loupe's own sections from the first one on
+	// change: prose above them that looks like a heading is the author's and stays as written.
+	for _, i := range sectionHeadings(rest) {
+		if i >= first {
+			rest[i] = "#" + strings.TrimSpace(rest[i])
+		}
+	}
 	// With no prose the chips row was followed directly by the first section's divider, which now follows nothing.
 	if first == 2 {
 		rest = rest[2:]
@@ -317,22 +325,7 @@ func firstSection(lines []string, blocking, total int) (int, error) {
 	if total > blocking {
 		want++
 	}
-	_, structural := markdown.StructuralLines(strings.Join(lines, "\n"))
-	var headings []int
-	depth := 0
-	for i, line := range lines {
-		if !structural[i] {
-			continue
-		}
-		switch trimmed := strings.TrimSpace(line); {
-		case trimmed == "<details>" || trimmed == "<details open>":
-			depth++
-		case trimmed == "</details>":
-			depth--
-		case depth == 0 && (trimmed == "### Must fix" || trimmed == "### Worth a look"):
-			headings = append(headings, i)
-		}
-	}
+	headings := sectionHeadings(lines)
 	if len(headings) < want {
 		return 0, fmt.Errorf("the round it shows has %d of its %d sections", len(headings), want)
 	}
@@ -394,4 +387,26 @@ func trimBlank(lines []string) []string {
 		lines = lines[:len(lines)-1]
 	}
 	return lines
+}
+
+// sectionHeadings finds loupe's section headings in a round: a `### Must fix` or `### Worth a look` line outside a
+// fence and outside every finding's <details>, which is where loupe writes them and authored text cannot.
+func sectionHeadings(lines []string) []int {
+	_, structural := markdown.StructuralLines(strings.Join(lines, "\n"))
+	var headings []int
+	depth := 0
+	for i, line := range lines {
+		if !structural[i] {
+			continue
+		}
+		switch trimmed := strings.TrimSpace(line); {
+		case trimmed == "<details>" || trimmed == "<details open>":
+			depth++
+		case trimmed == "</details>":
+			depth--
+		case depth == 0 && (trimmed == "### Must fix" || trimmed == "### Worth a look"):
+			headings = append(headings, i)
+		}
+	}
+	return headings
 }

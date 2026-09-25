@@ -100,7 +100,7 @@ func TestReadStickyDemotesTheCurrentRound(t *testing.T) {
 	// The chips move into the summary and the footer stays under the round; the reconciliation marker stays too, so an
 	// interrupted publish of this round still reconciles.
 	want := "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code></summary>\n\n" +
-		"### Must fix\n\n<details>\n<summary>⛔ <b>issue</b>: Title f-001</summary>\n\nBody f-001.\n\n</details>\n\n" +
+		"#### Must fix\n\n<details>\n<summary>⛔ <b>issue</b>: Title f-001</summary>\n\nBody f-001.\n\n</details>\n\n" +
 		"---\n\nreviewed `aaaaaaa`\n\n---\n\n<!-- loupe digest=" + strings.Repeat("1", 64) + " publication=00000000-0000-4000-8000-000000000001 -->\n\n</details>"
 	if earlier[0] != want {
 		t.Fatalf("demoted round\n--- got ---\n%s\n--- want ---\n%s", earlier[0], want)
@@ -116,7 +116,7 @@ func TestReadStickyNumbersRoundsInTheReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>🔵 1 question</code></summary>\n\nProse stays.\n\n---\n\nAfter a break.\n\n---\n\n### Worth a look") {
+	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>🔵 1 question</code></summary>\n\nProse stays.\n\n---\n\nAfter a break.\n\n---\n\n#### Worth a look") {
 		t.Fatalf("demoted round:\n%s", earlier[0])
 	}
 	next := stickyInput(6, "bbbbbbb222")
@@ -126,7 +126,7 @@ func TestReadStickyNumbersRoundsInTheReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(again[0], "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · no findings</summary>\n\nNothing left.\n\n---\n\nreviewed `bbbbbbb`\n\n---\n\n<!-- loupe digest=") ||
+	if !strings.HasPrefix(again[0], "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · <code>✓ no findings</code></summary>\n\nNothing left.\n\n---\n\nreviewed `bbbbbbb`\n\n---\n\n<!-- loupe digest=") ||
 		!strings.HasPrefix(again[1], "<details>\n<summary>Round 1 · ") {
 		t.Fatalf("blocks:\n%s", strings.Join(again, "\n=====\n"))
 	}
@@ -296,7 +296,7 @@ func TestReadStickyKeepsProseThatLooksLikeASection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := "</summary>\n\n" + prose + "\n\n---\n\n### Must fix\n\n<details>"
+		want := "</summary>\n\n" + prose + "\n\n---\n\n#### Must fix\n\n<details>"
 		if !strings.Contains(earlier[0], want) {
 			t.Errorf("prose %q was cut:\n%s", prose, earlier[0])
 		}
@@ -325,7 +325,7 @@ func TestReadStickyRefusesUnbalancedRounds(t *testing.T) {
 		// With every earlier round dropped nothing tells the layouts apart, so a second footer is refused.
 		{"a second footer after dropped rounds", strings.Replace(Body(droppedOnly), "\n\n<!-- loupe digest=3", "\n\n---\n\nreviewed `ddddddd`\n\n<!-- loupe digest=3", 1)},
 		{"stray </details> in a round with no findings", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.\n\n</details>\n\nOutside.", 1)},
-		{"extra <details> in an earlier round", strings.Replace(two, "### Must fix\n", "<details>\n<summary>Mine</summary>\n\n### Must fix\n", 1)},
+		{"extra <details> in an earlier round", strings.Replace(two, "#### Must fix\n", "<details>\n<summary>Mine</summary>\n\n#### Must fix\n", 1)},
 		{"missing </details> in an earlier round", strings.Replace(two, "Body f-001.\n\n</details>\n\n---\n\nreviewed `aaaaaaa`", "Body f-001.\n\n---\n\nreviewed `aaaaaaa`", 1)},
 		{"close tag after text in the shown round", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.</details>\n\nOutside.", 1)},
 		{"round closed early, then a second disclosure", strings.Replace(two, "\n\n<!-- loupe digest=1", "\n\n</details>\n\nOutside.\n\n<details>\n<summary>Mine</summary>\n\n<!-- loupe digest=1", 1)},
@@ -449,7 +449,7 @@ func TestStickyV0110BodyKeepsFooterShapedProse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadSticky: %v", err)
 	}
-	want := "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · no findings</summary>\n\n" + prose +
+	want := "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · <code>✓ no findings</code></summary>\n\n" + prose +
 		"\n\n---\n\nreviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`\n\n---\n\n<!-- loupe digest=" + strings.Repeat("2", 64) +
 		" publication=00000000-0000-4000-8000-000000000002 -->\n\n</details>"
 	if earlier[0] != want {
