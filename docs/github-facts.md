@@ -52,6 +52,8 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 ## Markdown rendering in review bodies
 
 - Alerts: `> [!NOTE]` and `> [!IMPORTANT]` render as callouts. Alert titles are GitHub's and cannot be changed.
+- Observed 2026-09-25 with GitHub's `POST /markdown` render endpoint in `gfm` mode, which renders and stores nothing: inside a blockquote, a `<details>` with its `<summary>` renders as a disclosure, a fenced `</details>` stays code, and a `> > ` line renders as a quote inside the quote. So a collapsed sticky round quoted whole (`specs/030-quoted-rounds`) renders as one quote holding its finding disclosures and its footer. The owner's session checked it first, and this session again on the same day. The review page itself was not checked.
+- Observed the same way on 2026-09-25: a code block indented by one tab renders as code on its own, but after `> ` it renders as a paragraph, because the tab then reaches only two columns past the quote's content. A fenced block, a list item continued by a tab, and a code block indented by four spaces render the same inside the quote as outside it.
 - A `---` immediately after `</details>` with no blank line renders as literal text, not a rule. Always put a blank line before a divider.
 - `<details>` and `</details>` are matched anywhere in a line, not only at line start. An unterminated `<!--` swallows everything after it, including the footer and hidden markers.
 - `<script>`, `<style>` and `<pre>` are never inert inside a body; loupe's allowlist refuses raw HTML other than details/summary.
