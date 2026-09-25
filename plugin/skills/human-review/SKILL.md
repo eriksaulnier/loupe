@@ -31,7 +31,7 @@ Run `loupe capture <pr-url> --json` from a clone of the pull request's repositor
 - `target.headSha`, `target.baseRef` and `target.headRef`: the refs the review reads the change at.
 - `target.previousRound`: present from round 2 on.
 
-To name what filed the findings in the published footer, add `--source <name>[@<version>]`, such as `--source my-reviewer@1.0.0`. To record which model produced them, add `--model <id>` with your own model identifier, such as `--model claude-opus-4-1`, when you know it. loupe checks it against `^[a-z0-9][a-z0-9._/:-]*$`, at most 64 characters and no `--`, so lowercase it and drop any `@` qualifier before passing it. Both are optional. If you do not know your model, omit the flag rather than guess.
+To name what filed the findings in the published footer, add `--source <name>[@<version>]`, such as `--source my-reviewer@1.0.0`. To name which model produced them in the published footer, add `--model <id>` with your own model identifier, such as `--model claude-opus-4-1`, when you know it. loupe checks it against `^[a-z0-9][a-z0-9._/:-]*$`, at most 64 characters and no `--`, so lowercase it and drop any `@` qualifier before passing it. Both are optional. If you do not know your model, omit the flag rather than guess.
 
 If capture refuses with `same-head`, an unpublished round already exists at this head. Follow `error.fix` and continue with that run instead of capturing again.
 

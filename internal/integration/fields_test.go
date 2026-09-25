@@ -44,15 +44,12 @@ func TestPublishRendersEveryFindingField(t *testing.T) {
 		`<b>issue</b> <picture>`, `alt="MAJOR" height="16" align="absmiddle"></picture>: `,
 		"> **Confidence:** high\\\n> **Severity:** major\\\n> **Verified:** reproduced\n",
 		"**Impact:** A 502 leaves two reviews.\n\nEvidence for line 3.\n\n**Suggested fix:** Return the original error.\n\n**References**\n\n- [github.com/o/r/issues/12](<https://github.com/o/r/issues/12>)\n- [localhost/a](<http://localhost/a?b=c>)\n\n</details>",
-		"· via `gadfly-review-pr 2.2.0` · unattended\n\n<!-- loupe digest=",
+		"· via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5` · unattended\n\n<!-- loupe digest=",
 		"src=gadfly-review-pr@2.2.0 model=anthropic/claude-sonnet-5 inline=",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body lacks %q:\n%s", want, body)
 		}
-	}
-	if strings.Contains(body, "claude-sonnet-5`") {
-		t.Errorf("the footer names the model:\n%s", body)
 	}
 }
 

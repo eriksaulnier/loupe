@@ -27,7 +27,7 @@ Every automated reviewer worth reading already reports more than a title and a b
 - **Impact** is a section because it is the one part of a finding a reader skims for: what breaks, with what input. It is Markdown, so it can hold the failing case.
 - **Verified** is separate from confidence because they answer different questions. Confidence is how sure the reviewer is. Verified is whether it ran the failure or reasoned to it.
 - **References** are a list because URLs in prose are lost, and a list of autolinks is the one form GitHub renders without escaping surprises.
-- **Model** is per run, not per finding, because one run has one reviewer. It goes in `loupe-meta` and not the footer, because a pull request reader has the reviewer's name from `via` and the model is provenance for tooling.
+- **Model** is per run, not per finding, because one run has one reviewer. It goes in `loupe-meta` and not the footer, because a pull request reader has the reviewer's name from `via` and the model is provenance for tooling. Amended by `specs/023-model-footer`, which also shows the model in the footer, since for an AI review it is part of how a reader weighs the findings.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -57,7 +57,7 @@ An agent files a finding with `severity: "major"`, `verified: "reproduced"`, an 
 
 ### User Story 2 - A run records which model reviewed (Priority: P2)
 
-A pipeline captures with `loupe capture <url> --source my-reviewer@1.0.0 --model anthropic/claude-sonnet-5`. The published review's footer is unchanged, and `loupe-meta` ends `src=my-reviewer@1.0.0 model=anthropic/claude-sonnet-5`. A human capturing by hand passes neither, and the review is byte for byte what it was.
+A pipeline captures with `loupe capture <url> --source my-reviewer@1.0.0 --model anthropic/claude-sonnet-5`. The published review's footer is unchanged, and `loupe-meta` ends `src=my-reviewer@1.0.0 model=anthropic/claude-sonnet-5`. A human capturing by hand passes neither, and the review is byte for byte what it was. Amended by `specs/023-model-footer`: the footer shows the model too.
 
 **Why this priority**: Provenance for automated reviews was the second thing #18 lacked, and it is a small change once the field plumbing exists.
 
@@ -66,7 +66,7 @@ A pipeline captures with `loupe capture <url> --source my-reviewer@1.0.0 --model
 **Acceptance Scenarios**:
 
 1. **Given** `loupe capture --model anthropic/claude-sonnet-5`, **When** the capture result is read, **Then** `target.model` carries the value and `target.json` stores it beside `source`.
-2. **Given** that run, **When** it is published, **Then** `loupe-meta` carries `model=anthropic/claude-sonnet-5` after `src=` when a source was given, or after `unattended=1` or `round=` when not, and the footer line has no model segment.
+2. **Given** that run, **When** it is published, **Then** `loupe-meta` carries `model=anthropic/claude-sonnet-5` after `src=` when a source was given, or after `unattended=1` or `round=` when not, and the footer line has no model segment. Amended by `specs/023-model-footer`: the footer shows the model too.
 3. **Given** `--model` with `>`, `--`, an uppercase letter, a space, or more than 64 characters, **When** capture runs, **Then** it refuses with `input` before touching the clone, and the fix names the flag and the pattern.
 4. **Given** a stored `target.json` whose `model` fails the pattern, **When** any command loads the run, **Then** it refuses as it does for a bad `source`.
 5. **Given** a capture without `--model`, **When** it is published, **Then** the body is byte for byte what it was before this feature.
@@ -120,13 +120,13 @@ A human opens a run captured last week whose findings carry `severity: "P2"`. `l
 - **FR-009**: `impact` MUST render inside the disclosure after the body and before `**Suggested fix**`, under a bold `**Impact**` line, its trailing newlines trimmed, as Markdown.
 - **FR-010**: `references` MUST render inside the disclosure after the suggested fix, under a bold `**References**` line, as one `- <url>` autolink bullet per entry in input order.
 - **FR-011**: An inline comment MUST carry the same meta-block parts, impact and references as the body's disclosure for that finding, without the location line: the comment sits on that line already.
-- **FR-012**: The chips row, headings, summary lines, dividers, footer and reconciliation marker MUST be unchanged by this feature. A finding without the new fields and a run without a model MUST publish a body byte for byte identical to before.
+- **FR-012**: The chips row, headings, summary lines, dividers, footer and reconciliation marker MUST be unchanged by this feature. A finding without the new fields and a run without a model MUST publish a body byte for byte identical to before. `specs/023-model-footer` later adds a model segment to the footer.
 
 #### Run provenance
 
 - **FR-013**: `loupe capture` MUST accept `--model <id>`, optional, stored in the run's target as `model` and returned in the capture result as `target.model`. Its absence MUST leave the target file without the key.
 - **FR-014**: A model MUST match `^[a-z0-9][a-z0-9._/:-]*$`, be at most 64 characters and contain no `--`. Capture MUST refuse a bad value with `input` before any Git or GitHub call, and loading a stored target MUST refuse one as it refuses a bad `source`.
-- **FR-015**: `loupe-meta` MUST carry `model=<id>` when the target has a model, placed after `src=`, or where `src=` would go when there is no source. The footer MUST NOT change.
+- **FR-015**: `loupe-meta` MUST carry `model=<id>` when the target has a model, placed after `src=`, or where `src=` would go when there is no source. The footer MUST NOT change. Amended by `specs/023-model-footer`: the footer shows the model too.
 - **FR-016**: loupe MUST NOT require a model anywhere: not on capture, not on `publish --unattended`, not on any input. Requiring it would force a reviewer that does not know its model to guess or stop filing.
 
 #### The example integration and the plugin
@@ -140,7 +140,7 @@ A human opens a run captured last week whose findings carry `severity: "P2"`. `l
 - **Verified**: whether the reviewer ran or observed the failure (`reproduced`) or reasoned to it (`plausible`). Orthogonal to confidence.
 - **Impact**: Markdown describing what goes wrong and under what input. Part of the finding's content, so it is digested and its change clears a decision.
 - **Reference**: one `http` or `https` URL the reviewer looked at. Kept verbatim, rendered as an autolink, never fetched.
-- **Model**: the identifier of the model that produced a run's findings, as the caller names it. Per run, recorded at capture, provenance only.
+- **Model**: the identifier of the model that produced a run's findings, as the caller names it. Per run, recorded at capture, provenance only. Amended by `specs/023-model-footer`, which also shows it in the footer.
 
 ## Success Criteria *(mandatory)*
 
@@ -150,7 +150,7 @@ A human opens a run captured last week whose findings carry `severity: "P2"`. `l
 - **SC-002**: Each rejected value for severity, verified, references and model is refused with `input` and zero writes, with a fix a reader can act on without loupe's source.
 - **SC-003**: A run captured before this feature, with a free-text severity, loads, shows, edits by title and publishes unchanged.
 - **SC-004**: A run without a model and findings without the new fields publish a body byte for byte identical to the goldens before this feature, footer included.
-- **SC-005**: A capture with `--model` publishes a body whose `loupe-meta` carries the value and whose footer does not.
+- **SC-005**: A capture with `--model` publishes a body whose `loupe-meta` carries the value and whose footer does not. Amended by `specs/023-model-footer`: the footer carries it too.
 - **SC-006**: The example workflow's capture step fails without the model variable, and the next live run on a pull request the maintainer names carries `model=` in its marker. The live check is unverified until that run.
 - **SC-007**: All automated repository checks pass after the final edit.
 

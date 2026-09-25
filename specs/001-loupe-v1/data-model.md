@@ -51,7 +51,7 @@ The exit's recording runs only on a clean exit: `q`, Ctrl-C in the full-screen p
 | `mergeBaseSha` | string | `git merge-base baseRef headRef`, the commit `pr.diff` compares the head against |
 | `diffSha256` | string | hex SHA-256 of `pr.diff`; every load of `pr.diff` compares it and refuses `record` on a mismatch (ruled 2026-09-13) |
 | `source` | string, optional | `--source` at capture, `name[@version]`, shown in the published footer and `loupe-meta`; omitted when none, so runs captured before it load unchanged |
-| `model` | string, optional | `--model` at capture, the reviewer's model id as the caller names it, carried in `loupe-meta` only; omitted when none (spec 008) |
+| `model` | string, optional | `--model` at capture, the reviewer's model id as the caller names it, shown in the published footer and `loupe-meta`; omitted when none (specs 008 and 023) |
 
 Validation: capture refuses (`same-head`) when the newest existing round has the same `headSha` and no receipt. `previousRound` is lineage; the previous published findings are found by walking rounds downward from `round - 1` to the first with a receipt. Capture refuses (`input`) a `source` outside the `src=` rule in `docs/comment-format.md` or a `model` outside the `model=` rule there, and loading a `target.json` that carries either refuses `record`.
 

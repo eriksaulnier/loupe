@@ -26,7 +26,7 @@ type Input struct {
 	PublicationID string
 	// Source is name[@version], already validated; empty omits it from the footer and loupe-meta.
 	Source string
-	// Model is the reviewer's model id, already validated; empty omits it from loupe-meta. The footer never shows it.
+	// Model is the reviewer's model id, already validated; empty omits it from the footer and loupe-meta.
 	Model string
 	// Unattended marks a review published without a human's confirmation, per constitution 2.0.0.
 	Unattended bool
@@ -123,6 +123,9 @@ func Body(in Input) string {
 	if in.Source != "" {
 		footer += " · via " + CodeSpan(OneLine(strings.Replace(in.Source, "@", " ", 1)))
 		meta += " src=" + in.Source
+	}
+	if in.Model != "" {
+		footer += " · " + CodeSpan(OneLine(in.Model))
 	}
 	// The footer ends with unattended while the marker keeps it before src=, so the two cannot build in step.
 	if in.Unattended {

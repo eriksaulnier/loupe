@@ -265,7 +265,8 @@ func TestBuildCarriesModel(t *testing.T) {
 	target := fixtureTarget()
 	target.Model = "anthropic/claude-sonnet-5"
 	env, err := Build(buildInput(target, readyDraft(), "comment", "none", false))
-	if err != nil || strings.Contains(env.Body, "claude-sonnet-5`") || !strings.Contains(env.Body, " model=anthropic/claude-sonnet-5 ") {
+	if err != nil || !strings.Contains(env.Body, "reviewed `1111111` · `anthropic/claude-sonnet-5`\n\n") ||
+		!strings.Contains(env.Body, " model=anthropic/claude-sonnet-5 ") {
 		t.Fatalf("model not rendered: %v\n%s", err, env.Body)
 	}
 }
