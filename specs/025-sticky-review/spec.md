@@ -38,6 +38,8 @@ This specification amends `docs/comment-format.md`, which is a contract (constit
 
 ## User Scenarios & Testing *(mandatory)*
 
+- An earlier round's `<summary>` draws its chips as `<code>` pills separated by spaces, matching the scoreboard, and a divider follows each collapsed round's footer (owner, 2026-09-25). Plain-text chips and rounds without that divider, as earlier builds wrote them, still read back and are carried as they are.
+
 ### User Story 1 - A pipeline keeps one review current (Priority: P1)
 
 A repository's workflow runs `loupe publish --unattended --sticky` after every push. The first round posts a review. Every later round rewrites that review's body: the newest round's chips, prose and findings on top, and each earlier round in a collapsed section below. The pull request's timeline holds one loupe review, not one per push.

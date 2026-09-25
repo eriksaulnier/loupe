@@ -26,7 +26,7 @@ reviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`
 <!-- loupe-round -->
 
 <details>
-<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>
+<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code></summary>
 
 ### Must fix
 
@@ -41,10 +41,12 @@ Body f-001.
 
 reviewed `aaaaaaa`
 
+---
+
 <!-- loupe digest=1111111111111111111111111111111111111111111111111111111111111111 publication=00000000-0000-4000-8000-000000000001 -->
 
 </details>
 
 <!-- loupe digest=2222222222222222222222222222222222222222222222222222222222222222 publication=00000000-0000-4000-8000-000000000002 -->
-<!-- loupe-findings v=1 sha256=614f71c61f0da75fc2dd555effb01e9cabda924b4dcdb5f4fe70150fc653f3e7 NMixCsIwFIbRV5FvjlLXO/oMbuKQNKkEf3KRpkMQ311UnA6cy5OaMZb9NB0J9NpVMM4fd/9NngfGyfP43YGAfI69esPaJgUUUxHGYyvr9wNJPt9ru2FL1Fpe13cAAAD//w== -->
+<!-- loupe-findings v=1 sha256=1e8ab9306b0344a9ed53c2d50c343839590a9dab700ab43d4dc588028b08adf8 NMixCsIwFIbRV5FvjlLXO/oMbuKQNKkEf3KRpkMQ311UnA6cy5OaMZb9NB0J9NpVMM4fd/9NngfGyfP43YGAfI69esPaJgUUUxHGYyvr9wNJPt9ru2FL1Fpe13cAAAD//w== -->
 <!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=none blocking=0 issues=0 suggestions=0 questions=1 other=0 excluded=0 withdrawn=0 reinstated=0 regraded=0 sticky=2 -->

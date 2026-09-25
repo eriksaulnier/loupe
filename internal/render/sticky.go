@@ -29,9 +29,10 @@ const (
 var (
 	stickyKey = regexp.MustCompile(` sticky=([0-9]+) -->$`)
 	srcKey    = regexp.MustCompile(` src=(\S+)`)
-	// roundSummary is a collapsed round's summary line as loupe writes it, with its chips or no findings after the
-	// commit, or, in a body written before that format, with nothing after it.
-	roundSummary = regexp.MustCompile(`^<summary>Round [0-9]+ · reviewed <code>[0-9a-f]+</code>( · [^<]+)?</summary>$`)
+	// roundSummary is a collapsed round's summary line as loupe writes it, with its chips as code pills or no findings
+	// after the commit. v0.11.0 wrote the chips as plain text joined by ` · `, and a body written before that format
+	// has nothing after the commit; both still read back.
+	roundSummary = regexp.MustCompile(`^<summary>Round [0-9]+ · reviewed <code>[0-9a-f]+</code>( · (?:[^<]+|<code>[^<]+</code>(?: <code>[^<]+</code>)*))?</summary>$`)
 	// stickyAny finds the key anywhere on the line, so a marker edited around it is still read back and refused by
 	// stickyKey's strict form rather than skipped for a second review.
 	stickyAny   = regexp.MustCompile(` sticky=(\S*)`)
@@ -238,8 +239,9 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	// The demoted round keeps its footer as it read on top, so the history shows each round's source and model.
-	content := footer + "\n\n" + digest
+	// The demoted round keeps its footer as it read on top, so the history shows each round's source and model. A
+	// divider closes it, so an opened round ends visibly before the next round's summary.
+	content := footer + "\n\n---\n\n" + digest
 	if len(rest) > 0 {
 		content = strings.Join(rest, "\n") + "\n\n---\n\n" + content
 	}
@@ -286,7 +288,7 @@ func splitChips(part []string, meta string) (string, []string, error) {
 			return "", nil, fmt.Errorf("its chips count %d blocking and its loupe-meta marker %d", n, counts["blocking"])
 		}
 		sum += n
-		chips = append(chips, strings.Trim(span, "`"))
+		chips = append(chips, "<code>"+strings.Trim(span, "`")+"</code>")
 	}
 	if sum != total {
 		return "", nil, fmt.Errorf("its chips count %d findings and its loupe-meta marker %d", sum, total)
@@ -300,7 +302,8 @@ func splitChips(part []string, meta string) (string, []string, error) {
 	if first == 2 {
 		rest = rest[2:]
 	}
-	return strings.Join(chips, " · "), rest, nil
+	// The pills match the scoreboard the round opened on. A <summary> is raw HTML, so they are <code>, not backticks.
+	return strings.Join(chips, " "), rest, nil
 }
 
 // firstSection finds the line of the round's first generated section heading. meta says how many sections there are,
@@ -368,12 +371,19 @@ func endsWithFooter(lines []string) bool {
 	return n >= 3 && footerLine.MatchString(lines[n-1]) && lines[n-2] == "" && lines[n-3] == "---"
 }
 
-// keepsFooter reports whether a collapsed round ends with its footer, then its reconciliation marker.
+// keepsFooter reports whether a collapsed round ends with its footer, then a divider, then its reconciliation marker.
+// A round demoted before the divider existed ends with its footer straight above the marker.
 func keepsFooter(block string) bool {
 	lines := strings.Split(block, "\n")
 	n := len(lines)
-	return n >= 7 && lines[n-1] == "</details>" && lines[n-2] == "" && digestLine.MatchString(lines[n-3]) && lines[n-4] == "" &&
-		endsWithFooter(lines[:n-4])
+	if n < 7 || lines[n-1] != "</details>" || lines[n-2] != "" || !digestLine.MatchString(lines[n-3]) || lines[n-4] != "" {
+		return false
+	}
+	lines = lines[:n-4]
+	if m := len(lines); m >= 2 && lines[m-1] == "---" && lines[m-2] == "" {
+		lines = lines[:m-2]
+	}
+	return endsWithFooter(lines)
 }
 
 func trimBlank(lines []string) []string {
