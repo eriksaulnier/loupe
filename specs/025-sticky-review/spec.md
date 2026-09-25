@@ -156,8 +156,8 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 
 - **FR-019**: `docs/comment-format.md` MUST document the sticky body, the `### Earlier rounds` section, the hidden round delimiter, `sticky=`, the numbering rule of FR-013, the drop rule of FR-024 and the silent-edit behavior.
 - **FR-020**: `specs/001-loupe-v1/contracts/cli.md` MUST document `--sticky`, its defaults and refusals, the `sticky` refusal code, the widened `changed` refusal and the `edited` result key. `loupe publish --help` MUST describe the same.
-- **FR-021**: `docs/github-facts.md` MUST record the review-update endpoint as used, marked unverified until the owner runs the probes of FR-022, and MUST NOT state any of them as observed.
-- **FR-022**: The unverified API facts and the probe for each MUST be listed in this spec's plan: whether `PUT /repos/{owner}/{repo}/pulls/{number}/reviews/{review_id}` accepts a body edit to a submitted review, for a user token and an installation token; whether it is refused after some time; whether it sends a notification; which status it returns for a review the caller did not author; and how a body near 65,536 characters behaves.
+- **FR-021**: `docs/github-facts.md` MUST record the review-update endpoint as used. A fact MUST be stated as observed only when the owner's probe of FR-022 ran, with its date and review ids, and every other fact MUST stay marked assumed.
+- **FR-022**: The API facts sticky mode relies on, the probe for each, and whether it was observed MUST be listed in this spec's plan: whether `PUT /repos/{owner}/{repo}/pulls/{number}/reviews/{review_id}` accepts a body edit to a submitted review, for a user token and an installation token; whether it is refused after some time; whether it sends a notification; which status it returns for a review the caller did not author; and how a body near 65,536 characters behaves.
 - **FR-023**: `scripts/check-tests.sh` MUST hold the review-update call to the same rule as `CreateReview`: called only from `internal/publish/publish.go`, and referenced there exactly once.
 
 ### Key Entities

@@ -71,7 +71,7 @@ None of these can be confirmed offline. The owner ran the probes marked observed
 - **IV. Never touch the user's checkout.** PASS. Not in scope.
 - **V. Machine contract first.** PASS. `--help` documents the flag, the refusals name their fix, and the `--json` result gains one always-present key. The new `sticky` code is added to the contract table.
 - **VI. Simplicity over ceremony.** PASS. No new dependency. One new file in `internal/publish`. The read-back is a line scanner over the structure loupe itself writes, not a Markdown parser. There is a refusal in place of recovery for a body loupe cannot read.
-- **VII. Verified means ran.** PASS. Every behavior is tested against `fakegh` and local repositories, the goldens are regenerated deliberately and read, and `mise run check` runs after the last edit. The live API facts are listed above as unverified, not claimed.
+- **VII. Verified means ran.** PASS. Every behavior is tested against `fakegh` and local repositories, the goldens are regenerated deliberately and read, and `mise run check` runs after the last edit. Each live API fact above is marked observed only where the owner's probe ran, and the rest stay assumed.
 
 Post-design re-check: PASS, unchanged.
 
@@ -104,7 +104,7 @@ internal/integration/                 # three unattended sticky rounds from fres
 testdata/golden/cli/publish-help.*    # regenerated with -update
 scripts/check-tests.sh                # UpdateReview under the CreateReview rule
 docs/comment-format.md                # Sticky reviews section, sticky= key
-docs/github-facts.md                  # the endpoint, unverified, with the probes
+docs/github-facts.md                  # the endpoint: observed facts, and the ones still assumed
 specs/001-loupe-v1/contracts/cli.md   # --sticky, sticky code, widened changed, edited
 ```
 
