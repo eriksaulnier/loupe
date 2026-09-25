@@ -225,6 +225,13 @@ func (s *Server) DenyUser() {
 	s.userForbidden = true
 }
 
+// AllowUser undoes DenyUser, for a test that hands the same pull request from an App back to a person.
+func (s *Server) AllowUser() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.userForbidden = false
+}
+
 // AddReview stores a review as if it already existed; a zero ID and empty HTMLURL are assigned.
 func (s *Server) AddReview(owner, repo string, number int, review github.Review) {
 	s.mu.Lock()

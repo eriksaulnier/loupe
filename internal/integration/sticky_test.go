@@ -18,7 +18,7 @@ func TestPublishStickyUnattendedKeepsOneReview(t *testing.T) {
 	for i, summary := range summaries {
 		h.Home = filepath.Join(t.TempDir(), "home")
 		h.IsTerminal = true
-		h.capture()
+		h.capture("--source", "loupe-ci@1.0.0")
 		h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
 		h.mustOK("summary", "--run", runRef, "--body", summary, "--expect-findings", "3")
 		h.IsTerminal = false

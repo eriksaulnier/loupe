@@ -106,3 +106,10 @@ description: "Task list for sticky review"
 ## Implementation strategy
 
 MVP is Phase 1 plus US1: what the downstream pipeline needs. US2 makes the human path safe, and it MUST land in the same change, since `--sticky` is reachable attended as soon as the flag exists.
+
+## Phase 7: Several publishers on one pull request (owner, 2026-09-25)
+
+- [X] T028 Match a `sticky=` key anywhere on the `loupe-meta` line when finding the review, and leave strict checking to `ReadSticky`, so a marker edited around the key is refused, not skipped. Tests in `internal/render/sticky_test.go` and `internal/publish/sticky_test.go`.
+- [X] T029 Match an unattended round's review by its `src=` name as well as `[bot]` (FR-006), refuse `--unattended --sticky` with no source (FR-025), and name `--source` in the fix for a 403 or 404 on an edit (FR-026). Tests in `internal/publish/sticky_test.go`.
+- [X] T030 Add `internal/integration/multi_test.go`: two people, a person and the pipeline, two Apps (including the unsourced refusal and the documented `round=`), and ordinary reviews never edited. `fakegh` gains `AllowUser`.
+- [X] T031 Document the cases, numbering, `--previous` and FR-027 in the spec, plan, `contracts/cli.md`, `docs/comment-format.md` and `publish --help`.

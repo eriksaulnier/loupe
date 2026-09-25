@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -98,6 +99,12 @@ func Run(ctx context.Context, opts Options) (receipt Receipt, replayed bool, err
 
 // retryID is the publicationId of the unknown attempt being retried, or empty.
 func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, bool, error) {
+	// An unattended round finds its sticky review by source, and two pipelines with none could not tell theirs apart.
+	if opts.Unattended && opts.Sticky && opts.Target.Source == "" {
+		return Receipt{}, false, refusal.New(refusal.Usage,
+			"loupe publish --unattended --sticky needs the source capture records, to tell this pipeline's sticky review from another's",
+			fmt.Sprintf("loupe capture %s --source <name>", opts.Target.URL))
+	}
 	// The token decides which command the caller wanted, so it is read before the terminal rule: a pipeline holding an
 	// installation token is told to add --unattended rather than to find a terminal it does not have. Both checks run
 	// again in Gates; here they keep a draft problem from hiding either one.
@@ -147,7 +154,7 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	}
 	var sticky *StickyBuild
 	if opts.Sticky {
-		if sticky, err = stickyInput(reviews, viewer); err != nil {
+		if sticky, err = stickyInput(reviews, viewer, opts.Target.Source); err != nil {
 			return Receipt{}, false, err
 		}
 	}
@@ -402,6 +409,10 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 			return Receipt{}, false, err
 		}
 		fix := fmt.Sprintf("fix what GitHub reported, then loupe publish; the pull request is %s", opts.Target.URL)
+		// Only the review's author can edit it, so a refused edit most likely picked another publisher's review.
+		if env.EditReviewID != 0 && (httpErr.Status == http.StatusForbidden || httpErr.Status == http.StatusNotFound) {
+			fix = "give this pipeline a loupe capture --source of its own, or loupe publish without --sticky to post a new review"
+		}
 		// GitHub refuses a submitted review while the viewer has a pending one, and loupe does not manage pending reviews.
 		if strings.Contains(strings.ToLower(httpErr.Message), "pending review") {
 			fix = fmt.Sprintf("submit or discard your pending review on %s first", opts.Target.URL)

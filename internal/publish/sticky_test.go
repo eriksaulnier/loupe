@@ -18,6 +18,37 @@ func stickyMeta(rounds int) string {
 	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 inline=none sticky=" + string(rune('0'+rounds)) + " -->\n"
 }
 
+func sourcedMeta(src string) string {
+	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 unattended=1 src=" + src + " inline=none sticky=1 -->\n"
+}
+
+// Two Apps can both publish loupe reviews, and an installation token cannot read its own login, so an unattended round
+// tells its own review by the source its capture recorded. The version is left out so a release keeps the same review.
+func TestFindStickyUnattendedMatchesItsSource(t *testing.T) {
+	reviews := []github.Review{
+		{ID: 1, User: "loupe-ci[bot]", State: "COMMENTED", Body: sourcedMeta("loupe-ci@1.0.0")},
+		{ID: 2, User: "other-app[bot]", State: "COMMENTED", Body: sourcedMeta("other-review")},
+		{ID: 3, User: "unsourced[bot]", State: "COMMENTED", Body: stickyMeta(1)},
+	}
+	for source, want := range map[string]int64{"loupe-ci@1.1.0": 1, "loupe-ci": 1, "other-review@2": 2, "third": 0} {
+		got, ok := findSticky(reviews, "", source)
+		if got.ID != want || ok != (want != 0) {
+			t.Errorf("source %q: found %d %v, want %d", source, got.ID, ok, want)
+		}
+	}
+	if got, ok := findSticky([]github.Review{{ID: 4, User: "reviewer", State: "COMMENTED", Body: sourcedMeta("other-review")}}, "reviewer", "loupe-ci"); !ok || got.ID != 4 {
+		t.Errorf("attended: a human's own review is theirs whatever its source, got %d %v", got.ID, ok)
+	}
+}
+
+func TestRunStickyUnattendedRefusesWithoutASource(t *testing.T) {
+	fx := newStickyRun(t, readyDraft(), nil, 1)
+	fx.opts.Target.Source = ""
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Usage, "--source")
+	fx.checkWrites(0, 0)
+}
+
 func TestFindSticky(t *testing.T) {
 	reviews := []github.Review{
 		{ID: 1, User: "reviewer", State: "COMMENTED", Body: stickyMeta(1)},
@@ -28,13 +59,13 @@ func TestFindSticky(t *testing.T) {
 		{ID: 7, User: "reviewer", State: "COMMENTED", Body: "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 -->\n"},
 		{ID: 10, User: "app[bot]", State: "COMMENTED", Body: stickyMeta(1)},
 	}
-	if got, ok := findSticky(reviews, "reviewer"); !ok || got.ID != 5 {
+	if got, ok := findSticky(reviews, "reviewer", ""); !ok || got.ID != 5 {
 		t.Fatalf("attended: got %d %v, want 5", got.ID, ok)
 	}
-	if got, ok := findSticky(reviews, ""); !ok || got.ID != 10 {
-		t.Fatalf("unattended: got %d %v, want 10", got.ID, ok)
+	if _, ok := findSticky(reviews, "", "loupe-ci"); ok {
+		t.Fatal("unattended: found a review from no source for source loupe-ci")
 	}
-	if _, ok := findSticky(reviews, "nobody"); ok {
+	if _, ok := findSticky(reviews, "nobody", ""); ok {
 		t.Fatal("found a sticky review for a viewer with none")
 	}
 }
@@ -50,7 +81,7 @@ func newStickyRun(t *testing.T, d *draft.Draft, gh *fakegh.Server, round int) *f
 		fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
 	}
 	fx.gh.SetViewer("loupe-app[bot]")
-	fx.opts.Sticky, fx.opts.Inline, fx.opts.Target.Round = true, "none", round
+	fx.opts.Sticky, fx.opts.Inline, fx.opts.Target.Round, fx.opts.Target.Source = true, "none", round, "loupe-ci@1.0.0"
 	return fx
 }
 
@@ -101,7 +132,7 @@ func TestRunStickyCreatesThenEdits(t *testing.T) {
 
 func TestRunStickyRefusesAReviewItCannotReadBack(t *testing.T) {
 	fx := newStickyRun(t, readyDraft(), nil, 2)
-	fx.gh.AddReview("acme", "widgets", 42, github.Review{User: "loupe-app[bot]", CommitID: headSHA, State: "COMMENTED", Body: stickyMeta(1)})
+	fx.gh.AddReview("acme", "widgets", 42, github.Review{User: "loupe-app[bot]", CommitID: headSHA, State: "COMMENTED", Body: sourcedMeta("loupe-ci")})
 	_, err := fx.run()
 	if message := wantRefusal(t, err, refusal.Sticky, "without --sticky"); !strings.Contains(message, "pullrequestreview-") {
 		t.Errorf("message %q does not name the review", message)
@@ -315,10 +346,24 @@ func TestRunStickyReplaysWithoutListing(t *testing.T) {
 
 // A count edited to 0 on GitHub still marks the review as the one to edit, so the round refuses rather than posting a
 // second sticky review beside it.
-func TestRunStickyRefusesAZeroCountRatherThanPostingASecondReview(t *testing.T) {
+func TestRunStickyRefusesATamperedMarkerRatherThanPostingASecondReview(t *testing.T) {
+	for _, tail := range []string{" sticky=0 -->", " sticky=1 extra=x -->"} {
+		fx, created := secondRound(t)
+		fx.gh.EditReview("acme", "widgets", 42, created.ReviewID, strings.Replace(created.Envelope.Body, " sticky=1 -->", tail, 1))
+		_, err := fx.run()
+		wantRefusal(t, err, refusal.Sticky, "without --sticky")
+		fx.checkWrites(1, 0)
+	}
+}
+
+// Only a review's author can edit it, so a refused edit points at the source that tells one publisher from another.
+func TestRunStickyRefusedEditNamesTheSource(t *testing.T) {
 	fx, created := secondRound(t)
-	fx.gh.EditReview("acme", "widgets", 42, created.ReviewID, strings.Replace(created.Envelope.Body, " sticky=1 -->", " sticky=0 -->", 1))
+	fx.gh.EditReview("acme", "widgets", 42, created.ReviewID, created.Envelope.Body)
+	fx.gh.SetViewer("another-app[bot]")
 	_, err := fx.run()
-	wantRefusal(t, err, refusal.Sticky, "without --sticky")
-	fx.checkWrites(1, 0)
+	wantRefusal(t, err, refusal.GitHub, "--source", "without --sticky")
+	if fx.exists("attempt.json") {
+		t.Fatal("a refused edit left an attempt")
+	}
 }
