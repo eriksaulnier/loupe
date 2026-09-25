@@ -473,7 +473,7 @@ func (c *confirmation) content(m *Model) string {
 	}
 	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
 	if c.inline() {
-		// The chips row sits above the box, and nothing does when there are no findings to count. Wrap drops the blank
+		// The chips row sits above the box, a no-findings pill when there are none to count. Wrap drops the blank
 		// lines the split left around the box, so its sides are spaced here instead: one row each.
 		if strings.TrimSpace(c.before) != "" {
 			parts = append(parts, m.styles.Wrap(render.ForDisplay(c.before), width, " "))

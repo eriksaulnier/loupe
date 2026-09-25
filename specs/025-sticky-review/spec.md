@@ -38,6 +38,10 @@ This specification amends `docs/comment-format.md`, which is a contract (constit
 
 ## User Scenarios & Testing *(mandatory)*
 
+- An earlier round's `<summary>` draws its chips as `<code>` pills separated by spaces, matching the scoreboard, or a `<code>🟢 no findings</code>` pill. A divider follows each collapsed round's footer, and loupe's section headings inside a collapsed round drop to `####` (owner, 2026-09-25). Rounds as earlier builds wrote them still read back and are carried as they are.
+- Every footer links its commit, and a sticky round with an earlier round adds a `changes since round N` compare link after it (owner, 2026-09-25). This also changes the ordinary review's footer; see `docs/comment-format.md` Footer.
+- A review with no findings, sticky or not, opens on a `🟢 no findings` chip in place of an empty chips row (owner, 2026-09-25). Read-back drops that chip when the round collapses, as it drops any chips row, and accepts a clean round without it.
+
 ### User Story 1 - A pipeline keeps one review current (Priority: P1)
 
 A repository's workflow runs `loupe publish --unattended --sticky` after every push. The first round posts a review. Every later round rewrites that review's body: the newest round's chips, prose and findings on top, and each earlier round in a collapsed section below. The pull request's timeline holds one loupe review, not one per push.

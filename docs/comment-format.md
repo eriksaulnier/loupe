@@ -91,7 +91,7 @@ that may already have succeeded, so a 502 produces two reviews.
 
 ---
 
-reviewed `d23632e`
+reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2)
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
 <!-- loupe-findings v=1 sha256=<sha256> <data> -->
@@ -100,7 +100,7 @@ reviewed `d23632e`
 
 ### Opening
 
-The chips row leads the body and the opening prose follows it, or the prose leads when there are no findings to count. The chips lead because `⛔ N blocking` is the one fact an author most needs, and a long unattended summary would otherwise push it down. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
+The chips row leads the body and the opening prose follows it. With no findings to count, the row is one `🟢 no findings` pill. The chips lead because `⛔ N blocking` is the one fact an author most needs, and a long unattended summary would otherwise push it down. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
 
 **Who writes the opening prose depends on who published.** An attended review carries a message the human typed at the publish confirmation, reading the body as they wrote it; the draft's summary is not published on that path and orients the human while they sort findings instead. An unattended review carries the draft's summary, because no human is there to type anything, and its footer already ends in ` · unattended` so a reader knows the prose was not read by a person before it appeared.
 
@@ -109,7 +109,8 @@ The prose is optional in both modes. When there is none the body opens on the ch
 ### Chips
 
 - One inline code span per non-zero count, zeros omitted, pluralized except `other` and `blocking`.
-- Each is led by a dot: ⛔ blocking, 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other.
+- **A review with no findings still opens on the row**, as the one chip `` `🟢 no findings` ``, so a reader sees at a glance that nothing was found. A body published before this chip opens on its prose instead, and sticky read-back accepts both.
+- Each is led by a dot: ⛔ blocking, 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other, and 🟢 alone when there is nothing to count.
 - Counts are derived from the final published findings at publish time, never from the summary prose.
 - **One chip per row dot below, in the order ⛔, 🟡, 🟣, 🔵, ⚪.** The chips row is a key to the dots that lead the rows. Blocking leads the row and is counted only there: a blocking row leads with `⛔` whatever its label, so a blocking issue is `⛔ 1 blocking`, never also `🟡 1 issue`. Every other chip counts the nonblocking findings of its label group.
 - A reader who scans the row and finds no chip for a dot will find no row with that dot either.
@@ -219,7 +220,8 @@ reviewed `SHA` · via `NAME VERSION` · `MODEL` · unattended
 ```
 
 - The footer answers only what a reader who never installed loupe can act on: which commit, who reviewed it, which model produced the findings, and whether anybody read it before it posted (`specs/009-review-footer`, `specs/023-model-footer`).
-- `SHA` is the abbreviated captured head commit, a generated code span subject to the backtick rule.
+- `SHA` is the abbreviated captured head commit, a generated code span subject to the backtick rule, linked to that commit on GitHub: ``[`SHA`](https://github.com/OWNER/REPO/commit/FULLSHA)``. The forms above show it bare for reading; the link is always there when the pull request's repository is known.
+- **A sticky round with an earlier round** adds `` · [changes since round N](https://github.com/OWNER/REPO/compare/PREV...FULLSHA)`` right after the SHA, where `N` and `PREV` are the newest earlier round's number and commit, in full when that round's footer links it. They are taken before the length limit drops any round, so the link stays when the round it names was dropped. An edit sends no notification and keeps the review's first timestamp, so this link is how a reader sees what changed between rounds. A plain review, and a sticky review's first round, have no such segment. Read-back accepts a footer with or without these links, since earlier releases wrote the SHA bare.
 - The ` · via ` suffix MUST appear only when capture recorded a source, and is otherwise absent, leaving the first form byte for byte. `NAME VERSION` is that source with its `@` rendered as a space, or `NAME` alone when it has no version, in a generated code span.
 - The `` · `MODEL` `` segment MUST appear only when capture recorded a model, and is otherwise absent, leaving the forms above it byte for byte. It follows ` · via ` when there is one, and otherwise the SHA. `MODEL` is the id exactly as capture recorded it, in a generated code span, with no display name and no label such as `by`: on an attended review the human is the author, and a model id names itself (`specs/023-model-footer`).
 - **` · unattended` MUST come last**, after ` · via ` and the model when there are any, only on a review `loupe publish --unattended` sent (`specs/007-unattended-publish/spec.md` FR-016, amended by `specs/009-review-footer`). A review published without `--unattended` is unchanged byte for byte.
@@ -299,15 +301,17 @@ reviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`
 <!-- loupe-round -->
 
 <details>
-<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>
+<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code></summary>
 
-### Must fix
+#### Must fix
 
 <details>…</details>
 
 ---
 
 reviewed `aaaaaaa` · via `gadfly-review-pr 2.1.0`
+
+---
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
 
@@ -320,8 +324,9 @@ reviewed `aaaaaaa` · via `gadfly-review-pr 2.1.0`
 
 - **The newest round is composed exactly as an ordinary review with `--inline none`**: chips, opening prose, `Must fix`, `Worth a look`, then a divider and its footer. The hidden markers end the body as on any review, and describe the newest round.
 - **`### Earlier rounds` follows the newest round's footer, after a divider**, only when the review holds an earlier round or dropped one. It holds one `<details>` per earlier round, newest first.
-- **An earlier round's `<summary>` reads `Round N · reviewed <code>SHA</code> · CHIPS`.** `N` is the round's place in the sticky review, 1 for the first sticky round, never loupe's `round=`, which can start above 1. `SHA` is its footer's commit. `CHIPS` is its chips row as text, each chip joined by ` · `, or `no findings` when the round published none. Its section holds the rest of the round as it read when it was on top: its prose and sections, then a divider and its footer line exactly as it read, then its reconciliation marker. The footer stays so the history shows which source and model reviewed each round. Its chips row is dropped, since the summary carries it, and so is the divider that separated the chips from the first section when no prose sat between. Its `loupe-meta` and its findings record are dropped too, so a body carries one of each, and both describe the round on top. The reconciliation marker stays, so an interrupted publish of that round still reconciles after a later round edited over it.
+- **An earlier round's `<summary>` reads `Round N · reviewed <code>SHA</code> · CHIPS`.** `N` is the round's place in the sticky review, 1 for the first sticky round, never loupe's `round=`, which can start above 1. `SHA` is its footer's commit. `CHIPS` is its chips row as pills, each chip in its own `<code>` separated by a space so it matches the scoreboard the round opened on, or a `<code>🟢 no findings</code>` pill when the round published none. A `<summary>` is raw HTML, so the pills are `<code>`, not backticks. Its section holds the rest of the round as it read when it was on top: its prose and sections, with loupe's `### Must fix` and `### Worth a look` headings dropped one level to `####` so an opened round reads as history under the round on top (prose above them is the author's and keeps its headings), then a divider and its footer line exactly as it read, then a divider that closes the round so an opened round ends visibly before the next summary, then its reconciliation marker. The footer stays so the history shows which source and model reviewed each round. Its chips row is dropped, since the summary carries it, and so is the divider that separated the chips from the first section when no prose sat between. Its `loupe-meta` and its findings record are dropped too, so a body carries one of each, and both describe the round on top. The reconciliation marker stays, so an interrupted publish of that round still reconciles after a later round edited over it.
 - **A loupe released before the findings record cannot continue a sticky series that carries one.** It finds the record where it expects the reconciliation marker and refuses with `sticky`, whose fix, publishing once without `--sticky`, still works. Every loupe from spec 027 on reads bodies with and without a record.
+- **Earlier bodies still read back.** A summary whose chips are plain text joined by ` · ` or that says `no findings` in plain text, as v0.11.0 wrote them, and a collapsed round with `###` section headings or no divider after its footer, as earlier builds of this layout wrote it, all read back and are carried as they are.
 - **A body in the v0.11.0 layout** (the newest round's footer after the earlier rounds, and collapsed rounds without a footer) still reads back, and the next round writes this layout. The round it showed keeps its footer. The rounds v0.11.0 collapsed have no footer to recover and are carried as they are. One such body is refused with `sticky`: every earlier round dropped, and the shown round's prose ending in a divider and a line shaped like a footer, since nothing then tells it from a footer added on GitHub.
 - **A body published before this format** (its collapsed rounds keep their footer and a chips line inside) still reads back. Its collapsed rounds are carried as they are, and only their `Round N` is renumbered by place. When the round it shows has no findings and its prose ends in a divider and a line shaped like a footer, it MAY be refused with `sticky` instead, since it then reads as a footer added on GitHub. Only pre-release probe reviews carry this format.
 - **Two hidden comment lines delimit the rounds**: `<!-- loupe-earlier -->` opens the section, and `<!-- loupe-round -->` precedes each round. loupe reads a sticky body back by these lines and by the generated tail (reconciliation marker, findings record when present, `loupe-meta`) and by the newest round's divider and footer, and only on lines outside a fence. The allowlist refuses an HTML comment outside a fence in every authored field, so authored text can quote a delimiter but never move a round boundary. A body that has lost that structure, such as one reworded on GitHub, is refused with `sticky` rather than guessed at. That includes text added to the footer or before the first collapsed round, a newest collapsed round whose footer was removed, a findings record anywhere but the tail, which the next body would otherwise carry as a second record, a collapsed round that is not one `<details>` under loupe's `<summary>Round N · …</summary>` line, a round that is not exactly one `<details>` whose tags inside pair up and nest, or whose fence or HTML comment is left open, and collapsed rounds plus dropped ones that do not add up to `K − 1`, since the next edit would otherwise lose a round without saying so.

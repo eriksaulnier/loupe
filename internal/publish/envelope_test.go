@@ -270,7 +270,7 @@ func TestBuildCarriesModel(t *testing.T) {
 	target := fixtureTarget()
 	target.Model = "anthropic/claude-sonnet-5"
 	env, err := Build(buildInput(target, readyDraft(), "comment", "none", false))
-	if err != nil || !strings.Contains(env.Body, "reviewed `1111111` · `anthropic/claude-sonnet-5`\n\n") ||
+	if err != nil || !strings.Contains(env.Body, "`1111111`](") || !strings.Contains(env.Body, ") · `anthropic/claude-sonnet-5`\n\n") ||
 		!strings.Contains(env.Body, " model=anthropic/claude-sonnet-5 ") {
 		t.Fatalf("model not rendered: %v\n%s", err, env.Body)
 	}
@@ -500,6 +500,24 @@ func TestBuildStickyDropsTheOldestRoundsToFit(t *testing.T) {
 	_, err = Build(in)
 	if r, ok := refusal.As(err); !ok || r.Details["rule"] != "limit" {
 		t.Fatalf("a round over the limit alone must refuse with limit, got %#v", err)
+	}
+}
+
+// The footer's link to the round before survives the length limit dropping that round's block.
+func TestBuildStickyKeepsTheCompareLinkWhenItsRoundIsDropped(t *testing.T) {
+	block := "<details>\n<summary>Round 1 · reviewed <code>abcdef1</code> · <code>🟢 no findings</code></summary>\n\n" +
+		strings.Repeat("x", 70000) + "\n\n</details>"
+	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", false)
+	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []string{block}}
+	env, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(env.Body, "Round 1 · reviewed") || !strings.Contains(env.Body, "The oldest round was dropped") {
+		t.Fatalf("the earlier round was not dropped:\n%s", env.Body[:300])
+	}
+	if !strings.Contains(env.Body, "[changes since round 1](") || !strings.Contains(env.Body, "/compare/abcdef1...") {
+		t.Fatalf("the compare link went with the dropped round:\n%s", env.Body[len(env.Body)-600:])
 	}
 }
 

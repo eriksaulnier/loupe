@@ -109,7 +109,7 @@ func TestFollowUpRoundReadsPreviousAndPublishesItsRound(t *testing.T) {
 	}
 
 	h.publishRound(2)
-	if body := lastPostBody(t, h); !strings.Contains(body, "\n\nreviewed `") || !strings.Contains(body, "<!-- loupe-meta v=1 round=2 ") {
+	if body := lastPostBody(t, h); !strings.Contains(body, "\n\nreviewed [`") || !strings.Contains(body, "<!-- loupe-meta v=1 round=2 ") {
 		t.Fatalf("round 2 marker:\n%s", body)
 	}
 }
@@ -159,7 +159,7 @@ func TestAbandonedRoundDoesNotAdvancePublishedRound(t *testing.T) {
 	h.publishRound(2)
 
 	body := lastPostBody(t, h)
-	if !strings.Contains(body, "\n\nreviewed `") || !strings.Contains(body, "<!-- loupe-meta v=1 round=1 ") {
+	if !strings.Contains(body, "\n\nreviewed [`") || !strings.Contains(body, "<!-- loupe-meta v=1 round=1 ") {
 		t.Fatalf("round 2 published after an abandoned round 1:\n%s", body)
 	}
 	var receipt struct {

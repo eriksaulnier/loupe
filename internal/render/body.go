@@ -119,7 +119,10 @@ func Body(in Input) string {
 	for _, f := range in.Findings {
 		census[group(f.Label)]++
 	}
-	footer := "reviewed " + CodeSpan(OneLine(shortSHA(in.HeadSHA)))
+	footer := "reviewed " + commitLink(in)
+	if since := sinceLink(in); since != "" {
+		footer += " · " + since
+	}
 	meta := fmt.Sprintf("v=1 round=%d", in.Round)
 	if in.Unattended {
 		meta += " unattended=1"
@@ -160,6 +163,7 @@ func Body(in Input) string {
 }
 
 // chipsRow is a key to the row dots below: a blocking row leads with ⛔, and every other row with its label group's dot.
+// With no findings it is one pill that says so.
 func chipsRow(blocking int, rest []Finding) string {
 	var chips []string
 	if blocking > 0 {
@@ -176,8 +180,15 @@ func chipsRow(blocking int, rest []Finding) string {
 			chips = append(chips, CodeSpan(fmt.Sprintf("%s %d %s", dots[g], n, plural(n, nouns[g][0], nouns[g][1]))))
 		}
 	}
+	// A clean review still opens on the scoreboard, so a reader sees at a glance that nothing was found.
+	if len(chips) == 0 {
+		return CodeSpan(cleanChip)
+	}
 	return strings.Join(chips, " ")
 }
+
+// cleanChip is the scoreboard of a review with no findings.
+const cleanChip = "🟢 no findings"
 
 func sectionBlock(title string, fs []Finding, in Input) string {
 	parts := make([]string, len(fs))
@@ -488,4 +499,31 @@ func plural(n int, one, many string) string {
 		return one
 	}
 	return many
+}
+
+// commitLink is the reviewed commit as a code span linked to it on GitHub, so a reader can open exactly what was
+// reviewed. Without the repository it stays a bare code span.
+func commitLink(in Input) string {
+	span := CodeSpan(OneLine(shortSHA(in.HeadSHA)))
+	if in.Owner == "" || in.Repo == "" {
+		return span
+	}
+	return fmt.Sprintf("[%s](https://github.com/%s/%s/commit/%s)", span, in.Owner, in.Repo, in.HeadSHA)
+}
+
+// sinceLink compares the newest earlier round's commit with this one, so a reader of a sticky review sees in one
+// click what the author changed between rounds. An edit sends no notification and keeps the review's first
+// timestamp, so the footer is where a reader learns the review moved on. It is empty without an earlier round.
+func sinceLink(in Input) string {
+	if in.Sticky == nil || in.Owner == "" || in.Repo == "" {
+		return ""
+	}
+	round, sha := in.Sticky.PrevRound, in.Sticky.PrevSHA
+	if round == 0 {
+		round, sha = PreviousRound(in.Sticky.Earlier)
+	}
+	if round == 0 {
+		return ""
+	}
+	return fmt.Sprintf("[changes since round %d](https://github.com/%s/%s/compare/%s...%s)", round, in.Owner, in.Repo, sha, in.HeadSHA)
 }
