@@ -378,7 +378,7 @@ func MapSummaryLines(text string, fn func(string) string) string {
 // mapTagLines applies fn to every structural line outside a fence.
 func mapTagLines(text string, fn func(line, trimmed string) string) string {
 	lines := splitLines(text)
-	_ = walkStructural(lines, func(i int, trimmed string) { lines[i] = fn(lines[i], trimmed) })
+	_ = walkStructural(lines, func(i int, trimmed string, _ bool) { lines[i] = fn(lines[i], trimmed) })
 	return strings.Join(lines, "\n")
 }
 
@@ -388,7 +388,7 @@ func mapTagLines(text string, fn func(line, trimmed string) string) string {
 func StructuralLines(text string) (lines []string, structural []bool) {
 	lines = splitLines(text)
 	structural = make([]bool, len(lines))
-	_ = walkStructural(lines, func(i int, _ string) { structural[i] = true })
+	_ = walkStructural(lines, func(i int, _ string, _ bool) { structural[i] = true })
 	return lines, structural
 }
 
@@ -401,12 +401,12 @@ var detailsTag = regexp.MustCompile(`(?i)</?details(\s|/|>|$)`)
 
 // OneDisclosure reports why text is not exactly one disclosure: it MUST open on a <details> tag line, stay open until
 // its last line outside a fence, close there, with every <details> inside pairing up and nesting, and leave no fence
-// open. Lines are read as Check reads them. It checks generated text, which may carry tags Check refuses, such as a
+// or HTML comment open. Lines are read as Check reads them. It checks generated text, which may carry tags Check refuses, such as a
 // summary's <b>.
 func OneDisclosure(text string) error {
 	depth, seen, closed := 0, false, false
 	var err error
-	open := walkStructural(splitLines(text), func(i int, trimmed string) {
+	open := walkStructural(splitLines(text), func(i int, trimmed string, html bool) {
 		switch {
 		case err != nil:
 		case closed:
@@ -419,9 +419,17 @@ func OneDisclosure(text string) error {
 			depth--
 			closed = depth == 0
 		default:
-			// GitHub matches a details tag anywhere in a line, so one this count would skip is refused instead.
-			if text, _ := textOnly(trimmed, true); detailsTag.MatchString(text) {
+			// GitHub matches a details tag anywhere in a line, so one this count would skip is refused instead. An HTML
+			// block gets no inline parsing, so backticks there are not a code span, as in Check.
+			text := trimmed
+			if !html {
+				text, _ = textOnly(trimmed, true)
+			}
+			switch {
+			case detailsTag.MatchString(text):
 				err = fmt.Errorf("line %d carries a <details> tag that is not alone on its line", i+1)
+			case opensHiddenText(text, html):
+				err = fmt.Errorf("line %d opens an HTML comment it does not close", i+1)
 			}
 		}
 	})
@@ -436,8 +444,34 @@ func OneDisclosure(text string) error {
 	return nil
 }
 
-// walkStructural calls fn for every structural line outside a fence, and reports whether a fence is left open.
-func walkStructural(lines []string, fn func(i int, trimmed string)) bool {
+// opensHiddenText reports whether line opens a comment it does not close: <!-- with no --> after it, or <? or another
+// <! with no > after it, which HTML reads as a comment up to the next >. A browser reads such a comment on past the
+// line, hiding any details tag it reaches from the count. <!--> and <!---> close themselves, as they do in HTML. Outside
+// an HTML block, a <! before anything but a letter or [ is text, as findHTML reads it.
+func opensHiddenText(line string, html bool) bool {
+	for i := strings.IndexByte(line, '<'); i >= 0; i = strings.IndexByte(line, '<') {
+		rest, end := line[i+1:], ">"
+		switch {
+		case strings.HasPrefix(rest, "!--"):
+			rest, end = rest[1:], "-->"
+		case strings.HasPrefix(rest, "?"),
+			strings.HasPrefix(rest, "!") && (html || len(rest) > 1 && (isLetter(rest[1]) || rest[1] == '[')):
+		default:
+			line = rest
+			continue
+		}
+		j := strings.Index(rest, end)
+		if j < 0 {
+			return true
+		}
+		line = rest[j+len(end):]
+	}
+	return false
+}
+
+// walkStructural calls fn for every structural line outside a fence, with whether it sits in an HTML block, and reports
+// whether a fence is left open.
+func walkStructural(lines []string, fn func(i int, trimmed string, html bool)) bool {
 	var fenceChar byte
 	var fenceLen int
 	inHTMLBlock := false
@@ -462,7 +496,7 @@ func walkStructural(lines []string, fn func(i int, trimmed string)) bool {
 			fenceChar, fenceLen = c, length
 			continue
 		}
-		fn(i, trimmed)
+		fn(i, trimmed, inHTMLBlock)
 	}
 	return fenceChar != 0
 }
