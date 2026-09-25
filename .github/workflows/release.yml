@@ -40,3 +40,26 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # After goreleaser, not beside it: the archives this release's action default names exist only once it
+  # has uploaded them.
+  install-action:
+    needs: [release-please, goreleaser]
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./
+      - env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          want="loupe version ${TAG#v}"
+          got="$(loupe --version)"
+          [ "$got" = "$want" ] || { echo "::error::loupe --version printed '$got', want '$want'"; exit 1; }

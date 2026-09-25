@@ -1,0 +1,72 @@
+name: Install loupe
+description: Download a loupe release, verify it against the release's checksums and put it on PATH.
+
+inputs:
+  version:
+    description: The loupe release tag to install, such as v0.10.0. The leading v is optional.
+    required: false
+    # release-please rewrites this at each release, so pinning the action's sha also pins the binary.
+    default: v0.10.0 # x-release-please-version
+
+runs:
+  using: composite
+  steps:
+    - name: Install loupe
+      shell: bash
+      env:
+        LOUPE_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        if [ -z "$LOUPE_VERSION" ]; then
+          echo "::error::version is empty. Give a loupe release tag, such as v0.10.0."
+          exit 1
+        fi
+        tag="v${LOUPE_VERSION#v}"
+
+        case "$RUNNER_OS" in
+          Linux) os=linux ;;
+          macOS) os=darwin ;;
+          *) os= ;;
+        esac
+        case "$RUNNER_ARCH" in
+          X64) arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) arch= ;;
+        esac
+        if [ -z "$os" ] || [ -z "$arch" ]; then
+          echo "::error::loupe has no build for runner $RUNNER_OS/$RUNNER_ARCH. Supported: linux_amd64, linux_arm64, darwin_amd64, darwin_arm64."
+          exit 1
+        fi
+
+        # goreleaser names the archive after the tag with its leading v stripped.
+        archive="loupe_${tag#v}_${os}_${arch}.tar.gz"
+        base="https://github.com/eriksaulnier/loupe/releases/download/$tag"
+        # Directories of their own, so a second install in the same job does not overwrite the first.
+        dl="$(mktemp -d "$RUNNER_TEMP/loupe.XXXXXX")"
+        bin="$(mktemp -d "$RUNNER_TEMP/loupe.XXXXXX")"
+        cd "$dl"
+
+        download() {
+          # curl retries only timeouts and 408, 429 and 5xx responses, so a 404 still fails at once.
+          if ! curl -fsSL --retry 3 -o "$1" "$base/$1"; then
+            # release-please creates the tag before goreleaser uploads the archives.
+            echo "::error::could not download $base/$1. If $tag was released in the last few minutes, its archives may still be uploading. Retry shortly. Otherwise check that $tag is a loupe release."
+            exit 1
+          fi
+        }
+        download "$archive"
+        download checksums.txt
+
+        if ! grep -F "  $archive" checksums.txt > archive.sha256; then
+          echo "::error::checksums.txt for loupe $tag has no entry for $archive"
+          exit 1
+        fi
+        # macOS runners are not known to ship GNU sha256sum. shasum reads the same line.
+        if command -v sha256sum >/dev/null; then
+          sha256sum -c archive.sha256
+        else
+          shasum -a 256 -c archive.sha256
+        fi
+
+        tar -xzf "$archive" -C "$bin" loupe
+        echo "$bin" >> "$GITHUB_PATH"

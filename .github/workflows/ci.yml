@@ -15,3 +15,166 @@ jobs:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise run check
+
+  # Pull requests only, and each install job checks out the pull request's head rather than its merge with main. A
+  # release stamps main's default before goreleaser uploads its archives, so the release pull request, the push that
+  # merges it and any merge commit built in that window name archives that do not exist yet. release.yml runs the
+  # same check once they do.
+  install-action:
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
+    strategy:
+      fail-fast: false
+      matrix:
+        # One runner per goreleaser target.
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: ./
+      # TestInstallAction pins the action's default to the manifest version.
+      - run: |
+          set -euo pipefail
+          want="loupe version $(jq -r '."."' .release-please-manifest.json)"
+          got="$(loupe --version)"
+          [ "$got" = "$want" ] || { echo "::error::loupe --version printed '$got', want '$want'"; exit 1; }
+          case "$(command -v loupe)" in
+            "$RUNNER_TEMP"/*) ;;
+            *) echo "::error::loupe resolved to $(command -v loupe), outside RUNNER_TEMP"; exit 1 ;;
+          esac
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --porcelain
+            echo "::error::the action wrote into the workspace"
+            exit 1
+          fi
+
+  # A second install in one job, the version input's bare form, an empty version and a tag with no release.
+  install-action-inputs:
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: ./
+      - run: dirname "$(command -v loupe)" > "$RUNNER_TEMP/first-install"
+      # A second install in the same job: the later PATH entry wins, and the first binary stays in place.
+      - uses: ./
+        with:
+          version: 0.9.0
+      - run: |
+          set -euo pipefail
+          got="$(loupe --version)"
+          [ "$got" = "loupe version 0.9.0" ] || { echo "::error::loupe --version printed '$got', want 'loupe version 0.9.0'"; exit 1; }
+          first="$(cat "$RUNNER_TEMP/first-install")/loupe"
+          want="loupe version $(jq -r '."."' .release-please-manifest.json)"
+          got="$("$first" --version)"
+          [ "$got" = "$want" ] || { echo "::error::the first install now prints '$got', want '$want'"; exit 1; }
+          echo "$PATH" > "$RUNNER_TEMP/path-before-refusals"
+      # An explicit empty input reaches the action as empty. The runner applies the default only to an unset input.
+      - id: empty
+        uses: ./
+        continue-on-error: true
+        with:
+          version: ''
+      - id: missing
+        uses: ./
+        continue-on-error: true
+        with:
+          version: v0.0.0
+      # Each step gets its own GITHUB_PATH file, so a leak shows only in the PATH that later steps inherit.
+      - env:
+          EMPTY: ${{ steps.empty.outcome }}
+          MISSING: ${{ steps.missing.outcome }}
+        run: |
+          set -euo pipefail
+          [ "$EMPTY" = failure ] || { echo "::error::an empty version gave $EMPTY, want failure"; exit 1; }
+          [ "$MISSING" = failure ] || { echo "::error::v0.0.0, which is not a loupe release, gave $MISSING, want failure"; exit 1; }
+          [ "$PATH" = "$(cat "$RUNNER_TEMP/path-before-refusals")" ] || { echo "::error::a refused install still added to PATH"; exit 1; }
+
+  # The checksum refusals, against a fake curl first on PATH, since the action's release URL is fixed. The fake serves
+  # a stand-in archive under whatever name the action asks for, and a checksums.txt shaped by the mode file.
+  install-action-checksums:
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Put a fake curl first on PATH
+        run: |
+          set -euo pipefail
+          fake="$RUNNER_TEMP/fake-release"
+          mkdir -p "$fake/bin" "$fake/src"
+          printf '#!/bin/sh\necho fake loupe\n' > "$fake/src/loupe"
+          chmod +x "$fake/src/loupe"
+          tar -czf "$fake/archive.tar.gz" -C "$fake/src" loupe
+          cat > "$fake/bin/curl" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          fake="$(dirname "$(dirname "$0")")"
+          out=
+          while [ $# -gt 1 ]; do
+            if [ "$1" = -o ]; then out="$2"; fi
+            shift
+          done
+          url="$1"
+          case "$url" in
+            */checksums.txt)
+              sum="$(sha256sum "$fake/archive.tar.gz" | cut -d' ' -f1)"
+              name="$(cat "$fake/name")"
+              case "$(cat "$fake/mode")" in
+                ok) echo "$sum  $name" > "$out" ;;
+                missing) echo "$sum  other_$name" > "$out" ;;
+                bad) echo "$(printf '0%.0s' $(seq 64))  $name" > "$out" ;;
+              esac
+              ;;
+            *)
+              cp "$fake/archive.tar.gz" "$out"
+              basename "$url" > "$fake/name"
+              ;;
+          esac
+          SH
+          chmod +x "$fake/bin/curl"
+          echo "$fake/bin" >> "$GITHUB_PATH"
+          echo ok > "$fake/mode"
+      # A control, so the refusals below fail on the checksum and not on the fake.
+      - uses: ./
+      - run: |
+          set -euo pipefail
+          [ "$(loupe)" = "fake loupe" ]
+          echo "$PATH" > "$RUNNER_TEMP/path-before-refusals"
+      - run: echo missing > "$RUNNER_TEMP/fake-release/mode"
+      - id: missing
+        uses: ./
+        continue-on-error: true
+      - run: echo bad > "$RUNNER_TEMP/fake-release/mode"
+      - id: bad
+        uses: ./
+        continue-on-error: true
+      # Each step gets its own GITHUB_PATH file, so a leak shows only in the PATH that later steps inherit.
+      - env:
+          MISSING: ${{ steps.missing.outcome }}
+          BAD: ${{ steps.bad.outcome }}
+        run: |
+          set -euo pipefail
+          [ "$MISSING" = failure ] || { echo "::error::a checksums.txt with no entry gave $MISSING, want failure"; exit 1; }
+          [ "$BAD" = failure ] || { echo "::error::a wrong digest gave $BAD, want failure"; exit 1; }
+          [ "$PATH" = "$(cat "$RUNNER_TEMP/path-before-refusals")" ] || { echo "::error::a refused install still added to PATH"; exit 1; }
+
+  install-action-unsupported:
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: install
+        uses: ./
+        continue-on-error: true
+      - if: steps.install.outcome != 'failure'
+        shell: bash
+        run: |
+          echo "::error::the action installed on Windows, which loupe has no build for"
+          exit 1

@@ -33,6 +33,16 @@ loupe --version
 > [!NOTE]
 > mise hides releases younger than its `minimum_release_age`, so right after a release this fails with `no versions found for github:eriksaulnier/loupe matching date filter`. Wait, or run `mise settings add minimum_release_age_excludes "github:eriksaulnier/loupe"`.
 
+### GitHub Actions
+
+The repository is also an action that installs a release, checks it against the release's `checksums.txt` and puts `loupe` on `PATH` for the rest of the job. It runs on Linux and macOS, on amd64 and arm64.
+
+```yaml
+- uses: eriksaulnier/loupe@<sha> # <tag>
+```
+
+Pin the commit sha of a release tag, with the tag in a comment. The action installs the release it shipped in, so Dependabot moves the action and the binary together. To install another release, set `version`, for example `version: v0.9.0`.
+
 ## Try it
 
 In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-memory GitHub. You can try the interface and the whole publish flow end to end, the final `y` included, and nothing leaves the machine. `mise run demo -- <loupe args>` runs any other command: `acme/widgets#42` is mid-review, `#43` is ready to publish, and `#44` is ready but its pull request's head has moved since capture.

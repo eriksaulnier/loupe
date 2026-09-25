@@ -29,12 +29,13 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add eriksaulnier/loupe` find the plugin |
 | `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add eriksaulnier/loupe` |
 | `package.json` | Makes the repository a Pi package whose skills are `plugin/skills`; it holds no JavaScript |
+| `action.yml` | The composite action that installs a released loupe in a GitHub Actions job. release-please stamps its `version` default at each release, and `TestInstallAction` pins it to the manifest |
 | `specs/NNN-topic/` | One directory per feature: `spec.md`, then `plan.md` and `tasks.md`. `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
 | `docs/` | `comment-format.md` (the published review format, a contract) and `github-facts.md` (observed GitHub behavior). `tapes/` drives the README's terminal images in `assets/`, and `scripts/review-screenshot.sh` its picture of a published review; neither is read by the binary |
 | `testdata/` | Diff fixtures and goldens |
 | `assets/review/v1/` | The severity pill SVGs every published review hotlinks from `main`. A file here MUST NOT change once on `main`; a redesign adds `v2`. A test pins their hashes |
 | `scripts/` | `check-tests.sh`, the test-hygiene grep that `mise run check` runs, and `review-screenshot.sh`, which `mise run review-screenshot` runs |
-| `.github/workflows/` | `ci.yml` runs `mise run check`; `release.yml` runs release-please, then goreleaser |
+| `.github/workflows/` | `ci.yml` runs `mise run check`, and on pull requests runs `action.yml` on each target; `release.yml` runs release-please, then goreleaser, then `action.yml` on each target against the new release |
 | `.github/workflows/review.yml` | The caller for `eriksaulnier/loupe-workflows`, the shared reusable workflow that captures a pull request, runs an agent over the captured head and diff, and publishes unattended. This file holds only what is loupe's own: the triggers, the `REVIEW_ENABLED` kill switch, the permissions the called jobs are capped by, and the model. A round runs unasked when a pull request is opened ready or marked ready for review, and by the `ai-review` label for every round after that |
 | `.github/review-instructions.md` | loupe's half of that workflow's prompt: what the linters already cover, the constitution, the contracts `contracts/cli.md` and `comment-format.md` pin, and how to read the goldens. Read from the default branch, never from the pull request |
 | `.specify/memory/constitution.md` | The seven principles. Read first |
