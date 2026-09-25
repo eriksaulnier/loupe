@@ -142,3 +142,46 @@ func TestAssessRefusals(t *testing.T) {
 		t.Fatalf("a refused assess changed the draft: %v", shown)
 	}
 }
+
+// An attended round publishes its assessments under the human's name, so the confirmation names them, the receipt keeps
+// them, and the next local round carries the open one from that receipt.
+func TestAttendedRoundCarriesItsAssessmentsThroughItsReceipt(t *testing.T) {
+	h := newHarness(t)
+	h.captureRound(1)
+	h.publishRound(1)
+	h.pushHead("src/round2.go")
+	h.captureRound(2)
+	ref := roundRef(2)
+	h.mustOK("assess", "e-1", "--status", "open", "--run", ref)
+	h.mustOK("add", "--run", ref, "--from", h.WriteFile("finding.json", generalFinding("Cache race")))
+	h.IsTerminal = true
+	h.Stdin = "a\nq\n"
+	if _, stderr, exit := h.Run("review", ref, "--plain"); exit != 0 {
+		t.Fatalf("review exit %d stderr %q", exit, stderr)
+	}
+	h.Stdin = confirmPublish("", "y")
+	stdout, stderr, exit := h.Run("publish", ref, "--action", "comment", "--plain")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q", exit, stderr)
+	}
+	h.IsTerminal = false
+	if !strings.Contains(stdout, "a copy of the 1 finding above, plus 1 earlier finding still open") {
+		t.Fatalf("the confirmation does not name the assessment:\n%s", stdout)
+	}
+	var receipt struct {
+		Envelope struct {
+			Assessments []map[string]any `json:"assessments"`
+		} `json:"envelope"`
+	}
+	decodeNumbers(t, readFile(t, filepath.Join(h.RunDir(2), "receipt.json")), &receipt)
+	if len(receipt.Envelope.Assessments) != 1 || receipt.Envelope.Assessments[0]["status"] != "open" {
+		t.Fatalf("receipt assessments %v", receipt.Envelope.Assessments)
+	}
+
+	h.pushHead("src/round3.go")
+	h.captureRound(3)
+	got := earlierRows(t, h.mustOK("show", "--previous", "--run", roundRef(3)))
+	if len(got) != 2 || got[0].title != "Changed line" || got[0].round != "1" || got[1].title != "Cache race" || got[1].round != "2" {
+		t.Fatalf("round 3 earlier %v, want round 1's carried finding, then round 2's", got)
+	}
+}
