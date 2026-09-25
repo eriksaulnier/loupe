@@ -378,7 +378,7 @@ func MapSummaryLines(text string, fn func(string) string) string {
 // mapTagLines applies fn to every structural line outside a fence.
 func mapTagLines(text string, fn func(line, trimmed string) string) string {
 	lines := splitLines(text)
-	_ = walkStructural(lines, func(i int, trimmed string, _ bool) { lines[i] = fn(lines[i], trimmed) })
+	_ = walkStructural(lines, func(i int, trimmed, _ string, _ bool) { lines[i] = fn(lines[i], trimmed) })
 	return strings.Join(lines, "\n")
 }
 
@@ -388,7 +388,7 @@ func mapTagLines(text string, fn func(line, trimmed string) string) string {
 func StructuralLines(text string) (lines []string, structural []bool) {
 	lines = splitLines(text)
 	structural = make([]bool, len(lines))
-	_ = walkStructural(lines, func(i int, _ string, _ bool) { structural[i] = true })
+	_ = walkStructural(lines, func(i int, _, _ string, _ bool) { structural[i] = true })
 	return lines, structural
 }
 
@@ -406,7 +406,7 @@ var detailsTag = regexp.MustCompile(`(?i)</?details(\s|/|>|$)`)
 func OneDisclosure(text string) error {
 	depth, seen, closed := 0, false, false
 	var err error
-	open := walkStructural(splitLines(text), func(i int, trimmed string, html bool) {
+	open := walkStructural(splitLines(text), func(i int, trimmed, visible string, html bool) {
 		switch {
 		case err != nil:
 		case closed:
@@ -419,16 +419,11 @@ func OneDisclosure(text string) error {
 			depth--
 			closed = depth == 0
 		default:
-			// GitHub matches a details tag anywhere in a line, so one this count would skip is refused instead. An HTML
-			// block gets no inline parsing, so backticks there are not a code span, as in Check.
-			text := trimmed
-			if !html {
-				text, _ = textOnly(trimmed, true)
-			}
+			// GitHub matches a details tag anywhere in a line, so one this count would skip is refused instead.
 			switch {
-			case detailsTag.MatchString(text):
+			case detailsTag.MatchString(visible):
 				err = fmt.Errorf("line %d carries a <details> tag that is not alone on its line", i+1)
-			case opensHiddenText(text, html):
+			case opensHiddenText(visible, html):
 				err = fmt.Errorf("line %d opens an HTML comment it does not close", i+1)
 			}
 		}
@@ -469,12 +464,13 @@ func opensHiddenText(line string, html bool) bool {
 	return false
 }
 
-// walkStructural calls fn for every structural line outside a fence, with whether it sits in an HTML block, and reports
-// whether a fence is left open.
-func walkStructural(lines []string, fn func(i int, trimmed string, html bool)) bool {
+// walkStructural calls fn for every structural line outside a fence, and reports whether a fence is left open. fn also
+// gets whether the line sits in an HTML block, and the line as GitHub shows it, read as Check reads it: escapes and
+// code spans blanked, except in an HTML block or after a line that leaves a code span open, up to the next blank line.
+func walkStructural(lines []string, fn func(i int, trimmed, visible string, html bool)) bool {
 	var fenceChar byte
 	var fenceLen int
-	inHTMLBlock := false
+	inHTMLBlock, openSpan := false, false
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		structural := inHTMLBlock || !indented(line)
@@ -485,18 +481,25 @@ func walkStructural(lines []string, fn func(i int, trimmed string, html bool)) b
 			}
 			continue
 		case trimmed == "":
-			inHTMLBlock = false
-			continue
-		case !structural:
+			inHTMLBlock, openSpan = false, false
 			continue
 		}
-		if opensHTMLBlock(trimmed) {
-			inHTMLBlock = true
-		} else if c, length, ok := opensFence(trimmed); ok && !inHTMLBlock {
-			fenceChar, fenceLen = c, length
-			continue
+		if structural && opensHTMLBlock(trimmed) {
+			inHTMLBlock, openSpan = true, false
 		}
-		fn(i, trimmed, inHTMLBlock)
+		visible := trimmed
+		if !inHTMLBlock {
+			if c, length, ok := opensFence(trimmed); ok && structural {
+				fenceChar, fenceLen, openSpan = c, length, false
+				continue
+			}
+			text, unclosed := textOnly(trimmed, !openSpan)
+			openSpan = openSpan || unclosed
+			visible = strings.TrimSpace(text)
+		}
+		if structural {
+			fn(i, trimmed, visible, inHTMLBlock)
+		}
 	}
 	return fenceChar != 0
 }

@@ -199,6 +199,10 @@ func TestOneDisclosure(t *testing.T) {
 		{"comment left open after text", "<details>\n<summary>x</summary>\n\ntext <!-- a --> and <!-- b\n\n</details>", false},
 		{"closed comments", "<details>\n<summary>x</summary>\n\n<!-- loupe digest=1 -->\n<!-->\n\n</details>", true},
 		{"comment opener in a code span is text", "<details>\n<summary>x</summary>\n\nsee `<!--` here\n\n</details>", true},
+		// A code span runs across lines until a blank line, so a run on the next line closes one left open here.
+		{"close tag after a span that spans lines", "<details>\n<summary>x</summary>\n\na ` b\nc` </details> `d`\n\n</details>", false},
+		{"span that spans lines, then a tag in a span", "<details>\n<summary>x</summary>\n\na `b\nc` and `</details>`\n\n</details>", false},
+		{"a blank line ends an open span", "<details>\n<summary>x</summary>\n\na ` b\n\nsee `</details>` here\n\n</details>", true},
 		// An HTML block gets no inline parsing, so backticks there hide nothing.
 		{"comment opener in backticks inside an HTML block", "<details>\n<summary>x</summary>\n\n</summary>\n`<!--`\n\n</details>", false},
 		{"details tag in backticks inside an HTML block", "<details>\n<summary>x</summary>\n\n</summary>\n`</details>`\n\n</details>", false},
