@@ -416,7 +416,7 @@ func keepsFooter(block string) bool {
 	if m >= 2 && strings.HasPrefix(lines[m-2], ">") && footerLine.MatchString(lines[m-1]) {
 		return true
 	}
-	if m := len(lines); m >= 2 && lines[m-1] == "---" && lines[m-2] == "" {
+	if m >= 2 && lines[m-1] == "---" && lines[m-2] == "" {
 		lines = lines[:m-2]
 	}
 	return endsWithFooter(lines)
