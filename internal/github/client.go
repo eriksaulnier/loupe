@@ -355,7 +355,7 @@ func listPages[W any](ctx context.Context, c *REST, next string, each func(W)) e
 }
 
 const threadCommentFields = `pageInfo { hasNextPage endCursor }
-nodes { author { __typename login } body url createdAt pullRequestReview { databaseId } }`
+nodes { author { __typename login } body url createdAt pullRequestReview { fullDatabaseId } }`
 
 const threadsQuery = `query($owner: String!, $repo: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $repo) {
@@ -388,13 +388,14 @@ type gqlComments struct {
 		URL               string    `json:"url"`
 		CreatedAt         time.Time `json:"createdAt"`
 		PullRequestReview *struct {
-			DatabaseID int64 `json:"databaseId"`
+			// FullDatabaseID is a BigInt, which GraphQL sends as a string. databaseId is deprecated for overflowing 32 bits.
+			FullDatabaseID string `json:"fullDatabaseId"`
 		} `json:"pullRequestReview"`
 	} `json:"nodes"`
 }
 
 // comments names a bot as REST does, name[bot], so one author reads the same in every listing.
-func (g gqlComments) comments() []ThreadComment {
+func (g gqlComments) comments() ([]ThreadComment, error) {
 	out := make([]ThreadComment, 0, len(g.Nodes))
 	for _, n := range g.Nodes {
 		c := ThreadComment{User: ghost, Body: n.Body, URL: n.URL, CreatedAt: n.CreatedAt}
@@ -405,11 +406,15 @@ func (g gqlComments) comments() []ThreadComment {
 			}
 		}
 		if n.PullRequestReview != nil {
-			c.ReviewID = n.PullRequestReview.DatabaseID
+			id, err := strconv.ParseInt(n.PullRequestReview.FullDatabaseID, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("GitHub sent review id %q on a thread comment: %w", n.PullRequestReview.FullDatabaseID, err)
+			}
+			c.ReviewID = id
 		}
 		out = append(out, c)
 	}
-	return out
+	return out, nil
 }
 
 func (c *REST) ListReviewThreads(ctx context.Context, owner, repo string, number int) ([]ReviewThread, error) {
@@ -443,8 +448,12 @@ func (c *REST) ListReviewThreads(ctx context.Context, owner, repo string, number
 			return nil, fmt.Errorf("GitHub returned no pull request %s/%s#%d for its review threads", owner, repo, number)
 		}
 		for _, n := range pr.ReviewThreads.Nodes {
+			comments, err := n.Comments.comments()
+			if err != nil {
+				return nil, err
+			}
 			t := ReviewThread{Path: n.Path, Line: deref(n.Line), OriginalLine: deref(n.OriginalLine), Side: n.DiffSide,
-				Resolved: n.IsResolved, Outdated: n.IsOutdated, Comments: n.Comments.comments()}
+				Resolved: n.IsResolved, Outdated: n.IsOutdated, Comments: comments}
 			for page := n.Comments.PageInfo; page.HasNextPage; {
 				var more struct {
 					Node *struct {
@@ -457,7 +466,11 @@ func (c *REST) ListReviewThreads(ctx context.Context, owner, repo string, number
 				if more.Node == nil {
 					return nil, fmt.Errorf("GitHub returned no review thread %s on %s/%s#%d", n.ID, owner, repo, number)
 				}
-				t.Comments = append(t.Comments, more.Node.Comments.comments()...)
+				page2, err := more.Node.Comments.comments()
+				if err != nil {
+					return nil, err
+				}
+				t.Comments = append(t.Comments, page2...)
 				page = more.Node.Comments.PageInfo
 			}
 			threads = append(threads, t)

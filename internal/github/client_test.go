@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -413,7 +414,7 @@ func TestListReviewThreadsFollowsBothCursors(t *testing.T) {
 		switch {
 		case req.Variables["id"] == "T1":
 			writeJSON(w, 200, `{"data": {"node": {"comments": {"pageInfo": {"hasNextPage": false, "endCursor": "c2"}, "nodes": [
-				{"author": {"__typename": "User", "login": "carol"}, "body": "third", "url": "u3", "createdAt": "2026-09-25T12:00:00Z", "pullRequestReview": {"databaseId": 13}}]}}}}`)
+				{"author": {"__typename": "User", "login": "carol"}, "body": "third", "url": "u3", "createdAt": "2026-09-25T12:00:00Z", "pullRequestReview": {"fullDatabaseId": "13"}}]}}}}`)
 		case req.Variables["after"] == "t1":
 			writeJSON(w, 200, `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": false, "endCursor": "t2"}, "nodes": [
 				{"id": "T2", "path": "b.go", "line": null, "originalLine": 4, "diffSide": "LEFT", "isResolved": true, "isOutdated": true,
@@ -423,8 +424,8 @@ func TestListReviewThreadsFollowsBothCursors(t *testing.T) {
 			writeJSON(w, 200, `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": true, "endCursor": "t1"}, "nodes": [
 				{"id": "T1", "path": "a.go", "line": 12, "originalLine": 10, "diffSide": "RIGHT", "isResolved": false, "isOutdated": false,
 				 "comments": {"pageInfo": {"hasNextPage": true, "endCursor": "c1"}, "nodes": [
-					{"author": {"__typename": "User", "login": "alice"}, "body": "first", "url": "u1", "createdAt": "2026-09-25T10:00:00Z", "pullRequestReview": {"databaseId": 11}},
-					{"author": {"__typename": "Bot", "login": "ci"}, "body": "second", "url": "u2", "createdAt": "2026-09-25T11:00:00Z", "pullRequestReview": {"databaseId": 12}}]}}]}}}}}`)
+					{"author": {"__typename": "User", "login": "alice"}, "body": "first", "url": "u1", "createdAt": "2026-09-25T10:00:00Z", "pullRequestReview": {"fullDatabaseId": "11"}},
+					{"author": {"__typename": "Bot", "login": "ci"}, "body": "second", "url": "u2", "createdAt": "2026-09-25T11:00:00Z", "pullRequestReview": {"fullDatabaseId": "12"}}]}}]}}}}}`)
 		}
 	})
 	threads, err := c.ListReviewThreads(context.Background(), "o", "r", 7)
@@ -469,6 +470,10 @@ func TestListReviewThreadsErrors(t *testing.T) {
 			func(err error) bool { return err != nil }},
 		"server error": {502, `{"message": "Bad Gateway"}`,
 			func(err error) bool { var he *HTTPError; return errors.As(err, &he) && he.Status == 502 }},
+		"a review id that is not a number": {200, `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": false}, "nodes": [
+			{"id": "T1", "path": "a.go", "diffSide": "RIGHT", "comments": {"pageInfo": {"hasNextPage": false}, "nodes": [
+				{"author": null, "body": "x", "url": "u", "createdAt": "2026-09-25T10:00:00Z", "pullRequestReview": {"fullDatabaseId": "x1"}}]}}]}}}}}`,
+			func(err error) bool { return err != nil && strings.Contains(err.Error(), `"x1"`) }},
 		"unauthorized": {401, `{"message": "Bad credentials"}`,
 			func(err error) bool { r, ok := refusal.As(err); return ok && r.Code == refusal.Auth }},
 	} {

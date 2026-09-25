@@ -616,7 +616,7 @@ func wireThreadComment(c github.ThreadComment) map[string]any {
 		author = map[string]any{"__typename": "User", "login": c.User}
 	}
 	if c.ReviewID != 0 {
-		review = map[string]any{"databaseId": c.ReviewID}
+		review = map[string]any{"fullDatabaseId": strconv.FormatInt(c.ReviewID, 10)}
 	}
 	return map[string]any{"author": author, "body": c.Body, "url": c.URL, "createdAt": c.CreatedAt.UTC().Format(time.RFC3339),
 		"pullRequestReview": review}
