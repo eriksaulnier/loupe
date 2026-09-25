@@ -134,7 +134,7 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 #### The body
 
 - **FR-009**: The new round's part of a sticky body MUST be composed exactly as a non-sticky body with `--inline none` is: chips, opening prose, `Must fix`, `Worth a look`. The footer and both markers MUST end the body as today.
-- **FR-010**: When the edited review holds earlier rounds, the body MUST carry, between the new round's part and the footer's divider, a `### Earlier rounds` section holding one `<details>` per earlier round, newest first. Each `<summary>` MUST read `Round N · reviewed <code>SHA</code>`, where `N` and `SHA` are that round's `round=` and footer commit. Each section MUST hold that round's part, its footer line and its reconciliation marker, as they read in the edited body.
+- **FR-010**: When the edited review holds earlier rounds, the body MUST carry, between the new round's part and the footer's divider, a `### Earlier rounds` section holding one `<details>` per earlier round, newest first. Each `<summary>` MUST read `Round N · reviewed <code>SHA</code> · CHIPS`, where `N` is the round's place in the sticky review (1 for the first sticky round), `SHA` is its footer commit, and `CHIPS` is its chips row as text joined by ` · `, or `no findings`. Each section MUST hold that round's part without its chips row, then its reconciliation marker, as they read in the edited body. The footer line is not kept (owner, 2026-09-25, after reading the live render). A body published before this format MUST still read back, with its collapsed rounds renumbered by place.
 - **FR-011**: loupe MUST read the edited body back through lines outside code fences only, as the allowlist reads fences. It MUST locate the rounds by loupe-generated HTML comment lines, which the allowlist forbids in every authored field outside a fence, so authored text cannot move a round boundary. A body that lacks the expected structure MUST be refused with the new refusal code `sticky`, naming the review URL, with the fix to publish without `--sticky`.
 - **FR-012**: `loupe-meta` on a sticky body MUST carry `sticky=K` as its last key, where `K` is the number of rounds published into the review, this one included. A non-sticky body MUST NOT carry the key.
 - **FR-013**: `round=` on a sticky body MUST be this round's `N`. On the attended path `N` is counted as today. On the unattended path each qualifying bot review MUST count `K` rounds when it carries `sticky=K`, and 1 otherwise.
@@ -164,7 +164,7 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 
 - **Sticky review**: a submitted loupe review whose `loupe-meta` carries `sticky=K`. It holds the newest round on top and up to `K − 1` earlier rounds collapsed below.
 - **Round part**: the chips row, opening prose and sections one round composed, without footer or markers.
-- **Earlier round**: a round part plus its footer line and reconciliation marker, wrapped in one `<details>` under `### Earlier rounds`.
+- **Earlier round**: a round part without its chips row, plus its reconciliation marker, wrapped in one `<details>` under `### Earlier rounds` whose `<summary>` carries the round's place, commit and chips.
 - **Receipt**: gains the edited review's id and whether this round edited it.
 
 ## Success Criteria *(mandatory)*

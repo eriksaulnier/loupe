@@ -22,7 +22,11 @@ Body f-001.
 <!-- loupe-round -->
 
 <details>
-<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>
+<summary>Round 1 · reviewed <code>aaaaaaa</code></summary>
+
+`⛔ 1 blocking`
+
+---
 
 ### Must fix
 
@@ -32,6 +36,10 @@ Body f-001.
 Body f-001.
 
 </details>
+
+---
+
+reviewed `aaaaaaa`
 
 <!-- loupe digest=1111111111111111111111111111111111111111111111111111111111111111 publication=00000000-0000-4000-8000-000000000001 -->
 

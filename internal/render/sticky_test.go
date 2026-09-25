@@ -1,6 +1,8 @@
 package render
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -54,8 +56,11 @@ func TestStickyBodyHoldsEarlierRoundsBeforeTheFooter(t *testing.T) {
 	in := stickyInput(2, "bbbbbbb222", general("f-001", "question", false))
 	in.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
 	body := Body(in)
-	at := indexes(t, body, "### Worth a look", "\n\n---\n\n<!-- loupe-earlier -->\n\n### Earlier rounds\n\n<!-- loupe-round -->\n\n<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code></summary>",
+	at := indexes(t, body, "### Worth a look", "\n\n---\n\n<!-- loupe-earlier -->\n\n### Earlier rounds\n\n<!-- loupe-round -->\n\n<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>",
 		"</details>\n\n---\n\nreviewed `bbbbbbb`", "sticky=2 -->")
+	if strings.Contains(body, "reviewed `aaaaaaa`") {
+		t.Fatalf("the earlier round kept its footer:\n%s", body)
+	}
 	if at[0] > at[1] || at[1] > at[2] || at[2] > at[3] {
 		t.Fatalf("sections out of order %v:\n%s", at, body)
 	}
@@ -88,16 +93,60 @@ func TestStickyBodyCountsDroppedRounds(t *testing.T) {
 }
 
 func TestReadStickyDemotesTheCurrentRound(t *testing.T) {
-	first := firstRound()
-	earlier, _, err := ReadSticky(first)
+	earlier, _, err := ReadSticky(firstRound())
 	if err != nil {
 		t.Fatal(err)
 	}
-	part := first[:strings.Index(first, "\n\n---\n\nreviewed ")]
-	want := "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code></summary>\n\n" + part +
-		"\n\n---\n\nreviewed `aaaaaaa`\n\n<!-- loupe digest=" + strings.Repeat("1", 64) + " publication=00000000-0000-4000-8000-000000000001 -->\n\n</details>"
+	// The chips move into the summary and the footer goes, since the summary names the commit; the reconciliation
+	// marker stays so an interrupted publish of this round still reconciles.
+	want := "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>\n\n" +
+		"### Must fix\n\n<details>\n<summary>⛔ <b>issue</b>: Title f-001</summary>\n\nBody f-001.\n\n</details>\n\n" +
+		"<!-- loupe digest=" + strings.Repeat("1", 64) + " publication=00000000-0000-4000-8000-000000000001 -->\n\n</details>"
 	if earlier[0] != want {
 		t.Fatalf("demoted round\n--- got ---\n%s\n--- want ---\n%s", earlier[0], want)
+	}
+}
+
+// Rounds are numbered by their place in the sticky review, not by loupe's round count, which can start above 1.
+func TestReadStickyNumbersRoundsInTheReview(t *testing.T) {
+	in := stickyInput(5, "aaaaaaa111", general("f-001", "question", false))
+	in.Summary = "Prose stays.\n\n---\n\nAfter a break."
+	in.Sticky = &StickyInput{Rounds: 1}
+	earlier, _, err := ReadSticky(Body(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · 🔵 1 question</summary>\n\nProse stays.\n\n---\n\nAfter a break.\n\n---\n\n### Worth a look") {
+		t.Fatalf("demoted round:\n%s", earlier[0])
+	}
+	next := stickyInput(6, "bbbbbbb222")
+	next.Summary = "Nothing left."
+	next.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
+	again, _, err := ReadSticky(Body(next))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(again[0], "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · no findings</summary>\n\nNothing left.\n\n<!-- loupe digest=") ||
+		!strings.HasPrefix(again[1], "<details>\n<summary>Round 1 · ") {
+		t.Fatalf("blocks:\n%s", strings.Join(again, "\n=====\n"))
+	}
+}
+
+// A body written before the collapsed-round format changed still reads back, and its old rounds are renumbered.
+func TestReadStickyReadsTheEarlierFormat(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-before-025-format.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := strings.Replace(string(data), "<summary>Round 1 · ", "<summary>Round 3 · ", 1)
+	earlier, rounds, err := ReadSticky(old)
+	if err != nil || rounds != 2 || len(earlier) != 2 {
+		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
+	}
+	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · 🔵 1 question</summary>") ||
+		!strings.HasPrefix(earlier[1], "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code></summary>") ||
+		!strings.Contains(earlier[1], "reviewed `aaaaaaa`") {
+		t.Fatalf("blocks:\n%s", strings.Join(earlier, "\n=====\n"))
 	}
 }
 
@@ -114,7 +163,7 @@ func TestReadStickyKeepsOlderBlocksNewestFirst(t *testing.T) {
 	if err != nil || rounds != 4 {
 		t.Fatalf("rounds %d err %v", rounds, err)
 	}
-	if len(again) != 2 || !strings.Contains(again[0], "Round 2 · reviewed <code>bbbbbbb</code>") || again[1] != earlier[0] {
+	if len(again) != 2 || !strings.Contains(again[0], "Round 4 · reviewed <code>bbbbbbb</code>") || again[1] != strings.Replace(earlier[0], "Round 1 · ", "Round 3 · ", 1) {
 		t.Fatalf("blocks %d:\n%s", len(again), strings.Join(again, "\n=====\n"))
 	}
 	for _, b := range again {

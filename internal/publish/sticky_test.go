@@ -87,7 +87,7 @@ func TestRunStickyCreatesThenEdits(t *testing.T) {
 	if !edited.Edited || edited.ReviewID != created.ReviewID || edited.Envelope.EditReviewID != created.ReviewID || edited.Envelope.Body != review.Body {
 		t.Fatalf("second round: receipt %+v", edited)
 	}
-	for _, want := range []string{"### Earlier rounds", "<summary>Round 1 · reviewed <code>1111111</code></summary>", " round=2 ", " sticky=2 -->",
+	for _, want := range []string{"### Earlier rounds", "<summary>Round 1 · reviewed <code>1111111</code> · ⛔ 1 blocking · 🟣 1 suggestion · 🔵 1 question</summary>", " round=2 ", " sticky=2 -->",
 		"publication=" + created.Envelope.PublicationID, "publication=" + edited.Envelope.PublicationID} {
 		if !strings.Contains(review.Body, want) {
 			t.Errorf("edited body lacks %q", want)

@@ -27,7 +27,9 @@ const (
 
 var (
 	stickyKey   = regexp.MustCompile(` sticky=([0-9]+) -->$`)
-	roundKey    = regexp.MustCompile(` round=([0-9]+) `)
+	countKey    = regexp.MustCompile(` (blocking|issues|suggestions|questions|other)=([0-9]+)`)
+	chipSpan    = regexp.MustCompile("^`(⛔|🟡|🟣|🔵|⚪) ([0-9]+) [a-z]+`$")
+	roundNumber = regexp.MustCompile(`^<details>\n<summary>Round [0-9]+ · `)
 	digestLine  = regexp.MustCompile(`^<!-- loupe digest=\S+ publication=\S+ -->$`)
 	footerStart = regexp.MustCompile("^reviewed `([0-9a-f]+)`")
 )
@@ -77,9 +79,9 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	if n < 6 || !structural[n] || !strings.HasPrefix(lines[n], MetaPrefix) {
 		return nil, 0, errors.New("its last line is not a loupe-meta marker")
 	}
-	sticky, round := stickyKey.FindStringSubmatch(lines[n]), roundKey.FindStringSubmatch(lines[n])
-	if sticky == nil || round == nil {
-		return nil, 0, errors.New("its loupe-meta marker has no sticky= or round= key")
+	sticky := stickyKey.FindStringSubmatch(lines[n])
+	if sticky == nil {
+		return nil, 0, errors.New("its loupe-meta marker has no sticky= key")
 	}
 	rounds, _ = strconv.Atoi(sticky[1])
 	digest, footer := lines[n-1], lines[n-3]
@@ -121,9 +123,59 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	if len(part) == 0 {
 		return nil, 0, errors.New("the round it shows is empty")
 	}
-	demoted := fmt.Sprintf("<details>\n<summary>Round %s · reviewed <code>%s</code></summary>\n\n%s\n\n---\n\n%s\n\n%s\n\n</details>",
-		round[1], shortSHA(sha[1]), strings.Join(part, "\n"), footer, digest)
+	chips, rest, err := splitChips(part, lines[n])
+	if err != nil {
+		return nil, 0, err
+	}
+	content := digest
+	if len(rest) > 0 {
+		content = strings.Join(rest, "\n") + "\n\n" + digest
+	}
+	// Each round is numbered by its place in the review, so the newest earlier round is rounds and the ones below it
+	// count down. A body written before this numbering carried loupe's round count, which is renumbered here too.
+	demoted := fmt.Sprintf("<details>\n<summary>Round %d · reviewed <code>%s</code> · %s</summary>\n\n%s\n\n</details>",
+		rounds, shortSHA(sha[1]), chips, content)
+	for i, block := range blocks {
+		blocks[i] = roundNumber.ReplaceAllString(block, fmt.Sprintf("<details>\n<summary>Round %d · ", rounds-1-i))
+	}
 	return append([]string{demoted}, blocks...), rounds, nil
+}
+
+// splitChips takes the chips row off a round and returns it as summary text, or "no findings". The row is loupe's
+// first line exactly when meta counts a finding, and its chips MUST add up to that count, so prose that looks like a
+// chips row is never taken for one. The divider that followed the row goes with it when no prose sat between.
+func splitChips(part []string, meta string) (string, []string, error) {
+	counts := map[string]int{}
+	for _, m := range countKey.FindAllStringSubmatch(meta, -1) {
+		counts[m[1]], _ = strconv.Atoi(m[2])
+	}
+	total := counts["issues"] + counts["suggestions"] + counts["questions"] + counts["other"]
+	if total == 0 {
+		return "no findings", part, nil
+	}
+	var chips []string
+	sum := 0
+	for _, span := range strings.Split(part[0], "` `") {
+		span = "`" + strings.Trim(span, "`") + "`"
+		m := chipSpan.FindStringSubmatch(span)
+		if m == nil {
+			return "", nil, errors.New("the round it shows does not open on its chips row")
+		}
+		n, _ := strconv.Atoi(m[2])
+		if m[1] == "⛔" && n != counts["blocking"] {
+			return "", nil, fmt.Errorf("its chips count %d blocking and its loupe-meta marker %d", n, counts["blocking"])
+		}
+		sum += n
+		chips = append(chips, strings.Trim(span, "`"))
+	}
+	if sum != total {
+		return "", nil, fmt.Errorf("its chips count %d findings and its loupe-meta marker %d", sum, total)
+	}
+	rest := trimBlank(part[1:])
+	if len(rest) > 2 && rest[0] == "---" && rest[1] == "" && strings.HasPrefix(rest[2], "### ") {
+		rest = rest[2:]
+	}
+	return strings.Join(chips, " · "), rest, nil
 }
 
 func trimBlank(lines []string) []string {
