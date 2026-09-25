@@ -278,7 +278,11 @@ func splitChips(part []string, meta string) (string, []string, error) {
 	}
 	total := counts["issues"] + counts["suggestions"] + counts["questions"] + counts["other"]
 	if total == 0 {
-		return "<code>✓ no findings</code>", part, nil
+		// A clean round opens on its no-findings pill, and a body written before that pill opens on its prose.
+		if len(part) > 0 && part[0] == CodeSpan(cleanChip) {
+			part = trimBlank(part[1:])
+		}
+		return "<code>" + cleanChip + "</code>", part, nil
 	}
 	var chips []string
 	sum := 0

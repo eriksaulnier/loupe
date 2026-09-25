@@ -163,6 +163,7 @@ func Body(in Input) string {
 }
 
 // chipsRow is a key to the row dots below: a blocking row leads with ⛔, and every other row with its label group's dot.
+// With no findings it is one pill that says so.
 func chipsRow(blocking int, rest []Finding) string {
 	var chips []string
 	if blocking > 0 {
@@ -179,8 +180,15 @@ func chipsRow(blocking int, rest []Finding) string {
 			chips = append(chips, CodeSpan(fmt.Sprintf("%s %d %s", dots[g], n, plural(n, nouns[g][0], nouns[g][1]))))
 		}
 	}
+	// A clean review still opens on the scoreboard, so a reader sees at a glance that nothing was found.
+	if len(chips) == 0 {
+		return CodeSpan(cleanChip)
+	}
 	return strings.Join(chips, " ")
 }
+
+// cleanChip is the scoreboard of a review with no findings.
+const cleanChip = "✓ no findings"
 
 func sectionBlock(title string, fs []Finding, in Input) string {
 	parts := make([]string, len(fs))

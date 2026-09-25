@@ -100,7 +100,7 @@ reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e
 
 ### Opening
 
-The chips row leads the body and the opening prose follows it, or the prose leads when there are no findings to count. The chips lead because `⛔ N blocking` is the one fact an author most needs, and a long unattended summary would otherwise push it down. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
+The chips row leads the body and the opening prose follows it. With no findings to count, the row is one `✓ no findings` pill. The chips lead because `⛔ N blocking` is the one fact an author most needs, and a long unattended summary would otherwise push it down. The body MUST NOT open with a callout. GitHub's review header already shows the event (approved, changes requested, commented), and the leading `⛔` chip already states the blocking count, so a callout would only repeat one or the other.
 
 **Who writes the opening prose depends on who published.** An attended review carries a message the human typed at the publish confirmation, reading the body as they wrote it; the draft's summary is not published on that path and orients the human while they sort findings instead. An unattended review carries the draft's summary, because no human is there to type anything, and its footer already ends in ` · unattended` so a reader knows the prose was not read by a person before it appeared.
 
@@ -109,6 +109,7 @@ The prose is optional in both modes. When there is none the body opens on the ch
 ### Chips
 
 - One inline code span per non-zero count, zeros omitted, pluralized except `other` and `blocking`.
+- **A review with no findings still opens on the row**, as the one chip `` `✓ no findings` ``, so a reader sees at a glance that nothing was found. A body published before this chip opens on its prose instead, and sticky read-back accepts both.
 - Each is led by a dot: ⛔ blocking, 🟡 issue, 🟣 suggestion, 🔵 question, ⚪ other.
 - Counts are derived from the final published findings at publish time, never from the summary prose.
 - **One chip per row dot below, in the order ⛔, 🟡, 🟣, 🔵, ⚪.** The chips row is a key to the dots that lead the rows. Blocking leads the row and is counted only there: a blocking row leads with `⛔` whatever its label, so a blocking issue is `⛔ 1 blocking`, never also `🟡 1 issue`. Every other chip counts the nonblocking findings of its label group.
