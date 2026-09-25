@@ -230,6 +230,8 @@ func TestReadStickyRefusesAnUnreadableBody(t *testing.T) {
 		"not sticky":      strings.Replace(first, " sticky=1", "", 1),
 		"no marker":       first[:strings.Index(first, "<!-- loupe digest=")],
 		"footer replaced": strings.Replace(first, "reviewed `aaaaaaa`", "edited by hand", 1),
+		// The footer is not carried into the collapsed round, so text added to it would be lost without a word.
+		"footer extended": strings.Replace(first, "reviewed `aaaaaaa`", "reviewed `aaaaaaa` keep this note", 1),
 		"no divider":      strings.Replace(first, "\n\n---\n\nreviewed", "\n\nreviewed", 1),
 		"text after meta": first + "\nA note added on GitHub.\n",
 		// An earlier round whose delimiter was deleted on GitHub would otherwise vanish from the next edit.

@@ -31,7 +31,13 @@ var (
 	chipSpan    = regexp.MustCompile("^`(⛔|🟡|🟣|🔵|⚪) ([0-9]+) [a-z]+`$")
 	roundNumber = regexp.MustCompile(`^<details>\n<summary>Round [0-9]+ · `)
 	digestLine  = regexp.MustCompile(`^<!-- loupe digest=\S+ publication=\S+ -->$`)
-	footerStart = regexp.MustCompile("^reviewed `([0-9a-f]+)`")
+	// footerLine is the whole footer Body writes: the commit, then the source, the model and the unattended mark when
+	// present, each held to the rule capture validates it by. The collapsed round does not keep the footer, so a footer
+	// with anything else on it is refused rather than dropped.
+	footerLine = regexp.MustCompile("^reviewed `([0-9a-f]+)`" +
+		"( · via `[a-z0-9][a-z0-9._-]*( [0-9][0-9A-Za-z.+-]*)?`)?" +
+		"( · `[a-z0-9][a-z0-9._/:-]*`)?" +
+		"( · unattended)?$")
 )
 
 func earlierSection(s StickyInput) string {
@@ -85,7 +91,7 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	}
 	rounds, _ = strconv.Atoi(sticky[1])
 	digest, footer := lines[n-1], lines[n-3]
-	sha := footerStart.FindStringSubmatch(footer)
+	sha := footerLine.FindStringSubmatch(footer)
 	if !digestLine.MatchString(digest) || lines[n-2] != "" || sha == nil || lines[n-4] != "" || lines[n-5] != "---" || lines[n-6] != "" {
 		return nil, 0, errors.New("it does not end with loupe's divider, footer and reconciliation marker")
 	}
