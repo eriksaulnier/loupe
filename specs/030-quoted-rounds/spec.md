@@ -25,6 +25,8 @@ This specification amends `docs/comment-format.md`, which is a contract (constit
 - Q: What level do loupe's section headings take inside the quote? → A: `###`, as on top (owner, 2026-09-25, after reviewing a quoted round on `eriksaulnier/loupe-sandbox#1`). The `####` demotion from spec 025 made them read small inside muted quoted text, and the quote already marks the round as history.
 - Q: Does quoting keep a finding's own location quote? → A: Yes. It nests as a quote inside the round's quote, which GitHub renders as a second bar. Checked with GitHub's Markdown renderer on 2026-09-25, together with `<details>` inside a quote.
 
+- Q: Should a quoted round in which a line lost its `>` be refused? → A: No (owner, 2026-09-25, after the CI review of #54). The first build refused it, but it told a quoted round by a line shaped like a footer, which a v0.11.0 round's authored prose can also end in, so a valid legacy series was refused. A lost marker only moves a line outside the quote. A hidden marker that authored text cannot forge was the alternative, and it is deferred until something needs to read inside collapsed rounds.
+
 ### Settled by the constitution, contracts and code
 
 - The dividers inside a collapsed round go. The quote's edge now does their work, and a divider inside the quote would split it into what reads as two rounds again.
@@ -63,7 +65,7 @@ A pipeline upgrades loupe mid-series. The next round reads the review back, coll
 1. **Given** a sticky body in the v0.12.0 layout with two collapsed rounds, **When** a round publishes over it, **Then** the round that was on top is collapsed and quoted, the two older rounds are carried byte for byte apart from their `Round N`, and the body reads back again on the next round.
 2. **Given** a body in the v0.11.0 layout, or one from before spec 025's format, **When** a round publishes over it, **Then** it reads back as it does today.
 3. **Given** a body whose newest collapsed round is quoted, **When** its quoted footer was removed on GitHub, **Then** the next round refuses with `sticky`, as it does today for an unquoted round that lost its footer.
-4. **Given** a body whose newest collapsed round is quoted, **When** a line inside the quote lost its `>` on GitHub, **Then** the next round refuses with `sticky` rather than carrying a round that renders half outside its quote.
+4. **Given** a body whose newest collapsed round is quoted, **When** a line inside the quote lost its `>` on GitHub, **Then** the next round carries the round as it is, with that line outside the quote.
 
 ---
 
@@ -84,7 +86,7 @@ A pipeline upgrades loupe mid-series. The next round reads the review back, coll
 - **FR-003**: The reconciliation marker MUST stay outside the quote, on its own line after it and before `</details>`.
 - **FR-004**: The collapsed round's `<summary>` line, the round delimiters, and the newest round's layout MUST NOT change.
 - **FR-005**: A round collapsed in an earlier layout MUST be carried as it is, apart from its `Round N`.
-- **FR-006**: Read-back MUST accept a collapsed round in the quoted layout and in every layout it accepts today. The refusal rules MUST cover the quoted layout: a newest collapsed round whose quoted footer is gone, and a quoted round in which a non-blank line has lost its `> `, MUST refuse with `sticky`.
+- **FR-006**: Read-back MUST accept a collapsed round in the quoted layout and in every layout it accepts today. The refusal rules MUST cover the quoted layout: a newest collapsed round whose quoted footer is gone MUST refuse with `sticky`. A quoted round in which a line lost its `>` MUST be carried as it is.
 - **FR-007**: `docs/comment-format.md` MUST show the quoted layout in its sticky example, state FR-001 to FR-006, and list the v0.12.0 layout among the earlier bodies that still read back.
 
 ### Key Entities
