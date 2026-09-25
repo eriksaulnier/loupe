@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -124,6 +125,20 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	n := len(lines) - 1
 	for n >= 0 && strings.TrimSpace(lines[n]) == "" {
 		n--
+	}
+	// The record describes only the round on top, so the demoted round leaves it behind and the next body writes its
+	// own. A body written before the record has none.
+	if n >= 1 && structural[n-1] && strings.HasPrefix(lines[n-1], recordPrefix) {
+		lines = slices.Delete(slices.Clone(lines), n-1, n)
+		structural = slices.Delete(slices.Clone(structural), n-1, n)
+		n--
+	}
+	// Any other record was written on GitHub. Carried into a collapsed round, it would give the next body two, and no
+	// capture could read that body back.
+	for i := range n {
+		if structural[i] && strings.HasPrefix(lines[i], recordPrefix) {
+			return nil, 0, errors.New("it carries a findings record outside loupe's generated tail")
+		}
 	}
 	if n < 6 || !structural[n] || !strings.HasPrefix(lines[n], MetaPrefix) {
 		return nil, 0, errors.New("its last line is not a loupe-meta marker")

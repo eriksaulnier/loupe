@@ -27,7 +27,7 @@ func TestCreateRunAndLoadTarget(t *testing.T) {
 	root := t.TempDir()
 	dir := RunDir(root, "o", "r", 12, 2)
 	target := sampleTarget()
-	if err := CreateRun(dir, target, []byte("diff --git a/x b/x\n"), []byte("{\"schema\": 1}\n")); err != nil {
+	if err := CreateRun(dir, target, []byte("diff --git a/x b/x\n"), []byte("{\"schema\": 1}\n"), nil); err != nil {
 		t.Fatal(err)
 	}
 	for name, want := range map[string]string{"pr.diff": "diff --git a/x b/x\n", "draft.json": "{\"schema\": 1}\n"} {
@@ -150,7 +150,7 @@ func TestCreateRunRefusesExisting(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("keep"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := CreateRun(dir, sampleTarget(), nil, nil)
+	err := CreateRun(dir, sampleTarget(), nil, nil, nil)
 	r, ok := refusal.As(err)
 	if !ok || r.Code != refusal.Internal {
 		t.Fatalf("got %v", err)
@@ -194,7 +194,7 @@ func TestReadDiffChecksTheFingerprint(t *testing.T) {
 	stored := []byte("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n")
 	target := sampleTarget()
 	target.DiffSHA256 = DiffSHA256(stored)
-	if err := CreateRun(dir, target, stored, []byte("{}\n")); err != nil {
+	if err := CreateRun(dir, target, stored, []byte("{}\n"), nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := ReadDiff(dir, target)
@@ -212,5 +212,24 @@ func TestReadDiffChecksTheFingerprint(t *testing.T) {
 	_, err = ReadDiff(dir, target)
 	if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "diffSha256") {
 		t.Fatalf("edited pr.diff: %v, want a refusal naming the file and the fingerprint", err)
+	}
+}
+
+func TestCreateRunWritesPreviousOnlyWhenGiven(t *testing.T) {
+	root := t.TempDir()
+	with, without := RunDir(root, "o", "r", 12, 1), RunDir(root, "o", "r", 12, 2)
+	if err := CreateRun(with, sampleTarget(), nil, []byte("{}\n"), []byte("{\"schema\": 1}\n")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(with, PreviousFile)); err != nil || string(got) != "{\"schema\": 1}\n" {
+		t.Fatalf("previous.json: %q, %v", got, err)
+	}
+	target := sampleTarget()
+	target.Round = 2
+	if err := CreateRun(without, target, nil, []byte("{}\n"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(without, PreviousFile)); !os.IsNotExist(err) {
+		t.Fatalf("previous.json was written without bytes: %v", err)
 	}
 }

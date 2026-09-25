@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
@@ -179,7 +180,8 @@ func TestPublishEndToEnd(t *testing.T) {
 	if !strings.Contains(body, humanMessage) || strings.Contains(body, "Two things to look at.") {
 		t.Fatalf("POST body opens on the wrong prose:\n%s", body)
 	}
-	if !strings.Contains(stdout, strings.ReplaceAll(body, "<details>", "<details open>")) {
+	// The record shows as a note there, and the payload below carries its exact bytes.
+	if !strings.Contains(stdout, render.RecordAsNote(strings.ReplaceAll(body, "<details>", "<details open>"))) {
 		t.Fatalf("the confirmation did not show the body that was sent:\n%s", stdout)
 	}
 	postJSON, err := json.Marshal(post)

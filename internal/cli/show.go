@@ -40,12 +40,15 @@ Result (--json):
    "digest": "sha256 hex"}
 
 --previous shows instead the findings published by the newest earlier round that has a receipt,
-skipping unpublished rounds, and refuses with not-found when no earlier round was published.
+skipping unpublished rounds. Without one, it shows the round capture read back from GitHub
+and stored in the run. It reads no network. It refuses with not-found when there is neither,
+with the reason capture stored when there is one. from says which source answered; for
+github, round is the review's own round number.
 
 Result (--previous --json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@2",
    "dir": "/path/to/run",
-   "round": 1, "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
+   "from": "receipt", "round": 1, "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
    "findings": [{"id": "f-001", "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
                  "label": "issue", "blocking": true}]}
@@ -73,7 +76,7 @@ func newShowCmd(deps Deps) *cobra.Command {
 		},
 	}
 	cmd.Flags().String("run", "", "run reference, owner/repo#123 or owner/repo#123@2")
-	cmd.Flags().Bool("previous", false, "show the findings published by the newest earlier published round")
+	cmd.Flags().Bool("previous", false, "show the findings published by the newest earlier round, from a local receipt or read back from GitHub at capture")
 	cmd.Flags().Bool("diff", false, "write the captured diff to stdout instead of the draft")
 	return cmd
 }
@@ -149,32 +152,25 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 	if err != nil {
 		return err
 	}
-	round, dir, err := run.PreviousPublished(root, ref)
+	from, round, reviewURL, findings, err := previousRound(root, ref)
 	if err != nil {
 		return err
 	}
-	receipt, found, err := publish.LoadReceipt(dir)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("receipt.json in %s disappeared while it was being read", dir)
-	}
-	findings := receipt.Envelope.Findings
 	if findings == nil {
 		findings = []publish.EnvelopeFinding{}
 	}
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{
+			"from":      from,
 			"round":     round,
-			"reviewUrl": receipt.ReviewURL,
+			"reviewUrl": reviewURL,
 			"findings":  findings,
 		})
 	}
 	s, width := deps.outStyle(), deps.width()
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s  %s\n", header(s, width, ref.String(), ""), s.Dim.Render(fmt.Sprintf("round %d, published", round)))
-	fmt.Fprintf(&b, "%s\n\n", s.Accent.Render(oneLine(receipt.ReviewURL)))
+	fmt.Fprintf(&b, "%s\n\n", s.Accent.Render(oneLine(reviewURL)))
 	fmt.Fprintf(&b, "%s\n", s.Heading("findings"))
 	if len(findings) == 0 {
 		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  (none)"))
@@ -196,6 +192,41 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 	fmt.Fprintf(&b, "%s\n", next(s, width, fmt.Sprintf("Round %d is on GitHub. The current round is", round), "loupe show --run "+ref.String()))
 	_, err = io.WriteString(deps.Stdout, b.String())
 	return err
+}
+
+// previousRound is the newest earlier local round with a receipt, the exact envelope loupe sent, or else the round
+// capture read back from GitHub and stored in this run. It reads no network, so a reviewer with no GitHub access can
+// run it.
+func previousRound(root string, ref run.Ref) (from string, round int, reviewURL string, findings []publish.EnvelopeFinding, err error) {
+	round, dir, err := run.PreviousPublished(root, ref)
+	if err == nil {
+		receipt, found, err := publish.LoadReceipt(dir)
+		if err != nil {
+			return "", 0, "", nil, err
+		}
+		if !found {
+			return "", 0, "", nil, fmt.Errorf("receipt.json in %s disappeared while it was being read", dir)
+		}
+		return "receipt", round, receipt.ReviewURL, receipt.Envelope.Findings, nil
+	}
+	local, ok := refusal.As(err)
+	if !ok || local.Code != refusal.NotFound {
+		return "", 0, "", nil, err
+	}
+	stored, found, err := publish.LoadPrevious(run.RunDir(root, ref.Owner, ref.Repo, ref.Number, ref.Round))
+	if err != nil {
+		return "", 0, "", nil, err
+	}
+	switch {
+	case !found:
+		return "", 0, "", nil, local
+	case !stored.Found:
+		pr := run.Ref{Owner: ref.Owner, Repo: ref.Repo, Number: ref.Number}
+		return "", 0, "", nil, refusal.New(refusal.NotFound,
+			fmt.Sprintf("no earlier round of %s was published here, and none can be read back from GitHub: %s", pr, stored.Reason),
+			local.Fix)
+	}
+	return "github", stored.Round, stored.ReviewURL, stored.Findings, nil
 }
 
 // findingBlock is one finding as every view prints it.

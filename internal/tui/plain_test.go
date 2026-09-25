@@ -558,3 +558,31 @@ func TestConfirmPlainNamesTheReviewItEdits(t *testing.T) {
 		t.Fatalf("a new review shows the edit line:\n%s", out.String())
 	}
 }
+
+// recordPreview is a confirmation fixture whose body is render.Body's, record line included.
+func recordPreview() publish.Preview {
+	in := render.Input{Owner: "acme", Repo: "widgets", Number: 42, Round: 1, HeadSHA: "abc1234", Inline: "none",
+		Digest: "d", PublicationID: "p", Findings: []render.Finding{{ID: "f-001", Title: "T", Body: "B.", General: true, Label: "issue"}}}
+	p := confirmPreview()
+	p.Comments = nil
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		composed := in
+		composed.Summary = message
+		return publish.Envelope{Body: render.Body(composed)}, p.EnvelopeJSON, nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	return p
+}
+
+// The record is a line of base64 no one can read, so the confirmation names it instead, as it shows pills as words.
+func TestConfirmPlainShowsTheRecordAsANote(t *testing.T) {
+	var out bytes.Buffer
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(recordPreview()); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if strings.Contains(text, "sha256=") || !strings.Contains(text, "<!-- loupe-findings: a copy of the 1 finding above -->") {
+		t.Errorf("want the record shown as a note:\n%s", text)
+	}
+}

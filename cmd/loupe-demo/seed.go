@@ -173,7 +173,7 @@ func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool) error {
 		}
 		url := target.URL
 		if writeRuns {
-			if err := run.CreateRun(run.RunDir(home, owner, repo, r.number, 1), target, []byte(demoDiff), data); err != nil {
+			if err := run.CreateRun(run.RunDir(home, owner, repo, r.number, 1), target, []byte(demoDiff), data, nil); err != nil {
 				return fmt.Errorf("create demo run #%d: %w", r.number, err)
 			}
 		}

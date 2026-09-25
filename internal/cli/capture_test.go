@@ -34,7 +34,7 @@ func TestCreateRoundLostRaceIsLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := run.Target{Schema: run.TargetSchema, Owner: "o", Repo: "r", Number: 7, Round: 2}
-	err := createRound(dir, target, []byte{}, []byte("{}\n"), "https://github.com/o/r/pull/7")
+	err := createRound(dir, target, []byte{}, []byte("{}\n"), nil, "https://github.com/o/r/pull/7")
 	r, ok := refusal.As(err)
 	if !ok || r.Code != refusal.Lock {
 		t.Fatalf("got %v, want a lock refusal", err)

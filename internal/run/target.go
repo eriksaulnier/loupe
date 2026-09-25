@@ -137,9 +137,13 @@ func LoadDiff(dir string, target Target) (*diff.Diff, error) {
 	return parsed, nil
 }
 
-// CreateRun takes the draft as bytes because run must not import draft. The run appears complete or not at all:
-// files are written to a sibling temp directory that is renamed into place.
-func CreateRun(dir string, target Target, diff []byte, draftJSON []byte) (err error) {
+// PreviousFile holds the round capture read back from GitHub. See publish.Previous.
+const PreviousFile = "previous.json"
+
+// CreateRun takes the draft and the previous round as bytes because run must not import draft or publish. The run
+// appears complete or not at all: files are written to a sibling temp directory that is renamed into place. A nil
+// previous writes no PreviousFile.
+func CreateRun(dir string, target Target, diff, draftJSON, previous []byte) (err error) {
 	if _, statErr := os.Lstat(dir); !errors.Is(statErr, fs.ErrNotExist) {
 		return refusal.New(refusal.Internal, fmt.Sprintf("run directory %s already exists", dir), "file an issue")
 	}
@@ -164,6 +168,11 @@ func CreateRun(dir string, target Target, diff []byte, draftJSON []byte) (err er
 	}
 	if err = WriteFileAtomic(filepath.Join(tmp, "draft.json"), draftJSON); err != nil {
 		return err
+	}
+	if previous != nil {
+		if err = WriteFileAtomic(filepath.Join(tmp, PreviousFile), previous); err != nil {
+			return err
+		}
 	}
 	if err = os.Rename(tmp, dir); err != nil {
 		if _, statErr := os.Lstat(dir); statErr == nil {

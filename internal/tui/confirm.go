@@ -265,7 +265,9 @@ func (c *confirmation) cutAfter(body, message string) error {
 	return nil
 }
 
-func displayBody(body string) string { return render.PillsAsWords(markdown.OpenDetails(body)) }
+func displayBody(body string) string {
+	return render.RecordAsNote(render.PillsAsWords(markdown.OpenDetails(body)))
+}
 
 // messageRows is how many rows the input's text takes. The textarea pads its view out to the height it was given and
 // never reports the text's own height, but it asks its prompt function for one row at a time, the text's rows first
@@ -481,7 +483,7 @@ func (c *confirmation) content(m *Model) string {
 		after := strings.TrimLeft(c.after, "\n")
 		parts = append(parts, c.messageView(m, width), "", m.styles.Wrap(render.ForDisplay(after), width, " "))
 	} else {
-		parts = append(parts, m.styles.Wrap(render.ForDisplay(render.PillsAsWords(markdown.OpenDetails(c.shown.Body))), width, " "))
+		parts = append(parts, m.styles.Wrap(render.ForDisplay(displayBody(c.shown.Body)), width, " "))
 	}
 	parts = append(parts, "", m.styles.Rule(m.width, fmt.Sprintf("inline comments (%d)", len(c.shown.Comments)), ""))
 	for _, comment := range c.shown.Comments {

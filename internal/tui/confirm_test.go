@@ -112,6 +112,15 @@ func TestConfirmShowsPillsAsWords(t *testing.T) {
 	}
 }
 
+func TestConfirmShowsTheRecordAsANote(t *testing.T) {
+	m := NewConfirmModel(recordPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 1))
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 60})
+	view := ansi.Strip(m.confirm.content(m.shell))
+	if strings.Contains(view, "sha256=") || !strings.Contains(view, "a copy of the 1 finding above") {
+		t.Errorf("want the record shown as a note:\n%s", view)
+	}
+}
+
 // TestConfirmBoxIsEvenlySpaced: the renderer leaves blank lines on one side of the opening slot and not the other,
 // so without respacing the box would sit one row closer to one neighbor than to the other.
 func TestConfirmBoxIsEvenlySpaced(t *testing.T) {

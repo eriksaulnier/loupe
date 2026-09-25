@@ -10,25 +10,13 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
-// findSticky is the publisher's newest loupe review when that review is sticky: the viewer's own, or when viewer is
-// empty, a [bot]'s from the same source. An installation token cannot read its own login, so the source capture
-// recorded is what tells one App's review from another's, which GitHub would refuse to let this one edit. Its version
-// is left out, so a release keeps editing the same review. A plain loupe review from the same publisher ends the
-// series, so publishing once without --sticky is how a sticky review loupe cannot read back is left behind.
+// findSticky is the publisher's newest loupe review when that review is sticky. newestOwn's source match matters here
+// too, because GitHub would refuse to let this App edit another App's review. A plain loupe review from the same
+// publisher ends the series, so publishing once without --sticky is how a sticky review loupe cannot read back is left
+// behind.
 func findSticky(reviews []github.Review, viewer, source string) (github.Review, bool) {
-	var newest github.Review
-	for _, r := range reviews {
-		if r.State == "PENDING" || !authorMatches(r.User, Envelope{Viewer: viewer}) || !render.IsLoupe(r.Body) {
-			continue
-		}
-		if viewer == "" && sourceName(render.MetaSource(r.Body)) != sourceName(source) {
-			continue
-		}
-		if r.ID > newest.ID {
-			newest = r
-		}
-	}
-	if _, sticky := render.StickyRounds(newest.Body); newest.ID == 0 || !sticky {
+	newest, ok := newestOwn(reviews, viewer, source)
+	if _, sticky := render.StickyRounds(newest.Body); !ok || !sticky {
 		return github.Review{}, false
 	}
 	return newest, true

@@ -50,7 +50,7 @@ func TestShowJSONCarriesDigest(t *testing.T) {
 	}
 	dir := run.RunDir(home, "o", "r", 1, 1)
 	target := run.Target{Schema: run.TargetSchema, Owner: "o", Repo: "r", Number: 1, Round: 1}
-	if err := run.CreateRun(dir, target, nil, draftJSON); err != nil {
+	if err := run.CreateRun(dir, target, nil, draftJSON, nil); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := draft.Load(dir)
@@ -80,7 +80,7 @@ func diffRun(t *testing.T, captured []byte) string {
 		Schema: run.TargetSchema, Owner: "o", Repo: "r", Number: 1, Round: 1,
 		DiffSHA256: run.DiffSHA256(captured),
 	}
-	if err := run.CreateRun(run.RunDir(home, "o", "r", 1, 1), target, captured, draftJSON); err != nil {
+	if err := run.CreateRun(run.RunDir(home, "o", "r", 1, 1), target, captured, draftJSON, nil); err != nil {
 		t.Fatal(err)
 	}
 	return home

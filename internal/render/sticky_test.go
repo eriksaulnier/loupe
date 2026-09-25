@@ -40,6 +40,8 @@ func TestStickyOffLeavesBodyUnchanged(t *testing.T) {
 	plain := Body(in)
 	in.Sticky = &StickyInput{Rounds: 1}
 	sticky := Body(in)
+	// The record's checksum covers loupe-meta, so it differs too, and is compared without it.
+	plain, sticky = strings.Replace(plain, recordOf(t, plain)+"\n", "", 1), strings.Replace(sticky, recordOf(t, sticky)+"\n", "", 1)
 	if want := strings.Replace(plain, " regraded=0 -->", " regraded=0 sticky=1 -->", 1); sticky != want {
 		t.Fatalf("a one-round sticky body must differ only by sticky=1\n--- got ---\n%s\n--- want ---\n%s", sticky, want)
 	}
@@ -299,5 +301,61 @@ func TestReadStickyKeepsProseThatLooksLikeASection(t *testing.T) {
 		if !strings.Contains(earlier[0], want) {
 			t.Errorf("prose %q was cut:\n%s", prose, earlier[0])
 		}
+	}
+}
+
+func TestReadStickyDropsTheRecordFromTheDemotedRound(t *testing.T) {
+	earlier, _, err := ReadSticky(firstRound())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(earlier[0], recordPrefix) {
+		t.Fatalf("the demoted round kept its record:\n%s", earlier[0])
+	}
+}
+
+func TestStickyRoundsKeepOneRecordOnTheCurrentRound(t *testing.T) {
+	body := firstRound()
+	for round := 2; round <= 3; round++ {
+		earlier, rounds, err := ReadSticky(body)
+		if err != nil {
+			t.Fatalf("round %d: %v", round, err)
+		}
+		in := stickyInput(round, strings.Repeat(string(rune('a'+round)), 10), general("f-00"+string(rune('0'+round)), "question", false))
+		in.Sticky = &StickyInput{Rounds: rounds + 1, Earlier: earlier}
+		body = Body(in)
+	}
+	if n := strings.Count(body, recordPrefix); n != 1 {
+		t.Fatalf("a three-round sticky body holds %d records", n)
+	}
+	got, err := ReadRecord(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != "f-003" {
+		t.Fatalf("the record reads %+v, want the third round's f-003", got)
+	}
+}
+
+func TestReadStickyReadsABodyWithoutARecord(t *testing.T) {
+	body := firstRound()
+	legacy := strings.Replace(body, recordOf(t, body)+"\n", "", 1)
+	if _, rounds, err := ReadSticky(legacy); err != nil || rounds != 1 {
+		t.Fatalf("a body written before the record: rounds %d, err %v", rounds, err)
+	}
+}
+
+// A record anywhere but the tail was written on GitHub, and carrying it into a collapsed round would leave the next
+// body with two, which no capture can read back.
+func TestReadStickyRefusesARecordOutsideTheTail(t *testing.T) {
+	body := firstRound()
+	record := recordOf(t, body)
+	edited := strings.Replace(body, "### Must fix", record+"\n\n### Must fix", 1)
+	if _, _, err := ReadSticky(edited); err == nil || !strings.Contains(err.Error(), "findings record") {
+		t.Fatalf("ReadSticky: %v, want a refusal naming the findings record", err)
+	}
+	fenced := strings.Replace(body, "### Must fix", "```\n"+record+"\n```\n\n### Must fix", 1)
+	if _, _, err := ReadSticky(fenced); err != nil && strings.Contains(err.Error(), "findings record") {
+		t.Fatalf("a fenced record was refused: %v", err)
 	}
 }
