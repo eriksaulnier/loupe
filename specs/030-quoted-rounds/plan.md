@@ -6,7 +6,7 @@
 
 ## Summary
 
-The demote step in `render.ReadSticky` writes the round it takes off the top as one blockquote: its prose and sections, loupe's section headings at `###` as on top, then its footer, every line prefixed with `> ` or `>` when blank, with no divider inside, and its reconciliation marker after the quote. Read-back learns the quoted layout beside every earlier one: a collapsed round is quoted when its content ends on a quoted footer, and a quoted round with a non-blank line that lost its `>` is refused. `markdown.OpenDetails` and `markdown.MapSummaryLines` learn to see through quote markers, so the terminal confirmation keeps showing a collapsed round's pills as words and its disclosures open. Nothing else in the body changes.
+The demote step in `render.ReadSticky` writes the round it takes off the top as one blockquote: its prose and sections, loupe's section headings at `###` as on top, then its footer, every line prefixed with `> ` or `>` when blank, with no divider inside, and its reconciliation marker after the quote. Read-back learns the quoted layout beside every earlier one, and carries a quoted round whose lines lost a marker as it is (amended after the CI review of #54). `markdown.OpenDetails` and `markdown.MapSummaryLines` learn to see through quote markers, so the terminal confirmation keeps showing a collapsed round's pills as words and its disclosures open. Nothing else in the body changes.
 
 ## Technical Context
 
