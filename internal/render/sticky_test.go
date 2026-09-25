@@ -687,3 +687,20 @@ func TestReadStickyCarriesAnOlderRoundThatOpensOnAQuote(t *testing.T) {
 		t.Fatalf("round 2:\n%s", earlier[1])
 	}
 }
+
+// The terminal shows a collapsed round's rows with their pills as words, as it does for the round on top.
+func TestPillsAsWordsReachesAQuotedRound(t *testing.T) {
+	in := stickyInput(1, "aaaaaaa111", rated("f-001", "issue", "major", true))
+	in.Sticky = &StickyInput{Rounds: 1}
+	earlier, _, err := ReadSticky(Body(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := stickyInput(2, "bbbbbbb222")
+	next.Summary = "Fixed."
+	next.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
+	shown := PillsAsWords(Body(next))
+	if !strings.Contains(shown, "\n> <summary>⛔ <b>issue</b> MAJOR: Title f-001</summary>\n") || strings.Contains(shown, "<picture>") {
+		t.Fatalf("pills left in the quoted round:\n%s", shown)
+	}
+}
