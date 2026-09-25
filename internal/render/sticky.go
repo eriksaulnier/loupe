@@ -63,33 +63,32 @@ func earlierSection(s StickyInput) string {
 
 // StickyRounds is the sticky= count on body's loupe-meta line, and whether the line carries the key at all. A key
 // whose count is not a number still marks the review as sticky, so it is read back and refused rather than skipped.
-// Only the last marker line outside a fence counts, since a finding may quote one.
 func StickyRounds(body string) (rounds int, sticky bool) {
-	lines, structural := markdown.StructuralLines(body)
-	for i := len(lines) - 1; i >= 0; i-- {
-		if structural[i] && strings.HasPrefix(lines[i], MetaPrefix) {
-			m := stickyAny.FindStringSubmatch(lines[i])
-			if m == nil {
-				return 0, false
-			}
-			rounds, _ = strconv.Atoi(m[1])
-			return rounds, true
-		}
+	line, ok := stickyMeta(body)
+	if !ok {
+		return 0, false
 	}
-	return 0, false
+	rounds, _ = strconv.Atoi(stickyAny.FindStringSubmatch(line)[1])
+	return rounds, true
 }
 
-// MetaSource is the src= value on body's loupe-meta line, empty when there is none. Like StickyRounds it reads only the
-// last marker line outside a fence.
-func MetaSource(body string) string {
+// stickyMeta is the last marker line outside a fence that carries sticky=. A finding may quote a marker inside a fence,
+// and one appended on GitHub after loupe's own must not hide it.
+func stickyMeta(body string) (string, bool) {
 	lines, structural := markdown.StructuralLines(body)
 	for i := len(lines) - 1; i >= 0; i-- {
-		if structural[i] && strings.HasPrefix(lines[i], MetaPrefix) {
-			if m := srcKey.FindStringSubmatch(lines[i]); m != nil {
-				return m[1]
-			}
-			return ""
+		if structural[i] && strings.HasPrefix(lines[i], MetaPrefix) && stickyAny.MatchString(lines[i]) {
+			return lines[i], true
 		}
+	}
+	return "", false
+}
+
+// MetaSource is the src= value on the marker line StickyRounds reads, empty when there is none.
+func MetaSource(body string) string {
+	line, _ := stickyMeta(body)
+	if m := srcKey.FindStringSubmatch(line); m != nil {
+		return m[1]
 	}
 	return ""
 }

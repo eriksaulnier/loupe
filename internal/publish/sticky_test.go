@@ -349,9 +349,14 @@ func TestRunStickyReplaysWithoutListing(t *testing.T) {
 // A count edited to 0 on GitHub still marks the review as the one to edit, so the round refuses rather than posting a
 // second sticky review beside it.
 func TestRunStickyRefusesATamperedMarkerRatherThanPostingASecondReview(t *testing.T) {
-	for _, tail := range []string{" sticky=0 -->", " sticky=1 extra=x -->"} {
+	appended := render.MetaPrefix + "v=1 round=9 -->\n"
+	for _, edit := range []func(string) string{
+		func(body string) string { return strings.Replace(body, " sticky=1 -->", " sticky=0 -->", 1) },
+		func(body string) string { return strings.Replace(body, " sticky=1 -->", " sticky=1 extra=x -->", 1) },
+		func(body string) string { return body + appended },
+	} {
 		fx, created := secondRound(t)
-		fx.gh.EditReview("acme", "widgets", 42, created.ReviewID, strings.Replace(created.Envelope.Body, " sticky=1 -->", tail, 1))
+		fx.gh.EditReview("acme", "widgets", 42, created.ReviewID, edit(created.Envelope.Body))
 		_, err := fx.run()
 		wantRefusal(t, err, refusal.Sticky, "without --sticky")
 		fx.checkWrites(1, 0)

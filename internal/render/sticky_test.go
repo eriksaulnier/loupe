@@ -263,6 +263,8 @@ func TestStickyRounds(t *testing.T) {
 		// A key edited on GitHub still marks the review as sticky, so it is read back and refused rather than skipped.
 		{"sticky=0", strings.Replace(firstRound(), " sticky=1 -->", " sticky=0 -->", 1), 0, true},
 		{"sticky=x", strings.Replace(firstRound(), " sticky=1 -->", " sticky=x -->", 1), 0, true},
+		// A marker line appended on GitHub after loupe's own does not hide it.
+		{"marker appended after", firstRound() + MetaPrefix + "v=1 round=9 -->\n", 1, true},
 		{"key after sticky=", strings.Replace(firstRound(), " sticky=1 -->", " sticky=1 extra=x -->", 1), 1, true},
 		{"key moved earlier", strings.Replace(strings.Replace(firstRound(), " sticky=1 -->", " -->", 1), " round=1 ", " sticky=1 round=1 ", 1), 1, true},
 	}
@@ -270,6 +272,9 @@ func TestStickyRounds(t *testing.T) {
 		if rounds, sticky := StickyRounds(c.body); rounds != c.rounds || sticky != c.sticky {
 			t.Errorf("%s: StickyRounds = %d, %v; want %d, %v", c.name, rounds, sticky, c.rounds, c.sticky)
 		}
+	}
+	if _, _, err := ReadSticky(firstRound() + MetaPrefix + "v=1 round=9 -->\n"); err == nil {
+		t.Error("ReadSticky accepted a second marker appended after loupe's")
 	}
 	for _, tail := range []string{" sticky=0 -->", " sticky=x -->", " sticky=1 extra=x -->"} {
 		if _, _, err := ReadSticky(strings.Replace(firstRound(), " sticky=1 -->", tail, 1)); err == nil {
