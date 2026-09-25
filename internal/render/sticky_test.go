@@ -344,3 +344,18 @@ func TestReadStickyReadsABodyWithoutARecord(t *testing.T) {
 		t.Fatalf("a body written before the record: rounds %d, err %v", rounds, err)
 	}
 }
+
+// A record anywhere but the tail was written on GitHub, and carrying it into a collapsed round would leave the next
+// body with two, which no capture can read back.
+func TestReadStickyRefusesARecordOutsideTheTail(t *testing.T) {
+	body := firstRound()
+	record := recordOf(t, body)
+	edited := strings.Replace(body, "### Must fix", record+"\n\n### Must fix", 1)
+	if _, _, err := ReadSticky(edited); err == nil || !strings.Contains(err.Error(), "findings record") {
+		t.Fatalf("ReadSticky: %v, want a refusal naming the findings record", err)
+	}
+	fenced := strings.Replace(body, "### Must fix", "```\n"+record+"\n```\n\n### Must fix", 1)
+	if _, _, err := ReadSticky(fenced); err != nil && strings.Contains(err.Error(), "findings record") {
+		t.Fatalf("a fenced record was refused: %v", err)
+	}
+}
