@@ -658,7 +658,6 @@ func TestReadStickyRefusesAQuotedRoundThatLostItsFooter(t *testing.T) {
 	body := quotedThreeRounds(t)
 	cases := []struct{ name, old, new string }{
 		{"newest round's quoted footer removed", "\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
-		{"newest round's footer lost its marker", "\n> reviewed [`bbbbbbb`]", "\nreviewed [`bbbbbbb`]"},
 		{"newest round emptied", "> Prose of round 2.\n>\n> ### Worth a look\n>\n> <details>\n> <summary>🔵 <b>question</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
 	}
 	for _, c := range cases {
@@ -679,11 +678,12 @@ func TestReadStickyRefusesAQuotedRoundThatLostItsFooter(t *testing.T) {
 func TestReadStickyCarriesAQuotedRoundThatLostAMarker(t *testing.T) {
 	body := quotedThreeRounds(t)
 	cases := []struct{ name, old, new string }{
-		{"prose", "> Prose of round 2.", "Prose of round 2."},
-		{"a marker without its space", "> Prose of round 2.", ">Prose of round 2."},
-		{"a heading", "> ### Worth a look", "### Worth a look"},
-		{"a finding line", "> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]", "Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]"},
-		{"an older round's line", "> ### Must fix", "### Must fix"},
+		{"prose", "\n> Prose of round 2.", "\nProse of round 2."},
+		{"a marker without its space", "\n> Prose of round 2.", "\n>Prose of round 2."},
+		{"a heading", "\n> ### Worth a look", "\n### Worth a look"},
+		{"a finding line", "\n> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]", "\nBody f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]"},
+		{"an older round's line", "\n> ### Must fix", "\n### Must fix"},
+		{"the newest round's footer", "\n> reviewed [`bbbbbbb`]", "\nreviewed [`bbbbbbb`]"},
 		{"an older round's footer", "\n> reviewed [`aaaaaaa`]", "\nreviewed [`aaaaaaa`]"},
 	}
 	for _, c := range cases {

@@ -403,14 +403,18 @@ func endsWithFooter(lines []string) bool {
 
 // keepsFooter reports whether a collapsed round ends with its footer, then its reconciliation marker: quoted, or
 // unquoted with a divider between the two. A round demoted before that divider existed ends with its footer straight
-// above the marker.
+// above the marker. A quoted footer that lost its marker on GitHub is still the footer, so it is kept, not refused.
 func keepsFooter(block string) bool {
 	lines, ok := roundContent(block)
 	if !ok {
 		return false
 	}
-	if last, quoted := strings.CutPrefix(lines[len(lines)-1], "> "); quoted {
+	m := len(lines)
+	if last, quoted := strings.CutPrefix(lines[m-1], "> "); quoted {
 		return footerLine.MatchString(last)
+	}
+	if m >= 2 && strings.HasPrefix(lines[m-2], ">") && footerLine.MatchString(lines[m-1]) {
+		return true
 	}
 	if m := len(lines); m >= 2 && lines[m-1] == "---" && lines[m-2] == "" {
 		lines = lines[:m-2]
