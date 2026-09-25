@@ -269,12 +269,14 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	// The demoted round keeps its footer as it read on top, so the history shows each round's source and model. A
-	// divider closes it, so an opened round ends visibly before the next round's summary.
-	content := footer + "\n\n---\n\n" + digest
+	// The demoted round keeps its footer as it read on top, so the history shows each round's source and model. The
+	// round is one quote, whose edge shows where an opened round ends. The marker stays outside it, where
+	// reconciliation reads it.
+	content := footer
 	if len(rest) > 0 {
-		content = strings.Join(rest, "\n") + "\n\n---\n\n" + content
+		content = strings.Join(rest, "\n") + "\n\n" + content
 	}
+	content = quoteLines(content) + "\n\n" + digest
 	// Each round is numbered by its place in the review, so the newest earlier round is rounds and the ones below it
 	// count down. A body written before this numbering carried loupe's round count, which is renumbered here too.
 	demoted := fmt.Sprintf("<details>\n<summary>Round %d · reviewed <code>%s</code> · %s</summary>\n\n%s\n\n</details>",
@@ -327,7 +329,7 @@ func splitChips(part []string, meta string) (string, []string, error) {
 	if sum != total {
 		return "", nil, fmt.Errorf("its chips count %d findings and its loupe-meta marker %d", sum, total)
 	}
-	rest := trimBlank(part[1:])
+	rest := slices.Clone(trimBlank(part[1:]))
 	first, err := firstSection(rest, counts["blocking"], total)
 	if err != nil {
 		return "", nil, err
@@ -335,14 +337,18 @@ func splitChips(part []string, meta string) (string, []string, error) {
 	// A collapsed round's sections drop a heading level, so an opened round reads as history under the round on top
 	// and its headings stay out of the page outline's top level. Only loupe's own sections from the first one on
 	// change: prose above them that looks like a heading is the author's and stays as written.
-	for _, i := range sectionHeadings(rest) {
-		if i >= first {
-			rest[i] = "#" + strings.TrimSpace(rest[i])
+	// Their dividers go too: inside the round's quote a rule reads as a boundary between rounds. A section whose
+	// divider was removed on GitHub loses nothing, so it is carried without one.
+	headings := sectionHeadings(rest)
+	for k := len(headings) - 1; k >= 0; k-- {
+		i := headings[k]
+		if i < first {
+			break
 		}
-	}
-	// With no prose the chips row was followed directly by the first section's divider, which now follows nothing.
-	if first == 2 {
-		rest = rest[2:]
+		rest[i] = "#" + strings.TrimSpace(rest[i])
+		if i >= 2 && rest[i-1] == "" && rest[i-2] == "---" {
+			rest = slices.Delete(rest, i-2, i)
+		}
 	}
 	// The pills match the scoreboard the round opened on. A <summary> is raw HTML, so they are <code>, not backticks.
 	return strings.Join(chips, " "), rest, nil
@@ -398,19 +404,45 @@ func endsWithFooter(lines []string) bool {
 	return n >= 3 && footerLine.MatchString(lines[n-1]) && lines[n-2] == "" && lines[n-3] == "---"
 }
 
-// keepsFooter reports whether a collapsed round ends with its footer, then a divider, then its reconciliation marker.
-// A round demoted before the divider existed ends with its footer straight above the marker.
+// keepsFooter reports whether a collapsed round ends with its footer, then its reconciliation marker: quoted, or
+// unquoted with a divider between the two. A round demoted before that divider existed ends with its footer straight
+// above the marker.
 func keepsFooter(block string) bool {
-	lines := strings.Split(block, "\n")
-	n := len(lines)
-	if n < 7 || lines[n-1] != "</details>" || lines[n-2] != "" || !digestLine.MatchString(lines[n-3]) || lines[n-4] != "" {
+	lines, ok := roundContent(block)
+	if !ok {
 		return false
 	}
-	lines = lines[:n-4]
+	if last, quoted := strings.CutPrefix(lines[len(lines)-1], "> "); quoted {
+		return footerLine.MatchString(last)
+	}
 	if m := len(lines); m >= 2 && lines[m-1] == "---" && lines[m-2] == "" {
 		lines = lines[:m-2]
 	}
 	return endsWithFooter(lines)
+}
+
+// roundContent is what a collapsed round holds between its summary line and its reconciliation marker, or false when
+// it does not end on that marker as loupe writes it.
+func roundContent(block string) ([]string, bool) {
+	lines := strings.Split(block, "\n")
+	n := len(lines)
+	if n < 7 || lines[n-1] != "</details>" || lines[n-2] != "" || !digestLine.MatchString(lines[n-3]) || lines[n-4] != "" {
+		return nil, false
+	}
+	return lines[2 : n-4], true
+}
+
+// quoteLines puts text in one quote. A blank line takes the marker alone, since a line without one ends the quote.
+func quoteLines(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			lines[i] = ">"
+		} else {
+			lines[i] = "> " + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func trimBlank(lines []string) []string {
