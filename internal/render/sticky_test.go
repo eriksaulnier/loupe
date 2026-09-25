@@ -126,7 +126,7 @@ func TestReadStickyNumbersRoundsInTheReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(again[0], "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · <code>✓ no findings</code></summary>\n\nNothing left.\n\n---\n\nreviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n\n---\n\n<!-- loupe digest=") ||
+	if !strings.HasPrefix(again[0], "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · <code>🟢 no findings</code></summary>\n\nNothing left.\n\n---\n\nreviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n\n---\n\n<!-- loupe digest=") ||
 		!strings.HasPrefix(again[1], "<details>\n<summary>Round 1 · ") {
 		t.Fatalf("blocks:\n%s", strings.Join(again, "\n=====\n"))
 	}
@@ -449,7 +449,7 @@ func TestStickyV0110BodyKeepsFooterShapedProse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadSticky: %v", err)
 	}
-	want := "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · <code>✓ no findings</code></summary>\n\n" + prose +
+	want := "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · <code>🟢 no findings</code></summary>\n\n" + prose +
 		"\n\n---\n\nreviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`\n\n---\n\n<!-- loupe digest=" + strings.Repeat("2", 64) +
 		" publication=00000000-0000-4000-8000-000000000002 -->\n\n</details>"
 	if earlier[0] != want {
@@ -508,7 +508,7 @@ func TestReadStickyReadsACleanRoundWithoutItsChip(t *testing.T) {
 	in.Summary = "Nothing to fix."
 	in.Sticky = &StickyInput{Rounds: 1}
 	body := Body(in)
-	older := strings.Replace(body, "`✓ no findings`\n\n", "", 1)
+	older := strings.Replace(body, "`🟢 no findings`\n\n", "", 1)
 	if older == body {
 		t.Fatal("the fixture has no chip to remove")
 	}
@@ -516,7 +516,7 @@ func TestReadStickyReadsACleanRoundWithoutItsChip(t *testing.T) {
 	if err != nil || rounds != 1 || len(earlier) != 1 {
 		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
 	}
-	if !strings.Contains(earlier[0], "<code>✓ no findings</code></summary>\n\nNothing to fix.\n\n---\n\n") {
+	if !strings.Contains(earlier[0], "<code>🟢 no findings</code></summary>\n\nNothing to fix.\n\n---\n\n") {
 		t.Fatalf("clean round read back wrong:\n%s", earlier[0])
 	}
 }

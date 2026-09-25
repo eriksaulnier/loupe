@@ -505,7 +505,7 @@ func TestBuildStickyDropsTheOldestRoundsToFit(t *testing.T) {
 
 // The footer's link to the round before survives the length limit dropping that round's block.
 func TestBuildStickyKeepsTheCompareLinkWhenItsRoundIsDropped(t *testing.T) {
-	block := "<details>\n<summary>Round 1 · reviewed <code>abcdef1</code> · <code>✓ no findings</code></summary>\n\n" +
+	block := "<details>\n<summary>Round 1 · reviewed <code>abcdef1</code> · <code>🟢 no findings</code></summary>\n\n" +
 		strings.Repeat("x", 70000) + "\n\n</details>"
 	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", false)
 	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []string{block}}

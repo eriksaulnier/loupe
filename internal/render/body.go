@@ -188,7 +188,7 @@ func chipsRow(blocking int, rest []Finding) string {
 }
 
 // cleanChip is the scoreboard of a review with no findings.
-const cleanChip = "✓ no findings"
+const cleanChip = "🟢 no findings"
 
 func sectionBlock(title string, fs []Finding, in Input) string {
 	parts := make([]string, len(fs))
