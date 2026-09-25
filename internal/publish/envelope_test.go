@@ -503,6 +503,24 @@ func TestBuildStickyDropsTheOldestRoundsToFit(t *testing.T) {
 	}
 }
 
+// The footer's link to the round before survives the length limit dropping that round's block.
+func TestBuildStickyKeepsTheCompareLinkWhenItsRoundIsDropped(t *testing.T) {
+	block := "<details>\n<summary>Round 1 · reviewed <code>abcdef1</code> · <code>✓ no findings</code></summary>\n\n" +
+		strings.Repeat("x", 70000) + "\n\n</details>"
+	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", false)
+	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []string{block}}
+	env, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(env.Body, "Round 1 · reviewed") || !strings.Contains(env.Body, "The oldest round was dropped") {
+		t.Fatalf("the earlier round was not dropped:\n%s", env.Body[:300])
+	}
+	if !strings.Contains(env.Body, "[changes since round 1](") || !strings.Contains(env.Body, "/compare/abcdef1...") {
+		t.Fatalf("the compare link went with the dropped round:\n%s", env.Body[len(env.Body)-600:])
+	}
+}
+
 // noise is n characters that deflate poorly, so a finding carrying it makes the record nearly as long as the finding.
 func noise(n int) string {
 	var b strings.Builder

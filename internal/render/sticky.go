@@ -17,6 +17,28 @@ type StickyInput struct {
 	Rounds int
 	// Earlier holds the collapsed rounds as ReadSticky returns them, newest first.
 	Earlier []string
+	// PrevRound and PrevSHA name the round before this one for the footer's compare link. They are kept apart from
+	// Earlier, which the length limit may empty, and when unset they are read from Earlier's newest round.
+	PrevRound int
+	PrevSHA   string
+}
+
+// PreviousRound reads the newest collapsed round's number and commit, preferring the full SHA its footer links to over
+// the abbreviated one in its summary. It returns 0 when there is no earlier round or it cannot be read.
+func PreviousRound(earlier []string) (int, string) {
+	if len(earlier) == 0 {
+		return 0, ""
+	}
+	m := earlierHead.FindStringSubmatch(earlier[0])
+	if m == nil {
+		return 0, ""
+	}
+	round, _ := strconv.Atoi(m[1])
+	sha := m[2]
+	if full := commitURL.FindStringSubmatch(earlier[0]); full != nil && strings.HasPrefix(full[1], sha) {
+		sha = full[1]
+	}
+	return round, sha
 }
 
 // The two delimiters are HTML comment lines, which the allowlist refuses outside a fence in every authored field, so
@@ -40,6 +62,8 @@ var (
 	chipSpan    = regexp.MustCompile("^`(⛔|🟡|🟣|🔵|⚪) ([0-9]+) [a-z]+`$")
 	roundNumber = regexp.MustCompile(`^<details>\n<summary>Round [0-9]+ · `)
 	digestLine  = regexp.MustCompile(`^<!-- loupe digest=\S+ publication=\S+ -->$`)
+	// commitURL finds the full commit a linked footer names.
+	commitURL = regexp.MustCompile(`\]\(https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/commit/([0-9a-f]+)\)`)
 	// earlierHead reads a collapsed round's number and commit off its summary line.
 	earlierHead = regexp.MustCompile(`^<details>\n<summary>Round ([0-9]+) · reviewed <code>([0-9a-f]+)</code>`)
 	// footerLine is the whole footer Body writes: the commit, then the source, the model and the unattended mark when

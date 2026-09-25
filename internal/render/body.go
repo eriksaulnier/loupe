@@ -515,12 +515,15 @@ func commitLink(in Input) string {
 // click what the author changed between rounds. An edit sends no notification and keeps the review's first
 // timestamp, so the footer is where a reader learns the review moved on. It is empty without an earlier round.
 func sinceLink(in Input) string {
-	if in.Sticky == nil || len(in.Sticky.Earlier) == 0 || in.Owner == "" || in.Repo == "" {
+	if in.Sticky == nil || in.Owner == "" || in.Repo == "" {
 		return ""
 	}
-	m := earlierHead.FindStringSubmatch(in.Sticky.Earlier[0])
-	if m == nil {
+	round, sha := in.Sticky.PrevRound, in.Sticky.PrevSHA
+	if round == 0 {
+		round, sha = PreviousRound(in.Sticky.Earlier)
+	}
+	if round == 0 {
 		return ""
 	}
-	return fmt.Sprintf("[changes since round %s](https://github.com/%s/%s/compare/%s...%s)", m[1], in.Owner, in.Repo, m[2], in.HeadSHA)
+	return fmt.Sprintf("[changes since round %d](https://github.com/%s/%s/compare/%s...%s)", round, in.Owner, in.Repo, sha, in.HeadSHA)
 }

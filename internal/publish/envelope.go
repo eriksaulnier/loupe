@@ -150,7 +150,10 @@ func Build(in BuildInput) (Envelope, error) {
 		}
 	}
 	if in.Sticky != nil {
-		r.Sticky = &render.StickyInput{Rounds: in.Sticky.Rounds, Earlier: in.Sticky.Earlier}
+		// The round before is named from the full history, before the length limit may drop its block, so the footer's
+		// compare link survives the drop.
+		prevRound, prevSHA := render.PreviousRound(in.Sticky.Earlier)
+		r.Sticky = &render.StickyInput{Rounds: in.Sticky.Rounds, Earlier: in.Sticky.Earlier, PrevRound: prevRound, PrevSHA: prevSHA}
 	}
 	env.Body = render.Body(r)
 	// The oldest collapsed rounds give way first, so a pull request with many rounds never stops a sticky review.
