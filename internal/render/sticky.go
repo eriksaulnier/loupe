@@ -172,10 +172,52 @@ func splitChips(part []string, meta string) (string, []string, error) {
 		return "", nil, fmt.Errorf("its chips count %d findings and its loupe-meta marker %d", sum, total)
 	}
 	rest := trimBlank(part[1:])
-	if len(rest) > 2 && rest[0] == "---" && rest[1] == "" && strings.HasPrefix(rest[2], "### ") {
+	first, err := firstSection(rest, counts["blocking"], total)
+	if err != nil {
+		return "", nil, err
+	}
+	// With no prose the chips row was followed directly by the first section's divider, which now follows nothing.
+	if first == 2 {
 		rest = rest[2:]
 	}
 	return strings.Join(chips, " · "), rest, nil
+}
+
+// firstSection finds the line of the round's first generated section heading. meta says how many sections there are,
+// and they end the round, so the first is that many headings from the end outside any <details>. Prose sits before it
+// and MAY carry the same heading, which is why the count runs from the end.
+func firstSection(lines []string, blocking, total int) (int, error) {
+	want := 0
+	if blocking > 0 {
+		want++
+	}
+	if total > blocking {
+		want++
+	}
+	_, structural := markdown.StructuralLines(strings.Join(lines, "\n"))
+	var headings []int
+	depth := 0
+	for i, line := range lines {
+		if !structural[i] {
+			continue
+		}
+		switch trimmed := strings.TrimSpace(line); {
+		case trimmed == "<details>" || trimmed == "<details open>":
+			depth++
+		case trimmed == "</details>":
+			depth--
+		case depth == 0 && (trimmed == "### Must fix" || trimmed == "### Worth a look"):
+			headings = append(headings, i)
+		}
+	}
+	if len(headings) < want {
+		return 0, fmt.Errorf("the round it shows has %d of its %d sections", len(headings), want)
+	}
+	first := headings[len(headings)-want]
+	if first < 2 || lines[first-1] != "" || lines[first-2] != "---" {
+		return 0, errors.New("the round's first section does not follow a divider")
+	}
+	return first, nil
 }
 
 func trimBlank(lines []string) []string {

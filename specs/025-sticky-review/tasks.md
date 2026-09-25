@@ -25,7 +25,9 @@ description: "Task list for sticky review"
   - with `Earlier`, the section `<!-- loupe-earlier -->`, blank, `### Earlier rounds`, then for each block `<!-- loupe-round -->`, blank, the block, sits after the last finding section and before the footer's `---`, with blank lines around every divider.
   - with `Rounds` greater than `1 + len(Earlier)`, the heading is followed by `The N oldest rounds were dropped to fit GitHub's length limit.`, or `The oldest round was dropped to fit GitHub's length limit.` when N is 1.
 - [X] T003 [P] Add failing tests to `internal/render/sticky_test.go` for `ReadSticky(body string) (Earlier []string, rounds int, err error)` and `StickyRounds(body string) int`:
-  - reading a one-round sticky body gives one block: `<details>`, `<summary>Round N · reviewed <code>SHA</code></summary>`, blank, the round part, blank, `---`, blank, the footer line, blank, the reconciliation marker line, blank, `</details>`. `N` comes from `round=`, `SHA` from the footer's code span, and `rounds` from `sticky=`.
+  - reading a one-round sticky body gives one block: `<details>`, `<summary>Round N · reviewed <code>SHA</code> · CHIPS</summary>`, blank, the round part without its chips row, blank, the reconciliation marker line, blank, `</details>`. `N` is the round's place in the review, from `sticky=`, `SHA` comes from the footer's code span, and `CHIPS` is the chips row as text or `no findings` (format amended by the owner on 2026-09-25).
+  - prose that opens on `---` and a heading, even `### Must fix`, stays whole in the collapsed round. Only the divider between a chips row and the first generated section goes.
+  - a body written before the 2026-09-25 format reads back, and its collapsed rounds are renumbered by place.
   - reading a body with earlier rounds gives the demoted current round first, then the earlier blocks unchanged. The dropped-rounds note is not carried.
   - a round part whose finding body holds `<!-- loupe-round -->`, `<!-- loupe-earlier -->` and a fake `loupe-meta` line inside a fence reads back identically.
   - a CRLF body reads as LF.

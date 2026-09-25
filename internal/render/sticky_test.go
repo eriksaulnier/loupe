@@ -228,3 +228,20 @@ func TestStickyRounds(t *testing.T) {
 		t.Errorf("no marker: %d, want 0", got)
 	}
 }
+
+// Prose that opens on a divider and a heading, even loupe's own, is the human's and stays in the collapsed round.
+func TestReadStickyKeepsProseThatLooksLikeASection(t *testing.T) {
+	for _, prose := range []string{"---\n\n### Notes\n\nKeep this.", "---\n\n### Must fix\n\nMy own heading."} {
+		in := stickyInput(1, "aaaaaaa111", general("f-001", "issue", true))
+		in.Summary = prose
+		in.Sticky = &StickyInput{Rounds: 1}
+		earlier, _, err := ReadSticky(Body(in))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "</summary>\n\n" + prose + "\n\n---\n\n### Must fix\n\n<details>"
+		if !strings.Contains(earlier[0], want) {
+			t.Errorf("prose %q was cut:\n%s", prose, earlier[0])
+		}
+	}
+}
