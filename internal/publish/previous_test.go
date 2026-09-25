@@ -141,6 +141,8 @@ func TestPreviousRoundTripsThroughItsFile(t *testing.T) {
 	for _, p := range []Previous{
 		{Schema: PreviousSchema, Found: true, ReviewID: 5, ReviewURL: "u", Round: 2, Findings: []EnvelopeFinding{{ID: "f-001", Title: "T"}}},
 		{Schema: PreviousSchema, Found: true, ReviewID: 5, ReviewURL: "u", Round: 2, Findings: []EnvelopeFinding{}},
+		{Schema: PreviousSchema, Found: true, ReviewID: 5, ReviewURL: "u", Round: 2, Commit: "abc", Findings: []EnvelopeFinding{},
+			Assessments: openAndAddressed()},
 		{Schema: PreviousSchema, Reason: "why"},
 	} {
 		data, err := EncodePrevious(p)
@@ -179,6 +181,7 @@ func TestLoadPreviousRefusesAnIncompleteFoundRound(t *testing.T) {
 		"empty id":            `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "", "title": "T"}]}`,
 		"empty title":         `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "f-001", "title": ""}]}`,
 		"reason and findings": `{"schema": 1, "reason": "why", "findings": []}`,
+		"unknown status":      `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [], "assessments": [{"ref": "e-1", "status": "fixed", "finding": {"id": "f-001", "title": "T"}}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -202,5 +205,59 @@ func TestReadPreviousRefusesAReviewWithNoRound(t *testing.T) {
 	got := readPrevious(t, gh.Client(t), "acme", "widgets", 42, "", "ci-review")
 	if got.Found || !strings.Contains(got.Reason, "no round=") {
 		t.Fatalf("got %+v, want a reason naming round=", got)
+	}
+}
+
+func openAndAddressed() []draft.Assessment {
+	in := draft.FiledIn{Round: 1, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-1", Commit: "0ld0000"}
+	return []draft.Assessment{
+		{Ref: "e-1", Status: draft.StatusOpen, Finding: draft.EarlierFinding{ID: "f-001", Title: "Bare except", Body: "B.",
+			Location: &draft.Location{Path: "a.py", Side: "RIGHT", Line: 9}, Label: "issue", FiledIn: in}},
+		{Ref: "e-2", Status: draft.StatusAddressed, Finding: draft.EarlierFinding{ID: "f-002", Title: "Sleep", Body: "S.", FiledIn: in}},
+	}
+}
+
+func assessedBody(sticky *render.StickyInput) string {
+	return render.Body(render.Input{Owner: "acme", Repo: "widgets", Number: 42, Round: 3, HeadSHA: "abc1234", Inline: "none",
+		Digest: "d", PublicationID: "p", Source: "ci-review", Unattended: true, Sticky: sticky,
+		Findings:    []render.Finding{{ID: "f-001", Title: "New", Body: "Body.", General: true}},
+		Assessments: recordAssessments(openAndAddressed())})
+}
+
+func TestReadPreviousReadsAssessmentsAndTheRoundsCommit(t *testing.T) {
+	first, rounds, err := render.ReadSticky(publishedBody("ci-review", "First", &render.StickyInput{Rounds: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]struct {
+		body string
+		want string
+	}{
+		"plain": {assessedBody(nil), "c0ffee0"},
+		// An edited review keeps the commit_id of the round that created it.
+		"sticky": {assessedBody(&render.StickyInput{Rounds: rounds + 1, Earlier: first}), "abc1234"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gh := fakegh.New(t)
+			r := review(5, "ci[bot]", c.body)
+			r.CommitID = "c0ffee0"
+			gh.AddReview("acme", "widgets", 42, r)
+			got := readPrevious(t, gh.Client(t), "acme", "widgets", 42, "", "ci-review")
+			if !got.Found || got.Commit != c.want || !reflect.DeepEqual(got.Assessments, openAndAddressed()) {
+				t.Fatalf("got %+v, want commit %s and the assessments", got, c.want)
+			}
+		})
+	}
+}
+
+func TestEarlierCarriesOpenAssessmentsThenTheFiledFindings(t *testing.T) {
+	in := draft.FiledIn{Round: 2, ReviewURL: "u2", Commit: "new0000"}
+	got := Earlier([]EnvelopeFinding{{ID: "f-001", Title: "Third", Blocking: true}}, openAndAddressed(), in)
+	want := []draft.EarlierFinding{openAndAddressed()[0].Finding, {ID: "f-001", Title: "Third", Blocking: true, FiledIn: in}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+	if got := Earlier(nil, nil, in); got == nil || len(got) != 0 {
+		t.Fatalf("no findings gave %#v, want an empty list", got)
 	}
 }

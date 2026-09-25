@@ -17,13 +17,16 @@ const PreviousSchema = 1
 // Previous is the round capture read back from GitHub for a run with no earlier local receipt: the publisher's newest
 // loupe review and its findings when Found, and otherwise the reason there is none.
 type Previous struct {
-	Schema    int               `json:"schema"`
-	Found     bool              `json:"found"`
-	ReviewID  int64             `json:"reviewId,omitempty"`
-	ReviewURL string            `json:"reviewUrl,omitempty"`
-	Round     int               `json:"round,omitempty"`
-	Findings  []EnvelopeFinding `json:"findings"`
-	Reason    string            `json:"reason,omitempty"`
+	Schema    int    `json:"schema"`
+	Found     bool   `json:"found"`
+	ReviewID  int64  `json:"reviewId,omitempty"`
+	ReviewURL string `json:"reviewUrl,omitempty"`
+	Round     int    `json:"round,omitempty"`
+	// Commit is the round's own head, empty when a sticky body's could not be read back.
+	Commit      string             `json:"commit,omitempty"`
+	Findings    []EnvelopeFinding  `json:"findings"`
+	Assessments []draft.Assessment `json:"assessments,omitempty"`
+	Reason      string             `json:"reason,omitempty"`
 }
 
 // newestOwn is the publisher's newest loupe review: the viewer's own, or when viewer is empty, a [bot]'s from the same
@@ -58,7 +61,7 @@ func ReadPrevious(reviews []github.Review, listErr error, owner, repo string, nu
 	if !ok {
 		return none(fmt.Sprintf("no earlier loupe review from %s is on %s", publisher(viewer, source), prURL))
 	}
-	records, err := render.ReadRecord(review.Body)
+	records, assessed, err := render.ReadRecord(review.Body)
 	if err != nil {
 		return none(fmt.Sprintf("%s cannot be read back: %v", review.HTMLURL, err))
 	}
@@ -75,7 +78,53 @@ func ReadPrevious(reviews []github.Review, listErr error, owner, repo string, nu
 		findings = append(findings, f)
 	}
 	return Previous{Schema: PreviousSchema, Found: true, ReviewID: review.ID, ReviewURL: review.HTMLURL,
-		Round: round, Findings: findings}
+		Round: round, Commit: roundCommit(review), Findings: findings, Assessments: draftAssessments(assessed)}
+}
+
+// roundCommit is the commit the review's current round reviewed. An edited review keeps the commit_id of the round that
+// created it, so a sticky body's own round is read from the body. The findings are exact without it, so a body it
+// cannot be read from leaves it empty rather than losing the round.
+func roundCommit(review github.Review) string {
+	if _, sticky := render.StickyRounds(review.Body); !sticky {
+		return review.CommitID
+	}
+	earlier, _, err := render.ReadSticky(review.Body)
+	if err != nil {
+		return ""
+	}
+	_, sha := render.PreviousRound(earlier)
+	return sha
+}
+
+func draftAssessments(as []render.RecordAssessment) []draft.Assessment {
+	var out []draft.Assessment
+	for _, a := range as {
+		f := a.Finding
+		ef := draft.EarlierFinding{ID: f.ID, Title: f.Title, Body: f.Body, Label: f.Label, Blocking: f.Blocking,
+			FiledIn: draft.FiledIn{Round: f.FiledIn.Round, ReviewURL: f.FiledIn.ReviewURL, Commit: f.FiledIn.Commit}}
+		if f.Location != nil {
+			ef.Location = &draft.Location{Path: f.Location.Path, Side: f.Location.Side, Line: f.Location.Line, StartLine: f.Location.StartLine}
+		}
+		out = append(out, draft.Assessment{Ref: a.Ref, Status: a.Status, Finding: ef})
+	}
+	return out
+}
+
+// Earlier is every finding still open before this round: those the previous round assessed as open, in the order it
+// recorded them, which keeps the oldest filing first, then the ones it filed. An open finding therefore rides forward
+// one round at a time, and a round never reads further back than the round before it.
+func Earlier(filed []EnvelopeFinding, assessments []draft.Assessment, filedIn draft.FiledIn) []draft.EarlierFinding {
+	out := []draft.EarlierFinding{}
+	for _, a := range assessments {
+		if a.Status == draft.StatusOpen {
+			out = append(out, a.Finding)
+		}
+	}
+	for _, f := range filed {
+		out = append(out, draft.EarlierFinding{ID: f.ID, Title: f.Title, Body: f.Body, Location: f.Location, Label: f.Label,
+			Blocking: f.Blocking, FiledIn: filedIn})
+	}
+	return out
 }
 
 // publishedBy is the author half of the publisher rule: a loupe review by the viewer, or with an installation token,
@@ -130,6 +179,11 @@ func previousProblem(p Previous) string {
 	for i, f := range p.Findings {
 		if f.ID == "" || f.Title == "" {
 			return fmt.Sprintf("finding %d lacks an id or a title", i+1)
+		}
+	}
+	for i, a := range p.Assessments {
+		if (a.Status != draft.StatusOpen && a.Status != draft.StatusAddressed) || a.Finding.ID == "" || a.Finding.Title == "" {
+			return fmt.Sprintf("assessment %d lacks a known status, or its finding's id or title", i+1)
 		}
 	}
 	return ""
