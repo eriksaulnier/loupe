@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.11.0](https://github.com/eriksaulnier/loupe/compare/v0.10.0...v0.11.0) (2026-09-25)
+
+
+### Features
+
+* **action:** add a composite action that installs loupe ([#41](https://github.com/eriksaulnier/loupe/issues/41)) ([c689a20](https://github.com/eriksaulnier/loupe/commit/c689a20125b8f4cbc8d87170248aaf77c5ac7b7d))
+* **publish:** default --inline to none ([#42](https://github.com/eriksaulnier/loupe/issues/42)) ([47e9f90](https://github.com/eriksaulnier/loupe/commit/47e9f90e76ccb8f83609b9eccd88fdff83173afe))
+* **publish:** edit one sticky review per pull request with --sticky ([#43](https://github.com/eriksaulnier/loupe/issues/43)) ([4c4ab73](https://github.com/eriksaulnier/loupe/commit/4c4ab73f289ff2f831b28e87947df2bac996fc32))
+* **render:** carry human-gate counts in loupe-meta ([#33](https://github.com/eriksaulnier/loupe/issues/33)) ([d83f809](https://github.com/eriksaulnier/loupe/commit/d83f809ef5fac0fd7dad844f5394e4206d6f5b18))
+* **render:** show the captured model in the review footer ([#40](https://github.com/eriksaulnier/loupe/issues/40)) ([77a88f1](https://github.com/eriksaulnier/loupe/commit/77a88f17f068004121a5f8076379656cc0b8a10f))
+* **tui:** let p publish from the final confirmation ([#39](https://github.com/eriksaulnier/loupe/issues/39)) ([140e9ef](https://github.com/eriksaulnier/loupe/commit/140e9ef7004019f7ef39ad82a0de729573887bf2))
+
+
+### Bug Fixes
+
+* **handoff:** never switch the Orca view to the review split ([#38](https://github.com/eriksaulnier/loupe/issues/38)) ([c8748b1](https://github.com/eriksaulnier/loupe/commit/c8748b1688ebb6fa622a6eee8cc15dcf41766f8c))
+
 ## [0.10.0](https://github.com/eriksaulnier/loupe/compare/v0.9.0...v0.10.0) (2026-09-23)
 
 
