@@ -54,15 +54,16 @@ type FeedbackComment struct {
 
 // ReadComments never fails: the feedback is an aid to the reviewer, so a listing that cannot be read is a reason the
 // run records, not a capture that refuses. It leaves out the publisher's own loupe reviews for this source, which show
-// --previous already hands over, and their comments in threads, but keeps everyone's replies to them.
-func ReadComments(ctx context.Context, client github.Client, owner, repo string, number int, viewer, source string) Comments {
+// --previous already hands over, and their comments in threads, but keeps everyone's replies to them. It takes
+// capture's one listing of the reviews, and listErr when that listing failed.
+func ReadComments(ctx context.Context, client github.Client, reviews []github.Review, listErr error, owner, repo string,
+	number int, viewer, source string) Comments {
 	prURL := fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, number)
 	none := func(listing string, err error) Comments {
 		return Comments{Schema: CommentsSchema, Reason: fmt.Sprintf("could not list the %s on %s: %v", listing, prURL, err)}
 	}
-	reviews, err := client.ListReviews(ctx, owner, repo, number)
-	if err != nil {
-		return none("reviews", err)
+	if listErr != nil {
+		return none("reviews", listErr)
 	}
 	threads, err := client.ListReviewThreads(ctx, owner, repo, number)
 	if err != nil {

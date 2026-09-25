@@ -21,7 +21,9 @@ func feedbackPR(gh *fakegh.Server) {
 
 func readFeedback(t *testing.T, gh *fakegh.Server, viewer, source string) Comments {
 	t.Helper()
-	return ReadComments(context.Background(), gh.Client(t), "acme", "widgets", 42, viewer, source)
+	client := gh.Client(t)
+	reviews, err := client.ListReviews(context.Background(), "acme", "widgets", 42)
+	return ReadComments(context.Background(), client, reviews, err, "acme", "widgets", 42, viewer, source)
 }
 
 func TestReadCommentsListsEveryoneAcrossPages(t *testing.T) {

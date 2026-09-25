@@ -1,7 +1,6 @@
 package publish
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -47,13 +46,12 @@ func newestOwn(reviews []github.Review, viewer, source string) (github.Review, b
 
 // ReadPrevious never fails: the previous round is an aid to the reviewer, so a round that cannot be read is a reason
 // the run records, not a capture that refuses. It never falls back to an older review, which the author has since
-// seen superseded.
-func ReadPrevious(ctx context.Context, client github.Client, owner, repo string, number int, viewer, source string) Previous {
+// seen superseded. It takes capture's one listing of the reviews, and listErr when that listing failed.
+func ReadPrevious(reviews []github.Review, listErr error, owner, repo string, number int, viewer, source string) Previous {
 	prURL := fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, number)
 	none := func(reason string) Previous { return Previous{Schema: PreviousSchema, Reason: reason} }
-	reviews, err := client.ListReviews(ctx, owner, repo, number)
-	if err != nil {
-		return none(fmt.Sprintf("could not list the reviews on %s: %v", prURL, err))
+	if listErr != nil {
+		return none(fmt.Sprintf("could not list the reviews on %s: %v", prURL, listErr))
 	}
 	review, ok := newestOwn(reviews, viewer, source)
 	if !ok {

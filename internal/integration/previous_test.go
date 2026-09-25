@@ -115,15 +115,16 @@ func TestStickyRoundReadsTheReviewsCurrentRound(t *testing.T) {
 	}
 }
 
-func TestLocalReceiptWinsAndSkipsTheRead(t *testing.T) {
+// The reviews are still listed once, for the other reviewers' feedback (spec 029), but the receipt answers --previous.
+func TestLocalReceiptWinsOverTheReviews(t *testing.T) {
 	h := newHarness(t)
 	h.captureRound(1)
 	h.publishRound(1)
 	h.pushHead("src/round2.go")
 	lists := h.reviewLists()
 	env := h.captureRound(2)
-	if got := h.reviewLists() - lists; got != 0 {
-		t.Fatalf("capture after a local receipt listed the reviews %d times", got)
+	if got := h.reviewLists() - lists; got != 1 {
+		t.Fatalf("capture after a local receipt listed the reviews %d times, want 1", got)
 	}
 	if p := previousOf(t, env); p["from"] != "receipt" || fmt.Sprint(p["round"]) != "1" || len(p) != 2 {
 		t.Fatalf("capture previous %v, want {from: receipt, round: 1}", p)
