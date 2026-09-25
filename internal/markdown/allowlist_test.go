@@ -259,3 +259,20 @@ func TestOneDisclosure(t *testing.T) {
 		}
 	}
 }
+
+// Only the terminal's display reads through quotes, and loupe nests them two deep, so a tag line deeper than the bound
+// is shown as written rather than paid for once per marker.
+func TestOpenDetailsStopsAtTheQuoteBound(t *testing.T) {
+	within := strings.Repeat("> ", maxQuoteDepth) + "<details>"
+	past := strings.Repeat("> ", maxQuoteDepth+1) + "<details>"
+	if got := OpenDetails(within); got != strings.Repeat("> ", maxQuoteDepth)+"<details open>" {
+		t.Errorf("a tag line at the bound was not opened: %q", got)
+	}
+	if got := OpenDetails(past); got != past {
+		t.Errorf("a tag line past the bound was changed: %q", got)
+	}
+	deep := strings.Repeat(">", 1<<16) + " <details>"
+	if got := OpenDetails(deep); got != deep {
+		t.Error("a line of 65536 markers was changed")
+	}
+}

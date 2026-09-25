@@ -376,13 +376,17 @@ func MapSummaryLines(text string, fn func(string) string) string {
 // mapTagLines applies fn to every structural line outside a fence.
 func mapTagLines(text string, fn func(line, trimmed string) string) string {
 	lines := splitLines(text)
-	mapLines(lines, fn)
+	mapLines(lines, fn, 0)
 	return strings.Join(lines, "\n")
 }
 
+// maxQuoteDepth bounds how many quote markers mapLines reads through. loupe nests quotes two deep, a finding's location
+// in a collapsed round, and each level rebuilds its lines, so an authored run of markers costs its square without it.
+const maxQuoteDepth = 8
+
 // mapLines reads each run of quoted lines again with one marker off, so a tag line in a collapsed sticky round, which
 // is one quote, is found as it would be outside it.
-func mapLines(lines []string, fn func(line, trimmed string) string) {
+func mapLines(lines []string, fn func(line, trimmed string) string, depth int) {
 	var quoted []int
 	walkStructural(lines, func(i int, trimmed string) {
 		if strings.HasPrefix(trimmed, ">") {
@@ -391,7 +395,7 @@ func mapLines(lines []string, fn func(line, trimmed string) string) {
 		}
 		lines[i] = fn(lines[i], trimmed)
 	})
-	for start := 0; start < len(quoted); {
+	for start := 0; start < len(quoted) && depth < maxQuoteDepth; {
 		end := start + 1
 		for end < len(quoted) && quoted[end] == quoted[end-1]+1 {
 			end++
@@ -401,7 +405,7 @@ func mapLines(lines []string, fn func(line, trimmed string) string) {
 		for k, i := range run {
 			markers[k], inner[k] = cutMarker(lines[i])
 		}
-		mapLines(inner, fn)
+		mapLines(inner, fn, depth+1)
 		for k, i := range run {
 			lines[i] = markers[k] + inner[k]
 		}
