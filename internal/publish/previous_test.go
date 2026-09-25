@@ -158,3 +158,40 @@ func TestPreviousRoundTripsThroughItsFile(t *testing.T) {
 		t.Fatalf("err %#v, want a record refusal", err)
 	}
 }
+
+// A found round missing what capture always writes is damage, and reading it as an empty round would tell the
+// reviewer nothing was published.
+func TestLoadPreviousRefusesAnIncompleteFoundRound(t *testing.T) {
+	for name, content := range map[string]string{
+		"no findings":         `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1}`,
+		"no review id":        `{"schema": 1, "found": true, "reviewUrl": "u", "round": 1, "findings": []}`,
+		"no review url":       `{"schema": 1, "found": true, "reviewId": 5, "round": 1, "findings": []}`,
+		"no round":            `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "findings": []}`,
+		"empty id":            `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "", "title": "T"}]}`,
+		"empty title":         `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "f-001", "title": ""}]}`,
+		"reason and findings": `{"schema": 1, "reason": "why", "findings": []}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := run.WriteFileAtomic(filepath.Join(dir, run.PreviousFile), []byte(content)); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := LoadPrevious(dir); err == nil {
+				t.Fatal("an incomplete previous.json was read")
+			} else if r, ok := refusal.As(err); !ok || r.Code != refusal.Record {
+				t.Fatalf("err %#v, want a record refusal", err)
+			}
+		})
+	}
+}
+
+func TestReadPreviousRefusesAReviewWithNoRound(t *testing.T) {
+	body := render.Body(render.Input{Owner: "acme", Repo: "widgets", Number: 42, HeadSHA: "abc1234", Inline: "none",
+		Digest: "d", PublicationID: "p", Source: "ci-review", Unattended: true})
+	gh := fakegh.New(t)
+	gh.AddReview("acme", "widgets", 42, review(5, "ci[bot]", body))
+	got := ReadPrevious(context.Background(), gh.Client(t), "acme", "widgets", 42, "", "ci-review")
+	if got.Found || !strings.Contains(got.Reason, "no round=") {
+		t.Fatalf("got %+v, want a reason naming round=", got)
+	}
+}

@@ -22,7 +22,7 @@ type Previous struct {
 	ReviewID  int64             `json:"reviewId,omitempty"`
 	ReviewURL string            `json:"reviewUrl,omitempty"`
 	Round     int               `json:"round,omitempty"`
-	Findings  []EnvelopeFinding `json:"findings,omitempty"`
+	Findings  []EnvelopeFinding `json:"findings"`
 	Reason    string            `json:"reason,omitempty"`
 }
 
@@ -63,6 +63,10 @@ func ReadPrevious(ctx context.Context, client github.Client, owner, repo string,
 	if err != nil {
 		return none(fmt.Sprintf("%s cannot be read back: %v", review.HTMLURL, err))
 	}
+	round := render.MetaRound(review.Body)
+	if round < 1 {
+		return none(review.HTMLURL + " cannot be read back: its loupe-meta marker carries no round=")
+	}
 	findings := make([]EnvelopeFinding, 0, len(records))
 	for _, r := range records {
 		f := EnvelopeFinding{ID: r.ID, Title: r.Title, Body: r.Body, Label: r.Label, Blocking: r.Blocking}
@@ -72,7 +76,7 @@ func ReadPrevious(ctx context.Context, client github.Client, owner, repo string,
 		findings = append(findings, f)
 	}
 	return Previous{Schema: PreviousSchema, Found: true, ReviewID: review.ID, ReviewURL: review.HTMLURL,
-		Round: render.MetaRound(review.Body), Findings: findings}
+		Round: round, Findings: findings}
 }
 
 func publisher(viewer, source string) string {
@@ -97,17 +101,27 @@ func EncodePrevious(p Previous) ([]byte, error) {
 // a local receipt. A damaged file is a record refusal.
 func LoadPrevious(dir string) (Previous, bool, error) {
 	var p Previous
-	found, err := loadRecord(filepath.Join(dir, run.PreviousFile), &p, func() string {
-		switch {
-		case p.Schema != PreviousSchema:
-			return fmt.Sprintf("schema is %d, expected %d", p.Schema, PreviousSchema)
-		case !p.Found && p.Reason == "":
-			return "it holds neither findings nor a reason"
-		}
-		return ""
-	})
-	if found && err == nil && p.Found && p.Findings == nil {
-		p.Findings = []EnvelopeFinding{}
-	}
+	found, err := loadRecord(filepath.Join(dir, run.PreviousFile), &p, func() string { return previousProblem(p) })
 	return p, found, err
+}
+
+// previousProblem holds a found round to everything capture writes for one, so a damaged file is refused rather than
+// read as a round that published nothing.
+func previousProblem(p Previous) string {
+	switch {
+	case p.Schema != PreviousSchema:
+		return fmt.Sprintf("schema is %d, expected %d", p.Schema, PreviousSchema)
+	case !p.Found && (p.Reason == "" || p.Findings != nil):
+		return "it holds neither a round nor only a reason"
+	case !p.Found:
+		return ""
+	case p.ReviewID < 1 || p.ReviewURL == "" || p.Round < 1 || p.Findings == nil:
+		return "its round lacks a review id, a review URL, a round number or its findings"
+	}
+	for i, f := range p.Findings {
+		if f.ID == "" || f.Title == "" {
+			return fmt.Sprintf("finding %d lacks an id or a title", i+1)
+		}
+	}
+	return ""
 }
