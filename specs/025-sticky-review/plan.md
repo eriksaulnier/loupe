@@ -49,19 +49,19 @@
 - **The review screenshot.** Decision: not rerun here. A non-sticky review does not change. The README's picture shows a non-sticky review, so a rerun is needed only if the owner wants a sticky one pictured. That goes on the pending list.
 - **No separate design artifacts.** Decision: no `research.md`, `data-model.md`, `contracts/` or `quickstart.md`. Rationale: specs 014 and later hold research in the plan. The contracts are `docs/comment-format.md` and `specs/001-loupe-v1/contracts/cli.md`, amended in place.
 
-### Unverified GitHub facts and the probes for each (FR-022)
+### GitHub facts and the probes for each (FR-022)
 
-None of these can be confirmed offline. `docs/github-facts.md` records them as unverified. Each probe runs on a pull request the owner names on a repository the owner controls.
+None of these can be confirmed offline. The owner ran the probes marked observed on 2026-09-24 and 2026-09-25 on `eriksaulnier/loupe-probe#1` with a user token, and `docs/github-facts.md` records the results. The rest stay assumed.
 
-| Fact assumed | Probe |
-| :--- | :--- |
-| `PUT /repos/{o}/{r}/pulls/{n}/reviews/{id}` with `{"body"}` replaces a submitted `COMMENTED` review's body, keeps its state and `commit_id`, and returns the review | Post a `COMMENT` review with `gh api`, then `gh api -X PUT …/reviews/<id> -f body=edited`. Compare `state`, `commit_id` and `body` before and after |
-| The same works with an installation token (`github-actions[bot]`) | Run the probe from a workflow step with `GITHUB_TOKEN` and `pull-requests: write` |
-| The edit is not refused after time passes | Repeat the `PUT` on a review older than a day, and on one older than a week |
-| Editing sends no notification | Watch the pull request's author's notifications and email during the probe |
-| Editing a review the caller did not author is refused, and with which status (403 or 404) | `PUT` from a second account, or from `GITHUB_TOKEN` against a human's review |
-| A body near 65,536 characters is accepted, and one character more is refused with 422 | `PUT` a 65,536-character body, then a 65,537-character body |
-| `<details>` nested 17 deep renders | Publish a sticky round whose collapsed round holds a finding body with 15 nested disclosures, and open it |
+| Fact | Status | Probe |
+| :--- | :--- | :--- |
+| `PUT /repos/{o}/{r}/pulls/{n}/reviews/{id}` with `{"body"}` replaces a submitted `COMMENTED` review's body, keeps its state and `commit_id`, and returns the review | Observed | Post a `COMMENT` review with `gh api`, then `gh api -X PUT …/reviews/<id> -f body=edited`. Compare `state`, `commit_id` and `body` before and after |
+| The same works with an installation token (`github-actions[bot]`) | Assumed | Run the probe from a workflow step with `GITHUB_TOKEN` and `pull-requests: write` |
+| The edit is not refused after time passes | Observed, 15 days | Repeat the `PUT` on a review older than a day, and on one older than a week |
+| Editing sends no notification | Assumed | Watch the pull request's author's notifications and email during the probe |
+| Editing a review the caller did not author is refused, and with which status (403 or 404) | Assumed | `PUT` from a second account, or from `GITHUB_TOKEN` against a human's review |
+| A body near 65,536 characters is accepted, and one character more is refused with 422 | Observed otherwise: the limit is 262,144 UTF-8 bytes, which 65,536 characters never exceed | `PUT` a 65,536-character body, then a 65,537-character body |
+| `<details>` nested 17 deep renders | Observed | Publish a sticky round whose collapsed round holds a finding body with 15 nested disclosures, and open it |
 
 ## Constitution Check
 
@@ -113,5 +113,5 @@ specs/001-loupe-v1/contracts/cli.md   # --sticky, sticky code, widened changed, 
 | Departure | From | Why |
 | :--- | :--- | :--- |
 | Constitution amended to 2.1.0 | 2.0.2's "posts exactly one GitHub review per publication" | Owner, 2026-09-24, in clarify: amend rather than read the preamble loosely. Committed as its own change before planning |
-| A collapsed round nests its findings one `<details>` level deeper than the allowlist's bound assumes | `docs/comment-format.md` depth rule (15 in a body, 16 in a summary) | Owner's draft asks for one `<details>` per round. The allowlist still checks authored text at its own bounds. GitHub's rendering past 16 levels is a listed probe |
+| A collapsed round nests its findings one `<details>` level deeper than the allowlist's bound assumes | `docs/comment-format.md` depth rule (15 in a body, 16 in a summary) | Owner's draft asks for one `<details>` per round. The allowlist still checks authored text at its own bounds. GitHub was observed to render 17 levels |
 | `changed` also covers the edited review's body changing during confirmation | `contracts/cli.md` `changed`: the draft changed | Same meaning to the human (what you confirmed is no longer what would be sent), same fix. A new code would add a second name for one situation |

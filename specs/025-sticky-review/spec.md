@@ -182,7 +182,8 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 - The earlier rounds are read back from the review on GitHub, not from local receipts, because an unattended pipeline starts from a fresh data root and has no local history.
 - A sticky round edits only a sticky review. Mixing sticky and non-sticky rounds on one pull request leaves the non-sticky reviews in the timeline, which is accepted.
 - The review stays pinned to the first round's commit, because an edit cannot change `commit_id`. The footer names the newest round's commit.
-- A demoted round nests its findings' `<details>` one level deeper than the allowlist's bound assumes. Whether GitHub renders nesting past 16 levels is unverified.
+- A demoted round nests its findings' `<details>` one level deeper than the allowlist's bound assumes. GitHub was observed to render 17 levels on 2026-09-25 (`docs/github-facts.md`).
+- The drop-oldest bound stays at 65,536 characters. GitHub's 422 names that number, but an edit was observed to accept up to 262,144 UTF-8 bytes. A character takes at most 4 bytes, so a body within the bound can never be refused for length, and a looser bound would need a byte count loupe does not keep. Raising it is the owner's call.
 - The downstream pipeline's follow-up review posts no inline comments today, so body-only matches what it has.
 - `loupe review`'s built-in publish step does not offer sticky mode. A human who wants it runs `loupe publish --sticky`.
 - Exposing `--sticky` as an input of the `loupe-workflows` reusable workflow is out of scope. It lives in another repository.

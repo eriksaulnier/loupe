@@ -21,8 +21,8 @@ var (
 
 var events = map[string]string{"comment": "COMMENT", "approve": "APPROVE", "request-changes": "REQUEST_CHANGES"}
 
-// maxBodyChars is the owner's reading of GitHub's limit on a review or comment body; longer bodies are believed to be
-// rejected with 422.
+// maxBodyChars is the number GitHub's 422 names. GitHub was observed to count 262,144 UTF-8 bytes instead, which
+// 65,536 characters never exceed, so a body under this bound is never refused for length (docs/github-facts.md).
 const (
 	maxBodyChars = 65536
 	limitFix     = "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -"
