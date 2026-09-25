@@ -215,21 +215,26 @@ func TestReadDiffChecksTheFingerprint(t *testing.T) {
 	}
 }
 
-func TestCreateRunWritesPreviousOnlyWhenGiven(t *testing.T) {
+func TestCreateRunWritesOptionalFilesOnlyWhenGiven(t *testing.T) {
 	root := t.TempDir()
 	with, without := RunDir(root, "o", "r", 12, 1), RunDir(root, "o", "r", 12, 2)
-	if err := CreateRun(with, sampleTarget(), nil, []byte("{}\n"), []byte("{\"schema\": 1}\n")); err != nil {
+	optional := map[string][]byte{PreviousFile: []byte("{\"schema\": 1}\n"), CommentsFile: []byte("{\"schema\": 2}\n")}
+	if err := CreateRun(with, sampleTarget(), nil, []byte("{}\n"), optional); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := os.ReadFile(filepath.Join(with, PreviousFile)); err != nil || string(got) != "{\"schema\": 1}\n" {
-		t.Fatalf("previous.json: %q, %v", got, err)
+	for name, want := range optional {
+		if got, err := os.ReadFile(filepath.Join(with, name)); err != nil || string(got) != string(want) {
+			t.Fatalf("%s: %q, %v", name, got, err)
+		}
 	}
 	target := sampleTarget()
 	target.Round = 2
 	if err := CreateRun(without, target, nil, []byte("{}\n"), nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Lstat(filepath.Join(without, PreviousFile)); !os.IsNotExist(err) {
-		t.Fatalf("previous.json was written without bytes: %v", err)
+	for name := range optional {
+		if _, err := os.Lstat(filepath.Join(without, name)); !os.IsNotExist(err) {
+			t.Fatalf("%s was written without bytes: %v", name, err)
+		}
 	}
 }

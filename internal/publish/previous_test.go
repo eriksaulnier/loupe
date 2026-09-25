@@ -24,6 +24,13 @@ func publishedBody(source, title string, sticky *render.StickyInput) string {
 			Location: &render.Location{Path: "a.go", Side: "RIGHT", Line: 3}}}})
 }
 
+// readPrevious lists the reviews once, as capture does, and hands the listing to ReadPrevious.
+func readPrevious(t *testing.T, client github.Client, owner, repo string, number int, viewer, source string) Previous {
+	t.Helper()
+	reviews, err := client.ListReviews(context.Background(), owner, repo, number)
+	return ReadPrevious(reviews, err, owner, repo, number, viewer, source)
+}
+
 func review(id int64, user, body string) github.Review {
 	return github.Review{ID: id, User: user, State: "COMMENTED", Body: body,
 		HTMLURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-" + string(rune('0'+id))}
@@ -60,7 +67,7 @@ func TestNewestOwnPicksThePublishersNewestLoupeReview(t *testing.T) {
 func TestReadPreviousReadsTheRecord(t *testing.T) {
 	gh := fakegh.New(t)
 	gh.AddReview("acme", "widgets", 42, review(5, "ci[bot]", publishedBody("ci-review@1.0.0", "Retry loop", nil)))
-	got := ReadPrevious(context.Background(), gh.Client(t), "acme", "widgets", 42, "", "ci-review@2.0.0")
+	got := readPrevious(t, gh.Client(t), "acme", "widgets", 42, "", "ci-review@2.0.0")
 	want := Previous{Schema: PreviousSchema, Found: true, ReviewID: 5, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-5", Round: 3,
 		Findings: []EnvelopeFinding{{ID: "f-001", Title: "Retry loop", Body: "Body.", Label: "issue", Blocking: true,
 			Location: &draft.Location{Path: "a.go", Side: "RIGHT", Line: 3}}}}
@@ -76,7 +83,7 @@ func TestReadPreviousReadsTheCurrentRoundOfASticky(t *testing.T) {
 	}
 	gh := fakegh.New(t)
 	gh.AddReview("acme", "widgets", 42, review(5, "ci[bot]", publishedBody("ci-review", "Second", &render.StickyInput{Rounds: rounds + 1, Earlier: earlier})))
-	got := ReadPrevious(context.Background(), gh.Client(t), "acme", "widgets", 42, "", "ci-review")
+	got := readPrevious(t, gh.Client(t), "acme", "widgets", 42, "", "ci-review")
 	if !got.Found || len(got.Findings) != 1 || got.Findings[0].Title != "Second" {
 		t.Fatalf("got %+v, want the current round's finding", got)
 	}
@@ -112,7 +119,7 @@ func TestReadPreviousStatesWhyThereIsNone(t *testing.T) {
 			if c.fail {
 				gh.Fail(http.MethodGet, "/repos/acme/widgets/pulls/42/reviews", http.StatusBadGateway)
 			}
-			got := ReadPrevious(context.Background(), gh.Client(t), "acme", "widgets", 42, "", "ci-review")
+			got := readPrevious(t, gh.Client(t), "acme", "widgets", 42, "", "ci-review")
 			if got.Found || got.Findings != nil || !strings.Contains(got.Reason, c.want) {
 				t.Fatalf("got %+v, want a reason containing %q", got, c.want)
 			}
@@ -121,7 +128,7 @@ func TestReadPreviousStatesWhyThereIsNone(t *testing.T) {
 }
 
 func TestReadPreviousNamesTheViewer(t *testing.T) {
-	got := ReadPrevious(context.Background(), fakegh.New(t).Client(t), "acme", "widgets", 42, "alice", "")
+	got := readPrevious(t, fakegh.New(t).Client(t), "acme", "widgets", 42, "alice", "")
 	if want := "no earlier loupe review from alice is on"; !strings.Contains(got.Reason, want) {
 		t.Fatalf("reason %q, want %q", got.Reason, want)
 	}
@@ -190,7 +197,7 @@ func TestReadPreviousRefusesAReviewWithNoRound(t *testing.T) {
 		Digest: "d", PublicationID: "p", Source: "ci-review", Unattended: true})
 	gh := fakegh.New(t)
 	gh.AddReview("acme", "widgets", 42, review(5, "ci[bot]", body))
-	got := ReadPrevious(context.Background(), gh.Client(t), "acme", "widgets", 42, "", "ci-review")
+	got := readPrevious(t, gh.Client(t), "acme", "widgets", 42, "", "ci-review")
 	if got.Found || !strings.Contains(got.Reason, "no round=") {
 		t.Fatalf("got %+v, want a reason naming round=", got)
 	}

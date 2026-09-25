@@ -1,7 +1,6 @@
 package publish
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -28,14 +27,14 @@ type Previous struct {
 
 // newestOwn is the publisher's newest loupe review: the viewer's own, or when viewer is empty, a [bot]'s from the same
 // source. An installation token cannot read its own login, so the source capture recorded is what tells one App's
-// review from another's. Its version is left out, so a release keeps reading and editing the same series.
+// review from another's.
 func newestOwn(reviews []github.Review, viewer, source string) (github.Review, bool) {
 	var newest github.Review
 	for _, r := range reviews {
-		if r.State == "PENDING" || !authorMatches(r.User, Envelope{Viewer: viewer}) || !render.IsLoupe(r.Body) {
+		if r.State == "PENDING" || !publishedBy(r, viewer) {
 			continue
 		}
-		if viewer == "" && sourceName(render.MetaSource(r.Body)) != sourceName(source) {
+		if viewer == "" && !sameSource(r.Body, source) {
 			continue
 		}
 		if r.ID > newest.ID {
@@ -47,13 +46,12 @@ func newestOwn(reviews []github.Review, viewer, source string) (github.Review, b
 
 // ReadPrevious never fails: the previous round is an aid to the reviewer, so a round that cannot be read is a reason
 // the run records, not a capture that refuses. It never falls back to an older review, which the author has since
-// seen superseded.
-func ReadPrevious(ctx context.Context, client github.Client, owner, repo string, number int, viewer, source string) Previous {
+// seen superseded. It takes capture's one listing of the reviews, and listErr when that listing failed.
+func ReadPrevious(reviews []github.Review, listErr error, owner, repo string, number int, viewer, source string) Previous {
 	prURL := fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, number)
 	none := func(reason string) Previous { return Previous{Schema: PreviousSchema, Reason: reason} }
-	reviews, err := client.ListReviews(ctx, owner, repo, number)
-	if err != nil {
-		return none(fmt.Sprintf("could not list the reviews on %s: %v", prURL, err))
+	if listErr != nil {
+		return none(fmt.Sprintf("could not list the reviews on %s: %v", prURL, listErr))
 	}
 	review, ok := newestOwn(reviews, viewer, source)
 	if !ok {
@@ -77,6 +75,17 @@ func ReadPrevious(ctx context.Context, client github.Client, owner, repo string,
 	}
 	return Previous{Schema: PreviousSchema, Found: true, ReviewID: review.ID, ReviewURL: review.HTMLURL,
 		Round: round, Findings: findings}
+}
+
+// publishedBy is the author half of the publisher rule: a loupe review by the viewer, or with an installation token,
+// which cannot read its own login, by any [bot].
+func publishedBy(r github.Review, viewer string) bool {
+	return authorMatches(r.User, Envelope{Viewer: viewer}) && render.IsLoupe(r.Body)
+}
+
+// sameSource leaves the version out, so a release keeps reading and editing the same series.
+func sameSource(body, source string) bool {
+	return sourceName(render.MetaSource(body)) == sourceName(source)
 }
 
 func publisher(viewer, source string) string {

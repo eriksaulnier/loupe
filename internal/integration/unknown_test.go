@@ -148,7 +148,7 @@ func TestUnknownOutcomeWithoutMatchNeedsRetry(t *testing.T) {
 	var posts []string
 	marker := regexp.MustCompile(`publication=([0-9a-f-]+) -->`)
 	for _, r := range h.GH.Requests() {
-		if body, ok := r.Body.(map[string]any); ok && r.Method == "POST" {
+		if body, ok := r.Body.(map[string]any); ok && !r.Read() {
 			posts = append(posts, marker.FindStringSubmatch(body["body"].(string))[1])
 		}
 	}

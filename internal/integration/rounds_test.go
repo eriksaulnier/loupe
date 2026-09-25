@@ -59,7 +59,7 @@ func lastPostBody(t *testing.T, h *harness) string {
 	t.Helper()
 	body := ""
 	for _, r := range h.GH.Requests() {
-		if r.Method == "POST" {
+		if !r.Read() {
 			m, _ := r.Body.(map[string]any)
 			body, _ = m["body"].(string)
 		}

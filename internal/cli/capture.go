@@ -36,6 +36,12 @@ name matches --source, and stores its findings in the run, so loupe show --previ
 answers offline. A review that cannot be read back is stored as a reason instead. That
 never refuses the capture.
 
+It also reads everyone else's feedback on the pull request for loupe show --comments:
+submitted reviews, inline review threads and top-level comments, every page of each. It
+leaves out loupe's own reviews for this source: a loupe review whose source name, version
+aside, matches --source and whose author is the viewer, or with an App token a [bot]. A
+listing that fails is stored as a reason, never as empty lists.
+
 The clone is --repo, or the working directory.
 
 Result (--json):
@@ -55,10 +61,12 @@ Result (--json):
             "loupe summary --run owner/repo#123@1 --from <file> --expect-findings <n> --json",
             "then the human runs: loupe review owner/repo#123@1"],
    "previous": {"from": "github", "round": 1,
-                "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "findingCount": 2}}
+                "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "findingCount": 2},
+   "comments": {"read": true, "reviews": 2, "threads": 1, "comments": 3}}
   target.previousRound is present from round 2 on; target.source only when --source was given, and target.model only
   when --model was. previous.from is receipt (with round), github (with round, reviewUrl and findingCount) or none
-  (with reason). Run loupe show --previous when it is receipt or github.`
+  (with reason). Run loupe show --previous when it is receipt or github. comments is {read: true} with the three
+  counts, or {read: false, reason}. Run loupe show --comments when read is true.`
 
 const prURLFix = "loupe capture https://github.com/<owner>/<repo>/pull/<number>"
 
@@ -214,9 +222,25 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		return leftRefs(fmt.Errorf("git diff of %s...%s does not parse: %w", baseRef, headRef, err))
 	}
 
-	previous, previousJSON, err := capturePrevious(cmd, client, root, ref, viewer, source)
+	// One listing of the reviews serves both reads, so a round adds a single review request to GitHub.
+	reviews, reviewsErr := client.ListReviews(ctx, owner, repo, number)
+	previous, previousJSON, err := capturePrevious(root, ref, reviews, reviewsErr, viewer, source)
 	if err != nil {
 		return leftRefs(err)
+	}
+	feedback := publish.ReadComments(ctx, client, reviews, reviewsErr, owner, repo, number, viewer, source)
+	commentsJSON, err := publish.EncodeComments(feedback)
+	if err != nil {
+		return leftRefs(err)
+	}
+	optional := map[string][]byte{run.CommentsFile: commentsJSON}
+	if previousJSON != nil {
+		optional[run.PreviousFile] = previousJSON
+	}
+	comments := map[string]any{"read": false, "reason": feedback.Reason}
+	if feedback.Read {
+		comments = map[string]any{"read": true, "reviews": len(feedback.Reviews), "threads": len(feedback.Threads),
+			"comments": len(feedback.Comments)}
 	}
 
 	prURL := pr.URL
@@ -253,7 +277,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		return leftRefs(fmt.Errorf("encode empty draft: %w", err))
 	}
 	dir := run.RunDir(root, owner, repo, number, ref.Round)
-	if err := createRound(dir, target, diffBytes, append(draftJSON, '\n'), previousJSON, canonical); err != nil {
+	if err := createRound(dir, target, diffBytes, append(draftJSON, '\n'), optional, canonical); err != nil {
 		return leftRefs(err)
 	}
 	unlockErr := held.Unlock()
@@ -277,15 +301,16 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 			"cleanup":  cleanup,
 			"next":     next,
 			"previous": previous,
+			"comments": comments,
 		})
 	}
-	return printCapture(deps, ref, target, cleanup, next, previous)
+	return printCapture(deps, ref, target, cleanup, next, previous, comments)
 }
 
 // capturePrevious finds the round show --previous will list. A local receipt is the exact envelope loupe sent, so it
-// wins and GitHub is not read. Without one, the publisher's newest loupe review is read back and stored in the run,
-// so show --previous answers offline, as a CI reviewer with no GitHub access needs.
-func capturePrevious(cmd *cobra.Command, client github.Client, root string, ref run.Ref, viewer, source string) (map[string]any, []byte, error) {
+// wins over the reviews. Without one, the publisher's newest loupe review is read back and stored in the run, so show
+// --previous answers offline, as a CI reviewer with no GitHub access needs.
+func capturePrevious(root string, ref run.Ref, reviews []github.Review, listErr error, viewer, source string) (map[string]any, []byte, error) {
 	round, _, err := run.PreviousPublished(root, ref)
 	if err == nil {
 		return map[string]any{"from": "receipt", "round": round}, nil, nil
@@ -293,7 +318,7 @@ func capturePrevious(cmd *cobra.Command, client github.Client, root string, ref 
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.NotFound {
 		return nil, nil, err
 	}
-	p := publish.ReadPrevious(cmd.Context(), client, ref.Owner, ref.Repo, ref.Number, viewer, source)
+	p := publish.ReadPrevious(reviews, listErr, ref.Owner, ref.Repo, ref.Number, viewer, source)
 	data, err := publish.EncodePrevious(p)
 	if err != nil {
 		return nil, nil, err
@@ -335,8 +360,8 @@ func githubReadRefusal(err error, prURL string) error {
 
 // createRound reports a lost race for the round directory as lock. The capture lock should already rule that out;
 // this keeps the outcome a refusal if two captures still reach the same round.
-func createRound(dir string, target run.Target, diffBytes, draftJSON, previousJSON []byte, prURL string) error {
-	err := run.CreateRun(dir, target, diffBytes, draftJSON, previousJSON)
+func createRound(dir string, target run.Target, diffBytes, draftJSON []byte, optional map[string][]byte, prURL string) error {
+	err := run.CreateRun(dir, target, diffBytes, draftJSON, optional)
 	if r, ok := refusal.As(err); ok && r.Code == refusal.Internal {
 		if _, statErr := os.Lstat(dir); statErr == nil {
 			pr := run.Ref{Owner: target.Owner, Repo: target.Repo, Number: target.Number}
@@ -348,7 +373,7 @@ func createRound(dir string, target run.Target, diffBytes, draftJSON, previousJS
 	return err
 }
 
-func printCapture(deps Deps, ref run.Ref, target run.Target, cleanup, steps []string, previous map[string]any) error {
+func printCapture(deps Deps, ref run.Ref, target run.Target, cleanup, steps []string, previous, comments map[string]any) error {
 	s, width := deps.outStyle(), deps.width()
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s %s  %s\n", s.Good.Bold(true).Render(s.Glyphs.Accepted), s.Good.Bold(true).Render("captured"),
@@ -358,6 +383,7 @@ func printCapture(deps Deps, ref run.Ref, target run.Target, cleanup, steps []st
 		fmt.Fprintf(&b, "  %s\n", s.Dim.Render(oneLine(r)))
 	}
 	fmt.Fprintf(&b, "%s\n", s.Dim.Render("  previous round: "+previousLine(previous)))
+	fmt.Fprintf(&b, "%s\n", s.Dim.Render("  other reviewers: "+commentsLine(comments)))
 	fmt.Fprintf(&b, "\n%s  %s\n", s.Heading("cleanup"), s.Dim.Render("remove the refs when done with"))
 	for _, c := range cleanup {
 		fmt.Fprintf(&b, "  %s\n", s.Accent.Render(oneLine(c)))
@@ -379,6 +405,14 @@ func previousLine(p map[string]any) string {
 			plural(p["findingCount"].(int), "finding"))
 	}
 	return "none; " + oneLine(fmt.Sprint(p["reason"]))
+}
+
+func commentsLine(c map[string]any) string {
+	if c["read"] != true {
+		return "not read; " + oneLine(fmt.Sprint(c["reason"]))
+	}
+	count := func(key, noun string) string { return fmt.Sprintf("%d %s", c[key], plural(c[key].(int), noun)) }
+	return count("reviews", "review") + ", " + count("threads", "thread") + ", " + count("comments", "comment")
 }
 
 var shellSafe = regexp.MustCompile(`^[A-Za-z0-9@%+=:,./_-]+$`)

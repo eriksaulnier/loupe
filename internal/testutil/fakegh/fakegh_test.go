@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
@@ -213,5 +214,73 @@ func TestUpdateReviewOutcomes(t *testing.T) {
 	}
 	if s.UpdateCount() != 6 || s.CreateCount() != 0 {
 		t.Fatalf("update count %d, create count %d", s.UpdateCount(), s.CreateCount())
+	}
+}
+
+func TestIssueCommentsAndThreadsCrossPages(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	s.SetPR("o", "r", samplePR())
+	s.SetPageSize(2)
+	at := time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)
+	var wantComments []github.IssueComment
+	for i := 0; i < 5; i++ {
+		wantComments = append(wantComments, s.AddIssueComment("o", "r", 3, github.IssueComment{User: "u", Body: fmt.Sprintf("c%d", i), CreatedAt: at}))
+	}
+	var wantThreads []github.ReviewThread
+	for i := 0; i < 3; i++ {
+		th := github.ReviewThread{Path: fmt.Sprintf("f%d.go", i), Line: i + 1, OriginalLine: i + 1, Side: "RIGHT", Resolved: i == 1, Outdated: i == 2}
+		for j := 0; j < 3; j++ {
+			th.Comments = append(th.Comments, github.ThreadComment{ReviewID: 7, User: []string{"alice", "ci[bot]", "ghost"}[j], Body: fmt.Sprintf("t%d.%d", i, j), URL: "u", CreatedAt: at})
+		}
+		s.AddReviewThread("o", "r", 3, th)
+		wantThreads = append(wantThreads, th)
+	}
+	comments, err := c.ListIssueComments(ctx, "o", "r", 3)
+	if err != nil || !reflect.DeepEqual(comments, wantComments) {
+		t.Fatalf("comments %+v, %v", comments, err)
+	}
+	threads, err := c.ListReviewThreads(ctx, "o", "r", 3)
+	if err != nil || !reflect.DeepEqual(threads, wantThreads) {
+		t.Fatalf("threads %+v, %v", threads, err)
+	}
+}
+
+func TestReviewThreadsOfAMissingPullRequestIsAnError(t *testing.T) {
+	s := New(t)
+	if _, err := s.Client(t).ListReviewThreads(ctx, "o", "r", 9); err == nil {
+		t.Fatal("expected an error")
+	}
+}
+
+func TestFailAfterFailsALaterPage(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	s.SetPR("o", "r", samplePR())
+	s.SetPageSize(1)
+	s.AddIssueComment("o", "r", 3, github.IssueComment{User: "u", Body: "a"})
+	s.AddIssueComment("o", "r", 3, github.IssueComment{User: "u", Body: "b"})
+	s.FailAfter(http.MethodGet, "/repos/o/r/issues/3/comments", 1, http.StatusBadGateway)
+	_, err := c.ListIssueComments(ctx, "o", "r", 3)
+	var he *github.HTTPError
+	if !errors.As(err, &he) || he.Status != http.StatusBadGateway || len(s.Requests()) != 2 {
+		t.Fatalf("got %v after %d requests", err, len(s.Requests()))
+	}
+}
+
+func TestRequestReadTellsQueriesFromWrites(t *testing.T) {
+	for _, c := range []struct {
+		r    Request
+		want bool
+	}{
+		{Request{Method: http.MethodGet, Path: "/repos/o/r/pulls/3/reviews"}, true},
+		{Request{Method: http.MethodPost, Path: "/graphql", Body: map[string]any{"query": " query($id: ID!) {}"}}, true},
+		{Request{Method: http.MethodPost, Path: "/graphql", Body: map[string]any{"query": "mutation { x }"}}, false},
+		{Request{Method: http.MethodPost, Path: "/repos/o/r/pulls/3/reviews"}, false},
+		{Request{Method: http.MethodPut, Path: "/repos/o/r/pulls/3/reviews/1"}, false},
+	} {
+		if got := c.r.Read(); got != c.want {
+			t.Errorf("%s %s %v: Read %v, want %v", c.r.Method, c.r.Path, c.r.Body, got, c.want)
+		}
 	}
 }

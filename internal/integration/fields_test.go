@@ -17,7 +17,7 @@ const fullFinding = `{"title": "Changed line", "body": "Evidence for line 3.", "
 func (h *harness) lastReviewBody() string {
 	var post map[string]any
 	for _, r := range h.GH.Requests() {
-		if r.Method == "POST" {
+		if !r.Read() {
 			post, _ = r.Body.(map[string]any)
 		}
 	}

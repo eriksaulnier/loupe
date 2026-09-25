@@ -1,5 +1,5 @@
-// Package fakegh is an in-memory GitHub REST server for the endpoints loupe calls, reached through the production
-// client so request encoding is exercised end to end.
+// Package fakegh is an in-memory GitHub REST and GraphQL server for the endpoints loupe calls, reached through the
+// production client so request encoding is exercised end to end.
 package fakegh
 
 import (
@@ -12,8 +12,10 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/eriksaulnier/loupe/internal/github"
 )
@@ -24,6 +26,16 @@ type Request struct {
 	RawQuery string
 	// Body is the decoded JSON body, nil when the request had none.
 	Body any
+}
+
+// Read reports whether the request only reads: a GET, or a GraphQL query, which GitHub takes as a POST.
+func (r Request) Read() bool {
+	if r.Method == http.MethodGet {
+		return true
+	}
+	body, _ := r.Body.(map[string]any)
+	query, _ := body["query"].(string)
+	return r.Method == http.MethodPost && r.Path == "/graphql" && strings.HasPrefix(strings.TrimSpace(query), "query")
 }
 
 type outcomeKind int
@@ -76,6 +88,11 @@ type Server struct {
 	headOwners    map[prKey]string
 	failures      map[string]int
 	reviews       map[prKey][]github.Review
+	issueComments map[prKey][]github.IssueComment
+	threads       map[prKey][]github.ReviewThread
+	pageSize      int
+	failAfter     map[string]failRule
+	served        map[string]int
 	comparisons   map[compareKey]github.Comparison
 	viewer        string
 	userForbidden bool
@@ -98,13 +115,17 @@ func New(t *testing.T) *Server {
 // Start serves the fake outside a test, for the demo program; stop closes the listener.
 func Start() (s *Server, stop func()) {
 	s = &Server{
-		prs:         map[prKey]github.PullRequest{},
-		branches:    map[prKey]string{},
-		headOwners:  map[prKey]string{},
-		failures:    map[string]int{},
-		reviews:     map[prKey][]github.Review{},
-		comparisons: map[compareKey]github.Comparison{},
-		nextID:      1000,
+		prs:           map[prKey]github.PullRequest{},
+		branches:      map[prKey]string{},
+		headOwners:    map[prKey]string{},
+		failures:      map[string]int{},
+		reviews:       map[prKey][]github.Review{},
+		issueComments: map[prKey][]github.IssueComment{},
+		threads:       map[prKey][]github.ReviewThread{},
+		failAfter:     map[string]failRule{},
+		served:        map[string]int{},
+		comparisons:   map[compareKey]github.Comparison{},
+		nextID:        1000,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}", s.getPullRequest)
@@ -114,13 +135,22 @@ func Start() (s *Server, stop func()) {
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{number}/reviews", s.createReview)
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{number}/reviews/{id}", s.updateReview)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/compare/{basehead}", s.getComparison)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/issues/{number}/comments", s.listIssueComments)
+	mux.HandleFunc("POST /graphql", s.graphQL)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := s.record(r); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
 			return
 		}
 		s.mu.Lock()
-		status, failing := s.failures[r.Method+" "+r.URL.Path]
+		route := r.Method + " " + r.URL.Path
+		status, failing := s.failures[route]
+		if rule, ok := s.failAfter[route]; ok && !failing {
+			if s.served[route] >= rule.after {
+				status, failing = rule.status, true
+			}
+			s.served[route]++
+		}
 		s.mu.Unlock()
 		if failing {
 			writeJSON(w, status, map[string]any{"message": "Server Error"})
@@ -194,6 +224,32 @@ func (s *Server) Fail(method, path string, status int) {
 	s.failures[method+" "+path] = status
 }
 
+type failRule struct{ after, status int }
+
+// FailAfter answers the requests with method and exact path with status once after have been answered normally, so a
+// listing can fail on a later page.
+func (s *Server) FailAfter(method, path string, after, status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failAfter[method+" "+path] = failRule{after: after, status: status}
+	s.served[method+" "+path] = 0
+}
+
+// SetPageSize caps every listing's page at n items whatever the client asks for, as GitHub MAY, so a test crosses
+// pages with a few items; 0 removes the cap.
+func (s *Server) SetPageSize(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pageSize = n
+}
+
+func (s *Server) limit(asked int) int {
+	if s.pageSize > 0 && s.pageSize < asked {
+		return s.pageSize
+	}
+	return asked
+}
+
 func (s *Server) SetHead(owner, repo string, number int, sha string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -237,6 +293,29 @@ func (s *Server) AddReview(owner, repo string, number int, review github.Review)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.storeReview(prKey{owner, repo, number}, review)
+}
+
+// AddIssueComment stores a top-level pull request comment and returns it with its id and URL.
+func (s *Server) AddIssueComment(owner, repo string, number int, c github.IssueComment) github.IssueComment {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nextID++
+	c.ID = s.nextID
+	if c.HTMLURL == "" {
+		c.HTMLURL = fmt.Sprintf("https://github.com/%s/%s/pull/%d#issuecomment-%d", owner, repo, number, c.ID)
+	}
+	key := prKey{owner, repo, number}
+	s.issueComments[key] = append(s.issueComments[key], c)
+	return c
+}
+
+// AddReviewThread stores an inline thread. A comment's User ending in [bot] is served as a GraphQL Bot without the
+// suffix, and an empty User as a deleted account, so the client's naming is exercised.
+func (s *Server) AddReviewThread(owner, repo string, number int, t github.ReviewThread) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := prKey{owner, repo, number}
+	s.threads[key] = append(s.threads[key], t)
 }
 
 // EditReview replaces a stored review's body, as another round or the author on GitHub would.
@@ -404,6 +483,19 @@ func (s *Server) listReviews(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
+	s.mu.Lock()
+	all := s.reviews[key]
+	s.mu.Unlock()
+	start, end := s.restPage(w, r, len(all))
+	out := make([]any, 0, end-start)
+	for _, rv := range all[start:end] {
+		out = append(out, wireReview(rv))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// restPage reads per_page and page, sets the Link header when a page follows, and returns the slice bounds.
+func (s *Server) restPage(w http.ResponseWriter, r *http.Request, total int) (start, end int) {
 	perPage, page := 30, 1
 	if v, err := strconv.Atoi(r.URL.Query().Get("per_page")); err == nil && v > 0 {
 		perPage = v
@@ -412,19 +504,129 @@ func (s *Server) listReviews(w http.ResponseWriter, r *http.Request) {
 		page = v
 	}
 	s.mu.Lock()
-	all := s.reviews[key]
+	size := s.limit(perPage)
 	s.mu.Unlock()
-	start := min((page-1)*perPage, len(all))
-	end := min(start+perPage, len(all))
-	if end < len(all) {
+	start = min((page-1)*size, total)
+	end = min(start+size, total)
+	if end < total {
 		next := fmt.Sprintf("https://api.github.com%s?per_page=%d&page=%d", r.URL.Path, perPage, page+1)
 		w.Header().Set("Link", fmt.Sprintf(`<%s>; rel="next"`, next))
 	}
+	return start, end
+}
+
+func (s *Server) listIssueComments(w http.ResponseWriter, r *http.Request) {
+	key, ok := keyOf(r)
+	if !ok {
+		notFound(w)
+		return
+	}
+	s.mu.Lock()
+	all := s.issueComments[key]
+	s.mu.Unlock()
+	start, end := s.restPage(w, r, len(all))
 	out := make([]any, 0, end-start)
-	for _, rv := range all[start:end] {
-		out = append(out, wireReview(rv))
+	for _, c := range all[start:end] {
+		var user any
+		if c.User != "" {
+			user = map[string]any{"login": c.User}
+		}
+		out = append(out, map[string]any{"id": c.ID, "user": user, "body": c.Body, "html_url": c.HTMLURL,
+			"created_at": c.CreatedAt.UTC().Format(time.RFC3339)})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// graphQL answers the two review-thread queries loupe sends, told apart by their variables: a thread's comments by
+// its id, or a pull request's threads by owner, repo and number. A thread's id encodes where it is stored.
+func (s *Server) graphQL(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Variables map[string]any `json:"variables"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
+		return
+	}
+	after, _ := req.Variables["after"].(string)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	size := s.limit(100)
+	if id, ok := req.Variables["id"].(string); ok {
+		var owner, repo string
+		var number, index int
+		if _, err := fmt.Sscanf(strings.ReplaceAll(id, "/", " "), "thread %s %s %d %d", &owner, &repo, &number, &index); err != nil ||
+			index >= len(s.threads[prKey{owner, repo, number}]) {
+			writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"node": nil}})
+			return
+		}
+		comments := s.threads[prKey{owner, repo, number}][index].Comments
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"node": map[string]any{
+			"comments": gqlPage(len(comments), after, size, func(i int) any { return wireThreadComment(comments[i]) })}}})
+		return
+	}
+	owner, _ := req.Variables["owner"].(string)
+	repo, _ := req.Variables["repo"].(string)
+	number, _ := req.Variables["number"].(float64)
+	key := prKey{owner, repo, int(number)}
+	if _, ok := s.prs[key]; !ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data":   map[string]any{"repository": map[string]any{"pullRequest": nil}},
+			"errors": []any{map[string]any{"type": "NOT_FOUND", "message": fmt.Sprintf("Could not resolve to a PullRequest with the number of %d.", key.number)}},
+		})
+		return
+	}
+	threads := s.threads[key]
+	page := gqlPage(len(threads), after, size, func(i int) any {
+		t := threads[i]
+		node := map[string]any{
+			"id": fmt.Sprintf("thread/%s/%s/%d/%d", owner, repo, key.number, i), "path": t.Path,
+			"line": nilZero(t.Line), "originalLine": nilZero(t.OriginalLine), "diffSide": t.Side,
+			"isResolved": t.Resolved, "isOutdated": t.Outdated,
+			"comments": gqlPage(len(t.Comments), "", size, func(j int) any { return wireThreadComment(t.Comments[j]) }),
+		}
+		return node
+	})
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"repository": map[string]any{
+		"pullRequest": map[string]any{"reviewThreads": page}}}})
+}
+
+// gqlPage serves item(i) for up to size items after the cursor, which is the offset of the item it follows.
+func gqlPage(total int, after string, size int, item func(int) any) map[string]any {
+	start := 0
+	if after != "" {
+		n, err := strconv.Atoi(after)
+		if err == nil {
+			start = min(n, total)
+		}
+	}
+	end := min(start+size, total)
+	nodes := make([]any, 0, end-start)
+	for i := start; i < end; i++ {
+		nodes = append(nodes, item(i))
+	}
+	return map[string]any{"pageInfo": map[string]any{"hasNextPage": end < total, "endCursor": strconv.Itoa(end)}, "nodes": nodes}
+}
+
+func wireThreadComment(c github.ThreadComment) map[string]any {
+	var author, review any
+	switch {
+	case strings.HasSuffix(c.User, "[bot]"):
+		author = map[string]any{"__typename": "Bot", "login": strings.TrimSuffix(c.User, "[bot]")}
+	case c.User != "":
+		author = map[string]any{"__typename": "User", "login": c.User}
+	}
+	if c.ReviewID != 0 {
+		review = map[string]any{"fullDatabaseId": strconv.FormatInt(c.ReviewID, 10)}
+	}
+	return map[string]any{"author": author, "body": c.Body, "url": c.URL, "createdAt": c.CreatedAt.UTC().Format(time.RFC3339),
+		"pullRequestReview": review}
+}
+
+func nilZero(n int) any {
+	if n == 0 {
+		return nil
+	}
+	return n
 }
 
 func (s *Server) createReview(w http.ResponseWriter, r *http.Request) {
@@ -554,7 +756,7 @@ func wirePR(pr github.PullRequest, branch string) map[string]any {
 }
 
 func wireReview(rv github.Review) map[string]any {
-	return map[string]any{
+	out := map[string]any{
 		"id":        rv.ID,
 		"user":      map[string]any{"login": rv.User},
 		"commit_id": rv.CommitID,
@@ -562,6 +764,10 @@ func wireReview(rv github.Review) map[string]any {
 		"body":      rv.Body,
 		"html_url":  rv.HTMLURL,
 	}
+	if !rv.SubmittedAt.IsZero() {
+		out["submitted_at"] = rv.SubmittedAt.UTC().Format(time.RFC3339)
+	}
+	return out
 }
 
 func notFound(w http.ResponseWriter) {
