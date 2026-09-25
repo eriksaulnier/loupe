@@ -324,7 +324,8 @@ func TestReadStickyRefusesUnbalancedRounds(t *testing.T) {
 		{"round closed early, then a second disclosure", strings.Replace(two, "\n\n<!-- loupe digest=1", "\n\n</details>\n\nOutside.\n\n<details>\n<summary>Mine</summary>\n\n<!-- loupe digest=1", 1)},
 		{"close tag after a span that spans lines", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix. `a\nb` </details> `c`\n\nOutside.", 1)},
 		{"comment left open before an earlier round's close", regexp.MustCompile(`(<!-- loupe digest=1[^\n]*-->\n\n)</details>`).ReplaceAllString(two, "$1<!--\n\n</details>")},
-		// A footer appended after the earlier rounds would make the round's own footer read as text in its collapse.
+		// This loupe never writes a footer after the earlier rounds, and its newest collapsed round carries a footer,
+		// so a body with both is a hand edit, not the v0.11.0 layout.
 		{"a second footer after the earlier rounds", strings.Replace(two, "\n\n<!-- loupe digest=2", "\n\n---\n\nreviewed `ddddddd`\n\n<!-- loupe digest=2", 1)},
 		// An open fence also hides the generated tail, so the structure checks refused this before the balance check.
 		{"unclosed fence in the shown round", strings.Replace(two, "Body f-002.", "Body f-002.\n\n```", 1)},
@@ -421,5 +422,30 @@ func TestStickyMovesAV0110BodyToTheNewLayout(t *testing.T) {
 	again, rounds, err := ReadSticky(body)
 	if err != nil || rounds != 3 || len(again) != 3 || again[1] != earlier[0] || again[2] != earlier[1] {
 		t.Fatalf("rounds %d err %v blocks:\n%s", rounds, err, strings.Join(again, "\n=====\n"))
+	}
+}
+
+// Authored prose can end with a divider and a footer-shaped line. In a v0.11.0 body the footer at the tail is the
+// round's own, so that prose is the round's text and reads back as it was written.
+func TestStickyV0110BodyKeepsFooterShapedProse(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-v0.11.0-layout.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, rest, _ := strings.Cut(string(data), "\n\n---\n\n<!-- loupe-earlier -->")
+	if rest == "" || !strings.Contains(rest, " questions=1 ") {
+		t.Fatalf("the fixture changed:\n%s", data)
+	}
+	prose := "Prose.\n\n---\n\nreviewed `abcdef`"
+	body := prose + "\n\n---\n\n<!-- loupe-earlier -->" + strings.Replace(rest, " questions=1 ", " questions=0 ", 1)
+	earlier, _, err := ReadSticky(body)
+	if err != nil {
+		t.Fatalf("ReadSticky: %v", err)
+	}
+	want := "<details>\n<summary>Round 2 · reviewed <code>bbbbbbb</code> · no findings</summary>\n\n" + prose +
+		"\n\n---\n\nreviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`\n\n<!-- loupe digest=" + strings.Repeat("2", 64) +
+		" publication=00000000-0000-4000-8000-000000000002 -->\n\n</details>"
+	if earlier[0] != want {
+		t.Fatalf("demoted round:\n%s", earlier[0])
 	}
 }

@@ -161,7 +161,9 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 		}
 		footer, region = lines[n-3], lines[:n-6]
 	}
+	atTail := footer != ""
 	part := region
+	underRound := false
 	var blocks []string
 	dropped := 0
 	for i := range region {
@@ -173,14 +175,11 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 			return nil, 0, errors.New("its earlier rounds do not follow a divider")
 		}
 		part = trimBlank(part[:len(part)-1])
-		ownFooter := len(part) >= 3 && footerLine.MatchString(part[len(part)-1]) && part[len(part)-2] == "" && part[len(part)-3] == "---"
-		switch {
-		case footer != "" && ownFooter:
-			// Only one layout writes each, so a body with both was edited, and either could be the round's own.
-			return nil, 0, errors.New("it carries a footer both under the round it shows and after the earlier rounds")
-		case footer == "" && !ownFooter:
-			return nil, 0, errors.New("the round it shows does not end with loupe's divider and footer")
-		case footer == "":
+		underRound = endsWithFooter(part)
+		if footer == "" {
+			if !underRound {
+				return nil, 0, errors.New("the round it shows does not end with loupe's divider and footer")
+			}
 			footer, part = part[len(part)-1], part[:len(part)-3]
 		}
 		var current []string
@@ -215,6 +214,12 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	}
 	if footer == "" {
 		return nil, 0, errors.New("it does not end with loupe's divider, footer and reconciliation marker")
+	}
+	// A footer at the tail is the v0.11.0 layout's, whose round prose MAY end in a line shaped like a footer. That
+	// layout collapsed rounds without one, while this one keeps it, so a newest collapsed round with a footer marks a
+	// footer at the tail as a hand edit rather than the round's own.
+	if atTail && underRound && len(blocks) > 0 && keepsFooter(blocks[0]) {
+		return nil, 0, errors.New("it carries a footer both under the round it shows and after the earlier rounds")
 	}
 	if len(blocks)+dropped != rounds-1 {
 		return nil, 0, fmt.Errorf("it holds %d earlier rounds and says %d were dropped, but sticky=%d", len(blocks), dropped, rounds)
@@ -349,6 +354,20 @@ func sectionHead(lines []string) (dropped int, err error) {
 		return strconv.Atoi(m[2])
 	}
 	return 0, errors.New("its earlier rounds do not open with loupe's heading")
+}
+
+// endsWithFooter reports whether lines end with a divider, a blank line and a footer, as a round does under it.
+func endsWithFooter(lines []string) bool {
+	n := len(lines)
+	return n >= 3 && footerLine.MatchString(lines[n-1]) && lines[n-2] == "" && lines[n-3] == "---"
+}
+
+// keepsFooter reports whether a collapsed round ends with its footer, then its reconciliation marker.
+func keepsFooter(block string) bool {
+	lines := strings.Split(block, "\n")
+	n := len(lines)
+	return n >= 7 && lines[n-1] == "</details>" && lines[n-2] == "" && digestLine.MatchString(lines[n-3]) && lines[n-4] == "" &&
+		endsWithFooter(lines[:n-4])
 }
 
 func trimBlank(lines []string) []string {
