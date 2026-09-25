@@ -500,3 +500,23 @@ func TestReadStickyReadsARoundWithoutItsClosingDivider(t *testing.T) {
 		t.Fatalf("the older round was not carried as it is:\n%s", carried[1])
 	}
 }
+
+// A clean round published before the no-findings chip opens on its prose, and it MUST still read back with that prose
+// kept whole.
+func TestReadStickyReadsACleanRoundWithoutItsChip(t *testing.T) {
+	in := stickyInput(1, "aaaaaaa111")
+	in.Summary = "Nothing to fix."
+	in.Sticky = &StickyInput{Rounds: 1}
+	body := Body(in)
+	older := strings.Replace(body, "`✓ no findings`\n\n", "", 1)
+	if older == body {
+		t.Fatal("the fixture has no chip to remove")
+	}
+	earlier, rounds, err := ReadSticky(older)
+	if err != nil || rounds != 1 || len(earlier) != 1 {
+		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
+	}
+	if !strings.Contains(earlier[0], "<code>✓ no findings</code></summary>\n\nNothing to fix.\n\n---\n\n") {
+		t.Fatalf("clean round read back wrong:\n%s", earlier[0])
+	}
+}
