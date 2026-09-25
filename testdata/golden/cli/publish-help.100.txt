@@ -69,7 +69,7 @@ sticky round posts a review. Each later round replaces that review's body: the n
 and every earlier round collapsed below it, newest first. The review edited is your newest sticky
 loupe review on the pull request, or unattended, the newest one a [bot] posted from the same
 loupe capture --source, version aside; unattended --sticky refuses a run captured without one, and
-an edit GitHub refuses as not yours names --source as the fix. An edit sends no
+an unattended edit GitHub refuses as not its own names --source as the fix. An edit sends no
 notification, and the review keeps the first round's commit. The confirmation shows the whole new
 body, earlier rounds included, and names the review it edits. If that review changes on GitHub
 before y, nothing is sent and publish refuses with changed. When the earlier rounds would take the

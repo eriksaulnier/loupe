@@ -367,3 +367,18 @@ func TestRunStickyRefusedEditNamesTheSource(t *testing.T) {
 		t.Fatal("a refused edit left an attempt")
 	}
 }
+
+// An attended round finds the viewer's own review whatever its source, so a refused attended edit keeps the general fix.
+func TestRunStickyRefusedAttendedEditKeepsTheGeneralFix(t *testing.T) {
+	first := newAttendedStickyRun(t, nil)
+	if _, err := first.run(); err != nil {
+		t.Fatal(err)
+	}
+	second := newAttendedStickyRun(t, first.gh)
+	second.gh.QueueUpdate(fakegh.Reject422("Not Found"))
+	_, err := second.run()
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.GitHub || strings.Contains(r.Fix, "--source") {
+		t.Fatalf("got %#v", err)
+	}
+}

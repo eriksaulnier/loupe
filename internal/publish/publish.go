@@ -409,8 +409,9 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 			return Receipt{}, false, err
 		}
 		fix := fmt.Sprintf("fix what GitHub reported, then loupe publish; the pull request is %s", opts.Target.URL)
-		// Only the review's author can edit it, so a refused edit most likely picked another publisher's review.
-		if env.EditReviewID != 0 && (httpErr.Status == http.StatusForbidden || httpErr.Status == http.StatusNotFound) {
+		// Only the review's author can edit it, and an unattended round tells its own review only by source, so a refused
+		// unattended edit most likely picked another App's review.
+		if env.EditReviewID != 0 && env.Unattended() && (httpErr.Status == http.StatusForbidden || httpErr.Status == http.StatusNotFound) {
 			fix = "give this pipeline a loupe capture --source of its own, or loupe publish without --sticky to post a new review"
 		}
 		// GitHub refuses a submitted review while the viewer has a pending one, and loupe does not manage pending reviews.
