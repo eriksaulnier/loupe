@@ -22,7 +22,7 @@
 
 **Project Type**: CLI.
 
-**Constraints**: Constitution 2.1.0 (amended for this feature on 2026-09-24). `docs/comment-format.md` is a contract and is amended by this spec. `scripts/check-tests.sh` holds `CreateReview` to one reference in `internal/publish/publish.go`, and `UpdateReview` joins that rule.
+**Constraints**: Constitution 3.0.0 (amended for this feature on 2026-09-24). `docs/comment-format.md` is a contract and is amended by this spec. `scripts/check-tests.sh` holds `CreateReview` to one reference in `internal/publish/publish.go`, and `UpdateReview` joins that rule.
 
 **Scale/Scope**: One new client method and fake handler, two new render functions and one new input field, one new publish file (`sticky.go`), changes to `publish.go`, `envelope.go`, `reconcile.go`, `round.go` and `records.go`, a flag and a result key in `internal/cli/publish.go`, one line in each confirmation surface, three documents and one script rule.
 
@@ -66,7 +66,7 @@ None of these can be confirmed offline. The owner ran the probes marked observed
 ## Constitution Check
 
 - **I. A tool for agents.** PASS. `--sticky` is a flag of an existing command, reachable from `loupe publish --help` on both paths. No host-specific path.
-- **II. Nothing posts unread under a human's name.** PASS under 2.1.0. The one request edits a review the viewer published, and the author rule restricts it to one. The preview is the whole replacement body. The recheck after `y` refuses if the body being replaced changed. The new round's findings are accepted and its prose is typed at the confirmation, as today. Earlier rounds' findings and prose were accepted and typed in their own rounds, and they are shown again in full. Unattended keeps App identity, `COMMENT` only and the unattended marking, and edits only a `[bot]` review. An installation token cannot read its own login, so a `[bot]` review by another App can be chosen. The edit request is then expected to be refused by GitHub, which ends as a definite rejection that changes nothing. That refusal is a listed probe, not an observation.
+- **II. Nothing posts unread under a human's name.** PASS under 3.0.0. The one request edits a review the viewer published, and the author rule restricts it to one. The preview is the whole replacement body. The recheck after `y` refuses if the body being replaced changed. The new round's findings are accepted and its prose is typed at the confirmation, as today. Earlier rounds' findings and prose were accepted and typed in their own rounds, and they are shown again in full. Unattended keeps App identity, `COMMENT` only and the unattended marking, and edits only a `[bot]` review. An installation token cannot read its own login, so a `[bot]` review by another App can be chosen. The edit request is then expected to be refused by GitHub, which ends as a definite rejection that changes nothing. That refusal is a listed probe, not an observation.
 - **III. Local files, no service.** PASS. No new file kinds and no network access beyond the GitHub API.
 - **IV. Never touch the user's checkout.** PASS. Not in scope.
 - **V. Machine contract first.** PASS. `--help` documents the flag, the refusals name their fix, and the `--json` result gains one always-present key. The new `sticky` code is added to the contract table.
@@ -112,6 +112,6 @@ specs/001-loupe-v1/contracts/cli.md   # --sticky, sticky code, widened changed, 
 
 | Departure | From | Why |
 | :--- | :--- | :--- |
-| Constitution amended to 2.1.0 | 2.0.2's "posts exactly one GitHub review per publication" | Owner, 2026-09-24, in clarify: amend rather than read the preamble loosely. Committed as its own change before planning |
+| Constitution amended to 3.0.0 | 2.0.2's "posts exactly one GitHub review per publication" | Owner, 2026-09-24, in clarify: amend rather than read the preamble loosely. Committed as its own change before planning |
 | A collapsed round nests its findings one `<details>` level deeper than the allowlist's bound assumes | `docs/comment-format.md` depth rule (15 in a body, 16 in a summary) | Owner's draft asks for one `<details>` per round. The allowlist still checks authored text at its own bounds. GitHub was observed to render 17 levels |
 | `changed` also covers the edited review's body changing during confirmation | `contracts/cli.md` `changed`: the draft changed | Same meaning to the human (what you confirmed is no longer what would be sent), same fix. A new code would add a second name for one situation |

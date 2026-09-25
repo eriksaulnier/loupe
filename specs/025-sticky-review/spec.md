@@ -14,7 +14,7 @@ This specification amends `docs/comment-format.md`, which is a contract (constit
 
 - A review published without `--sticky` does not change by one byte. Every existing golden stays as it is.
 - The reconciliation marker keeps its format. A sticky body adds the `sticky=` key to `loupe-meta` under the rule that new keys MAY be added and existing keys MUST keep their meaning.
-- The publication state machine gains one write, the edit of an existing review's body, in place of the create. A publication still sends exactly one write request. Constitution 2.1.0 permits this.
+- The publication state machine gains one write, the edit of an existing review's body, in place of the create. A publication still sends exactly one write request. Constitution 3.0.0 permits this.
 - `--unattended` keeps every rule of `specs/007-unattended-publish`. `--sticky` narrows it further and loosens nothing.
 
 ## Clarifications
@@ -30,7 +30,7 @@ This specification amends `docs/comment-format.md`, which is a contract (constit
 ### Session 2026-09-24
 
 - Q: When the earlier rounds push a sticky body past GitHub's 65,536-character limit, what does loupe do? → A: Drop the oldest collapsed rounds until the body fits, and say under `### Earlier rounds` how many of the oldest rounds were dropped. `sticky=K` keeps counting every round published into the review.
-- Q: The constitution's preamble says loupe posts exactly one GitHub review per publication, and a sticky follow-up posts none and edits one. Does this need an amendment? → A: Yes. Constitution 2.1.0 (2026-09-24, owner-approved) says a publication creates or edits exactly one review. Principle II lets the one request replace the body of a review published earlier under the same identity, requires the confirmation to show the whole replacement body, and limits an unattended edit to a review a GitHub App published.
+- Q: The constitution's preamble says loupe posts exactly one GitHub review per publication, and a sticky follow-up posts none and edits one. Does this need an amendment? → A: Yes. Constitution 3.0.0 (2026-09-24, owner-approved) says a publication creates or edits exactly one review. Principle II lets the one request replace the body of a review published earlier under the same identity, requires the confirmation to show the whole replacement body, and limits an unattended edit to a review a GitHub App published.
 
 ## User Scenarios & Testing *(mandatory)*
 

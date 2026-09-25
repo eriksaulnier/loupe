@@ -7,7 +7,7 @@ description: "Task list for sticky review"
 
 **Input**: Design documents from `specs/025-sticky-review/`
 
-**Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), `.specify/memory/constitution.md` (2.1.0)
+**Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), `.specify/memory/constitution.md` (3.0.0)
 
 **Tests**: The publication state machine and the published format change, so every behavior is pinned by a failing test before the code that makes it pass (constitution, Development Workflow). Goldens are regenerated only after a hand-written test pins the change, and every regeneration is followed by reading the diff. Every existing body golden MUST stay byte-identical (SC-002). New tests MUST pass `scripts/check-tests.sh`: no pseudo-terminal, no network host literal, and no `CreateReview` or `UpdateReview` outside `internal/publish`.
 

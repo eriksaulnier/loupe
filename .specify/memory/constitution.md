@@ -50,8 +50,8 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 This constitution supersedes every other practice in the repository. An amendment MUST state what changed and why, bump the version below (MAJOR for a removed or redefined principle, MINOR for a new principle or section, PATCH for wording), and update the specification and plan when a principle they rely on changes. Plans MUST include a Constitution Check and justify each violation in Complexity Tracking.
 
-**Version**: 2.1.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-24
+**Version**: 3.0.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-24
 
-**2.1.0** (2026-09-24): A publication MAY edit one review's body instead of creating a review. The preamble and Principle II said a publication posts exactly one review, and sticky mode edits the review an earlier round posted so a pull request's timeline holds one loupe review instead of one per round (specs/025-sticky-review). The one-request rule, the COMMENT-only rule for an unattended review and the unattended marking are unchanged. An edit MUST show the human the whole replacement body, because it overwrites words already published under their name.
+**3.0.0** (2026-09-24): A publication MAY edit one review's body instead of creating a review. This is MAJOR because it redefines what Principle II's one request may do (owner, 2026-09-25). The preamble and Principle II said a publication posts exactly one review, and sticky mode edits the review an earlier round posted so a pull request's timeline holds one loupe review instead of one per round (specs/025-sticky-review). The one-request rule, the COMMENT-only rule for an unattended review and the unattended marking are unchanged. An edit MUST show the human the whole replacement body, because it overwrites words already published under their name.
 
 **2.0.2** (2026-09-18): Principle II now covers the review body's opening prose and not only its findings. The title always claimed it; the text left the one paragraph a reader sees first to an agent, which the human then published verbatim under their own name (specs/013-human-message).
