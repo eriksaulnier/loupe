@@ -543,8 +543,8 @@ func fixture(t *testing.T, name string) string {
 	return string(data)
 }
 
-// Every divider loupe wrote into the round goes, since the quote's edge now marks the round and a rule inside it reads
-// as a boundary between rounds. A divider the author wrote in the prose is theirs and stays.
+// Every divider loupe wrote into the round goes, since the quote's edge marks the round and a rule inside it reads as a
+// boundary between rounds. A divider the author wrote in the prose is theirs and stays.
 func TestReadStickyQuotesTheDemotedRoundWithoutDividers(t *testing.T) {
 	in := stickyInput(1, "aaaaaaa111", general("f-001", "issue", true), general("f-002", "question", false))
 	in.Summary = "Prose.\n\n---\n\nMore prose."

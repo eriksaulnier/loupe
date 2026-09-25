@@ -300,7 +300,7 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 
 // splitChips takes the chips row off a round and returns it as summary pills, or a no-findings pill. The row is loupe's
 // first line exactly when meta counts a finding, and its chips MUST add up to that count, so prose that looks like a
-// chips row is never taken for one. The divider that followed the row goes with it when no prose sat between.
+// chips row is never taken for one.
 func splitChips(part []string, meta string) (string, []string, error) {
 	counts := map[string]int{}
 	for _, m := range countKey.FindAllStringSubmatch(meta, -1) {
@@ -340,8 +340,6 @@ func splitChips(part []string, meta string) (string, []string, error) {
 	// A collapsed round's sections drop a heading level, so an opened round reads as history under the round on top
 	// and its headings stay out of the page outline's top level. Only loupe's own sections from the first one on
 	// change: prose above them that looks like a heading is the author's and stays as written.
-	// Their dividers go too: inside the round's quote a rule reads as a boundary between rounds. A section whose
-	// divider was removed on GitHub loses nothing, so it is carried without one.
 	headings := sectionHeadings(rest)
 	for k := len(headings) - 1; k >= 0; k-- {
 		i := headings[k]
@@ -349,6 +347,8 @@ func splitChips(part []string, meta string) (string, []string, error) {
 			break
 		}
 		rest[i] = "#" + strings.TrimSpace(rest[i])
+		// A section's divider goes too: inside the round's quote a rule reads as a boundary between rounds. A section
+		// whose divider was removed on GitHub loses nothing, so it is carried without one.
 		if i >= 2 && rest[i-1] == "" && rest[i-2] == "---" {
 			rest = slices.Delete(rest, i-2, i)
 		}
