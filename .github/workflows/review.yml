@@ -33,6 +33,9 @@ jobs:
       pull_request: ${{ inputs.pull_request || github.event.pull_request.number }}
       model: ${{ vars.REVIEW_MODEL }}
       debug: ${{ vars.REVIEW_DEBUG == 'true' }}
+      # The default 40 ran out before publishing on several large loupe pull requests, which then got
+      # no review at all.
+      max_turns: 80
       # loupe dogfoods its own sticky review. Sticky finds the review to edit by its source name, so
       # source MUST stay at its default for every round.
       sticky: true
