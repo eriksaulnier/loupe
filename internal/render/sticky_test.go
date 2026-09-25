@@ -597,6 +597,41 @@ func TestReadStickyNestsALocationQuote(t *testing.T) {
 	}
 }
 
+// A body in the v0.12.0 layout reads back after an upgrade. The round it showed is collapsed into a quote, and the
+// rounds v0.12.0 collapsed are carried byte for byte apart from their number.
+func TestStickyMovesAV0120BodyToTheQuotedLayout(t *testing.T) {
+	old := fixture(t, "sticky-v0.12.0-layout.md")
+	earlier, rounds, err := ReadSticky(old)
+	if err != nil || rounds != 3 || len(earlier) != 3 {
+		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
+	}
+	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 3 · reviewed <code>ccccccc</code> · <code>🟣 1 suggestion</code></summary>\n\n> One suggestion left.\n>\n> #### Worth a look\n") ||
+		!strings.Contains(earlier[0], "\n>\n> > [`internal/a.go:12`](") ||
+		!strings.HasSuffix(earlier[0], "\n>\n> reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since round 2](https://github.com/o/r/compare/bbbbbbb222...ccccccc333) · via `gadfly-review-pr 2.3.0` · `anthropic/claude-opus-5.5`\n\n<!-- loupe digest="+strings.Repeat("3", 64)+" publication=00000000-0000-4000-8000-000000000003 -->\n\n</details>") {
+		t.Fatalf("demoted round:\n%s", earlier[0])
+	}
+	blocks := strings.Split(old, "\n\n<!-- loupe-round -->\n\n")
+	if len(blocks) != 3 {
+		t.Fatalf("the fixture changed:\n%s", old)
+	}
+	for i, want := range []string{blocks[1], blocks[2][:strings.Index(blocks[2], "\n\n<!-- loupe digest=3")]} {
+		if earlier[i+1] != want {
+			t.Fatalf("round %d was not carried as it is\n--- got ---\n%s\n--- want ---\n%s", 2-i, earlier[i+1], want)
+		}
+	}
+	next := stickyInput(4, "ddddddd444", general("f-001", "question", false))
+	next.Sticky = &StickyInput{Rounds: rounds + 1, Earlier: earlier}
+	again, rounds, err := ReadSticky(Body(next))
+	if err != nil || rounds != 4 || len(again) != 4 || again[1] != earlier[0] {
+		t.Fatalf("rounds %d err %v blocks:\n%s", rounds, err, strings.Join(again, "\n=====\n"))
+	}
+	for i, block := range earlier[1:] {
+		if want := roundNumber.ReplaceAllString(block, "<details>\n<summary>Round "+string(rune('2'-i))+" · "); again[i+2] != want {
+			t.Fatalf("round %d changed:\n%s", 2-i, again[i+2])
+		}
+	}
+}
+
 // A quoted round in which a line lost its marker renders half outside its quote, so it is refused rather than carried,
 // in the newest collapsed round or an older one. A marker without its space still quotes the line.
 func TestReadStickyRefusesABrokenQuote(t *testing.T) {
