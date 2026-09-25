@@ -60,7 +60,7 @@ description: "Task list for detecting and opening a pane in Herdr or Orca, throu
 
 - [x] T021 Record, in `specs/001-loupe-v1/validation.md` (T019), the results the orchestrator reports from quickstart.md's "Live, in Orca" steps, run by the human, not this agent: from an agent terminal at least 120 columns wide, `LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42' --json` returning `host: orca`, `direction: right`, and review opening in the split with focus; pressing `q` in review closing the pane; handing off a published run so `loupe-demo review` refuses in the pane, leaving it open. Any step not run stays on the Unverified list per FR-022 and FR-023; this task records outcomes only and runs no host command itself.
 
-## Phase 8: Focus gate (added 2026-09-22, FR-024)
+## Phase 8: Focus gate (added 2026-09-22, FR-024; superseded 2026-09-24 by Phase 9)
 
 - [x] T022 Write the failing tests first in `internal/pane/orca_test.go`: `TestDetectOrcaNeedsHandleAndBinary` also reads `ORCA_TAB_ID` and detects without it; `TestOpenSendsShowSplitListAndSwitchWhenTheAgentTabIsActive` (renamed from `TestOpenSendsShowSplitAndSwitch`), `TestOpenSkipsSwitchWhenTheAgentTabIsInTheBackground`, `TestOpenSwitchesWithoutListingWhenTheTabIsUnknown` and `TestOpenRefusesAtLayout` (tab in no group, unreadable listing, failed listing); `herdr_test.go` asserts `Focused: true`.
 - [x] T023 In `internal/cli/handoff_test.go`, set `ORCA_TAB_ID` in `orcaEnv`, answer `list` in `fakeOrcaBin` through `fakeOrcaBinWithActiveTab`, assert `focused: true` for Herdr and a foreground Orca tab, and add `TestHandoffLeavesTheViewAloneFromABackgroundOrcaTab` for `focused: false`, the "without focus" line and no `switch` call.
@@ -80,3 +80,10 @@ T012, T015, T016, T017 and T018 alongside each other and alongside T013/T014; T0
 ## Implementation strategy
 
 Build bottom-up, one file group at a time: the shared seam first (Phase 1), then Herdr rebuilt on it (Phase 2) so the existing host never regresses, then Orca as the second concrete host (Phase 3) — only once both exist does `pane.Detect` compile. Phase 4 wires the CLI to the seam and is where Orca actually becomes reachable as `loupe handoff`. Phase 5's documents can start as soon as the fact they describe is settled, in parallel with later code phases. Phase 6 is the gate; Phase 7 is the owner's live walk in their own Orca session.
+
+## Phase 9: Never switch (added 2026-09-24, FR-025)
+
+- [x] T028 In `internal/pane/orca.go`, drop the `layout` and `switch` steps, the `tabID` field and `tabActive`, and return `Focused: false`. `internal/pane/orca_test.go` asserts the exact `show`, `split` calls with `Focused: false` in `TestOpenSendsShowAndSplitAndNeverSwitches`, and loses the layout and switch cases; `TestDetectOrcaNeedsHandleAndBinary` no longer reads `ORCA_TAB_ID`.
+- [x] T029 In `internal/cli/handoff_test.go`, drop `ORCA_TAB_ID` from `orcaEnv` and `list`/`switch` from `fakeOrcaBin`, and replace the foreground and background Orca tests with `TestHandoffOpensReviewInAnOrcaSplitWithoutFocus`, covering `--json` and the "without focus" line. Update the `handoff` help, both goldens, the README, the CLI contract, validation.md and the human-review skill.
+- [x] T030 Run `mise run check` until green, and record the live checks in `specs/001-loupe-v1/validation.md`.
+

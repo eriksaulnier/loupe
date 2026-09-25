@@ -26,9 +26,10 @@ A host whose conditions are met only in part is skipped. With no host it refuses
 The pane opens below the agent's pane when that pane is known to be under 120 columns wide,
 and to the right otherwise. The width is the host's own report of the agent's pane (Herdr has
 one, Orca none), else the agent's own terminal; with neither it opens right. The pane runs
-this loupe's review for the run. It takes focus, except in Orca when the agent's tab is not
-the one its tab group shows: then it opens there and the human's view stays where it is. It
-closes when review exits cleanly and stays open on a refusal so the human can read it.
+this loupe's review for the run. In Herdr the pane takes focus. In Orca it never does: Orca
+can focus a pane only by moving the human's view to its worktree, so the pane shows in the
+agent's tab and the view stays where it is. The pane closes when review exits cleanly and
+stays open on a refusal so the human can read it.
 
 The agent MUST NOT send to, read, resize, close or reuse the pane; a hand-off that opens a pane
 opens a new one. A failed host call refuses pane-failed and is not retried; its details name
