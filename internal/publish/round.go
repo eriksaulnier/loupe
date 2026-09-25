@@ -45,26 +45,33 @@ func publishedRound(root string, target run.Target) (int, error) {
 }
 
 // unattendedRound counts a pull request's own bot loupe reviews, since a fresh data root has no local round state to
-// number a pipeline's reviews from. A review counts when it is not pending, its author login ends [bot], and its
-// body carries the loupe-meta marker; this counts any App posting loupe reviews, not only the one publishing now.
-func unattendedRound(ctx context.Context, client github.Client, target run.Target) (int, error) {
-	reviews, err := client.ListReviews(ctx, target.Owner, target.Repo, target.Number)
-	if err != nil {
-		if _, ok := refusal.As(err); ok {
-			return 0, err
-		}
-		prURL := fmt.Sprintf("https://github.com/%s/%s/pull/%d", target.Owner, target.Repo, target.Number)
-		return 0, refusal.New(refusal.GitHub,
-			fmt.Sprintf("could not list the reviews on %s to number this round; nothing was sent: %v", prURL, err),
-			fmt.Sprintf("retry loupe publish; check network access to api.github.com; the pull request is %s", prURL))
-	}
+// number a pipeline's reviews from. It counts any App posting loupe reviews, not only the one publishing now, and a
+// sticky review counts every round published into it.
+func unattendedRound(reviews []github.Review) int {
 	count := 1
 	for _, r := range reviews {
 		if r.State != "PENDING" && strings.HasSuffix(r.User, "[bot]") && strings.Contains(r.Body, render.MetaPrefix) {
-			count++
+			rounds, _ := render.StickyRounds(r.Body)
+			count += max(rounds, 1)
 		}
 	}
-	return count, nil
+	return count
+}
+
+// listReviews refuses rather than guessing when the list cannot be read; purpose finishes "could not list the reviews
+// on <pr> to …".
+func listReviews(ctx context.Context, client github.Client, target run.Target, purpose string) ([]github.Review, error) {
+	reviews, err := client.ListReviews(ctx, target.Owner, target.Repo, target.Number)
+	if err != nil {
+		if _, ok := refusal.As(err); ok {
+			return nil, err
+		}
+		prURL := fmt.Sprintf("https://github.com/%s/%s/pull/%d", target.Owner, target.Repo, target.Number)
+		return nil, refusal.New(refusal.GitHub,
+			fmt.Sprintf("could not list the reviews on %s to %s; nothing was sent: %v", prURL, purpose, err),
+			fmt.Sprintf("retry loupe publish; check network access to api.github.com; the pull request is %s", prURL))
+	}
+	return reviews, nil
 }
 
 // hasAttempt only stats, so a corrupt attempt in another round cannot refuse this publish.

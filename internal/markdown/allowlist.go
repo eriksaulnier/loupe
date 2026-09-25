@@ -373,10 +373,30 @@ func MapSummaryLines(text string, fn func(string) string) string {
 	})
 }
 
-// mapTagLines applies fn to every structural line outside a fence. Line endings are normalized as Check normalizes
-// them, so the two agree on where a fence opens.
+// mapTagLines applies fn to every structural line outside a fence.
 func mapTagLines(text string, fn func(line, trimmed string) string) string {
-	lines := strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n")
+	lines := splitLines(text)
+	walkStructural(lines, func(i int, trimmed string) { lines[i] = fn(lines[i], trimmed) })
+	return strings.Join(lines, "\n")
+}
+
+// StructuralLines reports which lines of text, split after normalizing line endings, are non-blank lines outside a
+// fence, read as Check reads them. Authored text that passed Check holds no HTML comment on such a line, so a comment
+// line loupe generated can be found by it without mistaking a fenced copy for the original.
+func StructuralLines(text string) (lines []string, structural []bool) {
+	lines = splitLines(text)
+	structural = make([]bool, len(lines))
+	walkStructural(lines, func(i int, _ string) { structural[i] = true })
+	return lines, structural
+}
+
+// splitLines normalizes line endings as Check does, so the two agree on where a fence opens.
+func splitLines(text string) []string {
+	return strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(text), "\n")
+}
+
+// walkStructural calls fn for every structural line outside a fence.
+func walkStructural(lines []string, fn func(i int, trimmed string)) {
 	var fenceChar byte
 	var fenceLen int
 	inHTMLBlock := false
@@ -401,7 +421,6 @@ func mapTagLines(text string, fn func(line, trimmed string) string) string {
 			fenceChar, fenceLen = c, length
 			continue
 		}
-		lines[i] = fn(line, trimmed)
+		fn(i, trimmed)
 	}
-	return strings.Join(lines, "\n")
 }

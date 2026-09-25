@@ -1,6 +1,6 @@
 # loupe Constitution
 
-loupe gives any shell-capable agent a standard way to file pull-request review findings into a local draft, gives the human a terminal interface to decide each finding, and posts exactly one GitHub review per publication: confirmed by the human, or posted by a GitHub App and marked unattended. These principles govern every specification, plan and task in this repository.
+loupe gives any shell-capable agent a standard way to file pull-request review findings into a local draft, gives the human a terminal interface to decide each finding, and creates or edits exactly one GitHub review per publication: confirmed by the human, or sent by a GitHub App and marked unattended. These principles govern every specification, plan and task in this repository.
 
 ## Core Principles
 
@@ -10,7 +10,7 @@ loupe MUST NOT invoke, prompt, supervise, sandbox or authenticate a reviewer. An
 
 ### II. Nothing posts unread under a human's name
 
-Every finding that reaches GitHub under a human's identity MUST have been individually accepted by that human, the review body's opening prose MUST have been written by that human at the confirmation, and the review as a whole MUST have been confirmed by the human in one interactive command that sends exactly one GitHub request. No command MAY set that prose, because a command that writes the human's words is a command an agent can call. That command MUST refuse without an interactive terminal. An unattended publication MAY skip the terminal and the per-finding decisions only when it authenticates with a GitHub App installation token. It MUST post as that App, MUST send a COMMENT review, MUST mark the review as unattended, and MAY take its opening prose from the draft's summary, so a review no one read never approves or blocks a merge and never reads as a person's. Agents working in a human's session are forbidden from publishing by contract. Per-finding sign-off is the product, not a safety rail: designs that let a human approve a batch without seeing each item are out of scope.
+Every finding that reaches GitHub under a human's identity MUST have been individually accepted by that human, the review body's opening prose MUST have been written by that human at the confirmation, and the review as a whole MUST have been confirmed by the human in one interactive command that sends exactly one GitHub request. No command MAY set that prose, because a command that writes the human's words is a command an agent can call. That one request MAY replace the body of a review loupe published earlier under the same identity instead of creating a review. The confirmation MUST then show the whole replacement body, earlier rounds included, because it overwrites text already published under that identity. That command MUST refuse without an interactive terminal. An unattended publication MAY skip the terminal and the per-finding decisions only when it authenticates with a GitHub App installation token. It MUST post as that App, MUST send a COMMENT review, MUST mark the review as unattended, MUST edit only a review a GitHub App published, and MAY take its opening prose from the draft's summary, so a review no one read never approves or blocks a merge and never reads as a person's. Agents working in a human's session are forbidden from publishing by contract. Per-finding sign-off is the product, not a safety rail: designs that let a human approve a batch without seeing each item are out of scope.
 
 ### III. Local files, no service
 
@@ -50,6 +50,8 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 This constitution supersedes every other practice in the repository. An amendment MUST state what changed and why, bump the version below (MAJOR for a removed or redefined principle, MINOR for a new principle or section, PATCH for wording), and update the specification and plan when a principle they rely on changes. Plans MUST include a Constitution Check and justify each violation in Complexity Tracking.
 
-**Version**: 2.0.2 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-18
+**Version**: 3.0.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-24
+
+**3.0.0** (2026-09-24): A publication MAY edit one review's body instead of creating a review. This is MAJOR because it redefines what Principle II's one request may do (owner, 2026-09-25). The preamble and Principle II said a publication posts exactly one review, and sticky mode edits the review an earlier round posted so a pull request's timeline holds one loupe review instead of one per round (specs/025-sticky-review). The one-request rule, the COMMENT-only rule for an unattended review and the unattended marking are unchanged. An edit MUST show the human the whole replacement body, because it overwrites words already published under their name.
 
 **2.0.2** (2026-09-18): Principle II now covers the review body's opening prose and not only its findings. The title always claimed it; the text left the one paragraph a reader sees first to an agent, which the human then published verbatim under their own name (specs/013-human-message).

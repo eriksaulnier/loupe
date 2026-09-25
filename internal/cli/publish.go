@@ -76,16 +76,36 @@ replay and recovery still apply. --action defaults to comment and MUST NOT be se
 current branch's pull request is never used. The review is posted by the App, numbered from the
 pull request's own bot reviews, and marked unattended in its footer and loupe-meta.
 
+--sticky keeps one review per pull request current, with or without --unattended. The first
+sticky round posts a review. Each later round replaces that review's body: the new round on top,
+and every earlier round collapsed below it, newest first. The review edited is your newest loupe
+review on the pull request when it is sticky, or unattended, the newest one a [bot] posted from
+the same loupe capture --source, version aside. A plain loupe review you post after a sticky one
+ends that series, and the next sticky round starts a new review. Each unattended pipeline on a
+repository MUST use its own --source name: two sharing one pick or mix each other's reviews.
+Unattended --sticky refuses a run captured without one, and an unattended edit GitHub refuses as
+not its own names --source as the fix. An edit sends no notification, and the review keeps the
+first round's commit. The confirmation shows the whole new body, earlier rounds included, and
+names the review it edits. If that review changes on GitHub before y, nothing is sent and publish
+refuses with changed. When the earlier rounds would take the body past GitHub's length limit, the
+oldest are dropped and the body says how many. --action defaults to comment, --inline stays at its
+default none, and any other value of either refuses with usage: an edit cannot change a review's
+state, and an inline comment stays on the review that created it. A sticky review loupe cannot
+read back, such as one reworded on GitHub, refuses with sticky; publish once without --sticky,
+which ends the series, and the next sticky round starts a new review. loupe review's own publish
+step never edits a review.
+
 Result (--json), alone on stdout while the confirmation draws on stderr:
   {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "author": "reviewer", "reviewId": 123,
    "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true,
-   "unattended": false}
+   "unattended": false, "edited": false}
 A receipt replay has "sent": false and "replayed": true; a canceled publish has only "sent": false.
-unattended says whether --unattended composed the review. author is the login GitHub returned for
-it, absent when the receipt predates loupe recording it.`
+unattended says whether --unattended composed the review. edited says whether it replaced the body
+of a review an earlier sticky round posted. author is the login GitHub returned for the review,
+absent when the receipt predates loupe recording it.`
 
-const publishUsage = "loupe publish <ref> --action comment|approve|request-changes [--inline none|blocking|all]"
+const publishUsage = "loupe publish <ref> --action comment|approve|request-changes [--inline none|blocking|all] [--sticky]"
 
 func newPublishCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -103,6 +123,7 @@ func newPublishCmd(deps Deps) *cobra.Command {
 	cmd.Flags().Bool("retry-unknown", false, "send again after an unknown outcome that matches no review on the pull request")
 	cmd.Flags().Bool("plain", false, "confirm on one line instead of the full-screen view")
 	cmd.Flags().Bool("unattended", false, "publish with no terminal, confirmation or viewer recheck, from a GitHub App installation token")
+	cmd.Flags().Bool("sticky", false, "edit your sticky review on the pull request in place instead of posting a new one")
 	return cmd
 }
 
@@ -111,6 +132,18 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	inline, _ := cmd.Flags().GetString("inline")
 	plain, _ := cmd.Flags().GetBool("plain")
 	unattended, _ := cmd.Flags().GetBool("unattended")
+	sticky, _ := cmd.Flags().GetBool("sticky")
+	if sticky {
+		// An edit cannot change a review's state, and an inline comment stays on the review that created it, so a
+		// sticky review is a comment with its findings in the body alone.
+		if action != "" && action != "comment" {
+			return refusal.New(refusal.Usage, fmt.Sprintf("--sticky only publishes as comment, got --action %q", action), "--sticky --action comment")
+		}
+		if inline != "none" {
+			return refusal.New(refusal.Usage, fmt.Sprintf("--sticky publishes no inline comments, got --inline %q", inline), "--sticky --inline none")
+		}
+		action = "comment"
+	}
 	if unattended {
 		if action != "" && action != "comment" {
 			return refusal.New(refusal.Usage, fmt.Sprintf("--unattended only publishes as comment, got --action %q", action), publishUsage)
@@ -150,7 +183,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	jsonMode := wantJSON(cmd)
 	ui := interactiveOutput(deps, jsonMode)
 	receipt, replayed, err := publish.Run(cmd.Context(), publish.Options{
-		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, Unattended: unattended, RetryUnknown: retryUnknown,
+		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, Unattended: unattended, RetryUnknown: retryUnknown, Sticky: sticky,
 		Confirm: func(preview publish.Preview) (publish.Confirmation, error) {
 			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
 			width, height := terminalSize(deps)
@@ -179,7 +212,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	}
 	if jsonMode {
 		payload := map[string]any{"sent": !replayed, "reviewUrl": receipt.ReviewURL, "reviewId": receipt.ReviewID,
-			"unattended": receipt.Envelope.Unattended()}
+			"unattended": receipt.Envelope.Unattended(), "edited": receipt.Edited}
 		if receipt.Author != "" {
 			payload["author"] = receipt.Author
 		}
@@ -194,7 +227,11 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 // printPublished reports on stderr and prints the review URL alone on stdout, which is what a script reads.
 func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bool) error {
 	s := deps.errStyle()
-	outcome := s.Good.Bold(true).Render(s.Glyphs.Published + " published")
+	verb := "published"
+	if receipt.Edited {
+		verb = "edited"
+	}
+	outcome := s.Good.Bold(true).Render(s.Glyphs.Published + " " + verb)
 	detail := ref.String()
 	if inline := len(receipt.Envelope.Comments); inline > 0 {
 		detail += fmt.Sprintf("  %s %d inline %s", s.Dim.Render("action "+receipt.Action), inline, plural(inline, "comment"))
@@ -202,7 +239,7 @@ func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bo
 		detail += "  " + s.Dim.Render("action "+receipt.Action)
 	}
 	if replayed {
-		outcome = s.Good.Bold(true).Render(s.Glyphs.Published + " already published")
+		outcome = s.Good.Bold(true).Render(s.Glyphs.Published + " already " + verb)
 		detail = s.Dim.Render(fmt.Sprintf("%s was posted on %s", ref.String(), receipt.PostedAt.UTC().Format("2006-01-02 at 15:04 UTC")))
 	}
 	if _, err := fmt.Fprintf(deps.Stderr, "%s  %s\n", outcome, detail); err != nil {

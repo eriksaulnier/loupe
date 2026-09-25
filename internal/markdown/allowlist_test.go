@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -144,5 +145,33 @@ func TestOpenDetailsTreatsALoneCarriageReturnAsALineBreak(t *testing.T) {
 	got := OpenDetails("a\r```\n<details>\n```")
 	if strings.Contains(got, "<details open>") {
 		t.Errorf("fenced <details> was opened: %q", got)
+	}
+}
+
+func TestStructuralLines(t *testing.T) {
+	cases := []struct {
+		name, in string
+		want     []int
+	}{
+		{"plain lines, blanks skipped", "a\n\nb", []int{0, 2}},
+		{"backtick fence content and fences", "a\n```\n<!-- x -->\n```\nb", []int{0, 4}},
+		{"tilde fence closed only by its own length", "~~~~\n~~~\n<!-- x -->\n~~~~\n<!-- x -->", []int{4}},
+		{"indented four spaces is code", "a\n\n    <!-- x -->", []int{0}},
+		{"indented inside an html block counts", "<details>\n    <!-- x -->", []int{0, 1}},
+		{"crlf is normalized", "a\r\n```\r\nb\r\n```\r\nc", []int{0, 4}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			lines, structural := StructuralLines(c.in)
+			var got []int
+			for i, ok := range structural {
+				if ok {
+					got = append(got, i)
+				}
+			}
+			if len(lines) != len(structural) || !slices.Equal(got, c.want) {
+				t.Fatalf("StructuralLines(%q) = %v (of %d lines), want %v", c.in, got, len(lines), c.want)
+			}
+		})
 	}
 }

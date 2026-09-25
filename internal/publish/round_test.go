@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -67,11 +68,7 @@ func TestUnattendedRoundCountsBotLoupeReviews(t *testing.T) {
 	gh.AddReview("acme", "widgets", 42, github.Review{User: "some-bot[bot]", CommitID: headSHA, State: "COMMENTED", Body: "not a loupe review"})
 	gh.AddReview("acme", "widgets", 42, github.Review{User: "github-actions[bot]", CommitID: headSHA, State: "PENDING", Body: metaMarker(2)})
 
-	got, err := unattendedRound(context.Background(), client, fixtureTarget())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != 2 {
+	if got := listedRound(t, client); got != 2 {
 		t.Fatalf("unattendedRound = %d, want 2 (a human review and a pending bot review must not count)", got)
 	}
 }
@@ -79,18 +76,38 @@ func TestUnattendedRoundCountsBotLoupeReviews(t *testing.T) {
 func TestUnattendedRoundOfNoBotReviewsIsOne(t *testing.T) {
 	gh, client := newFake(t)
 	gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED", Body: metaMarker(1)})
-	got, err := unattendedRound(context.Background(), client, fixtureTarget())
-	if err != nil || got != 1 {
-		t.Fatalf("unattendedRound = %d, %v; want 1", got, err)
+	if got := listedRound(t, client); got != 1 {
+		t.Fatalf("unattendedRound = %d, want 1", got)
 	}
 }
 
 func TestUnattendedRoundRefusesOnListFailure(t *testing.T) {
 	gh, client := newFake(t)
 	gh.Fail("GET", "/repos/acme/widgets/pulls/42/reviews", 502)
-	_, err := unattendedRound(context.Background(), client, fixtureTarget())
+	_, err := listReviews(context.Background(), client, fixtureTarget(), "number this round")
 	wantRefusal(t, err, refusal.GitHub, prLink)
 	if n := gh.CreateCount(); n != 0 {
 		t.Fatalf("create count %d, nothing must be sent", n)
+	}
+}
+
+func listedRound(t *testing.T, client github.Client) int {
+	t.Helper()
+	reviews, err := listReviews(context.Background(), client, fixtureTarget(), "number this round")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return unattendedRound(reviews)
+}
+
+// A sticky bot review holds K rounds, so it counts K toward the next round's number.
+func TestUnattendedRoundCountsTheRoundsAStickyReviewHolds(t *testing.T) {
+	gh, client := newFake(t)
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "github-actions[bot]", CommitID: headSHA, State: "COMMENTED",
+		Body: "reviewed `x` · unattended\n\n" + metaMarker(1) + "\n"})
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "github-actions[bot]", CommitID: headSHA, State: "COMMENTED",
+		Body: "reviewed `x` · unattended\n\n" + strings.Replace(metaMarker(4), " -->", " sticky=3 -->", 1) + "\n"})
+	if got := listedRound(t, client); got != 5 {
+		t.Fatalf("unattendedRound = %d, want 5", got)
 	}
 }

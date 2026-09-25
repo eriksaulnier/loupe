@@ -28,18 +28,20 @@ const (
 
 // Envelope is the exact review request that was or may have been sent, plus what a later round needs to read back.
 type Envelope struct {
-	Target        EnvelopeTarget    `json:"target"`
-	Viewer        string            `json:"viewer"`
-	Action        string            `json:"action"`
-	Event         string            `json:"event"`
-	CommitID      string            `json:"commitId"`
-	DraftVersion  int               `json:"draftVersion"`
-	Digest        string            `json:"digest"`
-	PublicationID string            `json:"publicationId"`
-	Inline        string            `json:"inline"`
-	Body          string            `json:"body"`
-	Comments      []Comment         `json:"comments"`
-	Findings      []EnvelopeFinding `json:"findings"`
+	Target        EnvelopeTarget `json:"target"`
+	Viewer        string         `json:"viewer"`
+	Action        string         `json:"action"`
+	Event         string         `json:"event"`
+	CommitID      string         `json:"commitId"`
+	DraftVersion  int            `json:"draftVersion"`
+	Digest        string         `json:"digest"`
+	PublicationID string         `json:"publicationId"`
+	Inline        string         `json:"inline"`
+	// EditReviewID is the review whose body a sticky round replaces, 0 when the publication creates one.
+	EditReviewID int64             `json:"editReviewId,omitempty"`
+	Body         string            `json:"body"`
+	Comments     []Comment         `json:"comments"`
+	Findings     []EnvelopeFinding `json:"findings"`
 }
 
 // Unattended reports whether the envelope was composed by --unattended, which never records a viewer; an attended
@@ -98,6 +100,8 @@ type Receipt struct {
 	Envelope  Envelope  `json:"envelope"`
 	// Author is the login GitHub returned for the review, recorded because an unattended envelope's Viewer is empty.
 	Author string `json:"author,omitempty"`
+	// Edited is set when the publication replaced an earlier review's body rather than creating a review.
+	Edited bool `json:"edited,omitempty"`
 }
 
 // LoadAttempt reports found false only when attempt.json does not exist; a damaged file is a record refusal.

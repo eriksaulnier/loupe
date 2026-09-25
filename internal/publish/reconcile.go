@@ -9,14 +9,22 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
-// Match finds the submitted review an attempt created. The marker must be a whole line so a review that quotes it,
-// such as a reply pasting loupe's body, is not taken for the original; a PENDING review was never submitted. A body
-// edited on GitHub can come back with CRLF line endings.
+// Match finds the submitted review an attempt created or edited. The marker must be a whole line so a review that
+// quotes it, such as a reply pasting loupe's body, is not taken for the original; a PENDING review was never submitted.
+// A body edited on GitHub can come back with CRLF line endings.
 func Match(reviews []github.Review, attempt Attempt) (github.Review, bool) {
 	env := attempt.Envelope
 	marker := fmt.Sprintf("<!-- loupe digest=%s publication=%s -->", env.Digest, env.PublicationID)
 	for _, r := range reviews {
-		if !authorMatches(r.User, env) || r.CommitID != env.CommitID || r.State == "PENDING" {
+		if !authorMatches(r.User, env) || r.State == "PENDING" {
+			continue
+		}
+		// An edit cannot change a review's commit_id.
+		if env.EditReviewID != 0 {
+			if r.ID != env.EditReviewID {
+				continue
+			}
+		} else if r.CommitID != env.CommitID {
 			continue
 		}
 		for _, line := range strings.Split(r.Body, "\n") {
@@ -55,5 +63,5 @@ func Reconcile(ctx context.Context, gh github.Client, attempt Attempt) (*Receipt
 		return nil, nil
 	}
 	return &Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: attempt.Envelope.Action,
-		PostedAt: attempt.StartedAt, Envelope: attempt.Envelope, Author: review.User}, nil
+		PostedAt: attempt.StartedAt, Envelope: attempt.Envelope, Author: review.User, Edited: attempt.Envelope.EditReviewID != 0}, nil
 }

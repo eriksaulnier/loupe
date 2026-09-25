@@ -132,7 +132,7 @@ func TestAttendedPublishKeepsItsFieldsAndAddsTheNewOnes(t *testing.T) {
 	}
 	got := payloadKeys(sent)
 	if got["sent"] != true || got["reviewUrl"] == nil || got["reviewId"] == nil || got["unattended"] != false ||
-		got["author"] != "reviewer" || len(got) != 5 {
+		got["author"] != "reviewer" || got["edited"] != false || len(got) != 6 {
 		t.Fatalf("attended publish carries %v", got)
 	}
 	h.checkSends(1)

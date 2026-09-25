@@ -1,6 +1,6 @@
 # The published comment format
 
-loupe publishes one GitHub review per round. Where this document and `specs/001-loupe-v1/spec.md` disagree, the spec wins and the conflict is a bug here.
+loupe publishes one GitHub review per round, or with `--sticky` keeps one review per pull request and edits it each round (see Sticky reviews). Where this document and `specs/001-loupe-v1/spec.md` disagree, the spec wins and the conflict is a bug here.
 
 - This is the contract for what that review contains: the finding vocabulary, how the body is composed, and what authored Markdown is accepted.
 - It was iterated against real GitHub rendering; the observations behind its rules are in [github-facts.md](github-facts.md).
@@ -240,6 +240,7 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 - **`unattended=1` follows `round=` only on a review `loupe publish --unattended` sent**, directly before `src=` when both are present (`specs/007-unattended-publish/spec.md` FR-016). It is also how `loupe publish --unattended` counts a pull request's earlier rounds for `N` (FR-015), alongside the review's author ending `[bot]`.
 - **`src=` follows `round=`, or `unattended=1` when present, only when capture recorded a source**, as given (`src=gadfly-review-pr@2.2.0`). It is never escaped, so capture refuses a source that does not match `^[a-z0-9][a-z0-9._-]*(@[0-9][0-9A-Za-z.+-]*)?$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. None of those can close the comment.
 - **`model=` follows `src=`, or sits where `src=` would, only when capture recorded a model** with `loupe capture --model`, as given (`model=anthropic/claude-sonnet-5`). It is never escaped, so capture refuses a model that does not match `^[a-z0-9][a-z0-9._/:-]*$`, is over 64 characters, or contains `--`, and every command refuses a `target.json` carrying one. The footer shows the same id (see Footer), and this key is unchanged by it.
+- **`sticky=K` is the last key, only on a sticky review**, where `K` counts every round published into it, dropped ones included (`specs/025-sticky-review`). A review without the key is not sticky. See Sticky reviews.
 - New keys MAY be added to `loupe-meta`; existing keys MUST keep their meaning. **`round=` is the one recorded exception:** it carries `N`, this review's position among the pull request's publications (FR-042), where it once carried the run's round. Outside the shared-`N` case below, a pull request with no abandoned round reads identically under both, and `round=` still rises with each review a pull request publishes, so a reader that takes the highest as live picks the newest review. Since `specs/009-review-footer` the marker is the only place `N` appears, so the three rules that follow are a key for tooling and never something a reader of the review is asked to reconcile.
 - **`N` counts publications, not captures.** It is 1 plus the number of the pull request's *other* rounds holding a receipt or an attempt, so a round captured and abandoned unpublished does not advance it, and it MAY be lower than the run's round. An attempt counts because its review may already be on GitHub, so no other round reuses its number while the attempt stands, at the cost of a skipped number when an unknown attempt never landed. Other rounds count rather than earlier ones, so an older round that publishes after a newer one still gets the higher number.
 - **An unattended review counts differently.** `loupe publish --unattended` has no local round state to count, so its `N` is 1 plus the pull request's reviews by a `[bot]` author carrying a `loupe-meta` marker (`specs/007-unattended-publish/spec.md` FR-015). On a pull request reviewed both ways the two counters are disjoint: a human's review and a bot's MAY carry the same `N`, and a bot's `N` MAY be lower than the human `N` before it. The author and the ` · unattended` segment are what tell them apart.
@@ -256,9 +257,67 @@ Two HTML comments, both shipped in the payload and both visible in raw Markdown 
 | `all` | every published, located finding |
 
 - The body is always complete regardless of mode.
+- A sticky review is always `none`, since an inline comment belongs to the review that created it and could not follow the body as it is edited.
 - General findings, those with no location, are never inline.
 - Excluded and withdrawn findings appear in neither the body nor `comments[]`.
 - An inline comment's body is the finding rendered as it appears inside its disclosure (the summary line as the first line, then the meta block without its location line, then the impact, body, suggested fix and references), without the `<details>` wrapper.
+
+## Sticky reviews
+
+`loupe publish --sticky` keeps one loupe review per pull request current (`specs/025-sticky-review`). The first sticky round creates a `COMMENT` review with no inline comments. Each later round replaces that review's body in place, and nothing else about it. The body shows the newest round on top and each earlier round collapsed below it.
+
+````markdown
+`🔵 1 question`
+
+The blocking issue is fixed; one question left.
+
+---
+
+### Worth a look
+
+<details>…</details>
+
+---
+
+<!-- loupe-earlier -->
+
+### Earlier rounds
+
+<!-- loupe-round -->
+
+<details>
+<summary>Round 1 · reviewed <code>aaaaaaa</code> · ⛔ 1 blocking</summary>
+
+### Must fix
+
+<details>…</details>
+
+<!-- loupe digest=<sha256> publication=<uuid> -->
+
+</details>
+
+---
+
+reviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`
+
+<!-- loupe digest=<sha256> publication=<uuid> -->
+<!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=none blocking=0 issues=0 suggestions=0 questions=1 other=0 excluded=0 withdrawn=0 reinstated=0 regraded=0 sticky=2 -->
+````
+
+- **The newest round is composed exactly as an ordinary review with `--inline none`**: chips, opening prose, `Must fix`, `Worth a look`. The footer and both markers end the body as on any review, and describe the newest round.
+- **`### Earlier rounds` sits between the newest round and the footer's divider**, only when the review holds an earlier round or dropped one. It holds one `<details>` per earlier round, newest first.
+- **An earlier round's `<summary>` reads `Round N · reviewed <code>SHA</code> · CHIPS`.** `N` is the round's place in the sticky review, 1 for the first sticky round, never loupe's `round=`, which can start above 1. `SHA` is its footer's commit. `CHIPS` is its chips row as text, each chip joined by ` · `, or `no findings` when the round published none. Its section holds the rest of the round as it read when it was on top: its prose and sections, then its reconciliation marker. Its chips row and footer line are dropped, since the summary carries both, and so is the divider that separated the chips from the first section when no prose sat between. Its `loupe-meta` is dropped too, so a body carries one. The reconciliation marker stays, so an interrupted publish of that round still reconciles after a later round edited over it.
+- **A body published before this format** (its collapsed rounds keep their footer and a chips line inside) still reads back. Its collapsed rounds are carried as they are, and only their `Round N` is renumbered by place.
+- **Two hidden comment lines delimit the rounds**: `<!-- loupe-earlier -->` opens the section, and `<!-- loupe-round -->` precedes each round. loupe reads a sticky body back by these lines and by the generated tail (divider, footer, reconciliation marker, `loupe-meta`), and only on lines outside a fence. The allowlist refuses an HTML comment outside a fence in every authored field, so authored text can quote a delimiter but never move a round boundary. A body that has lost that structure, such as one reworded on GitHub, is refused with `sticky` rather than guessed at. That includes text added to the footer or before the first collapsed round, a collapsed round that is not one `<details>` under loupe's `<summary>Round N · …</summary>` line, and collapsed rounds plus dropped ones that do not add up to `K − 1`, since the next edit would otherwise lose a round without saying so.
+- **When the earlier rounds would take the body past 65,536 characters, the oldest are dropped first**. GitHub was observed to accept an edit of up to 262,144 UTF-8 bytes, and 65,536 characters never exceed that, so the bound is conservative by design, and the section opens with `The oldest round was dropped to fit GitHub's length limit.` or `The N oldest rounds were dropped to fit GitHub's length limit.` A dropped round's reconciliation marker goes with it. When the newest round alone is over the limit, publish refuses with `limit` as for any review.
+- **Two publications that edit the same review at once race.** Each reads the same body and the later edit wins, so the earlier one's round is lost from the history. loupe sends no precondition with the edit and does not lock across machines. The attended recheck after `y` narrows the window but cannot close it, and a pipeline's concurrency group is the guard.
+- **An edit is silent.** GitHub sends no notification for a body edit, and a round posts nothing to announce itself. Whether GitHub notifies is unverified (`docs/github-facts.md`).
+- **The review keeps the first round's commit and state.** An edit cannot change `commit_id` or the event, which is why a sticky review is `COMMENT` only: a `REQUEST_CHANGES` would outlive the round that asked for it. The footer names the newest round's commit.
+- **A plain loupe review ends a sticky series.** When the publisher's newest loupe review carries no `sticky=`, the next sticky round creates a new sticky review. That is also how a sticky review loupe cannot read back is left behind: publish once without `--sticky`.
+- **The review edited is the publisher's newest sticky review**: the viewer's own, or unattended, the newest `[bot]` review whose `src=` name, the part before any `@`, matches the source the round's capture recorded. An installation token cannot read its own login, so the source is what tells one App's review from another's, and an unattended `--sticky` round with no source is refused. Each unattended pipeline on a repository MUST use its own source name, since two sharing one pick or mix each other's reviews. An attended round never edits another person's review, and reviews without `sticky=` are left as they are. Two Apps that record the same source name MAY still pick each other's review, and GitHub is expected to refuse that edit, which is unverified.
+- **Several publishers on one pull request each keep their own sticky review.** A collapsed round's `Round N` counts only that review's rounds. An unattended `round=` still counts every App's loupe reviews, as the bullet on unattended numbering above says.
+- **Numbering.** `round=` is the newest round's `N`. Attended, `N` is counted from local receipts as for any review. Unattended, a sticky bot review counts as the `K` rounds its `sticky=K` records, and any other bot loupe review as one.
+- **A collapsed round nests its findings' `<details>` one level deeper** than the allowlist's bound assumes, 17 levels at most. GitHub was observed to render 17 levels (`docs/github-facts.md`).
 
 ## The supported Markdown boundary
 

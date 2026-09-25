@@ -14,6 +14,20 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - A pull request author cannot approve or request changes on their own pull request; the API rejects it with 422. loupe refuses before sending.
 - `GET /repos/{owner}/{repo}/pulls/{number}/reviews` lists submitted reviews with `user.login`, `commit_id`, `state` and `body`. Pending reviews of the viewer appear with state `PENDING`; they MUST NOT count as submitted during reconciliation.
 
+## Review edits
+
+`loupe publish --sticky` (`specs/025-sticky-review`) edits a review's body. Observed 2026-09-24 and 2026-09-25 on `eriksaulnier/loupe-probe#1` with a user token. The remaining assumptions are listed after, with their probes in the spec's plan.
+
+- Observed: `PUT /repos/{owner}/{repo}/pulls/{number}/reviews/{review_id}` with `{"body": …}` replaced the body of submitted `COMMENTED` review 5311900201. `state` stayed `COMMENTED`, `commit_id` stayed `51917aa`, `submitted_at` did not change, and the response was the review.
+- Observed: review 5160288969, submitted 2026-09-09, 15 days before the probe, was edited the same way and then restored. No time limit was seen.
+- Observed: an edit accepted a body of up to 262,144 UTF-8 bytes and refused 262,145 bytes or more with 422 `Body is too long (maximum is 65536 characters)`. The error text does not match the limit. The byte count held for ASCII (262,144 characters accepted), `é` (131,072 accepted, 131,073 refused), `€` (87,381 accepted, 87,382 refused) and a 4-byte emoji (65,536 accepted, 65,537 refused). So 65,536 characters, at most 4 bytes each, always fits.
+- Observed: review creation also accepted more than 65,536 characters. A 69,991-character body was accepted as review 5311910251, and 262,145 bytes was refused with the same 422. Its exact bound was not searched.
+- Observed: a body of 17 nested `<details>` rendered in `body_html` as 17 `<details>` and 17 `<summary>`, with the innermost text present and no tag escaped.
+- Observed end to end: `loupe publish --sticky` posted review 5311993789 (`sticky=1`, `inline=none`). The next round edited it in place (`sticky=2`). No new review appeared, `state` and `commit_id` were unchanged, and round 1 rendered as a collapsed earlier round.
+- Assumed: an edit works the same with an installation token, such as a workflow's `GITHUB_TOKEN`.
+- Assumed: an edit sends no notification to the pull request's participants.
+- Assumed: an edit to a review the caller did not author is refused with a 4xx. Whether that is 403 or 404 is unknown. loupe's fake answers 403.
+
 ## Inline review comments
 
 - Each entry in `comments[]` takes `path`, `line`, `side` (`RIGHT` for the new file, `LEFT` for the old) and optionally `start_line` and `start_side` for a range. `position` is the deprecated alternative; loupe uses `line`.

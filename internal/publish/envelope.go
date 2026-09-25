@@ -7,6 +7,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/findingid"
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
@@ -20,8 +21,8 @@ var (
 
 var events = map[string]string{"comment": "COMMENT", "approve": "APPROVE", "request-changes": "REQUEST_CHANGES"}
 
-// maxBodyChars is the owner's reading of GitHub's limit on a review or comment body; longer bodies are believed to be
-// rejected with 422.
+// maxBodyChars is the number GitHub's 422 names. GitHub was observed to count 262,144 UTF-8 bytes instead, which
+// 65,536 characters never exceed, so a body under this bound is never refused for length (docs/github-facts.md).
 const (
 	maxBodyChars = 65536
 	limitFix     = "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -"
@@ -48,6 +49,16 @@ type BuildInput struct {
 	// Message is the human's own opening prose, typed at the confirmation. It fills the slot the draft's summary
 	// fills unattended, and is empty when they typed none.
 	Message string
+	// Sticky composes a body later rounds edit in place; nil composes an ordinary review.
+	Sticky *StickyBuild
+}
+
+// StickyBuild is the sticky review a round edits, or a zero Review when the round creates it.
+type StickyBuild struct {
+	Review github.Review
+	// Rounds counts this round too.
+	Rounds  int
+	Earlier []string
 }
 
 // Build composes the review from the accepted findings, or, when unattended, the whole publishable set. It rechecks
@@ -106,6 +117,7 @@ func Build(in BuildInput) (Envelope, error) {
 		Digest:        draft.Digest(d),
 		PublicationID: in.PublicationID,
 		Inline:        in.Inline,
+		EditReviewID:  editReviewID(in.Sticky),
 		Comments:      []Comment{},
 		Findings:      []EnvelopeFinding{},
 	}
@@ -137,11 +149,26 @@ func Build(in BuildInput) (Envelope, error) {
 			env.Comments = append(env.Comments, Comment{Path: c.Path, Line: c.Line, Side: c.Side, StartLine: c.StartLine, StartSide: c.StartSide, Body: c.Body})
 		}
 	}
+	if in.Sticky != nil {
+		r.Sticky = &render.StickyInput{Rounds: in.Sticky.Rounds, Earlier: in.Sticky.Earlier}
+	}
 	env.Body = render.Body(r)
+	// The oldest collapsed rounds give way first, so a pull request with many rounds never stops a sticky review.
+	for r.Sticky != nil && len(r.Sticky.Earlier) > 0 && utf8.RuneCountInString(env.Body) > maxBodyChars {
+		r.Sticky.Earlier = r.Sticky.Earlier[:len(r.Sticky.Earlier)-1]
+		env.Body = render.Body(r)
+	}
 	if n := utf8.RuneCountInString(env.Body); n > maxBodyChars {
 		return Envelope{}, limitRefusal(fmt.Sprintf("the composed review body is %d characters; at most %d characters are allowed", n, maxBodyChars))
 	}
 	return env, nil
+}
+
+func editReviewID(s *StickyBuild) int64 {
+	if s == nil {
+		return 0
+	}
+	return s.Review.ID
 }
 
 func limitRefusal(message string) error {

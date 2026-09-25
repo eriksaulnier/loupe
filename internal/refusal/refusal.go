@@ -30,6 +30,7 @@ const (
 	Empty      Code = "empty"
 	Attempt    Code = "attempt"
 	Changed    Code = "changed"
+	Sticky     Code = "sticky"
 	Viewer     Code = "viewer"
 	Timeout    Code = "timeout"
 	GitHub     Code = "github"

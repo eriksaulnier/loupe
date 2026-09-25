@@ -35,6 +35,8 @@ type Input struct {
 	// Excluded, Withdrawn, Reinstated and Regraded are draft.GateCountsOf, over the whole draft, published findings
 	// included.
 	Excluded, Withdrawn, Reinstated, Regraded int
+	// Sticky marks a body that later rounds edit in place; nil is an ordinary review.
+	Sticky *StickyInput
 }
 
 type Finding struct {
@@ -111,6 +113,12 @@ func Body(in Input) string {
 		blocks = append(blocks, sectionBlock("Worth a look", rest, in))
 	}
 
+	if in.Sticky != nil {
+		if earlier := earlierSection(*in.Sticky); earlier != "" {
+			blocks = append(blocks, earlier)
+		}
+	}
+
 	census := [4]int{}
 	for _, f := range in.Findings {
 		census[group(f.Label)]++
@@ -134,11 +142,15 @@ func Body(in Input) string {
 	if in.Model != "" {
 		meta += " model=" + in.Model
 	}
+	sticky := ""
+	if in.Sticky != nil {
+		sticky = fmt.Sprintf(" sticky=%d", in.Sticky.Rounds)
+	}
 	blocks = append(blocks, fmt.Sprintf("%s\n\n<!-- loupe digest=%s publication=%s -->\n"+
-		MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d excluded=%d withdrawn=%d reinstated=%d regraded=%d -->\n",
+		MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d excluded=%d withdrawn=%d reinstated=%d regraded=%d%s -->\n",
 		footer, in.Digest, in.PublicationID,
 		meta, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther],
-		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded))
+		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded, sticky))
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
 	return strings.Join(blocks, "\n\n---\n\n")

@@ -65,14 +65,34 @@ replay and recovery still apply. --action defaults to comment and MUST NOT be se
 current branch's pull request is never used. The review is posted by the App, numbered from the
 pull request's own bot reviews, and marked unattended in its footer and loupe-meta.
 
+--sticky keeps one review per pull request current, with or without --unattended. The first
+sticky round posts a review. Each later round replaces that review's body: the new round on top,
+and every earlier round collapsed below it, newest first. The review edited is your newest loupe
+review on the pull request when it is sticky, or unattended, the newest one a [bot] posted from
+the same loupe capture --source, version aside. A plain loupe review you post after a sticky one
+ends that series, and the next sticky round starts a new review. Each unattended pipeline on a
+repository MUST use its own --source name: two sharing one pick or mix each other's reviews.
+Unattended --sticky refuses a run captured without one, and an unattended edit GitHub refuses as
+not its own names --source as the fix. An edit sends no notification, and the review keeps the
+first round's commit. The confirmation shows the whole new body, earlier rounds included, and
+names the review it edits. If that review changes on GitHub before y, nothing is sent and publish
+refuses with changed. When the earlier rounds would take the body past GitHub's length limit, the
+oldest are dropped and the body says how many. --action defaults to comment, --inline stays at its
+default none, and any other value of either refuses with usage: an edit cannot change a review's
+state, and an inline comment stays on the review that created it. A sticky review loupe cannot
+read back, such as one reworded on GitHub, refuses with sticky; publish once without --sticky,
+which ends the series, and the next sticky round starts a new review. loupe review's own publish
+step never edits a review.
+
 Result (--json)  alone on stdout while the confirmation draws on stderr
   {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "author": "reviewer", "reviewId": 123,
    "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123", "sent": true,
-   "unattended": false}
+   "unattended": false, "edited": false}
 A receipt replay has "sent": false and "replayed": true; a canceled publish has only "sent": false.
-unattended says whether --unattended composed the review. author is the login GitHub returned for
-it, absent when the receipt predates loupe recording it.
+unattended says whether --unattended composed the review. edited says whether it replaced the body
+of a review an earlier sticky round posted. author is the login GitHub returned for the review,
+absent when the receipt predates loupe recording it.
 
 Flags
       --action string   review action: comment, approve or request-changes
@@ -80,6 +100,7 @@ Flags
       --inline string   located findings that also become inline comments: none, blocking or all (default "none")
       --plain           confirm on one line instead of the full-screen view
       --retry-unknown   send again after an unknown outcome that matches no review on the pull request
+      --sticky          edit your sticky review on the pull request in place instead of posting a new one
       --unattended      publish with no terminal, confirmation or viewer recheck, from a GitHub App installation token
       --json   print exactly one JSON result object on stdout
 

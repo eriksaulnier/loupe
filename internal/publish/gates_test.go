@@ -28,11 +28,13 @@ type tokenKindClient struct {
 
 func (c tokenKindClient) TokenKind() github.TokenKind { return c.kind }
 
-// assertOnlyCreateWrites fails if the fake received any write other than review creation.
+// assertOnlyCreateWrites fails if the fake received any write other than creating a review or editing one's body.
 func assertOnlyCreateWrites(t *testing.T, gh *fakegh.Server) {
 	t.Helper()
 	for _, r := range gh.Requests() {
-		if r.Method != "GET" && (r.Method != "POST" || r.Path != "/repos/acme/widgets/pulls/42/reviews") {
+		create := r.Method == "POST" && r.Path == "/repos/acme/widgets/pulls/42/reviews"
+		edit := r.Method == "PUT" && strings.HasPrefix(r.Path, "/repos/acme/widgets/pulls/42/reviews/")
+		if r.Method != "GET" && !create && !edit {
 			t.Errorf("unexpected write %s %s", r.Method, r.Path)
 		}
 	}
