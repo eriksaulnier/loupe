@@ -89,10 +89,11 @@ func TestBodyGoldens(t *testing.T) {
 		"unlabeled-blocking.md": base(general("f-001", "", true)),
 		"left-side.md": base(Finding{ID: "f-001", Title: "Removed guard", Body: "Body.", Label: "issue",
 			Location: &Location{Path: "a.go", Side: "LEFT", Line: 24, StartLine: 21}}),
-		"hostile.md": hostile,
-		"sourced.md": sourced,
-		"modeled.md": modeled,
-		"sticky.md":  stickyGoldenInput(t),
+		"hostile.md":      hostile,
+		"sourced.md":      sourced,
+		"modeled.md":      modeled,
+		"sticky.md":       stickyGoldenInput(t),
+		"sticky-three.md": stickyThreeGoldenInput(t),
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -15,6 +15,7 @@ func TestPublishStickyUnattendedKeepsOneReview(t *testing.T) {
 	h.GH.SetViewer("github-actions[bot]")
 	summaries := []string{"First look.", "Second look.", "Third look."}
 	var edited []any
+	var bodies []string
 	for i, summary := range summaries {
 		h.Home = filepath.Join(t.TempDir(), "home")
 		h.IsTerminal = true
@@ -27,6 +28,11 @@ func TestPublishStickyUnattendedKeepsOneReview(t *testing.T) {
 			t.Fatalf("round %d: %v", i+1, sent)
 		}
 		edited = append(edited, sent["edited"])
+		reviews, err := h.GH.Client(t).ListReviews(context.Background(), owner, repo, number)
+		if err != nil || len(reviews) != 1 {
+			t.Fatalf("round %d: reviews %d err %v, want one", i+1, len(reviews), err)
+		}
+		bodies = append(bodies, reviews[0].Body)
 	}
 	if edited[0] != false || edited[1] != true || edited[2] != true {
 		t.Fatalf("edited per round %v, want false, true, true", edited)
@@ -53,6 +59,15 @@ func TestPublishStickyUnattendedKeepsOneReview(t *testing.T) {
 		}
 	}
 	at("round=3 unattended=1")
+	// Each collapsed round is one quote with no divider, and a round already collapsed is carried as it is.
+	oldest := func(body string) string {
+		return body[strings.Index(body, "<details>\n<summary>Round 1 · "):strings.LastIndex(body, "\n\n<!-- loupe digest=")]
+	}
+	round1 := oldest(bodies[1])
+	if !strings.Contains(round1, "</summary>\n\n> First look.\n>\n") || strings.Contains(round1, "\n---\n") || oldest(body) != round1 {
+		t.Fatalf("round 1 in round 2's body:\n%s\n\nin round 3's body:\n%s", round1, oldest(body))
+	}
+	at("</summary>\n\n> Second look.\n>\n")
 	if !strings.HasSuffix(strings.TrimSpace(body), " sticky=3 -->") {
 		t.Fatalf("marker does not number round 3 of 3:\n%s", body[len(body)-300:])
 	}

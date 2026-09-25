@@ -123,6 +123,13 @@ func TestOpenDetails(t *testing.T) {
 		{"indented four spaces is code", "text\n\n    <details>", "text\n\n    <details>"},
 		{"inline, not a tag line", "see <details> here", "see <details> here"},
 		{"fence line inside an html block is not a fence", "<details>\n```\n<details>", "<details open>\n```\n<details open>"},
+		// A collapsed sticky round is quoted, and its disclosures open as they do outside a quote.
+		{"quoted tag line", "> <details>\n> <summary>x</summary>\n>\n> </details>", "> <details open>\n> <summary>x</summary>\n>\n> </details>"},
+		{"quote inside a quote", "> > <details>", "> > <details open>"},
+		{"quote marker without its space", "><details>", "><details open>"},
+		{"inside a quoted fence", "> ```\n> <details>\n> ```\n>\n> <details>", "> ```\n> <details>\n> ```\n>\n> <details open>"},
+		{"a quote inside a fence is text", "```\n> <details>\n```", "```\n> <details>\n```"},
+		{"quoted, indented four spaces is code", "> text\n>\n>     <details>", "> text\n>\n>     <details>"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -130,6 +137,14 @@ func TestOpenDetails(t *testing.T) {
 				t.Fatalf("OpenDetails(%q) = %q, want %q", c.in, got, c.want)
 			}
 		})
+	}
+}
+
+func TestMapSummaryLinesReadsQuotedLines(t *testing.T) {
+	in := "<summary>a</summary>\n\n> <summary>b</summary>\n>\n> ```\n> <summary>c</summary>\n> ```"
+	want := "<summary>a</summary>!\n\n> <summary>b</summary>!\n>\n> ```\n> <summary>c</summary>\n> ```"
+	if got := MapSummaryLines(in, func(line string) string { return line + "!" }); got != want {
+		t.Fatalf("MapSummaryLines(%q) = %q, want %q", in, got, want)
 	}
 }
 
@@ -174,6 +189,13 @@ func TestStructuralLines(t *testing.T) {
 			}
 		})
 	}
+}
+
+// quotedRound is a collapsed sticky round in the quoted layout, with extra inserted before its footer.
+func quotedRound(extra string) string {
+	return "<details>\n<summary>Round 1</summary>\n\n> Prose.\n>\n> ### Must fix\n>\n> <details>\n> <summary>x</summary>\n>\n" +
+		"> > [`a.go:1`](https://example.com)\n>\n> ```\n> </details>\n> <!--\n> ```\n>\n> </details>\n>\n" + extra +
+		"> reviewed `aaaaaaa`\n\n<!-- loupe digest=1 publication=2 -->\n\n</details>"
 }
 
 func TestOneDisclosure(t *testing.T) {
@@ -226,10 +248,31 @@ func TestOneDisclosure(t *testing.T) {
 		// The browser ends the round at the first extra close, so later tags cannot bring the count back to zero.
 		{"extra close, then reopened", "<details>\n<summary>x</summary>\n\n</details></details><details><details>\n\n</details>", false},
 		{"closed declaration", "<details>\n<summary>x</summary>\n\n<!x> and <?y>\n\n</details>", true},
+		// A collapsed sticky round quotes its content, so its findings' tags and fences sit behind a quote marker.
+		{"quoted round", quotedRound(""), true},
+		{"stray close inside the quote", quotedRound("> </details>\n>\n"), false},
+		{"extra open inside the quote", quotedRound("> <details>\n>\n"), false},
 	}
 	for _, c := range cases {
 		if err := OneDisclosure(c.in); (err == nil) != c.ok {
 			t.Errorf("%s: OneDisclosure = %v, want ok %v", c.name, err, c.ok)
 		}
+	}
+}
+
+// Only the terminal's display reads through quotes, and loupe nests them two deep, so a tag line deeper than the bound
+// is shown as written rather than paid for once per marker.
+func TestOpenDetailsStopsAtTheQuoteBound(t *testing.T) {
+	within := strings.Repeat("> ", maxQuoteDepth) + "<details>"
+	past := strings.Repeat("> ", maxQuoteDepth+1) + "<details>"
+	if got := OpenDetails(within); got != strings.Repeat("> ", maxQuoteDepth)+"<details open>" {
+		t.Errorf("a tag line at the bound was not opened: %q", got)
+	}
+	if got := OpenDetails(past); got != past {
+		t.Errorf("a tag line past the bound was changed: %q", got)
+	}
+	deep := strings.Repeat(">", 1<<16) + " <details>"
+	if got := OpenDetails(deep); got != deep {
+		t.Error("a line of 65536 markers was changed")
 	}
 }
