@@ -116,11 +116,14 @@ func TestExampleGoldenMatchesDoc(t *testing.T) {
 		return hex.EncodeToString(sum[:])
 	}
 	want := strings.NewReplacer("8f3c…", hash("internal/publish/publish.go"), "5610…", hash("internal/draft/store.go")).Replace(string(m[1]))
-	got, err := os.ReadFile(goldenPath("example.md"))
+	golden, err := os.ReadFile(goldenPath("example.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != want {
+	// The record's data and checksum are pinned by the golden, and the doc shows where the line goes.
+	got := regexp.MustCompile(`(?m)^<!-- loupe-findings v=1 sha256=[0-9a-f]{64} \S+ -->$`).
+		ReplaceAllLiteralString(string(golden), "<!-- loupe-findings v=1 sha256=<sha256> <data> -->")
+	if got != want {
 		t.Fatalf("testdata/golden/example.md differs from the doc example\n--- golden ---\n%s\n--- doc ---\n%s", got, want)
 	}
 }
