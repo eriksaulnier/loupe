@@ -135,7 +135,7 @@ A developer runs the `human-review` workflow on a pull request with an open huma
 
 - **FR-010**: `show --comments` MUST answer from what capture stored, and MUST NOT make any network request.
 - **FR-011**: `show --comments --json` MUST return `reviews`, `threads` and `comments`, each an array, in the shape `contracts/cli.md` documents, with `excludedReviews`, the number of reviews FR-003 left out.
-- **FR-012**: When the run stored a reason, `show --comments` MUST refuse with `not-found` and carry the reason. When the run stored nothing, as for a run captured before this feature, it MUST refuse with `not-found` and say so. Each refusal MUST name `loupe capture` as the fix.
+- **FR-012**: When the run stored a reason, `show --comments` MUST refuse with `not-found` and carry the reason. When the run stored nothing, as for a run captured before this feature, it MUST refuse with `not-found` and say so. Each refusal's fix MUST say that the next `loupe capture` of the pull request reads the comments again, since a capture at an unchanged head refuses with `same-head`.
 - **FR-013**: `--comments` MUST refuse with `usage` when combined with `--previous` or `--diff`.
 - **FR-014**: Without `--json`, `show --comments` MUST print the reviews, threads and comments for a person to read.
 
