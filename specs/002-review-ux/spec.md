@@ -281,7 +281,7 @@ The choice screens MUST use `↑` and `↓` as their advertised controls and ret
 
 The final confirmation MUST remain visually distinct because it is the only screen that can publish.
 
-Only `y` MUST publish, scrolling and payload-toggle keys MUST retain their current behavior, and every other answer MUST continue to cancel without sending.
+Only `y` and `p` MUST publish, and neither MAY publish while the message input holds the keyboard. `p` MUST publish only when the confirmation has a message input, because that screen opens with the input focused, so a `p` pressed by reflex is typed, not sent. Without an input the screen opens on its own keys, where a reflexive `p` would publish before anything was read, so there `p` MUST do nothing, neither publishing nor canceling. The footer MUST name the key as `y/p` where `p` publishes and as `y` where it does not. Scrolling and payload-toggle keys MUST retain their current behavior, and every other answer MUST continue to cancel without sending.
 
 The confirmation MUST continue to show the review as it will read, inline comments, moved-head information when applicable, and the exact request payload through the existing toggle.
 
@@ -308,7 +308,7 @@ These follow the agreed mockup and stay within the intent of the sections above.
 - The file diff marks a line carrying a finding with a one-cell glyph (`◆`, ASCII `*`) instead of the identifier, and its header names the finding under the cursor, with `+N` when the line carries more.
 - The list's counts line keeps three-space gaps when it fits; narrower, zero counts drop and the gaps shrink to two; if it still does not fit, it splits over two lines and the header grows with it.
 - Help taller than the window scrolls with `↑`, `↓`, `Page Up` and `Page Down`; its header then shows `lines a–b of n` and its footer adds `↑/↓ scroll`.
-- When `y publish this review` and `any other key cancels, nothing is sent` do not fit the confirmation footer together, the cancel sentence moves, word for word, to the line above it.
+- When `y/p publish this review` (or `y publish this review` without a message input) and `any other key cancels, nothing is sent` do not fit the confirmation footer together, the cancel sentence moves, word for word, to the line above it.
 - A disabled publish action wraps its reason under the description column rather than clipping it.
 - The final confirmation reads `Publish · Step 3 of 3` inside the review program's publish flow. Opened by `loupe publish`, whose flags replace the two choice steps, it reads `Publish` with no step count.
 
@@ -342,7 +342,7 @@ A future Herdr integration MUST be able to launch the unchanged command `loupe r
 - **UX-008**: The finding footer MUST show only actions valid for the current finding and note state.
 - **UX-009**: Successful settling decisions MUST continue to advance while preventing typeahead from deciding an unseen finding.
 - **UX-010**: Publish choices MUST use unboxed stepped screens with visible descriptions and refusal reasons.
-- **UX-011**: Final confirmation behavior MUST remain unchanged except for presentation and advertised arrow-first scrolling.
+- **UX-011**: Final confirmation behavior MUST remain unchanged except for presentation, advertised arrow-first scrolling, and the confirming keys in §5.5.
 - **UX-012**: Full-screen, plain, Unicode, Nerd, ASCII, color, and `NO_COLOR` modes MUST preserve all security escaping and width guarantees.
 - **UX-013**: No runtime path MAY depend on Herdr or Herdr environment variables. Superseded on 2026-09-15 by `specs/006-agent-plugins` FR-010: `loupe handoff` runs Herdr from `internal/pane`; `loupe review` still has no Herdr path.
 
@@ -357,7 +357,7 @@ A future Herdr integration MUST be able to launch the unchanged command `loupe r
 7. **Given** a finding detail, **When** the human presses `←` or `→`, **Then** the preceding or following finding opens with the same boundary behavior as `N` or `n`.
 8. **Given** a file diff, **When** the human presses `←` or `→`, **Then** the cursor jumps to the preceding or following finding marker with the same boundary behavior as `[` or `]`.
 9. **Given** a successful decision followed immediately by repeated decision input, **When** the next finding has not had time to be displayed, **Then** the repeated decision is dropped and no unseen finding is decided.
-10. **Given** a ready review, **When** the human enters publication, **Then** action and inline choices appear as steps without decorative boxes and final confirmation still publishes only on `y`.
+10. **Given** a ready review, **When** the human enters publication, **Then** action and inline choices appear as steps without decorative boxes and final confirmation publishes only on the keys §5.5 names.
 11. **Given** widths of 60, 79, 80, 99, 100, and 140 columns, **When** every view renders in each glyph and color tier, **Then** no line exceeds the window and required actions remain visible.
 12. **Given** plain mode, a non-UTF-8 locale, or `NO_COLOR`, **When** review runs, **Then** the existing fallback behavior and decision semantics remain unchanged.
 

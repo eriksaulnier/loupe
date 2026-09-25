@@ -384,7 +384,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.opening && msg.Type != tea.KeyCtrlC {
 			return m, nil
 		}
-		// The confirmation comes first so that ctrl+c, like every key but y and the toggles, declines.
+		// The confirmation comes first so that ctrl+c, like every key but y, p and the toggles, declines.
 		if m.view == viewConfirm {
 			return m, m.updateConfirm(msg)
 		}
