@@ -28,6 +28,16 @@ type Request struct {
 	Body any
 }
 
+// Read reports whether the request only reads: a GET, or a GraphQL query, which GitHub takes as a POST.
+func (r Request) Read() bool {
+	if r.Method == http.MethodGet {
+		return true
+	}
+	body, _ := r.Body.(map[string]any)
+	query, _ := body["query"].(string)
+	return r.Method == http.MethodPost && r.Path == "/graphql" && strings.HasPrefix(strings.TrimSpace(query), "query")
+}
+
 type outcomeKind int
 
 const (

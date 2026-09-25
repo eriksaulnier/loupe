@@ -267,3 +267,20 @@ func TestFailAfterFailsALaterPage(t *testing.T) {
 		t.Fatalf("got %v after %d requests", err, len(s.Requests()))
 	}
 }
+
+func TestRequestReadTellsQueriesFromWrites(t *testing.T) {
+	for _, c := range []struct {
+		r    Request
+		want bool
+	}{
+		{Request{Method: http.MethodGet, Path: "/repos/o/r/pulls/3/reviews"}, true},
+		{Request{Method: http.MethodPost, Path: "/graphql", Body: map[string]any{"query": " query($id: ID!) {}"}}, true},
+		{Request{Method: http.MethodPost, Path: "/graphql", Body: map[string]any{"query": "mutation { x }"}}, false},
+		{Request{Method: http.MethodPost, Path: "/repos/o/r/pulls/3/reviews"}, false},
+		{Request{Method: http.MethodPut, Path: "/repos/o/r/pulls/3/reviews/1"}, false},
+	} {
+		if got := c.r.Read(); got != c.want {
+			t.Errorf("%s %s %v: Read %v, want %v", c.r.Method, c.r.Path, c.r.Body, got, c.want)
+		}
+	}
+}

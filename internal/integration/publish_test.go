@@ -43,9 +43,9 @@ func (h *harness) checkSends(want int) {
 		h.t.Errorf("CreateCount %d, want %d", got, want)
 	}
 	for _, r := range h.GH.Requests() {
-		create := r.Method == "POST" && r.Path == "/repos/acme/widgets/pulls/42/reviews"
+		create := !r.Read() && r.Path == "/repos/acme/widgets/pulls/42/reviews"
 		edit := r.Method == "PUT" && strings.HasPrefix(r.Path, "/repos/acme/widgets/pulls/42/reviews/")
-		if r.Method != "GET" && !create && !edit {
+		if !r.Read() && !create && !edit {
 			h.t.Errorf("unexpected write %s %s", r.Method, r.Path)
 		}
 	}
@@ -77,7 +77,7 @@ func TestPublishSendsCapturedSource(t *testing.T) {
 func lastPostComments(h *harness) []any {
 	var comments []any
 	for _, r := range h.GH.Requests() {
-		if r.Method == "POST" {
+		if !r.Read() {
 			m, _ := r.Body.(map[string]any)
 			comments, _ = m["comments"].([]any)
 		}
@@ -164,7 +164,7 @@ func TestPublishEndToEnd(t *testing.T) {
 
 	var post map[string]any
 	for _, r := range h.GH.Requests() {
-		if r.Method == "POST" {
+		if !r.Read() {
 			post, _ = r.Body.(map[string]any)
 		}
 	}
@@ -212,7 +212,7 @@ func (h *harness) lastPostBody() string {
 	h.t.Helper()
 	var body string
 	for _, r := range h.GH.Requests() {
-		if r.Method == "POST" {
+		if !r.Read() {
 			post, _ := r.Body.(map[string]any)
 			body, _ = post["body"].(string)
 		}
@@ -345,7 +345,7 @@ func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
 		}
 	}
 	for _, r := range h.GH.Requests() {
-		if post, ok := r.Body.(map[string]any); r.Method == "POST" && (!ok || post["commit_id"] != captured) {
+		if post, ok := r.Body.(map[string]any); !r.Read() && (!ok || post["commit_id"] != captured) {
 			t.Fatalf("review sent at %v, want the captured head %s", r.Body, captured)
 		}
 	}
@@ -433,7 +433,7 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 
 	var post map[string]any
 	for _, r := range h.GH.Requests() {
-		if r.Method == "POST" {
+		if !r.Read() {
 			post, _ = r.Body.(map[string]any)
 		}
 	}
@@ -534,7 +534,7 @@ func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 
 	var post map[string]any
 	for _, r := range h.GH.Requests() {
-		if r.Method == "POST" {
+		if !r.Read() {
 			post, _ = r.Body.(map[string]any)
 		}
 	}
