@@ -376,8 +376,46 @@ func MapSummaryLines(text string, fn func(string) string) string {
 // mapTagLines applies fn to every structural line outside a fence.
 func mapTagLines(text string, fn func(line, trimmed string) string) string {
 	lines := splitLines(text)
-	walkStructural(lines, func(i int, trimmed string) { lines[i] = fn(lines[i], trimmed) })
+	mapLines(lines, fn)
 	return strings.Join(lines, "\n")
+}
+
+// mapLines reads each run of quoted lines again with one marker off, so a tag line in a collapsed sticky round, which
+// is one quote, is found as it would be outside it.
+func mapLines(lines []string, fn func(line, trimmed string) string) {
+	var quoted []int
+	walkStructural(lines, func(i int, trimmed string) {
+		if strings.HasPrefix(trimmed, ">") {
+			quoted = append(quoted, i)
+			return
+		}
+		lines[i] = fn(lines[i], trimmed)
+	})
+	for start := 0; start < len(quoted); {
+		end := start + 1
+		for end < len(quoted) && quoted[end] == quoted[end-1]+1 {
+			end++
+		}
+		run := quoted[start:end]
+		markers, inner := make([]string, len(run)), make([]string, len(run))
+		for k, i := range run {
+			markers[k], inner[k] = cutMarker(lines[i])
+		}
+		mapLines(inner, fn)
+		for k, i := range run {
+			lines[i] = markers[k] + inner[k]
+		}
+		start = end
+	}
+}
+
+// cutMarker splits a quoted line after its marker and the one space CommonMark lets the marker take with it.
+func cutMarker(line string) (marker, rest string) {
+	i := strings.IndexByte(line, '>') + 1
+	if i < len(line) && line[i] == ' ' {
+		i++
+	}
+	return line[:i], line[i:]
 }
 
 // StructuralLines reports which lines of text, split after normalizing line endings, are non-blank lines outside a
