@@ -280,7 +280,7 @@ func writeTarget(t *testing.T, root, owner, repo string, number, round int) Targ
 	target := sampleTarget()
 	target.Owner, target.Repo, target.Number, target.Round = owner, repo, number, round
 	target.CapturedAt = time.Date(2026, 9, 13, 0, 0, round, 0, time.UTC)
-	if err := CreateRun(RunDir(root, owner, repo, number, round), target, nil, []byte("{}\n")); err != nil {
+	if err := CreateRun(RunDir(root, owner, repo, number, round), target, nil, []byte("{}\n"), nil); err != nil {
 		t.Fatal(err)
 	}
 	return target

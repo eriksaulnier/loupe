@@ -70,7 +70,7 @@ func writeRun(t *testing.T, home, owner, repo string, number, round int, title s
 		t.Fatal(err)
 	}
 	target := run.Target{Schema: run.TargetSchema, Owner: owner, Repo: repo, Number: number, Round: round, Title: title, CapturedAt: at}
-	if err := run.CreateRun(run.RunDir(home, owner, repo, number, round), target, nil, draftJSON); err != nil {
+	if err := run.CreateRun(run.RunDir(home, owner, repo, number, round), target, nil, draftJSON, nil); err != nil {
 		t.Fatal(err)
 	}
 }
