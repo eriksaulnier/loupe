@@ -22,6 +22,7 @@ This specification amends `docs/comment-format.md`, which is a contract (constit
 ### Settled by the owner (2026-09-25)
 
 - Q: Which layout? → A: Each collapsed round's content in one blockquote. One divider per round was the alternative. It is smaller, but it gives a long opened round no visible edge.
+- Q: What level do loupe's section headings take inside the quote? → A: `###`, as on top (owner, 2026-09-25, after reviewing a quoted round on `eriksaulnier/loupe-sandbox#1`). The `####` demotion from spec 025 made them read small inside muted quoted text, and the quote already marks the round as history.
 - Q: Does quoting keep a finding's own location quote? → A: Yes. It nests as a quote inside the round's quote, which GitHub renders as a second bar. Checked with GitHub's Markdown renderer on 2026-09-25, together with `<details>` inside a quote.
 
 ### Settled by the constitution, contracts and code
@@ -42,7 +43,7 @@ A reviewer opens a collapsed round on GitHub. Its prose, its findings and its fo
 
 **Acceptance Scenarios**:
 
-1. **Given** a sticky review holding one round with prose, a `Must fix` finding and a footer, **When** a second sticky round publishes, **Then** round 1's `<details>` holds its content as one blockquote: every line of the prose, the `#### Must fix` heading, the finding's `<details>` and the footer line, each line prefixed with `> `, or with `>` alone when it is blank.
+1. **Given** a sticky review holding one round with prose, a `Must fix` finding and a footer, **When** a second sticky round publishes, **Then** round 1's `<details>` holds its content as one blockquote: every line of the prose, the `### Must fix` heading, the finding's `<details>` and the footer line, each line prefixed with `> `, or with `>` alone when it is blank.
 2. **Given** that body, **When** it is inspected, **Then** round 1's content holds no `---` divider, and no divider sits between round 1's `</details>` and the next round's delimiter.
 3. **Given** a finding with a location, **When** its round is quoted, **Then** its location lines read `> > ` and GitHub renders them as a quote inside the round's quote.
 4. **Given** authored prose holding a fenced code block, a list or raw HTML the allowlist permits, **When** its round is quoted, **Then** GitHub renders it as it rendered on top.
@@ -78,7 +79,7 @@ A pipeline upgrades loupe mid-series. The next round reads the review back, coll
 
 ### Functional Requirements
 
-- **FR-001**: When a sticky round collapses the round below it, the collapsed round's content MUST be one blockquote. The content is the round's prose and sections, with loupe's section headings at `####` as today, then its footer line. Every line MUST be prefixed with `> `, or with `>` when the line is blank.
+- **FR-001**: When a sticky round collapses the round below it, the collapsed round's content MUST be one blockquote. The content is the round's prose and sections, with loupe's section headings at `###`, as they read on top, then its footer line. Every line MUST be prefixed with `> `, or with `>` when the line is blank.
 - **FR-002**: A newly collapsed round MUST NOT carry a divider: not between its prose and its first section, not between its sections and its footer, and not after its footer.
 - **FR-003**: The reconciliation marker MUST stay outside the quote, on its own line after it and before `</details>`.
 - **FR-004**: The collapsed round's `<summary>` line, the round delimiters, and the newest round's layout MUST NOT change.
