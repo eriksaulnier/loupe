@@ -201,12 +201,28 @@ func TestReadStickyReadsCRLF(t *testing.T) {
 
 func TestReadStickyRefusesAnUnreadableBody(t *testing.T) {
 	first := firstRound()
+	earlier, _, err := ReadSticky(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := stickyInput(2, "bbbbbbb222", general("f-001", "question", false))
+	next.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
+	second := Body(next)
+	dropped := stickyInput(3, "ccccccc333", general("f-001", "question", false))
+	dropped.Sticky = &StickyInput{Rounds: 3}
+	third := Body(dropped)
 	cases := map[string]string{
 		"not sticky":      strings.Replace(first, " sticky=1", "", 1),
 		"no marker":       first[:strings.Index(first, "<!-- loupe digest=")],
 		"footer replaced": strings.Replace(first, "reviewed `aaaaaaa`", "edited by hand", 1),
 		"no divider":      strings.Replace(first, "\n\n---\n\nreviewed", "\n\nreviewed", 1),
 		"text after meta": first + "\nA note added on GitHub.\n",
+		// An earlier round whose delimiter was deleted on GitHub would otherwise vanish from the next edit.
+		"round delimiter removed":   strings.Replace(second, "<!-- loupe-round -->\n\n", "", 1),
+		"text before the rounds":    strings.Replace(second, "### Earlier rounds\n\n", "### Earlier rounds\n\nA note added on GitHub.\n\n", 1),
+		"block is not a disclosure": strings.Replace(second, "<!-- loupe-round -->\n\n<details>", "<!-- loupe-round -->\n\nloose text\n\n<details>", 1),
+		"sticky count too high":     strings.Replace(second, " sticky=2 -->", " sticky=3 -->", 1),
+		"dropped count wrong":       strings.Replace(third, "The 2 oldest rounds", "The 5 oldest rounds", 1),
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {

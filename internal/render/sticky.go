@@ -93,6 +93,7 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 	region := lines[:n-6]
 	part := region
 	var blocks []string
+	dropped := 0
 	for i := range region {
 		if !structural[i] || region[i] != earlierDelimiter {
 			continue
@@ -108,6 +109,8 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 			if structural[j] && region[j] == roundDelimiter {
 				if inBlock {
 					blocks = append(blocks, strings.Join(trimBlank(current), "\n"))
+				} else if dropped, err = sectionHead(current); err != nil {
+					return nil, 0, err
 				}
 				current, inBlock = nil, true
 				continue
@@ -116,8 +119,20 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 		}
 		if inBlock {
 			blocks = append(blocks, strings.Join(trimBlank(current), "\n"))
+		} else if dropped, err = sectionHead(current); err != nil {
+			return nil, 0, err
 		}
 		break
+	}
+	// Every earlier round is either held or counted as dropped, so a round whose delimiter was edited away on GitHub
+	// is refused rather than silently left out of the next edit.
+	for _, block := range blocks {
+		if !strings.HasPrefix(block, "<details>\n<summary>Round ") || !strings.HasSuffix(block, "\n</details>") {
+			return nil, 0, errors.New("an earlier round is not one collapsed section")
+		}
+	}
+	if len(blocks)+dropped != rounds-1 {
+		return nil, 0, fmt.Errorf("it holds %d earlier rounds and says %d were dropped, but sticky=%d", len(blocks), dropped, rounds)
 	}
 	part = trimBlank(part)
 	if len(part) == 0 {
@@ -218,6 +233,28 @@ func firstSection(lines []string, blocking, total int) (int, error) {
 		return 0, errors.New("the round's first section does not follow a divider")
 	}
 	return first, nil
+}
+
+var droppedNote = regexp.MustCompile(`^The (oldest round was|([0-9]+) oldest rounds were) dropped to fit GitHub's length limit\.$`)
+
+// sectionHead reads what opens the earlier-rounds section: its heading, then the dropped-rounds note when there is one.
+// Anything else there is text loupe did not write, which the next edit would drop.
+func sectionHead(lines []string) (dropped int, err error) {
+	lines = trimBlank(lines)
+	switch {
+	case len(lines) == 1 && lines[0] == "### Earlier rounds":
+		return 0, nil
+	case len(lines) == 3 && lines[0] == "### Earlier rounds" && lines[1] == "":
+		m := droppedNote.FindStringSubmatch(lines[2])
+		if m == nil {
+			break
+		}
+		if m[2] == "" {
+			return 1, nil
+		}
+		return strconv.Atoi(m[2])
+	}
+	return 0, errors.New("its earlier rounds do not open with loupe's heading")
 }
 
 func trimBlank(lines []string) []string {
