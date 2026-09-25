@@ -35,8 +35,9 @@ func PreviousRound(earlier []string) (int, string) {
 	}
 	round, _ := strconv.Atoi(m[1])
 	sha := m[2]
-	if full := commitURL.FindStringSubmatch(earlier[0]); full != nil && strings.HasPrefix(full[1], sha) {
-		sha = full[1]
+	// The round's own footer is the last line of its block that links a commit, after any link a finding carries.
+	if all := commitURL.FindAllStringSubmatch(earlier[0], -1); len(all) > 0 && strings.HasPrefix(all[len(all)-1][1], sha) {
+		sha = all[len(all)-1][1]
 	}
 	return round, sha
 }
