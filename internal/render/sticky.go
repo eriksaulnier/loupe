@@ -337,18 +337,15 @@ func splitChips(part []string, meta string) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	// A collapsed round's sections drop a heading level, so an opened round reads as history under the round on top
-	// and its headings stay out of the page outline's top level. Only loupe's own sections from the first one on
-	// change: prose above them that looks like a heading is the author's and stays as written.
+	// Each of loupe's section dividers goes: inside the round's quote a rule reads as a boundary between rounds. Only
+	// loupe's own sections from the first one on lose theirs, so a divider in the prose stays. A section whose divider
+	// was removed on GitHub loses nothing, so it is carried without one.
 	headings := sectionHeadings(rest)
 	for k := len(headings) - 1; k >= 0; k-- {
 		i := headings[k]
 		if i < first {
 			break
 		}
-		rest[i] = "#" + strings.TrimSpace(rest[i])
-		// A section's divider goes too: inside the round's quote a rule reads as a boundary between rounds. A section
-		// whose divider was removed on GitHub loses nothing, so it is carried without one.
 		if i >= 2 && rest[i-1] == "" && rest[i-2] == "---" {
 			rest = slices.Delete(rest, i-2, i)
 		}

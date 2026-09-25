@@ -115,7 +115,7 @@ func TestReadStickyDemotesTheCurrentRound(t *testing.T) {
 	// The chips move into the summary, and the rest of the round with its footer becomes one quote with no divider. The
 	// reconciliation marker stays outside the quote, so an interrupted publish of this round still reconciles.
 	want := "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code></summary>\n\n" +
-		"> #### Must fix\n>\n> <details>\n> <summary>⛔ <b>issue</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n" +
+		"> ### Must fix\n>\n> <details>\n> <summary>⛔ <b>issue</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n" +
 		"> reviewed [`aaaaaaa`](https://github.com/o/r/commit/aaaaaaa111)\n\n<!-- loupe digest=" + strings.Repeat("1", 64) + " publication=00000000-0000-4000-8000-000000000001 -->\n\n</details>"
 	if earlier[0] != want {
 		t.Fatalf("demoted round\n--- got ---\n%s\n--- want ---\n%s", earlier[0], want)
@@ -131,7 +131,7 @@ func TestReadStickyNumbersRoundsInTheReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>🔵 1 question</code></summary>\n\n> Prose stays.\n>\n> ---\n>\n> After a break.\n>\n> #### Worth a look") {
+	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>🔵 1 question</code></summary>\n\n> Prose stays.\n>\n> ---\n>\n> After a break.\n>\n> ### Worth a look") {
 		t.Fatalf("demoted round:\n%s", earlier[0])
 	}
 	next := stickyInput(6, "bbbbbbb222")
@@ -315,7 +315,7 @@ func TestReadStickyKeepsProseThatLooksLikeASection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := "</summary>\n\n" + quoted + "\n>\n> #### Must fix\n>\n> <details>"
+		want := "</summary>\n\n" + quoted + "\n>\n> ### Must fix\n>\n> <details>"
 		if !strings.Contains(earlier[0], want) {
 			t.Errorf("prose %q was cut:\n%s", prose, earlier[0])
 		}
@@ -344,7 +344,7 @@ func TestReadStickyRefusesUnbalancedRounds(t *testing.T) {
 		// With every earlier round dropped nothing tells the layouts apart, so a second footer is refused.
 		{"a second footer after dropped rounds", strings.Replace(Body(droppedOnly), "\n\n<!-- loupe digest=3", "\n\n---\n\nreviewed `ddddddd`\n\n<!-- loupe digest=3", 1)},
 		{"stray </details> in a round with no findings", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.\n\n</details>\n\nOutside.", 1)},
-		{"extra <details> in an earlier round", strings.Replace(two, "> #### Must fix\n", "> <details>\n> <summary>Mine</summary>\n>\n> #### Must fix\n", 1)},
+		{"extra <details> in an earlier round", strings.Replace(two, "> ### Must fix\n", "> <details>\n> <summary>Mine</summary>\n>\n> ### Must fix\n", 1)},
 		{"missing </details> in an earlier round", strings.Replace(two, "> Body f-001.\n>\n> </details>\n", "> Body f-001.\n", 1)},
 		{"close tag after text in the shown round", strings.Replace(Body(clean), "Nothing to fix.", "Nothing to fix.</details>\n\nOutside.", 1)},
 		{"round closed early, then a second disclosure", strings.Replace(two, "\n\n<!-- loupe digest=1", "\n\n</details>\n\nOutside.\n\n<details>\n<summary>Mine</summary>\n\n<!-- loupe digest=1", 1)},
@@ -555,8 +555,8 @@ func TestReadStickyQuotesTheDemotedRoundWithoutDividers(t *testing.T) {
 	}
 	want := "<details>\n<summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code> <code>🔵 1 question</code></summary>\n\n" +
 		"> Prose.\n>\n> ---\n>\n> More prose.\n>\n" +
-		"> #### Must fix\n>\n> <details>\n> <summary>⛔ <b>issue</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n" +
-		"> #### Worth a look\n>\n> <details>\n> <summary>🔵 <b>question</b>: Title f-002</summary>\n>\n> Body f-002.\n>\n> </details>\n>\n" +
+		"> ### Must fix\n>\n> <details>\n> <summary>⛔ <b>issue</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n" +
+		"> ### Worth a look\n>\n> <details>\n> <summary>🔵 <b>question</b>: Title f-002</summary>\n>\n> Body f-002.\n>\n> </details>\n>\n" +
 		"> reviewed [`aaaaaaa`](https://github.com/o/r/commit/aaaaaaa111)\n\n<!-- loupe digest=" + strings.Repeat("1", 64) +
 		" publication=00000000-0000-4000-8000-000000000001 -->\n\n</details>"
 	if earlier[0] != want {
@@ -605,7 +605,7 @@ func TestStickyMovesAV0120BodyToTheQuotedLayout(t *testing.T) {
 	if err != nil || rounds != 3 || len(earlier) != 3 {
 		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
 	}
-	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 3 · reviewed <code>ccccccc</code> · <code>🟣 1 suggestion</code></summary>\n\n> One suggestion left.\n>\n> #### Worth a look\n") ||
+	if !strings.HasPrefix(earlier[0], "<details>\n<summary>Round 3 · reviewed <code>ccccccc</code> · <code>🟣 1 suggestion</code></summary>\n\n> One suggestion left.\n>\n> ### Worth a look\n") ||
 		!strings.Contains(earlier[0], "\n>\n> > [`internal/a.go:12`](") ||
 		!strings.HasSuffix(earlier[0], "\n>\n> reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since round 2](https://github.com/o/r/compare/bbbbbbb222...ccccccc333) · via `gadfly-review-pr 2.3.0` · `anthropic/claude-opus-5.5`\n\n<!-- loupe digest="+strings.Repeat("3", 64)+" publication=00000000-0000-4000-8000-000000000003 -->\n\n</details>") {
 		t.Fatalf("demoted round:\n%s", earlier[0])
@@ -653,11 +653,11 @@ func TestReadStickyRefusesABrokenQuote(t *testing.T) {
 		{"newest round's quoted footer removed", "\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
 		{"newest round's footer lost its marker", "\n> reviewed [`bbbbbbb`]", "\nreviewed [`bbbbbbb`]"},
 		{"prose lost its marker", "> Prose of round 2.", "Prose of round 2."},
-		{"heading lost its marker", "> #### Worth a look", "#### Worth a look"},
+		{"heading lost its marker", "> ### Worth a look", "### Worth a look"},
 		{"finding line lost its marker", "> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]", "Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]"},
-		{"older round's line lost its marker", "> #### Must fix", "#### Must fix"},
+		{"older round's line lost its marker", "> ### Must fix", "### Must fix"},
 		{"older round's footer lost its marker", "\n> reviewed [`aaaaaaa`]", "\nreviewed [`aaaaaaa`]"},
-		{"newest round emptied", "> Prose of round 2.\n>\n> #### Worth a look\n>\n> <details>\n> <summary>🔵 <b>question</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
+		{"newest round emptied", "> Prose of round 2.\n>\n> ### Worth a look\n>\n> <details>\n> <summary>🔵 <b>question</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

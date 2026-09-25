@@ -43,7 +43,7 @@ reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since
 
 > The blocking issue is fixed; one question left.
 >
-> #### Worth a look
+> ### Worth a look
 >
 > <details>
 > <summary>🔵 <b>question</b>: Title f-001</summary>
@@ -63,7 +63,7 @@ reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since
 <details>
 <summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code></summary>
 
-> #### Must fix
+> ### Must fix
 >
 > <details>
 > <summary>⛔ <b>issue</b>: Title f-001</summary>
@@ -79,5 +79,5 @@ reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since
 </details>
 
 <!-- loupe digest=3333333333333333333333333333333333333333333333333333333333333333 publication=00000000-0000-4000-8000-000000000003 -->
-<!-- loupe-findings v=1 sha256=f9f3b01d360cbe3475e2c24420fce566ecec39bcc281eb8efc3de2e40425e5d8 bM6xysIwFAXgV/k5c/7aZszooq7STRzS5jYGL4k0yVBK312iiBU6XbhwzncuM5yBwvBf1w0EkktMUGjL/ft8u2AmKOyDmd6/CgIcep1c8FA+Mwuw7oih4GLMVEIc+rvzFiqNmRaxkuSmJDck+SvNeOh0K4hPNHrNO13ZAIHoTCk7nw7HtiScJ6hGLt9ZMVtL8VWz3jZojrRcnwEAAP// -->
+<!-- loupe-findings v=1 sha256=da2a8fbef55b5f1dfc0943ebb35fe9d6c0201e520ef436ed9211940cc4fcaf64 bM6xysIwFAXgV/k5c/7aZszooq7STRzS5jYGL4k0yVBK312iiBU6XbhwzncuM5yBwvBf1w0EkktMUGjL/ft8u2AmKOyDmd6/CgIcep1c8FA+Mwuw7oih4GLMVEIc+rvzFiqNmRaxkuSmJDck+SvNeOh0K4hPNHrNO13ZAIHoTCk7nw7HtiScJ6hGLt9ZMVtL8VWz3jZojrRcnwEAAP// -->
 <!-- loupe-meta v=1 round=3 src=gadfly-review-pr@2.3.0 inline=none blocking=1 issues=1 suggestions=1 questions=0 other=0 excluded=0 withdrawn=0 reinstated=0 regraded=0 sticky=3 -->

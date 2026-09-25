@@ -28,7 +28,7 @@ reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since
 <details>
 <summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code></summary>
 
-> #### Must fix
+> ### Must fix
 >
 > <details>
 > <summary>⛔ <b>issue</b>: Title f-001</summary>
@@ -44,5 +44,5 @@ reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since
 </details>
 
 <!-- loupe digest=2222222222222222222222222222222222222222222222222222222222222222 publication=00000000-0000-4000-8000-000000000002 -->
-<!-- loupe-findings v=1 sha256=9108682375c9994758fdb6d3aa74fb0ed615361ae83686e7c28e9d1fdeca2a48 NMixCsIwFIbRV5FvjlLXO/oMbuKQNKkEf3KRpkMQ311UnA6cy5OaMZb9NB0J9NpVMM4fd/9NngfGyfP43YGAfI69esPaJgUUUxHGYyvr9wNJPt9ru2FL1Fpe13cAAAD//w== -->
+<!-- loupe-findings v=1 sha256=dacbaad1d66d1b82b6710399104c8f06bee67855fbd940ffec7bff2407ae2d09 NMixCsIwFIbRV5FvjlLXO/oMbuKQNKkEf3KRpkMQ311UnA6cy5OaMZb9NB0J9NpVMM4fd/9NngfGyfP43YGAfI69esPaJgUUUxHGYyvr9wNJPt9ru2FL1Fpe13cAAAD//w== -->
 <!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=none blocking=0 issues=0 suggestions=0 questions=1 other=0 excluded=0 withdrawn=0 reinstated=0 regraded=0 sticky=2 -->

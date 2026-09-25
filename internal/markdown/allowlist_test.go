@@ -193,7 +193,7 @@ func TestStructuralLines(t *testing.T) {
 
 // quotedRound is a collapsed sticky round in the quoted layout, with extra inserted before its footer.
 func quotedRound(extra string) string {
-	return "<details>\n<summary>Round 1</summary>\n\n> Prose.\n>\n> #### Must fix\n>\n> <details>\n> <summary>x</summary>\n>\n" +
+	return "<details>\n<summary>Round 1</summary>\n\n> Prose.\n>\n> ### Must fix\n>\n> <details>\n> <summary>x</summary>\n>\n" +
 		"> > [`a.go:1`](https://example.com)\n>\n> ```\n> </details>\n> <!--\n> ```\n>\n> </details>\n>\n" + extra +
 		"> reviewed `aaaaaaa`\n\n<!-- loupe digest=1 publication=2 -->\n\n</details>"
 }
