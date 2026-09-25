@@ -632,9 +632,9 @@ func TestStickyMovesAV0120BodyToTheQuotedLayout(t *testing.T) {
 	}
 }
 
-// A quoted round in which a line lost its marker renders half outside its quote, so it is refused rather than carried,
-// in the newest collapsed round or an older one. A marker without its space still quotes the line.
-func TestReadStickyRefusesABrokenQuote(t *testing.T) {
+// quotedThreeRounds is a sticky body whose two collapsed rounds were both quoted by this layout.
+func quotedThreeRounds(t *testing.T) string {
+	t.Helper()
 	body := firstRound()
 	for round := 2; round <= 3; round++ {
 		earlier, rounds, err := ReadSticky(body)
@@ -649,14 +649,16 @@ func TestReadStickyRefusesABrokenQuote(t *testing.T) {
 	if _, _, err := ReadSticky(body); err != nil {
 		t.Fatalf("the three-round body does not read back: %v", err)
 	}
+	return body
+}
+
+// The newest collapsed round keeps its footer so the history shows each round's source and model, and a round that
+// lost it was edited on GitHub.
+func TestReadStickyRefusesAQuotedRoundThatLostItsFooter(t *testing.T) {
+	body := quotedThreeRounds(t)
 	cases := []struct{ name, old, new string }{
 		{"newest round's quoted footer removed", "\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
 		{"newest round's footer lost its marker", "\n> reviewed [`bbbbbbb`]", "\nreviewed [`bbbbbbb`]"},
-		{"prose lost its marker", "> Prose of round 2.", "Prose of round 2."},
-		{"heading lost its marker", "> ### Worth a look", "### Worth a look"},
-		{"finding line lost its marker", "> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]", "Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]"},
-		{"older round's line lost its marker", "> ### Must fix", "### Must fix"},
-		{"older round's footer lost its marker", "\n> reviewed [`aaaaaaa`]", "\nreviewed [`aaaaaaa`]"},
 		{"newest round emptied", "> Prose of round 2.\n>\n> ### Worth a look\n>\n> <details>\n> <summary>🔵 <b>question</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
 	}
 	for _, c := range cases {
@@ -670,8 +672,33 @@ func TestReadStickyRefusesABrokenQuote(t *testing.T) {
 			}
 		})
 	}
-	if _, _, err := ReadSticky(strings.Replace(body, "> Prose of round 2.", ">Prose of round 2.", 1)); err != nil {
-		t.Fatalf("a marker without its space was refused: %v", err)
+}
+
+// A line that lost its quote marker on GitHub only renders outside the quote. Nothing in a round's content tells that
+// edit from an earlier layout's prose, so the round is carried as it is rather than refused.
+func TestReadStickyCarriesAQuotedRoundThatLostAMarker(t *testing.T) {
+	body := quotedThreeRounds(t)
+	cases := []struct{ name, old, new string }{
+		{"prose", "> Prose of round 2.", "Prose of round 2."},
+		{"a marker without its space", "> Prose of round 2.", ">Prose of round 2."},
+		{"a heading", "> ### Worth a look", "### Worth a look"},
+		{"a finding line", "> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]", "Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]"},
+		{"an older round's line", "> ### Must fix", "### Must fix"},
+		{"an older round's footer", "\n> reviewed [`aaaaaaa`]", "\nreviewed [`aaaaaaa`]"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if strings.Count(body, c.old) != 1 {
+				t.Fatalf("the body holds %q %d times", c.old, strings.Count(body, c.old))
+			}
+			earlier, _, err := ReadSticky(strings.Replace(body, c.old, c.new, 1))
+			if err != nil {
+				t.Fatalf("ReadSticky: %v", err)
+			}
+			if !strings.Contains(strings.Join(earlier, "\n"), c.new) {
+				t.Fatalf("the edited line was not carried:\n%s", strings.Join(earlier, "\n"))
+			}
+		})
 	}
 }
 
@@ -685,6 +712,30 @@ func TestReadStickyCarriesAnOlderRoundThatOpensOnAQuote(t *testing.T) {
 	}
 	if !strings.Contains(earlier[1], "</summary>\n\n> Quoted by the author.\n\nThe blocking issue is fixed; one question left.\n\n---\n\n#### Worth a look") {
 		t.Fatalf("round 2:\n%s", earlier[1])
+	}
+}
+
+// A round collapsed in the v0.11.0 layout carries no footer, so its prose MAY end in lines shaped like a quoted footer.
+// It is carried as it is, since nothing but a hidden marker could tell it from a quoted round.
+func TestReadStickyCarriesLegacyProseShapedLikeAQuotedFooter(t *testing.T) {
+	findings := "### Must fix\n\n<details>\n<summary>⛔ <b>issue</b>: Title f-001</summary>\n\nBody f-001.\n\n</details>\n"
+	for name, prose := range map[string]string{
+		"a footer under a quote": "Nothing to fix.\n\n> note\nreviewed `abc1234`\n",
+		"a quoted footer":        "Nothing to fix.\n\n> reviewed `abc1234`\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := fixture(t, "sticky-v0.11.0-layout.md")
+			if strings.Count(body, findings) != 1 {
+				t.Fatal("the v0.11.0 fixture changed shape")
+			}
+			earlier, _, err := ReadSticky(strings.Replace(body, findings, prose, 1))
+			if err != nil {
+				t.Fatalf("ReadSticky: %v", err)
+			}
+			if !strings.Contains(earlier[len(earlier)-1], "</summary>\n\n"+prose) {
+				t.Fatalf("the round was not carried as it was:\n%s", earlier[len(earlier)-1])
+			}
+		})
 	}
 }
 

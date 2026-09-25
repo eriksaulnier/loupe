@@ -242,9 +242,6 @@ func ReadSticky(body string) (earlier []string, rounds int, err error) {
 		if first != "<details>" || !roundSummary.MatchString(summary) || !strings.HasSuffix(block, "\n</details>") {
 			return nil, 0, errors.New("an earlier round is not one collapsed section under loupe's summary line")
 		}
-		if !quoteIntact(block) {
-			return nil, 0, errors.New("a quoted earlier round has a line that lost its quote marker")
-		}
 	}
 	if footer == "" {
 		return nil, 0, errors.New("it does not end with loupe's divider, footer and reconciliation marker")
@@ -430,30 +427,6 @@ func roundContent(block string) ([]string, bool) {
 		return nil, false
 	}
 	return lines[2 : n-4], true
-}
-
-// quoteIntact reports whether a collapsed round, when it is quoted, keeps every line inside its quote. A line that lost
-// its marker renders outside it. A round is quoted when it ends on a quoted footer, or on a footer that lost its
-// marker under a quoted line. Every earlier layout ends on a divider, on a footer under one, or on the round's own
-// text, so a round whose prose opens on a quote is not taken for a quoted one.
-func quoteIntact(block string) bool {
-	lines, ok := roundContent(block)
-	if !ok {
-		return true
-	}
-	if lines = trimBlank(lines); len(lines) == 0 {
-		return true
-	}
-	last, marked := strings.CutPrefix(lines[len(lines)-1], "> ")
-	if !footerLine.MatchString(last) || !marked && (len(lines) < 2 || !strings.HasPrefix(lines[len(lines)-2], ">")) {
-		return true
-	}
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, ">") {
-			return false
-		}
-	}
-	return true
 }
 
 // quoteLines puts text in one quote. A blank line takes the marker alone, since a line without one ends the quote.
