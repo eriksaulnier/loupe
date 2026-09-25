@@ -16,6 +16,7 @@ This specification amends `specs/001-loupe-v1/contracts/cli.md`, which it adopts
 - `show` gains one flag, `--comments`. `show` and `show --previous` keep their results.
 - The self-exclusion rule reuses the match that sticky mode and `--previous` use to find the publisher's own review (`specs/025-sticky-review`, `specs/027-previous-from-github`), together with its `src=` name. It changes nothing about that match.
 - A failed read degrades to a stated reason, as `--previous` does (spec 027).
+- Capture lists the pull request's reviews once per round and hands that listing to both the previous-round read and this one. This amends spec 027's User Story 3 scenario 1 and SC-004, which had capture make no review request when a local receipt exists: that one listing now serves the other reviewers' feedback. The receipt still answers `--previous`.
 
 ## Clarifications
 
