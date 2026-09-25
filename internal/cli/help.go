@@ -61,7 +61,7 @@ var runReferences = [][2]string{
 var conventions = [][2]string{
 	{"--json", "print exactly one JSON result object on stdout; diagnostics go to stderr"},
 	{"--from <file>|-", "read JSON input from a file, or from stdin with -"},
-	{"--expect-version <n>", "refuse unless the draft is at version n (add, edit, summary, reply)"},
+	{"--expect-version <n>", "refuse unless the draft is at version n (add, edit, summary, assess, reply)"},
 	{"--by agent|human", "who makes the change (default agent)"},
 	{"--version", "print loupe's own version"},
 }

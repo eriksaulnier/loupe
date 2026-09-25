@@ -29,6 +29,7 @@ Commands
   agent   capture   Capture a pull request into a new review round
           add       File findings into the draft
           summary   Set the summary the human reads while sorting findings
+          assess    Mark earlier findings as still open or addressed
           handoff   Open review for the human in a new pane
           wait      Block until the human sends a finding back or publishes
           edit      Change, withdraw or restore a finding
@@ -54,7 +55,7 @@ Run references
 Conventions
   --json                  print exactly one JSON result object on stdout; diagnostics go to stderr
   --from <file>|-         read JSON input from a file, or from stdin with -
-  --expect-version <n>    refuse unless the draft is at version n (add, edit, summary, reply)
+  --expect-version <n>    refuse unless the draft is at version n (add, edit, summary, assess, reply)
   --by agent|human        who makes the change (default agent)
   --version               print loupe's own version
   Exit 0 on success, 1 on refusal, 2 on usage error. Every refusal names a code and a fix.
