@@ -173,7 +173,7 @@ A sticky round whose edit request had an unknown outcome is reconciled on the ne
 
 - **Sticky review**: a submitted loupe review whose `loupe-meta` carries `sticky=K`. It holds the newest round on top and up to `K − 1` earlier rounds collapsed below.
 - **Round part**: the chips row, opening prose and sections one round composed, without footer or markers.
-- **Earlier round**: a round part without its chips row, plus its reconciliation marker, wrapped in one `<details>` under `### Earlier rounds` whose `<summary>` carries the round's place, commit and chips.
+- **Earlier round**: a round part without its chips row, then a divider and the round's footer line unchanged, then its reconciliation marker, wrapped in one `<details>` under `### Earlier rounds` whose `<summary>` carries the round's place, commit and chips. A round the v0.11.0 layout collapsed has no footer and is carried as it is.
 - **Receipt**: gains the edited review's id and whether this round edited it.
 
 ## Success Criteria *(mandatory)*
