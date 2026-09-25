@@ -1,6 +1,7 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,7 @@ func newTestClient(t *testing.T, handler func(w http.ResponseWriter, r *http.Req
 	var reqs []recorded
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
 		reqs = append(reqs, recorded{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Auth: r.Header.Get("Authorization"), Body: string(body)})
 		handler(w, r)
 	}))
@@ -348,5 +350,134 @@ func TestUpdateReviewErrorClassification(t *testing.T) {
 	_, err = c.UpdateReview(context.Background(), "o", "r", 7, 99, "new")
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.Auth {
 		t.Fatalf("got %#v", err)
+	}
+}
+
+func TestListReviewsCarriesSubmittedAt(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, `[{"id": 1, "user": {"login": "u1"}, "state": "APPROVED", "body": "", "html_url": "h1", "submitted_at": "2026-09-25T10:00:00Z"}]`)
+	})
+	reviews, err := c.ListReviews(context.Background(), "o", "r", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC); len(reviews) != 1 || !reviews[0].SubmittedAt.Equal(want) {
+		t.Fatalf("got %+v", reviews)
+	}
+}
+
+func TestListIssueCommentsFollowsPages(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			writeJSON(w, 200, `[{"id": 2, "user": null, "body": "b2", "html_url": "h2", "created_at": "2026-09-25T11:00:00Z"}]`)
+			return
+		}
+		w.Header().Set("Link", `<https://api.github.com/repositories/1/issues/7/comments?per_page=100&page=2>; rel="next"`)
+		writeJSON(w, 200, `[{"id": 1, "user": {"login": "ci[bot]"}, "body": "b1", "html_url": "h1", "created_at": "2026-09-25T10:00:00Z"}]`)
+	})
+	comments, err := c.ListIssueComments(context.Background(), "o", "r", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []IssueComment{
+		{ID: 1, User: "ci[bot]", Body: "b1", HTMLURL: "h1", CreatedAt: time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)},
+		{ID: 2, User: "ghost", Body: "b2", HTMLURL: "h2", CreatedAt: time.Date(2026, 9, 25, 11, 0, 0, 0, time.UTC)},
+	}
+	if !reflect.DeepEqual(comments, want) {
+		t.Fatalf("got %+v", comments)
+	}
+	if len(*reqs) != 2 || (*reqs)[0].Path != "/repos/o/r/issues/7/comments" || (*reqs)[0].Query.Get("per_page") != "100" {
+		t.Fatalf("requests %+v", *reqs)
+	}
+}
+
+type graphQLRequest struct {
+	Query     string         `json:"query"`
+	Variables map[string]any `json:"variables"`
+}
+
+func decodeGraphQL(t *testing.T, r *http.Request) graphQLRequest {
+	t.Helper()
+	var req graphQLRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		t.Errorf("decode GraphQL request: %v", err)
+	}
+	return req
+}
+
+func TestListReviewThreadsFollowsBothCursors(t *testing.T) {
+	var queries []graphQLRequest
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		req := decodeGraphQL(t, r)
+		queries = append(queries, req)
+		switch {
+		case req.Variables["id"] == "T1":
+			writeJSON(w, 200, `{"data": {"node": {"comments": {"pageInfo": {"hasNextPage": false, "endCursor": "c2"}, "nodes": [
+				{"author": {"__typename": "User", "login": "carol"}, "body": "third", "url": "u3", "createdAt": "2026-09-25T12:00:00Z", "pullRequestReview": {"databaseId": 13}}]}}}}`)
+		case req.Variables["after"] == "t1":
+			writeJSON(w, 200, `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": false, "endCursor": "t2"}, "nodes": [
+				{"id": "T2", "path": "b.go", "line": null, "originalLine": 4, "diffSide": "LEFT", "isResolved": true, "isOutdated": true,
+				 "comments": {"pageInfo": {"hasNextPage": false, "endCursor": "x"}, "nodes": [
+					{"author": null, "body": "gone", "url": "u4", "createdAt": "2026-09-25T13:00:00Z", "pullRequestReview": null}]}}]}}}}}`)
+		default:
+			writeJSON(w, 200, `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": true, "endCursor": "t1"}, "nodes": [
+				{"id": "T1", "path": "a.go", "line": 12, "originalLine": 10, "diffSide": "RIGHT", "isResolved": false, "isOutdated": false,
+				 "comments": {"pageInfo": {"hasNextPage": true, "endCursor": "c1"}, "nodes": [
+					{"author": {"__typename": "User", "login": "alice"}, "body": "first", "url": "u1", "createdAt": "2026-09-25T10:00:00Z", "pullRequestReview": {"databaseId": 11}},
+					{"author": {"__typename": "Bot", "login": "ci"}, "body": "second", "url": "u2", "createdAt": "2026-09-25T11:00:00Z", "pullRequestReview": {"databaseId": 12}}]}}]}}}}}`)
+		}
+	})
+	threads, err := c.ListReviewThreads(context.Background(), "o", "r", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := func(h int) time.Time { return time.Date(2026, 9, 25, h, 0, 0, 0, time.UTC) }
+	want := []ReviewThread{
+		{Path: "a.go", Line: 12, OriginalLine: 10, Side: "RIGHT", Comments: []ThreadComment{
+			{ReviewID: 11, User: "alice", Body: "first", URL: "u1", CreatedAt: at(10)},
+			{ReviewID: 12, User: "ci[bot]", Body: "second", URL: "u2", CreatedAt: at(11)},
+			{ReviewID: 13, User: "carol", Body: "third", URL: "u3", CreatedAt: at(12)},
+		}},
+		{Path: "b.go", OriginalLine: 4, Side: "LEFT", Resolved: true, Outdated: true, Comments: []ThreadComment{
+			{User: "ghost", Body: "gone", URL: "u4", CreatedAt: at(13)},
+		}},
+	}
+	if !reflect.DeepEqual(threads, want) {
+		t.Fatalf("got %+v", threads)
+	}
+	if len(*reqs) != 3 || (*reqs)[0].Method != http.MethodPost || (*reqs)[0].Path != "/graphql" {
+		t.Fatalf("requests %+v", *reqs)
+	}
+	first := queries[0].Variables
+	if first["owner"] != "o" || first["repo"] != "r" || first["number"] != float64(7) || first["after"] != nil {
+		t.Fatalf("first variables %+v", first)
+	}
+	if queries[1].Variables["after"] != "c1" && queries[2].Variables["after"] != "c1" {
+		t.Fatalf("thread comments were not read past cursor c1: %+v", queries)
+	}
+}
+
+func TestListReviewThreadsErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status int
+		body   string
+		check  func(error) bool
+	}{
+		"graphql error": {200, `{"data": {"repository": {"pullRequest": null}}, "errors": [{"type": "NOT_FOUND", "message": "Could not resolve to a PullRequest with the number of 7."}]}`,
+			func(err error) bool { return err != nil }},
+		"missing pull request": {200, `{"data": {"repository": {"pullRequest": null}}}`,
+			func(err error) bool { return err != nil }},
+		"server error": {502, `{"message": "Bad Gateway"}`,
+			func(err error) bool { var he *HTTPError; return errors.As(err, &he) && he.Status == 502 }},
+		"unauthorized": {401, `{"message": "Bad credentials"}`,
+			func(err error) bool { r, ok := refusal.As(err); return ok && r.Code == refusal.Auth }},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, tc.status, tc.body) })
+			threads, err := c.ListReviewThreads(context.Background(), "o", "r", 7)
+			if !tc.check(err) || threads != nil {
+				t.Fatalf("got %+v, %#v", threads, err)
+			}
+		})
 	}
 }
