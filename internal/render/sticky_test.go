@@ -596,3 +596,59 @@ func TestReadStickyNestsALocationQuote(t *testing.T) {
 		t.Fatalf("demoted round:\n%s", earlier[0])
 	}
 }
+
+// A quoted round in which a line lost its marker renders half outside its quote, so it is refused rather than carried,
+// in the newest collapsed round or an older one. A marker without its space still quotes the line.
+func TestReadStickyRefusesABrokenQuote(t *testing.T) {
+	body := firstRound()
+	for round := 2; round <= 3; round++ {
+		earlier, rounds, err := ReadSticky(body)
+		if err != nil {
+			t.Fatalf("round %d: %v", round, err)
+		}
+		in := stickyInput(round, strings.Repeat(string(rune('a'+round-1)), 7)+strings.Repeat(string(rune('0'+round)), 3), general("f-001", "question", false))
+		in.Summary = "Prose of round " + string(rune('0'+round)) + "."
+		in.Sticky = &StickyInput{Rounds: rounds + 1, Earlier: earlier}
+		body = Body(in)
+	}
+	if _, _, err := ReadSticky(body); err != nil {
+		t.Fatalf("the three-round body does not read back: %v", err)
+	}
+	cases := []struct{ name, old, new string }{
+		{"newest round's quoted footer removed", "\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
+		{"newest round's footer lost its marker", "\n> reviewed [`bbbbbbb`]", "\nreviewed [`bbbbbbb`]"},
+		{"prose lost its marker", "> Prose of round 2.", "Prose of round 2."},
+		{"heading lost its marker", "> #### Worth a look", "#### Worth a look"},
+		{"finding line lost its marker", "> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]", "Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`]"},
+		{"older round's line lost its marker", "> #### Must fix", "#### Must fix"},
+		{"older round's footer lost its marker", "\n> reviewed [`aaaaaaa`]", "\nreviewed [`aaaaaaa`]"},
+		{"newest round emptied", "> Prose of round 2.\n>\n> #### Worth a look\n>\n> <details>\n> <summary>🔵 <b>question</b>: Title f-001</summary>\n>\n> Body f-001.\n>\n> </details>\n>\n> reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n", "\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if strings.Count(body, c.old) != 1 {
+				t.Fatalf("the body holds %q %d times", c.old, strings.Count(body, c.old))
+			}
+			edited := strings.Replace(body, c.old, c.new, 1)
+			if _, _, err := ReadSticky(edited); err == nil {
+				t.Fatalf("ReadSticky accepted:\n%s", edited)
+			}
+		})
+	}
+	if _, _, err := ReadSticky(strings.Replace(body, "> Prose of round 2.", ">Prose of round 2.", 1)); err != nil {
+		t.Fatalf("a marker without its space was refused: %v", err)
+	}
+}
+
+// A round collapsed in an earlier layout MAY open on a quote the author wrote. It ends on a divider, not on a quoted
+// footer, so it is not taken for a quoted round and its unquoted lines are carried as they are.
+func TestReadStickyCarriesAnOlderRoundThatOpensOnAQuote(t *testing.T) {
+	old := strings.Replace(fixture(t, "sticky-v0.12.0-layout.md"), "\n\nThe blocking issue is fixed; one question left.\n\n", "\n\n> Quoted by the author.\n\nThe blocking issue is fixed; one question left.\n\n", 1)
+	earlier, _, err := ReadSticky(old)
+	if err != nil {
+		t.Fatalf("ReadSticky: %v", err)
+	}
+	if !strings.Contains(earlier[1], "</summary>\n\n> Quoted by the author.\n\nThe blocking issue is fixed; one question left.\n\n---\n\n#### Worth a look") {
+		t.Fatalf("round 2:\n%s", earlier[1])
+	}
+}
