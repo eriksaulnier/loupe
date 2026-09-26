@@ -253,3 +253,84 @@ func TestUnattendedPublishIsSilentWhenEveryEarlierFindingIsAssessed(t *testing.T
 		t.Fatalf("stderr warns with every earlier finding assessed: %q", stderr)
 	}
 }
+
+// asHuman hands the pull request back to the person the harness starts as, on the same data root.
+func (h *harness) asHuman() {
+	h.GH.AllowUser()
+	h.GH.SetViewer("reviewer")
+	h.client, h.GitHubErr = h.GH.Client(h.t), nil
+}
+
+// A pipeline and a person sharing one data root never read each other's receipts, so the person's earlier list and
+// what assess copies into their record hold only findings that person accepted.
+func TestAttendedRoundSkipsAnUnattendedReceipt(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.ciRound(false, bareExceptAndSleep, nil)
+
+	h.asHuman()
+	h.pushHead("src/round2.go")
+	if p := previousOf(t, h.captureRound(2)); p["from"] == "receipt" {
+		t.Fatalf("capture read the pipeline's receipt: %v", p)
+	}
+	e := h.mustRefuse("not-found", "show", "--previous", "--run", roundRef(2))
+	if msg := fmt.Sprint(e["message"]); !strings.Contains(msg, "round 1's receipt was published by github-actions[bot]") {
+		t.Fatalf("refusal %q does not name whose receipt was skipped", msg)
+	}
+	h.mustRefuse("not-found", "assess", "e-1", "--status", "open", "--run", roundRef(2))
+
+	h.mustOK("add", "--run", roundRef(2), "--from", h.WriteFile("finding.json", generalFinding("Cache race")))
+	h.IsTerminal = true
+	h.Stdin = "a\nq\n"
+	if _, stderr, exit := h.Run("review", roundRef(2), "--plain"); exit != 0 {
+		t.Fatalf("review exit %d stderr %q", exit, stderr)
+	}
+	h.Stdin = confirmPublish("", "y")
+	stdout, stderr, exit := h.Run("publish", roundRef(2), "--action", "comment", "--plain")
+	h.IsTerminal = false
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q", exit, stderr)
+	}
+	if strings.Contains(stdout, "earlier finding") {
+		t.Fatalf("the confirmation carries earlier findings:\n%s", stdout)
+	}
+	if _, findings := receiptFindings(t, h.RunDir(2)); len(findings) != 1 {
+		t.Fatalf("receipt findings %v, want only Cache race", findings)
+	}
+	if strings.Contains(string(readFile(t, filepath.Join(h.RunDir(2), "receipt.json"))), "Bare except") {
+		t.Fatal("the attended receipt holds a copy of the pipeline's finding")
+	}
+}
+
+// A pipeline round between two of a person's rounds is skipped, and the person's own older receipt still counts.
+func TestAttendedRoundReadsItsOwnOlderReceiptPastAPipelineRound(t *testing.T) {
+	h := newHarness(t)
+	h.captureRound(1)
+	h.publishRound(1)
+
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.pushHead("src/round2.go")
+	h.ciRound(false, bareExceptAndSleep, func(run string) {
+		if run != roundRef(2) {
+			t.Fatalf("pipeline captured %s, want %s", run, roundRef(2))
+		}
+		h.mustRefuse("not-found", "show", "--previous", "--run", run)
+	})
+
+	h.asHuman()
+	h.pushHead("src/round3.go")
+	if p := previousOf(t, h.captureRound(3)); p["from"] != "receipt" || fmt.Sprint(p["round"]) != "1" {
+		t.Fatalf("capture previous %v, want round 1's receipt", p)
+	}
+	shown := h.mustOK("show", "--previous", "--run", roundRef(3))
+	if shown["from"] != "receipt" || fmt.Sprint(shown["round"]) != "1" {
+		t.Fatalf("show --previous %v, want round 1's receipt", shown)
+	}
+	got := earlierRows(t, shown)
+	if len(got) != 1 || got[0].title != "Changed line" {
+		t.Fatalf("round 3 earlier %v, want only round 1's finding", got)
+	}
+	h.mustOK("assess", "e-1", "--status", "open", "--run", roundRef(3))
+}

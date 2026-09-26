@@ -7,6 +7,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -14,8 +15,8 @@ import (
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const PreviousSchema = 1
 
-// Previous is the round capture read back from GitHub for a run with no earlier local receipt: the publisher's newest
-// loupe review and its findings when Found, and otherwise the reason there is none.
+// Previous is the round capture read back from GitHub for a run with no earlier local receipt of its publisher's: the
+// publisher's newest loupe review and its findings when Found, and otherwise the reason there is none.
 type Previous struct {
 	Schema    int    `json:"schema"`
 	Found     bool   `json:"found"`
@@ -35,10 +36,7 @@ type Previous struct {
 func newestOwn(reviews []github.Review, viewer, source string) (github.Review, bool) {
 	var newest github.Review
 	for _, r := range reviews {
-		if r.State == "PENDING" || !publishedBy(r, viewer) {
-			continue
-		}
-		if viewer == "" && !sameSource(r.Body, source) {
+		if r.State == "PENDING" || !ownReview(r, viewer, source) {
 			continue
 		}
 		if r.ID > newest.ID {
@@ -46,6 +44,59 @@ func newestOwn(reviews []github.Review, viewer, source string) (github.Review, b
 		}
 	}
 	return newest, newest.ID != 0
+}
+
+func ownReview(r github.Review, viewer, source string) bool {
+	return publishedBy(r, viewer) && (viewer != "" || sameSource(r.Body, source))
+}
+
+// PreviousReceipt is the newest earlier local round whose receipt the run's own publisher wrote, by the rule newestOwn
+// applies to the reviews: a data root two publishers share must not hand one of them findings the other accepted. It
+// skips unpublished rounds because only a receipt records what the pull request author saw.
+func PreviousReceipt(root string, ref run.Ref, viewer, source string) (int, Receipt, error) {
+	skipped := ""
+	for round := ref.Round - 1; round >= 1; round-- {
+		receipt, found, err := LoadReceipt(run.RunDir(root, ref.Owner, ref.Repo, ref.Number, round))
+		if err != nil {
+			return 0, Receipt{}, err
+		}
+		if !found {
+			continue
+		}
+		if ownReview(receiptReview(receipt), viewer, source) {
+			return round, receipt, nil
+		}
+		if skipped == "" {
+			skipped = fmt.Sprintf("round %d's receipt was published by %s", round, receiptPublisher(receipt))
+		}
+	}
+	pr := run.Ref{Owner: ref.Owner, Repo: ref.Repo, Number: ref.Number}
+	message := fmt.Sprintf("no earlier round of %s was published", pr)
+	if skipped != "" {
+		message = fmt.Sprintf("no earlier round of %s was published here by %s: %s", pr, publisher(viewer, source), skipped)
+	}
+	return 0, Receipt{}, refusal.New(refusal.NotFound, message, fmt.Sprintf("loupe show --run %s", ref))
+}
+
+// receiptReview is the review a receipt records. A receipt written before Author was recorded predates unattended
+// publication, so its viewer is its author.
+func receiptReview(r Receipt) github.Review {
+	author := r.Author
+	if author == "" {
+		author = r.Envelope.Viewer
+	}
+	return github.Review{User: author, Body: r.Envelope.Body}
+}
+
+func receiptPublisher(r Receipt) string {
+	review := receiptReview(r)
+	if !r.Envelope.Unattended() {
+		return review.User
+	}
+	if source := render.MetaSource(review.Body); source != "" {
+		return review.User + " with source " + sourceName(source)
+	}
+	return review.User + " with no source"
 }
 
 // ReadPrevious never fails: the previous round is an aid to the reviewer, so a round that cannot be read is a reason
@@ -158,7 +209,7 @@ func EncodePrevious(p Previous) ([]byte, error) {
 }
 
 // LoadPrevious reports found false only when previous.json does not exist, as for a run captured before it did or after
-// a local receipt. A damaged file is a record refusal.
+// a local receipt of its publisher's. A damaged file is a record refusal.
 func LoadPrevious(dir string) (Previous, bool, error) {
 	var p Previous
 	found, err := loadRecord(filepath.Join(dir, run.PreviousFile), &p, PreviousSchema, func() string { return previousProblem(p) })

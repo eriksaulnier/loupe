@@ -3,6 +3,7 @@ package publish
 import (
 	"context"
 	"net/http"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -259,5 +260,72 @@ func TestEarlierCarriesOpenAssessmentsThenTheFiledFindings(t *testing.T) {
 	}
 	if got := Earlier(nil, nil, in); got == nil || len(got) != 0 {
 		t.Fatalf("no findings gave %#v, want an empty list", got)
+	}
+}
+
+func saveReceiptAt(t *testing.T, root string, round int, r Receipt) {
+	t.Helper()
+	dir := run.RunDir(root, "o", "r", 5, round)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveReceipt(dir, &r); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func attendedReceipt(viewer, author string) Receipt {
+	return Receipt{Author: author, Envelope: Envelope{Viewer: viewer, Body: publishedBody("", "Human", nil)}}
+}
+
+func unattendedReceipt(source string) Receipt {
+	return Receipt{Author: "ci[bot]", Envelope: Envelope{Body: publishedBody(source, "Bot", nil)}}
+}
+
+func TestPreviousReceiptKeepsOnlyThePublishersOwn(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(run.RunDir(root, "o", "r", 5, 4), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	saveReceiptAt(t, root, 1, attendedReceipt("reviewer", ""))
+	saveReceiptAt(t, root, 2, unattendedReceipt("ci-review@1.0.0"))
+	saveReceiptAt(t, root, 3, attendedReceipt("someone-else", "someone-else"))
+	ref := run.Ref{Owner: "o", Repo: "r", Number: 5, Round: 5}
+
+	for _, c := range []struct {
+		name, viewer, source string
+		want                 int
+	}{
+		{"a person skips a pipeline's and another person's rounds", "reviewer", "", 1},
+		{"a pipeline skips a person's rounds", "", "ci-review@2.0.0", 2},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			round, _, err := PreviousReceipt(root, ref, c.viewer, c.source)
+			if err != nil || round != c.want {
+				t.Fatalf("got round %d, %v, want %d", round, err, c.want)
+			}
+		})
+	}
+
+	_, _, err := PreviousReceipt(root, ref, "", "other-review")
+	r, ok := refusal.As(err)
+	want := "no earlier round of o/r#5 was published here by a [bot] with source other-review: round 3's receipt was published by someone-else"
+	if !ok || r.Code != refusal.NotFound || r.Message != want {
+		t.Fatalf("got %v, want not-found %q", err, want)
+	}
+}
+
+func TestPreviousReceiptRefusesWhenNoneWasPublished(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(run.RunDir(root, "o", "r", 5, 1), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	saveReceiptAt(t, root, 2, attendedReceipt("reviewer", "reviewer"))
+	for _, round := range []int{1, 2} {
+		_, _, err := PreviousReceipt(root, run.Ref{Owner: "o", Repo: "r", Number: 5, Round: round}, "reviewer", "")
+		r, ok := refusal.As(err)
+		if !ok || r.Code != refusal.NotFound || r.Message != "no earlier round of o/r#5 was published" {
+			t.Fatalf("round %d: got %v", round, err)
+		}
 	}
 }

@@ -278,19 +278,17 @@ type previous struct {
 	earlier []draft.EarlierFinding
 }
 
-// previousRound is the newest earlier local round with a receipt, the exact envelope loupe sent, or else the round
-// capture read back from GitHub and stored in this run. It reads no network, so a reviewer with no GitHub access can
-// run it.
+// previousRound is the newest earlier local round with a receipt from this run's publisher, the exact envelope loupe
+// sent, or else the round capture read back from GitHub and stored in this run. It reads no network, so a reviewer with
+// no GitHub access can run it.
 func previousRound(root string, ref run.Ref) (previous, error) {
-	round, dir, err := run.PreviousPublished(root, ref)
+	dir := run.RunDir(root, ref.Owner, ref.Repo, ref.Number, ref.Round)
+	target, err := run.LoadTarget(dir)
+	if err != nil {
+		return previous{}, err
+	}
+	round, receipt, err := publish.PreviousReceipt(root, ref, target.Viewer, target.Source)
 	if err == nil {
-		receipt, found, err := publish.LoadReceipt(dir)
-		if err != nil {
-			return previous{}, err
-		}
-		if !found {
-			return previous{}, fmt.Errorf("receipt.json in %s disappeared while it was being read", dir)
-		}
 		env := receipt.Envelope
 		filedIn := draft.FiledIn{Round: round, ReviewURL: receipt.ReviewURL, Commit: env.CommitID}
 		return previous{from: "receipt", round: round, reviewURL: receipt.ReviewURL, findings: env.Findings,
@@ -300,7 +298,7 @@ func previousRound(root string, ref run.Ref) (previous, error) {
 	if !ok || local.Code != refusal.NotFound {
 		return previous{}, err
 	}
-	stored, found, err := publish.LoadPrevious(run.RunDir(root, ref.Owner, ref.Repo, ref.Number, ref.Round))
+	stored, found, err := publish.LoadPrevious(dir)
 	if err != nil {
 		return previous{}, err
 	}
@@ -308,14 +306,22 @@ func previousRound(root string, ref run.Ref) (previous, error) {
 	case !found:
 		return previous{}, local
 	case !stored.Found:
-		pr := run.Ref{Owner: ref.Owner, Repo: ref.Repo, Number: ref.Number}
 		return previous{}, refusal.New(refusal.NotFound,
-			fmt.Sprintf("no earlier round of %s was published here, and none can be read back from GitHub: %s", pr, stored.Reason),
+			fmt.Sprintf("%s, and none can be read back from GitHub: %s", publishedHere(local.Message), stored.Reason),
 			local.Fix)
 	}
 	filedIn := draft.FiledIn{Round: stored.Round, ReviewURL: stored.ReviewURL, Commit: stored.Commit}
 	return previous{from: "github", round: stored.Round, reviewURL: stored.ReviewURL, findings: stored.Findings,
 		earlier: publish.Earlier(stored.Findings, stored.Assessments, filedIn)}, nil
+}
+
+// publishedHere appends "here" when no receipt was skipped, since the message goes on to say none was published on
+// GitHub either.
+func publishedHere(local string) string {
+	if strings.HasSuffix(local, " was published") {
+		return local + " here"
+	}
+	return local
 }
 
 // runShowComments answers only from what capture stored, so a reviewer with no GitHub access can run it. A failed read
