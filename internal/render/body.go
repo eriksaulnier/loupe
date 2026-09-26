@@ -101,12 +101,14 @@ func Body(in Input) string {
 		})
 	}
 
-	var head []string
-	if chips := chipsRow(len(blocking), rest); chips != "" {
-		head = append(head, chips)
+	chips := countChips(len(blocking), rest)
+	summary := strings.TrimRight(in.Summary, "\n")
+	if in.Sticky != nil {
+		summary = trimmedLines(summary)
 	}
-	if in.Summary != "" {
-		head = append(head, strings.TrimRight(in.Summary, "\n"))
+	head := []string{chips.row()}
+	if summary != "" {
+		head = append(head, summary)
 	}
 	blocks := []string{strings.Join(head, "\n\n")}
 
@@ -147,13 +149,22 @@ func Body(in Input) string {
 	if in.Sticky != nil {
 		sticky = fmt.Sprintf(" sticky=%d", in.Sticky.Rounds)
 	}
-	if in.Sticky != nil && in.Sticky.Note != "" {
-		footer += "\n\n" + noteStart + "\n\n" + strings.Trim(in.Sticky.Note, "\n") + "\n\n" + noteEnd
+	note := ""
+	if in.Sticky != nil {
+		note = trimmedLines(in.Sticky.Note)
+	}
+	if note != "" {
+		footer += "\n\n" + note
 	}
 	// Each round's footer sits under the round, so the earlier rounds follow the newest one's footer, and a round
 	// demoted later carries its footer into its collapse.
 	blocks = append(blocks, footer)
+	digest := fmt.Sprintf("<!-- loupe digest=%s publication=%s -->", in.Digest, in.PublicationID)
+	top := ""
 	if in.Sticky != nil {
+		// The anchor opens the body, as every other round's opens that round, so read-back needs one rule for all.
+		round := strings.Join(blocks, "\n\n---\n\n")
+		top = sealAnchor(topFields(in.Sticky.Rounds, in.HeadSHA, chips, lineCount(summary), lineCount(note)), round+"\n"+digest) + "\n\n"
 		if earlier := earlierSection(*in.Sticky); earlier != "" {
 			blocks = append(blocks, earlier)
 		}
@@ -163,33 +174,74 @@ func Body(in Input) string {
 		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded, sticky)
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
-	body := strings.Join(blocks, "\n\n---\n\n") + fmt.Sprintf("\n\n<!-- loupe digest=%s publication=%s -->\n", in.Digest, in.PublicationID)
+	body := top + strings.Join(blocks, "\n\n---\n\n") + "\n\n" + digest + "\n"
 	return withRecord(body, metaLine, in.Findings, in.Assessments, in.OmitRecord)
 }
 
-// chipsRow is a key to the row dots below: a blocking row leads with ⛔, and every other row with its label group's dot.
-// With no findings it is one pill that says so.
-func chipsRow(blocking int, rest []Finding) string {
-	var chips []string
-	if blocking > 0 {
-		chips = append(chips, CodeSpan(fmt.Sprintf("⛔ %d blocking", blocking)))
-	}
-	var counts [4]int
+// chipCounts is what the chips row counts: blocking findings, then the non-blocking findings of each label group. A
+// sticky round's anchor carries it, so a collapsed round's summary pills come from the same counts as its chips row.
+type chipCounts struct {
+	blocking int
+	groups   [4]int
+}
+
+func countChips(blocking int, rest []Finding) chipCounts {
+	c := chipCounts{blocking: blocking}
 	for _, f := range rest {
-		counts[group(f.Label)]++
+		c.groups[group(f.Label)]++
+	}
+	return c
+}
+
+// chips is a key to the row dots below: a blocking row leads with ⛔, and every other row with its label group's dot.
+// With no findings it is one chip that says so.
+func (c chipCounts) chips() []string {
+	var chips []string
+	if c.blocking > 0 {
+		chips = append(chips, fmt.Sprintf("⛔ %d blocking", c.blocking))
 	}
 	nouns := [...][2]string{groupIssue: {"issue", "issues"}, groupSuggestion: {"suggestion", "suggestions"},
 		groupQuestion: {"question", "questions"}, groupOther: {"other", "other"}}
-	for g, n := range counts {
+	for g, n := range c.groups {
 		if n > 0 {
-			chips = append(chips, CodeSpan(fmt.Sprintf("%s %d %s", dots[g], n, plural(n, nouns[g][0], nouns[g][1]))))
+			chips = append(chips, fmt.Sprintf("%s %d %s", dots[g], n, plural(n, nouns[g][0], nouns[g][1])))
 		}
 	}
 	// A clean review still opens on the scoreboard, so a reader sees at a glance that nothing was found.
 	if len(chips) == 0 {
-		return CodeSpan(cleanChip)
+		return []string{cleanChip}
 	}
-	return strings.Join(chips, " ")
+	return chips
+}
+
+func (c chipCounts) row() string {
+	var spans []string
+	for _, chip := range c.chips() {
+		spans = append(spans, CodeSpan(chip))
+	}
+	return strings.Join(spans, " ")
+}
+
+// pills match the scoreboard a round opened on. A <summary> is raw HTML, so they are <code>, not backticks.
+func (c chipCounts) pills() string {
+	var pills []string
+	for _, chip := range c.chips() {
+		pills = append(pills, "<code>"+chip+"</code>")
+	}
+	return strings.Join(pills, " ")
+}
+
+// trimmedLines reads line endings as LF and drops blank lines at both ends, as read-back cuts a round, so the anchor's
+// line counts hold. GitHub renders the same either way.
+func trimmedLines(s string) string {
+	return strings.Join(trimBlank(strings.Split(normalizeLines(s), "\n")), "\n")
+}
+
+func lineCount(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
 }
 
 // cleanChip is the scoreboard of a review with no findings.
@@ -524,8 +576,8 @@ func sinceLink(in Input) string {
 		return ""
 	}
 	round, sha := in.Sticky.PrevRound, in.Sticky.PrevSHA
-	if round == 0 {
-		round, sha = PreviousRound(in.Sticky.Earlier)
+	if round == 0 && len(in.Sticky.Earlier) > 0 {
+		round, sha = in.Sticky.Earlier[0].N, in.Sticky.Earlier[0].Commit
 	}
 	if round == 0 {
 		return ""

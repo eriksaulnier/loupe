@@ -1,5 +1,3 @@
-<!-- loupe-round v=1 n=3 commit=ccccccc333 blocking=1 issues=0 suggestions=1 questions=0 other=0 prose=1 note=0 sha256=f519b957bd54280f8c484a42e93167a92bcfdc5b75f1f87fd6eea1881e103e11 -->
-
 `⛔ 1 blocking` `🟣 1 suggestion`
 
 A new blocking issue, and one suggestion.
@@ -30,7 +28,13 @@ Body f-002.
 
 ---
 
-reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since round 2](https://github.com/o/r/compare/bbbbbbb222...ccccccc333) · via `gadfly-review-pr 2.3.0`
+reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since round 2](https://github.com/o/r/compare/bbbbbbb222...ccccccc333) · via `gadfly-review-pr 2.3.0` · `reviewer/model-1` · unattended
+
+<!-- loupe-note -->
+
+Pushed more commits? Add the label for a fresh review of the whole PR.
+
+<!-- loupe-note-end -->
 
 ---
 
@@ -38,7 +42,7 @@ reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since
 
 ### Earlier rounds
 
-<!-- loupe-round v=1 n=2 commit=bbbbbbb222 sha256=95663b4ae4b03e0f56ec5389abfda9f8f23758393acaf5ab10222904b2fa63bd -->
+<!-- loupe-round -->
 
 <details>
 <summary>Round 2 · reviewed <code>bbbbbbb</code> · <code>🔵 1 question</code></summary>
@@ -60,7 +64,7 @@ reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since
 
 </details>
 
-<!-- loupe-round v=1 n=1 commit=aaaaaaa111 sha256=d2a5b8aa5343cfa3104062f32e650d06631c6f962ce58fc0d63bd9b811c33152 -->
+<!-- loupe-round -->
 
 <details>
 <summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code></summary>
@@ -81,5 +85,5 @@ reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since
 </details>
 
 <!-- loupe digest=3333333333333333333333333333333333333333333333333333333333333333 publication=00000000-0000-4000-8000-000000000003 -->
-<!-- loupe-findings v=1 sha256=1b466169dece2588220aa438c32b8dbc7e3f384ad1e67fc94bfa62642403ad4d bM6xysIwFAXgV/k5c/7aZszooq7STRzS5jYGL4k0yVBK312iiBU6XbhwzncuM5yBwvBf1w0EkktMUGjL/ft8u2AmKOyDmd6/CgIcep1c8FA+Mwuw7oih4GLMVEIc+rvzFiqNmRaxkuSmJDck+SvNeOh0K4hPNHrNO13ZAIHoTCk7nw7HtiScJ6hGLt9ZMVtL8VWz3jZojrRcnwEAAP// -->
-<!-- loupe-meta v=1 round=3 src=gadfly-review-pr@2.3.0 inline=none blocking=1 issues=1 suggestions=1 questions=0 other=0 excluded=0 withdrawn=0 reinstated=0 regraded=0 sticky=3 -->
+<!-- loupe-findings v=1 sha256=2ca1f700492898287d5b59568bed48672d9dd05c2e890ed6faf2ed252ce461aa bM6xysIwFAXgV/k5c/7aZszooq7STRzS5jYGL4k0yVBK312iiBU6XbhwzncuM5yBwvBf1w0EkktMUGjL/ft8u2AmKOyDmd6/CgIcep1c8FA+Mwuw7oih4GLMVEIc+rvzFiqNmRaxkuSmJDck+SvNeOh0K4hPNHrNO13ZAIHoTCk7nw7HtiScJ6hGLt9ZMVtL8VWz3jZojrRcnwEAAP// -->
+<!-- loupe-meta v=1 round=3 unattended=1 src=gadfly-review-pr@2.3.0 model=reviewer/model-1 inline=none blocking=1 issues=1 suggestions=1 questions=0 other=0 excluded=0 withdrawn=0 reinstated=0 regraded=0 sticky=3 -->

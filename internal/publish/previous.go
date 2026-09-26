@@ -162,12 +162,12 @@ func roundCommit(review github.Review) string {
 	if _, sticky := render.StickyRounds(review.Body); !sticky {
 		return review.CommitID
 	}
+	// The round on top demotes to the first round ReadSticky returns, whose commit its anchor carries.
 	earlier, _, err := render.ReadSticky(review.Body)
 	if err != nil {
 		return ""
 	}
-	_, sha := render.PreviousRound(earlier)
-	return sha
+	return earlier[0].Commit
 }
 
 func draftAssessments(as []render.RecordAssessment) []draft.Assessment {

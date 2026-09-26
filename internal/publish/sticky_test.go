@@ -1,11 +1,14 @@
 package publish
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -451,5 +454,87 @@ func TestRunRefusesANoteOutsideAnUnattendedStickyRound(t *testing.T) {
 			t.Errorf("%s: got %v, want usage", name, err)
 		}
 		fx.checkWrites(0, 0)
+	}
+}
+
+// editOnGitHub changes one line of the only review, as a person editing it on GitHub would.
+func editOnGitHub(t *testing.T, fx *fixture, old, new string) {
+	t.Helper()
+	review := onlyReview(t, fx)
+	if !strings.Contains(review.Body, old) {
+		t.Fatalf("the review does not hold %q:\n%s", old, review.Body)
+	}
+	fx.gh.EditReview("acme", "widgets", 42, review.ID, strings.Replace(review.Body, old, new, 1))
+}
+
+// A round edited on GitHub is carried as found, and the human confirming the next round is told which one.
+func TestRunStickyAttendedNamesAnEditedRound(t *testing.T) {
+	first := newAttendedStickyRun(t, nil)
+	if _, err := first.run(); err != nil {
+		t.Fatal(err)
+	}
+	editOnGitHub(t, first, "reviewed [`1111111`]", "reviewed, typo fixed, [`1111111`]")
+	second := newAttendedStickyRun(t, first.gh)
+	if _, err := second.run(); err != nil {
+		t.Fatal(err)
+	}
+	if edited := second.previews[0].EditedIn(second.previews[0].Body); !slices.Equal(edited, []int{1}) {
+		t.Fatalf("preview names %v as edited, want round 1", edited)
+	}
+	if sent := sentBody(t, second.gh); !strings.Contains(sent, "> reviewed, typo fixed, [`1111111`]") {
+		t.Fatalf("the edit was not carried:\n%s", sent)
+	}
+	third := newAttendedStickyRun(t, first.gh)
+	if _, err := third.run(); err != nil {
+		t.Fatal(err)
+	}
+	if edited := third.previews[0].EditedIn(third.previews[0].Body); len(edited) != 0 {
+		t.Fatalf("round 1 is named as edited a second time: %v", edited)
+	}
+}
+
+// Nobody confirms an unattended round, so it names an edited round on stderr, where a pipeline's log keeps it.
+func TestRunStickyUnattendedNamesAnEditedRoundOnStderr(t *testing.T) {
+	first := newStickyRun(t, readyDraft(), nil, 1)
+	if _, err := first.run(); err != nil {
+		t.Fatal(err)
+	}
+	editOnGitHub(t, first, "reviewed [`1111111`]", "reviewed, typo fixed, [`1111111`]")
+	second := newStickyRun(t, readyDraft(), first.gh, 2)
+	var stderr bytes.Buffer
+	second.opts.Stderr = &stderr
+	if _, err := second.run(); err != nil {
+		t.Fatal(err)
+	}
+	if got := stderr.String(); got != EditedNotice([]int{1})+"\n" {
+		t.Fatalf("stderr %q", got)
+	}
+}
+
+func TestEditedNotice(t *testing.T) {
+	for rounds, want := range map[string]string{
+		"1":     "Round 1 was edited on GitHub since loupe wrote it. It is carried as it was found.",
+		"3 1":   "Rounds 3 and 1 were edited on GitHub since loupe wrote them. They are carried as they were found.",
+		"4 3 1": "Rounds 4, 3 and 1 were edited on GitHub since loupe wrote them. They are carried as they were found.",
+	} {
+		var ns []int
+		for _, f := range strings.Fields(rounds) {
+			n, _ := strconv.Atoi(f)
+			ns = append(ns, n)
+		}
+		if got := EditedNotice(ns); got != want {
+			t.Errorf("%v: %q", ns, got)
+		}
+	}
+}
+
+// A round the length limit dropped is not in the body, so it is not named as carried.
+func TestEditedRoundsNamesOnlyRoundsTheBodyCarries(t *testing.T) {
+	kept := render.Round{N: 3, Anchor: "<!-- round 3 anchor -->", Edited: true}
+	dropped := render.Round{N: 1, Anchor: "<!-- round 1 anchor -->", Edited: true}
+	plain := render.Round{N: 2, Anchor: "<!-- round 2 anchor -->"}
+	body := "top\n\n" + kept.Anchor + "\n\n" + plain.Anchor + "\n\n"
+	if got := editedRounds(body, []render.Round{kept, plain, dropped}); !slices.Equal(got, []int{3}) {
+		t.Fatalf("edited %v, want [3]", got)
 	}
 }

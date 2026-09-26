@@ -1,3 +1,5 @@
+<!-- loupe-round v=1 n=2 commit=bbbbbbb222 blocking=0 issues=0 suggestions=0 questions=1 other=0 prose=1 note=0 sha256=666e652a4c70d962fd4ab706354e02887d582276057837df826510561a309c6c -->
+
 `🔵 1 question`
 
 The blocking issue is fixed; one question left.
@@ -23,7 +25,7 @@ reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since
 
 ### Earlier rounds
 
-<!-- loupe-round -->
+<!-- loupe-round v=1 n=1 commit=aaaaaaa111 sha256=d2a5b8aa5343cfa3104062f32e650d06631c6f962ce58fc0d63bd9b811c33152 -->
 
 <details>
 <summary>Round 1 · reviewed <code>aaaaaaa</code> · <code>⛔ 1 blocking</code></summary>
@@ -44,5 +46,5 @@ reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since
 </details>
 
 <!-- loupe digest=2222222222222222222222222222222222222222222222222222222222222222 publication=00000000-0000-4000-8000-000000000002 -->
-<!-- loupe-findings v=1 sha256=dacbaad1d66d1b82b6710399104c8f06bee67855fbd940ffec7bff2407ae2d09 NMixCsIwFIbRV5FvjlLXO/oMbuKQNKkEf3KRpkMQ311UnA6cy5OaMZb9NB0J9NpVMM4fd/9NngfGyfP43YGAfI69esPaJgUUUxHGYyvr9wNJPt9ru2FL1Fpe13cAAAD//w== -->
+<!-- loupe-findings v=1 sha256=d9d69ce07bb93c8bd8e1da6f734490039e1df1e8f6bfac4dbe6231681a5869ec NMixCsIwFIbRV5FvjlLXO/oMbuKQNKkEf3KRpkMQ311UnA6cy5OaMZb9NB0J9NpVMM4fd/9NngfGyfP43YGAfI69esPaJgUUUxHGYyvr9wNJPt9ru2FL1Fpe13cAAAD//w== -->
 <!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=none blocking=0 issues=0 suggestions=0 questions=1 other=0 excluded=0 withdrawn=0 reinstated=0 regraded=0 sticky=2 -->

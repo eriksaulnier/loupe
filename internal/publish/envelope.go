@@ -64,7 +64,7 @@ type StickyBuild struct {
 	Review github.Review
 	// Rounds counts this round too.
 	Rounds  int
-	Earlier []string
+	Earlier []render.Round
 }
 
 // Build composes the review from the accepted findings, or, when unattended, the whole publishable set. It rechecks
@@ -170,7 +170,11 @@ func Build(in BuildInput) (Envelope, error) {
 	if in.Sticky != nil {
 		// The round before is named from the full history, before the length limit may drop its block, so the footer's
 		// compare link survives the drop.
-		prevRound, prevSHA := render.PreviousRound(in.Sticky.Earlier)
+		var prevRound int
+		var prevSHA string
+		if len(in.Sticky.Earlier) > 0 {
+			prevRound, prevSHA = in.Sticky.Earlier[0].N, in.Sticky.Earlier[0].Commit
+		}
 		r.Sticky = &render.StickyInput{Rounds: in.Sticky.Rounds, Earlier: in.Sticky.Earlier, PrevRound: prevRound, PrevSHA: prevSHA, Note: note}
 	}
 	env.Body = render.Body(r)

@@ -310,6 +310,9 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Co
 		if preview.Edits != "" {
 			p.printf("%s\n\n", editLine(preview.Edits))
 		}
+		if edited := editedIn(preview, preview.Body); len(edited) > 0 {
+			p.printf("%s\n\n", render.ForDisplay(publish.EditedNotice(edited)))
+		}
 		p.printf("Review body:\n\n%s\n", render.ForDisplay(displayBody(preview.Body)))
 		p.printf("\nInline comments: %d\n", len(preview.Comments))
 		for _, c := range preview.Comments {
@@ -344,6 +347,9 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Co
 			}
 			// Nobody answers y to a body they were not shown, and "exact request payload" has to stay exact, so a
 			// review that gained an opening is printed again with the envelope that carries it.
+			if edited := editedIn(preview, env.Body); len(edited) > 0 {
+				p.printf("\n%s\n", render.ForDisplay(publish.EditedNotice(edited)))
+			}
 			p.printf("\nReview body:\n\n%s\n", render.ForDisplay(displayBody(env.Body)))
 			p.printf("\nEnvelope JSON:\n\n%s\n", render.ForDisplay(envJSON))
 			break

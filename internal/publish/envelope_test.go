@@ -473,11 +473,11 @@ func TestComposedBodyFollowsTheOrderTheHumanDecidedIn(t *testing.T) {
 
 // Earlier rounds give way oldest first until the body fits; the round being published never does.
 func TestBuildStickyDropsTheOldestRoundsToFit(t *testing.T) {
-	block := func(n int) string {
-		return fmt.Sprintf("<details>\n<summary>Round %d</summary>\n\n%s\n\n</details>", n, strings.Repeat("x", 30000))
+	block := func(n int) render.Round {
+		return stickyRound(n, "abcdef1", fmt.Sprintf("<details>\n<summary>Round %d</summary>\n\n%s\n\n</details>", n, strings.Repeat("x", 30000)))
 	}
 	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", false)
-	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 5, Earlier: []string{block(4), block(3), block(2), block(1)}}
+	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 5, Earlier: []render.Round{block(4), block(3), block(2), block(1)}}
 	env, err := Build(in)
 	if err != nil {
 		t.Fatal(err)
@@ -486,7 +486,8 @@ func TestBuildStickyDropsTheOldestRoundsToFit(t *testing.T) {
 		t.Fatalf("body is %d characters", n)
 	}
 	if !strings.Contains(env.Body, "Round 4") || !strings.Contains(env.Body, "Round 3") || strings.Contains(env.Body, "Round 2") ||
-		!strings.Contains(env.Body, "The 2 oldest rounds were dropped") || !strings.Contains(env.Body, " sticky=5 -->") || env.EditReviewID != 77 {
+		!strings.Contains(env.Body, "The 2 oldest rounds were dropped") || !strings.Contains(env.Body, " sticky=5 -->") || env.EditReviewID != 77 ||
+		!strings.Contains(env.Body, block(3).Anchor) || strings.Contains(env.Body, block(2).Anchor) {
 		t.Fatalf("kept the wrong rounds:\n%s", env.Body[:200])
 	}
 	if len(in.Sticky.Earlier) != 4 {
@@ -496,7 +497,7 @@ func TestBuildStickyDropsTheOldestRoundsToFit(t *testing.T) {
 	d := readyDraft()
 	d.Summary = strings.Repeat(strings.Repeat("a", 99)+"\n", 700)
 	in = buildInput(fixtureTarget(), d, "comment", "none", true)
-	in.Sticky = &StickyBuild{Rounds: 2, Earlier: []string{block(1)}}
+	in.Sticky = &StickyBuild{Rounds: 2, Earlier: []render.Round{block(1)}}
 	_, err = Build(in)
 	if r, ok := refusal.As(err); !ok || r.Details["rule"] != "limit" {
 		t.Fatalf("a round over the limit alone must refuse with limit, got %#v", err)
@@ -508,7 +509,7 @@ func TestBuildStickyKeepsTheCompareLinkWhenItsRoundIsDropped(t *testing.T) {
 	block := "<details>\n<summary>Round 1 · reviewed <code>abcdef1</code> · <code>🟢 no findings</code></summary>\n\n" +
 		strings.Repeat("x", 70000) + "\n\n</details>"
 	in := buildInput(fixtureTarget(), readyDraft(), "comment", "none", false)
-	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []string{block}}
+	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []render.Round{stickyRound(1, "abcdef1", block)}}
 	env, err := Build(in)
 	if err != nil {
 		t.Fatal(err)
@@ -519,6 +520,11 @@ func TestBuildStickyKeepsTheCompareLinkWhenItsRoundIsDropped(t *testing.T) {
 	if !strings.Contains(env.Body, "[changes since round 1](") || !strings.Contains(env.Body, "/compare/abcdef1...") {
 		t.Fatalf("the compare link went with the dropped round:\n%s", env.Body[len(env.Body)-600:])
 	}
+}
+
+// stickyRound is a collapsed round whose anchor names it, so a test can see the anchor go with its round.
+func stickyRound(n int, commit, block string) render.Round {
+	return render.Round{N: n, Commit: commit, Anchor: fmt.Sprintf("<!-- round %d anchor -->", n), Block: block}
 }
 
 // noise is n characters that deflate poorly, so a finding carrying it makes the record nearly as long as the finding.
@@ -555,7 +561,7 @@ func TestBuildStickyDropsEarlierRoundsBeforeTheRecord(t *testing.T) {
 	d.Findings[0].Body = noise(30000)
 	in := buildInput(fixtureTarget(), d, "comment", "none", false)
 	earlier := fmt.Sprintf("<details>\n<summary>Round 1</summary>\n\n%s\n\n</details>", strings.Repeat("x", 20000))
-	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []string{earlier}}
+	in.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []render.Round{stickyRound(1, "abcdef1", earlier)}}
 	env, err := Build(in)
 	if err != nil {
 		t.Fatal(err)
