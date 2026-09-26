@@ -3,7 +3,9 @@
 # docs/assets/review-dark.png. GitHub's own render is the point, so every run posts one COMMENT review to a scratch
 # pull request: a render of the Markdown anywhere else is not what a reader sees (docs/github-facts.md). Submitted
 # reviews cannot be deleted, so the scratch pull request keeps every run's review; LOUPE_SCREENSHOT_REVIEW=<id>
-# recaptures one already posted instead of posting again.
+# recaptures one already posted instead of posting again. LOUPE_SCREENSHOT_STICKY=1 posts the three-round sticky body
+# from loupe-demo body --sticky instead and writes docs/assets/review-sticky.png and review-sticky-dark.png for the CI
+# page. The README's pair is left alone.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -16,6 +18,12 @@ for tool in gh jq perl pnpm node go; do
 done
 
 review=${LOUPE_SCREENSHOT_REVIEW:-}
+body_args=(body)
+name=review
+if [[ -n ${LOUPE_SCREENSHOT_STICKY:-} ]]; then
+	body_args=(body --sticky)
+	name=review-sticky
+fi
 
 # A recapture posts nothing: the review already holds its pill URLs, so it needs neither a pushed commit nor the body.
 if [[ -z $review ]]; then
@@ -42,7 +50,7 @@ pnpm add --dir "$tmp/pw" "playwright@$playwright_version" --silent >/dev/null
 "$tmp/pw/node_modules/.bin/playwright" install chromium >/dev/null
 
 if [[ -z $review ]]; then
-	go run ./cmd/loupe-demo body >"$tmp/body.md"
+	go run ./cmd/loupe-demo "${body_args[@]}" >"$tmp/body.md"
 	# Every finding stays collapsed: the rows are what the picture is for, and the terminal pictures show a finding's
 	# contents. That also keeps it near the other README images' proportions.
 	REF="$ref" perl -0pi -e 's{raw\.githubusercontent\.com/eriksaulnier/loupe/main/}{raw.githubusercontent.com/eriksaulnier/loupe/$ENV{REF}/}g' "$tmp/body.md"
@@ -98,7 +106,7 @@ const { chromium } = require('playwright');
 EOF
 url="https://github.com/$scratch_repo/pull/$scratch_pr"
 # Both are captured before either replaces the committed pair, so a failed run never leaves them mismatched.
-NODE_PATH="$tmp/pw/node_modules" node "$tmp/shot.cjs" "$url" "$review" "$tmp/review.png" light
-NODE_PATH="$tmp/pw/node_modules" node "$tmp/shot.cjs" "$url" "$review" "$tmp/review-dark.png" dark
-mv "$tmp/review.png" "$tmp/review-dark.png" docs/assets/
-echo "review-screenshot: wrote docs/assets/review.png and docs/assets/review-dark.png" >&2
+NODE_PATH="$tmp/pw/node_modules" node "$tmp/shot.cjs" "$url" "$review" "$tmp/$name.png" light
+NODE_PATH="$tmp/pw/node_modules" node "$tmp/shot.cjs" "$url" "$review" "$tmp/$name-dark.png" dark
+mv "$tmp/$name.png" "$tmp/$name-dark.png" docs/assets/
+echo "review-screenshot: wrote docs/assets/$name.png and docs/assets/$name-dark.png" >&2
