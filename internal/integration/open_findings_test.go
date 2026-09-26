@@ -143,6 +143,27 @@ func TestAssessRefusals(t *testing.T) {
 	}
 }
 
+// The draft is what show returns, so an assessment recorded a moment ago is readable the same way.
+func TestShowCarriesTheDraftsAssessments(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.ciRound(true, bareExceptAndSleep, nil)
+	h.pushHead("src/round2.go")
+	run := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	h.mustOK("assess", "e-1", "--status", "open", "--run", run)
+	shown := h.mustOK("show", "--run", run)
+	rows, _ := shown["assessments"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("show after assess: assessments %v, want one", shown["assessments"])
+	}
+	row, _ := rows[0].(map[string]any)
+	finding, _ := row["finding"].(map[string]any)
+	if row["ref"] != "e-1" || row["status"] != "open" || finding["title"] == nil {
+		t.Fatalf("show after assess: assessment %v, want e-1 open with its finding", row)
+	}
+}
+
 // An attended round publishes its assessments under the human's name, so the confirmation names them, the receipt keeps
 // them, and the next local round carries the open one from that receipt.
 func TestAttendedRoundCarriesItsAssessmentsThroughItsReceipt(t *testing.T) {

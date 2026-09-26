@@ -33,6 +33,7 @@ Result (--json):
    "decisions": {"f-001": {"findingId": "f-001", "decision": "accepted", "findingRev": 1, "at": "..."}},
    "notes": [{"id": "n-001", "findingId": "f-001", "body": "...", "at": "...", "status": "open"}],
    "replies": [{"id": "r-001", "noteId": "n-001", "body": "...", "by": "agent", "at": "..."}],
+   "assessments": [{"ref": "e-1", "status": "open", "finding": {"...": "as in show --previous's earlier"}}],
    "target": {"owner": "owner", "repo": "repo", "number": 123, "round": 1, "headSha": "...", "...": "as in capture"},
    "dispositions": {"f-001": "accepted"},
    "readiness": {"ready": true, "accepted": ["f-001"], "pending": [], "excluded": [],
@@ -150,7 +151,7 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 	dispositions := draft.Dispositions(d)
 	readiness := draft.ReadinessOf(d)
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{
+		payload := map[string]any{
 			"schema":       d.Schema,
 			"summary":      d.Summary,
 			"findings":     d.Findings,
@@ -161,7 +162,12 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 			"dispositions": dispositions,
 			"readiness":    readiness,
 			"digest":       draft.Digest(d),
-		})
+		}
+		// The key appears only once something was assessed, as it does in the draft on disk.
+		if len(d.Assessments) > 0 {
+			payload["assessments"] = d.Assessments
+		}
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}
 	return printShow(deps, ref, target, d, dispositions, readiness)
 }
