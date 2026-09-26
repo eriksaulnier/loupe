@@ -40,6 +40,11 @@ Sticky finds the review to edit by the capture's `--source` name. Unattended `--
 
 `--note <markdown>` adds a note under the new round's footer, such as how to ask for another round. It shows only while that round is the newest, so pass it again on each round that should carry one. It needs `--unattended --sticky`.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/review-sticky-dark.png">
+  <img alt="A sticky review after its third round: the counts and opening for round 3, its two findings as collapsed rows, a footer marked unattended with a link to the changes since round 2, the note under the footer, then an Earlier rounds section with rounds 2 and 1 each collapsed to one line of counts." src="assets/review-sticky.png">
+</picture>
+
 ## The shared review workflow
 
 [`eriksaulnier/loupe-workflows`](https://github.com/eriksaulnier/loupe-workflows) is a reusable workflow built on these steps. It installs a pinned loupe release, captures the pull request, runs an agent over the captured head and diff, and publishes unattended.
