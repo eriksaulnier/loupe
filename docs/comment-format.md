@@ -342,7 +342,7 @@ reviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`
 
 ## The supported Markdown boundary
 
-The renderer wraps each finding in a generated `<details>`. Authored content that closes it early restructures the published review. Four fields carry raw Markdown: a finding `body`, `impact` and `suggestedFix`, and the review `summary`. Every other interpolated field is made structurally incapable of unbalancing the wrapper:
+The renderer wraps each finding in a generated `<details>`. Authored content that closes it early restructures the published review. Five fields carry raw Markdown: a finding `body`, `impact` and `suggestedFix`, the review `summary`, and the round note of an unattended sticky round (spec 032), which passes the summary's allowlist. Every other interpolated field is made structurally incapable of unbalancing the wrapper:
 
 | Field | Why it cannot escape |
 | :--- | :--- |
