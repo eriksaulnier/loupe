@@ -19,7 +19,7 @@ loupe collects a review agent's findings into a local draft so you decide each o
 2. You decide each finding in `loupe review`. A finding you send back with a note goes to the agent, which answers it.
 3. `loupe publish` shows the exact review. You write its opening, and one key posts it.
 
-![The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title.](docs/assets/review.png)
+![The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title.](docs/assets/review-dark.png)
 
 This is what a published review looks like. A CI review uses the same format. See [Comment format](docs/comment-format.md).
 
