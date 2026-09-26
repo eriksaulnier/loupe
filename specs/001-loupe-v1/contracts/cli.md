@@ -13,7 +13,7 @@ This is the agent-facing and human-facing command contract. `/speckit-plan` Phas
 - `--from <path>` reads JSON input from a file; `--from -` reads it from stdin. `--from` conflicts with any flag that sets the same content.
 - `--by agent|human` on `add`, `edit`, `summary`, `reply`; default `agent`.
 - `--expect-version <n>` on `add`, `edit`, `summary`, `assess`, `reply`: refuse inside the lock unless the draft version equals `n`.
-- Unknown JSON fields are refused. JSON input MUST NOT carry `included`, `decision`, `status` or any decision field; such input is refused.
+- Unknown JSON fields are refused. JSON input MUST NOT carry `included`, `decision`, `status` or any decision field; such input is refused. `assess` is the one exception: its `status` assesses a finding an earlier round filed and decides nothing in this round.
 - `loupe --help` describes the workflow (capture → add → summary → review → publish), the run reference syntax, and states that `review` and `publish` are human-only: an agent MUST NOT operate either, pipe confirmation into them, drive them through a pseudo-terminal, or start `publish` by any route; an agent MAY run `loupe handoff` to start `review` in a new terminal pane the human sees, and MUST NOT then send to, read, resize, close or reuse that pane (ruled 2026-09-15, `specs/006-agent-plugins`). `loupe <command> --help` is complete without any run and shows the command's JSON input and result shapes.
 
 ## Result envelope
