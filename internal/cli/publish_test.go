@@ -117,3 +117,45 @@ func TestPublishStickyDefaultsActionAndInline(t *testing.T) {
 		}
 	}
 }
+
+// A note is words no human confirmed, so it is refused before the run is resolved unless a pipeline edits its sticky
+// review.
+func TestPublishNoteNeedsUnattendedSticky(t *testing.T) {
+	for _, args := range [][]string{
+		{"publish", "o/r#1", "--note", "A note.", "--action", "comment", "--json"},
+		{"publish", "o/r#1", "--note", "A note.", "--sticky", "--json"},
+		{"publish", "o/r#1", "--note", "A note.", "--unattended", "--json"},
+	} {
+		home := filepath.Join(t.TempDir(), "loupe-home")
+		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+		if code := Execute(deps, args); code != 2 {
+			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
+		}
+		e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		if fix, _ := e["fix"].(string); e["code"] != "usage" || !strings.Contains(fix, "--unattended --sticky") {
+			t.Fatalf("%v: got %v", args, e)
+		}
+		if _, err := os.Stat(home); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("%v: LOUPE_HOME was touched or cannot be checked: %v", args, err)
+		}
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": t.TempDir()})
+	if code := Execute(deps, []string{"publish", "o/r#1", "--unattended", "--sticky", "--note", "A note.", "--json"}); code != 1 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "no-run" {
+		t.Fatalf("got %v, want past flag validation to a no-run refusal", e)
+	}
+}
+
+func TestPublishHelpDocumentsTheNote(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	if code := Execute(deps, []string{"publish", "--help"}); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	for _, want := range []string{"--note <markdown>", "Earlier rounds", "digest"} {
+		if !strings.Contains(s.stdout.String(), want) {
+			t.Errorf("publish help lacks %q", want)
+		}
+	}
+}

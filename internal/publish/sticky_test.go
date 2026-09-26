@@ -416,3 +416,40 @@ func TestRunStickyRefusedAttendedEditKeepsTheGeneralFix(t *testing.T) {
 		t.Fatalf("got %#v", err)
 	}
 }
+
+// A pipeline passes the same note every round, and the review shows it once, on the newest round.
+func TestRunStickyNoteShowsOnlyOnTheNewestRound(t *testing.T) {
+	const note = "Pushed more commits? Add the `ai-review` label for a fresh review."
+	first := newStickyRun(t, readyDraft(), nil, 1)
+	first.opts.Note = note
+	if _, err := first.run(); err != nil {
+		t.Fatal(err)
+	}
+	if body := onlyReview(t, first).Body; strings.Count(body, note) != 1 {
+		t.Fatalf("first round lacks its note:\n%s", body)
+	}
+	second := newStickyRun(t, readyDraft(), first.gh, 2)
+	second.opts.Note = note
+	if _, err := second.run(); err != nil {
+		t.Fatal(err)
+	}
+	body := onlyReview(t, second).Body
+	if strings.Count(body, note) != 1 || strings.Index(body, note) > strings.Index(body, "### Earlier rounds") {
+		t.Fatalf("want the note once, above the earlier rounds:\n%s", body)
+	}
+}
+
+// The note is words no human confirmed, so only a pipeline round that edits its own sticky review may carry one.
+func TestRunRefusesANoteOutsideAnUnattendedStickyRound(t *testing.T) {
+	attended := newStickyRun(t, readyDraft(), nil, 1)
+	attended.opts.Unattended, attended.opts.Note = false, "A note."
+	plain := newUnattendedRun(t, readyDraft())
+	plain.opts.Note = "A note."
+	for name, fx := range map[string]*fixture{"attended": attended, "not sticky": plain} {
+		_, err := fx.run()
+		if r, ok := refusal.As(err); !ok || r.Code != refusal.Usage || !strings.Contains(r.Fix, "--unattended --sticky") {
+			t.Errorf("%s: got %v, want usage", name, err)
+		}
+		fx.checkWrites(0, 0)
+	}
+}

@@ -1,8 +1,10 @@
 package publish
 
 import (
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -28,6 +30,7 @@ const (
 	limitFix     = "exclude a finding in loupe review or shorten bodies with loupe edit <id> --from -"
 	// messageFix names the only place the message can be changed, because nothing else may write it.
 	messageFix = "reword the message at the publish confirmation"
+	noteFix    = "reword --note to pass the allowlist in docs/comment-format.md"
 )
 
 // BuildInput is everything a review is composed from. It is a struct rather than a parameter list because
@@ -51,6 +54,9 @@ type BuildInput struct {
 	Message string
 	// Sticky composes a body later rounds edit in place; nil composes an ordinary review.
 	Sticky *StickyBuild
+	// Note is shown under a sticky round's footer until a later round collapses it. It is not a finding, so the digest
+	// never covers it.
+	Note string
 }
 
 // StickyBuild is the sticky review a round edits, or a zero Review when the round creates it.
@@ -89,6 +95,16 @@ func Build(in BuildInput) (Envelope, error) {
 		opening, openingFix = d.Summary, "loupe summary --from -"
 	}
 	if err := markdown.Check(opening, markdown.Summary, openingFix); err != nil {
+		return Envelope{}, err
+	}
+	note := in.Note
+	if strings.TrimSpace(note) == "" {
+		note = ""
+	}
+	if note != "" && in.Sticky == nil {
+		return Envelope{}, errors.New("a note needs a sticky review")
+	}
+	if err := markdown.Check(note, markdown.Note, noteFix); err != nil {
 		return Envelope{}, err
 	}
 	for _, f := range included {
@@ -153,7 +169,7 @@ func Build(in BuildInput) (Envelope, error) {
 		// The round before is named from the full history, before the length limit may drop its block, so the footer's
 		// compare link survives the drop.
 		prevRound, prevSHA := render.PreviousRound(in.Sticky.Earlier)
-		r.Sticky = &render.StickyInput{Rounds: in.Sticky.Rounds, Earlier: in.Sticky.Earlier, PrevRound: prevRound, PrevSHA: prevSHA}
+		r.Sticky = &render.StickyInput{Rounds: in.Sticky.Rounds, Earlier: in.Sticky.Earlier, PrevRound: prevRound, PrevSHA: prevSHA, Note: note}
 	}
 	env.Body = render.Body(r)
 	// The oldest collapsed rounds give way first, so a pull request with many rounds never stops a sticky review.
@@ -167,7 +183,12 @@ func Build(in BuildInput) (Envelope, error) {
 		env.Body = render.Body(r)
 	}
 	if n := utf8.RuneCountInString(env.Body); n > maxBodyChars {
-		return Envelope{}, limitRefusal(fmt.Sprintf("the composed review body is %d characters; at most %d characters are allowed", n, maxBodyChars))
+		r := limitRefusal(fmt.Sprintf("the composed review body is %d characters; at most %d characters are allowed", n, maxBodyChars))
+		if note != "" {
+			// The note is the one part of the body a pipeline can shorten without touching the draft.
+			r.Fix = "shorten --note, or " + limitFix
+		}
+		return Envelope{}, r
 	}
 	return env, nil
 }
@@ -179,7 +200,7 @@ func editReviewID(s *StickyBuild) int64 {
 	return s.Review.ID
 }
 
-func limitRefusal(message string) error {
+func limitRefusal(message string) *refusal.Error {
 	r := refusal.New(refusal.Markdown, message, limitFix)
 	r.Details = map[string]any{"rule": "limit"}
 	return r

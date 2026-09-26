@@ -781,3 +781,114 @@ func TestPillsAsWordsReachesAQuotedRound(t *testing.T) {
 		t.Fatalf("pills left in the quoted round:\n%s", shown)
 	}
 }
+
+const roundNote = "Pushed more commits? Add the `claude-review-requested` label for a fresh review of the whole PR."
+
+// The note sits under the newest round's footer, where a reader finishes the round, and before the earlier rounds.
+func TestStickyNoteFollowsTheNewestFooter(t *testing.T) {
+	in := stickyGoldenInput(t)
+	in.Sticky.Note = roundNote
+	body := Body(in)
+	want := "· via `gadfly-review-pr 2.2.0`\n\n<!-- loupe-note -->\n\n" + roundNote + "\n\n<!-- loupe-note-end -->\n\n---\n\n<!-- loupe-earlier -->"
+	if !strings.Contains(body, want) {
+		t.Fatalf("note not under the footer:\n%s", body)
+	}
+	if strings.Count(body, roundNote) != 1 {
+		t.Fatalf("note appears %d times:\n%s", strings.Count(body, roundNote), body)
+	}
+	without := stickyGoldenInput(t)
+	if Body(without) == body {
+		t.Fatal("the note changed nothing")
+	}
+}
+
+// A collapsed round keeps its summary but never its note, so a hint meant for the newest round does not repeat down
+// the history.
+func TestReadStickyDropsTheNoteFromTheDemotedRound(t *testing.T) {
+	in := stickyInput(1, "aaaaaaa111", general("f-001", "issue", true))
+	in.Summary = "One blocking issue."
+	noted := in
+	noted.Sticky = &StickyInput{Rounds: 1, Note: roundNote}
+	in.Sticky = &StickyInput{Rounds: 1}
+	withNote, _, err := ReadSticky(Body(noted))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, _, err := ReadSticky(Body(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(withNote[0], "claude-review-requested") || strings.Contains(withNote[0], "loupe-note") {
+		t.Fatalf("the demoted round carries its note:\n%s", withNote[0])
+	}
+	if withNote[0] != plain[0] {
+		t.Fatalf("a noted round must demote exactly as one without a note\n--- got ---\n%s\n--- want ---\n%s", withNote[0], plain[0])
+	}
+}
+
+// Three rounds, each published with the note: only the newest carries it, and each collapsed round still reads back.
+func TestStickyNoteShowsOnlyOnTheNewestRound(t *testing.T) {
+	body := ""
+	for round := 1; round <= 3; round++ {
+		in := stickyInput(round, strings.Repeat(string(rune('a'+round-1)), 7)+"111", general("f-001", "issue", round == 1))
+		in.Summary = "Round prose."
+		in.Sticky = &StickyInput{Rounds: 1, Note: roundNote}
+		if body != "" {
+			earlier, rounds, err := ReadSticky(body)
+			if err != nil {
+				t.Fatalf("round %d: %v", round, err)
+			}
+			in.Sticky.Rounds, in.Sticky.Earlier = rounds+1, earlier
+		}
+		body = Body(in)
+	}
+	if n := strings.Count(body, roundNote); n != 1 {
+		t.Fatalf("the note appears %d times, want once:\n%s", n, body)
+	}
+	if strings.Index(body, roundNote) > strings.Index(body, earlierDelimiter) {
+		t.Fatalf("the note is not on the newest round:\n%s", body)
+	}
+	if _, _, err := ReadSticky(body); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A note is read by its delimiters alone, so a delimiter pair loupe did not write, or one left unpaired on GitHub, is
+// refused rather than guessed at.
+func TestReadStickyRefusesAMangledNote(t *testing.T) {
+	in := stickyGoldenInput(t)
+	in.Sticky.Note = roundNote
+	body := Body(in)
+	note := "\n\n" + noteStart + "\n\n" + roundNote + "\n\n" + noteEnd
+	moved := strings.Replace(body, note, "", 1)
+	moved = strings.Replace(moved, "### Earlier rounds\n", "### Earlier rounds"+note+"\n", 1)
+	plain := strings.Replace(body, note, "", 1)
+	intoProse := plain[:strings.Index(plain, "\n\n")] + note + plain[strings.Index(plain, "\n\n"):]
+	for name, mangled := range map[string]string{
+		"moved into the prose": intoProse,
+		"no end":               strings.Replace(body, noteEnd+"\n", "", 1),
+		"no start":             strings.Replace(body, noteStart+"\n", "", 1),
+		"two notes":            strings.Replace(body, noteEnd, noteEnd+"\n\n"+noteStart+"\n\nMore.\n\n"+noteEnd, 1),
+		"end first":            strings.NewReplacer(noteStart, noteEnd, noteEnd, noteStart).Replace(body),
+		"moved":                moved,
+	} {
+		// Each is refused by the note's own checks, not by a later rule that a mangled body happens to break.
+		if _, _, err := ReadSticky(mangled); err == nil || !strings.Contains(err.Error(), "round note") {
+			t.Errorf("%s: got %v:\n%s", name, err, mangled)
+		}
+	}
+}
+
+// Authored text can quote a delimiter inside a fence, and that quote is not a note.
+func TestReadStickyIgnoresAFencedNoteDelimiter(t *testing.T) {
+	in := stickyInput(1, "aaaaaaa111", general("f-001", "issue", true))
+	in.Summary = "```\n" + noteStart + "\n```"
+	in.Sticky = &StickyInput{Rounds: 1}
+	earlier, _, err := ReadSticky(Body(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(earlier[0], "> "+noteStart) {
+		t.Fatalf("the fenced delimiter was dropped:\n%s", earlier[0])
+	}
+}

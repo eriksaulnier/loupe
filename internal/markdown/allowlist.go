@@ -14,6 +14,8 @@ type Kind int
 const (
 	Body Kind = iota
 	Summary
+	// Note is a sticky round's note, which sits at the summary's depth.
+	Note
 )
 
 const maxBytes = 64 * 1024
@@ -35,8 +37,11 @@ const (
 // and predictable.
 func Check(text string, kind Kind, fix string) error {
 	s := scanner{name: "body", maxDepth: maxDepthBody, fix: fix}
-	if kind == Summary {
+	switch kind {
+	case Summary:
 		s.name, s.maxDepth = "summary", maxDepthSummary
+	case Note:
+		s.name, s.maxDepth = "note", maxDepthSummary
 	}
 	if len(text) > maxBytes {
 		return s.refuse(ruleLimit, 1, fmt.Sprintf("it is %d bytes; at most %d bytes (64 KiB) are allowed", len(text), maxBytes))

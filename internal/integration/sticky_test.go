@@ -72,3 +72,37 @@ func TestPublishStickyUnattendedKeepsOneReview(t *testing.T) {
 		t.Fatalf("marker does not number round 3 of 3:\n%s", body[len(body)-300:])
 	}
 }
+
+// A pipeline passes the same --note every round. The review shows it once, on the newest round, and each round still
+// reads the one before it back from GitHub.
+func TestPublishStickyNoteShowsOnlyOnTheNewestRound(t *testing.T) {
+	const note = "Pushed more commits? Add the `ai-review` label for a fresh review of the whole PR."
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	var body string
+	for round := 1; round <= 2; round++ {
+		h.Home = filepath.Join(t.TempDir(), "home")
+		h.IsTerminal = true
+		captured := h.capture("--source", "loupe-ci@1.0.0")
+		if previous := captured["previous"].(map[string]any); round == 2 && previous["from"] != "github" {
+			t.Fatalf("round 2 did not read round 1 back: %v", previous)
+		}
+		h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+		h.mustOK("summary", "--run", runRef, "--body", "Look "+string(rune('0'+round))+".", "--expect-findings", "3")
+		h.IsTerminal = false
+		h.mustOK("publish", runRef, "--unattended", "--sticky", "--note", note)
+		reviews, err := h.GH.Client(t).ListReviews(context.Background(), owner, repo, number)
+		if err != nil || len(reviews) != 1 {
+			t.Fatalf("round %d: reviews %d err %v, want one", round, len(reviews), err)
+		}
+		body = reviews[0].Body
+	}
+	earlier := strings.Index(body, "### Earlier rounds")
+	if strings.Count(body, note) != 1 || strings.Index(body, note) > earlier {
+		t.Fatalf("want the note once, on the newest round:\n%s", body)
+	}
+	if !strings.Contains(body[earlier:], "> Look 1.") {
+		t.Fatalf("round 1 lost its summary:\n%s", body)
+	}
+}
