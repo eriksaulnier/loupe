@@ -335,15 +335,20 @@ func TestConcurrentCapturesOfOnePullRequest(t *testing.T) {
 		return done
 	}
 
+	waiting := make(chan struct{})
+	var once sync.Once
+	h.LockBusy = func() { once.Do(func() { close(waiting) }) }
+
 	nowA, reachedA, releaseA := pausedNow()
 	doneA := start(0, nowA)
 	<-reachedA
 	h.GH.SetHead(owner, repo, number, h.Repo.PushHead(map[string]string{"src/app.go": "moved\n"}))
 	nowB, reachedB, releaseB := pausedNow()
 	doneB := start(1, nowB)
+	// reachedB fires only if B is not locked out, which is the bug this test exists to catch.
 	select {
 	case <-reachedB:
-	case <-time.After(time.Second):
+	case <-waiting:
 	}
 	close(releaseA)
 	<-doneA
