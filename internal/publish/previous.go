@@ -100,6 +100,7 @@ func publisher(viewer, source string) string {
 }
 
 func EncodePrevious(p Previous) ([]byte, error) {
+	p.Schema = PreviousSchema
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("encode %s: %w", run.PreviousFile, err)

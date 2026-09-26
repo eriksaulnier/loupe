@@ -9,6 +9,9 @@ import (
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const SchemaVersion = 1
 
+// schemaVersion and handBackSchema are what this loupe reads and writes, as vars so a test can play the next loupe.
+var schemaVersion, handBackSchema = SchemaVersion, HandBackSchema
+
 const (
 	SideRight = "RIGHT"
 	SideLeft  = "LEFT"
@@ -123,7 +126,7 @@ type HistoryEntry struct {
 
 func NewEmpty() *Draft {
 	return &Draft{
-		Schema:    SchemaVersion,
+		Schema:    schemaVersion,
 		Findings:  []Finding{},
 		Decisions: map[string]Decision{},
 		Notes:     []Note{},

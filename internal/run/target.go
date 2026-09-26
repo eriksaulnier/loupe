@@ -161,6 +161,7 @@ func CreateRun(dir string, target Target, diff, draftJSON []byte, optional map[s
 			_ = os.RemoveAll(tmp)
 		}
 	}()
+	target.Schema = TargetSchema
 	if err = WriteJSONAtomic(filepath.Join(tmp, "target.json"), target); err != nil {
 		return err
 	}

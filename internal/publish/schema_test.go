@@ -1,6 +1,7 @@
 package publish
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -188,4 +189,70 @@ func jsonFields(t reflect.Type, prefix string, out *[]string) {
 			jsonFields(ft, prefix+name+".", out)
 		}
 	}
+}
+
+// A loupe that reads an older file writes its own schema on save, so an older number never labels the newer fields.
+func TestWritersStampTheirOwnSchema(t *testing.T) {
+	dir := t.TempDir()
+	if err := SaveAttempt(dir, Attempt{State: StateInFlight, StartedAt: fixtureNow, UpdatedAt: fixtureNow}); err != nil {
+		t.Fatal(err)
+	}
+	defer func(s int) { recordSchema = s }(recordSchema)
+	recordSchema = 2
+	a, _, err := LoadAttempt(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.State = StateUnknown
+	if err := SaveAttempt(dir, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveReceipt(dir, Receipt{Schema: 1}); err != nil {
+		t.Fatal(err)
+	}
+	previous, err := EncodePrevious(Previous{Reason: "why"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	comments, err := EncodeComments(Comments{Reason: "why"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runDir := filepath.Join(t.TempDir(), "run")
+	target := fixtureTarget()
+	target.Schema = 0
+	if err := run.CreateRun(runDir, target, nil, []byte("{}\n"), nil); err != nil {
+		t.Fatal(err)
+	}
+	targetJSON, err := os.ReadFile(filepath.Join(runDir, "target.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		file string
+		data []byte
+		want int
+	}{
+		{attemptFile, readFile(t, filepath.Join(dir, attemptFile)), 2},
+		{receiptFile, readFile(t, filepath.Join(dir, receiptFile)), 2},
+		{run.PreviousFile, previous, PreviousSchema},
+		{run.CommentsFile, comments, CommentsSchema},
+		{"target.json", targetJSON, run.TargetSchema},
+	} {
+		var head struct {
+			Schema int `json:"schema"`
+		}
+		if err := json.Unmarshal(c.data, &head); err != nil || head.Schema != c.want {
+			t.Errorf("%s saved with schema %d (%v), want %d", c.file, head.Schema, err, c.want)
+		}
+	}
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

@@ -27,10 +27,10 @@ func handBackPath(dir string) string { return filepath.Join(dir, "handback.json"
 func LoadHandBack(dir string) (*HandBack, error) {
 	path := handBackPath(dir)
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-		return &HandBack{Schema: HandBackSchema, Notes: []string{}}, nil
+		return &HandBack{Schema: handBackSchema, Notes: []string{}}, nil
 	}
 	var h HandBack
-	if err := run.ReadJSON(path, &h, HandBackSchema); err != nil {
+	if err := run.ReadJSON(path, &h, handBackSchema); err != nil {
 		return nil, err
 	}
 	if h.Notes == nil {
@@ -68,5 +68,6 @@ func handBack(dir string, d *Draft, notes []Note) (added int, err error) {
 	if added == 0 {
 		return 0, nil
 	}
+	h.Schema = handBackSchema
 	return added, run.WriteJSONAtomic(handBackPath(dir), h)
 }

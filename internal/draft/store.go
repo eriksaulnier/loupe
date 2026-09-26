@@ -16,7 +16,7 @@ var ErrNoChange = errors.New("draft unchanged")
 func Load(dir string) (*Draft, error) {
 	path := filepath.Join(dir, "draft.json")
 	var d Draft
-	if err := run.ReadJSON(path, &d, SchemaVersion); err != nil {
+	if err := run.ReadJSON(path, &d, schemaVersion); err != nil {
 		return nil, err
 	}
 	// A draft that decodes with a nil collection would make later mutators panic, so it is refused as damaged.
@@ -62,6 +62,7 @@ func Mutate(dir, command string, expectVersion *int, getenv func(string) string,
 			}
 		}
 		loaded.Version++
+		loaded.Schema = schemaVersion
 		if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), loaded); err != nil {
 			return err
 		}

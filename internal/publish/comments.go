@@ -116,6 +116,7 @@ func author(login string) string {
 }
 
 func EncodeComments(c Comments) ([]byte, error) {
+	c.Schema = CommentsSchema
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("encode %s: %w", run.CommentsFile, err)
