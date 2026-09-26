@@ -260,7 +260,7 @@ func firstCheck(ctx context.Context, opts Options) (receipt Receipt, replay bool
 		return Receipt{}, false, "", err
 	}
 	if matched != nil {
-		if err := SaveReceipt(opts.Dir, *matched); err != nil {
+		if err := SaveReceipt(opts.Dir, matched); err != nil {
 			return Receipt{}, false, "", err
 		}
 		if err := DeleteAttempt(opts.Dir); err != nil {
@@ -270,7 +270,7 @@ func firstCheck(ctx context.Context, opts Options) (receipt Receipt, replay bool
 	}
 	if attempt.State != StateUnknown {
 		attempt.State, attempt.UpdatedAt = StateUnknown, opts.Now()
-		if err := SaveAttempt(opts.Dir, attempt); err != nil {
+		if err := SaveAttempt(opts.Dir, &attempt); err != nil {
 			return Receipt{}, false, "", err
 		}
 	}
@@ -345,7 +345,7 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 			return Receipt{}, false, err
 		}
 		if matched != nil {
-			if err := SaveReceipt(opts.Dir, *matched); err != nil {
+			if err := SaveReceipt(opts.Dir, matched); err != nil {
 				return Receipt{}, false, err
 			}
 			if err := DeleteAttempt(opts.Dir); err != nil {
@@ -376,9 +376,9 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	defer release()
 
 	started := opts.Now()
-	attempt := Attempt{Schema: RecordSchema, State: StateInFlight, StartedAt: started, UpdatedAt: started, Envelope: env,
+	attempt := Attempt{Schema: recordSchema, State: StateInFlight, StartedAt: started, UpdatedAt: started, Envelope: env,
 		Confirmed: Confirmed{Version: preview.Version, Digest: preview.Digest, Dispositions: preview.Dispositions}}
-	if err := SaveAttempt(opts.Dir, attempt); err != nil {
+	if err := SaveAttempt(opts.Dir, &attempt); err != nil {
 		return Receipt{}, false, err
 	}
 
@@ -402,9 +402,9 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 	r, isRefusal := refusal.As(sendErr)
 	switch {
 	case sendErr == nil:
-		receipt = Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: env.Action, PostedAt: opts.Now(), Envelope: env,
+		receipt = Receipt{Schema: recordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: env.Action, PostedAt: opts.Now(), Envelope: env,
 			Author: review.User, Edited: env.EditReviewID != 0}
-		if err := SaveReceipt(opts.Dir, receipt); err != nil {
+		if err := SaveReceipt(opts.Dir, &receipt); err != nil {
 			return Receipt{}, false, receiptLost(opts, attempt, review, err)
 		}
 		if err := DeleteAttempt(opts.Dir); err != nil {
@@ -434,7 +434,7 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 		return Receipt{}, false, r
 	default:
 		attempt.State, attempt.UpdatedAt, attempt.LastError = StateUnknown, opts.Now(), sendErr.Error()
-		if err := SaveAttempt(opts.Dir, attempt); err != nil {
+		if err := SaveAttempt(opts.Dir, &attempt); err != nil {
 			return Receipt{}, false, err
 		}
 		matched, reconcileErr := Reconcile(ctx, client, attempt)
@@ -446,7 +446,7 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 			return Receipt{}, false, unknownAttemptRefusal(opts.Target,
 				fmt.Sprintf("the review may or may not have been posted on %s, and no review there matches it yet: %v", opts.Target.URL, sendErr))
 		}
-		if err := SaveReceipt(opts.Dir, *matched); err != nil {
+		if err := SaveReceipt(opts.Dir, matched); err != nil {
 			return Receipt{}, false, receiptLost(opts, attempt, github.Review{ID: matched.ReviewID, HTMLURL: matched.ReviewURL}, err)
 		}
 		if err := DeleteAttempt(opts.Dir); err != nil {
@@ -477,7 +477,7 @@ func receiptLost(opts Options, attempt Attempt, review github.Review, saveErr er
 	}
 	message := fmt.Sprintf("review %d was %s at %s but receipt.json could not be written: %v", review.ID, verb, review.HTMLURL, saveErr)
 	attempt.UpdatedAt, attempt.LastError = opts.Now(), message
-	if err := SaveAttempt(opts.Dir, attempt); err != nil {
+	if err := SaveAttempt(opts.Dir, &attempt); err != nil {
 		message += fmt.Sprintf("; attempt.json could not be updated either: %v", err)
 	}
 	return refusal.New(refusal.Record, message, fmt.Sprintf("inspect %s; the review was posted", review.HTMLURL))

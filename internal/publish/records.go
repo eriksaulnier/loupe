@@ -120,7 +120,7 @@ func LoadAttempt(dir string) (Attempt, bool, error) {
 	return a, found, err
 }
 
-func SaveAttempt(dir string, a Attempt) error {
+func SaveAttempt(dir string, a *Attempt) error {
 	a.Schema = recordSchema
 	return run.WriteJSONAtomic(filepath.Join(dir, attemptFile), a)
 }
@@ -140,7 +140,7 @@ func LoadReceipt(dir string) (Receipt, bool, error) {
 	return r, found, err
 }
 
-func SaveReceipt(dir string, r Receipt) error {
+func SaveReceipt(dir string, r *Receipt) error {
 	r.Schema = recordSchema
 	return run.WriteJSONAtomic(filepath.Join(dir, receiptFile), r)
 }

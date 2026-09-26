@@ -39,7 +39,7 @@ func TestAttemptRoundTripAndDelete(t *testing.T) {
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	a := Attempt{Schema: RecordSchema, State: StateUnknown, StartedAt: at, UpdatedAt: at, Envelope: sampleEnvelope(),
 		Confirmed: Confirmed{Version: 5, Digest: "d1", Dispositions: map[string]string{"f-001": "accepted"}}, LastError: "boom"}
-	if err := SaveAttempt(dir, a); err != nil {
+	if err := SaveAttempt(dir, &a); err != nil {
 		t.Fatal(err)
 	}
 	got, found, err := LoadAttempt(dir)
@@ -61,7 +61,7 @@ func TestReceiptRoundTrip(t *testing.T) {
 	}
 	r := Receipt{Schema: RecordSchema, ReviewID: 7, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-7",
 		Action: "comment", PostedAt: time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC), Envelope: sampleEnvelope()}
-	if err := SaveReceipt(dir, r); err != nil {
+	if err := SaveReceipt(dir, &r); err != nil {
 		t.Fatal(err)
 	}
 	got, found, err := LoadReceipt(dir)
@@ -79,7 +79,7 @@ func TestReceiptAuthorRoundTripsAndIsOmittedWhenEmpty(t *testing.T) {
 	dir := t.TempDir()
 	r := Receipt{Schema: RecordSchema, ReviewID: 7, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-7",
 		Action: "comment", PostedAt: time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC), Envelope: sampleEnvelope(), Author: "github-actions[bot]"}
-	if err := SaveReceipt(dir, r); err != nil {
+	if err := SaveReceipt(dir, &r); err != nil {
 		t.Fatal(err)
 	}
 	got, found, err := LoadReceipt(dir)

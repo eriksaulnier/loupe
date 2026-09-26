@@ -1,6 +1,7 @@
 package publish
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -204,7 +206,7 @@ func jsonFields(t reflect.Type, prefix string, out *[]string) {
 // A loupe that reads an older file writes its own schema on save, so an older number never labels the newer fields.
 func TestWritersStampTheirOwnSchema(t *testing.T) {
 	dir := t.TempDir()
-	if err := SaveAttempt(dir, Attempt{State: StateInFlight, StartedAt: fixtureNow, UpdatedAt: fixtureNow}); err != nil {
+	if err := SaveAttempt(dir, &Attempt{State: StateInFlight, StartedAt: fixtureNow, UpdatedAt: fixtureNow}); err != nil {
 		t.Fatal(err)
 	}
 	defer func(s int) { recordSchema = s }(recordSchema)
@@ -214,11 +216,23 @@ func TestWritersStampTheirOwnSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.State = StateUnknown
-	if err := SaveAttempt(dir, a); err != nil {
+	if err := SaveAttempt(dir, &a); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveReceipt(dir, Receipt{Schema: 1}); err != nil {
+	r := Receipt{Schema: 1}
+	if err := SaveReceipt(dir, &r); err != nil {
 		t.Fatal(err)
+	}
+	gh, client := newFake(t)
+	gh.AddReview("acme", "widgets", 42, github.Review{User: "reviewer", CommitID: headSHA, State: "COMMENTED",
+		Body: markedBody(testDigest, testPublication)})
+	reconciled, err := Reconcile(context.Background(), client, unknownAttempt())
+	if err != nil || reconciled == nil {
+		t.Fatalf("reconciled %+v err %v", reconciled, err)
+	}
+	if a.Schema != 2 || r.Schema != 2 || reconciled.Schema != 2 {
+		t.Errorf("in memory the attempt says schema %d, the receipt %d and the reconciled receipt %d, want 2",
+			a.Schema, r.Schema, reconciled.Schema)
 	}
 	previous, err := EncodePrevious(Previous{Reason: "why"})
 	if err != nil {
