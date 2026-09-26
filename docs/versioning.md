@@ -10,12 +10,13 @@ Two other numbers are not record schemas, and this page does not govern them. Th
 - A reader MUST accept every schema from 1 up to its own.
 - A reader MUST refuse a higher schema with code `record`, a message that names both numbers, and the fix `upgrade loupe`. It MUST check the schema before it checks for unknown fields, so that a newer file never reads as a damaged one.
 - A reader MUST refuse an unknown field in a file at or below its own schema as damage, with the fix to inspect the file.
-- A reader MUST migrate a removed or redefined field when it reads the file.
+- A bump that only adds fields needs no migration. `ReadJSON` decodes an older file into the current struct, and the new fields stay empty.
+- The first bump that removes or redefines a field MUST add a migration step to `ReadJSON` in the same change. That step MUST decode by schema before it decodes the current struct, because the strict decode would refuse a valid older file.
 - A writer MUST NOT rewrite a file it refused. On its next save, a newer binary writes its own schema.
 
 The readers are strict because the draft and the attempt are read, changed and saved again. An older binary that ignored unknown fields would drop a newer binary's fields on its next save, and nobody would see the loss.
 
-A test in `internal/publish/schema_test.go` pins each file's JSON field set for each schema number. A field change without a bump fails `mise run check`. A bump adds the new schema's field set to that table and keeps the older ones.
+A test in `internal/publish/schema_test.go` pins each file's JSON field set, with each field's whole tag, for each schema number. A field change without a bump fails `mise run check`. A bump adds the new schema's field set to that table and keeps the older ones. A removal or redefinition shows there as a field that the new set drops or retags, and that is the change that MUST carry the migration step. No schema has been bumped yet, so no reader migrates today.
 
 ## The findings record
 

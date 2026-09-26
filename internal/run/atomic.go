@@ -62,7 +62,9 @@ func WriteJSONAtomic(path string, v any) error {
 }
 
 // ReadJSON reads a run file whose schema is from 1 up to schema. It refuses a damaged record rather than repairing it,
-// so the human can inspect what went wrong, and refuses a newer one as a loupe too old to read it.
+// so the human can inspect what went wrong, and refuses a newer one as a loupe too old to read it. It decodes every
+// accepted schema into the current struct, so the first bump that removes or redefines a field MUST add a migration
+// step here (docs/versioning.md).
 func ReadJSON(path string, v any, schema int) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
