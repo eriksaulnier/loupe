@@ -15,6 +15,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
@@ -176,6 +177,41 @@ func TestDemoBodyIsTheReviewPublishSends(t *testing.T) {
 	}
 	if !strings.HasPrefix(first, "`⛔ 1 blocking`") || !strings.Contains(first, "\n\n"+demoMessage+"\n\n---") || !strings.Contains(first, "### Must fix") ||
 		!strings.Contains(first, "publication=00000000-0000-4000-8000-000000000000") {
+		t.Errorf("unexpected body:\n%s", first)
+	}
+}
+
+// loupe-demo body --sticky is the input to the CI page's picture of a sticky review: three rounds, the first two
+// collapsed, the note under the newest, the same bytes every run.
+func TestDemoStickyBodyHoldsThreeRounds(t *testing.T) {
+	first, err := demoStickyBody(time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := demoStickyBody(time.Date(2026, 9, 23, 8, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Errorf("the body depends on the time:\n%s\n---\n%s", first, second)
+	}
+	if rounds, sticky := render.StickyRounds(first); !sticky || rounds != 3 {
+		t.Errorf("StickyRounds = %d, %v; want 3, true", rounds, sticky)
+	}
+	// Read back, the body yields the round it shows demoted, then the two it holds collapsed, newest first.
+	earlier, _, err := render.ReadSticky(first)
+	if err != nil {
+		t.Fatalf("the next round cannot read the body back: %v", err)
+	}
+	if len(earlier) != 3 {
+		t.Fatalf("ReadSticky = %d rounds; want the shown round and 2 collapsed ones", len(earlier))
+	}
+	for i, r := range earlier {
+		if r.N != 3-i || r.Edited {
+			t.Errorf("round %d read back as n=%d edited=%v; want n=%d, unedited", i, r.N, r.Edited, 3-i)
+		}
+	}
+	if !strings.Contains(first, stickyNote) || !strings.Contains(first, "### Earlier rounds") || !strings.Contains(first, "unattended") {
 		t.Errorf("unexpected body:\n%s", first)
 	}
 }
