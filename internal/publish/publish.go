@@ -48,6 +48,9 @@ type Options struct {
 	// HoldSignals is called just before attempt.json is written and the func it returns once the outcome is recorded.
 	// Nil holds the signals for real.
 	HoldSignals func(signals []os.Signal) (release func())
+	// CheckDraft, when set, may refuse the loaded draft before the gates. It runs after the terminal rule, which
+	// refuses before the draft is read, and only for a publication not already replayed.
+	CheckDraft func(*draft.Draft) error
 }
 
 // Confirmation is what the human answered at the publish confirmation.
@@ -130,6 +133,11 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	d, err := draft.Load(opts.Dir)
 	if err != nil {
 		return Receipt{}, false, err
+	}
+	if opts.CheckDraft != nil {
+		if err := opts.CheckDraft(d); err != nil {
+			return Receipt{}, false, err
+		}
 	}
 	moved, err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d, Unattended: opts.Unattended})
 	if err != nil {

@@ -15,14 +15,19 @@ func earlierPair() []EarlierFinding {
 	}
 }
 
+var roundOne = AssessedAgainst{From: "receipt", Round: 1, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-7"}
+
 func TestAssessRecordsACopyAndReplacesByRef(t *testing.T) {
 	d := &Draft{}
 	earlier := earlierPair()
-	if err := Assess(d, earlier, []AssessInput{{Ref: "e-2", Status: StatusOpen}, {Ref: "e-1", Status: StatusOpen}}); err != nil {
+	if _, err := Assess(d, roundOne, earlier, []AssessInput{{Ref: "e-2", Status: StatusOpen}, {Ref: "e-1", Status: StatusOpen}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Assess(d, earlier, []AssessInput{{Ref: "e-1", Status: StatusAddressed}}); err != nil {
-		t.Fatal(err)
+	if dropped, err := Assess(d, roundOne, earlier, []AssessInput{{Ref: "e-1", Status: StatusAddressed}}); err != nil || dropped != 0 {
+		t.Fatalf("dropped %d, %v, want 0 against the same round", dropped, err)
+	}
+	if d.AssessedAgainst == nil || *d.AssessedAgainst != roundOne {
+		t.Fatalf("assessedAgainst %+v, want %+v", d.AssessedAgainst, roundOne)
 	}
 	want := []Assessment{
 		{Ref: "e-1", Status: StatusAddressed, Finding: earlier[0]},
@@ -49,10 +54,10 @@ func TestAssessRefusesLeavingTheDraftUnchanged(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			d := &Draft{}
 			// A good entry ahead of the bad one lands only if the whole batch does.
-			err := Assess(d, earlierPair(), []AssessInput{{Ref: "e-2", Status: StatusOpen}, tc.in})
+			_, err := Assess(d, roundOne, earlierPair(), []AssessInput{{Ref: "e-2", Status: StatusOpen}, tc.in})
 			_ = wantRefusal(t, err, tc.code)
-			if d.Assessments != nil {
-				t.Fatalf("assessments %+v after a refusal, want none", d.Assessments)
+			if d.Assessments != nil || d.AssessedAgainst != nil {
+				t.Fatalf("draft %+v after a refusal, want no assessments", d)
 			}
 		})
 	}
@@ -63,5 +68,22 @@ func TestAssessmentCountsIgnoreRefsOutsideTheList(t *testing.T) {
 	open, addressed, unassessed := AssessmentCounts(d, earlierPair())
 	if open != 0 || addressed != 0 || unassessed != 2 {
 		t.Fatalf("counts %d, %d, %d, want 0, 0, 2", open, addressed, unassessed)
+	}
+}
+
+func TestAssessAgainstAnotherRoundDropsTheEarlierAssessments(t *testing.T) {
+	d := &Draft{}
+	if _, err := Assess(d, roundOne, earlierPair(), []AssessInput{{Ref: "e-1", Status: StatusOpen}, {Ref: "e-2", Status: StatusOpen}}); err != nil {
+		t.Fatal(err)
+	}
+	roundTwo := AssessedAgainst{From: "receipt", Round: 2, ReviewURL: roundOne.ReviewURL}
+	moved := []EarlierFinding{{ID: "f-001", Title: "Cache race", FiledIn: FiledIn{Round: 2}}}
+	dropped, err := Assess(d, roundTwo, moved, []AssessInput{{Ref: "e-1", Status: StatusAddressed}})
+	if err != nil || dropped != 2 {
+		t.Fatalf("dropped %d, %v, want 2", dropped, err)
+	}
+	want := []Assessment{{Ref: "e-1", Status: StatusAddressed, Finding: moved[0]}}
+	if !reflect.DeepEqual(d.Assessments, want) || *d.AssessedAgainst != roundTwo {
+		t.Fatalf("draft %+v, want only the new assessment against round 2", d)
 	}
 }

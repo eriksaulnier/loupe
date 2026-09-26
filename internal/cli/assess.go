@@ -19,6 +19,10 @@ finding this round does not mark open is not carried. Assessing a ref again repl
 status. The publication carries the statuses in its hidden findings record; they add no text
 to the review.
 
+The draft records which previous round the refs were read from. If a lower round publishes
+after that, it becomes the previous round: publish refuses with previous-moved, and the next
+assess drops the assessments read from the old round and counts them as dropped.
+
 Input (--from <file>, or --from - for stdin):
 
   {"assessments": [{"ref": "e-1", "status": "open"}, {"ref": "e-2", "status": "addressed"}]}
@@ -30,7 +34,7 @@ loupe show --previous does. It reads no network.
 Result (--json):
   {"loupe": 1, "ok": true, "command": "assess", "run": "owner/repo#123@2",
    "dir": "/path/to/run", "version": 4,
-   "earlier": 3, "open": 1, "addressed": 1, "unassessed": 1}`
+   "earlier": 3, "open": 1, "addressed": 1, "unassessed": 1, "dropped": 0}`
 
 func newAssessCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -103,8 +107,10 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 	if err != nil {
 		return err
 	}
-	d, err := draft.Mutate(dir, "assess", expectVersion, deps.Getenv, func(d *draft.Draft) error {
-		return draft.Assess(d, p.earlier, inputs)
+	dropped := 0
+	d, err := draft.Mutate(dir, "assess", expectVersion, deps.Getenv, func(d *draft.Draft) (err error) {
+		dropped, err = draft.Assess(d, p.against(), p.earlier, inputs)
+		return err
 	})
 	if err != nil {
 		return err
@@ -112,7 +118,7 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 	open, addressed, unassessed := draft.AssessmentCounts(d, p.earlier)
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{
-			"earlier": len(p.earlier), "open": open, "addressed": addressed, "unassessed": unassessed,
+			"earlier": len(p.earlier), "open": open, "addressed": addressed, "unassessed": unassessed, "dropped": dropped,
 		})
 	}
 	s := deps.outStyle()
@@ -120,6 +126,10 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 	for _, in := range inputs {
 		named = append(named, in.Ref)
 	}
-	return printDone(deps, fmt.Sprintf("Assessed %s on %s: %d open, %d addressed, %d of %d unassessed",
-		ids(s, named...), s.Accent.Render(ref.String()), open, addressed, unassessed, len(p.earlier)), d.Version)
+	message := fmt.Sprintf("Assessed %s on %s: %d open, %d addressed, %d of %d unassessed",
+		ids(s, named...), s.Accent.Render(ref.String()), open, addressed, unassessed, len(p.earlier))
+	if dropped > 0 {
+		message += fmt.Sprintf("; dropped %d %s read from an earlier previous round", dropped, plural(dropped, "assessment"))
+	}
+	return printDone(deps, message, d.Version)
 }

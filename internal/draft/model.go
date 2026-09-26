@@ -52,6 +52,16 @@ type Draft struct {
 	Replies   []Reply             `json:"replies"`
 	// Assessments is sorted by ref and omitted when empty, so a draft that assessed nothing reads as it always has.
 	Assessments []Assessment `json:"assessments,omitempty"`
+	// AssessedAgainst is the previous round the assessments were read from. Their refs name only that round's earlier
+	// list, so publish refuses once a lower round publishes and becomes the previous one.
+	AssessedAgainst *AssessedAgainst `json:"assessedAgainst,omitempty"`
+}
+
+// AssessedAgainst names a previous round as show --previous does.
+type AssessedAgainst struct {
+	From      string `json:"from"`
+	Round     int    `json:"round"`
+	ReviewURL string `json:"reviewUrl"`
 }
 
 // Assessment is this round's status for a finding an earlier round published and no round since marked addressed.

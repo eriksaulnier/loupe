@@ -269,6 +269,10 @@ type earlierEntry struct {
 	draft.EarlierFinding
 }
 
+func (p previous) against() draft.AssessedAgainst {
+	return draft.AssessedAgainst{From: p.from, Round: p.round, ReviewURL: p.reviewURL}
+}
+
 type previous struct {
 	from      string
 	round     int

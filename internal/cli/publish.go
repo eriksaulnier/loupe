@@ -207,9 +207,10 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 			}
 			return tui.Confirm(deps.Stdin, ui, deps.Getenv, tui.ConfirmTitle(ref.String(), action, inline, len(preview.Comments)))(preview)
 		},
-		Now:    deps.Now,
-		Getenv: deps.Getenv,
-		Stderr: deps.Stderr,
+		Now:        deps.Now,
+		Getenv:     deps.Getenv,
+		Stderr:     deps.Stderr,
+		CheckDraft: func(d *draft.Draft) error { return refuseMovedPrevious(deps, d, ref) },
 	})
 	if errors.Is(err, publish.ErrDeclined) {
 		es := deps.errStyle()
@@ -241,6 +242,28 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, payload)
 	}
 	return printPublished(deps, ref, receipt, replayed)
+}
+
+// refuseMovedPrevious catches a lower round that published after assess read the previous round. The assessments name
+// refs of the old round's earlier list, and a ref alone cannot tell the lists apart.
+func refuseMovedPrevious(deps Deps, d *draft.Draft, ref run.Ref) error {
+	if d.AssessedAgainst == nil {
+		return nil
+	}
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		return err
+	}
+	p, err := previousRound(root, ref)
+	if err != nil {
+		return err
+	}
+	if p.against() == *d.AssessedAgainst {
+		return nil
+	}
+	return refusal.New(refusal.PreviousMoved,
+		fmt.Sprintf("the previous round is now round %d (%s), not the round loupe assess read", p.round, p.reviewURL),
+		fmt.Sprintf("run loupe show --previous --run %s --json, then loupe assess --run %s again", ref, ref))
 }
 
 // warnUnassessed runs after the review is sent, so nothing here returns an error, not even a failed stderr write:

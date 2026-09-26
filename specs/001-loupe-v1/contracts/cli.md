@@ -59,6 +59,7 @@ Refusal or error (exit 1 or 2):
 | `empty` | Draft has no summary and an empty publishable set; or, after an attended confirmation, no message and no published findings | `loupe add` / `loupe summary`, or a message at the confirmation |
 | `attempt` | Unknown attempt not reconciled | inspect the pull request URL, then `--retry-unknown` |
 | `changed` | The draft's version, content or readiness changed while publish was confirming; or, under `--sticky`, the review to edit changed, or a sticky review appeared, while publish was confirming | `loupe review`, then `loupe publish` again; for the sticky review, `loupe publish` again to see it |
+| `previous-moved` | The draft's assessments were read from a previous round that is no longer the previous round, because a lower round published after `assess` ran | `loupe show --previous --run <ref> --json`, then `loupe assess --run <ref>` again |
 | `sticky` | `--sticky` found the publisher's sticky review, but its body is not in the form loupe writes, so its earlier rounds cannot be read back | `loupe publish` without `--sticky` to post a new review |
 | `viewer` | The GitHub login changed between showing the confirmation and sending; or the token's kind at publish differs from the kind capture recorded | `loupe publish` again to confirm as the current login; for the kind mismatch, capture and publish with the same token kind |
 | `timeout` | `wait --timeout` elapsed with no note handed back and no receipt | `loupe wait` again |

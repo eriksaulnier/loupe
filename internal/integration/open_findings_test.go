@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/github"
 )
 
 // Round 1 of the live case in specs/031-open-findings: two findings a later commit fixes.
@@ -333,4 +335,56 @@ func TestAttendedRoundReadsItsOwnOlderReceiptPastAPipelineRound(t *testing.T) {
 		t.Fatalf("round 3 earlier %v, want only round 1's finding", got)
 	}
 	h.mustOK("assess", "e-1", "--status", "open", "--run", roundRef(3))
+}
+
+// Round 3 assesses round 1 while round 2 is still unpublished. Once round 2 publishes, round 3's assessments name refs
+// in the wrong list, so publish refuses until round 3 assesses again, and that assess drops the stale ones.
+func TestPublishRefusesAssessmentsFromAMovedPreviousRound(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.ciRound(false, bareExceptAndSleep, nil)
+
+	head2 := h.pushHead("src/round2.go")
+	round2 := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	head3 := h.pushHead("src/round3.go")
+	round3 := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	qualifier := owner + ":" + repo + ":"
+	h.GH.SetComparison(owner, repo, qualifier+head2, qualifier+head3, github.Comparison{Status: "ahead", AheadBy: 1,
+		Commits: []github.Commit{{SHA: head3, Message: "round 3"}}, Files: []github.ComparedFile{{Filename: "src/round3.go"}}})
+	if res := h.mustOK("assess", "e-1", "e-2", "--status", "open", "--run", round3); fmt.Sprint(res["dropped"]) != "0" {
+		t.Fatalf("first assess result %v, want dropped 0", res)
+	}
+
+	h.mustOK("add", "--run", round2, "--from", h.WriteFile("findings.json", generalFinding("Cache race")))
+	h.mustOK("summary", "--run", round2, "--body", "A look.", "--expect-findings", "1")
+	h.mustOK("publish", round2, "--unattended", "--sticky")
+	url2, _ := receiptFindings(t, h.RunDir(2))
+
+	h.mustOK("add", "--run", round3, "--from", h.WriteFile("findings.json", generalFinding("Unbounded retries")))
+	h.mustOK("summary", "--run", round3, "--body", "A look.", "--expect-findings", "1")
+	lists := h.reviewLists()
+	e := h.mustRefuse("previous-moved", "publish", round3, "--unattended", "--sticky")
+	if want := fmt.Sprintf("the previous round is now round 2 (%s), not the round loupe assess read", url2); e["message"] != want {
+		t.Fatalf("message %q\nwant %q", e["message"], want)
+	}
+	if want := fmt.Sprintf("run loupe show --previous --run %s --json, then loupe assess --run %s again", round3, round3); e["fix"] != want {
+		t.Fatalf("fix %q\nwant %q", e["fix"], want)
+	}
+	if h.reviewLists() != lists {
+		t.Fatal("the refused publish reached GitHub")
+	}
+
+	res := h.mustOK("assess", "e-1", "--status", "open", "--run", round3)
+	if fmt.Sprintf("%v %v %v %v", res["dropped"], res["open"], res["unassessed"], res["earlier"]) != "2 1 0 1" {
+		t.Fatalf("reassess result %v, want 2 dropped, then 1 open of 1", res)
+	}
+	h.mustOK("publish", round3, "--unattended", "--sticky")
+
+	h.pushHead("src/round4.go")
+	run := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	got := earlierRows(t, h.mustOK("show", "--previous", "--run", run))
+	if len(got) != 2 || got[0].title != "Cache race" || got[0].round != "2" || got[1].title != "Unbounded retries" {
+		t.Fatalf("round 4 earlier %v, want round 2's Cache race carried, then round 3's finding", got)
+	}
 }
