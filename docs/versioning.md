@@ -35,6 +35,16 @@ The format of the record is in [`comment-format.md`](comment-format.md).
 
 `round=` changed its meaning once without a bump, before this rule. [`comment-format.md`](comment-format.md) records that exception.
 
+## Round anchors
+
+A sticky review opens each round on a `<!-- loupe-round v=1 … -->` anchor (`specs/033-round-anchors`).
+
+- A new key MAY come without a bump, before `sha256`. The checksum covers the fields as written, so an older reader still checks a key it does not know.
+- A removed or redefined key MUST bump `v=`.
+- A reader of a `v=` it does not know MUST refuse with `sticky`, whose fix, publishing once without `--sticky`, ends the series. It MUST NOT guess, because the next body carries every round it reads.
+
+The format of the anchor is in [`comment-format.md`](comment-format.md).
+
 ## Current versions
 
 | Record | Version | Note |
@@ -45,3 +55,4 @@ The format of the record is in [`comment-format.md`](comment-format.md).
 | attempt, receipt | `schema` 2 | `author`, `edited` and `envelope.editReviewId` came at 1 without a bump, before this rule. 2 added `envelope.assessments` (`specs/031-open-findings`) |
 | findings record | `v=1`, `v=2` | Lenient data. `v=2` adds the round's assessments, and a round with none still writes `v=1` |
 | `loupe-meta` | `v=1` | Key=value |
+| round anchor | `v=1` | Key=value, one per sticky round (`specs/033-round-anchors`) |
