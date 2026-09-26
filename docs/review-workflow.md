@@ -49,7 +49,7 @@ A note asks the agent about one finding. The agent revises the finding or withdr
 
 ### 6. You publish
 
-When no finding is pending and no note is open, press `p` in `loupe review`, or run `loupe publish`. The confirmation shows the exact review, with every section open and each inline comment. The cursor starts in the review's opening. Type it in your own words and press Esc to leave it. Then `y` sends. Keys that scroll or switch views do nothing else. Any other key cancels, and nothing is sent.
+When no finding is pending and no note is open, press `p` in `loupe review`, or run `loupe publish`. The confirmation shows the exact review, with every section open and each inline comment. The cursor starts in the review's opening. Type it in your own words and press Esc to leave it. Then `y` or `p` sends. Keys that scroll or switch views do nothing else. Any other key cancels, and nothing is sent.
 
 Only accepted findings are published. One confirmation sends exactly one GitHub request. `--action` picks `comment`, `approve` or `request-changes`, and `--inline` turns located findings into inline comments as well.
 
@@ -60,7 +60,7 @@ Only accepted findings are published. One confirmation sends exactly one GitHub 
 
 [Comment format](comment-format.md) describes every part of that review.
 
-Publish refuses rather than send something wrong. It refuses while a finding is pending or a note is open. It refuses when the captured commit has left the pull request's history. It refuses to approve or request changes on your own pull request. Each refusal names the command that fixes it. A head that only gained commits since capture is not refused. The confirmation lists the new commits and the findings on files they changed.
+Publish refuses rather than send something wrong. It refuses while a finding is pending or a note is open. It refuses when the captured commit has left the pull request's history. It refuses to approve or request changes on your own pull request. Each refusal names the command that fixes it. A head that only gained commits since capture is not refused for a comment or a request for changes. The confirmation lists the new commits and the findings on files they changed. An approval is still refused, because it would cover the new commits unreviewed.
 
 Once the review is posted, the run keeps a receipt. Running `loupe publish` again prints the review's URL without contacting GitHub.
 

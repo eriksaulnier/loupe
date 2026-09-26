@@ -11,7 +11,7 @@ No person reads an unattended review before it posts, so loupe holds it to fixed
 - It is marked unattended in its footer and in its hidden metadata, so it never reads as a person's review.
 - It MUST edit only a review that a GitHub App published.
 - Its opening comes from the draft's summary. Write the summary for the pull request's author, because no one reads it first.
-- It publishes every finding the agent filed and did not withdraw, since no one decides them one by one.
+- It publishes every accepted or pending finding, since no one decides them one by one. A finding that was excluded or withdrawn is left out.
 
 ## Install loupe in a job
 
@@ -27,7 +27,7 @@ Pin the commit sha of a release tag, with the tag in a comment. The action insta
 
 A pipeline reviews a pull request in four steps: capture, read, file, publish. Only capture needs the Git clone.
 
-1. `loupe capture <pr-url> --json` creates the run and prints its reference as `run`. Pass that reference to the later steps as `--run <ref>` or in `LOUPE_RUN`. Unattended publish does not fall back to the current branch's pull request, because a pipeline's checkout is usually not on that branch.
+1. `loupe capture <pr-url> --json` creates the run and prints its reference as `run`. Pass that reference to the later steps in `LOUPE_RUN`, or name it on each one: `--run <ref>` for `show`, `add` and `summary`, and as the argument of `loupe publish <ref>`. Unattended publish does not fall back to the current branch's pull request, because a pipeline's checkout is usually not on that branch.
 2. `loupe show --diff > review/pr.diff` writes the captured diff for the reviewer to read beside a checkout of the captured head. This is the supported way to get the diff. The run directory's layout is not a contract.
 3. File findings with one `loupe add` object or array, which is stored whole or not at all. A finding whose location is not in the captured diff is refused with the nearest valid lines. Then set `loupe summary`, even when there is nothing to report. You supply the adapter from your reviewer's output to `loupe add`'s input.
 4. `loupe publish --unattended --json` posts exactly one comment review, with no confirmation. The job needs `permissions: pull-requests: write`. The run records each attempt and its receipt. A pipeline that keeps `LOUPE_HOME` between steps can retry safely, even from another path or machine.
