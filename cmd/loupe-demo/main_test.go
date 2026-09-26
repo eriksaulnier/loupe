@@ -198,11 +198,18 @@ func TestDemoStickyBodyHoldsThreeRounds(t *testing.T) {
 	if rounds, sticky := render.StickyRounds(first); !sticky || rounds != 3 {
 		t.Errorf("StickyRounds = %d, %v; want 3, true", rounds, sticky)
 	}
-	if _, _, err := render.ReadSticky(first); err != nil {
+	// Read back, the body yields the round it shows demoted, then the two it holds collapsed, newest first.
+	earlier, _, err := render.ReadSticky(first)
+	if err != nil {
 		t.Fatalf("the next round cannot read the body back: %v", err)
 	}
-	if n := strings.Count(first, "\n<!-- loupe-round -->\n"); n != 2 {
-		t.Errorf("the body collapses %d rounds; want 2", n)
+	if len(earlier) != 3 {
+		t.Fatalf("ReadSticky = %d rounds; want the shown round and 2 collapsed ones", len(earlier))
+	}
+	for i, r := range earlier {
+		if r.N != 3-i || r.Edited {
+			t.Errorf("round %d read back as n=%d edited=%v; want n=%d, unedited", i, r.N, r.Edited, 3-i)
+		}
 	}
 	if !strings.Contains(first, stickyNote) || !strings.Contains(first, "### Earlier rounds") || !strings.Contains(first, "unattended") {
 		t.Errorf("unexpected body:\n%s", first)
