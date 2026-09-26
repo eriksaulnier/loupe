@@ -212,11 +212,7 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 		Dispositions: draft.Dispositions(d), HeadMoved: moved, Compose: compose}
 	if sticky != nil {
 		preview.Edits = sticky.Review.HTMLURL
-		for _, r := range sticky.Earlier {
-			if r.Edited {
-				preview.Edited = append(preview.Edited, r.N)
-			}
-		}
+		preview.Edited = editedRounds(env.Body, sticky.Earlier)
 	}
 
 	if opts.Unattended {

@@ -527,3 +527,14 @@ func TestEditedNotice(t *testing.T) {
 		}
 	}
 }
+
+// A round the length limit dropped is not in the body, so it is not named as carried.
+func TestEditedRoundsNamesOnlyRoundsTheBodyCarries(t *testing.T) {
+	kept := render.Round{N: 3, Anchor: "<!-- round 3 anchor -->", Edited: true}
+	dropped := render.Round{N: 1, Anchor: "<!-- round 1 anchor -->", Edited: true}
+	plain := render.Round{N: 2, Anchor: "<!-- round 2 anchor -->"}
+	body := "top\n\n" + kept.Anchor + "\n\n" + plain.Anchor + "\n\n"
+	if got := editedRounds(body, []render.Round{kept, plain, dropped}); !slices.Equal(got, []int{3}) {
+		t.Fatalf("edited %v, want [3]", got)
+	}
+}

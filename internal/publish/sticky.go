@@ -81,3 +81,14 @@ func EditedNotice(rounds []int) string {
 	list := strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 	return "Rounds " + list + " were edited on GitHub since loupe wrote them. They are carried as they were found."
 }
+
+// editedRounds numbers the rounds carried as edited that body still holds, since the length limit may drop one.
+func editedRounds(body string, earlier []render.Round) []int {
+	var out []int
+	for _, r := range earlier {
+		if r.Edited && strings.Contains(body, r.Anchor) {
+			out = append(out, r.N)
+		}
+	}
+	return out
+}
