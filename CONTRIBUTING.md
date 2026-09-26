@@ -69,4 +69,4 @@ CI runs `mise run check` on every pull request. The description MUST show the ch
 
 ## Releases
 
-release-please opens the release pull request from `main`, merging it tags the release, and goreleaser attaches the archives. Nothing is tagged, released or written into the release manifest by hand.
+release-please opens the release pull request from `main`, and merging it tags a draft release. goreleaser attaches the archives and then publishes the draft. Nothing is tagged, released or written into the release manifest by hand. [`docs/releasing.md`](docs/releasing.md) describes the flow, its rules and how to enable immutable releases.
