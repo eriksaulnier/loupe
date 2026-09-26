@@ -56,8 +56,9 @@ type confirmation struct {
 	// before and after are the review either side of the opening slot, which the input is drawn into. They are empty
 	// when the preview carries no closure, and the recomposed body is then shown whole instead.
 	before, after string
-	// rawBefore is before as composed, so after can be cut again from each recomposed body: a sticky review drops
-	// earlier rounds by the message's length, so what follows the message can change as it is typed.
+	// rawBefore is before as composed, with anchors shown as round numbers, so after can be cut again from each
+	// recomposed body: a sticky review drops earlier rounds by the message's length, so what follows the message can
+	// change as it is typed, and its top anchor sums the message, so what precedes it changes too.
 	rawBefore string
 	// inputTop and inputRows are where the input sits in the scrolling content, so typing can keep it on screen.
 	inputTop, inputRows int
@@ -85,6 +86,7 @@ func newConfirmation(preview publish.Preview, title ConfirmHeading, message stri
 		if c.rawBefore, _, found = strings.Cut(env.Body, messageSlot); !found {
 			err = fmt.Errorf("the composed review has nowhere to put your message")
 		}
+		c.rawBefore = render.AnchorsAsNotes(c.rawBefore)
 		c.before = displayBody(c.rawBefore)
 	}
 	if err == nil {
@@ -257,7 +259,7 @@ func (c *confirmation) recompose() {
 // cutAfter sets after to what body carries past the message. Fences in the message are balanced, as the allowlist
 // requires, so the tail is displayed on its own as it would be within the whole body.
 func (c *confirmation) cutAfter(body, message string) error {
-	rest, ok := strings.CutPrefix(body, c.rawBefore+message)
+	rest, ok := strings.CutPrefix(render.AnchorsAsNotes(body), c.rawBefore+message)
 	if !ok {
 		return fmt.Errorf("the composed review does not open where your message goes")
 	}
@@ -266,7 +268,7 @@ func (c *confirmation) cutAfter(body, message string) error {
 }
 
 func displayBody(body string) string {
-	return render.RecordAsNote(render.PillsAsWords(markdown.OpenDetails(body)))
+	return render.AnchorsAsNotes(render.RecordAsNote(render.PillsAsWords(markdown.OpenDetails(body))))
 }
 
 // messageRows is how many rows the input's text takes. The textarea pads its view out to the height it was given and

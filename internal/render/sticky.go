@@ -1,6 +1,7 @@
 package render
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -14,14 +15,26 @@ type StickyInput struct {
 	// Rounds is how many rounds have been published into the review, this one included, dropped ones too.
 	Rounds int
 	// Earlier holds the collapsed rounds as ReadSticky returns them, newest first.
-	Earlier []string
+	Earlier []Round
 	// PrevRound and PrevSHA name the round before this one for the footer's compare link. They are kept apart from
-	// Earlier, which the length limit may empty, and when unset they are read from Earlier's newest round.
+	// Earlier, which the length limit may empty, and when unset they are Earlier's newest round's.
 	PrevRound int
 	PrevSHA   string
 	// Note is shown under this round's footer while the round is the newest, and dropped when a later round collapses
 	// it. Empty writes no note.
 	Note string
+}
+
+// Round is one collapsed round as the next body carries it: its anchor line, then its <details> block. The length limit
+// drops a round whole, so a block never loses its anchor.
+type Round struct {
+	N      int
+	Commit string
+	Anchor string
+	Block  string
+	// Edited marks a round whose checksum did not match what GitHub returned. It is carried as found, and its anchor
+	// is written again over what was found, so the edit is named by one publication only.
+	Edited bool
 }
 
 // earlierDelimiter is an HTML comment line, which the allowlist refuses outside a fence in every authored field, so a
@@ -38,20 +51,27 @@ var (
 )
 
 func earlierSection(s StickyInput) string {
-	parts := []string{earlierDelimiter, "### Earlier rounds"}
-	switch dropped := s.Rounds - 1 - len(s.Earlier); {
-	case dropped == 1:
-		parts = append(parts, "The oldest round was dropped to fit GitHub's length limit.")
-	case dropped > 1:
-		parts = append(parts, fmt.Sprintf("The %d oldest rounds were dropped to fit GitHub's length limit.", dropped))
-	}
-	if len(parts) == 2 && len(s.Earlier) == 0 {
+	dropped := s.Rounds - 1 - len(s.Earlier)
+	if dropped <= 0 && len(s.Earlier) == 0 {
 		return ""
 	}
-	for _, block := range s.Earlier {
-		parts = append(parts, roundDelimiter, block)
+	parts := []string{earlierDelimiter, earlierHeading(dropped)}
+	for _, r := range s.Earlier {
+		parts = append(parts, r.Anchor, r.Block)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// earlierHeading opens the earlier-rounds section: its heading, then how many rounds the length limit dropped. The
+// reader composes it from the count and compares, so the note is never parsed.
+func earlierHeading(dropped int) string {
+	switch {
+	case dropped == 1:
+		return "### Earlier rounds\n\nThe oldest round was dropped to fit GitHub's length limit."
+	case dropped > 1:
+		return fmt.Sprintf("### Earlier rounds\n\nThe %d oldest rounds were dropped to fit GitHub's length limit.", dropped)
+	}
+	return "### Earlier rounds"
 }
 
 // StickyRounds is the sticky= count on body's loupe-meta line, and whether the line carries the key at all. A key
@@ -129,7 +149,37 @@ func trimBlank(lines []string) []string {
 	return lines
 }
 
-// ReadSticky reads a sticky body back into the collapsed rounds the next body holds, newest first, and its sticky= count.
-func ReadSticky(body string) (earlier []string, rounds int, err error) {
-	return readLegacy(body)
+// ReadSticky reads a sticky body back into the collapsed rounds the next body holds, newest first: the round the body
+// shows, demoted, then the rounds it already held. rounds is its sticky= count. A body with anchors is read by them
+// alone. One without is read by the legacy reader once, and what it returns is anchored, so the next body has anchors.
+func ReadSticky(body string) (earlier []Round, rounds int, err error) {
+	lines, structural := markdown.StructuralLines(body)
+	anchored, delimited := false, false
+	for i, line := range lines {
+		switch {
+		case !structural[i]:
+		case line == roundDelimiter:
+			delimited = true
+		case strings.HasPrefix(line, anchorPrefix):
+			anchored = true
+		}
+	}
+	switch {
+	case anchored && delimited:
+		return nil, 0, errors.New("it mixes anchored rounds with rounds delimited as loupe did before anchors")
+	case anchored:
+		return readAnchored(lines, structural)
+	}
+	blocks, rounds, err := readLegacy(body)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i, block := range blocks {
+		// The legacy reader has already numbered each block by its place in the review.
+		n := rounds - i
+		_, commit := PreviousRound([]string{block})
+		fields := fmt.Sprintf("v=1 n=%d commit=%s", n, commit)
+		earlier = append(earlier, Round{N: n, Commit: commit, Anchor: sealAnchor(fields, block), Block: block})
+	}
+	return earlier, rounds, nil
 }

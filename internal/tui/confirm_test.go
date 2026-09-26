@@ -21,6 +21,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
@@ -1018,5 +1019,42 @@ func TestConfirmRedrawsWhatFollowsTheMessage(t *testing.T) {
 	view := m.View()
 	if strings.Contains(view, "Round 1 kept") || !strings.Contains(view, "The oldest round was dropped") {
 		t.Fatalf("after typing, the screen does not match the body y sends:\n%s", view)
+	}
+}
+
+// stickyPreview is a confirmation fixture whose body is a sticky round render.Body composes, anchor included.
+func stickyPreview() publish.Preview {
+	in := render.Input{Owner: "acme", Repo: "widgets", Number: 42, Round: 1, HeadSHA: "abc1234", Inline: "none",
+		Digest: "d", PublicationID: "p", Findings: []render.Finding{{ID: "f-001", Title: "T", Body: "B.", General: true, Label: "issue"}},
+		Sticky: &render.StickyInput{Rounds: 1}}
+	p := confirmPreview()
+	p.Comments = nil
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		composed := in
+		composed.Summary = message
+		return publish.Envelope{Body: render.Body(composed)}, p.EnvelopeJSON, nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	return p
+}
+
+// The top anchor counts the message's lines and sums its bytes, so it changes with every keystroke. The message is
+// still typed in place, and the anchor shows as its round's number.
+func TestConfirmTypesIntoAStickyRound(t *testing.T) {
+	m := NewConfirmModel(stickyPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "Two lines.")
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	typeInto(m, "Second.")
+	if !m.confirm.inline() || m.confirm.slotErr != nil {
+		t.Fatalf("the message is not typed in place: %v", m.confirm.slotErr)
+	}
+	view := ansi.Strip(m.confirm.content(m.shell))
+	if !strings.Contains(view, "<!-- loupe-round 1 -->") || strings.Contains(view, "commit=") {
+		t.Fatalf("the anchor is not shown as its round:\n%s", view)
+	}
+	if !strings.Contains(m.confirm.shown.Body, " prose=2 ") {
+		t.Fatalf("the body y sends does not count the message:\n%s", m.confirm.shown.Body)
 	}
 }
