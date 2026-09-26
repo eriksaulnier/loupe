@@ -42,6 +42,7 @@ type harness struct {
 	Env               map[string]string
 	// GitHubErr, when set, is what building the GitHub client fails with.
 	GitHubErr error
+	LockBusy  func()
 	client    github.Client
 }
 
@@ -120,6 +121,7 @@ func (h *harness) runReading(stdin io.Reader, now func() time.Time, args ...stri
 		IsTerminal:       func() bool { return h.IsTerminal },
 		StderrIsTerminal: func() bool { return h.IsTerminal && !h.StderrNotTerminal },
 		TermWidth:        func() int { return 100 },
+		LockBusy:         h.LockBusy,
 	}
 	exit = cli.Execute(deps, args)
 	return out.String(), errOut.String(), exit

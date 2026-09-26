@@ -65,10 +65,10 @@ func TestGlyphs(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			// The dispositions stand for the whole set; the style package pins the rest of it.
-			got := Glyphs(envOf(c.env))
+			got := style.Glyphs(envOf(c.env))
 			if got.Accepted != c.want.Accepted || got.Pending != c.want.Pending || got.Excluded != c.want.Excluded ||
 				got.Withdrawn != c.want.Withdrawn || got.Blocking != c.want.Blocking {
-				t.Fatalf("Glyphs = %+v, want the dispositions of %+v", got, c.want)
+				t.Fatalf("style.Glyphs = %+v, want the dispositions of %+v", got, c.want)
 			}
 		})
 	}
