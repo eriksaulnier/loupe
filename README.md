@@ -19,6 +19,10 @@ loupe collects a review agent's findings into a local draft so you decide each o
 2. You decide each finding in `loupe review`. A finding you send back with a note goes to the agent, which answers it.
 3. `loupe publish` shows the exact review. You write its opening, and one key posts it.
 
+![The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title.](docs/assets/review.png)
+
+This is what a published review looks like. A CI review uses the same format. See [Comment format](docs/comment-format.md).
+
 ## Install
 
 ```sh
@@ -34,9 +38,9 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 ## Documentation
 
 - [Install](docs/install.md): the binary, the agent plugin for each host, and updating the two together.
+- [Comment format](docs/comment-format.md): what a published review looks like on GitHub.
 - [The review workflow](docs/review-workflow.md): the attended loop end to end, handing off in a terminal pane, adapting a review skill you already have, and the command and environment reference.
 - [Unattended reviews in CI](docs/ci-action.md): the GitHub Action, the pipeline steps, sticky rounds and the rules an unattended review follows.
-- [Comment format](docs/comment-format.md): what a published review looks like on GitHub.
 - [CLI contract](specs/001-loupe-v1/contracts/cli.md): commands, input, results and errors, for scripting against loupe.
 - [Constitution](.specify/memory/constitution.md): the seven principles every change answers to.
 - [Contributing](CONTRIBUTING.md): setup, local development, tests, commits and releases.
