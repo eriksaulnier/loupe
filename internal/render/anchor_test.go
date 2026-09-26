@@ -105,7 +105,7 @@ func TestBodyAnchorsEveryRound(t *testing.T) {
 		!slices.Equal(ns, []int{3, 2, 1}) {
 		t.Fatalf("anchors %v:\n%s", ns, body)
 	}
-	if !strings.Contains(body, " · via `gadfly-review-pr 2.3.0`\n\nPush again for another round.\n\nOr ask.\n\n---\n\n<!-- loupe-earlier -->") {
+	if !strings.Contains(body, " · via `gadfly-review-pr 2.3.0`\n\n> Push again for another round.\n>\n> Or ask.\n\n---\n\n<!-- loupe-earlier -->") {
 		t.Fatalf("the note does not follow the footer:\n%s", body)
 	}
 	earlier, rounds, err := ReadSticky(body)
@@ -306,7 +306,7 @@ func TestReadStickyCollapsesAnEditedTopRoundWhole(t *testing.T) {
 	for _, want := range []string{
 		"<details>\n<summary>Round 3 · reviewed <code>ccccccc</code> · <code>⛔ 1 blocking</code> <code>🟣 1 suggestion</code></summary>\n\n> `⛔ 1 blocking` `🟣 1 suggestion`\n>\n> A new blocking issue, and one suggestion. Edited.\n>\n> ---\n>\n> ### Must fix\n",
 		"> ---\n>\n> reviewed [`ccccccc`]",
-		"\n>\n> Push again for another round.\n>\n> Or ask.\n\n<!-- loupe digest=3",
+		"\n>\n> > Push again for another round.\n> >\n> > Or ask.\n\n<!-- loupe digest=3",
 	} {
 		if !strings.Contains(top.Block, want) {
 			t.Fatalf("missing %q:\n%s", want, top.Block)

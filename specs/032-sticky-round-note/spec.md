@@ -72,7 +72,7 @@ A caller passes `--note` to an attended publish, or to one without `--sticky`, o
 
 - **FR-001**: `loupe publish` MUST take `--note <markdown>`, and MUST refuse it with `usage`, before the run is resolved, unless `--unattended` and `--sticky` are both set.
 - **FR-002**: The note MUST pass the Markdown allowlist at the summary's depth, and a failure MUST refuse with `markdown` and name the note.
-- **FR-003**: The note MUST render under the newest round's footer as `<!-- loupe-note -->`, a blank line, the note, a blank line and `<!-- loupe-note-end -->`, before the earlier rounds.
+- **FR-003** (amended 2026-09-26 by the owner: the note renders as one quote, `> ` before each line and `>` on a blank line, so it reads as the pipeline's aside and keeps its line count): The note MUST render under the newest round's footer as `<!-- loupe-note -->`, a blank line, the note, a blank line and `<!-- loupe-note-end -->`, before the earlier rounds.
 - **FR-004**: Read-back MUST drop the note, delimiters included, before it collapses the round, and MUST refuse with `sticky` when the delimiters are not one pair after a blank line on the round on top.
 - **FR-005**: The note MUST NOT change the digest, the findings that publish or the inline comments.
 - **FR-006**: `loupe publish --help`, `contracts/cli.md` and `docs/comment-format.md` MUST document the note.

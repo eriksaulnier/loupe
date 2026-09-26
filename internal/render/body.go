@@ -154,7 +154,9 @@ func Body(in Input) string {
 		note = trimmedLines(in.Sticky.Note)
 	}
 	if note != "" {
-		footer += "\n\n" + note
+		// The note is the pipeline's aside, not the round's prose, so it reads as a quote. The marker keeps every line,
+		// so the anchor's count holds.
+		footer += "\n\n" + quoteLines(note)
 	}
 	// Each round's footer sits under the round, so the earlier rounds follow the newest one's footer, and a round
 	// demoted later carries its footer into its collapse.

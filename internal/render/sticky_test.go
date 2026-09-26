@@ -849,7 +849,7 @@ func TestStickyNoteFollowsTheNewestFooter(t *testing.T) {
 	in := stickyGoldenInput(t)
 	in.Sticky.Note = roundNote
 	body := Body(in)
-	want := "· via `gadfly-review-pr 2.2.0`\n\n" + roundNote + "\n\n---\n\n<!-- loupe-earlier -->"
+	want := "· via `gadfly-review-pr 2.2.0`\n\n> " + roundNote + "\n\n---\n\n<!-- loupe-earlier -->"
 	if !strings.Contains(body, want) {
 		t.Fatalf("note not under the footer:\n%s", body)
 	}
