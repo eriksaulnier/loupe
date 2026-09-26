@@ -65,9 +65,9 @@ func TestReadersRefuseAnUnknownFieldAtTheirOwnSchema(t *testing.T) {
 	}
 }
 
-// fieldSets holds each versioned struct's JSON field paths for every schema it has written. A field added, removed or
-// renamed without a bump fails here, because an older loupe would refuse or silently drop it. A bump adds the new
-// schema's set and keeps the older ones.
+// fieldSets holds each versioned struct's JSON field paths, with their whole tags, for every schema it has written. A
+// field added, removed, renamed or retagged without a bump fails here, because an older loupe would refuse or silently
+// drop it. A bump adds the new schema's set and keeps the older ones.
 var fieldSets = []struct {
 	typ    reflect.Type
 	schema int
@@ -76,13 +76,14 @@ var fieldSets = []struct {
 	{reflect.TypeFor[draft.Draft](), draft.SchemaVersion, map[int][]string{
 		1: {
 			"decisions", "decisions.at", "decisions.decision", "decisions.findingId", "decisions.findingRev",
-			"findings", "findings.blocking", "findings.body", "findings.by", "findings.confidence",
+			"findings", "findings.blocking", "findings.body", "findings.by", "findings.confidence,omitempty",
 			"findings.createdAt", "findings.general", "findings.history", "findings.history.at",
-			"findings.history.by", "findings.history.changed", "findings.id", "findings.impact", "findings.included",
-			"findings.label", "findings.location", "findings.location.line", "findings.location.path",
-			"findings.location.side", "findings.location.startLine", "findings.references", "findings.rev",
-			"findings.severity", "findings.suggestedFix", "findings.title", "findings.updatedAt",
-			"findings.verified", "notes", "notes.at", "notes.body", "notes.closedAt", "notes.findingId", "notes.id",
+			"findings.history.by", "findings.history.changed", "findings.id", "findings.impact,omitempty",
+			"findings.included", "findings.label,omitempty", "findings.location,omitempty", "findings.location.line",
+			"findings.location.path", "findings.location.side", "findings.location.startLine,omitempty",
+			"findings.references,omitempty", "findings.rev", "findings.severity,omitempty",
+			"findings.suggestedFix,omitempty", "findings.title", "findings.updatedAt", "findings.verified,omitempty",
+			"notes", "notes.at", "notes.body", "notes.closedAt,omitempty", "notes.findingId", "notes.id",
 			"notes.status", "replies", "replies.at", "replies.body", "replies.by", "replies.id", "replies.noteId",
 			"schema", "summary", "version",
 		},
@@ -95,8 +96,8 @@ var fieldSets = []struct {
 	{reflect.TypeFor[run.Target](), run.TargetSchema, map[int][]string{
 		1: {
 			"author", "baseRef", "baseSha", "capturedAt", "clonePath", "diffSha256", "headRef", "headSha",
-			"mergeBaseSha", "model", "number", "owner", "previousRound", "repo", "round", "schema", "source",
-			"title", "url", "viewer",
+			"mergeBaseSha", "model,omitempty", "number", "owner", "previousRound,omitempty", "repo", "round",
+			"schema", "source,omitempty", "title", "url", "viewer",
 		},
 	}},
 	{reflect.TypeFor[Attempt](), RecordSchema, map[int][]string{
@@ -104,49 +105,57 @@ var fieldSets = []struct {
 			"confirmed", "confirmed.digest", "confirmed.dispositions", "confirmed.version", "envelope",
 			"envelope.action", "envelope.body", "envelope.comments", "envelope.comments.body",
 			"envelope.comments.line", "envelope.comments.path", "envelope.comments.side",
-			"envelope.comments.startLine", "envelope.comments.startSide", "envelope.commitId", "envelope.digest",
-			"envelope.draftVersion", "envelope.editReviewId", "envelope.event", "envelope.findings",
-			"envelope.findings.blocking", "envelope.findings.body", "envelope.findings.id",
+			"envelope.comments.startLine,omitempty", "envelope.comments.startSide,omitempty", "envelope.commitId",
+			"envelope.digest", "envelope.draftVersion", "envelope.editReviewId,omitempty", "envelope.event",
+			"envelope.findings", "envelope.findings.blocking", "envelope.findings.body", "envelope.findings.id",
 			"envelope.findings.label", "envelope.findings.location", "envelope.findings.location.line",
 			"envelope.findings.location.path", "envelope.findings.location.side",
-			"envelope.findings.location.startLine", "envelope.findings.title", "envelope.inline",
+			"envelope.findings.location.startLine,omitempty", "envelope.findings.title", "envelope.inline",
 			"envelope.publicationId", "envelope.target", "envelope.target.headSha", "envelope.target.number",
-			"envelope.target.owner", "envelope.target.repo", "envelope.target.round", "envelope.viewer", "lastError",
-			"schema", "startedAt", "state", "updatedAt",
+			"envelope.target.owner", "envelope.target.repo", "envelope.target.round", "envelope.viewer",
+			"lastError,omitempty", "schema", "startedAt", "state", "updatedAt",
 		},
 	}},
 	{reflect.TypeFor[Receipt](), RecordSchema, map[int][]string{
 		1: {
-			"action", "author", "edited", "envelope", "envelope.action", "envelope.body", "envelope.comments",
-			"envelope.comments.body", "envelope.comments.line", "envelope.comments.path", "envelope.comments.side",
-			"envelope.comments.startLine", "envelope.comments.startSide", "envelope.commitId", "envelope.digest",
-			"envelope.draftVersion", "envelope.editReviewId", "envelope.event", "envelope.findings",
-			"envelope.findings.blocking", "envelope.findings.body", "envelope.findings.id",
-			"envelope.findings.label", "envelope.findings.location", "envelope.findings.location.line",
-			"envelope.findings.location.path", "envelope.findings.location.side",
-			"envelope.findings.location.startLine", "envelope.findings.title", "envelope.inline",
-			"envelope.publicationId", "envelope.target", "envelope.target.headSha", "envelope.target.number",
-			"envelope.target.owner", "envelope.target.repo", "envelope.target.round", "envelope.viewer", "postedAt",
-			"reviewId", "reviewUrl", "schema",
+			"action", "author,omitempty", "edited,omitempty", "envelope", "envelope.action", "envelope.body",
+			"envelope.comments", "envelope.comments.body", "envelope.comments.line", "envelope.comments.path",
+			"envelope.comments.side", "envelope.comments.startLine,omitempty",
+			"envelope.comments.startSide,omitempty", "envelope.commitId", "envelope.digest", "envelope.draftVersion",
+			"envelope.editReviewId,omitempty", "envelope.event", "envelope.findings", "envelope.findings.blocking",
+			"envelope.findings.body", "envelope.findings.id", "envelope.findings.label",
+			"envelope.findings.location", "envelope.findings.location.line", "envelope.findings.location.path",
+			"envelope.findings.location.side", "envelope.findings.location.startLine,omitempty",
+			"envelope.findings.title", "envelope.inline", "envelope.publicationId", "envelope.target",
+			"envelope.target.headSha", "envelope.target.number", "envelope.target.owner", "envelope.target.repo",
+			"envelope.target.round", "envelope.viewer", "postedAt", "reviewId", "reviewUrl", "schema",
 		},
 	}},
 	{reflect.TypeFor[Previous](), PreviousSchema, map[int][]string{
 		1: {
 			"findings", "findings.blocking", "findings.body", "findings.id", "findings.label", "findings.location",
 			"findings.location.line", "findings.location.path", "findings.location.side",
-			"findings.location.startLine", "findings.title", "found", "reason", "reviewId", "reviewUrl", "round",
-			"schema",
+			"findings.location.startLine,omitempty", "findings.title", "found", "reason,omitempty",
+			"reviewId,omitempty", "reviewUrl,omitempty", "round,omitempty", "schema",
 		},
 	}},
 	{reflect.TypeFor[Comments](), CommentsSchema, map[int][]string{
 		1: {
-			"comments", "comments.author", "comments.body", "comments.createdAt", "comments.url", "excludedReviews",
-			"read", "reason", "reviews", "reviews.author", "reviews.body", "reviews.id", "reviews.state",
-			"reviews.submittedAt", "reviews.url", "schema", "threads", "threads.comments", "threads.comments.author",
-			"threads.comments.body", "threads.comments.createdAt", "threads.comments.url", "threads.line",
-			"threads.originalLine", "threads.outdated", "threads.path", "threads.resolved", "threads.side",
+			"comments,omitempty", "comments.author", "comments.body", "comments.createdAt,omitzero", "comments.url",
+			"excludedReviews,omitempty", "read", "reason,omitempty", "reviews,omitempty", "reviews.author",
+			"reviews.body", "reviews.id", "reviews.state", "reviews.submittedAt,omitzero", "reviews.url", "schema",
+			"threads,omitempty", "threads.comments", "threads.comments.author", "threads.comments.body",
+			"threads.comments.createdAt,omitzero", "threads.comments.url", "threads.line,omitempty",
+			"threads.originalLine,omitempty", "threads.outdated", "threads.path", "threads.resolved",
+			"threads.side,omitempty",
 		},
 	}},
+	// tagProbe is not a record. It pins that a tag's options count, so an omitempty change without a bump fails.
+	{reflect.TypeFor[tagProbe](), 1, map[int][]string{1: {"name,omitempty"}}},
+}
+
+type tagProbe struct {
+	Name string `json:"name,omitempty"`
 }
 
 func TestEachRecordsFieldSetIsPinnedToItsSchema(t *testing.T) {
@@ -173,14 +182,15 @@ func TestEachRecordsFieldSetIsPinnedToItsSchema(t *testing.T) {
 func jsonFields(t reflect.Type, prefix string, out *[]string) {
 	for i := range t.NumField() {
 		f := t.Field(i)
-		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		tag := f.Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
 		if !f.IsExported() || name == "-" {
 			continue
 		}
 		if name == "" {
-			name = f.Name
+			name, tag = f.Name, f.Name+tag
 		}
-		*out = append(*out, prefix+name)
+		*out = append(*out, prefix+tag)
 		ft := f.Type
 		for ft.Kind() == reflect.Pointer || ft.Kind() == reflect.Slice || ft.Kind() == reflect.Map {
 			ft = ft.Elem()
