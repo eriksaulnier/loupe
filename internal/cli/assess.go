@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -31,7 +32,8 @@ Input (--from <file>, or --from - for stdin):
 
 Or name the refs as arguments with --status open|addressed. The whole batch is recorded or
 none of it: an unknown ref refuses with not-found, and a run with no previous round refuses as
-loupe show --previous does. It reads no network.
+loupe show --previous does. A previous round captured by an older loupe, which recorded no
+publication id, refuses with not-found: capture again from an empty data root. It reads no network.
 
 Result (--json):
   {"loupe": 1, "ok": true, "command": "assess", "run": "owner/repo#123@2",
@@ -109,6 +111,17 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 	p, err := previousRound(root, ref)
 	if err != nil {
 		return err
+	}
+	// Publish checks the previous round against GitHub by its publication id, so without one nothing would catch a
+	// newer round published from another data root.
+	if p.publicationID == "" {
+		target, err := run.LoadTarget(dir)
+		if err != nil {
+			return err
+		}
+		return refusal.New(refusal.NotFound,
+			fmt.Sprintf("the previous round of %s was captured by an older loupe that did not record its publication id, so publish could not check that it is still the previous round", ref),
+			fmt.Sprintf("run %s from an empty data root, then assess again", publish.RecaptureCommand(target)))
 	}
 	dropped := 0
 	d, err := draft.Mutate(dir, "assess", expectVersion, deps.Getenv, func(d *draft.Draft) (err error) {

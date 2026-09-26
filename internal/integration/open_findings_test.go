@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -569,5 +570,37 @@ func TestPublishRefusesWhenAnotherDataRootPublishesDuringConfirmation(t *testing
 	}
 	if got := len(h.reviewsBy()["reviewer"]); got != 2 {
 		t.Fatalf("%d reviews by reviewer, want round 1 and the other root's round only", got)
+	}
+}
+
+// A run captured by a loupe that did not record publication ids cannot be checked against GitHub at publish, so assess
+// refuses rather than record assessments no check can guard.
+func TestAssessRefusesAPreviousRoundWithoutAPublicationID(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.ciRound(true, bareExceptAndSleep, nil)
+	h.pushHead("src/round2.go")
+	h.Home = filepath.Join(t.TempDir(), "home")
+	run := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	path := filepath.Join(h.RunDir(1), "previous.json")
+	stored := string(readFile(t, path))
+	older := regexp.MustCompile(`\n\s*"publicationId": "[^"]*",`).ReplaceAllString(stored, "")
+	if older == stored {
+		t.Fatalf("previous.json carries no publicationId to remove:\n%s", stored)
+	}
+	if err := os.WriteFile(path, []byte(older), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.mustOK("show", "--previous", "--run", run)
+	e := h.mustRefuse("not-found", "assess", "e-1", "--status", "open", "--run", run)
+	if msg := fmt.Sprint(e["message"]); !strings.Contains(msg, "captured by an older loupe") {
+		t.Fatalf("message %q does not say the round was captured by an older loupe", msg)
+	}
+	if fix := fmt.Sprint(e["fix"]); !strings.Contains(fix, "loupe capture "+prURL()+" --source ci-review from an empty data root") {
+		t.Fatalf("fix %q does not name a fresh capture", fix)
+	}
+	if shown := h.mustOK("show", "--run", run); shown["assessments"] != nil {
+		t.Fatalf("a refused assess changed the draft: %v", shown["assessments"])
 	}
 }

@@ -258,17 +258,21 @@ func refuseMovedReview(reviews []github.Review, viewer string, target run.Target
 	if ok && render.PublicationID(review.Body) == against.PublicationID {
 		return nil
 	}
-	capture := "loupe capture " + target.URL
-	if target.Source != "" {
-		capture += " --source " + target.Source
-	}
-	fix := fmt.Sprintf("this run's previous round was read at capture: run %s from an empty data root, then assess again", capture)
+	fix := fmt.Sprintf("this run's previous round was read at capture: run %s from an empty data root, then assess again", RecaptureCommand(target))
 	if !ok {
 		return refusal.New(refusal.PreviousMoved, fmt.Sprintf("no loupe review from %s is on %s, but loupe assess read round %d (%s)",
 			publisher(viewer, target.Source), target.URL, against.Round, against.ReviewURL), fix)
 	}
 	return refusal.New(refusal.PreviousMoved, fmt.Sprintf("the previous round is now round %d (%s), not the round loupe assess read",
 		render.MetaRound(review.Body), review.HTMLURL), fix)
+}
+
+// RecaptureCommand captures the run's pull request again with the same source, which reads the previous round afresh.
+func RecaptureCommand(target run.Target) string {
+	if target.Source == "" {
+		return "loupe capture " + target.URL
+	}
+	return "loupe capture " + target.URL + " --source " + target.Source
 }
 
 // firstCheck reconciles an existing attempt before any gate, so a review that did reach GitHub gets its receipt even
