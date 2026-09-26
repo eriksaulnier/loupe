@@ -36,6 +36,8 @@ type Deps struct {
 	TermWidth func() int
 	// TTYWidth is the agent's own terminal width, which picks a handoff's split direction; nil means unreadable.
 	TTYWidth func() (int, bool)
+	// LockBusy, when set, runs each time capture finds its lock held; tests use it to know a second capture is waiting.
+	LockBusy func()
 	// palettes is built once per invocation so color is detected once; a Deps built by a test has none and each
 	// caller builds its own.
 	palettes *palettes

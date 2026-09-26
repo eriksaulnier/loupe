@@ -398,11 +398,15 @@ func TestConcurrentCapturesAtUnchangedHead(t *testing.T) {
 		return done
 	}
 
+	waiting := make(chan struct{})
+	var once sync.Once
+	h.LockBusy = func() { once.Do(func() { close(waiting) }) }
+
 	nowA, reachedA, releaseA := pausedNow()
 	doneA := start(0, nowA)
 	<-reachedA
 	doneB := start(1, fixedNow)
-	time.Sleep(200 * time.Millisecond)
+	<-waiting
 	close(releaseA)
 	<-doneA
 	<-doneB

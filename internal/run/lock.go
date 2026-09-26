@@ -26,6 +26,12 @@ type Held struct {
 // Lock takes the run's exclusive flock. The kernel drops a flock when its holder dies, so a timeout means a live
 // contender or a wedged process, never a leftover from a crash.
 func Lock(dir, command string, getenv func(string) string) (*Held, error) {
+	return LockNotifying(dir, command, getenv, nil)
+}
+
+// LockNotifying is Lock that calls busy, when set, each time it finds the lock held, so a test can order a race on
+// the lock instead of sleeping and hoping the other process got there first.
+func LockNotifying(dir, command string, getenv func(string) string, busy func()) (*Held, error) {
 	timeout, err := lockTimeout(getenv)
 	if err != nil {
 		return nil, err
@@ -48,6 +54,9 @@ func Lock(dir, command string, getenv func(string) string) (*Held, error) {
 		if !time.Now().Before(deadline) {
 			_ = f.Close()
 			return nil, heldRefusal(path)
+		}
+		if busy != nil {
+			busy()
 		}
 		time.Sleep(lockRetryInterval)
 	}

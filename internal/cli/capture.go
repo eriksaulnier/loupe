@@ -155,7 +155,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if err := os.MkdirAll(prDir, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", prDir, err)
 	}
-	held, err := run.Lock(prDir, "capture", deps.Getenv)
+	held, err := run.LockNotifying(prDir, "capture", deps.Getenv, deps.LockBusy)
 	if err != nil {
 		return err
 	}
