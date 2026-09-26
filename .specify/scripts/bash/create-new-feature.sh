@@ -133,6 +133,64 @@ get_highest_from_specs() {
     echo "$highest"
 }
 
+# Read names on stdin (one per line) and print the highest sequential prefix.
+# Same match rules as get_highest_from_specs: >=3 digits, no timestamp prefixes.
+highest_prefix_from_names() {
+    local highest=0 name number
+    while IFS= read -r name; do
+        name="${name##*/}"
+        if echo "$name" | grep -Eq '^[0-9]{3,}-' && ! echo "$name" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
+            number=$(echo "$name" | grep -Eo '^[0-9]+')
+            if is_feature_number_in_range "$number"; then
+                number=$((10#$number))
+                [ "$number" -gt "$highest" ] && highest=$number
+            fi
+        fi
+    done
+    echo "$highest"
+}
+
+# Highest number reserved on origin: NNN-* branch names, plus specs/NNN-* on
+# origin/main and on each such branch. Parallel branches cannot see each
+# other's specs/ directories locally, so the local scan alone hands two agents
+# the same number. Prints 0 and warns on stderr when origin is unreachable.
+get_highest_from_origin() {
+    local heads branches ref names
+    if ! git remote get-url origin >/dev/null 2>&1; then
+        >&2 echo "[specify] Warning: no origin remote; numbering from local specs/ only"
+        echo 0
+        return 0
+    fi
+    if ! heads=$(GIT_TERMINAL_PROMPT=0 git ls-remote --heads origin 2>/dev/null); then
+        >&2 echo "[specify] Warning: git ls-remote origin failed; numbering from local specs/ only"
+        echo 0
+        return 0
+    fi
+    branches=$(printf '%s\n' "$heads" | sed -n 's|^[^[:space:]]*[[:space:]]*refs/heads/||p' | grep -E '^[0-9]{3,}-' || true)
+    # Fetch so ls-tree can read branch trees; a failure only loses the tree scan.
+    if ! GIT_TERMINAL_PROMPT=0 git fetch --quiet origin >/dev/null 2>&1; then
+        >&2 echo "[specify] Warning: git fetch origin failed; using remote branch names only"
+    fi
+    names="$branches"
+    for ref in origin/main $(printf '%s\n' "$branches" | sed 's|^|origin/|'); do
+        names="$names
+$(git ls-tree --name-only "$ref" specs/ 2>/dev/null || true)"
+    done
+    printf '%s\n' "$names" | highest_prefix_from_names
+}
+
+# Highest number across the local specs directory and origin.
+get_highest_number() {
+    local local_highest remote_highest
+    local_highest=$(get_highest_from_specs "$1")
+    remote_highest=$(get_highest_from_origin)
+    if [ "$remote_highest" -gt "$local_highest" ]; then
+        echo "$remote_highest"
+    else
+        echo "$local_highest"
+    fi
+}
+
 # Return success when a spec directory owns the given numeric prefix.
 spec_prefix_exists() {
     local specs_dir="$1"
@@ -289,7 +347,7 @@ else
 
     # Determine branch number from existing feature directories
     if [ -z "$BRANCH_NUMBER" ]; then
-        HIGHEST=$(get_highest_from_specs "$SPECS_DIR")
+        HIGHEST=$(get_highest_number "$SPECS_DIR")
         if [ "$HIGHEST" -eq "$MAX_FEATURE_NUMBER" ]; then
             echo "Error: feature number must be between 0 and $MAX_FEATURE_NUMBER, got '9223372036854775808'" >&2
             exit 1
@@ -312,7 +370,7 @@ else
 
         if [ "$SPEC_CONFLICT" = true ]; then
             REQUESTED_NUM="$FEATURE_NUM"
-            HIGHEST=$(get_highest_from_specs "$SPECS_DIR")
+            HIGHEST=$(get_highest_number "$SPECS_DIR")
             BRANCH_NUMBER=$HIGHEST
             while true; do
                 if [ "$BRANCH_NUMBER" -eq "$MAX_FEATURE_NUMBER" ]; then

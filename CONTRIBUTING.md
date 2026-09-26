@@ -24,7 +24,7 @@ Two documents are contracts with people outside the codebase: [`specs/001-loupe-
 
 Bug fixes and small changes that keep to the existing specs go straight to a pull request.
 
-New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory holding `spec.md` (what and why), then `plan.md` (how, checked against the constitution) and `tasks.md` (ordered, test-first steps). The files follow [spec-kit](https://github.com/github/spec-kit): in Claude Code the `.claude/skills/speckit-*` skills drive the flow, but the files are plain Markdown built from `.specify/templates/`, and any contributor MAY write them by hand.
+New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory holding `spec.md` (what and why), then `plan.md` (how, checked against the constitution) and `tasks.md` (ordered, test-first steps). The files follow [spec-kit](https://github.com/github/spec-kit): in Claude Code the `.claude/skills/speckit-*` skills drive the flow, but the files are plain Markdown built from `.specify/templates/`, and any contributor MAY write them by hand. The create script picks the next `NNN` from the local `specs/`, from `NNN-*` branches on `origin`, and from `specs/` on `origin/main` and those branches, so parallel branches do not share a number.
 
 A plan that departs from the constitution, research or contracts MUST record the departure and its reason in its Complexity Tracking table. A new runtime dependency MUST carry a one-line reason in the plan (Principle VI).
 
