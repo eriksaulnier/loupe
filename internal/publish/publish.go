@@ -48,8 +48,9 @@ type Options struct {
 	// HoldSignals is called just before attempt.json is written and the func it returns once the outcome is recorded.
 	// Nil holds the signals for real.
 	HoldSignals func(signals []os.Signal) (release func())
-	// CheckDraft, when set, may refuse the loaded draft before the gates. It runs after the terminal rule, which
-	// refuses before the draft is read, and only for a publication not already replayed.
+	// CheckDraft, when set, may refuse the loaded draft. It runs after the terminal rule and before the gates, then
+	// again under the lock just before sending, since what it checks can change while the human confirms. It never
+	// runs for a replayed publication.
 	CheckDraft func(*draft.Draft) error
 }
 
@@ -374,6 +375,11 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 		return Receipt{}, false, refusal.New(refusal.Changed,
 			fmt.Sprintf("the draft changed while the review was being confirmed (confirmed version %d, now %d); nothing was sent", preview.Version, d.Version),
 			"loupe review, then loupe publish again")
+	}
+	if opts.CheckDraft != nil {
+		if err := opts.CheckDraft(d); err != nil {
+			return Receipt{}, false, err
+		}
 	}
 
 	hold := opts.HoldSignals

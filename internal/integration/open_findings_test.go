@@ -2,6 +2,8 @@ package integration
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -425,4 +427,61 @@ func TestEmptyAssessClearsAssessmentsFromAMovedPreviousRound(t *testing.T) {
 	}
 	h.mustRefuse("input", "assess", "--run", round3, "--from", empty)
 	h.mustOK("publish", round3, "--unattended", "--sticky")
+}
+
+// confirmAfter calls during before its first read of answer, so another publish lands while the human confirms.
+type confirmAfter struct {
+	during func()
+	answer io.Reader
+}
+
+func (c *confirmAfter) Read(p []byte) (int, error) {
+	if c.during != nil {
+		c.during()
+		c.during = nil
+	}
+	return c.answer.Read(p)
+}
+
+// Round 2 publishes while the human confirms round 3, which assessed round 1: the check before the confirmation passed,
+// so the one before sending must refuse.
+func TestPublishRefusesWhenThePreviousRoundMovesDuringConfirmation(t *testing.T) {
+	h := newHarness(t)
+	h.Env["NO_COLOR"] = "1"
+	h.captureRound(1)
+	h.publishRound(1)
+	head2 := h.pushHead("src/round2.go")
+	h.captureRound(2)
+	h.mustOK("add", "--run", roundRef(2), "--from", h.WriteFile("finding.json", generalFinding("Cache race")))
+	head3 := h.pushHead("src/round3.go")
+	h.captureRound(3)
+	qualifier := owner + ":" + repo + ":"
+	h.GH.SetComparison(owner, repo, qualifier+head2, qualifier+head3, github.Comparison{Status: "ahead", AheadBy: 1,
+		Commits: []github.Commit{{SHA: head3, Message: "round 3"}}, Files: []github.ComparedFile{{Filename: "src/round3.go"}}})
+	h.mustOK("assess", "e-1", "--status", "open", "--run", roundRef(3))
+	h.mustOK("add", "--run", roundRef(3), "--from", h.WriteFile("finding.json", generalFinding("Unbounded retries")))
+	h.IsTerminal = true
+	for _, round := range []int{2, 3} {
+		h.Stdin = "a\nq\n"
+		if _, stderr, exit := h.Run("review", roundRef(round), "--plain"); exit != 0 {
+			t.Fatalf("review round %d exit %d stderr %q", round, exit, stderr)
+		}
+	}
+
+	answer := &confirmAfter{answer: strings.NewReader(confirmPublish("", "y")), during: func() {
+		if stdout, stderr, exit := h.runWith(confirmPublish("", "y"), fixedNow, "publish", roundRef(2), "--action", "comment", "--plain"); exit != 0 {
+			t.Fatalf("round 2 publish exit %d stdout %q stderr %q", exit, stdout, stderr)
+		}
+	}}
+	_, stderr, exit := h.runReading(answer, fixedNow, "publish", roundRef(3), "--action", "comment", "--plain")
+	h.IsTerminal = false
+	if exit != 1 || !strings.Contains(stderr, "error: the previous round is now round 2 (") {
+		t.Fatalf("round 3 publish exit %d stderr %q, want previous-moved", exit, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(h.RunDir(3), "receipt.json")); err == nil {
+		t.Fatal("round 3 published")
+	}
+	if got := len(h.reviewsBy()["reviewer"]); got != 2 {
+		t.Fatalf("%d reviews by reviewer, want rounds 1 and 2 only", got)
+	}
 }
