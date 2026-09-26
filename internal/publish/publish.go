@@ -76,6 +76,9 @@ type Preview struct {
 	HeadMoved *HeadMoved
 	// Edits is the URL of the review whose body this publication replaces, empty when it creates one.
 	Edits string
+	// Edited numbers the rounds of that review edited on GitHub since loupe wrote them, newest first. The body carries
+	// them as they were found.
+	Edited []int
 	// Compose rebuilds the review around a message the human typed and returns it with its JSON. The confirmation
 	// renders what it returns and publication sends what it returns, so what was approved and what is sent cannot
 	// differ. Run always sets it.
@@ -209,9 +212,20 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 		Dispositions: draft.Dispositions(d), HeadMoved: moved, Compose: compose}
 	if sticky != nil {
 		preview.Edits = sticky.Review.HTMLURL
+		for _, r := range sticky.Earlier {
+			if r.Edited {
+				preview.Edited = append(preview.Edited, r.N)
+			}
+		}
 	}
 
 	if opts.Unattended {
+		// No one confirms this round, so a pipeline's log is where a person can learn their edit was carried.
+		if len(preview.Edited) > 0 && opts.Stderr != nil {
+			if _, err := fmt.Fprintln(opts.Stderr, EditedNotice(preview.Edited)); err != nil {
+				return Receipt{}, false, err
+			}
+		}
 		return send(ctx, opts, client, env, preview, retryID)
 	}
 

@@ -586,3 +586,17 @@ func TestConfirmPlainShowsTheRecordAsANote(t *testing.T) {
 		t.Errorf("want the record shown as a note:\n%s", text)
 	}
 }
+
+// A round edited on GitHub is carried as found, so the human is told before the body they are about to overwrite.
+func TestConfirmPlainNamesAnEditedRound(t *testing.T) {
+	preview := confirmPreview()
+	preview.Edits, preview.Edited = editedURL, []int{2}
+	var out bytes.Buffer
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(preview); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if i := strings.Index(text, publish.EditedNotice([]int{2})); i < 0 || i > strings.Index(text, "Review body:") {
+		t.Fatalf("the edited round is not named before the body:\n%s", text)
+	}
+}

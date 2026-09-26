@@ -1058,3 +1058,14 @@ func TestConfirmTypesIntoAStickyRound(t *testing.T) {
 		t.Fatalf("the body y sends does not count the message:\n%s", m.confirm.shown.Body)
 	}
 }
+
+func TestConfirmNamesAnEditedRound(t *testing.T) {
+	preview := stickyPreview()
+	preview.Edits, preview.Edited = "https://github.com/acme/widgets/pull/42#pullrequestreview-77", []int{3, 1}
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
+	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	view := ansi.Strip(m.confirm.content(m.shell))
+	if i := strings.Index(view, publish.EditedNotice([]int{3, 1})); i < 0 || i > strings.Index(view, "review body") {
+		t.Fatalf("the edited rounds are not named before the body:\n%s", view)
+	}
+}

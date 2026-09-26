@@ -472,6 +472,9 @@ func (c *confirmation) content(m *Model) string {
 	if c.preview.Edits != "" {
 		parts = append(parts, m.styles.Rule(m.width, "edits a published review", ""),
 			m.styles.Warn.Render(m.styles.Wrap(editLine(c.preview.Edits), width, " ")), "")
+		if len(c.preview.Edited) > 0 {
+			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(render.ForDisplay(publish.EditedNotice(c.preview.Edited)), width, " ")), "")
+		}
 	}
 	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
 	if c.inline() {

@@ -2,6 +2,8 @@ package publish
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -65,3 +67,17 @@ func recheckSticky(ctx context.Context, client github.Client, target run.Target,
 }
 
 func lf(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
+
+// EditedNotice names the rounds of a sticky review edited on GitHub since loupe wrote them, newest first. They are
+// carried as found rather than refused, so the words stay, and this is how the publisher learns of them.
+func EditedNotice(rounds []int) string {
+	if len(rounds) == 1 {
+		return fmt.Sprintf("Round %d was edited on GitHub since loupe wrote it. It is carried as it was found.", rounds[0])
+	}
+	names := make([]string, len(rounds))
+	for i, n := range rounds {
+		names[i] = strconv.Itoa(n)
+	}
+	list := strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+	return "Rounds " + list + " were edited on GitHub since loupe wrote them. They are carried as they were found."
+}

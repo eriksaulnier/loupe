@@ -310,6 +310,9 @@ func ConfirmPlain(in io.Reader, out io.Writer) func(publish.Preview) (publish.Co
 		if preview.Edits != "" {
 			p.printf("%s\n\n", editLine(preview.Edits))
 		}
+		if len(preview.Edited) > 0 {
+			p.printf("%s\n\n", render.ForDisplay(publish.EditedNotice(preview.Edited)))
+		}
 		p.printf("Review body:\n\n%s\n", render.ForDisplay(displayBody(preview.Body)))
 		p.printf("\nInline comments: %d\n", len(preview.Comments))
 		for _, c := range preview.Comments {
