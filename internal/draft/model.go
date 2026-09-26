@@ -7,7 +7,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // schemaVersion and handBackSchema are what this loupe reads and writes, as vars so a test can play the next loupe.
 var schemaVersion, handBackSchema = SchemaVersion, HandBackSchema

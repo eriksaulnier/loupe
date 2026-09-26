@@ -183,7 +183,7 @@ func TestLoadPreviousRefusesAnIncompleteFoundRound(t *testing.T) {
 		"empty id":            `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "", "title": "T"}]}`,
 		"empty title":         `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "f-001", "title": ""}]}`,
 		"reason and findings": `{"schema": 1, "reason": "why", "findings": []}`,
-		"unknown status":      `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [], "assessments": [{"ref": "e-1", "status": "fixed", "finding": {"id": "f-001", "title": "T"}}]}`,
+		"unknown status":      `{"schema": 2, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [], "assessments": [{"ref": "e-1", "status": "fixed", "finding": {"id": "f-001", "title": "T"}}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

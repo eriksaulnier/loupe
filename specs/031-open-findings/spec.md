@@ -13,6 +13,7 @@
 This specification amends `docs/comment-format.md` and `specs/001-loupe-v1/contracts/cli.md`, and builds on `specs/027-previous-from-github`.
 
 - The findings record gains a version 2 whose data also holds the round's assessments. A round with no assessments writes version 1 exactly as today, so no existing body and no existing golden changes.
+- `draft.json`, `attempt.json`, `receipt.json` and `previous.json` move to `schema` 2, as `docs/versioning.md` requires for their new fields. The bump only adds fields, so every schema 1 file still reads.
 - `show --previous --json` keeps `from`, `round`, `reviewUrl` and `findings` with their meanings, and gains one key, `earlier`.
 - One command is added, `assess`. No existing command changes its input or its refusals.
 - No visible byte of a published body changes.

@@ -13,7 +13,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const PreviousSchema = 1
+const PreviousSchema = 2
 
 // Previous is the round capture read back from GitHub for a run with no earlier local receipt of its publisher's: the
 // publisher's newest loupe review and its findings when Found, and otherwise the reason there is none.

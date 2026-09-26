@@ -2,6 +2,7 @@ package publish
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -90,7 +91,7 @@ func TestReceiptAuthorRoundTripsAndIsOmittedWhenEmpty(t *testing.T) {
 
 func TestRecordsRefuseWrongSchema(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "receipt.json"), []byte(`{"schema": 2}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "receipt.json"), fmt.Appendf(nil, `{"schema": %d}`, RecordSchema+1), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := LoadReceipt(dir); !isRefusal(err, refusal.Record) {
