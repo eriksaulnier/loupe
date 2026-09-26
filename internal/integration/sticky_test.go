@@ -109,7 +109,7 @@ func TestPublishStickyNoteShowsOnlyOnTheNewestRound(t *testing.T) {
 	}
 }
 
-// Three pipeline rounds with a note leave one review whose every round opens on its anchor, the newest at line 1. A
+// Four pipeline rounds with a note leave one review whose every round opens on its anchor, the newest at line 1. A
 // person's edit to a collapsed round between rounds is carried and named on stderr by the next round only.
 func TestPublishStickyAnchorsEveryRound(t *testing.T) {
 	t.Parallel()
