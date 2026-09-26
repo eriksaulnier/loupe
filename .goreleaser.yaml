@@ -30,12 +30,17 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
-# release-please owns the changelog and creates the release; goreleaser only attaches the archives to it.
+# release-please owns the changelog and creates the release as a draft. goreleaser attaches the archives to it, then
+# publishes it. An immutable release takes no new assets once published, so the order is load-bearing.
 changelog:
   disable: true
 
 release:
   mode: keep-existing
+  # A draft is invisible to a lookup by tag, so goreleaser finds release-please's draft by name. release-please names
+  # it after the tag. If the names drift apart, goreleaser creates and publishes a second release instead.
+  use_existing_draft: true
+  name_template: "{{ .Tag }}"
   github:
     owner: eriksaulnier
     name: loupe

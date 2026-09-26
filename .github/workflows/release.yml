@@ -21,8 +21,8 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # release-please cuts the tag with GITHUB_TOKEN, and a tag made with that token triggers no other workflow, so
-  # goreleaser runs here, gated on it.
+  # release-please cuts the tag and a draft release with GITHUB_TOKEN, and a tag made with that token triggers no other
+  # workflow, so goreleaser runs here, gated on it.
   goreleaser:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
@@ -33,6 +33,15 @@ jobs:
           fetch-depth: 0
       - uses: jdx/mise-action@v4
       - run: mise run check
+      # goreleaser creates and publishes a release of its own when it finds no draft by this name, which an immutable
+      # release would make permanent.
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          drafts="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft and .name == env.TAG) | .id' | wc -l | tr -d ' ')"
+          [ "$drafts" = 1 ] || { echo "::error::want exactly one draft release named $TAG for goreleaser to publish, found $drafts"; exit 1; }
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
@@ -41,8 +50,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # After goreleaser, not beside it: the archives this release's action default names exist only once it
-  # has uploaded them.
+  # After goreleaser, not beside it: the release stays a draft, whose download URLs 404, until goreleaser has
+  # uploaded the archives this release's action default names and published it.
   install-action:
     needs: [release-please, goreleaser]
     if: needs.release-please.outputs.release_created == 'true'
