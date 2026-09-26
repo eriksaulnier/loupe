@@ -118,7 +118,7 @@ get_highest_from_specs() {
             [ -d "$dir" ] || continue
             dirname=$(basename "$dir")
             # Match sequential prefixes (>=3 digits), but skip timestamp dirs.
-            if echo "$dirname" | grep -Eq '^[0-9]{3,}-' && ! echo "$dirname" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
+            if echo "$dirname" | grep -Eq '^[0-9]{3}-' && ! echo "$dirname" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
                 number=$(echo "$dirname" | grep -Eo '^[0-9]+')
                 if is_feature_number_in_range "$number"; then
                     number=$((10#$number))
@@ -139,7 +139,7 @@ highest_prefix_from_names() {
     local highest=0 name number
     while IFS= read -r name; do
         name="${name##*/}"
-        if echo "$name" | grep -Eq '^[0-9]{3,}-' && ! echo "$name" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
+        if echo "$name" | grep -Eq '^[0-9]{3}-' && ! echo "$name" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
             number=$(echo "$name" | grep -Eo '^[0-9]+')
             if is_feature_number_in_range "$number"; then
                 number=$((10#$number))
@@ -174,7 +174,7 @@ get_highest_from_origin() {
     if ! GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="$ssh_cmd" git fetch --quiet origin >/dev/null 2>&1; then
         >&2 echo "[specify] Warning: git fetch origin failed; using remote branch names only"
     fi
-    names=$(printf '%s\n' "$branches" | grep -E '^[0-9]{3,}-' || true)
+    names=$(printf '%s\n' "$branches" | grep -E '^[0-9]{3}-' || true)
     for ref in origin/main $(printf '%s\n' "$branches" | sed 's|^|origin/|'); do
         names="$names
 $(git ls-tree --name-only "$ref" specs/ 2>/dev/null || true)"
