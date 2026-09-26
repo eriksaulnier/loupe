@@ -529,3 +529,45 @@ func TestPublishRefusesWhenAnotherDataRootPublishedMeanwhile(t *testing.T) {
 		h.mustOK("assess", "e-1", "e-2", "e-3", "--status", "open", "--run", run)
 	})
 }
+
+// The attended form of the overlap: the same person publishes their next round from another data root while this
+// root's round is at its confirmation, after the check before the confirmation passed.
+func TestPublishRefusesWhenAnotherDataRootPublishesDuringConfirmation(t *testing.T) {
+	h := newHarness(t)
+	h.Env["NO_COLOR"] = "1"
+	h.captureRound(1)
+	h.publishRound(1)
+
+	h.pushHead("src/round2.go")
+	other := *h
+	other.Home = filepath.Join(t.TempDir(), "home")
+	h.Home = filepath.Join(t.TempDir(), "home")
+	for _, r := range []*harness{h, &other} {
+		r.captureRound(1)
+		r.mustOK("add", "--run", roundRef(1), "--from", r.WriteFile("finding.json", generalFinding("Cache race")))
+		r.IsTerminal = true
+		r.Stdin = "a\nq\n"
+		if _, stderr, exit := r.Run("review", roundRef(1), "--plain"); exit != 0 {
+			t.Fatalf("review exit %d stderr %q", exit, stderr)
+		}
+	}
+	h.mustOK("assess", "e-1", "--status", "open", "--run", roundRef(1))
+
+	answer := &confirmAfter{answer: strings.NewReader(confirmPublish("", "y")), during: func() {
+		if stdout, stderr, exit := other.runWith(confirmPublish("", "y"), fixedNow, "publish", roundRef(1), "--action", "comment", "--plain"); exit != 0 {
+			t.Fatalf("the other root's publish exit %d stdout %q stderr %q", exit, stdout, stderr)
+		}
+	}}
+	_, stderr, exit := h.runReading(answer, fixedNow, "publish", roundRef(1), "--action", "comment", "--plain")
+	h.IsTerminal = false
+	if exit != 1 || !strings.Contains(stderr, "error: the previous round is now round ") ||
+		!strings.Contains(stderr, "loupe capture "+prURL()+" from an empty data root") {
+		t.Fatalf("publish exit %d stderr %q, want previous-moved naming a fresh capture", exit, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(h.RunDir(1), "receipt.json")); err == nil {
+		t.Fatal("this root's round published")
+	}
+	if got := len(h.reviewsBy()["reviewer"]); got != 2 {
+		t.Fatalf("%d reviews by reviewer, want round 1 and the other root's round only", got)
+	}
+}

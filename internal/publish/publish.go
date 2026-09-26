@@ -413,6 +413,16 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 			return Receipt{}, false, err
 		}
 	}
+	// Another data root can publish the next round while the human confirms, and only GitHub shows it.
+	if a := d.AssessedAgainst; a != nil && a.PublicationID != "" {
+		reviews, err := listReviews(ctx, client, opts.Target, "check the previous round")
+		if err != nil {
+			return Receipt{}, false, err
+		}
+		if err := refuseMovedReview(reviews, env.Viewer, opts.Target, *a); err != nil {
+			return Receipt{}, false, err
+		}
+	}
 
 	hold := opts.HoldSignals
 	if hold == nil {
