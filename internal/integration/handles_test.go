@@ -18,6 +18,7 @@ func (h *harness) checkDir(env map[string]any, round int) {
 }
 
 func TestEveryRunResultNamesItsDirectory(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.checkDir(h.capture(), 1)
 	h.checkDir(h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", sendBackFindings)), 1)
@@ -59,6 +60,7 @@ func TestEveryRunResultNamesItsDirectory(t *testing.T) {
 }
 
 func TestRestoredDataRootNamesTheNewDirectory(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.Restore(t)
@@ -79,6 +81,7 @@ func payloadKeys(env map[string]any) map[string]any {
 }
 
 func TestUnattendedPublishSaysSoAndNamesThePoster(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -116,6 +119,7 @@ func TestUnattendedPublishSaysSoAndNamesThePoster(t *testing.T) {
 }
 
 func TestAttendedPublishKeepsItsFieldsAndAddsTheNewOnes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 

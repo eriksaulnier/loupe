@@ -27,6 +27,26 @@ const (
 	number = 42
 )
 
+// TestMain sets the environment the helpers would otherwise set per test with t.Setenv, which panics under t.Parallel.
+func TestMain(m *testing.M) {
+	ghConfig, err := os.MkdirTemp("", "loupe-integration-gh-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := gitrepo.SetProcessEnv(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := fakegh.IsolateConfig(ghConfig); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(ghConfig)
+	os.Exit(code)
+}
+
 type harness struct {
 	t    *testing.T
 	Repo *gitrepo.Repo

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -166,12 +167,27 @@ func Start() (s *Server, stop func()) {
 func (s *Server) Client(t *testing.T) github.Client {
 	t.Helper()
 	// go-gh reads the gh config directory even when given a token; keep it away from the developer's.
-	t.Setenv("GH_CONFIG_DIR", t.TempDir())
+	if !configIsolated {
+		t.Setenv("GH_CONFIG_DIR", t.TempDir())
+	}
 	c, err := s.NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// configIsolated is set only before m.Run, so parallel tests read it without a lock.
+var configIsolated bool
+
+// IsolateConfig points GH_CONFIG_DIR at dir for the whole process. A TestMain whose tests call t.Parallel MUST call
+// it before m.Run, because Client otherwise calls t.Setenv, which panics in a parallel test.
+func IsolateConfig(dir string) error {
+	if err := os.Setenv("GH_CONFIG_DIR", dir); err != nil {
+		return err
+	}
+	configIsolated = true
+	return nil
 }
 
 // NewClient is Client for a caller without a test, which MUST point GH_CONFIG_DIR away from the developer's own.

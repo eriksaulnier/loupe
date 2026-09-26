@@ -52,6 +52,7 @@ func (h *harness) checkSends(want int) {
 }
 
 func TestPublishSendsCapturedSource(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n", "--source", "gadfly-review-pr@2.2.0")
 	h.Stdin = confirmPublish("", "y")
@@ -88,6 +89,7 @@ func lastPostComments(h *harness) []any {
 // Without --inline a blocking finding lives only in the body's Must fix section, not also as a line comment
 // (specs/026-inline-default-none).
 func TestPublishDefaultsToNoInlineComments(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		flags    []string
 		comments int
@@ -124,6 +126,7 @@ func TestPublishDefaultsToNoInlineComments(t *testing.T) {
 const humanMessage = "I read every one of these before sending them."
 
 func TestPublishEndToEnd(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	draftPath := filepath.Join(h.RunDir(1), "draft.json")
@@ -222,6 +225,7 @@ func (h *harness) lastPostBody() string {
 
 // TestPublishCarriesGateCounts is SC-001: one finding of each kind the gate counts, published attended.
 func TestPublishCarriesGateCounts(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", `[
@@ -251,6 +255,7 @@ func TestPublishCarriesGateCounts(t *testing.T) {
 }
 
 func TestPublishRefusesWithoutTerminalBeforePrinting(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	h.IsTerminal = false
@@ -263,6 +268,7 @@ func TestPublishRefusesWithoutTerminalBeforePrinting(t *testing.T) {
 }
 
 func TestPublishRefusesTTYBeforeCredentialsAndRecords(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	h.IsTerminal = false
@@ -278,6 +284,7 @@ func TestPublishRefusesTTYBeforeCredentialsAndRecords(t *testing.T) {
 }
 
 func TestInteractiveJSONNeedsStderrTerminal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	h.StderrNotTerminal = true
@@ -296,6 +303,7 @@ func TestInteractiveJSONNeedsStderrTerminal(t *testing.T) {
 }
 
 func TestPublishGateRefusals(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		answers string
@@ -325,6 +333,7 @@ func TestPublishGateRefusals(t *testing.T) {
 }
 
 func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	captured := h.Repo.HeadSHA()
@@ -352,6 +361,7 @@ func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
 }
 
 func TestPublishRefusesEmptyDraft(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.IsTerminal = true
@@ -364,6 +374,7 @@ func TestPublishRefusesEmptyDraft(t *testing.T) {
 }
 
 func TestPublishRefusesBadFlagsFirst(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	for _, args := range [][]string{
 		{"publish", "acme/widgets#99", "--inline", "all"},
@@ -383,6 +394,7 @@ func TestPublishRefusesBadFlagsFirst(t *testing.T) {
 }
 
 func TestPublishJSONPrintsOneObject(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 
@@ -417,6 +429,7 @@ func TestPublishJSONPrintsOneObject(t *testing.T) {
 }
 
 func TestPublishUnattendedEndToEnd(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -463,6 +476,7 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 // The review pipeline publishes with no --inline, so an unattended review takes the same default as an attended one
 // (specs/026-inline-default-none).
 func TestPublishUnattendedDefaultsToNoInlineComments(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -486,6 +500,7 @@ func TestPublishUnattendedDefaultsToNoInlineComments(t *testing.T) {
 // TestPublishUnattendedPortableDataRoot proves FR-003: publish reads only the data root and GitHub, so a root
 // restored at a different absolute path, with no Git repository nearby, publishes the same review.
 func TestPublishUnattendedPortableDataRoot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -514,6 +529,7 @@ func TestPublishUnattendedPortableDataRoot(t *testing.T) {
 // TestPublishUnattendedNumbersFromBotReviews proves FR-015 end to end: a fresh data root holds no round state, so
 // the number in the marker can only come from the pull request's own bot loupe reviews.
 func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -545,6 +561,7 @@ func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 }
 
 func TestPublishUnattendedRefusesUserTokens(t *testing.T) {
+	t.Parallel()
 	for _, prefix := range []string{"ghu_", "gho_", "ghp_", "github_pat_"} {
 		t.Run(prefix, func(t *testing.T) {
 			h := newHarness(t)
@@ -559,6 +576,7 @@ func TestPublishUnattendedRefusesUserTokens(t *testing.T) {
 }
 
 func TestPublishTokenMismatchAttendedRefusesInstallationToken(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	h.UseInstallationToken()
@@ -568,6 +586,7 @@ func TestPublishTokenMismatchAttendedRefusesInstallationToken(t *testing.T) {
 }
 
 func TestPublishTokenMismatchRefusesViewer(t *testing.T) {
+	t.Parallel()
 	t.Run("user-captured published unattended", func(t *testing.T) {
 		h := newHarness(t)
 		h.capture()
@@ -591,6 +610,7 @@ func TestPublishTokenMismatchRefusesViewer(t *testing.T) {
 }
 
 func TestPublishUnattendedRefusesNoToken(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
@@ -612,6 +632,7 @@ func (h *harness) publishRefusesUnattended(code string) map[string]any {
 }
 
 func TestPublishUnattendedReconcilesAmbiguousSend(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -632,6 +653,7 @@ func TestPublishUnattendedReconcilesAmbiguousSend(t *testing.T) {
 }
 
 func TestPublishUnattendedReconcilesAmbiguousSendFromRestoredRoot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -656,6 +678,7 @@ func TestPublishUnattendedReconcilesAmbiguousSendFromRestoredRoot(t *testing.T) 
 // and its reconciliation failed, and a later job restores that data root elsewhere. The review is on GitHub by then,
 // so the attempt becomes a receipt under its original publication id and nothing is sent a second time.
 func TestPublishUnattendedReconcilesRestoredUnknownAttempt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -689,6 +712,7 @@ func TestPublishUnattendedReconcilesRestoredUnknownAttempt(t *testing.T) {
 }
 
 func TestPublishUnattendedRetriesUnknownAttempt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -713,6 +737,7 @@ func TestPublishUnattendedRetriesUnknownAttempt(t *testing.T) {
 }
 
 func TestPublishUnattendedRetriesUnknownAttemptFromRestoredRoot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -738,6 +763,7 @@ func TestPublishUnattendedRetriesUnknownAttemptFromRestoredRoot(t *testing.T) {
 }
 
 func TestReviewJSONPrintsOneObject(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))

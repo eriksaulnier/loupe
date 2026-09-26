@@ -58,6 +58,7 @@ func previousOf(t *testing.T, env map[string]any) map[string]any {
 }
 
 func TestCIRoundReadsThePreviousRoundFromGitHub(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -96,6 +97,7 @@ func TestCIRoundReadsThePreviousRoundFromGitHub(t *testing.T) {
 }
 
 func TestStickyRoundReadsTheReviewsCurrentRound(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -118,6 +120,7 @@ func TestStickyRoundReadsTheReviewsCurrentRound(t *testing.T) {
 // The receipt answers --previous, and capture lists the reviews once regardless, for the other reviewers' feedback
 // (specs/029-reviewer-comments).
 func TestLocalReceiptWinsOverTheReviews(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	h.publishRound(1)
@@ -139,6 +142,7 @@ func TestLocalReceiptWinsOverTheReviews(t *testing.T) {
 }
 
 func TestUnpublishedLocalRoundsStillReadGitHub(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	h.pushHead("src/round2.go")
@@ -150,6 +154,7 @@ func TestUnpublishedLocalRoundsStillReadGitHub(t *testing.T) {
 }
 
 func TestUnreadablePreviousRoundDegrades(t *testing.T) {
+	t.Parallel()
 	stripRecord := func(body string) string {
 		var kept []string
 		for _, line := range strings.Split(body, "\n") {
@@ -197,6 +202,7 @@ func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 }
 
 func TestRunFromAnOlderLoupeRefusesAsBefore(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	if err := os.Remove(filepath.Join(h.RunDir(1), "previous.json")); err != nil {
@@ -209,6 +215,7 @@ func TestRunFromAnOlderLoupeRefusesAsBefore(t *testing.T) {
 }
 
 func TestHumanOnAFreshMachineReadsTheirLastRound(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	h.publishRound(1)

@@ -53,6 +53,7 @@ func (h *harness) publishRefuses(code string, args ...string) map[string]any {
 }
 
 func TestUnknownOutcomeReconcilesOnNextPublish(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	draftPath := filepath.Join(h.RunDir(1), "draft.json")
@@ -95,6 +96,7 @@ func TestUnknownOutcomeReconcilesOnNextPublish(t *testing.T) {
 }
 
 func TestAmbiguousSendReconcilesAtOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	h.GH.QueueCreate(fakegh.ServerErrorAfterRecord())
@@ -111,6 +113,7 @@ func TestAmbiguousSendReconcilesAtOnce(t *testing.T) {
 }
 
 func TestUnknownOutcomeWithoutMatchNeedsRetry(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.reviewed("a\na\nx\nq\n")
 	h.GH.QueueCreate(fakegh.ServerErrorDrop())

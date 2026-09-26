@@ -23,6 +23,7 @@ func awaitingOf(env map[string]any) string {
 }
 
 func TestWaitFollowsTheSendBackLoop(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", sendBackFindings))
@@ -68,6 +69,7 @@ func TestWaitFollowsTheSendBackLoop(t *testing.T) {
 }
 
 func TestSendBackWakesWaitWhileReviewIsOpen(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", sendBackFindings))
@@ -114,6 +116,7 @@ func TestSendBackWakesWaitWhileReviewIsOpen(t *testing.T) {
 }
 
 func TestQuitStillHandsBackANoteNeverHandedBack(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", sendBackFindings))
