@@ -39,7 +39,7 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 | `f` | Show the whole file's diff |
 | `?` | List the keys for the current view |
 
-Every decision is saved at once. A small terminal, `TERM=dumb` or `--plain` gives a plain mode that asks about one finding at a time.
+Every decision is saved at once. A small terminal, `TERM=dumb` or `--plain` switches to a plain mode that asks about one finding at a time.
 
 ### 5. The agent answers what you send back
 
@@ -49,9 +49,11 @@ A note asks the agent about one finding. The agent revises the finding or withdr
 
 ### 6. You publish
 
-When no finding is pending and no note is open, press `p` in `loupe review`, or run `loupe publish`. The confirmation shows the exact review, with every section open and each inline comment. The cursor starts in the review's opening. Type it in your own words and press Esc to leave it. Then `y` or `p` sends. Keys that scroll or switch views do nothing else. Any other key cancels, and nothing is sent.
+When no finding is pending and no note is open, press `p` in `loupe review`, or run `loupe publish`. The confirmation shows the exact review, with every section open and each inline comment.
 
-Only accepted findings are published. One confirmation sends exactly one GitHub request. `--action` picks `comment`, `approve` or `request-changes`, and `--inline` turns located findings into inline comments as well.
+The cursor starts in the review's opening. Type it in your own words and press Esc to leave it. Then `y` or `p` sends. Keys that scroll or switch views do nothing else. Any other key cancels, and nothing is sent.
+
+Only accepted findings are published. One confirmation sends exactly one GitHub request. `--action` picks `comment`, `approve` or `request-changes`. `--inline` also turns located findings into inline comments.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/review-dark.png">
@@ -60,7 +62,13 @@ Only accepted findings are published. One confirmation sends exactly one GitHub 
 
 [Comment format](comment-format.md) describes every part of that review.
 
-Publish refuses rather than send something wrong. It refuses while a finding is pending or a note is open. It refuses when the captured commit has left the pull request's history. It refuses to approve or request changes on your own pull request. Each refusal names the command that fixes it. A head that only gained commits since capture is not refused for a comment or a request for changes. The confirmation lists the new commits and the findings on files they changed. An approval is still refused, because it would cover the new commits unreviewed.
+Publish refuses rather than send something wrong. Each refusal names the command that fixes it. It refuses:
+
+- while a finding is pending or a note is open.
+- when the captured commit has left the pull request's history.
+- to approve or request changes on your own pull request.
+
+A head that only gained commits since capture is not refused for a comment or a request for changes. The confirmation lists the new commits and the findings on files they changed. An approval is still refused, because it would cover the new commits unreviewed.
 
 Once the review is posted, the run keeps a receipt. Running `loupe publish` again prints the review's URL without contacting GitHub.
 
@@ -68,7 +76,9 @@ Once the review is posted, the run keeps a receipt. Running `loupe publish` agai
 
 After the author pushes, ask the agent for another round. Capture makes a new run, such as `owner/repo#123@2`, and hands the agent the findings you published last time.
 
-`loupe publish --sticky` keeps one review per pull request current. The first sticky round posts a review. Each later one replaces that review's body, with the new round on top and earlier rounds collapsed below it. The confirmation shows the whole new body and names the review it edits. An edit sends no notification. The `p` key in `loupe review` always posts a new review, so a sticky round goes through `loupe publish`. A plain review posted after a sticky one ends the series, and the next sticky round starts a new review.
+`loupe publish --sticky` keeps one review per pull request current. The first sticky round posts a review. Each later one replaces that review's body, with the new round on top and earlier rounds collapsed below it. The confirmation shows the whole new body and names the review it edits. An edit sends no notification.
+
+The `p` key in `loupe review` always posts a new review, so a sticky round goes through `loupe publish`. A plain review posted after a sticky one ends the series, and the next sticky round starts a new review.
 
 ## Handing off in a terminal pane
 
@@ -128,7 +138,7 @@ In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-me
 | `LOUPE_RUN` | The run a command acts on when it names none |
 | `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for a run's lock. Default 3000, maximum 60000 |
 | `LOUPE_ICONS` | `ascii`, `unicode` (default) or `nerd` (needs a Nerd Font). A non-UTF-8 locale always gets ASCII |
-| `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Honored for color, plain-mode fallback and glyph selection |
+| `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Control color, plain-mode fallback and glyph selection |
 | `GH_TOKEN`, `GITHUB_TOKEN` | The github.com token, checked in that order. Without either, loupe uses the one `gh auth login` stored |
 
 [`contracts/cli.md`](../specs/001-loupe-v1/contracts/cli.md#environment) has the exact rules and refusals for the `LOUPE_` variables.

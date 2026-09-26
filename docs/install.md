@@ -20,7 +20,7 @@ To update, run the same `mise use` command again.
 
 ### From a release archive
 
-Each [release](https://github.com/eriksaulnier/loupe/releases) attaches one archive per platform and a `checksums.txt`. Download the archive for your platform, check it and put `loupe` on your `PATH`:
+Each [release](https://github.com/eriksaulnier/loupe/releases) attaches one archive per platform and a `checksums.txt`. Download the archive for your platform, verify it and put `loupe` on your `PATH`:
 
 ```sh
 version=0.13.0 # x-release-please-version
@@ -34,7 +34,7 @@ tar -xzf "$archive" loupe
 install loupe ~/.local/bin/ # any directory on your PATH
 ```
 
-`sha256sum -c` reads the same line where `shasum` is missing.
+Where `shasum` is missing, pipe the same line to `sha256sum -c`.
 
 ### In GitHub Actions
 
@@ -42,7 +42,9 @@ The repository is also an action that installs a release. [Unattended reviews in
 
 ## The agent plugin
 
-One plugin serves Claude Code, Codex and Pi. Its `human-review` skill is the workflow a review skill or agent follows. The agent captures the pull request, files findings, hands the run to you and answers your send-back notes. The plugin brings no review method of its own. [The review workflow](review-workflow.md#adapting-a-review-skill-you-already-have) shows how to connect a review skill you already have.
+One plugin serves Claude Code, Codex and Pi. Its `human-review` skill is the workflow that a review skill or agent follows. The agent captures the pull request, files findings, hands the run to you and answers your send-back notes. The plugin brings no review method of its own.
+
+To connect a review skill you already have, see [the review workflow](review-workflow.md#adapting-a-review-skill-you-already-have).
 
 ```sh
 # Claude Code
@@ -62,7 +64,3 @@ pi install git:github.com/eriksaulnier/loupe@v0.13.0 # x-release-please-version
 
 > [!IMPORTANT]
 > Inside the Codex sandbox, loupe cannot reach GitHub, the clone's `.git`, its data directory or the terminal host's socket. Approve the skill's requests to run `loupe` outside the sandbox. Pi has no sandbox.
-
-## Next
-
-[The review workflow](review-workflow.md) walks through a review from capture to publish.

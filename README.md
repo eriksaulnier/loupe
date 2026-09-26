@@ -11,7 +11,7 @@ loupe collects a review agent's findings into a local draft so you decide each o
 - **Nothing posts under your name unread.** You accept or drop each finding yourself. You write the review's opening, and one confirmation sends one review.
 - **Any review agent works.** loupe has no opinion on how findings are found. The agent files them through a CLI, and a plugin for Claude Code, Codex and Pi teaches it the workflow.
 - **Findings are files on disk.** One directory per run. No daemon, no database, no service to sign up for.
-- **Human and bot reviews read the same.** A CI job can publish through loupe too. Its review uses the same comment format, is marked as unattended, and never approves or blocks a merge.
+- **Human and bot reviews read the same.** A CI job can publish through loupe too. Its review uses the same comment format. It is marked unattended and never approves or blocks a merge.
 
 ## How it works
 
@@ -39,7 +39,7 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 
 - [Install](docs/install.md): the binary, the agent plugin for each host, and updating the two together.
 - [Comment format](docs/comment-format.md): what a published review looks like on GitHub.
-- [The review workflow](docs/review-workflow.md): the attended loop end to end, handing off in a terminal pane, adapting a review skill you already have, and the command and environment reference.
+- [The review workflow](docs/review-workflow.md): the attended loop, the pane hand-off, adapting a review skill you already have, and the command and environment reference.
 - [Unattended reviews in CI](docs/ci-action.md): the GitHub Action, the pipeline steps, sticky rounds and the rules an unattended review follows.
 - [CLI contract](specs/001-loupe-v1/contracts/cli.md): commands, input, results and errors, for scripting against loupe.
 - [Constitution](.specify/memory/constitution.md): the seven principles every change answers to.
@@ -47,4 +47,4 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+MIT. See [LICENSE](LICENSE).

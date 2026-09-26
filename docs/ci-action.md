@@ -2,12 +2,12 @@
 
 loupe is built for [the attended workflow](review-workflow.md), where a person decides each finding. A CI job can also review a pull request and publish through loupe with no one watching. The review then uses the same [comment format](comment-format.md) as one a person publishes, so human and bot reviews read the same way on the pull request.
 
-## What an unattended review may do
+## Rules for an unattended review
 
 No person reads an unattended review before it posts, so loupe holds it to fixed rules. These come from Principle II of the [constitution](../.specify/memory/constitution.md).
 
-- It MUST authenticate with a GitHub App installation token, which starts with `ghs_`, and it posts as that App. Actions' own `GITHUB_TOKEN` is one. A user token is refused with `token`.
-- It MUST be a COMMENT review. It never approves and never requests changes, so it never approves or blocks a merge.
+- It MUST authenticate with a GitHub App installation token. Such a token starts with `ghs_`, and Actions' own `GITHUB_TOKEN` is one. The review posts as that App. A user token is refused with `token`.
+- It MUST be a COMMENT review, so it never approves or blocks a merge.
 - It is marked unattended in its footer and in its hidden metadata, so it never reads as a person's review.
 - It MUST edit only a review that a GitHub App published.
 - Its opening comes from the draft's summary. Write the summary for the pull request's author, because no one reads it first.
@@ -21,15 +21,15 @@ The repository is also an action. It installs a release, checks the archive agai
 - uses: eriksaulnier/loupe@<sha> # <tag>
 ```
 
-Pin the commit sha of a release tag, with the tag in a comment. The action installs the release it shipped in, so Dependabot moves the action and the binary together. To install another release, set `version`, for example `version: v0.9.0`.
+Pin the commit SHA of a release tag, with the tag in a comment. The action installs the release it shipped in, so Dependabot moves the action and the binary together. To install another release, set `version`, for example `version: v0.9.0`.
 
 ## The pipeline
 
 A pipeline reviews a pull request in four steps: capture, read, file, publish. Only capture needs the Git clone.
 
-1. `loupe capture <pr-url> --json` creates the run and prints its reference as `run`. Pass that reference to the later steps in `LOUPE_RUN`, or name it on each one: `--run <ref>` for `show`, `add` and `summary`, and as the argument of `loupe publish <ref>`. Unattended publish does not fall back to the current branch's pull request, because a pipeline's checkout is usually not on that branch.
+1. `loupe capture <pr-url> --json` creates the run and prints its reference as `run`. Pass the reference to later steps in `LOUPE_RUN`, or name it on each step. `show`, `add` and `summary` take `--run <ref>`, and `loupe publish` takes the reference as its argument. Unattended publish never falls back to the current branch's pull request, because a pipeline's checkout is usually not on that branch.
 2. `loupe show --diff > review/pr.diff` writes the captured diff for the reviewer to read beside a checkout of the captured head. This is the supported way to get the diff. The run directory's layout is not a contract.
-3. File findings with one `loupe add` object or array, which is stored whole or not at all. A finding whose location is not in the captured diff is refused with the nearest valid lines. Then set `loupe summary`, even when there is nothing to report. You supply the adapter from your reviewer's output to `loupe add`'s input.
+3. File findings with one `loupe add` object or array, which is stored whole or not at all. A finding whose location is not in the captured diff is refused with the nearest valid lines. Then run `loupe summary`, even when there is nothing to report. You write the adapter from your reviewer's output to the input `loupe add` takes.
 4. `loupe publish --unattended --json` posts exactly one comment review, with no confirmation. The job needs `permissions: pull-requests: write`. The run records each attempt and its receipt. A pipeline that keeps `LOUPE_HOME` between steps can retry safely, even from another path or machine.
 
 ## Sticky rounds
