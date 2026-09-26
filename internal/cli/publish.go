@@ -227,9 +227,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	if unattended {
 		// No human confirms an unattended round, so nothing else tells its pipeline that skipping assess drops every
 		// earlier finding from the next round.
-		if err := warnUnassessed(deps, dir, ref); err != nil {
-			return err
-		}
+		warnUnassessed(deps, dir, ref)
 	}
 	if jsonMode {
 		payload := map[string]any{"sent": !replayed, "reviewUrl": receipt.ReviewURL, "reviewId": receipt.ReviewID,
@@ -245,38 +243,40 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	return printPublished(deps, ref, receipt, replayed)
 }
 
-// warnUnassessed runs after the review is sent, so a failed read is reported rather than returned: exiting 1 would tell
-// the pipeline nothing was published.
-func warnUnassessed(deps Deps, dir string, ref run.Ref) error {
+// warnUnassessed runs after the review is sent, so nothing here returns an error, not even a failed stderr write:
+// exiting 1 would tell the pipeline nothing was published.
+func warnUnassessed(deps Deps, dir string, ref run.Ref) {
 	s := deps.errStyle()
-	warn := func(message string) error {
-		_, err := fmt.Fprintf(deps.Stderr, "%s %s\n", s.Warn.Bold(true).Render("warning:"), message)
-		return err
+	warn := func(message string) {
+		_, _ = fmt.Fprintf(deps.Stderr, "%s %s\n", s.Warn.Bold(true).Render("warning:"), message)
 	}
 	root, err := run.DataRoot(deps.Getenv)
 	if err != nil {
-		return warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		return
 	}
 	p, err := previousRound(root, ref)
 	if r, ok := refusal.As(err); ok && r.Code == refusal.NotFound {
-		return nil
+		return
 	}
 	if err != nil {
-		return warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		return
 	}
 	d, err := draft.Load(dir)
 	if err != nil {
-		return warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		return
 	}
 	_, _, unassessed := draft.AssessmentCounts(d, p.earlier)
 	if unassessed == 0 {
-		return nil
+		return
 	}
 	verb := "were"
 	if unassessed == 1 {
 		verb = "was"
 	}
-	return warn(fmt.Sprintf("%d earlier %s %s not assessed and will not carry forward. Run loupe assess before loupe publish.",
+	warn(fmt.Sprintf("%d earlier %s %s not assessed and will not carry forward. Run loupe assess before loupe publish.",
 		unassessed, plural(unassessed, "finding"), verb))
 }
 
