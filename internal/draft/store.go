@@ -16,14 +16,12 @@ var ErrNoChange = errors.New("draft unchanged")
 func Load(dir string) (*Draft, error) {
 	path := filepath.Join(dir, "draft.json")
 	var d Draft
-	if err := run.ReadJSON(path, &d); err != nil {
+	if err := run.ReadJSON(path, &d, SchemaVersion); err != nil {
 		return nil, err
 	}
 	// A draft that decodes with a nil collection would make later mutators panic, so it is refused as damaged.
 	problem := ""
 	switch {
-	case d.Schema != SchemaVersion:
-		problem = fmt.Sprintf("schema is %d, expected %d", d.Schema, SchemaVersion)
 	case d.Findings == nil:
 		problem = "findings is missing or null"
 	case d.Decisions == nil:

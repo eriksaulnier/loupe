@@ -2,7 +2,6 @@ package draft
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -30,13 +29,10 @@ func LoadHandBack(dir string) (*HandBack, error) {
 		return &HandBack{Schema: HandBackSchema, Notes: []string{}}, nil
 	}
 	var h HandBack
-	if err := run.ReadJSON(path, &h); err != nil {
+	if err := run.ReadJSON(path, &h, HandBackSchema); err != nil {
 		return nil, err
 	}
-	switch {
-	case h.Schema != HandBackSchema:
-		return nil, run.RecordRefusal(path, fmt.Errorf("schema is %d, expected %d", h.Schema, HandBackSchema))
-	case h.Notes == nil:
+	if h.Notes == nil {
 		return nil, run.RecordRefusal(path, errors.New("notes is missing or null"))
 	}
 	return &h, nil

@@ -155,9 +155,9 @@ func TestAwaitingDropsAnsweredAndClosedNotes(t *testing.T) {
 
 func TestLoadHandBackRefusesDamagedFile(t *testing.T) {
 	for name, content := range map[string]string{
-		"wrong schema": `{"schema": 2, "notes": []}`,
-		"null notes":   `{"schema": 1, "notes": null}`,
-		"truncated":    `{"schema": 1, "notes": ["n-0`,
+		"schema 0":   `{"schema": 0, "notes": []}`,
+		"null notes": `{"schema": 1, "notes": null}`,
+		"truncated":  `{"schema": 1, "notes": ["n-0`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := handBackRun(t)

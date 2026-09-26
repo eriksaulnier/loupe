@@ -217,7 +217,7 @@ func TestLoadRefusesIncompleteDraft(t *testing.T) {
 		"empty object":   `{}`,
 		"null decisions": `{"schema": 1, "findings": [], "decisions": null, "notes": [], "replies": []}`,
 		"missing notes":  `{"schema": 1, "findings": [], "decisions": {}, "replies": []}`,
-		"wrong schema":   `{"schema": 2, "findings": [], "decisions": {}, "notes": [], "replies": []}`,
+		"schema 0":       `{"schema": 0, "findings": [], "decisions": {}, "notes": [], "replies": []}`,
 	}
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -110,7 +110,7 @@ func EncodePrevious(p Previous) ([]byte, error) {
 // a local receipt. A damaged file is a record refusal.
 func LoadPrevious(dir string) (Previous, bool, error) {
 	var p Previous
-	found, err := loadRecord(filepath.Join(dir, run.PreviousFile), &p, func() string { return previousProblem(p) })
+	found, err := loadRecord(filepath.Join(dir, run.PreviousFile), &p, PreviousSchema, func() string { return previousProblem(p) })
 	return p, found, err
 }
 
@@ -118,8 +118,6 @@ func LoadPrevious(dir string) (Previous, bool, error) {
 // read as a round that published nothing.
 func previousProblem(p Previous) string {
 	switch {
-	case p.Schema != PreviousSchema:
-		return fmt.Sprintf("schema is %d, expected %d", p.Schema, PreviousSchema)
 	case !p.Found && (p.Reason == "" || p.Findings != nil):
 		return "it holds neither a round nor only a reason"
 	case !p.Found:
