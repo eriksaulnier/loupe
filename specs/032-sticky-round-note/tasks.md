@@ -1,6 +1,6 @@
 # Tasks: A note on the newest sticky round
 
-**Input**: Design documents from `specs/031-sticky-round-note/`
+**Input**: Design documents from `specs/032-sticky-round-note/`
 
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), `.specify/memory/constitution.md` (3.0.0)
 

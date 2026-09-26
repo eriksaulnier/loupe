@@ -1,8 +1,8 @@
 # Implementation Plan: A note on the newest sticky round
 
-**Branch**: `031-sticky-round-note` | **Date**: 2026-09-25 | **Spec**: [spec.md](spec.md)
+**Branch**: `032-sticky-round-note` | **Date**: 2026-09-25 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/031-sticky-round-note/spec.md`
+**Input**: Feature specification from `specs/032-sticky-round-note/spec.md`
 
 ## Summary
 
@@ -60,4 +60,6 @@ specs/001-loupe-v1/contracts/cli.md
 
 ## Complexity Tracking
 
-None.
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+| :--- | :--- | :--- |
+| Principle II names the draft's summary as the only source of an unattended review's prose; `--note` adds a second source, a flag | The hint belongs to the pipeline that runs every round, not to the round: it names the label that starts the next round, and a collapsed round MUST NOT keep it | Putting it in the summary repeats it in every collapsed round, which is the defect this spec fixes. The flag is refused unless the publication is both `--unattended` and `--sticky`, so it never sets words under a human's name |

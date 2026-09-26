@@ -1,6 +1,6 @@
 # Feature Specification: A note on the newest sticky round
 
-**Feature Branch**: `031-sticky-round-note`
+**Feature Branch**: `032-sticky-round-note`
 
 **Created**: 2026-09-25
 
