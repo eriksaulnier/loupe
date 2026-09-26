@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -327,5 +328,30 @@ func TestPreviousReceiptRefusesWhenNoneWasPublished(t *testing.T) {
 		if !ok || r.Code != refusal.NotFound || r.Message != "no earlier round of o/r#5 was published" {
 			t.Fatalf("round %d: got %v", round, err)
 		}
+	}
+}
+
+// Rounds 2 and 3 were both captured, and round 3 published first: round 2 is the publisher's newest publication.
+func TestPreviousReceiptPicksTheNewestPublication(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(run.RunDir(root, "o", "r", 5, 5), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	at := func(r Receipt, hour int) Receipt {
+		r.PostedAt = time.Date(2026, 9, 26, hour, 0, 0, 0, time.UTC)
+		return r
+	}
+	saveReceiptAt(t, root, 1, at(attendedReceipt("reviewer", "reviewer"), 9))
+	saveReceiptAt(t, root, 2, at(attendedReceipt("reviewer", "reviewer"), 12))
+	saveReceiptAt(t, root, 3, at(attendedReceipt("reviewer", "reviewer"), 11))
+	saveReceiptAt(t, root, 4, at(attendedReceipt("someone-else", "someone-else"), 13))
+	round, _, err := PreviousReceipt(root, run.Ref{Owner: "o", Repo: "r", Number: 5, Round: 5}, "reviewer", "")
+	if err != nil || round != 2 {
+		t.Fatalf("got round %d, %v, want 2, published last", round, err)
+	}
+	saveReceiptAt(t, root, 3, at(attendedReceipt("reviewer", "reviewer"), 12))
+	round, _, err = PreviousReceipt(root, run.Ref{Owner: "o", Repo: "r", Number: 5, Round: 5}, "reviewer", "")
+	if err != nil || round != 3 {
+		t.Fatalf("got round %d, %v, want 3 on a tie", round, err)
 	}
 }

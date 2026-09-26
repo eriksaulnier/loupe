@@ -53,11 +53,12 @@ func ownReview(r github.Review, viewer, source string) bool {
 	return publishedBy(r, viewer) && (viewer != "" || sameSource(r.Body, source))
 }
 
-// PreviousReceipt is the newest earlier local round whose receipt the run's own publisher wrote, by the rule newestOwn
-// applies to the reviews: a data root two publishers share must not hand one of them findings the other accepted. It
-// skips unpublished rounds because only a receipt records what the pull request author saw.
+// PreviousReceipt is the earlier local round whose receipt the run's own publisher wrote most recently, by the rule
+// newestOwn applies to the reviews: a data root two publishers share must not hand one of them findings the other
+// accepted. It skips unpublished rounds because only a receipt records what the pull request author saw.
 func PreviousReceipt(root string, ref run.Ref, viewer, source string) (int, Receipt, error) {
 	skipped := ""
+	newest, newestReceipt := 0, Receipt{}
 	for round := ref.Round - 1; round >= 1; round-- {
 		receipt, found, err := LoadReceipt(run.RunDir(root, ref.Owner, ref.Repo, ref.Number, round))
 		if err != nil {
@@ -67,11 +68,19 @@ func PreviousReceipt(root string, ref run.Ref, viewer, source string) (int, Rece
 			continue
 		}
 		if ownReview(receiptReview(receipt), viewer, source) {
-			return round, receipt, nil
+			// Rounds captured together can publish out of order, so PostedAt decides. The scan runs downward, so a tie
+			// keeps the higher round.
+			if newest == 0 || receipt.PostedAt.After(newestReceipt.PostedAt) {
+				newest, newestReceipt = round, receipt
+			}
+			continue
 		}
 		if skipped == "" {
 			skipped = fmt.Sprintf("round %d's receipt was published by %s", round, receiptPublisher(receipt))
 		}
+	}
+	if newest != 0 {
+		return newest, newestReceipt, nil
 	}
 	pr := run.Ref{Owner: ref.Owner, Repo: ref.Repo, Number: ref.Number}
 	message := fmt.Sprintf("no earlier round of %s was published", pr)
