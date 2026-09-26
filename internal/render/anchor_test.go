@@ -206,7 +206,8 @@ func TestReadStickyRefusesABrokenAnchoredBody(t *testing.T) {
 		"collapsed round removed":      strings.Replace(body, anchors[0], "", 1),
 		"malformed collapsed anchor":   strings.Replace(body, anchors[1], strings.Replace(anchors[1], "commit=", "commit=x", 1), 1),
 		"legacy delimiter mixed in":    strings.Replace(body, anchors[1], "<!-- loupe-round -->", 1),
-		"text above the top anchor":    "A note added on GitHub.\n\n" + body,
+		"no top anchor":                strings.Replace(body, top+"\n", "", 1),
+		"top anchor after the rounds":  strings.Replace(strings.Replace(body, top+"\n", "", 1), "### Earlier rounds", "### Earlier rounds\n\n"+top, 1),
 		"anchor inside the top round":  strings.Replace(body, "### Must fix", anchors[1]+"\n\n### Must fix", 1),
 		"text before the rounds":       strings.Replace(body, "### Earlier rounds\n\n", "### Earlier rounds\n\nA note added on GitHub.\n\n", 1),
 		"no divider before the rounds": strings.Replace(body, "\n\n---\n\n<!-- loupe-earlier -->", "\n\n<!-- loupe-earlier -->", 1),
@@ -385,5 +386,35 @@ func TestAnchorsAsNotes(t *testing.T) {
 	}
 	if AnchorsAsNotes(shown) != shown {
 		t.Fatal("rewriting twice changed the text")
+	}
+}
+
+// The top anchor is line 1 of the body. Anything above it was added on GitHub, so the round on top is carried as found
+// and named, prefix included, rather than read as unedited or refused.
+func TestReadStickyCarriesTextAboveTheTopAnchor(t *testing.T) {
+	body := threeRounds(t)
+	for name, prefix := range map[string]string{"a blank line": "\n", "a whitespace line": "  \n", "text": "Added on GitHub.\n\n"} {
+		t.Run(name, func(t *testing.T) {
+			earlier, _, err := ReadSticky(prefix + body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			top := earlier[0]
+			if !top.Edited || top.N != 3 || earlier[1].Edited || earlier[2].Edited {
+				t.Fatalf("rounds: %+v", earlier)
+			}
+			if text := strings.TrimSpace(prefix); text != "" && !strings.Contains(top.Block, "</summary>\n\n> "+text+"\n>\n") {
+				t.Fatalf("the prefix was not carried:\n%s", top.Block)
+			}
+			if !strings.Contains(top.Block, "> `⛔ 1 blocking` `🟣 1 suggestion`\n") || strings.Contains(top.Block, anchorPrefix) {
+				t.Fatalf("the round was not quoted whole, or kept its anchor:\n%s", top.Block)
+			}
+			next := stickyInput(4, "ddddddd444")
+			next.Sticky = &StickyInput{Rounds: 4, Earlier: earlier}
+			again, _, err := ReadSticky(Body(next))
+			if err != nil || again[1] != (Round{N: 3, Commit: top.Commit, Anchor: top.Anchor, Block: top.Block}) {
+				t.Fatalf("err %v, round 3 read back as %+v", err, again[1])
+			}
+		})
 	}
 }

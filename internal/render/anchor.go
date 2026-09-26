@@ -142,13 +142,25 @@ func readAnchored(lines []string, structural []bool) ([]Round, int, error) {
 	}
 	region, regionStructural := lines[:n-2], structural[:n-2]
 
-	first := 0
-	for first < len(region) && strings.TrimSpace(region[first]) == "" {
-		first++
+	// Body writes the top anchor at line 1, so anything above it was added on GitHub. It belongs to the round on top,
+	// which is then carried as found.
+	first := -1
+	for i, line := range region {
+		if !regionStructural[i] {
+			continue
+		}
+		if line == earlierDelimiter {
+			break
+		}
+		if strings.HasPrefix(line, anchorPrefix) {
+			first = i
+			break
+		}
 	}
-	if first == len(region) || !regionStructural[first] || !strings.HasPrefix(region[first], anchorPrefix) {
-		return nil, 0, errors.New("it does not open on the anchor of the round it shows")
+	if first < 0 {
+		return nil, 0, errors.New("it has no anchor for the round it shows")
 	}
+	above := slices.Clone(region[:first])
 	earlierAt := -1
 	var anchors []int
 	for i := first + 1; i < len(region); i++ {
@@ -166,14 +178,14 @@ func readAnchored(lines []string, structural []bool) ([]Round, int, error) {
 			anchors = append(anchors, i)
 		}
 	}
-	shown := trimBlank(region[first+1:])
+	shown := trimBlank(append(above, region[first+1:]...))
 	dropped := rounds - 1 - len(anchors)
 	if earlierAt >= 0 {
 		part := trimBlank(region[first+1 : earlierAt])
 		if len(part) == 0 || part[len(part)-1] != "---" {
 			return nil, 0, errors.New("its earlier rounds do not follow a divider")
 		}
-		shown = trimBlank(part[:len(part)-1])
+		shown = trimBlank(append(above, part[:len(part)-1]...))
 		headEnd := len(region)
 		if len(anchors) > 0 {
 			headEnd = anchors[0]
@@ -193,7 +205,7 @@ func readAnchored(lines []string, structural []bool) ([]Round, int, error) {
 	if top.n != rounds {
 		return nil, 0, fmt.Errorf("the round it shows is numbered %d, but sticky=%d", top.n, rounds)
 	}
-	demoted, err := demote(top, shown, digest)
+	demoted, err := demote(top, shown, digest, first > 0)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -229,15 +241,15 @@ func readAnchored(lines []string, structural []bool) ([]Round, int, error) {
 	return earlier, rounds, nil
 }
 
-// demote collapses the round on top. A round whose checksum matches is cut by its anchor's counts: the chips row goes
+// demote collapses the round on top. moved says its anchor is not line 1. A round whose checksum matches is cut by its anchor's counts: the chips row goes
 // into the summary, and loupe's dividers go, since inside the quote a rule reads as a boundary between rounds. A round
 // edited on GitHub no longer fits those counts, so its whole text is quoted as found.
-func demote(top anchor, shown []string, digest string) (Round, error) {
+func demote(top anchor, shown []string, digest string, moved bool) (Round, error) {
 	chips, prose, note, err := topValues(top)
 	if err != nil {
 		return Round{}, err
 	}
-	edited := !top.matches(strings.Join(shown, "\n") + "\n" + digest)
+	edited := moved || !top.matches(strings.Join(shown, "\n")+"\n"+digest)
 	content := strings.Join(shown, "\n")
 	if !edited {
 		if content, err = verifiedContent(shown, prose, note); err != nil {
