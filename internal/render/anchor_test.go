@@ -389,32 +389,43 @@ func TestAnchorsAsNotes(t *testing.T) {
 	}
 }
 
-// The top anchor is line 1 of the body. Anything above it was added on GitHub, so the round on top is carried as found
-// and named, prefix included, rather than read as unedited or refused.
-func TestReadStickyCarriesTextAboveTheTopAnchor(t *testing.T) {
+// Whitespace-only lines above the top anchor are not content, so the round reads as loupe wrote it and collapses to the
+// same bytes as without them.
+func TestReadStickyDropsBlankLinesAboveTheTopAnchor(t *testing.T) {
 	body := threeRounds(t)
-	for name, prefix := range map[string]string{"a blank line": "\n", "a whitespace line": "  \n", "text": "Added on GitHub.\n\n"} {
+	want, _, err := ReadSticky(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, prefix := range map[string]string{"a blank line": "\n", "a whitespace line": "  \n", "several": "\n \t\n\n"} {
 		t.Run(name, func(t *testing.T) {
-			earlier, _, err := ReadSticky(prefix + body)
-			if err != nil {
-				t.Fatal(err)
-			}
-			top := earlier[0]
-			if !top.Edited || top.N != 3 || earlier[1].Edited || earlier[2].Edited {
-				t.Fatalf("rounds: %+v", earlier)
-			}
-			if text := strings.TrimSpace(prefix); text != "" && !strings.Contains(top.Block, "</summary>\n\n> "+text+"\n>\n") {
-				t.Fatalf("the prefix was not carried:\n%s", top.Block)
-			}
-			if !strings.Contains(top.Block, "> `⛔ 1 blocking` `🟣 1 suggestion`\n") || strings.Contains(top.Block, anchorPrefix) {
-				t.Fatalf("the round was not quoted whole, or kept its anchor:\n%s", top.Block)
-			}
-			next := stickyInput(4, "ddddddd444")
-			next.Sticky = &StickyInput{Rounds: 4, Earlier: earlier}
-			again, _, err := ReadSticky(Body(next))
-			if err != nil || again[1] != (Round{N: 3, Commit: top.Commit, Anchor: top.Anchor, Block: top.Block}) {
-				t.Fatalf("err %v, round 3 read back as %+v", err, again[1])
+			got, _, err := ReadSticky(prefix + body)
+			if err != nil || !slices.Equal(got, want) {
+				t.Fatalf("err %v, rounds:\n%s", err, strings.Join(blocks(got), "\n=====\n"))
 			}
 		})
+	}
+}
+
+// Text above the top anchor was added on GitHub and is content: the round on top is carried as found, with the text
+// and the blank lines around the anchor kept, and named as edited.
+func TestReadStickyCarriesTextAboveTheTopAnchor(t *testing.T) {
+	body := threeRounds(t)
+	earlier, _, err := ReadSticky("\nAdded on GitHub.\n\n" + body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	top := earlier[0]
+	if !top.Edited || top.N != 3 || earlier[1].Edited || earlier[2].Edited {
+		t.Fatalf("rounds: %+v", earlier)
+	}
+	if !strings.Contains(top.Block, "</summary>\n\n> Added on GitHub.\n>\n>\n> `⛔ 1 blocking` `🟣 1 suggestion`\n") || strings.Contains(top.Block, anchorPrefix) {
+		t.Fatalf("the round was not carried whole with its prefix, or kept its anchor:\n%s", top.Block)
+	}
+	next := stickyInput(4, "ddddddd444")
+	next.Sticky = &StickyInput{Rounds: 4, Earlier: earlier}
+	again, _, err := ReadSticky(Body(next))
+	if err != nil || again[1] != (Round{N: 3, Commit: top.Commit, Anchor: top.Anchor, Block: top.Block}) {
+		t.Fatalf("err %v, round 3 read back as %+v", err, again[1])
 	}
 }
