@@ -96,6 +96,10 @@ fi
 
 MAX_FEATURE_NUMBER=9223372036854775807
 MAX_BRANCH_LENGTH=244
+# Scans ignore larger prefixes so that a name such as 2024-cleanup cannot
+# become the highest feature number.
+MAX_SCANNED_NUMBER=999
+ORIGIN_TIMEOUT=20
 
 is_feature_number_in_range() {
     local value="$1"
@@ -118,11 +122,11 @@ get_highest_from_specs() {
             [ -d "$dir" ] || continue
             dirname=$(basename "$dir")
             # Match sequential prefixes (>=3 digits), but skip timestamp dirs.
-            if echo "$dirname" | grep -Eq '^[0-9]{3}-' && ! echo "$dirname" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
+            if echo "$dirname" | grep -Eq '^[0-9]{3,}-' && ! echo "$dirname" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
                 number=$(echo "$dirname" | grep -Eo '^[0-9]+')
                 if is_feature_number_in_range "$number"; then
                     number=$((10#$number))
-                    if [ "$number" -gt "$highest" ]; then
+                    if [ "$number" -le "$MAX_SCANNED_NUMBER" ] && [ "$number" -gt "$highest" ]; then
                         highest=$number
                     fi
                 fi
@@ -134,47 +138,71 @@ get_highest_from_specs() {
 }
 
 # Read names on stdin (one per line) and print the highest sequential prefix.
-# Same match rules as get_highest_from_specs: >=3 digits, no timestamp prefixes.
+# Same match rules as get_highest_from_specs.
 highest_prefix_from_names() {
     local highest=0 name number
     while IFS= read -r name; do
         name="${name##*/}"
-        if echo "$name" | grep -Eq '^[0-9]{3}-' && ! echo "$name" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
+        if echo "$name" | grep -Eq '^[0-9]{3,}-' && ! echo "$name" | grep -Eq '^[0-9]{8}-[0-9]{6}-'; then
             number=$(echo "$name" | grep -Eo '^[0-9]+')
             if is_feature_number_in_range "$number"; then
                 number=$((10#$number))
-                [ "$number" -gt "$highest" ] && highest=$number
+                [ "$number" -le "$MAX_SCANNED_NUMBER" ] && [ "$number" -gt "$highest" ] && highest=$number
             fi
         fi
     done
     echo "$highest"
 }
 
+# Run a git command against origin that MUST NOT prompt or hang. The SSH
+# options bound only an SSH connect, so a perl alarm bounds any transport. git
+# runs in its own process group so that the alarm also stops its transport
+# helper, which would otherwise outlive git until the connect times out.
+origin_git() {
+    local -x GIT_TERMINAL_PROMPT=0
+    local -x GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=5'
+    if command -v perl >/dev/null 2>&1; then
+        perl -e '
+            my $timeout = shift;
+            my $pid = fork() // die "fork: $!\n";
+            if ($pid == 0) { setpgrp(0, 0); exec { $ARGV[0] } @ARGV; exit 127; }
+            setpgrp($pid, $pid);
+            $SIG{$_} = sub { kill("TERM", -$pid); exit 124 } for qw(ALRM INT TERM HUP);
+            alarm $timeout;
+            waitpid($pid, 0);
+            exit($? & 127 ? 128 + ($? & 127) : $? >> 8);
+        ' "$ORIGIN_TIMEOUT" git "$@"
+    else
+        git "$@"
+    fi
+}
+
 # Highest number reserved on origin: NNN-* branch names, plus specs/NNN-* on
 # origin/main and on every remote branch. Parallel branches cannot see each
 # other's specs/ directories locally, so the local scan alone hands two agents
-# the same number, and a branch need not carry the number in its name. Prints 0
-# and warns on stderr when origin is unreachable. The network calls MUST NOT
-# prompt or hang, so both run with prompts off and a short SSH timeout.
+# the same number, and a branch need not carry the number in its name.
 get_highest_from_origin() {
     local heads branches ref names
-    local ssh_cmd='ssh -o BatchMode=yes -o ConnectTimeout=5'
     if ! git remote get-url origin >/dev/null 2>&1; then
         >&2 echo "[specify] Warning: no origin remote; numbering from local specs/ only"
         echo 0
         return 0
     fi
-    if ! heads=$(GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="$ssh_cmd" git ls-remote --heads origin 2>/dev/null); then
+    if ! command -v perl >/dev/null 2>&1; then
+        >&2 echo "[specify] Warning: perl not found; origin lookups run without a deadline"
+    fi
+    if ! heads=$(origin_git ls-remote --heads origin 2>/dev/null); then
         >&2 echo "[specify] Warning: git ls-remote origin failed; numbering from local specs/ only"
         echo 0
         return 0
     fi
     branches=$(printf '%s\n' "$heads" | sed -n 's|^[^[:space:]]*[[:space:]]*refs/heads/||p')
     # Fetch so ls-tree can read branch trees; a failure only loses the tree scan.
-    if ! GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="$ssh_cmd" git fetch --quiet origin >/dev/null 2>&1; then
+    # The explicit refspec reaches every head, even in a single-branch clone.
+    if ! origin_git fetch --quiet origin '+refs/heads/*:refs/remotes/origin/*' >/dev/null 2>&1; then
         >&2 echo "[specify] Warning: git fetch origin failed; using remote branch names only"
     fi
-    names=$(printf '%s\n' "$branches" | grep -E '^[0-9]{3}-' || true)
+    names=$(printf '%s\n' "$branches" | grep -E '^[0-9]{3,}-' || true)
     for ref in origin/main $(printf '%s\n' "$branches" | sed 's|^|origin/|'); do
         names="$names
 $(git ls-tree --name-only "$ref" specs/ 2>/dev/null || true)"
