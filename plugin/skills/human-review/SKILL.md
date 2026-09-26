@@ -65,6 +65,8 @@ For each entry in its `earlier` list, run `loupe assess <refs> --status open|add
 
 An earlier finding that you do not assess does not carry forward to the next round. The result's `unassessed` count shows any that you missed.
 
+If `loupe publish` later refuses with `previous-moved`, run `loupe show --previous --run <ref> --json` again and assess its new `earlier` list.
+
 ## 5. Set the summary
 
 Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findings <n> --from <file> --run <ref> --json`, where `<n>` is the number of findings you filed. On a `count` refusal, `error.details.included` lists the findings that landed; file the missing ones and run `summary` again.

@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: Owner request, 2026-09-25. The shared review workflow runs follow-up rounds that read `loupe show --previous --json` and write a "Prior feedback status" list in the summary: each earlier finding marked addressed or not yet addressed. The agent files only what the new changes introduce, so a still-open earlier finding goes into that prose list and not into a new finding. `show --previous` returns only the previous round's filed findings, so a finding round 2 carried as "not yet addressed" is invisible to round 3, and round 3 never marks it addressed. Live example: `traackr-internal-engineering/claude-review-testbed#4`, review 5322367406, where round 1's bare `except:` and sleep-after-last-attempt were carried in round 2's summary, fixed in round 3's commit, and missing from round 3's status list.
+**Input**: Owner request, 2026-09-25. The shared review workflow runs follow-up rounds that read `loupe show --previous --json` and write a "Prior feedback status" list in the summary: each earlier finding marked addressed or not yet addressed. The agent files only what the new changes introduce, so a still-open earlier finding goes into that prose list and not into a new finding. `show --previous` returns only the previous round's filed findings, so a finding round 2 carried as "not yet addressed" is invisible to round 3, and round 3 never marks it addressed. Live example: a multi-round unattended review on a test repository, where round 1's bare `except:` and sleep-after-last-attempt were carried in round 2's summary, fixed in round 3's commit, and missing from round 3's status list.
 
 ## Relationship to earlier specifications
 
@@ -25,7 +25,7 @@ Decided by the implementing agent under the owner's brief; accepted at merge by 
 
 - Q: Return the previous round's summary, or record a status for each earlier finding as data? → A: Data. A summary is prose an agent has to parse, and an attended round's opening prose is the human's own and need not list statuses at all. Data survives both and lets loupe render the list later.
 - Q: Which earlier findings does a round carry forward? → A: Only those it marks `open`. A finding the round does not assess is not carried. Carrying every unassessed finding by default was rejected: a workflow that re-files what is still open, as the `human-review` skill does, would then hold each finding twice, and a caller that never assesses would carry every finding ever filed. `assess` reports how many earlier findings are still unassessed, so an agent sees any it missed, and `publish --unattended` warns on stderr when a round leaves any unassessed.
-- Q: Does an assessment carry a note? → A: No. An attended round publishes its assessments under the human's name in a hidden record the human does not read line by line. The copies stay in that record and the confirmation shows only their counts, so after an unattended round the human accepts unread text by confirming. A note would add more. The reason a finding is still open belongs in the summary, where a reader sees it.
+- Q: Does an assessment carry a note? → A: No. An attended round publishes its assessments under the human's name in a hidden record the human does not read line by line. The copies stay in that record and the confirmation shows only their counts. Every copied finding was accepted by the same identity in an earlier round, because both read-back paths keep only the same publisher's round: a local receipt counts only when its publisher is the run's, as a review read back from GitHub does. Confirming therefore accepts no text that identity has not already accepted. A note would add text no one accepted. The reason a finding is still open belongs in the summary, where a reader sees it.
 - Q: How does an agent name an earlier finding? → A: By a ref, `e-1`, `e-2` and so on, that `show --previous` assigns in its `earlier` list. A finding id is unique only within the round that filed it, and neither the round number nor the commit tells two rounds apart in every case: every CI round starts from an empty data root as round 1, and two rounds can review the same head.
 - Q: Where was a finding first filed? → A: `filedIn`: the round, review URL and commit of the round that filed it, as `show --previous` reports them for that round. For a sticky review the commit is its round's own, read from the body, since GitHub keeps the first round's `commit_id` on an edited review.
 
@@ -96,6 +96,7 @@ A caller that never runs `assess` publishes the same bytes as before, and reads 
 - **FR-010**: A publication MUST carry the draft's assessments in its envelope, and so in its receipt, and in its findings record.
 - **FR-011**: A record with assessments MUST be version 2, whose data is an object holding `findings` and `assessments`. A record with none MUST be version 1, unchanged.
 - **FR-012**: The publish confirmation's stand-in for the record MUST also name how many earlier findings it marks open and how many addressed.
+- **FR-013**: The draft MUST record the previous round `assess` read, as `assessedAgainst: {from, round, reviewUrl}`, omitted until `assess` runs. `publish` MUST re-resolve the previous round before it sends, and MUST refuse with `previous-moved` when it differs, because a lower round that published after `assess` ran has become the previous round and the refs name entries of the old list. `assess` against a different previous round MUST drop the draft's earlier assessments before recording, and MUST report how many as `dropped`.
 
 **Reading**
 
@@ -103,6 +104,7 @@ A caller that never runs `assess` publishes the same bytes as before, and reads 
 - **FR-021**: A carried finding MUST keep the `filedIn` it was assessed with. A filed finding's `filedIn` MUST be the previous round's `round`, `reviewUrl` and commit.
 - **FR-022**: Capture MUST store the previous round's assessments and commit when it reads the round back from GitHub, and `show --previous` MUST answer offline as today.
 - **FR-023**: A version 2 record MUST be read with the same doubt rule as version 1: any assessment without a known status, an id or a title makes the whole record unreadable.
+- **FR-024**: Both read-back paths MUST keep only the same publisher's round. A local receipt MUST count only when its author is the run's viewer, or for a run captured with an installation token, when its author is a `[bot]` and its `src=` name, version aside, matches the run's source. `show --previous`, `assess` and capture MUST skip any other receipt and keep looking at lower rounds, as they skip unpublished rounds. When they find none, `show --previous` and `assess` MUST refuse with `not-found`, and the message MUST name the newest skipped receipt's round and publisher.
 
 **Contracts**
 
