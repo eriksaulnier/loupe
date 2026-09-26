@@ -351,10 +351,22 @@ func TestPreviousReceiptPicksTheNewestReview(t *testing.T) {
 	if err != nil || round != 2 {
 		t.Fatalf("got round %d, %v, want 2, the newer review", round, err)
 	}
-	// A sticky review keeps its id across rounds, so the higher round is its newer one.
+	// A sticky review keeps its id across rounds, and round 3 edited it before round 2 did, so round 2's receipt holds
+	// the series' later round.
+	sticky := func(k int) Receipt {
+		return Receipt{Author: "reviewer", Envelope: Envelope{Viewer: "reviewer", Body: publishedBody("", "Human", &render.StickyInput{Rounds: k})}}
+	}
+	saveReceiptAt(t, root, 2, posted(sticky(3), 20, 10))
+	saveReceiptAt(t, root, 3, posted(sticky(2), 20, 8))
+	round, _, err = PreviousReceipt(root, ref, "reviewer", "")
+	if err != nil || round != 2 {
+		t.Fatalf("got round %d, %v, want 2, the sticky series' later round", round, err)
+	}
+	// When both receipts share an id and neither is sticky, the higher capture round wins.
+	saveReceiptAt(t, root, 2, posted(attendedReceipt("reviewer", "reviewer"), 20, 10))
 	saveReceiptAt(t, root, 3, posted(attendedReceipt("reviewer", "reviewer"), 20, 8))
 	round, _, err = PreviousReceipt(root, ref, "reviewer", "")
 	if err != nil || round != 3 {
-		t.Fatalf("got round %d, %v, want 3 on the same review", round, err)
+		t.Fatalf("got round %d, %v, want 3 on a full tie", round, err)
 	}
 }

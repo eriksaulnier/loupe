@@ -68,9 +68,7 @@ func PreviousReceipt(root string, ref run.Ref, viewer, source string) (int, Rece
 			continue
 		}
 		if ownReview(receiptReview(receipt), viewer, source) {
-			// Rounds captured together can publish out of order, and only GitHub's review id orders them. A sticky
-			// review keeps one id, so the downward scan keeps the higher round.
-			if newest == 0 || receipt.ReviewID > newestReceipt.ReviewID {
+			if newest == 0 || newerReceipt(receipt, newestReceipt) {
 				newest, newestReceipt = round, receipt
 			}
 			continue
@@ -88,6 +86,18 @@ func PreviousReceipt(root string, ref run.Ref, viewer, source string) (int, Rece
 		message = fmt.Sprintf("no earlier round of %s was published here by %s: %s", pr, publisher(viewer, source), skipped)
 	}
 	return 0, Receipt{}, refusal.New(refusal.NotFound, message, fmt.Sprintf("loupe show --run %s", ref))
+}
+
+// newerReceipt orders two receipts as GitHub recorded them, since rounds captured together can publish out of order:
+// by review id, then within one sticky review by its series round. A full tie is left to the caller's downward scan
+// of capture rounds, which keeps the higher one.
+func newerReceipt(a, b Receipt) bool {
+	if a.ReviewID != b.ReviewID {
+		return a.ReviewID > b.ReviewID
+	}
+	ka, _ := render.StickyRounds(a.Envelope.Body)
+	kb, _ := render.StickyRounds(b.Envelope.Body)
+	return ka > kb
 }
 
 // receiptReview is the review a receipt records. A receipt written before Author was recorded predates unattended
