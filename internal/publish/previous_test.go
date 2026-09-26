@@ -331,27 +331,30 @@ func TestPreviousReceiptRefusesWhenNoneWasPublished(t *testing.T) {
 	}
 }
 
-// Rounds 2 and 3 were both captured, and round 3 published first: round 2 is the publisher's newest publication.
-func TestPreviousReceiptPicksTheNewestPublication(t *testing.T) {
+// Rounds 2 and 3 were both captured, and round 3 published first: round 2's review is GitHub's newer one, though its
+// response came back sooner.
+func TestPreviousReceiptPicksTheNewestReview(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(run.RunDir(root, "o", "r", 5, 5), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	at := func(r Receipt, hour int) Receipt {
-		r.PostedAt = time.Date(2026, 9, 26, hour, 0, 0, 0, time.UTC)
+	posted := func(r Receipt, id int64, hour int) Receipt {
+		r.ReviewID, r.PostedAt = id, time.Date(2026, 9, 26, hour, 0, 0, 0, time.UTC)
 		return r
 	}
-	saveReceiptAt(t, root, 1, at(attendedReceipt("reviewer", "reviewer"), 9))
-	saveReceiptAt(t, root, 2, at(attendedReceipt("reviewer", "reviewer"), 12))
-	saveReceiptAt(t, root, 3, at(attendedReceipt("reviewer", "reviewer"), 11))
-	saveReceiptAt(t, root, 4, at(attendedReceipt("someone-else", "someone-else"), 13))
-	round, _, err := PreviousReceipt(root, run.Ref{Owner: "o", Repo: "r", Number: 5, Round: 5}, "reviewer", "")
+	saveReceiptAt(t, root, 1, posted(attendedReceipt("reviewer", "reviewer"), 5, 9))
+	saveReceiptAt(t, root, 2, posted(attendedReceipt("reviewer", "reviewer"), 20, 10))
+	saveReceiptAt(t, root, 3, posted(attendedReceipt("reviewer", "reviewer"), 10, 12))
+	saveReceiptAt(t, root, 4, posted(attendedReceipt("someone-else", "someone-else"), 30, 13))
+	ref := run.Ref{Owner: "o", Repo: "r", Number: 5, Round: 5}
+	round, _, err := PreviousReceipt(root, ref, "reviewer", "")
 	if err != nil || round != 2 {
-		t.Fatalf("got round %d, %v, want 2, published last", round, err)
+		t.Fatalf("got round %d, %v, want 2, the newer review", round, err)
 	}
-	saveReceiptAt(t, root, 3, at(attendedReceipt("reviewer", "reviewer"), 12))
-	round, _, err = PreviousReceipt(root, run.Ref{Owner: "o", Repo: "r", Number: 5, Round: 5}, "reviewer", "")
+	// A sticky review keeps its id across rounds, so the higher round is its newer one.
+	saveReceiptAt(t, root, 3, posted(attendedReceipt("reviewer", "reviewer"), 20, 8))
+	round, _, err = PreviousReceipt(root, ref, "reviewer", "")
 	if err != nil || round != 3 {
-		t.Fatalf("got round %d, %v, want 3 on a tie", round, err)
+		t.Fatalf("got round %d, %v, want 3 on the same review", round, err)
 	}
 }

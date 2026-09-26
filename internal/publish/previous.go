@@ -53,8 +53,8 @@ func ownReview(r github.Review, viewer, source string) bool {
 	return publishedBy(r, viewer) && (viewer != "" || sameSource(r.Body, source))
 }
 
-// PreviousReceipt is the earlier local round whose receipt the run's own publisher wrote most recently, by the rule
-// newestOwn applies to the reviews: a data root two publishers share must not hand one of them findings the other
+// PreviousReceipt is the earlier local round holding the run's own publisher's newest review, by the rule newestOwn
+// applies to the reviews: a data root two publishers share must not hand one of them findings the other
 // accepted. It skips unpublished rounds because only a receipt records what the pull request author saw.
 func PreviousReceipt(root string, ref run.Ref, viewer, source string) (int, Receipt, error) {
 	skipped := ""
@@ -68,9 +68,9 @@ func PreviousReceipt(root string, ref run.Ref, viewer, source string) (int, Rece
 			continue
 		}
 		if ownReview(receiptReview(receipt), viewer, source) {
-			// Rounds captured together can publish out of order, so PostedAt decides. The scan runs downward, so a tie
-			// keeps the higher round.
-			if newest == 0 || receipt.PostedAt.After(newestReceipt.PostedAt) {
+			// Rounds captured together can publish out of order, and only GitHub's review id orders them. A sticky
+			// review keeps one id, so the downward scan keeps the higher round.
+			if newest == 0 || receipt.ReviewID > newestReceipt.ReviewID {
 				newest, newestReceipt = round, receipt
 			}
 			continue
