@@ -11,6 +11,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const PreviousSchema = 1
 
 // Previous is the round capture read back from GitHub for a run with no earlier local receipt: the publisher's newest

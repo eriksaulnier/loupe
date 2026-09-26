@@ -22,7 +22,7 @@ Capture MAY write Git objects and loupe-owned private refs into the user's clone
 
 ### V. Machine contract first
 
-Every agent-facing command MUST answer `--help` without run state, MUST accept structured input from a file or stdin, and with `--json` MUST emit exactly one versioned result object on stdout. Every refusal MUST name its reason and the corrective command. Stdout is machine output; diagnostics go to stderr.
+Every agent-facing command MUST answer `--help` without run state, MUST accept structured input from a file or stdin, and with `--json` MUST emit exactly one versioned result object on stdout. Every refusal MUST name its reason and the corrective command. Stdout is machine output; diagnostics go to stderr. Run files and the findings record MUST follow the versioning rule in `docs/versioning.md`.
 
 ### VI. Simplicity over ceremony
 
@@ -50,7 +50,9 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 This constitution supersedes every other practice in the repository. An amendment MUST state what changed and why, bump the version below (MAJOR for a removed or redefined principle, MINOR for a new principle or section, PATCH for wording), and update the specification and plan when a principle they rely on changes. Plans MUST include a Constitution Check and justify each violation in Complexity Tracking.
 
-**Version**: 3.0.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-24
+**Version**: 3.0.1 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-26
+
+**3.0.1** (2026-09-26): Principle V now points at `docs/versioning.md` for how run files and the findings record are versioned. This is PATCH because it adds no principle and redefines none (owner, 2026-09-26). Three fields reached the attempt and the receipt with no schema bump, and a file from a newer loupe read as damage with a fix that sent the human to inspect it rather than to upgrade. The rule now lives in one page, and a test pins each record's fields to its schema.
 
 **3.0.0** (2026-09-24): A publication MAY edit one review's body instead of creating a review. This is MAJOR because it redefines what Principle II's one request may do (owner, 2026-09-25). The preamble and Principle II said a publication posts exactly one review, and sticky mode edits the review an earlier round posted so a pull request's timeline holds one loupe review instead of one per round (specs/025-sticky-review). The one-request rule, the COMMENT-only rule for an unattended review and the unattended marking are unchanged. An edit MUST show the human the whole replacement body, because it overwrites words already published under their name.
 

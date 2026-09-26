@@ -10,6 +10,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const HandBackSchema = 1
 
 // HandBack is the set of notes handed to the agent: each note as it is written, and any still open and unanswered

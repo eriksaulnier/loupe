@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const SchemaVersion = 1
 
 const (

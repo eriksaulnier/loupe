@@ -11,6 +11,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const CommentsSchema = 1
 
 // Comments is the feedback capture read from everyone but the publisher: the pull request's reviews, inline threads and

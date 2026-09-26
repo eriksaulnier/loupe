@@ -16,6 +16,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const TargetSchema = 1
 
 // Target is written once by capture and never changed.

@@ -28,6 +28,8 @@ New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory 
 
 A plan that departs from the constitution, research or contracts MUST record the departure and its reason in its Complexity Tracking table. A new runtime dependency MUST carry a one-line reason in the plan (Principle VI).
 
+A change to the fields of a run file, such as `draft.json` or `receipt.json`, or of the findings record MUST follow the [schema versioning rule](docs/versioning.md): bump the version, and keep reading every older one.
+
 A spec that is drafted but not scheduled belongs on the [loupe project board](https://github.com/users/eriksaulnier/projects/6) as a draft item titled `Draft spec: <topic>`, not in `specs/`. A directory there takes the next number, which says the work is starting, and a branch holding one nobody is working on is a number reserved against a feature that may never arrive. When the work is picked up, move the card to In Progress, run the flow and paste the draft in as the spec's **Input**. A draft item is not an issue, so no pull request can close it: once the pull request merges, move the card to Done by hand. Finished specs stay in the repository: `docs/comment-format.md`, `specs/001-loupe-v1/validation.md`, the README, `AGENTS.md` and two code comments cite them by path, and a spec is reviewed as a diff like anything else.
 
 ## Tests
