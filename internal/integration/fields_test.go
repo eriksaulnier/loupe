@@ -26,6 +26,7 @@ func (h *harness) lastReviewBody() string {
 }
 
 func TestPublishRendersEveryFindingField(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -54,6 +55,7 @@ func TestPublishRendersEveryFindingField(t *testing.T) {
 }
 
 func TestEditClearsNewFieldsAndRefusesBadOnes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("finding.json", fullFinding))
@@ -72,6 +74,7 @@ func TestEditClearsNewFieldsAndRefusesBadOnes(t *testing.T) {
 
 // A run captured before the severity enum may hold free text. It still shows, edits by title and publishes.
 func TestLegacySeverityStaysUsable(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")

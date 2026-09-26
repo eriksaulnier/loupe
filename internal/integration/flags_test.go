@@ -10,6 +10,7 @@ import (
 
 // Every content flag of add and edit conflicts with --from at the command line.
 func TestFromConflictsWithEveryContentFlag(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--title", "t", "--body", "b", "--general")
@@ -30,6 +31,7 @@ func TestFromConflictsWithEveryContentFlag(t *testing.T) {
 }
 
 func TestSummaryRequiresExpectFindingsForAgents(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustRefuseUsage("summary", "--run", runRef, "--body", "Nothing found.")
@@ -38,6 +40,7 @@ func TestSummaryRequiresExpectFindingsForAgents(t *testing.T) {
 }
 
 func TestExpectVersionAtTheCommandLine(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	draftPath := filepath.Join(h.RunDir(1), "draft.json")
@@ -62,6 +65,7 @@ func (h *harness) mustRefuseUsage(args ...string) {
 }
 
 func TestChangedDiffIsRefusedOnEveryLoad(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--title", "t", "--body", "b", "--general")

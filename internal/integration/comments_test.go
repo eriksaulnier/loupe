@@ -21,6 +21,7 @@ func commentsOf(t *testing.T, env map[string]any) map[string]any {
 
 // A CI round reads everyone else's feedback from a fresh data root, and not the pipeline's own sticky review.
 func TestCIRoundReadsOtherReviewersButNotItsOwn(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -66,6 +67,7 @@ func TestCIRoundReadsOtherReviewersButNotItsOwn(t *testing.T) {
 }
 
 func TestCaptureSurvivesAFailedFeedbackRead(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.GH.Fail(http.MethodPost, "/graphql", http.StatusBadGateway)
 	env := h.capture()
@@ -84,6 +86,7 @@ func TestCaptureSurvivesAFailedFeedbackRead(t *testing.T) {
 }
 
 func TestCaptureSaysWhatItReadInItsHumanOutput(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.GH.AddIssueComment(owner, repo, number, github.IssueComment{User: "dana", Body: "Looks fine."})
 	stdout, stderr, exit := h.Run("capture", prURL())

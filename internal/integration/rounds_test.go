@@ -68,6 +68,7 @@ func lastPostBody(t *testing.T, h *harness) string {
 }
 
 func TestFollowUpRoundReadsPreviousAndPublishesItsRound(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	h.publishRound(1)
@@ -115,6 +116,7 @@ func TestFollowUpRoundReadsPreviousAndPublishesItsRound(t *testing.T) {
 }
 
 func TestRoundsAndSameHead(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	h.publishRound(1)
@@ -152,6 +154,7 @@ func TestRoundsAndSameHead(t *testing.T) {
 }
 
 func TestAbandonedRoundDoesNotAdvancePublishedRound(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	h.pushHead("src/round2.go")

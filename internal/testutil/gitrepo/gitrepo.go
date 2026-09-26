@@ -37,17 +37,36 @@ type Snapshot struct {
 	Refs        map[string]string
 }
 
+// env keeps the developer's global config (hooks, signing, default branch) away from test repositories.
+var env = [][2]string{
+	{"GIT_CONFIG_GLOBAL", os.DevNull},
+	{"GIT_CONFIG_NOSYSTEM", "1"},
+	{"GIT_AUTHOR_NAME", "Test Author"},
+	{"GIT_AUTHOR_EMAIL", "author@example.com"},
+	{"GIT_AUTHOR_DATE", "2026-01-01T00:00:00Z"},
+	{"GIT_COMMITTER_NAME", "Test Committer"},
+	{"GIT_COMMITTER_EMAIL", "committer@example.com"},
+	{"GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z"},
+}
+
+// SetProcessEnv sets New's environment once for the whole process. A TestMain whose tests call t.Parallel MUST call
+// it before m.Run, because New otherwise calls t.Setenv, which panics in a parallel test.
+func SetProcessEnv() error {
+	for _, kv := range env {
+		if err := os.Setenv(kv[0], kv[1]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func New(t *testing.T, owner, repo string, number int) *Repo {
 	t.Helper()
-	// The developer's global config (hooks, signing, default branch) must not reach test repositories.
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	t.Setenv("GIT_AUTHOR_NAME", "Test Author")
-	t.Setenv("GIT_AUTHOR_EMAIL", "author@example.com")
-	t.Setenv("GIT_AUTHOR_DATE", "2026-01-01T00:00:00Z")
-	t.Setenv("GIT_COMMITTER_NAME", "Test Committer")
-	t.Setenv("GIT_COMMITTER_EMAIL", "committer@example.com")
-	t.Setenv("GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z")
+	for _, kv := range env {
+		if os.Getenv(kv[0]) != kv[1] {
+			t.Setenv(kv[0], kv[1])
+		}
+	}
 
 	root := t.TempDir()
 	r := &Repo{

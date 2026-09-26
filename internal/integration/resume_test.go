@@ -28,6 +28,7 @@ func listRuns(t *testing.T, env map[string]any) []map[string]any {
 }
 
 func TestResumeFromBranch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	for _, pr := range []struct {
 		number int

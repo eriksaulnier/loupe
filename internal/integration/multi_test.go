@@ -94,6 +94,7 @@ func holdsOnly(t *testing.T, who, body string, want, avoid []string) {
 // Two people each keep their own sticky review. Neither edits the other's, neither reads the other's rounds into their
 // history, and each numbers and reads back only their own rounds, which live on their own machine.
 func TestStickyTwoPeopleKeepTheirOwnReviews(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, bob := human(t, "alice"), human(t, "bob")
 	for _, step := range []struct {
@@ -123,6 +124,7 @@ func TestStickyTwoPeopleKeepTheirOwnReviews(t *testing.T) {
 // A person and the pipeline each keep their own sticky review: a person's login never ends [bot], and the pipeline
 // only edits a [bot] review.
 func TestStickyPersonAndPipelineKeepTheirOwnReviews(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice, ci := human(t, "alice"), pipeline("github-actions[bot]", "loupe-ci@1.0.0")
 	for _, step := range []struct {
@@ -143,6 +145,7 @@ func TestStickyPersonAndPipelineKeepTheirOwnReviews(t *testing.T) {
 // read its own login. Without that, one would pick the other's review, and GitHub would refuse that edit on every run.
 // Unattended numbering still counts every App's loupe reviews, as specs/007-unattended-publish FR-015 defines it.
 func TestStickyTwoAppsKeepTheirOwnReviews(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	a, b := pipeline("loupe-ci[bot]", "loupe-ci@1.0.0"), pipeline("other-review[bot]", "other-review@3.1.0")
 	for _, step := range []struct {
@@ -173,6 +176,7 @@ func TestStickyTwoAppsKeepTheirOwnReviews(t *testing.T) {
 
 // A publisher's ordinary reviews are never edited: a sticky round only edits a review whose marker carries sticky=.
 func TestStickyNeverEditsAnOrdinaryReview(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice := human(t, "alice")
 	h.publishAs(alice, "Plain review.", "--action", "comment")
@@ -189,6 +193,7 @@ func TestStickyNeverEditsAnOrdinaryReview(t *testing.T) {
 // A sticky review loupe cannot read back is refused, and the refusal's advice works: one plain publish ends the series,
 // so the next sticky round starts a new review instead of refusing again on every run.
 func TestStickyUnreadableReviewIsLeftBehindByAPlainPublish(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice := human(t, "alice")
 	first := h.publishAs(alice, "Sticky one.", "--sticky")

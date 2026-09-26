@@ -10,6 +10,7 @@ import (
 // TestPublishStickyUnattendedKeepsOneReview is SC-001: three pipeline rounds, each from a fresh data root as a job
 // starts, leave one review on the pull request holding all three, newest on top.
 func TestPublishStickyUnattendedKeepsOneReview(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -76,6 +77,7 @@ func TestPublishStickyUnattendedKeepsOneReview(t *testing.T) {
 // A pipeline passes the same --note every round. The review shows it once, on the newest round, and each round still
 // reads the one before it back from GitHub.
 func TestPublishStickyNoteShowsOnlyOnTheNewestRound(t *testing.T) {
+	t.Parallel()
 	const note = "Pushed more commits? Add the `ai-review` label for a fresh review of the whole PR."
 	h := newHarness(t)
 	h.UseInstallationToken()

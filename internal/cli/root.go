@@ -74,6 +74,12 @@ func (d Deps) width() int {
 	return defaultWidth
 }
 
+// The commands list in workflow order, not alphabetically, because help reads as the order they are run in. It is set
+// once here, not in NewRoot, because it is a cobra global and NewRoot runs concurrently in parallel tests.
+func init() {
+	cobra.EnableCommandSorting = false
+}
+
 func NewRoot(deps Deps) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "loupe",
@@ -89,8 +95,6 @@ func NewRoot(deps Deps) *cobra.Command {
 	root.SetIn(deps.Stdin)
 	root.SetOut(deps.Stdout)
 	root.SetErr(deps.Stderr)
-	// The commands list in workflow order, not alphabetically, because help reads as the order they are run in.
-	cobra.EnableCommandSorting = false
 	for _, g := range []struct {
 		id       string
 		commands []*cobra.Command

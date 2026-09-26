@@ -45,6 +45,7 @@ func dispositionOf(env map[string]any, id string) any {
 }
 
 func TestSendBackLoop(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", sendBackFindings))

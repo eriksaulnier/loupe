@@ -35,6 +35,7 @@ func readFile(t *testing.T, path string) []byte {
 }
 
 func TestCaptureLeavesCloneUntouched(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.Repo.Git("config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*")
 	before := h.Repo.Snapshot()
@@ -112,6 +113,7 @@ func TestCaptureLeavesCloneUntouched(t *testing.T) {
 }
 
 func TestCaptureWithInstallationTokenSkipsViewer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.capture()
@@ -131,6 +133,7 @@ func TestCaptureWithInstallationTokenSkipsViewer(t *testing.T) {
 }
 
 func TestCaptureRecordsSource(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.mustRefuse("input", "capture", prURL(), "--source", "a-->b")
 	if _, err := os.Stat(h.RunDir(1)); !os.IsNotExist(err) {
@@ -153,6 +156,7 @@ func TestCaptureRecordsSource(t *testing.T) {
 }
 
 func TestCaptureRecordsModel(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.mustRefuse("input", "capture", prURL(), "--model", "Claude Sonnet")
 	if _, err := os.Stat(h.RunDir(1)); !os.IsNotExist(err) {
@@ -173,6 +177,7 @@ func TestCaptureRecordsModel(t *testing.T) {
 }
 
 func TestCaptureHumanOutput(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	stdout, stderr, exit := h.Run("capture", prURL())
 	if exit != 0 {
@@ -186,6 +191,7 @@ func TestCaptureHumanOutput(t *testing.T) {
 }
 
 func TestCaptureRefusesOtherOrigin(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	other := gitrepo.New(t, "other", "repo", number)
 	h.mustRefuse("origin", "capture", prURL(), "--repo", other.Dir)
@@ -200,6 +206,7 @@ const twoFindings = `[
 ]`
 
 func TestAddShowAndSummary(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 
@@ -260,6 +267,7 @@ func TestAddShowAndSummary(t *testing.T) {
 }
 
 func TestShowDiffHandsOverTheCapturedFile(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 
@@ -280,6 +288,7 @@ func TestShowDiffHandsOverTheCapturedFile(t *testing.T) {
 }
 
 func TestCaptureRefusalAfterFetchNamesCleanup(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.GH.SetHead(owner, repo, number, h.Repo.BaseSHA())
 	baseRef, headRef := "refs/loupe/acme/widgets/42/1/base", "refs/loupe/acme/widgets/42/1/head"
@@ -319,6 +328,7 @@ func pausedNow() (now func() time.Time, reached chan struct{}, release chan stru
 // The first capture verifies head X; the head then moves to Y and a second capture of the same round would force-fetch
 // Y into the refs the first capture is about to record as X.
 func TestConcurrentCapturesOfOnePullRequest(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	type result struct {
 		stdout, stderr string
@@ -386,6 +396,7 @@ func TestConcurrentCapturesOfOnePullRequest(t *testing.T) {
 }
 
 func TestConcurrentCapturesAtUnchangedHead(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.Env["LOUPE_LOCK_TIMEOUT_MS"] = "60000"
 	type result struct {

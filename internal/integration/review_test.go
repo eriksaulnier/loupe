@@ -6,6 +6,7 @@ import (
 )
 
 func TestReviewInPlainModeRecordsDecisions(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", twoFindings))
