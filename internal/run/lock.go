@@ -51,12 +51,13 @@ func LockNotifying(dir, command string, getenv func(string) string, busy func())
 			_ = f.Close()
 			return nil, fmt.Errorf("lock %s: %w", path, err)
 		}
+		// The hook fires on every observed hold, before the deadline can turn the same observation into a refusal.
+		if busy != nil {
+			busy()
+		}
 		if !time.Now().Before(deadline) {
 			_ = f.Close()
 			return nil, heldRefusal(path)
-		}
-		if busy != nil {
-			busy()
 		}
 		time.Sleep(lockRetryInterval)
 	}
