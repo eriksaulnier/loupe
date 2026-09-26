@@ -299,13 +299,13 @@ func TestReleasePleaseBumpsEveryPluginVersion(t *testing.T) {
 		}
 	}
 
-	// The README's Pi install pins a tag, so release-please rewrites the line that carries its marker.
+	// The install page's Pi install pins a tag, so release-please rewrites the line that carries its marker.
 	generic := false
 	for _, f := range config.Packages["."].ExtraFiles {
-		generic = generic || (f.Type == "generic" && f.Path == "README.md")
+		generic = generic || (f.Type == "generic" && f.Path == "docs/install.md")
 	}
 	pin := "pi install git:github.com/eriksaulnier/loupe@v" + releaseVersion(t) + " # x-release-please-version"
-	if !generic || !strings.Contains(readRepoFile(t, "README.md"), pin) {
-		t.Errorf("README.md MUST be a generic release-please extra-file and carry %q", pin)
+	if !generic || !strings.Contains(readRepoFile(t, "docs/install.md"), pin) {
+		t.Errorf("docs/install.md MUST be a generic release-please extra-file and carry %q", pin)
 	}
 }
