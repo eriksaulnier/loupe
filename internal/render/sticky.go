@@ -333,6 +333,10 @@ func dropNote(lines []string, structural []bool) ([]string, []bool, error) {
 		return nil, nil, errors.New("its round note is not one pair of loupe's note delimiters")
 	case end > earlier:
 		return nil, nil, errors.New("its round note is not on the round it shows")
+	// A note moved into the round's prose would drop cleanly and pass the body off as unedited, so the pair MUST sit
+	// where Body wrote it, right after the footer.
+	case start < 2 || !structural[start-2] || !footerLine.MatchString(lines[start-2]):
+		return nil, nil, errors.New("its round note does not follow the round's footer")
 	}
 	return slices.Delete(slices.Clone(lines), start-1, end+1), slices.Delete(slices.Clone(structural), start-1, end+1), nil
 }

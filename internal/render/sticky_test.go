@@ -862,12 +862,15 @@ func TestReadStickyRefusesAMangledNote(t *testing.T) {
 	note := "\n\n" + noteStart + "\n\n" + roundNote + "\n\n" + noteEnd
 	moved := strings.Replace(body, note, "", 1)
 	moved = strings.Replace(moved, "### Earlier rounds\n", "### Earlier rounds"+note+"\n", 1)
+	plain := strings.Replace(body, note, "", 1)
+	intoProse := plain[:strings.Index(plain, "\n\n")] + note + plain[strings.Index(plain, "\n\n"):]
 	for name, mangled := range map[string]string{
-		"no end":    strings.Replace(body, noteEnd+"\n", "", 1),
-		"no start":  strings.Replace(body, noteStart+"\n", "", 1),
-		"two notes": strings.Replace(body, noteEnd, noteEnd+"\n\n"+noteStart+"\n\nMore.\n\n"+noteEnd, 1),
-		"end first": strings.NewReplacer(noteStart, noteEnd, noteEnd, noteStart).Replace(body),
-		"moved":     moved,
+		"moved into the prose": intoProse,
+		"no end":               strings.Replace(body, noteEnd+"\n", "", 1),
+		"no start":             strings.Replace(body, noteStart+"\n", "", 1),
+		"two notes":            strings.Replace(body, noteEnd, noteEnd+"\n\n"+noteStart+"\n\nMore.\n\n"+noteEnd, 1),
+		"end first":            strings.NewReplacer(noteStart, noteEnd, noteEnd, noteStart).Replace(body),
+		"moved":                moved,
 	} {
 		// Each is refused by the note's own checks, not by a later rule that a mangled body happens to break.
 		if _, _, err := ReadSticky(mangled); err == nil || !strings.Contains(err.Error(), "round note") {
