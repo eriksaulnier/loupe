@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.14.0](https://github.com/eriksaulnier/loupe/compare/v0.13.0...v0.14.0) (2026-09-26)
+
+
+### Features
+
+* **cli:** carry open findings across review rounds ([#56](https://github.com/eriksaulnier/loupe/issues/56)) ([5b1100e](https://github.com/eriksaulnier/loupe/commit/5b1100eb7f30315376e802739f20d44c05511b50))
+* **publish:** add --note for unattended sticky rounds ([#57](https://github.com/eriksaulnier/loupe/issues/57)) ([09506a2](https://github.com/eriksaulnier/loupe/commit/09506a2ad26e0039663a971e3b708eb0617784a0))
+* **render:** anchor each round of a sticky review in data ([#65](https://github.com/eriksaulnier/loupe/issues/65)) ([a60eefe](https://github.com/eriksaulnier/loupe/commit/a60eefefbb24f8fae5fef45a7cb6907e307bfcf2))
+* **render:** write the sticky round note as a quote ([#66](https://github.com/eriksaulnier/loupe/issues/66)) ([f3b78ef](https://github.com/eriksaulnier/loupe/commit/f3b78efb08b697989bb9894528d1bbdfe97df6b8))
+* **run:** accept every schema up to the reader's own ([#64](https://github.com/eriksaulnier/loupe/issues/64)) ([b5233dd](https://github.com/eriksaulnier/loupe/commit/b5233dd65f7725c67ad26d828007e5396d6d9f78))
+
 ## [0.13.0](https://github.com/eriksaulnier/loupe/compare/v0.12.0...v0.13.0) (2026-09-25)
 
 

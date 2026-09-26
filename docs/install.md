@@ -23,7 +23,7 @@ To update, run the same `mise use` command again.
 Each [release](https://github.com/eriksaulnier/loupe/releases) attaches one archive per platform and a `checksums.txt`. Download the archive for your platform, verify it and put `loupe` on your `PATH`:
 
 ```sh
-version=0.13.0 # x-release-please-version
+version=0.14.0 # x-release-please-version
 os=darwin arch=arm64 # or linux, and amd64
 archive="loupe_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/eriksaulnier/loupe/releases/download/v$version"
@@ -56,7 +56,7 @@ codex plugin marketplace add eriksaulnier/loupe
 codex plugin add loupe@loupe
 
 # Pi, pinned to the release. Use the version loupe --version prints.
-pi install git:github.com/eriksaulnier/loupe@v0.13.0 # x-release-please-version
+pi install git:github.com/eriksaulnier/loupe@v0.14.0 # x-release-please-version
 ```
 
 > [!IMPORTANT]
