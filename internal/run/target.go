@@ -16,6 +16,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const TargetSchema = 1
 
 // Target is written once by capture and never changed.
@@ -89,11 +90,8 @@ func ValidateModel(model string) error {
 func LoadTarget(dir string) (Target, error) {
 	path := filepath.Join(dir, "target.json")
 	var t Target
-	if err := ReadJSON(path, &t); err != nil {
+	if err := ReadJSON(path, &t, TargetSchema); err != nil {
 		return Target{}, err
-	}
-	if t.Schema != TargetSchema {
-		return Target{}, RecordRefusal(path, fmt.Errorf("schema is %d, expected %d", t.Schema, TargetSchema))
 	}
 	if err := ValidateSource(t.Source); err != nil {
 		return Target{}, RecordRefusal(path, err)
@@ -163,6 +161,7 @@ func CreateRun(dir string, target Target, diff, draftJSON []byte, optional map[s
 			_ = os.RemoveAll(tmp)
 		}
 	}()
+	target.Schema = TargetSchema
 	if err = WriteJSONAtomic(filepath.Join(tmp, "target.json"), target); err != nil {
 		return err
 	}

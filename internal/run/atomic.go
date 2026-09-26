@@ -61,11 +61,22 @@ func WriteJSONAtomic(path string, v any) error {
 	return WriteFileAtomic(path, append(data, '\n'))
 }
 
-// ReadJSON refuses a damaged record rather than repairing it, so the human can inspect what went wrong.
-func ReadJSON(path string, v any) error {
+// ReadJSON reads a run file whose schema is from 1 up to schema. It refuses a damaged record rather than repairing it,
+// so the human can inspect what went wrong, and refuses a newer one as a loupe too old to read it. It decodes every
+// accepted schema into the current struct, so the first bump that removes or redefines a field MUST add a migration
+// step here (docs/versioning.md).
+func ReadJSON(path string, v any, schema int) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return RecordRefusal(path, err)
+	}
+	// The schema is read first and leniently, because a newer file's new fields would otherwise refuse it as damaged.
+	var head struct {
+		Schema int `json:"schema"`
+	}
+	if json.Unmarshal(data, &head) == nil && head.Schema > schema {
+		return refusal.New(refusal.Record,
+			fmt.Sprintf("cannot read %s: schema is %d, this loupe reads up to %d", path, head.Schema, schema), "upgrade loupe")
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
@@ -74,6 +85,9 @@ func ReadJSON(path string, v any) error {
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return RecordRefusal(path, errors.New("unexpected data after the JSON value"))
+	}
+	if head.Schema < 1 {
+		return RecordRefusal(path, fmt.Errorf("schema is %d, expected at least 1", head.Schema))
 	}
 	return nil
 }

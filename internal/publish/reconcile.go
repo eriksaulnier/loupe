@@ -62,6 +62,6 @@ func Reconcile(ctx context.Context, gh github.Client, attempt Attempt) (*Receipt
 	if !ok {
 		return nil, nil
 	}
-	return &Receipt{Schema: RecordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: attempt.Envelope.Action,
+	return &Receipt{Schema: recordSchema, ReviewID: review.ID, ReviewURL: review.HTMLURL, Action: attempt.Envelope.Action,
 		PostedAt: attempt.StartedAt, Envelope: attempt.Envelope, Author: review.User, Edited: attempt.Envelope.EditReviewID != 0}, nil
 }

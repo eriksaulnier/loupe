@@ -11,6 +11,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const CommentsSchema = 1
 
 // Comments is the feedback capture read from everyone but the publisher: the pull request's reviews, inline threads and
@@ -115,6 +116,7 @@ func author(login string) string {
 }
 
 func EncodeComments(c Comments) ([]byte, error) {
+	c.Schema = CommentsSchema
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("encode %s: %w", run.CommentsFile, err)
@@ -126,7 +128,7 @@ func EncodeComments(c Comments) ([]byte, error) {
 // damaged file is a record refusal.
 func LoadComments(dir string) (Comments, bool, error) {
 	var c Comments
-	found, err := loadRecord(filepath.Join(dir, run.CommentsFile), &c, func() string { return commentsProblem(c) })
+	found, err := loadRecord(filepath.Join(dir, run.CommentsFile), &c, CommentsSchema, func() string { return commentsProblem(c) })
 	return c, found, err
 }
 
@@ -134,8 +136,6 @@ func LoadComments(dir string) (Comments, bool, error) {
 // read as feedback nobody left.
 func commentsProblem(c Comments) string {
 	switch {
-	case c.Schema != CommentsSchema:
-		return fmt.Sprintf("schema is %d, expected %d", c.Schema, CommentsSchema)
 	case !c.Read && (c.Reason == "" || c.Reviews != nil || c.Threads != nil || c.Comments != nil || c.ExcludedReviews != 0):
 		return "it holds neither the feedback nor only a reason"
 	case c.Read && c.Reason != "":

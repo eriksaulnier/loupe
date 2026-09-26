@@ -173,7 +173,7 @@ func TestLoadTargetMissing(t *testing.T) {
 }
 
 func TestLoadTargetRefusesWrongSchema(t *testing.T) {
-	for name, content := range map[string]string{"null": `null`, "empty object": `{}`, "wrong schema": `{"schema": 2}`} {
+	for name, content := range map[string]string{"null": `null`, "empty object": `{}`, "schema 0": `{"schema": 0}`} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "target.json")

@@ -11,6 +11,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const PreviousSchema = 1
 
 // Previous is the round capture read back from GitHub for a run with no earlier local receipt: the publisher's newest
@@ -99,6 +100,7 @@ func publisher(viewer, source string) string {
 }
 
 func EncodePrevious(p Previous) ([]byte, error) {
+	p.Schema = PreviousSchema
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("encode %s: %w", run.PreviousFile, err)
@@ -110,7 +112,7 @@ func EncodePrevious(p Previous) ([]byte, error) {
 // a local receipt. A damaged file is a record refusal.
 func LoadPrevious(dir string) (Previous, bool, error) {
 	var p Previous
-	found, err := loadRecord(filepath.Join(dir, run.PreviousFile), &p, func() string { return previousProblem(p) })
+	found, err := loadRecord(filepath.Join(dir, run.PreviousFile), &p, PreviousSchema, func() string { return previousProblem(p) })
 	return p, found, err
 }
 
@@ -118,8 +120,6 @@ func LoadPrevious(dir string) (Previous, bool, error) {
 // read as a round that published nothing.
 func previousProblem(p Previous) string {
 	switch {
-	case p.Schema != PreviousSchema:
-		return fmt.Sprintf("schema is %d, expected %d", p.Schema, PreviousSchema)
 	case !p.Found && (p.Reason == "" || p.Findings != nil):
 		return "it holds neither a round nor only a reason"
 	case !p.Found:

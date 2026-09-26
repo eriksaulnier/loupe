@@ -10,8 +10,9 @@ import (
 )
 
 type sample struct {
-	Name  string `json:"name"`
-	Count int    `json:"count"`
+	Schema int    `json:"schema"`
+	Name   string `json:"name"`
+	Count  int    `json:"count"`
 }
 
 func TestWriteFileAtomicReplaces(t *testing.T) {
@@ -47,22 +48,22 @@ func TestWriteFileAtomicMissingDir(t *testing.T) {
 
 func TestWriteJSONAtomicFormat(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.json")
-	if err := WriteJSONAtomic(path, sample{Name: "a", Count: 2}); err != nil {
+	if err := WriteJSONAtomic(path, sample{Schema: 1, Name: "a", Count: 2}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "{\n  \"name\": \"a\",\n  \"count\": 2\n}\n"
+	want := "{\n  \"schema\": 1,\n  \"name\": \"a\",\n  \"count\": 2\n}\n"
 	if string(got) != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 	var back sample
-	if err := ReadJSON(path, &back); err != nil {
+	if err := ReadJSON(path, &back, 1); err != nil {
 		t.Fatal(err)
 	}
-	if back != (sample{Name: "a", Count: 2}) {
+	if back != (sample{Schema: 1, Name: "a", Count: 2}) {
 		t.Fatalf("round trip: %+v", back)
 	}
 }
@@ -71,10 +72,13 @@ func TestReadJSONRefusesDamage(t *testing.T) {
 	dir := t.TempDir()
 	cases := map[string]*string{
 		"missing":   nil,
-		"malformed": ptr(`{"name": "a"`),
-		"unknown":   ptr(`{"name": "a", "extra": 1}`),
-		"trailing":  ptr(`{"name": "a"} {}`),
-		"wrongtype": ptr(`{"count": "x"}`),
+		"malformed": ptr(`{"schema": 1, "name": "a"`),
+		"unknown":   ptr(`{"schema": 1, "name": "a", "extra": 1}`),
+		"trailing":  ptr(`{"schema": 1, "name": "a"} {}`),
+		"wrongtype": ptr(`{"schema": 1, "count": "x"}`),
+		"no schema": ptr(`{"name": "a"}`),
+		"schema 0":  ptr(`{"schema": 0, "name": "a"}`),
+		"null":      ptr(`null`),
 	}
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -85,7 +89,7 @@ func TestReadJSONRefusesDamage(t *testing.T) {
 				}
 			}
 			var v sample
-			err := ReadJSON(path, &v)
+			err := ReadJSON(path, &v, 1)
 			r, ok := refusal.As(err)
 			if !ok {
 				t.Fatalf("expected refusal, got %v", err)
@@ -100,6 +104,38 @@ func TestReadJSONRefusesDamage(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestReadJSONAcceptsEverySchemaUpToItsOwn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.json")
+	for schema := 1; schema <= 3; schema++ {
+		if err := WriteJSONAtomic(path, sample{Schema: schema, Name: "a"}); err != nil {
+			t.Fatal(err)
+		}
+		var v sample
+		if err := ReadJSON(path, &v, 3); err != nil || v.Schema != schema {
+			t.Fatalf("schema %d: read %+v, %v", schema, v, err)
+		}
+	}
+}
+
+// A newer file may carry fields this reader has never heard of, and those MUST NOT turn the refusal into one that
+// calls the file damaged.
+func TestReadJSONRefusesANewerSchemaWithAnUpgrade(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.json")
+	content := `{"schema": 3, "name": "a", "future": true}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var v sample
+	r, ok := refusal.As(ReadJSON(path, &v, 2))
+	if !ok || r.Code != refusal.Record || !strings.Contains(r.Message, path) ||
+		!strings.Contains(r.Message, "schema is 3, this loupe reads up to 2") || r.Fix != "upgrade loupe" {
+		t.Fatalf("got %+v", r)
+	}
+	if after, err := os.ReadFile(path); err != nil || string(after) != content {
+		t.Fatalf("file was changed: %q, %v", after, err)
 	}
 }
 

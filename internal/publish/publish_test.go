@@ -527,9 +527,9 @@ func TestRunRefusesRecordAppearedDuringConfirmation(t *testing.T) {
 			fx.opts.Confirm = fx.confirmWith(true, func() {
 				var err error
 				if name == "receipt.json" {
-					err = SaveReceipt(fx.dir, Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env})
+					err = SaveReceipt(fx.dir, &Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env})
 				} else {
-					err = SaveAttempt(fx.dir, Attempt{Schema: RecordSchema, State: StateInFlight, StartedAt: fixtureNow, UpdatedAt: fixtureNow, Envelope: env})
+					err = SaveAttempt(fx.dir, &Attempt{Schema: RecordSchema, State: StateInFlight, StartedAt: fixtureNow, UpdatedAt: fixtureNow, Envelope: env})
 				}
 				if err != nil {
 					t.Error(err)
@@ -836,7 +836,7 @@ func (fx *fixture) saveMarkedAttempt(state string) Attempt {
 		fx.t.Fatal(err)
 	}
 	a := Attempt{Schema: RecordSchema, State: state, StartedAt: fixtureNow, UpdatedAt: fixtureNow, Envelope: env}
-	if err := SaveAttempt(fx.dir, a); err != nil {
+	if err := SaveAttempt(fx.dir, &a); err != nil {
 		fx.t.Fatal(err)
 	}
 	return a
@@ -891,7 +891,7 @@ func TestRunRetryUnknownRefusesWhenRecordsChangeDuringConfirmation(t *testing.T)
 	changes := map[string]func(fx *fixture){
 		"receipt appeared": func(fx *fixture) {
 			env, _ := Build(buildInput(fixtureTarget(), readyDraft(), "comment", "all", false))
-			if err := SaveReceipt(fx.dir, Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env}); err != nil {
+			if err := SaveReceipt(fx.dir, &Receipt{Schema: RecordSchema, ReviewID: 1, ReviewURL: prLink + "#pullrequestreview-1", Action: "comment", PostedAt: fixtureNow, Envelope: env}); err != nil {
 				fx.t.Error(err)
 			}
 		},
@@ -899,7 +899,7 @@ func TestRunRetryUnknownRefusesWhenRecordsChangeDuringConfirmation(t *testing.T)
 		"attempt in flight": func(fx *fixture) {
 			a, _, _ := LoadAttempt(fx.dir)
 			a.State = StateInFlight
-			if err := SaveAttempt(fx.dir, a); err != nil {
+			if err := SaveAttempt(fx.dir, &a); err != nil {
 				fx.t.Error(err)
 			}
 		},

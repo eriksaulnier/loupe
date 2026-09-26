@@ -108,6 +108,8 @@ func TestReadPreviousStatesWhyThereIsNone(t *testing.T) {
 		{"no record, older one ignored", []github.Review{older, review(5, "ci[bot]", strings.Replace(body, record+"\n", "", 1))}, false,
 			"https://github.com/acme/widgets/pull/42#pullrequestreview-5 cannot be read back: it carries no findings record"},
 		{"edited", []github.Review{review(5, "ci[bot]", strings.Replace(body, "T</summary>", "Tx</summary>", 1))}, false, "changed on GitHub"},
+		{"newer record", []github.Review{review(5, "ci[bot]", strings.Replace(body, "loupe-findings v=1 ", "loupe-findings v=9 ", 1))}, false,
+			"its findings record is v=9, which this loupe does not read"},
 		{"list fails", nil, true, "could not list the reviews on https://github.com/acme/widgets/pull/42"},
 	}
 	for _, c := range cases {

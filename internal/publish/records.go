@@ -14,7 +14,11 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
+// Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
 const RecordSchema = 1
+
+// recordSchema is what this loupe reads and writes, as a var so a test can play the next loupe.
+var recordSchema = RecordSchema
 
 const (
 	StateInFlight = "in-flight"
@@ -107,11 +111,8 @@ type Receipt struct {
 // LoadAttempt reports found false only when attempt.json does not exist; a damaged file is a record refusal.
 func LoadAttempt(dir string) (Attempt, bool, error) {
 	var a Attempt
-	found, err := loadRecord(filepath.Join(dir, attemptFile), &a, func() string {
-		switch {
-		case a.Schema != RecordSchema:
-			return fmt.Sprintf("schema is %d, expected %d", a.Schema, RecordSchema)
-		case a.State != StateInFlight && a.State != StateUnknown:
+	found, err := loadRecord(filepath.Join(dir, attemptFile), &a, recordSchema, func() string {
+		if a.State != StateInFlight && a.State != StateUnknown {
 			return fmt.Sprintf("state is %q, expected %q or %q", a.State, StateInFlight, StateUnknown)
 		}
 		return ""
@@ -119,7 +120,8 @@ func LoadAttempt(dir string) (Attempt, bool, error) {
 	return a, found, err
 }
 
-func SaveAttempt(dir string, a Attempt) error {
+func SaveAttempt(dir string, a *Attempt) error {
+	a.Schema = recordSchema
 	return run.WriteJSONAtomic(filepath.Join(dir, attemptFile), a)
 }
 
@@ -134,24 +136,20 @@ func DeleteAttempt(dir string) error {
 // LoadReceipt reports found false only when receipt.json does not exist; a damaged file is a record refusal.
 func LoadReceipt(dir string) (Receipt, bool, error) {
 	var r Receipt
-	found, err := loadRecord(filepath.Join(dir, receiptFile), &r, func() string {
-		if r.Schema != RecordSchema {
-			return fmt.Sprintf("schema is %d, expected %d", r.Schema, RecordSchema)
-		}
-		return ""
-	})
+	found, err := loadRecord(filepath.Join(dir, receiptFile), &r, recordSchema, func() string { return "" })
 	return r, found, err
 }
 
-func SaveReceipt(dir string, r Receipt) error {
+func SaveReceipt(dir string, r *Receipt) error {
+	r.Schema = recordSchema
 	return run.WriteJSONAtomic(filepath.Join(dir, receiptFile), r)
 }
 
-func loadRecord(path string, v any, problem func() string) (bool, error) {
+func loadRecord(path string, v any, schema int, problem func() string) (bool, error) {
 	if _, err := os.Lstat(path); errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
-	if err := run.ReadJSON(path, v); err != nil {
+	if err := run.ReadJSON(path, v, schema); err != nil {
 		return true, err
 	}
 	if p := problem(); p != "" {

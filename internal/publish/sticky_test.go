@@ -341,7 +341,7 @@ func TestRunStickyOlderRoundStillReconcilesAfterAnEditOverIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	// As if the edit's response was lost: the review is on GitHub and only an unknown attempt is on disk.
-	if err := SaveAttempt(fx.dir, Attempt{Schema: RecordSchema, State: StateUnknown, StartedAt: fixtureNow, UpdatedAt: fixtureNow, Envelope: sent.Envelope}); err != nil {
+	if err := SaveAttempt(fx.dir, &Attempt{Schema: RecordSchema, State: StateUnknown, StartedAt: fixtureNow, UpdatedAt: fixtureNow, Envelope: sent.Envelope}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(fx.dir, "receipt.json")); err != nil {

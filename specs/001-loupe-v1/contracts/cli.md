@@ -38,7 +38,7 @@ Refusal or error (exit 1 or 2):
 | :--- | :--- | :--- |
 | `usage` | Bad flags or arguments, or an invalid `LOUPE_LOCK_TIMEOUT_MS` | the correct invocation, or the valid range |
 | `no-run` | No run resolved | `loupe capture <url>` or `--run <ref>` (for `review` and `publish`, the `<ref>` argument) |
-| `record` | A run file is missing or unreadable, or `pr.diff` no longer matches `target.diffSha256` | the file and an inspection command; never repaired |
+| `record` | A run file is missing, unreadable or of a newer schema, or `pr.diff` no longer matches `target.diffSha256` | the file and an inspection command; never repaired. For a newer schema, both schema numbers and `upgrade loupe`. Amended on 2026-09-26 by `docs/versioning.md`: a file from a newer loupe had read as damaged |
 | `origin` | Clone origin is not the pull request's repository | `loupe capture <url> --repo <path>` |
 | `pr` | Pull request not found, closed, or not on github.com | the capture syntax for an open pull request |
 | `same-head` | The newest round is unpublished and at the pull request's current head | `--run <ref>` for that round |

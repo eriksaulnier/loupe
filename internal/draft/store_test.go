@@ -2,6 +2,7 @@ package draft
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -217,7 +218,7 @@ func TestLoadRefusesIncompleteDraft(t *testing.T) {
 		"empty object":   `{}`,
 		"null decisions": `{"schema": 1, "findings": [], "decisions": null, "notes": [], "replies": []}`,
 		"missing notes":  `{"schema": 1, "findings": [], "decisions": {}, "replies": []}`,
-		"wrong schema":   `{"schema": 2, "findings": [], "decisions": {}, "notes": [], "replies": []}`,
+		"schema 0":       `{"schema": 0, "findings": [], "decisions": {}, "notes": [], "replies": []}`,
 	}
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -322,4 +323,37 @@ func loadStored(t *testing.T, dir string) *Draft {
 		t.Fatal(err)
 	}
 	return d
+}
+
+// A loupe that reads an older file writes its own schema on save, so an older number never labels the newer fields.
+func TestSavesStampTheCurrentSchema(t *testing.T) {
+	dir := newRunWithFinding(t)
+	if _, err := sendBack(dir, "Why?"); err != nil {
+		t.Fatal(err)
+	}
+	defer func(d, h int) { schemaVersion, handBackSchema = d, h }(schemaVersion, handBackSchema)
+	schemaVersion, handBackSchema = 2, 2
+	if _, err := sendBack(dir, "And this?"); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"draft.json", "handback.json"} {
+		if got := storedSchema(t, filepath.Join(dir, file)); got != 2 {
+			t.Errorf("%s saved with schema %d, want 2", file, got)
+		}
+	}
+}
+
+func storedSchema(t *testing.T, path string) int {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var head struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		t.Fatal(err)
+	}
+	return head.Schema
 }
