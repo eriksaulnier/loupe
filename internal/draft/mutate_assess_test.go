@@ -87,3 +87,18 @@ func TestAssessAgainstAnotherRoundDropsTheEarlierAssessments(t *testing.T) {
 		t.Fatalf("draft %+v, want only the new assessment against round 2", d)
 	}
 }
+
+func TestEmptyAssessOnlyDropsFromAMovedRound(t *testing.T) {
+	d := &Draft{}
+	_, err := Assess(d, roundOne, earlierPair(), []AssessInput{})
+	_ = wantRefusal(t, err, refusal.Input)
+	if _, err := Assess(d, roundOne, earlierPair(), []AssessInput{{Ref: "e-1", Status: StatusOpen}}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = Assess(d, roundOne, earlierPair(), []AssessInput{})
+	_ = wantRefusal(t, err, refusal.Input)
+	dropped, err := Assess(d, AssessedAgainst{From: "receipt", Round: 2}, nil, []AssessInput{})
+	if err != nil || dropped != 1 || d.Assessments != nil || d.AssessedAgainst != nil {
+		t.Fatalf("dropped %d, %v, draft %+v, want 1 dropped and nothing recorded", dropped, err, d)
+	}
+}

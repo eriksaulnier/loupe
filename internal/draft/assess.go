@@ -24,6 +24,15 @@ func Assess(d *Draft, against AssessedAgainst, earlier []EarlierFinding, inputs 
 	if d.AssessedAgainst != nil && *d.AssessedAgainst != against {
 		dropped, next = len(next), nil
 	}
+	// An empty batch is the only way out when the new previous round's earlier list is empty and no ref is left to
+	// assess, so it is accepted only when it drops something.
+	if len(inputs) == 0 {
+		if dropped == 0 {
+			return 0, refusal.New(refusal.Input, `input has no "assessments"`, "see loupe assess --help for the input shape")
+		}
+		d.Assessments, d.AssessedAgainst = nil, nil
+		return dropped, nil
+	}
 	for _, in := range inputs {
 		if in.Status != StatusOpen && in.Status != StatusAddressed {
 			return 0, refusal.New(refusal.Input, fmt.Sprintf("status %q for %s is not open or addressed", in.Status, in.Ref),

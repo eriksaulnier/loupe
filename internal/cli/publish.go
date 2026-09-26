@@ -261,9 +261,12 @@ func refuseMovedPrevious(deps Deps, d *draft.Draft, ref run.Ref) error {
 	if p.against() == *d.AssessedAgainst {
 		return nil
 	}
+	fix := fmt.Sprintf("run loupe show --previous --run %s --json, then loupe assess --run %s again", ref, ref)
+	if len(p.earlier) == 0 {
+		fix = fmt.Sprintf(`the new previous round has no earlier findings: run loupe assess --run %s --from - with {"assessments": []} to drop the old assessments`, ref)
+	}
 	return refusal.New(refusal.PreviousMoved,
-		fmt.Sprintf("the previous round is now round %d (%s), not the round loupe assess read", p.round, p.reviewURL),
-		fmt.Sprintf("run loupe show --previous --run %s --json, then loupe assess --run %s again", ref, ref))
+		fmt.Sprintf("the previous round is now round %d (%s), not the round loupe assess read", p.round, p.reviewURL), fix)
 }
 
 // warnUnassessed runs after the review is sent, so nothing here returns an error, not even a failed stderr write:

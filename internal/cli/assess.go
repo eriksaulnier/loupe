@@ -21,7 +21,9 @@ to the review.
 
 The draft records which previous round the refs were read from. If a lower round publishes
 after that, it becomes the previous round: publish refuses with previous-moved, and the next
-assess drops the assessments read from the old round and counts them as dropped.
+assess drops the assessments read from the old round and counts them as dropped. When the
+new earlier list is empty, {"assessments": []} through --from drops them and records nothing;
+an empty batch that would drop nothing refuses with input.
 
 Input (--from <file>, or --from - for stdin):
 
@@ -94,7 +96,8 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 		if err := DecodeInput("assess", from, deps.Stdin, &in); err != nil {
 			return err
 		}
-		if len(in.Assessments) == 0 {
+		// Only an explicit [] reaches draft.Assess, which accepts it when it drops assessments from a moved round.
+		if in.Assessments == nil {
 			return refusal.New(refusal.Input, `input has no "assessments"`, "see loupe assess --help for the input shape")
 		}
 		inputs = in.Assessments
@@ -128,6 +131,9 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 	}
 	message := fmt.Sprintf("Assessed %s on %s: %d open, %d addressed, %d of %d unassessed",
 		ids(s, named...), s.Accent.Render(ref.String()), open, addressed, unassessed, len(p.earlier))
+	if len(inputs) == 0 {
+		message = fmt.Sprintf("Assessed nothing on %s: %d of %d unassessed", s.Accent.Render(ref.String()), unassessed, len(p.earlier))
+	}
 	if dropped > 0 {
 		message += fmt.Sprintf("; dropped %d %s read from an earlier previous round", dropped, plural(dropped, "assessment"))
 	}

@@ -388,3 +388,41 @@ func TestPublishRefusesAssessmentsFromAMovedPreviousRound(t *testing.T) {
 		t.Fatalf("round 4 earlier %v, want round 2's Cache race carried, then round 3's finding", got)
 	}
 }
+
+// A summary-only round 2 leaves an empty earlier list, so no ref can be assessed again. An explicit empty batch is how
+// round 3 clears what it read from round 1.
+func TestEmptyAssessClearsAssessmentsFromAMovedPreviousRound(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.ciRound(false, bareExceptAndSleep, nil)
+
+	head2 := h.pushHead("src/round2.go")
+	round2 := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	head3 := h.pushHead("src/round3.go")
+	round3 := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	qualifier := owner + ":" + repo + ":"
+	h.GH.SetComparison(owner, repo, qualifier+head2, qualifier+head3, github.Comparison{Status: "ahead", AheadBy: 1,
+		Commits: []github.Commit{{SHA: head3, Message: "round 3"}}, Files: []github.ComparedFile{{Filename: "src/round3.go"}}})
+	empty := h.WriteFile("empty.json", `{"assessments": []}`)
+	h.mustRefuse("input", "assess", "--run", round3, "--from", empty)
+	h.mustOK("assess", "e-1", "e-2", "--status", "open", "--run", round3)
+
+	h.mustOK("summary", "--run", round2, "--body", "Nothing new.", "--expect-findings", "0")
+	h.mustOK("publish", round2, "--unattended", "--sticky")
+
+	h.mustOK("summary", "--run", round3, "--body", "Nothing new.", "--expect-findings", "0")
+	e := h.mustRefuse("previous-moved", "publish", round3, "--unattended", "--sticky")
+	if fix := fmt.Sprint(e["fix"]); !strings.Contains(fix, `{"assessments": []}`) {
+		t.Fatalf("fix %q does not name the empty batch", fix)
+	}
+	res := h.mustOK("assess", "--run", round3, "--from", empty)
+	if fmt.Sprintf("%v %v %v", res["dropped"], res["earlier"], res["open"]) != "2 0 0" {
+		t.Fatalf("empty assess result %v, want 2 dropped of an empty list", res)
+	}
+	if shown := h.mustOK("show", "--run", round3); shown["assessments"] != nil || shown["assessedAgainst"] != nil {
+		t.Fatalf("draft after the empty assess %v, want no assessments", shown)
+	}
+	h.mustRefuse("input", "assess", "--run", round3, "--from", empty)
+	h.mustOK("publish", round3, "--unattended", "--sticky")
+}

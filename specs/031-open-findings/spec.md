@@ -96,7 +96,7 @@ A caller that never runs `assess` publishes the same bytes as before, and reads 
 - **FR-010**: A publication MUST carry the draft's assessments in its envelope, and so in its receipt, and in its findings record.
 - **FR-011**: A record with assessments MUST be version 2, whose data is an object holding `findings` and `assessments`. A record with none MUST be version 1, unchanged.
 - **FR-012**: The publish confirmation's stand-in for the record MUST also name how many earlier findings it marks open and how many addressed.
-- **FR-013**: The draft MUST record the previous round `assess` read, as `assessedAgainst: {from, round, reviewUrl}`, omitted until `assess` runs. `publish` MUST re-resolve the previous round before it sends, and MUST refuse with `previous-moved` when it differs, because a lower round that published after `assess` ran has become the previous round and the refs name entries of the old list. `assess` against a different previous round MUST drop the draft's earlier assessments before recording, and MUST report how many as `dropped`.
+- **FR-013**: The draft MUST record the previous round `assess` read, as `assessedAgainst: {from, round, reviewUrl}`, omitted until `assess` runs. `publish` MUST re-resolve the previous round before it sends, and MUST refuse with `previous-moved` when it differs, because a lower round that published after `assess` ran has become the previous round and the refs name entries of the old list. `assess` against a different previous round MUST drop the draft's earlier assessments before recording, and MUST report how many as `dropped`. Because the new `earlier` list may be empty, `assess --from` with `{"assessments": []}` MUST then drop them and record nothing.
 
 **Reading**
 
