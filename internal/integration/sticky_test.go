@@ -108,3 +108,53 @@ func TestPublishStickyNoteShowsOnlyOnTheNewestRound(t *testing.T) {
 		t.Fatalf("round 1 lost its summary:\n%s", body)
 	}
 }
+
+// Three pipeline rounds with a note leave one review whose every round opens on its anchor, the newest at line 1. A
+// person's edit to a collapsed round between rounds is carried and named on stderr by the next round only.
+func TestPublishStickyAnchorsEveryRound(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	client := h.GH.Client(t)
+	var body string
+	for round := 1; round <= 4; round++ {
+		h.Home = filepath.Join(t.TempDir(), "home")
+		h.IsTerminal = true
+		h.capture("--source", "loupe-ci@1.0.0")
+		h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+		h.mustOK("summary", "--run", runRef, "--body", "Look "+string(rune('0'+round))+".", "--expect-findings", "3")
+		h.IsTerminal = false
+		stdout, stderr, exit := h.Run("publish", runRef, "--unattended", "--sticky", "--json", "--note", "Push again for another round.")
+		if exit != 0 {
+			t.Fatalf("round %d: exit %d\n%s\n%s", round, exit, stdout, stderr)
+		}
+		if named := strings.Contains(stderr, "Round 1 was edited on GitHub"); named != (round == 3) {
+			t.Fatalf("round %d: stderr %q", round, stderr)
+		}
+		reviews, err := client.ListReviews(context.Background(), owner, repo, number)
+		if err != nil || len(reviews) != 1 {
+			t.Fatalf("round %d: reviews %d err %v, want one", round, len(reviews), err)
+		}
+		body = reviews[0].Body
+		if round == 2 {
+			edited := strings.Replace(body, "> Look 1.", "> Look 1, edited on GitHub.", 1)
+			if edited == body {
+				t.Fatalf("round 1 is not quoted:\n%s", body)
+			}
+			h.GH.EditReview(owner, repo, number, reviews[0].ID, edited)
+		}
+	}
+	if !strings.HasPrefix(body, "<!-- loupe-round v=1 n=4 commit=") || !strings.Contains(body, " note=1 sha256=") {
+		t.Fatalf("the body does not open on round 4's anchor:\n%s", body)
+	}
+	for _, n := range []string{"3", "2", "1"} {
+		if strings.Count(body, "\n<!-- loupe-round v=1 n="+n+" commit=") != 1 {
+			t.Fatalf("round %s is not anchored once:\n%s", n, body)
+		}
+	}
+	if strings.Count(body, "Push again for another round.") != 1 || !strings.Contains(body, "> Look 1, edited on GitHub.") ||
+		strings.Contains(body, "loupe-note") {
+		t.Fatalf("note or edit wrong:\n%s", body)
+	}
+}
