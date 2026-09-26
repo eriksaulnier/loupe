@@ -24,7 +24,7 @@ will appear in the published review's hidden marker.
 Result (--json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 5,
-   "schema": 1,
+   "schema": 2,
    "summary": "Markdown",
    "findings": [{"id": "f-001", "rev": 1, "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
@@ -34,6 +34,7 @@ Result (--json):
    "notes": [{"id": "n-001", "findingId": "f-001", "body": "...", "at": "...", "status": "open"}],
    "replies": [{"id": "r-001", "noteId": "n-001", "body": "...", "by": "agent", "at": "..."}],
    "assessments": [{"ref": "e-1", "status": "open", "finding": {"...": "as in show --previous's earlier"}}],
+   "assessedAgainst": {"from": "github", "round": 1, "reviewUrl": "...", "publicationId": "..."},
    "target": {"owner": "owner", "repo": "repo", "number": 123, "round": 1, "headSha": "...", "...": "as in capture"},
    "dispositions": {"f-001": "accepted"},
    "readiness": {"ready": true, "accepted": ["f-001"], "pending": [], "excluded": [],
@@ -163,9 +164,12 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 			"readiness":    readiness,
 			"digest":       draft.Digest(d),
 		}
-		// The key appears only once something was assessed, as it does in the draft on disk.
+		// The keys appear only once something was assessed, as they do in the draft on disk.
 		if len(d.Assessments) > 0 {
 			payload["assessments"] = d.Assessments
+		}
+		if d.AssessedAgainst != nil {
+			payload["assessedAgainst"] = d.AssessedAgainst
 		}
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}

@@ -167,6 +167,15 @@ func TestShowCarriesTheDraftsAssessments(t *testing.T) {
 	if row["ref"] != "e-1" || row["status"] != "open" || finding["title"] == nil {
 		t.Fatalf("show after assess: assessment %v, want e-1 open with its finding", row)
 	}
+	previous := h.mustOK("show", "--previous", "--run", run)
+	against, _ := shown["assessedAgainst"].(map[string]any)
+	if against["from"] != previous["from"] || fmt.Sprint(against["round"]) != fmt.Sprint(previous["round"]) ||
+		against["reviewUrl"] != previous["reviewUrl"] || against["publicationId"] == nil {
+		t.Fatalf("show after assess: assessedAgainst %v, want the round show --previous names", shown["assessedAgainst"])
+	}
+	if unassessed := h.mustOK("show", "--run", roundRef(1)); unassessed["assessedAgainst"] != nil {
+		t.Fatalf("show before any assess carries assessedAgainst: %v", unassessed["assessedAgainst"])
+	}
 }
 
 // An attended round publishes its assessments under the human's name, so the confirmation names them, the receipt keeps
