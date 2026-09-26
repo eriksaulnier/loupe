@@ -589,14 +589,24 @@ func TestConfirmPlainShowsTheRecordAsANote(t *testing.T) {
 
 // A round edited on GitHub is carried as found, so the human is told before the body they are about to overwrite.
 func TestConfirmPlainNamesAnEditedRound(t *testing.T) {
-	preview := confirmPreview()
-	preview.Edits, preview.Edited = editedURL, []int{2}
+	notice := publish.EditedNotice([]int{1})
 	var out bytes.Buffer
-	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(preview); err != nil {
+	if _, err := ConfirmPlain(strings.NewReader("\nn\n"), &out)(editedPreview()); err != nil {
 		t.Fatal(err)
 	}
 	text := out.String()
-	if i := strings.Index(text, publish.EditedNotice([]int{2})); i < 0 || i > strings.Index(text, "Review body:") {
+	if i := strings.Index(text, notice); i < 0 || i > strings.Index(text, "Review body:") {
 		t.Fatalf("the edited round is not named before the body:\n%s", text)
+	}
+	// The body is printed again for the message, and the notice follows the body y sends.
+	for message, named := range map[string]bool{"Short.": true, "A message long enough to drop a round.": false} {
+		out.Reset()
+		if _, err := ConfirmPlain(strings.NewReader(message+"\nn\n"), &out)(editedPreview()); err != nil {
+			t.Fatal(err)
+		}
+		_, after, _ := strings.Cut(out.String(), "Your message")
+		if strings.Contains(after, notice) != named {
+			t.Errorf("%q: notice after the message %v, want %v:\n%s", message, !named, named, after)
+		}
 	}
 }

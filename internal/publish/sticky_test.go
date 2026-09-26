@@ -478,7 +478,7 @@ func TestRunStickyAttendedNamesAnEditedRound(t *testing.T) {
 	if _, err := second.run(); err != nil {
 		t.Fatal(err)
 	}
-	if edited := second.previews[0].Edited; !slices.Equal(edited, []int{1}) {
+	if edited := second.previews[0].EditedIn(second.previews[0].Body); !slices.Equal(edited, []int{1}) {
 		t.Fatalf("preview names %v as edited, want round 1", edited)
 	}
 	if sent := sentBody(t, second.gh); !strings.Contains(sent, "> reviewed, typo fixed, [`1111111`]") {
@@ -488,7 +488,7 @@ func TestRunStickyAttendedNamesAnEditedRound(t *testing.T) {
 	if _, err := third.run(); err != nil {
 		t.Fatal(err)
 	}
-	if edited := third.previews[0].Edited; len(edited) != 0 {
+	if edited := third.previews[0].EditedIn(third.previews[0].Body); len(edited) != 0 {
 		t.Fatalf("round 1 is named as edited a second time: %v", edited)
 	}
 }

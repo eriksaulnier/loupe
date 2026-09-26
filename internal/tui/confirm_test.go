@@ -1059,13 +1059,44 @@ func TestConfirmTypesIntoAStickyRound(t *testing.T) {
 	}
 }
 
+// editedPreview is a sticky confirmation whose round 1 was edited on GitHub. A message over ten characters drops that
+// round for length, as the limit drops the oldest round first.
+func editedPreview() publish.Preview {
+	p := confirmPreview()
+	p.Edits = "https://github.com/acme/widgets/pull/42#pullrequestreview-77"
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		rest := "<!-- round 1 anchor -->"
+		if len(message) > 10 {
+			rest = "The oldest round was dropped"
+		}
+		head := previewChips
+		if message != "" {
+			head += "\n\n" + message
+		}
+		return publish.Envelope{Body: head + "\n\n---\n\n" + rest}, p.EnvelopeJSON, nil
+	}
+	p.EditedIn = func(body string) []int {
+		if strings.Contains(body, "<!-- round 1 anchor -->") {
+			return []int{1}
+		}
+		return nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	return p
+}
+
+// The notice names the rounds the body y sends carries, so a message long enough to drop the edited round unnames it.
 func TestConfirmNamesAnEditedRound(t *testing.T) {
-	preview := stickyPreview()
-	preview.Edits, preview.Edited = "https://github.com/acme/widgets/pull/42#pullrequestreview-77", []int{3, 1}
-	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
+	m := NewConfirmModel(editedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
 	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	notice := publish.EditedNotice([]int{1})
 	view := ansi.Strip(m.confirm.content(m.shell))
-	if i := strings.Index(view, publish.EditedNotice([]int{3, 1})); i < 0 || i > strings.Index(view, "review body") {
-		t.Fatalf("the edited rounds are not named before the body:\n%s", view)
+	if i := strings.Index(view, notice); i < 0 || i > strings.Index(view, "review body") {
+		t.Fatalf("the edited round is not named before the body:\n%s", view)
+	}
+	typeInto(m, "A message long enough to drop a round.")
+	if view := ansi.Strip(m.confirm.content(m.shell)); strings.Contains(view, notice) || !strings.Contains(view, "The oldest round was dropped") {
+		t.Fatalf("the notice names a round the body no longer carries:\n%s", view)
 	}
 }

@@ -92,3 +92,10 @@ func editedRounds(body string, earlier []render.Round) []int {
 	}
 	return out
 }
+
+func earlierOf(s *StickyBuild) []render.Round {
+	if s == nil {
+		return nil
+	}
+	return s.Earlier
+}

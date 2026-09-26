@@ -421,6 +421,14 @@ func editLine(url string) string {
 	return render.ForDisplay("This replaces the whole body of " + url + " with the body below, earlier rounds included. An edit sends no notification.")
 }
 
+// editedIn is what the preview says of the body on screen, which is the body y sends.
+func editedIn(preview publish.Preview, body string) []int {
+	if preview.EditedIn == nil {
+		return nil
+	}
+	return preview.EditedIn(body)
+}
+
 // headMovedLines escapes every line for display because commit text is untrusted.
 func headMovedLines(moved *publish.HeadMoved) []string {
 	lines := []string{
@@ -472,8 +480,8 @@ func (c *confirmation) content(m *Model) string {
 	if c.preview.Edits != "" {
 		parts = append(parts, m.styles.Rule(m.width, "edits a published review", ""),
 			m.styles.Warn.Render(m.styles.Wrap(editLine(c.preview.Edits), width, " ")), "")
-		if len(c.preview.Edited) > 0 {
-			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(render.ForDisplay(publish.EditedNotice(c.preview.Edited)), width, " ")), "")
+		if edited := editedIn(c.preview, c.shown.Body); len(edited) > 0 {
+			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(render.ForDisplay(publish.EditedNotice(edited)), width, " ")), "")
 		}
 	}
 	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
