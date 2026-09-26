@@ -16,6 +16,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -48,6 +49,10 @@ type Options struct {
 	// HoldSignals is called just before attempt.json is written and the func it returns once the outcome is recorded.
 	// Nil holds the signals for real.
 	HoldSignals func(signals []os.Signal) (release func())
+	// CheckDraft, when set, may refuse the loaded draft. It runs after the terminal rule and before the gates, then
+	// again under the lock just before sending, since what it checks can change while the human confirms. It never
+	// runs for a replayed publication.
+	CheckDraft func(*draft.Draft) error
 }
 
 // Confirmation is what the human answered at the publish confirmation.
@@ -131,6 +136,11 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	if err != nil {
 		return Receipt{}, false, err
 	}
+	if opts.CheckDraft != nil {
+		if err := opts.CheckDraft(d); err != nil {
+			return Receipt{}, false, err
+		}
+	}
 	moved, err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d, Unattended: opts.Unattended})
 	if err != nil {
 		return Receipt{}, false, err
@@ -158,6 +168,16 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 		round = unattendedRound(reviews)
 	} else if round, err = publishedRound(root, opts.Target); err != nil {
 		return Receipt{}, false, err
+	}
+	if a := d.AssessedAgainst; a != nil && a.PublicationID != "" {
+		if !opts.Unattended && !opts.Sticky {
+			if reviews, err = listReviews(ctx, client, opts.Target, "check the previous round"); err != nil {
+				return Receipt{}, false, err
+			}
+		}
+		if err := refuseMovedReview(reviews, viewer, opts.Target, *a); err != nil {
+			return Receipt{}, false, err
+		}
 	}
 	var sticky *StickyBuild
 	if opts.Sticky {
@@ -228,6 +248,31 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 		}
 	}
 	return send(ctx, opts, client, env, preview, retryID)
+}
+
+// refuseMovedReview catches a round published on the pull request after assess read the previous round, which the run
+// cannot see when it came from another data root. The run's previous round is fixed at capture, so the way out is a
+// new capture, from a data root holding no receipt of the older round.
+func refuseMovedReview(reviews []github.Review, viewer string, target run.Target, against draft.AssessedAgainst) error {
+	review, ok := newestOwn(reviews, viewer, target.Source)
+	if ok && render.PublicationID(review.Body) == against.PublicationID {
+		return nil
+	}
+	fix := fmt.Sprintf("this run's previous round was read at capture: run %s from an empty data root, then assess again", RecaptureCommand(target))
+	if !ok {
+		return refusal.New(refusal.PreviousMoved, fmt.Sprintf("no loupe review from %s is on %s, but loupe assess read round %d (%s)",
+			publisher(viewer, target.Source), target.URL, against.Round, against.ReviewURL), fix)
+	}
+	return refusal.New(refusal.PreviousMoved, fmt.Sprintf("the previous round is now round %d (%s), not the round loupe assess read",
+		render.MetaRound(review.Body), review.HTMLURL), fix)
+}
+
+// RecaptureCommand captures the run's pull request again with the same source, which reads the previous round afresh.
+func RecaptureCommand(target run.Target) string {
+	if target.Source == "" {
+		return "loupe capture " + target.URL
+	}
+	return "loupe capture " + target.URL + " --source " + target.Source
 }
 
 // firstCheck reconciles an existing attempt before any gate, so a review that did reach GitHub gets its receipt even
@@ -366,6 +411,21 @@ func send(ctx context.Context, opts Options, client github.Client, env Envelope,
 		return Receipt{}, false, refusal.New(refusal.Changed,
 			fmt.Sprintf("the draft changed while the review was being confirmed (confirmed version %d, now %d); nothing was sent", preview.Version, d.Version),
 			"loupe review, then loupe publish again")
+	}
+	if opts.CheckDraft != nil {
+		if err := opts.CheckDraft(d); err != nil {
+			return Receipt{}, false, err
+		}
+	}
+	// Another data root can publish the next round while the human confirms, and only GitHub shows it.
+	if a := d.AssessedAgainst; a != nil && a.PublicationID != "" {
+		reviews, err := listReviews(ctx, client, opts.Target, "check the previous round")
+		if err != nil {
+			return Receipt{}, false, err
+		}
+		if err := refuseMovedReview(reviews, env.Viewer, opts.Target, *a); err != nil {
+			return Receipt{}, false, err
+		}
 	}
 
 	hold := opts.HoldSignals

@@ -16,6 +16,7 @@ var contractResultKeys = map[string][]string{
 	"add":      {"findings", "version"},
 	"edit":     {"finding", "version", "clearedDecision"},
 	"summary":  {"version", "includedCount"},
+	"assess":   {"version", "earlier", "open", "addressed", "unassessed", "dropped"},
 	"handoff":  {"host", "paneId", "direction"},
 	"wait":     {"reason", "awaiting", "readiness", "notes", "findings"},
 	"show":     {"summary", "findings", "decisions", "notes", "replies", "target", "dispositions", "readiness", "digest"},
@@ -32,6 +33,7 @@ var contractInputKeys = map[string][]string{
 	"edit":    {`"title"`, `"location"`, `null`, `references`},
 	"summary": {`{"summary": `},
 	"reply":   {`{"body": `},
+	"assess":  {`{"assessments": `, `"ref"`, `"status"`},
 }
 
 func TestEveryCommandHelpWorksWithoutState(t *testing.T) {

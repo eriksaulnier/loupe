@@ -161,7 +161,7 @@ func TestPluginSkill(t *testing.T) {
 		"loupe feedback --run <ref> --json", "loupe edit <finding-id> --from <file> --run <ref> --json",
 		"loupe edit <finding-id> --exclude", "loupe reply <note-id>", "`\"reason\": \"published\"`",
 		"change a finding's `label` or `blocking` in review", "pass its `version` as `--expect-version`",
-		"Leave both out of your edit file unless a note asks", "hand off again from section 5",
+		"Leave both out of your edit file unless a note asks", "hand off again from section 6",
 		"`loupe handoff` refuses `review-open`, so no second pane opens",
 	} {
 		if !strings.Contains(body, phrase) {
@@ -176,7 +176,7 @@ func TestPluginSkillProhibitions(t *testing.T) {
 	lines := strings.Split(skillBody(t, "human-review"), "\n")
 	for _, want := range []string{
 		"- You MUST NOT run `loupe publish` or open it for the human, in a pane or by any other route. It is human-only.",
-		"- You MUST NOT run `loupe review` yourself; `loupe handoff` MAY open it for the human, as section 5 describes.",
+		"- You MUST NOT run `loupe review` yourself; `loupe handoff` MAY open it for the human, as section 6 describes.",
 		"- You MUST NOT allocate a pseudo-terminal to reach `loupe review` or `loupe publish`: no `script`, `expect`, `unbuffer`, or `pty` libraries.",
 		"- You MUST NOT send keys or text to, read output from, resize, close, or reuse a pane running `loupe review` or `loupe publish`.",
 		"- You MUST NOT pipe or script confirmation into any loupe command.",
@@ -184,7 +184,7 @@ func TestPluginSkillProhibitions(t *testing.T) {
 		"- You MUST NOT run the pull request's code, check out its branch in the user's clone, or modify the user's working tree.",
 		"- When a command refuses, the result has `\"ok\": false` and an `error` object. You SHOULD read `error.code` and follow `error.fix`, which names the corrective command. You MUST NOT work around a refusal by editing loupe's files.",
 		"- In a sandboxed shell, such as Codex's default, `loupe capture` needs the network and write access to the clone's `.git`, every loupe command needs write access to loupe's data directory outside the workspace, and `loupe handoff` needs the terminal host's socket. When a `loupe` command fails because of the sandbox, rerun it with the host's approval to run outside the sandbox, even when loupe returns a refusal. For `loupe handoff` this holds only when `error.details.step` is `probe`, because a later step can already have opened a pane. You MUST NOT work around the sandbox by setting `LOUPE_HOME` or `XDG_DATA_HOME`.",
-		"When `error.code` is `review-open`, the human already has review open for this run: tell them it is there and go on to section 6.",
+		"When `error.code` is `review-open`, the human already has review open for this run: tell them it is there and go on to section 7.",
 		"On any other refusal, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.",
 	} {
 		if !slices.Contains(lines, want) {

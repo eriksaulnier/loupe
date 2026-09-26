@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -206,9 +207,10 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 			}
 			return tui.Confirm(deps.Stdin, ui, deps.Getenv, tui.ConfirmTitle(ref.String(), action, inline, len(preview.Comments)))(preview)
 		},
-		Now:    deps.Now,
-		Getenv: deps.Getenv,
-		Stderr: deps.Stderr,
+		Now:        deps.Now,
+		Getenv:     deps.Getenv,
+		Stderr:     deps.Stderr,
+		CheckDraft: func(d *draft.Draft) error { return refuseMovedPrevious(deps, d, ref) },
 	})
 	if errors.Is(err, publish.ErrDeclined) {
 		es := deps.errStyle()
@@ -223,6 +225,11 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
+	if unattended {
+		// No human confirms an unattended round, so nothing else tells its pipeline that skipping assess drops every
+		// earlier finding from the next round.
+		warnUnassessed(deps, dir, ref)
+	}
 	if jsonMode {
 		payload := map[string]any{"sent": !replayed, "reviewUrl": receipt.ReviewURL, "reviewId": receipt.ReviewID,
 			"unattended": receipt.Envelope.Unattended(), "edited": receipt.Edited}
@@ -235,6 +242,68 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, payload)
 	}
 	return printPublished(deps, ref, receipt, replayed)
+}
+
+// refuseMovedPrevious catches a lower round that published after assess read the previous round. The assessments name
+// refs of the old round's earlier list, and a ref alone cannot tell the lists apart.
+func refuseMovedPrevious(deps Deps, d *draft.Draft, ref run.Ref) error {
+	if d.AssessedAgainst == nil {
+		return nil
+	}
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		return err
+	}
+	p, err := previousRound(root, ref)
+	if err != nil {
+		return err
+	}
+	if p.against() == *d.AssessedAgainst {
+		return nil
+	}
+	fix := fmt.Sprintf("run loupe show --previous --run %s --json, then loupe assess --run %s again", ref, ref)
+	if len(p.earlier) == 0 {
+		fix = fmt.Sprintf(`the new previous round has no earlier findings: run loupe assess --run %s --from - with {"assessments": []} to drop the old assessments`, ref)
+	}
+	return refusal.New(refusal.PreviousMoved,
+		fmt.Sprintf("the previous round is now round %d (%s), not the round loupe assess read", p.round, p.reviewURL), fix)
+}
+
+// warnUnassessed runs after the review is sent, so nothing here returns an error, not even a failed stderr write:
+// exiting 1 would tell the pipeline nothing was published.
+func warnUnassessed(deps Deps, dir string, ref run.Ref) {
+	s := deps.errStyle()
+	warn := func(message string) {
+		_, _ = fmt.Fprintf(deps.Stderr, "%s %s\n", s.Warn.Bold(true).Render("warning:"), message)
+	}
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		return
+	}
+	p, err := previousRound(root, ref)
+	if r, ok := refusal.As(err); ok && r.Code == refusal.NotFound {
+		return
+	}
+	if err != nil {
+		warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		return
+	}
+	d, err := draft.Load(dir)
+	if err != nil {
+		warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+		return
+	}
+	_, _, unassessed := draft.AssessmentCounts(d, p.earlier)
+	if unassessed == 0 {
+		return
+	}
+	verb := "were"
+	if unassessed == 1 {
+		verb = "was"
+	}
+	warn(fmt.Sprintf("%d earlier %s %s not assessed and will not carry forward. Run loupe assess before loupe publish.",
+		unassessed, plural(unassessed, "finding"), verb))
 }
 
 // printPublished reports on stderr and prints the review URL alone on stdout, which is what a script reads.

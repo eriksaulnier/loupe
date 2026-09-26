@@ -39,6 +39,8 @@ type Input struct {
 	Sticky *StickyInput
 	// OmitRecord writes the findings record's omission line in its place, for a body too long to carry it.
 	OmitRecord bool
+	// Assessments rides in the findings record only, so the next round can carry an open finding forward.
+	Assessments []RecordAssessment
 }
 
 type Finding struct {
@@ -162,7 +164,7 @@ func Body(in Input) string {
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
 	body := strings.Join(blocks, "\n\n---\n\n") + fmt.Sprintf("\n\n<!-- loupe digest=%s publication=%s -->\n", in.Digest, in.PublicationID)
-	return withRecord(body, metaLine, in.Findings, in.OmitRecord)
+	return withRecord(body, metaLine, in.Findings, in.Assessments, in.OmitRecord)
 }
 
 // chipsRow is a key to the row dots below: a blocking row leads with ⛔, and every other row with its label group's dot.

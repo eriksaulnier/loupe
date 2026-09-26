@@ -15,7 +15,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const RecordSchema = 1
+const RecordSchema = 2
 
 // recordSchema is what this loupe reads and writes, as a var so a test can play the next loupe.
 var recordSchema = RecordSchema
@@ -46,6 +46,8 @@ type Envelope struct {
 	Body         string            `json:"body"`
 	Comments     []Comment         `json:"comments"`
 	Findings     []EnvelopeFinding `json:"findings"`
+	// Assessments is the draft's, omitted when there are none so a receipt written before them reads the same.
+	Assessments []draft.Assessment `json:"assessments,omitempty"`
 }
 
 // Unattended reports whether the envelope was composed by --unattended, which never records a viewer; an attended

@@ -24,7 +24,7 @@ will appear in the published review's hidden marker.
 Result (--json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 5,
-   "schema": 1,
+   "schema": 2,
    "summary": "Markdown",
    "findings": [{"id": "f-001", "rev": 1, "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
@@ -33,6 +33,8 @@ Result (--json):
    "decisions": {"f-001": {"findingId": "f-001", "decision": "accepted", "findingRev": 1, "at": "..."}},
    "notes": [{"id": "n-001", "findingId": "f-001", "body": "...", "at": "...", "status": "open"}],
    "replies": [{"id": "r-001", "noteId": "n-001", "body": "...", "by": "agent", "at": "..."}],
+   "assessments": [{"ref": "e-1", "status": "open", "finding": {"...": "as in show --previous's earlier"}}],
+   "assessedAgainst": {"from": "github", "round": 1, "reviewUrl": "...", "publicationId": "..."},
    "target": {"owner": "owner", "repo": "repo", "number": 123, "round": 1, "headSha": "...", "...": "as in capture"},
    "dispositions": {"f-001": "accepted"},
    "readiness": {"ready": true, "accepted": ["f-001"], "pending": [], "excluded": [],
@@ -45,13 +47,23 @@ and stored in the run. It reads no network. It refuses with not-found when there
 with the reason capture stored when there is one. from says which source answered; for
 github, round is the review's own round number.
 
+earlier is every finding still open before this round: the ones the previous round marked open
+with loupe assess, then the ones it filed. Each carries filedIn, the round that first filed it,
+and a ref, e-1 onward, that loupe assess takes. A finding the previous round did not mark open
+is not carried.
+
 Result (--previous --json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@2",
    "dir": "/path/to/run",
    "from": "receipt", "round": 1, "reviewUrl": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
    "findings": [{"id": "f-001", "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
-                 "label": "issue", "blocking": true}]}
+                 "label": "issue", "blocking": true}],
+   "earlier": [{"ref": "e-1", "id": "f-001", "title": "...", "body": "...", "location": null,
+                "label": "issue", "blocking": true,
+                "filedIn": {"round": 1, "reviewUrl": "https://...", "commit": "..."}}]}
+  commit is absent when a sticky review's round could not be read back, or when the run was
+  captured by a loupe older than earlier.
 
 --comments shows instead the feedback capture read from everyone else on the pull request:
 submitted reviews, inline review threads and top-level comments. It leaves out loupe's own
@@ -140,7 +152,7 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 	dispositions := draft.Dispositions(d)
 	readiness := draft.ReadinessOf(d)
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{
+		payload := map[string]any{
 			"schema":       d.Schema,
 			"summary":      d.Summary,
 			"findings":     d.Findings,
@@ -151,7 +163,15 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 			"dispositions": dispositions,
 			"readiness":    readiness,
 			"digest":       draft.Digest(d),
-		})
+		}
+		// The keys appear only once something was assessed, as they do in the draft on disk.
+		if len(d.Assessments) > 0 {
+			payload["assessments"] = d.Assessments
+		}
+		if d.AssessedAgainst != nil {
+			payload["assessedAgainst"] = d.AssessedAgainst
+		}
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}
 	return printShow(deps, ref, target, d, dispositions, readiness)
 }
@@ -182,19 +202,25 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 	if err != nil {
 		return err
 	}
-	from, round, reviewURL, findings, err := previousRound(root, ref)
+	p, err := previousRound(root, ref)
 	if err != nil {
 		return err
 	}
+	from, round, reviewURL, findings := p.from, p.round, p.reviewURL, p.findings
 	if findings == nil {
 		findings = []publish.EnvelopeFinding{}
 	}
 	if wantJSON(cmd) {
+		earlier := make([]earlierEntry, 0, len(p.earlier))
+		for i, e := range p.earlier {
+			earlier = append(earlier, earlierEntry{Ref: draft.EarlierRef(i), EarlierFinding: e})
+		}
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{
 			"from":      from,
 			"round":     round,
 			"reviewUrl": reviewURL,
 			"findings":  findings,
+			"earlier":   earlier,
 		})
 	}
 	s, width := deps.outStyle(), deps.width()
@@ -219,44 +245,93 @@ func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
 			title: f.Title, meta: meta, body: f.Body,
 		})
 	}
+	// The previous round's own findings end the earlier list and are shown above, so only what it carried is listed.
+	if carried := p.earlier[:len(p.earlier)-len(findings)]; len(carried) > 0 {
+		fmt.Fprintf(&b, "%s\n", s.Heading("still open from earlier rounds"))
+		for i, f := range carried {
+			meta := []metaCell{dimCell(draft.EarlierRef(i))}
+			if f.FiledIn.Commit != "" {
+				meta = append(meta, dimCell("filed at "+f.FiledIn.Commit[:min(7, len(f.FiledIn.Commit))]))
+			}
+			if f.Label != "" {
+				meta = append(meta, dimCell(labelCell(s, f.Label)))
+			}
+			meta = append(meta, dimCell(locationCell(s, f.Location)))
+			writeFinding(&b, s, width, findingBlock{
+				glyph: s.Glyphs.Accepted, kind: style.Good, id: f.ID, blocking: f.Blocking,
+				title: f.Title, meta: meta, body: f.Body,
+			})
+		}
+	}
 	fmt.Fprintf(&b, "%s\n", next(s, width, fmt.Sprintf("Round %d is on GitHub. The current round is", round), "loupe show --run "+ref.String()))
 	_, err = io.WriteString(deps.Stdout, b.String())
 	return err
 }
 
-// previousRound is the newest earlier local round with a receipt, the exact envelope loupe sent, or else the round
-// capture read back from GitHub and stored in this run. It reads no network, so a reviewer with no GitHub access can
-// run it.
-func previousRound(root string, ref run.Ref) (from string, round int, reviewURL string, findings []publish.EnvelopeFinding, err error) {
-	round, dir, err := run.PreviousPublished(root, ref)
+type earlierEntry struct {
+	Ref string `json:"ref"`
+	draft.EarlierFinding
+}
+
+func (p previous) against() draft.AssessedAgainst {
+	return draft.AssessedAgainst{From: p.from, Round: p.round, ReviewURL: p.reviewURL, PublicationID: p.publicationID}
+}
+
+type previous struct {
+	from      string
+	round     int
+	reviewURL string
+	// publicationID names the round on GitHub, so publish can tell whether the review it builds on is still this one.
+	publicationID string
+	findings      []publish.EnvelopeFinding
+	// earlier ends with findings, so what the round carried is the part before them.
+	earlier []draft.EarlierFinding
+}
+
+// previousRound is the newest earlier local round with a receipt from this run's publisher, the exact envelope loupe
+// sent, or else the round capture read back from GitHub and stored in this run. It reads no network, so a reviewer with
+// no GitHub access can run it.
+func previousRound(root string, ref run.Ref) (previous, error) {
+	dir := run.RunDir(root, ref.Owner, ref.Repo, ref.Number, ref.Round)
+	target, err := run.LoadTarget(dir)
+	if err != nil {
+		return previous{}, err
+	}
+	round, receipt, err := publish.PreviousReceipt(root, ref, target.Viewer, target.Source)
 	if err == nil {
-		receipt, found, err := publish.LoadReceipt(dir)
-		if err != nil {
-			return "", 0, "", nil, err
-		}
-		if !found {
-			return "", 0, "", nil, fmt.Errorf("receipt.json in %s disappeared while it was being read", dir)
-		}
-		return "receipt", round, receipt.ReviewURL, receipt.Envelope.Findings, nil
+		env := receipt.Envelope
+		filedIn := draft.FiledIn{Round: round, ReviewURL: receipt.ReviewURL, Commit: env.CommitID}
+		return previous{from: "receipt", round: round, reviewURL: receipt.ReviewURL, publicationID: env.PublicationID, findings: env.Findings,
+			earlier: publish.Earlier(env.Findings, env.Assessments, filedIn)}, nil
 	}
 	local, ok := refusal.As(err)
 	if !ok || local.Code != refusal.NotFound {
-		return "", 0, "", nil, err
+		return previous{}, err
 	}
-	stored, found, err := publish.LoadPrevious(run.RunDir(root, ref.Owner, ref.Repo, ref.Number, ref.Round))
+	stored, found, err := publish.LoadPrevious(dir)
 	if err != nil {
-		return "", 0, "", nil, err
+		return previous{}, err
 	}
 	switch {
 	case !found:
-		return "", 0, "", nil, local
+		return previous{}, local
 	case !stored.Found:
-		pr := run.Ref{Owner: ref.Owner, Repo: ref.Repo, Number: ref.Number}
-		return "", 0, "", nil, refusal.New(refusal.NotFound,
-			fmt.Sprintf("no earlier round of %s was published here, and none can be read back from GitHub: %s", pr, stored.Reason),
+		return previous{}, refusal.New(refusal.NotFound,
+			fmt.Sprintf("%s, and none can be read back from GitHub: %s", publishedHere(local.Message), stored.Reason),
 			local.Fix)
 	}
-	return "github", stored.Round, stored.ReviewURL, stored.Findings, nil
+	filedIn := draft.FiledIn{Round: stored.Round, ReviewURL: stored.ReviewURL, Commit: stored.Commit}
+	return previous{from: "github", round: stored.Round, reviewURL: stored.ReviewURL, publicationID: stored.PublicationID, findings: stored.Findings,
+		earlier: publish.Earlier(stored.Findings, stored.Assessments, filedIn)}, nil
+}
+
+// publishedHere appends "here" when no receipt was skipped, since the message goes on to say none was published on
+// GitHub either.
+func publishedHere(local string) string {
+	if strings.HasSuffix(local, " was published") {
+		return local + " here"
+	}
+	return local
 }
 
 // runShowComments answers only from what capture stored, so a reviewer with no GitHub access can run it. A failed read

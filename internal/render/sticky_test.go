@@ -389,7 +389,7 @@ func TestStickyRoundsKeepOneRecordOnTheCurrentRound(t *testing.T) {
 	if n := strings.Count(body, recordPrefix); n != 1 {
 		t.Fatalf("a three-round sticky body holds %d records", n)
 	}
-	got, err := ReadRecord(body)
+	got, _, err := ReadRecord(body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,7 +442,7 @@ func TestStickyMovesAV0110BodyToTheNewLayout(t *testing.T) {
 	body := Body(next)
 	indexes(t, body, "Body f-001.\n\n</details>\n\n---\n\nreviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since round 2](https://github.com/o/r/compare/bbbbbbb...ccccccc333) · via `gadfly-review-pr 2.3.0`\n\n---\n\n<!-- loupe-earlier -->",
 		"<summary>Round 2 · reviewed <code>bbbbbbb</code>", "reviewed `bbbbbbb` · via `gadfly-review-pr 2.2.0`", "<summary>Round 1 · reviewed <code>aaaaaaa</code>")
-	if _, err := ReadRecord(body); err != nil {
+	if _, _, err := ReadRecord(body); err != nil {
 		t.Fatalf("ReadRecord: %v", err)
 	}
 	again, rounds, err := ReadSticky(body)

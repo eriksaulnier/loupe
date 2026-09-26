@@ -31,6 +31,11 @@ func Load(dir string) (*Draft, error) {
 	case d.Replies == nil:
 		problem = "replies is missing or null"
 	}
+	for i, a := range d.Assessments {
+		if problem == "" && (a.Ref == "" || (a.Status != StatusOpen && a.Status != StatusAddressed) || a.Finding.ID == "" || a.Finding.Title == "") {
+			problem = fmt.Sprintf("assessment %d lacks a ref, a known status, or its finding's id or title", i+1)
+		}
+	}
 	if problem != "" {
 		return nil, run.RecordRefusal(path, errors.New(problem))
 	}

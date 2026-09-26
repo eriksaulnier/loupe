@@ -545,7 +545,7 @@ func TestBuildLeavesTheRecordOutWhenItDoesNotFit(t *testing.T) {
 	if !strings.Contains(env.Body, "\n<!-- loupe-findings v=1 omitted=length -->\n") {
 		t.Fatalf("a body that fits only without its record does not say it was left out:\n%s", env.Body[len(env.Body)-400:])
 	}
-	if _, err := render.ReadRecord(env.Body); err != render.ErrRecordOmitted {
+	if _, _, err := render.ReadRecord(env.Body); err != render.ErrRecordOmitted {
 		t.Fatalf("ReadRecord: %v", err)
 	}
 }
@@ -563,8 +563,23 @@ func TestBuildStickyDropsEarlierRoundsBeforeTheRecord(t *testing.T) {
 	if strings.Contains(env.Body, "Round 1") {
 		t.Fatal("the earlier round was kept")
 	}
-	if _, err := render.ReadRecord(env.Body); err != nil {
+	if _, _, err := render.ReadRecord(env.Body); err != nil {
 		t.Fatalf("the record was not kept: %v", err)
+	}
+}
+
+func TestBuildCarriesTheDraftsAssessments(t *testing.T) {
+	d := readyDraft()
+	d.Assessments = openAndAddressed()
+	env, err := Build(buildInput(fixtureTarget(), d, "comment", "none", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(env.Assessments, d.Assessments) {
+		t.Fatalf("envelope assessments %+v", env.Assessments)
+	}
+	if _, assessed, err := render.ReadRecord(env.Body); err != nil || len(assessed) != 2 || assessed[0].Finding.FiledIn.Commit != "0ld0000" {
+		t.Fatalf("record assessments %+v, %v", assessed, err)
 	}
 }
 

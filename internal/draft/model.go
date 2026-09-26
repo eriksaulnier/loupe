@@ -7,7 +7,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // schemaVersion and handBackSchema are what this loupe reads and writes, as vars so a test can play the next loupe.
 var schemaVersion, handBackSchema = SchemaVersion, HandBackSchema
@@ -33,6 +33,11 @@ const (
 	ByHuman = "human"
 )
 
+const (
+	StatusOpen      = "open"
+	StatusAddressed = "addressed"
+)
+
 type Draft struct {
 	// Schema is SchemaVersion.
 	Schema int `json:"schema"`
@@ -45,6 +50,49 @@ type Draft struct {
 	Decisions map[string]Decision `json:"decisions"`
 	Notes     []Note              `json:"notes"`
 	Replies   []Reply             `json:"replies"`
+	// Assessments is sorted by ref and omitted when empty, so a draft that assessed nothing reads as it always has.
+	Assessments []Assessment `json:"assessments,omitempty"`
+	// AssessedAgainst is the previous round the assessments were read from. Their refs name only that round's earlier
+	// list, so publish refuses once a lower round publishes and becomes the previous one.
+	AssessedAgainst *AssessedAgainst `json:"assessedAgainst,omitempty"`
+}
+
+// AssessedAgainst names a previous round as show --previous does.
+type AssessedAgainst struct {
+	From      string `json:"from"`
+	Round     int    `json:"round"`
+	ReviewURL string `json:"reviewUrl"`
+	// PublicationID tells a sticky review's rounds apart, since they share one URL. Empty when the run's previous
+	// round was captured before loupe recorded publication ids.
+	PublicationID string `json:"publicationId,omitempty"`
+}
+
+// Assessment is this round's status for a finding an earlier round published and no round since marked addressed.
+// It copies the finding, so publishing it needs no second read of the previous round.
+type Assessment struct {
+	// Ref is the name show --previous gave the finding in this round, e-1 onward. A later round names it afresh.
+	Ref string `json:"ref"`
+	// Status is StatusOpen or StatusAddressed.
+	Status  string         `json:"status"`
+	Finding EarlierFinding `json:"finding"`
+}
+
+// EarlierFinding is a published finding as the envelope holds it, plus the round that first filed it.
+type EarlierFinding struct {
+	ID       string    `json:"id"`
+	Title    string    `json:"title"`
+	Body     string    `json:"body"`
+	Location *Location `json:"location"`
+	Label    string    `json:"label"`
+	Blocking bool      `json:"blocking"`
+	FiledIn  FiledIn   `json:"filedIn"`
+}
+
+// FiledIn names a round as show --previous names it. Commit is empty when it could not be read back.
+type FiledIn struct {
+	Round     int    `json:"round"`
+	ReviewURL string `json:"reviewUrl"`
+	Commit    string `json:"commit,omitempty"`
 }
 
 type Finding struct {

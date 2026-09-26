@@ -89,6 +89,26 @@ var fieldSets = []struct {
 			"notes.status", "replies", "replies.at", "replies.body", "replies.by", "replies.id", "replies.noteId",
 			"schema", "summary", "version",
 		},
+		2: {
+			"assessedAgainst,omitempty", "assessedAgainst.from", "assessedAgainst.publicationId,omitempty",
+			"assessedAgainst.reviewUrl", "assessedAgainst.round", "assessments,omitempty", "assessments.finding",
+			"assessments.finding.blocking", "assessments.finding.body", "assessments.finding.filedIn",
+			"assessments.finding.filedIn.commit,omitempty", "assessments.finding.filedIn.reviewUrl",
+			"assessments.finding.filedIn.round", "assessments.finding.id", "assessments.finding.label",
+			"assessments.finding.location", "assessments.finding.location.line", "assessments.finding.location.path",
+			"assessments.finding.location.side", "assessments.finding.location.startLine,omitempty",
+			"assessments.finding.title", "assessments.ref", "assessments.status", "decisions", "decisions.at",
+			"decisions.decision", "decisions.findingId", "decisions.findingRev", "findings", "findings.blocking",
+			"findings.body", "findings.by", "findings.confidence,omitempty", "findings.createdAt", "findings.general",
+			"findings.history", "findings.history.at", "findings.history.by", "findings.history.changed", "findings.id",
+			"findings.impact,omitempty", "findings.included", "findings.label,omitempty", "findings.location,omitempty",
+			"findings.location.line", "findings.location.path", "findings.location.side",
+			"findings.location.startLine,omitempty", "findings.references,omitempty", "findings.rev",
+			"findings.severity,omitempty", "findings.suggestedFix,omitempty", "findings.title", "findings.updatedAt",
+			"findings.verified,omitempty", "notes", "notes.at", "notes.body", "notes.closedAt,omitempty",
+			"notes.findingId", "notes.id", "notes.status", "replies", "replies.at", "replies.body", "replies.by",
+			"replies.id", "replies.noteId", "schema", "summary", "version",
+		},
 	}},
 	{reflect.TypeFor[draft.HandBack](), draft.HandBackSchema, map[int][]string{
 		1: {
@@ -117,6 +137,28 @@ var fieldSets = []struct {
 			"envelope.target.owner", "envelope.target.repo", "envelope.target.round", "envelope.viewer",
 			"lastError,omitempty", "schema", "startedAt", "state", "updatedAt",
 		},
+		2: {
+			"confirmed", "confirmed.digest", "confirmed.dispositions", "confirmed.version", "envelope",
+			"envelope.action", "envelope.assessments,omitempty", "envelope.assessments.finding",
+			"envelope.assessments.finding.blocking", "envelope.assessments.finding.body",
+			"envelope.assessments.finding.filedIn", "envelope.assessments.finding.filedIn.commit,omitempty",
+			"envelope.assessments.finding.filedIn.reviewUrl", "envelope.assessments.finding.filedIn.round",
+			"envelope.assessments.finding.id", "envelope.assessments.finding.label",
+			"envelope.assessments.finding.location", "envelope.assessments.finding.location.line",
+			"envelope.assessments.finding.location.path", "envelope.assessments.finding.location.side",
+			"envelope.assessments.finding.location.startLine,omitempty", "envelope.assessments.finding.title",
+			"envelope.assessments.ref", "envelope.assessments.status", "envelope.body", "envelope.comments",
+			"envelope.comments.body", "envelope.comments.line", "envelope.comments.path", "envelope.comments.side",
+			"envelope.comments.startLine,omitempty", "envelope.comments.startSide,omitempty", "envelope.commitId",
+			"envelope.digest", "envelope.draftVersion", "envelope.editReviewId,omitempty", "envelope.event",
+			"envelope.findings", "envelope.findings.blocking", "envelope.findings.body", "envelope.findings.id",
+			"envelope.findings.label", "envelope.findings.location", "envelope.findings.location.line",
+			"envelope.findings.location.path", "envelope.findings.location.side",
+			"envelope.findings.location.startLine,omitempty", "envelope.findings.title", "envelope.inline",
+			"envelope.publicationId", "envelope.target", "envelope.target.headSha", "envelope.target.number",
+			"envelope.target.owner", "envelope.target.repo", "envelope.target.round", "envelope.viewer",
+			"lastError,omitempty", "schema", "startedAt", "state", "updatedAt",
+		},
 	}},
 	{reflect.TypeFor[Receipt](), RecordSchema, map[int][]string{
 		1: {
@@ -132,6 +174,27 @@ var fieldSets = []struct {
 			"envelope.target.headSha", "envelope.target.number", "envelope.target.owner", "envelope.target.repo",
 			"envelope.target.round", "envelope.viewer", "postedAt", "reviewId", "reviewUrl", "schema",
 		},
+		2: {
+			"action", "author,omitempty", "edited,omitempty", "envelope", "envelope.action",
+			"envelope.assessments,omitempty", "envelope.assessments.finding", "envelope.assessments.finding.blocking",
+			"envelope.assessments.finding.body", "envelope.assessments.finding.filedIn",
+			"envelope.assessments.finding.filedIn.commit,omitempty", "envelope.assessments.finding.filedIn.reviewUrl",
+			"envelope.assessments.finding.filedIn.round", "envelope.assessments.finding.id",
+			"envelope.assessments.finding.label", "envelope.assessments.finding.location",
+			"envelope.assessments.finding.location.line", "envelope.assessments.finding.location.path",
+			"envelope.assessments.finding.location.side", "envelope.assessments.finding.location.startLine,omitempty",
+			"envelope.assessments.finding.title", "envelope.assessments.ref", "envelope.assessments.status",
+			"envelope.body", "envelope.comments", "envelope.comments.body", "envelope.comments.line",
+			"envelope.comments.path", "envelope.comments.side", "envelope.comments.startLine,omitempty",
+			"envelope.comments.startSide,omitempty", "envelope.commitId", "envelope.digest", "envelope.draftVersion",
+			"envelope.editReviewId,omitempty", "envelope.event", "envelope.findings", "envelope.findings.blocking",
+			"envelope.findings.body", "envelope.findings.id", "envelope.findings.label", "envelope.findings.location",
+			"envelope.findings.location.line", "envelope.findings.location.path", "envelope.findings.location.side",
+			"envelope.findings.location.startLine,omitempty", "envelope.findings.title", "envelope.inline",
+			"envelope.publicationId", "envelope.target", "envelope.target.headSha", "envelope.target.number",
+			"envelope.target.owner", "envelope.target.repo", "envelope.target.round", "envelope.viewer", "postedAt",
+			"reviewId", "reviewUrl", "schema",
+		},
 	}},
 	{reflect.TypeFor[Previous](), PreviousSchema, map[int][]string{
 		1: {
@@ -139,6 +202,19 @@ var fieldSets = []struct {
 			"findings.location.line", "findings.location.path", "findings.location.side",
 			"findings.location.startLine,omitempty", "findings.title", "found", "reason,omitempty",
 			"reviewId,omitempty", "reviewUrl,omitempty", "round,omitempty", "schema",
+		},
+		2: {
+			"assessments,omitempty", "assessments.finding", "assessments.finding.blocking", "assessments.finding.body",
+			"assessments.finding.filedIn", "assessments.finding.filedIn.commit,omitempty",
+			"assessments.finding.filedIn.reviewUrl", "assessments.finding.filedIn.round", "assessments.finding.id",
+			"assessments.finding.label", "assessments.finding.location", "assessments.finding.location.line",
+			"assessments.finding.location.path", "assessments.finding.location.side",
+			"assessments.finding.location.startLine,omitempty", "assessments.finding.title", "assessments.ref",
+			"assessments.status", "commit,omitempty", "findings", "findings.blocking", "findings.body", "findings.id",
+			"findings.label", "findings.location", "findings.location.line", "findings.location.path",
+			"findings.location.side", "findings.location.startLine,omitempty", "findings.title", "found",
+			"publicationId,omitempty", "reason,omitempty", "reviewId,omitempty", "reviewUrl,omitempty",
+			"round,omitempty", "schema",
 		},
 	}},
 	{reflect.TypeFor[Comments](), CommentsSchema, map[int][]string{
@@ -210,7 +286,8 @@ func TestWritersStampTheirOwnSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func(s int) { recordSchema = s }(recordSchema)
-	recordSchema = 2
+	next := RecordSchema + 1
+	recordSchema = next
 	a, _, err := LoadAttempt(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -230,9 +307,9 @@ func TestWritersStampTheirOwnSchema(t *testing.T) {
 	if err != nil || reconciled == nil {
 		t.Fatalf("reconciled %+v err %v", reconciled, err)
 	}
-	if a.Schema != 2 || r.Schema != 2 || reconciled.Schema != 2 {
-		t.Errorf("in memory the attempt says schema %d, the receipt %d and the reconciled receipt %d, want 2",
-			a.Schema, r.Schema, reconciled.Schema)
+	if a.Schema != next || r.Schema != next || reconciled.Schema != next {
+		t.Errorf("in memory the attempt says schema %d, the receipt %d and the reconciled receipt %d, want %d",
+			a.Schema, r.Schema, reconciled.Schema, next)
 	}
 	previous, err := EncodePrevious(Previous{Reason: "why"})
 	if err != nil {
@@ -257,8 +334,8 @@ func TestWritersStampTheirOwnSchema(t *testing.T) {
 		data []byte
 		want int
 	}{
-		{attemptFile, readFile(t, filepath.Join(dir, attemptFile)), 2},
-		{receiptFile, readFile(t, filepath.Join(dir, receiptFile)), 2},
+		{attemptFile, readFile(t, filepath.Join(dir, attemptFile)), next},
+		{receiptFile, readFile(t, filepath.Join(dir, receiptFile)), next},
 		{run.PreviousFile, previous, PreviousSchema},
 		{run.CommentsFile, comments, CommentsSchema},
 		{"target.json", targetJSON, run.TargetSchema},

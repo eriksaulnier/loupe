@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -101,7 +102,7 @@ func TestRecordCannotBeClosedByAFinding(t *testing.T) {
 	if !recordLine.MatchString(record) {
 		t.Fatalf("record line %q", record)
 	}
-	got, err := ReadRecord(body)
+	got, _, err := ReadRecord(body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestRecordChecksumCoversBodyAndData(t *testing.T) {
 
 func TestReadRecordRoundTrips(t *testing.T) {
 	in := exampleInput()
-	got, err := ReadRecord(Body(in))
+	got, _, err := ReadRecord(Body(in))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +139,7 @@ func TestReadRecordRoundTrips(t *testing.T) {
 	if !bytes.Equal(gotJSON, wantJSON) {
 		t.Fatalf("read back\n got %s\nwant %s", gotJSON, wantJSON)
 	}
-	crlf, err := ReadRecord(strings.ReplaceAll(Body(in), "\n", "\r\n"))
+	crlf, _, err := ReadRecord(strings.ReplaceAll(Body(in), "\n", "\r\n"))
 	if err != nil {
 		t.Fatalf("CRLF body: %v", err)
 	}
@@ -193,7 +194,7 @@ func TestReadRecordRefusals(t *testing.T) {
 		"no record":        {body: strings.Replace(body, record+"\n", "", 1), is: ErrNoRecord},
 		"omitted":          {body: Body(omitted), is: ErrRecordOmitted},
 		"two records":      {body: strings.Replace(body, record, record+"\n"+record, 1), want: "more than one"},
-		"other version":    {body: strings.Replace(body, "loupe-findings v=1 ", "loupe-findings v=2 ", 1), want: "v=2"},
+		"other version":    {body: strings.Replace(body, "loupe-findings v=1 ", "loupe-findings v=3 ", 1), want: "v=3"},
 		"visible edit":     {body: strings.Replace(body, "Redundant sort", "Redundant sorts", 1), want: "changed"},
 		"data edit":        {body: strings.Replace(body, record, flipData(t, record), 1), want: "changed"},
 		"not base64":       {body: withRecordLine(t, body, record, "!!!!", true), want: "base64"},
@@ -207,7 +208,7 @@ func TestReadRecordRefusals(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := ReadRecord(c.body)
+			got, _, err := ReadRecord(c.body)
 			if err == nil {
 				t.Fatalf("read %+v, want an error", got)
 			}
@@ -229,7 +230,7 @@ func TestReadRecordIgnoresAFencedRecord(t *testing.T) {
 	_, record, _ := tail(t, Body(quoted))
 	in := exampleInput()
 	in.Findings[0].Body = "```\n" + record + "\n```"
-	got, err := ReadRecord(Body(in))
+	got, _, err := ReadRecord(Body(in))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +238,7 @@ func TestReadRecordIgnoresAFencedRecord(t *testing.T) {
 		t.Fatalf("read %d findings, want 2", len(got))
 	}
 	_, record, _ = tail(t, Body(in))
-	if _, err := ReadRecord(strings.Replace(Body(in), record+"\n", "", 1)); !errors.Is(err, ErrNoRecord) {
+	if _, _, err := ReadRecord(strings.Replace(Body(in), record+"\n", "", 1)); !errors.Is(err, ErrNoRecord) {
 		t.Fatalf("a body whose only record is fenced read as %v, want ErrNoRecord", err)
 	}
 }
@@ -290,5 +291,93 @@ func TestMetaRound(t *testing.T) {
 	}
 	if got := MetaRound("no marker here"); got != 0 {
 		t.Fatalf("MetaRound %d, want 0", got)
+	}
+}
+
+func TestPublicationIDSkipsAQuotedMarker(t *testing.T) {
+	in := exampleInput()
+	in.PublicationID = "pub-7"
+	quoted := Body(in) + "\n```\n<!-- loupe digest=d publication=quoted -->\n```\n"
+	if got := PublicationID(quoted); got != "pub-7" {
+		t.Fatalf("PublicationID %q, want pub-7", got)
+	}
+	if got := PublicationID("no marker here"); got != "" {
+		t.Fatalf("PublicationID %q, want none", got)
+	}
+}
+
+func assessedInput() Input {
+	in := exampleInput()
+	filedIn := RecordFiledIn{Round: 1, ReviewURL: "https://github.com/o/r/pull/7#pullrequestreview-1", Commit: "abc123"}
+	in.Assessments = []RecordAssessment{
+		{Ref: "e-1", Status: "open", Finding: RecordEarlier{RecordFinding: RecordFinding{ID: "f-001", Title: "Bare except", Body: "B."}, FiledIn: filedIn}},
+		{Ref: "e-2", Status: "addressed", Finding: RecordEarlier{RecordFinding: RecordFinding{ID: "f-002", Title: "Sleep", Body: "S.", Blocking: true}, FiledIn: filedIn}},
+	}
+	return in
+}
+
+func TestRecordWithAssessmentsIsVersion2AndRoundTrips(t *testing.T) {
+	in := assessedInput()
+	body := Body(in)
+	_, record, _ := tail(t, body)
+	m := regexp.MustCompile(`^<!-- loupe-findings v=2 sha256=[0-9a-f]{64} ([A-Za-z0-9+/=]+) -->$`).FindStringSubmatch(record)
+	if m == nil {
+		t.Fatalf("record line %q is not version 2", record)
+	}
+	if got := string(inflateData(t, m[1])); !strings.HasPrefix(got, `{"findings":[{"id":"f-001",`) || !strings.Contains(got, `"assessments":[{"ref":"e-1","status":"open","finding":{"id":"f-001","title":"Bare except","body":"B.","location":null,"label":"","blocking":false,"filedIn":{"round":1,"reviewUrl":"https://github.com/o/r/pull/7#pullrequestreview-1","commit":"abc123"}}}`) {
+		t.Fatalf("record data %s", got)
+	}
+	findings, assessments, err := ReadRecord(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 2 || !reflect.DeepEqual(assessments, in.Assessments) {
+		t.Fatalf("read back %d findings and %+v", len(findings), assessments)
+	}
+	if without := exampleInput(); Body(without) != strings.Replace(body, record, recordOf(t, Body(without)), 1) {
+		t.Fatal("assessments changed more than the record line")
+	}
+}
+
+func TestReadRecordVersion2Refusals(t *testing.T) {
+	body := Body(assessedInput())
+	v2 := func(data string) string {
+		return strings.Replace(withData(t, body, []byte(data), true), "loupe-findings v=1 ", "loupe-findings v=2 ", 1)
+	}
+	earlier := `{"id":"f-001","title":"T","body":"B","location":null,"label":"","blocking":false,"filedIn":{"round":1,"reviewUrl":"u"}}`
+	for name, c := range map[string]struct{ body, want string }{
+		"a bare list":         {v2(`[]`), "findings and assessments"},
+		"no assessments key":  {v2(`{"findings":[]}`), "findings and assessments"},
+		"unknown status":      {v2(`{"findings":[],"assessments":[{"ref":"e-1","status":"fixed","finding":` + earlier + `}]}`), "fixed"},
+		"assessment no title": {v2(`{"findings":[],"assessments":[{"ref":"e-1","status":"open","finding":` + strings.Replace(earlier, `"T"`, `""`, 1) + `}]}`), "title"},
+		"version 1 object":    {withData(t, body, []byte(`{"findings":[],"assessments":[]}`), true), "list"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, a, err := ReadRecord(c.body)
+			if err == nil || f != nil || a != nil {
+				t.Fatalf("read %+v %+v %v, want only an error", f, a, err)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("error %q does not mention %q", err, c.want)
+			}
+		})
+	}
+}
+
+func TestRecordAsNoteNamesAssessments(t *testing.T) {
+	for want, statuses := range map[string][]string{
+		"<!-- loupe-findings: a copy of the 2 findings above, plus 1 earlier finding still open -->":                     {"open"},
+		"<!-- loupe-findings: a copy of the 2 findings above, plus 2 earlier findings still open -->":                    {"open", "open"},
+		"<!-- loupe-findings: a copy of the 2 findings above, plus 1 earlier finding marked addressed -->":               {"addressed"},
+		"<!-- loupe-findings: a copy of the 2 findings above, plus 2 earlier findings, 1 still open and 1 addressed -->": {"open", "addressed"},
+	} {
+		in := assessedInput()
+		in.Assessments = in.Assessments[:len(statuses)]
+		for i, s := range statuses {
+			in.Assessments[i].Status = s
+		}
+		if got := recordOf(t, RecordAsNote(Body(in))); got != want {
+			t.Errorf("note %q, want %q", got, want)
+		}
 	}
 }

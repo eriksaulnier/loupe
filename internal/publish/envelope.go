@@ -136,9 +136,11 @@ func Build(in BuildInput) (Envelope, error) {
 		EditReviewID:  editReviewID(in.Sticky),
 		Comments:      []Comment{},
 		Findings:      []EnvelopeFinding{},
+		Assessments:   d.Assessments,
 	}
 	r := render.Input{Owner: target.Owner, Repo: target.Repo, Number: target.Number, Round: in.Round, HeadSHA: target.HeadSHA,
 		Inline: in.Inline, Summary: opening, Digest: env.Digest, PublicationID: env.PublicationID, Source: target.Source, Model: target.Model, Unattended: in.Unattended}
+	r.Assessments = recordAssessments(d.Assessments)
 	gate := draft.GateCountsOf(d)
 	r.Excluded, r.Withdrawn, r.Reinstated, r.Regraded = gate.Excluded, gate.Withdrawn, gate.Reinstated, gate.Regraded
 	for _, f := range included {
@@ -229,4 +231,18 @@ func sameIDs(a, b []draft.Finding) bool {
 		return out
 	}
 	return slices.Equal(ids(a), ids(b))
+}
+
+func recordAssessments(as []draft.Assessment) []render.RecordAssessment {
+	var out []render.RecordAssessment
+	for _, a := range as {
+		f := a.Finding
+		rf := render.RecordFinding{ID: f.ID, Title: f.Title, Body: f.Body, Label: f.Label, Blocking: f.Blocking}
+		if f.Location != nil {
+			rf.Location = &render.RecordLocation{Path: f.Location.Path, Side: f.Location.Side, Line: f.Location.Line, StartLine: f.Location.StartLine}
+		}
+		out = append(out, render.RecordAssessment{Ref: a.Ref, Status: a.Status, Finding: render.RecordEarlier{RecordFinding: rf,
+			FiledIn: render.RecordFiledIn{Round: f.FiledIn.Round, ReviewURL: f.FiledIn.ReviewURL, Commit: f.FiledIn.Commit}}})
+	}
+	return out
 }

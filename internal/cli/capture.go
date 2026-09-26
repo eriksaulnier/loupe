@@ -30,11 +30,11 @@ stores the diff and its SHA-256, and creates an empty draft. The working files, 
 current branch and every other ref of the clone are left untouched.
 
 It also finds the round loupe show --previous will list. An earlier local round with a
-receipt wins. Without one, capture reads the publisher's newest loupe review on the pull
-request back from GitHub, the viewer's own, or with an App token a [bot]'s whose source
-name matches --source, and stores its findings in the run, so loupe show --previous
-answers offline. A review that cannot be read back is stored as a reason instead. That
-never refuses the capture.
+receipt from the same publisher wins. Without one, capture reads the publisher's newest
+loupe review on the pull request back from GitHub, the viewer's own, or with an App token
+a [bot]'s whose source name matches --source, and stores its findings in the run, so loupe
+show --previous answers offline. A review that cannot be read back is stored as a reason
+instead. That never refuses the capture.
 
 It also reads everyone else's feedback on the pull request for loupe show --comments:
 submitted reviews, inline review threads and top-level comments, every page of each. It
@@ -307,11 +307,11 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	return printCapture(deps, ref, target, cleanup, next, previous, comments)
 }
 
-// capturePrevious finds the round show --previous will list. A local receipt is the exact envelope loupe sent, so it
-// wins over the reviews. Without one, the publisher's newest loupe review is read back and stored in the run, so show
-// --previous answers offline, as a CI reviewer with no GitHub access needs.
+// capturePrevious finds the round show --previous will list. A local receipt from the same publisher is the exact
+// envelope loupe sent, so it wins over the reviews. Without one, the publisher's newest loupe review is read back and
+// stored in the run, so show --previous answers offline, as a CI reviewer with no GitHub access needs.
 func capturePrevious(root string, ref run.Ref, reviews []github.Review, listErr error, viewer, source string) (map[string]any, []byte, error) {
-	round, _, err := run.PreviousPublished(root, ref)
+	round, _, err := publish.PreviousReceipt(root, ref, viewer, source)
 	if err == nil {
 		return map[string]any{"from": "receipt", "round": round}, nil, nil
 	}

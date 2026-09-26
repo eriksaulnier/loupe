@@ -31,8 +31,8 @@ func TestAsUnwrapsWrappedRefusal(t *testing.T) {
 }
 
 func TestCodesMatchContractTable(t *testing.T) {
-	want := []string{"usage", "no-run", "record", "origin", "pr", "same-head", "auth", "token", "input", "location", "markdown", "version", "count", "not-found", "lock", "tty", "head-moved", "own-pr", "blocking", "not-ready", "empty", "attempt", "changed", "sticky", "viewer", "timeout", "github", "no-pane-host", "pane-failed", "review-open", "internal"}
-	got := []Code{Usage, NoRun, Record, Origin, PR, SameHead, Auth, Token, Input, Location, Markdown, Version, Count, NotFound, Lock, TTY, HeadMoved, OwnPR, Blocking, NotReady, Empty, Attempt, Changed, Sticky, Viewer, Timeout, GitHub, NoPaneHost, PaneFailed, ReviewOpen, Internal}
+	want := []string{"usage", "no-run", "record", "origin", "pr", "same-head", "auth", "token", "input", "location", "markdown", "version", "count", "not-found", "lock", "tty", "head-moved", "own-pr", "blocking", "not-ready", "empty", "attempt", "changed", "previous-moved", "sticky", "viewer", "timeout", "github", "no-pane-host", "pane-failed", "review-open", "internal"}
+	got := []Code{Usage, NoRun, Record, Origin, PR, SameHead, Auth, Token, Input, Location, Markdown, Version, Count, NotFound, Lock, TTY, HeadMoved, OwnPR, Blocking, NotReady, Empty, Attempt, Changed, PreviousMoved, Sticky, Viewer, Timeout, GitHub, NoPaneHost, PaneFailed, ReviewOpen, Internal}
 	if len(got) != len(want) {
 		t.Fatalf("got %d codes, want %d", len(got), len(want))
 	}
