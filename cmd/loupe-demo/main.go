@@ -14,7 +14,8 @@
 // was decided.
 //
 // loupe-demo body prints the review body #43 publishes with the walkthrough tape's message, the input
-// scripts/review-screenshot.sh posts to render the README's picture of a published review.
+// scripts/review-screenshot.sh posts to render the README's picture of a published review. loupe-demo body --sticky
+// prints the body an unattended sticky review holds after its third round, for the CI page's picture.
 package main
 
 import (
@@ -27,8 +28,10 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/cli"
 	"github.com/eriksaulnier/loupe/internal/diff"
+	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/pane"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
@@ -41,8 +44,15 @@ func main() {
 const demoMarker = ".loupe-demo"
 
 func demo(args []string) int {
-	if len(args) == 1 && args[0] == "body" {
-		body, err := demoBody(time.Now())
+	if len(args) > 0 && args[0] == "body" {
+		compose := demoBody
+		switch {
+		case len(args) == 2 && args[1] == "--sticky":
+			compose = demoStickyBody
+		case len(args) != 1:
+			return fail(fmt.Errorf("usage: loupe-demo body [--sticky]"))
+		}
+		body, err := compose(time.Now())
 		if err != nil {
 			return fail(err)
 		}
@@ -165,6 +175,65 @@ func demoBody(now time.Time) (string, error) {
 		return "", err
 	}
 	return env.Body, nil
+}
+
+// stickyNote is the hint a pipeline passes with --note, shown under the newest round only.
+const stickyNote = "Remove the `ai-review` label and add it back to ask for another round."
+
+// stickyRounds are the rounds demoStickyBody publishes, each at a new head that fixed some of what the round before
+// found, so the collapsed rounds show the counts falling. The numbers index findings.
+var stickyRounds = []struct {
+	head     string
+	findings []int
+	summary  string
+}{
+	{headSHA, []int{0, 1, 2, 3, 4}, summary},
+	{movedSHA, []int{0, 2, 3}, "The expiry fix resolves the blocking finding, and the size limit is now documented. " +
+		"The lock held across the network call, the metrics reset and the untested 304 path remain."},
+	{"5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f", []int{0, 2}, "The 304 path now has a test. Two findings remain, and " +
+		"neither blocks: the lock held across the network call, and the metrics reset on every scrape."},
+}
+
+// demoStickyBody composes #43 as an unattended sticky pipeline would after three rounds. Each round reads the body
+// before it back the way publish does, so the collapsed rounds are the ones a real edit would carry.
+func demoStickyBody(now time.Time) (string, error) {
+	parsed, err := diff.Parse([]byte(demoDiff))
+	if err != nil {
+		return "", fmt.Errorf("parse the demo diff: %w", err)
+	}
+	body := ""
+	for i, r := range stickyRounds {
+		round := i + 1
+		sticky := &publish.StickyBuild{Rounds: 1}
+		if body != "" {
+			earlier, rounds, err := render.ReadSticky(body)
+			if err != nil {
+				return "", fmt.Errorf("read round %d back: %w", round-1, err)
+			}
+			sticky = &publish.StickyBuild{Rounds: rounds + 1, Earlier: earlier}
+		}
+		d := draft.NewEmpty()
+		in := make([]draft.FindingInput, 0, len(r.findings))
+		for _, n := range r.findings {
+			in = append(in, findings[n])
+		}
+		if _, err := draft.Add(d, in, parsed, draft.ByAgent, now); err != nil {
+			return "", fmt.Errorf("add round %d's findings: %w", round, err)
+		}
+		d.Summary = r.summary
+		note := ""
+		if round == len(stickyRounds) {
+			note = stickyNote
+		}
+		env, err := publish.Build(publish.BuildInput{Target: demoTarget(43, r.head, round, now), Round: round, Draft: d,
+			Viewer: viewer, Action: "comment", Inline: "none", Unattended: true,
+			PublicationID: fmt.Sprintf("00000000-0000-4000-8000-%012d", round), Sticky: sticky, Note: note})
+		if err != nil {
+			return "", fmt.Errorf("compose round %d: %w", round, err)
+		}
+		body = env.Body
+	}
+	return body, nil
 }
 
 func fail(err error) int {

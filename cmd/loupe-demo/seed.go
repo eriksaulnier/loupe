@@ -205,13 +205,16 @@ func demoRun(parsed *diff.Diff, number int, decide func(d *draft.Draft) error, n
 	if err := decide(d); err != nil {
 		return run.Target{}, nil, fmt.Errorf("decide the demo findings for #%d: %w", number, err)
 	}
+	return demoTarget(number, headSHA, 1, now), d, nil
+}
+
+func demoTarget(number int, head string, round int, now time.Time) run.Target {
 	url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, number)
-	target := run.Target{
+	return run.Target{
 		Schema: run.TargetSchema, Owner: owner, Repo: repo, Number: number, URL: url, Title: prTitle,
-		Author: author, Viewer: viewer, BaseSHA: baseSHA, HeadSHA: headSHA, Round: 1, CapturedAt: now,
+		Author: author, Viewer: viewer, BaseSHA: baseSHA, HeadSHA: head, Round: round, CapturedAt: now,
 		DiffSHA256: run.DiffSHA256([]byte(demoDiff)), Source: "code-review@1.4.0", Model: "anthropic/claude-opus-5.5",
 	}
-	return target, d, nil
 }
 
 // midReview leaves something in every state: accepted, pending and blocking, pending with an answered note, excluded
