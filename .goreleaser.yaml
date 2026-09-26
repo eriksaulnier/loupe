@@ -41,6 +41,9 @@ release:
   # it after the tag. If the names drift apart, goreleaser creates and publishes a second release instead.
   use_existing_draft: true
   name_template: "{{ .Tag }}"
+  # A retried run finds the assets an earlier attempt uploaded to the draft, and GitHub refuses a second upload by the
+  # same name.
+  replace_existing_artifacts: true
   github:
     owner: eriksaulnier
     name: loupe

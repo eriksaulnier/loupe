@@ -22,7 +22,7 @@ goreleaser finds a draft by name, never by tag, since GitHub's lookup by tag ski
 
 - A release MUST NOT be tagged, created, edited or published by hand.
 - `release-please-config.json` MUST keep `draft` and `force-tag-creation` set to `true`, and `.goreleaser.yaml` MUST keep `use_existing_draft: true` and a `name_template` that matches release-please's release name.
-- A failed release SHOULD be recovered by re-running the failed jobs of the same workflow run, which keeps release-please's outputs. goreleaser picks up the same draft.
+- A failed release SHOULD be recovered by re-running the failed jobs of the same workflow run, which keeps release-please's outputs. goreleaser picks up the same draft, deletes any asset an earlier attempt uploaded to it and uploads that asset again, because `replace_existing_artifacts` is set in `.goreleaser.yaml`.
 - A published release that lacks an asset MUST NOT be patched. Cut the next patch release instead, since an immutable release cannot take the asset and its tag cannot be reused.
 
 ## Enabling immutable releases
@@ -33,4 +33,4 @@ The owner runs these steps once.
 2. In the repository, open Settings, go to the Releases section and select Enable release immutability. It applies only to releases published afterward, so earlier releases stay mutable.
 3. Merge the next release pull request. In the Actions tab, watch the `release` run: `release-please` creates the tag and the draft, `goreleaser` passes the draft check and publishes, and each `install-action` job passes.
 4. Check the result with `gh release view vX.Y.Z --json isDraft,isImmutable,assets --jq '{isDraft, isImmutable, assets: [.assets[].name]}'`. It MUST show `isDraft: false`, `isImmutable: true`, `checksums.txt` and four archives. `gh release list` MUST show exactly one release for the tag.
-5. If a job failed before goreleaser published, re-run the failed jobs. If a release was published without every asset, cut a new patch release through the normal flow, and record what failed in an issue.
+5. If a job failed before goreleaser published, re-run the failed jobs. The retry replaces every asset already on the draft, then publishes it. If a release was published without every asset, cut a new patch release through the normal flow, and record what failed in an issue.
