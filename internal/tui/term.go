@@ -33,7 +33,5 @@ func ChooseMode(opts Options) Mode {
 	return FullScreen
 }
 
-// GlyphSet and Glyphs are the style package's, so both surfaces draw the same characters.
+// GlyphSet is the style package's, so both surfaces draw the same characters.
 type GlyphSet = style.GlyphSet
-
-func Glyphs(getenv func(string) string) GlyphSet { return style.Glyphs(getenv) }

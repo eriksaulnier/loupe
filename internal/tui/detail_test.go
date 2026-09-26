@@ -294,7 +294,7 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 }
 
 func TestDetailActionsFollowTheFinding(t *testing.T) {
-	g := Glyphs(envOf(map[string]string{"LANG": "en_US.UTF-8"}))
+	g := style.Glyphs(envOf(map[string]string{"LANG": "en_US.UTF-8"}))
 	located := draft.Finding{ID: "f-001", Location: &draft.Location{Path: "a.go", Line: 1}, Included: true}
 	general := draft.Finding{ID: "f-002", Included: true}
 	withdrawn := located
