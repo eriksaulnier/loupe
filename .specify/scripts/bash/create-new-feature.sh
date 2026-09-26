@@ -151,27 +151,30 @@ highest_prefix_from_names() {
 }
 
 # Highest number reserved on origin: NNN-* branch names, plus specs/NNN-* on
-# origin/main and on each such branch. Parallel branches cannot see each
+# origin/main and on every remote branch. Parallel branches cannot see each
 # other's specs/ directories locally, so the local scan alone hands two agents
-# the same number. Prints 0 and warns on stderr when origin is unreachable.
+# the same number, and a branch need not carry the number in its name. Prints 0
+# and warns on stderr when origin is unreachable. The network calls MUST NOT
+# prompt or hang, so both run with prompts off and a short SSH timeout.
 get_highest_from_origin() {
     local heads branches ref names
+    local ssh_cmd='ssh -o BatchMode=yes -o ConnectTimeout=5'
     if ! git remote get-url origin >/dev/null 2>&1; then
         >&2 echo "[specify] Warning: no origin remote; numbering from local specs/ only"
         echo 0
         return 0
     fi
-    if ! heads=$(GIT_TERMINAL_PROMPT=0 git ls-remote --heads origin 2>/dev/null); then
+    if ! heads=$(GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="$ssh_cmd" git ls-remote --heads origin 2>/dev/null); then
         >&2 echo "[specify] Warning: git ls-remote origin failed; numbering from local specs/ only"
         echo 0
         return 0
     fi
-    branches=$(printf '%s\n' "$heads" | sed -n 's|^[^[:space:]]*[[:space:]]*refs/heads/||p' | grep -E '^[0-9]{3,}-' || true)
+    branches=$(printf '%s\n' "$heads" | sed -n 's|^[^[:space:]]*[[:space:]]*refs/heads/||p')
     # Fetch so ls-tree can read branch trees; a failure only loses the tree scan.
-    if ! GIT_TERMINAL_PROMPT=0 git fetch --quiet origin >/dev/null 2>&1; then
+    if ! GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="$ssh_cmd" git fetch --quiet origin >/dev/null 2>&1; then
         >&2 echo "[specify] Warning: git fetch origin failed; using remote branch names only"
     fi
-    names="$branches"
+    names=$(printf '%s\n' "$branches" | grep -E '^[0-9]{3,}-' || true)
     for ref in origin/main $(printf '%s\n' "$branches" | sed 's|^|origin/|'); do
         names="$names
 $(git ls-tree --name-only "$ref" specs/ 2>/dev/null || true)"
