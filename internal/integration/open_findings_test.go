@@ -185,3 +185,50 @@ func TestAttendedRoundCarriesItsAssessmentsThroughItsReceipt(t *testing.T) {
 		t.Fatalf("round 3 earlier %v, want round 1's carried finding, then round 2's", got)
 	}
 }
+
+// A pipeline that never runs assess drops every earlier finding, so an unattended publish says so on stderr and
+// nowhere else.
+func TestUnattendedPublishWarnsOfUnassessedEarlierFindings(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.Env["NO_COLOR"] = "1"
+	h.ciRound(true, bareExceptAndSleep, nil)
+	h.pushHead("src/round2.go")
+	run := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	h.mustOK("assess", "e-1", "--status", "open", "--run", run)
+	h.mustOK("add", "--run", run, "--from", h.WriteFile("findings.json", generalFinding("Cache race")))
+	h.mustOK("summary", "--run", run, "--body", "A look.", "--expect-findings", "1")
+	stdout, stderr, exit := h.Run("publish", run, "--unattended", "--sticky", "--json")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q", exit, stderr)
+	}
+	want := "warning: 1 earlier finding was not assessed and will not carry forward. Run loupe assess before loupe publish.\n"
+	if !strings.Contains(stderr, want) {
+		t.Fatalf("stderr %q lacks %q", stderr, want)
+	}
+	if strings.Contains(stdout, "warning:") {
+		t.Fatalf("the warning reached stdout: %s", stdout)
+	}
+}
+
+func TestUnattendedPublishIsSilentWhenEveryEarlierFindingIsAssessed(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.Env["NO_COLOR"] = "1"
+	h.ciRound(true, bareExceptAndSleep, nil)
+	h.pushHead("src/round2.go")
+	run := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	h.mustOK("assess", "e-1", "--status", "open", "--run", run)
+	h.mustOK("assess", "e-2", "--status", "addressed", "--run", run)
+	h.mustOK("add", "--run", run, "--from", h.WriteFile("findings.json", generalFinding("Cache race")))
+	h.mustOK("summary", "--run", run, "--body", "A look.", "--expect-findings", "1")
+	_, stderr, exit := h.Run("publish", run, "--unattended", "--sticky")
+	if exit != 0 {
+		t.Fatalf("publish exit %d stderr %q", exit, stderr)
+	}
+	if strings.Contains(stderr, "warning:") {
+		t.Fatalf("stderr warns with every earlier finding assessed: %q", stderr)
+	}
+}

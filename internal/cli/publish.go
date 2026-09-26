@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -223,6 +224,13 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
+	if unattended {
+		// No human confirms an unattended round, so nothing else tells its pipeline that skipping assess drops every
+		// earlier finding from the next round.
+		if err := warnUnassessed(deps, dir, ref); err != nil {
+			return err
+		}
+	}
 	if jsonMode {
 		payload := map[string]any{"sent": !replayed, "reviewUrl": receipt.ReviewURL, "reviewId": receipt.ReviewID,
 			"unattended": receipt.Envelope.Unattended(), "edited": receipt.Edited}
@@ -235,6 +243,41 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, payload)
 	}
 	return printPublished(deps, ref, receipt, replayed)
+}
+
+// warnUnassessed runs after the review is sent, so a failed read is reported rather than returned: exiting 1 would tell
+// the pipeline nothing was published.
+func warnUnassessed(deps Deps, dir string, ref run.Ref) error {
+	s := deps.errStyle()
+	warn := func(message string) error {
+		_, err := fmt.Fprintf(deps.Stderr, "%s %s\n", s.Warn.Bold(true).Render("warning:"), message)
+		return err
+	}
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		return warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+	}
+	p, err := previousRound(root, ref)
+	if r, ok := refusal.As(err); ok && r.Code == refusal.NotFound {
+		return nil
+	}
+	if err != nil {
+		return warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+	}
+	d, err := draft.Load(dir)
+	if err != nil {
+		return warn(fmt.Sprintf("could not check for unassessed earlier findings: %v", err))
+	}
+	_, _, unassessed := draft.AssessmentCounts(d, p.earlier)
+	if unassessed == 0 {
+		return nil
+	}
+	verb := "were"
+	if unassessed == 1 {
+		verb = "was"
+	}
+	return warn(fmt.Sprintf("%d earlier %s %s not assessed and will not carry forward. Run loupe assess before loupe publish.",
+		unassessed, plural(unassessed, "finding"), verb))
 }
 
 // printPublished reports on stderr and prints the review URL alone on stdout, which is what a script reads.
