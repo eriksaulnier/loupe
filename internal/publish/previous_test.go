@@ -69,7 +69,7 @@ func TestReadPreviousReadsTheRecord(t *testing.T) {
 	gh := fakegh.New(t)
 	gh.AddReview("acme", "widgets", 42, review(5, "ci[bot]", publishedBody("ci-review@1.0.0", "Retry loop", nil)))
 	got := readPrevious(t, gh.Client(t), "acme", "widgets", 42, "", "ci-review@2.0.0")
-	want := Previous{Schema: PreviousSchema, Found: true, ReviewID: 5, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-5", Round: 3,
+	want := Previous{Schema: PreviousSchema, Found: true, ReviewID: 5, ReviewURL: "https://github.com/acme/widgets/pull/42#pullrequestreview-5", Round: 3, PublicationID: "p",
 		Findings: []EnvelopeFinding{{ID: "f-001", Title: "Retry loop", Body: "Body.", Label: "issue", Blocking: true,
 			Location: &draft.Location{Path: "a.go", Side: "RIGHT", Line: 3}}}}
 	if !reflect.DeepEqual(got, want) {

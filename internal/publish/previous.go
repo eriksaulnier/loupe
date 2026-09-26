@@ -24,10 +24,13 @@ type Previous struct {
 	ReviewURL string `json:"reviewUrl,omitempty"`
 	Round     int    `json:"round,omitempty"`
 	// Commit is the round's own head, empty when a sticky body's could not be read back.
-	Commit      string             `json:"commit,omitempty"`
-	Findings    []EnvelopeFinding  `json:"findings"`
-	Assessments []draft.Assessment `json:"assessments,omitempty"`
-	Reason      string             `json:"reason,omitempty"`
+	Commit string `json:"commit,omitempty"`
+	// PublicationID names the review's current round, which a sticky review's URL alone does not. Empty in a run
+	// captured before it was recorded.
+	PublicationID string             `json:"publicationId,omitempty"`
+	Findings      []EnvelopeFinding  `json:"findings"`
+	Assessments   []draft.Assessment `json:"assessments,omitempty"`
+	Reason        string             `json:"reason,omitempty"`
 }
 
 // newestOwn is the publisher's newest loupe review: the viewer's own, or when viewer is empty, a [bot]'s from the same
@@ -129,7 +132,8 @@ func ReadPrevious(reviews []github.Review, listErr error, owner, repo string, nu
 		findings = append(findings, f)
 	}
 	return Previous{Schema: PreviousSchema, Found: true, ReviewID: review.ID, ReviewURL: review.HTMLURL,
-		Round: round, Commit: roundCommit(review), Findings: findings, Assessments: draftAssessments(assessed)}
+		Round: round, Commit: roundCommit(review), PublicationID: render.PublicationID(review.Body), Findings: findings,
+		Assessments: draftAssessments(assessed)}
 }
 
 // roundCommit is the commit the review's current round reviewed. An edited review keeps the commit_id of the round that

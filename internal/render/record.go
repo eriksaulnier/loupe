@@ -308,6 +308,20 @@ func recordCount(version, data string) (findings, open, addressed int, ok bool) 
 }
 
 // MetaRound is the round= value on the marker line MetaSource reads, 0 when there is none.
+// PublicationID is the publication id of body's current round, empty when it has none. A sticky body keeps each
+// earlier round's reconciliation marker above its own, so the last one outside a fence is the current round's.
+func PublicationID(body string) string {
+	lines, structural := markdown.StructuralLines(body)
+	for i := len(lines) - 1; i >= 0; i-- {
+		if m := publicationKey.FindStringSubmatch(lines[i]); structural[i] && m != nil {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+var publicationKey = regexp.MustCompile(`^<!-- loupe digest=\S+ publication=(\S+) -->$`)
+
 func MetaRound(body string) int {
 	line, ok := stickyMeta(body)
 	if !ok {

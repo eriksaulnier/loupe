@@ -62,6 +62,9 @@ type AssessedAgainst struct {
 	From      string `json:"from"`
 	Round     int    `json:"round"`
 	ReviewURL string `json:"reviewUrl"`
+	// PublicationID tells a sticky review's rounds apart, since they share one URL. Empty when the run's previous
+	// round was captured before loupe recorded publication ids.
+	PublicationID string `json:"publicationId,omitempty"`
 }
 
 // Assessment is this round's status for a finding an earlier round published and no round since marked addressed.

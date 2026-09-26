@@ -16,6 +16,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -168,6 +169,16 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	} else if round, err = publishedRound(root, opts.Target); err != nil {
 		return Receipt{}, false, err
 	}
+	if a := d.AssessedAgainst; a != nil && a.PublicationID != "" {
+		if !opts.Unattended && !opts.Sticky {
+			if reviews, err = listReviews(ctx, client, opts.Target, "check the previous round"); err != nil {
+				return Receipt{}, false, err
+			}
+		}
+		if err := refuseMovedReview(reviews, viewer, opts.Target, *a); err != nil {
+			return Receipt{}, false, err
+		}
+	}
 	var sticky *StickyBuild
 	if opts.Sticky {
 		if sticky, err = stickyInput(reviews, viewer, opts.Target.Source); err != nil {
@@ -237,6 +248,27 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 		}
 	}
 	return send(ctx, opts, client, env, preview, retryID)
+}
+
+// refuseMovedReview catches a round published on the pull request after assess read the previous round, which the run
+// cannot see when it came from another data root. The run's previous round is fixed at capture, so the way out is a
+// new capture, from a data root holding no receipt of the older round.
+func refuseMovedReview(reviews []github.Review, viewer string, target run.Target, against draft.AssessedAgainst) error {
+	review, ok := newestOwn(reviews, viewer, target.Source)
+	if ok && render.PublicationID(review.Body) == against.PublicationID {
+		return nil
+	}
+	capture := "loupe capture " + target.URL
+	if target.Source != "" {
+		capture += " --source " + target.Source
+	}
+	fix := fmt.Sprintf("this run's previous round was read at capture: run %s from an empty data root, then assess again", capture)
+	if !ok {
+		return refusal.New(refusal.PreviousMoved, fmt.Sprintf("no loupe review from %s is on %s, but loupe assess read round %d (%s)",
+			publisher(viewer, target.Source), target.URL, against.Round, against.ReviewURL), fix)
+	}
+	return refusal.New(refusal.PreviousMoved, fmt.Sprintf("the previous round is now round %d (%s), not the round loupe assess read",
+		render.MetaRound(review.Body), review.HTMLURL), fix)
 }
 
 // firstCheck reconciles an existing attempt before any gate, so a review that did reach GitHub gets its receipt even

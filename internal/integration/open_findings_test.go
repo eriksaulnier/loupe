@@ -485,3 +485,47 @@ func TestPublishRefusesWhenThePreviousRoundMovesDuringConfirmation(t *testing.T)
 		t.Fatalf("%d reviews by reviewer, want rounds 1 and 2 only", got)
 	}
 }
+
+// Two pipeline rounds from separate data roots overlap: X assesses review P, Y publishes on top of it, then X
+// publishes. X's stored previous round still names P, so only the review X is about to build on shows the move.
+func TestPublishRefusesWhenAnotherDataRootPublishedMeanwhile(t *testing.T) {
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.ciRound(true, bareExceptAndSleep, nil)
+
+	h.pushHead("src/round2.go")
+	rootX := filepath.Join(t.TempDir(), "home")
+	h.Home = rootX
+	runX := fmt.Sprint(h.capture("--source", "ci-review")["run"])
+	h.mustOK("assess", "e-1", "e-2", "--status", "open", "--run", runX)
+	h.mustOK("add", "--run", runX, "--from", h.WriteFile("findings.json", generalFinding("Unbounded retries")))
+	h.mustOK("summary", "--run", runX, "--body", "A look.", "--expect-findings", "1")
+
+	h.ciRound(true, generalFinding("Cache race"), func(run string) {
+		h.mustOK("assess", "e-1", "e-2", "--status", "open", "--run", run)
+	})
+
+	h.Home = rootX
+	sends := len(h.GH.Requests())
+	e := h.mustRefuse("previous-moved", "publish", runX, "--unattended", "--sticky")
+	if msg := fmt.Sprint(e["message"]); !strings.Contains(msg, "the previous round is now round 2 (") {
+		t.Fatalf("message %q, want round 2", msg)
+	}
+	if fix := fmt.Sprint(e["fix"]); !strings.Contains(fix, "loupe capture "+prURL()+" --source ci-review from an empty data root") {
+		t.Fatalf("fix %q does not name a fresh capture", fix)
+	}
+	for _, r := range h.GH.Requests()[sends:] {
+		if !r.Read() {
+			t.Fatalf("the refused publish wrote to GitHub: %s %s", r.Method, r.Path)
+		}
+	}
+
+	h.ciRound(true, generalFinding("Unbounded retries"), func(run string) {
+		got := earlierRows(t, h.mustOK("show", "--previous", "--run", run))
+		if len(got) != 3 || got[2].title != "Cache race" {
+			t.Fatalf("a fresh capture's earlier %v, want round 1's two findings, then Cache race", got)
+		}
+		h.mustOK("assess", "e-1", "e-2", "e-3", "--status", "open", "--run", run)
+	})
+}

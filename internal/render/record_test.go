@@ -294,6 +294,18 @@ func TestMetaRound(t *testing.T) {
 	}
 }
 
+func TestPublicationIDSkipsAQuotedMarker(t *testing.T) {
+	in := exampleInput()
+	in.PublicationID = "pub-7"
+	quoted := Body(in) + "\n```\n<!-- loupe digest=d publication=quoted -->\n```\n"
+	if got := PublicationID(quoted); got != "pub-7" {
+		t.Fatalf("PublicationID %q, want pub-7", got)
+	}
+	if got := PublicationID("no marker here"); got != "" {
+		t.Fatalf("PublicationID %q, want none", got)
+	}
+}
+
 func assessedInput() Input {
 	in := exampleInput()
 	filedIn := RecordFiledIn{Round: 1, ReviewURL: "https://github.com/o/r/pull/7#pullrequestreview-1", Commit: "abc123"}

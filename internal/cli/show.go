@@ -270,14 +270,16 @@ type earlierEntry struct {
 }
 
 func (p previous) against() draft.AssessedAgainst {
-	return draft.AssessedAgainst{From: p.from, Round: p.round, ReviewURL: p.reviewURL}
+	return draft.AssessedAgainst{From: p.from, Round: p.round, ReviewURL: p.reviewURL, PublicationID: p.publicationID}
 }
 
 type previous struct {
 	from      string
 	round     int
 	reviewURL string
-	findings  []publish.EnvelopeFinding
+	// publicationID names the round on GitHub, so publish can tell whether the review it builds on is still this one.
+	publicationID string
+	findings      []publish.EnvelopeFinding
 	// earlier ends with findings, so what the round carried is the part before them.
 	earlier []draft.EarlierFinding
 }
@@ -295,7 +297,7 @@ func previousRound(root string, ref run.Ref) (previous, error) {
 	if err == nil {
 		env := receipt.Envelope
 		filedIn := draft.FiledIn{Round: round, ReviewURL: receipt.ReviewURL, Commit: env.CommitID}
-		return previous{from: "receipt", round: round, reviewURL: receipt.ReviewURL, findings: env.Findings,
+		return previous{from: "receipt", round: round, reviewURL: receipt.ReviewURL, publicationID: env.PublicationID, findings: env.Findings,
 			earlier: publish.Earlier(env.Findings, env.Assessments, filedIn)}, nil
 	}
 	local, ok := refusal.As(err)
@@ -315,7 +317,7 @@ func previousRound(root string, ref run.Ref) (previous, error) {
 			local.Fix)
 	}
 	filedIn := draft.FiledIn{Round: stored.Round, ReviewURL: stored.ReviewURL, Commit: stored.Commit}
-	return previous{from: "github", round: stored.Round, reviewURL: stored.ReviewURL, findings: stored.Findings,
+	return previous{from: "github", round: stored.Round, reviewURL: stored.ReviewURL, publicationID: stored.PublicationID, findings: stored.Findings,
 		earlier: publish.Earlier(stored.Findings, stored.Assessments, filedIn)}, nil
 }
 
