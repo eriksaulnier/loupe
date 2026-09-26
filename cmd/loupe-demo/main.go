@@ -178,7 +178,7 @@ func demoBody(now time.Time) (string, error) {
 }
 
 // stickyNote is the hint a pipeline passes with --note, shown under the newest round only.
-const stickyNote = "Remove the `ai-review` label and add it back to ask for another round."
+const stickyNote = "Add the `ai-review` label to ask for another round."
 
 // stickyRounds are the rounds demoStickyBody publishes, each at a new head that fixed some of what the round before
 // found, so the collapsed rounds show the counts falling. The numbers index findings.
