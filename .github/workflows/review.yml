@@ -37,7 +37,9 @@ jobs:
       # no review at all.
       max_turns: 80
       # loupe dogfoods its own sticky review. Sticky finds the review to edit by its source name, so
-      # source MUST stay at its default for every round.
+      # the name is set here and MUST NOT change: the next loupe-workflows release derives a longer
+      # default, and a changed name would leave every open series behind and post a second review.
+      source: loupe-ci
       sticky: true
     secrets:
       openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
