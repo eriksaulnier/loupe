@@ -31,14 +31,17 @@ const (
 	Attempt       Code = "attempt"
 	Changed       Code = "changed"
 	PreviousMoved Code = "previous-moved"
-	Sticky        Code = "sticky"
-	Viewer        Code = "viewer"
-	Timeout       Code = "timeout"
-	GitHub        Code = "github"
-	NoPaneHost    Code = "no-pane-host"
-	PaneFailed    Code = "pane-failed"
-	ReviewOpen    Code = "review-open"
-	Internal      Code = "internal"
+	// PreviousUnreadable is a previous loupe review that exists, or may, but cannot be read back, as distinct from
+	// not-found, which a caller reads as there being no earlier findings to carry.
+	PreviousUnreadable Code = "previous-unreadable"
+	Sticky             Code = "sticky"
+	Viewer             Code = "viewer"
+	Timeout            Code = "timeout"
+	GitHub             Code = "github"
+	NoPaneHost         Code = "no-pane-host"
+	PaneFailed         Code = "pane-failed"
+	ReviewOpen         Code = "review-open"
+	Internal           Code = "internal"
 )
 
 type Error struct {

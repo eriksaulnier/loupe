@@ -37,8 +37,6 @@ type Input struct {
 	Excluded, Withdrawn, Reinstated, Regraded int
 	// Sticky marks a body that later rounds edit in place; nil is an ordinary review.
 	Sticky *StickyInput
-	// OmitRecord writes the findings record's omission line in its place, for a body too long to carry it.
-	OmitRecord bool
 	// Assessments rides in the findings record only, so the next round can carry an open finding forward.
 	Assessments []RecordAssessment
 }
@@ -177,7 +175,7 @@ func Body(in Input) string {
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
 	body := top + strings.Join(blocks, "\n\n---\n\n") + "\n\n" + digest + "\n"
-	return withRecord(body, metaLine, in.Findings, in.Assessments, in.OmitRecord)
+	return withRecord(body, metaLine, in.Findings, in.Assessments)
 }
 
 // chipCounts is what the chips row counts: blocking findings, then the non-blocking findings of each label group. A

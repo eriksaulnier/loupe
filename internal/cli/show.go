@@ -44,8 +44,10 @@ Result (--json):
 --previous shows instead the findings published by the newest earlier round that has a receipt,
 skipping unpublished rounds. Without one, it shows the round capture read back from GitHub
 and stored in the run. It reads no network. It refuses with not-found when there is neither,
-with the reason capture stored when there is one. from says which source answered; for
-github, round is the review's own round number.
+with the reason capture stored when there is one. It refuses with previous-unreadable when
+capture found a loupe review it could not read back, or could not list the reviews: earlier
+findings may exist that loupe cannot carry. from says which source answered; for github,
+round is the review's own round number.
 
 earlier is every finding still open before this round: the ones the previous round marked open
 with loupe assess, then the ones it filed. Each carries filedIn, the round that first filed it,
@@ -316,9 +318,12 @@ func previousRound(root string, ref run.Ref) (previous, error) {
 	case !found:
 		return previous{}, local
 	case !stored.Found:
-		return previous{}, refusal.New(refusal.NotFound,
-			fmt.Sprintf("%s, and none can be read back from GitHub: %s", publishedHere(local.Message), stored.Reason),
-			local.Fix)
+		code, fix := refusal.NotFound, local.Fix
+		if stored.Unreadable {
+			code, fix = refusal.PreviousUnreadable, fmt.Sprintf("carry the earlier findings from GitHub by hand, or run %s from an empty data root after the head moves", publish.RecaptureCommand(target))
+		}
+		return previous{}, refusal.New(code,
+			fmt.Sprintf("%s, and none can be read back from GitHub: %s", publishedHere(local.Message), stored.Reason), fix)
 	}
 	filedIn := draft.FiledIn{Round: stored.Round, ReviewURL: stored.ReviewURL, Commit: stored.Commit}
 	return previous{from: "github", round: stored.Round, reviewURL: stored.ReviewURL, publicationID: stored.PublicationID, findings: stored.Findings,

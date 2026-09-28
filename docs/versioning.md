@@ -50,7 +50,7 @@ The format of the anchor is in [`comment-format.md`](comment-format.md).
 | Record | Version | Note |
 | :--- | :--- | :--- |
 | draft | `schema` 2 | 2 added `assessments` and `assessedAgainst` (`specs/031-open-findings`) |
-| previous | `schema` 2 | 2 added `commit`, `publicationId` and `assessments` (`specs/031-open-findings`) |
+| previous | `schema` 3 | 2 added `commit`, `publicationId` and `assessments` (`specs/031-open-findings`). 3 added `unreadable` (`specs/034-keep-findings-record`). A schema 1 or 2 file with no round reads as unreadable unless its reason is the one capture writes for no loupe review |
 | hand-back, target, comments | `schema` 1 | Strict. Unchanged until the next field change |
 | attempt, receipt | `schema` 2 | `author`, `edited` and `envelope.editReviewId` came at 1 without a bump, before this rule. 2 added `envelope.assessments` (`specs/031-open-findings`) |
 | findings record | `v=1`, `v=2` | Lenient data. `v=2` adds the round's assessments, and a round with none still writes `v=1` |

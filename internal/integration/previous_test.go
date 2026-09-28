@@ -148,11 +148,14 @@ func TestUnpublishedLocalRoundsStillReadGitHub(t *testing.T) {
 	h.pushHead("src/round2.go")
 	lists := h.reviewLists()
 	p := previousOf(t, h.captureRound(2))
-	if h.reviewLists()-lists != 1 || p["from"] != "none" || !strings.Contains(fmt.Sprint(p["reason"]), "no earlier loupe review from reviewer") {
+	if h.reviewLists()-lists != 1 || p["from"] != "none" || p["unreadable"] != nil || !strings.Contains(fmt.Sprint(p["reason"]), "no earlier loupe review from reviewer") {
 		t.Fatalf("capture previous %v", p)
 	}
+	h.mustRefuse("not-found", "show", "--previous", "--run", roundRef(2))
 }
 
+// A loupe review that is there but cannot be read back is refused with its own code, so a caller never reads it as a
+// pull request with no earlier findings to carry.
 func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 	t.Parallel()
 	stripRecord := func(body string) string {
@@ -170,6 +173,9 @@ func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 		want   string
 	}{
 		{"no record", func(h *harness, r github.Review) { h.GH.EditReview(owner, repo, number, r.ID, stripRecord(r.Body)) }, "carries no findings record"},
+		{"record left out by an older loupe", func(h *harness, r github.Review) {
+			h.GH.EditReview(owner, repo, number, r.ID, strings.Replace(stripRecord(r.Body), "<!-- loupe-meta ", "<!-- loupe-findings v=1 omitted=length -->\n<!-- loupe-meta ", 1))
+		}, "left out to fit GitHub's length limit"},
 		{"edited on GitHub", func(h *harness, r github.Review) {
 			h.GH.EditReview(owner, repo, number, r.ID, strings.Replace(r.Body, "A look.", "A second look.", 1))
 		}, "changed on GitHub after loupe published it"},
@@ -190,12 +196,25 @@ func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 			h.Home = filepath.Join(t.TempDir(), "home")
 			h.pushHead("src/round2.go")
 			p := previousOf(t, h.capture("--source", "ci-review"))
-			if p["from"] != "none" || !strings.Contains(fmt.Sprint(p["reason"]), c.want) {
+			if p["from"] != "none" || p["unreadable"] != true || !strings.Contains(fmt.Sprint(p["reason"]), c.want) {
 				t.Fatalf("capture previous %v, want a reason containing %q", p, c.want)
 			}
-			e := h.mustRefuse("not-found", "show", "--previous", "--run", runRef)
-			if msg, _ := e["message"].(string); !strings.Contains(msg, c.want) || e["fix"] != "loupe show --run "+runRef {
-				t.Fatalf("refusal %v", e)
+			for _, args := range [][]string{{"show", "--previous", "--run", runRef}, {"assess", "--run", runRef, "e-1", "--status", "open"}} {
+				e := h.mustRefuse("previous-unreadable", args...)
+				if msg, _ := e["message"].(string); !strings.Contains(msg, c.want) || !strings.Contains(fmt.Sprint(e["fix"]), "loupe capture "+prURL()+" --source ci-review") {
+					t.Fatalf("%s refusal %v", args[0], e)
+				}
+			}
+			// The round still publishes, and says it could not check the earlier findings rather than staying silent. A
+			// failed listing also fails publish, so that case stops here.
+			if c.name == "list fails" {
+				return
+			}
+			h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", oneFinding))
+			h.mustOK("summary", "--run", runRef, "--body", "A look.", "--expect-findings", "1")
+			h.IsTerminal = false
+			if _, stderr, exit := h.Run("publish", runRef, "--unattended"); exit != 0 || !strings.Contains(stderr, "could not check for unassessed earlier findings") {
+				t.Fatalf("publish exit %d stderr %q, want a warning", exit, stderr)
 			}
 		})
 	}
@@ -231,5 +250,34 @@ func TestHumanOnAFreshMachineReadsTheirLastRound(t *testing.T) {
 	shown := h.mustOK("show", "--previous", "--run", roundRef(1))
 	if findings, _ := shown["findings"].([]any); !reflect.DeepEqual(findings, want) {
 		t.Fatalf("show --previous %v\nwant findings %v", shown, want)
+	}
+}
+
+// A sticky round that drops its earlier round to fit keeps its findings record, so the next round reads it back.
+func TestNextRoundReadsBackARoundThatShedItsEarlierRounds(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.publishUnattended(noiseFinding("first", 30000), "loupe-ci", "--sticky")
+	h.pushHead("src/round2.go")
+	second := h.publishUnattended(noiseFinding("second", 30000), "loupe-ci", "--sticky")
+	_, want := receiptFindings(t, filepath.Join(second, "runs", owner, repo, fmt.Sprint(number), "1"))
+	reviews, err := h.GH.Client(t).ListReviews(context.Background(), owner, repo, number)
+	if err != nil || len(reviews) != 1 {
+		t.Fatalf("reviews %v err %v", reviews, err)
+	}
+	if body := reviews[0].Body; strings.Contains(body, "<summary>Round 1 · ") || !strings.Contains(body, "The oldest round was dropped") {
+		t.Fatalf("round 2 kept round 1, so the test does not reach the length limit:\n%s", body[len(body)-600:])
+	}
+
+	h.Home = filepath.Join(t.TempDir(), "home")
+	h.pushHead("src/round3.go")
+	if p := previousOf(t, h.capture("--source", "loupe-ci")); p["from"] != "github" || fmt.Sprint(p["round"]) != "2" || fmt.Sprint(p["findingCount"]) != "1" {
+		t.Fatalf("capture previous %v, want round 2 with 1 finding", p)
+	}
+	shown := h.mustOK("show", "--previous", "--run", runRef)
+	if findings, _ := shown["findings"].([]any); !reflect.DeepEqual(findings, want) {
+		t.Fatalf("show --previous read %d findings, want round 2's %d", len(findings), len(want))
 	}
 }
