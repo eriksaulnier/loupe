@@ -34,7 +34,7 @@ receipt from the same publisher wins. Without one, capture reads the publisher's
 loupe review on the pull request back from GitHub, the viewer's own, or with an App token
 a [bot]'s whose source name matches --source, and stores its findings in the run, so loupe
 show --previous answers offline. A review that cannot be read back is stored as a reason
-instead. That never refuses the capture.
+instead, marked unreadable. That never refuses the capture.
 
 It also reads everyone else's feedback on the pull request for loupe show --comments:
 submitted reviews, inline review threads and top-level comments, every page of each. It
@@ -65,7 +65,8 @@ Result (--json):
    "comments": {"read": true, "reviews": 2, "threads": 1, "comments": 3}}
   target.previousRound is present from round 2 on; target.source only when --source was given, and target.model only
   when --model was. previous.from is receipt (with round), github (with round, reviewUrl and findingCount) or none
-  (with reason). Run loupe show --previous when it is receipt or github. comments is {read: true} with the three
+  (with reason, and unreadable: true when a loupe review exists but cannot be read back). Run loupe show --previous
+  when it is receipt or github. comments is {read: true} with the three
   counts, or {read: false, reason}. Run loupe show --comments when read is true.`
 
 const prURLFix = "loupe capture https://github.com/<owner>/<repo>/pull/<number>"
