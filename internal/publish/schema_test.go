@@ -216,6 +216,19 @@ var fieldSets = []struct {
 			"publicationId,omitempty", "reason,omitempty", "reviewId,omitempty", "reviewUrl,omitempty",
 			"round,omitempty", "schema",
 		},
+		3: {
+			"assessments,omitempty", "assessments.finding", "assessments.finding.blocking", "assessments.finding.body",
+			"assessments.finding.filedIn", "assessments.finding.filedIn.commit,omitempty",
+			"assessments.finding.filedIn.reviewUrl", "assessments.finding.filedIn.round", "assessments.finding.id",
+			"assessments.finding.label", "assessments.finding.location", "assessments.finding.location.line",
+			"assessments.finding.location.path", "assessments.finding.location.side",
+			"assessments.finding.location.startLine,omitempty", "assessments.finding.title", "assessments.ref",
+			"assessments.status", "commit,omitempty", "findings", "findings.blocking", "findings.body", "findings.id",
+			"findings.label", "findings.location", "findings.location.line", "findings.location.path",
+			"findings.location.side", "findings.location.startLine,omitempty", "findings.title", "found",
+			"publicationId,omitempty", "reason,omitempty", "reviewId,omitempty", "reviewUrl,omitempty",
+			"round,omitempty", "schema", "unreadable,omitempty",
+		},
 	}},
 	{reflect.TypeFor[Comments](), CommentsSchema, map[int][]string{
 		1: {

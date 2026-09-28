@@ -2,6 +2,7 @@ package publish
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -112,6 +113,8 @@ func TestReadPreviousStatesWhyThereIsNone(t *testing.T) {
 		{"edited", []github.Review{review(5, "ci[bot]", strings.Replace(body, "T</summary>", "Tx</summary>", 1))}, false, "changed on GitHub"},
 		{"newer record", []github.Review{review(5, "ci[bot]", strings.Replace(body, "loupe-findings v=1 ", "loupe-findings v=9 ", 1))}, false,
 			"its findings record is v=9, which this loupe does not read"},
+		{"record left out", []github.Review{review(5, "ci[bot]", strings.Replace(body, record, "<!-- loupe-findings v=1 omitted=length -->", 1))}, false,
+			"its findings record was left out to fit GitHub's length limit"},
 		{"list fails", nil, true, "could not list the reviews on https://github.com/acme/widgets/pull/42"},
 	}
 	for _, c := range cases {
@@ -126,6 +129,9 @@ func TestReadPreviousStatesWhyThereIsNone(t *testing.T) {
 			got := readPrevious(t, gh.Client(t), "acme", "widgets", 42, "", "ci-review")
 			if got.Found || got.Findings != nil || !strings.Contains(got.Reason, c.want) {
 				t.Fatalf("got %+v, want a reason containing %q", got, c.want)
+			}
+			if want := c.name != "no review"; got.Unreadable != want {
+				t.Fatalf("unreadable %v, want %v", got.Unreadable, want)
 			}
 		})
 	}
@@ -146,6 +152,7 @@ func TestPreviousRoundTripsThroughItsFile(t *testing.T) {
 		{Schema: PreviousSchema, Found: true, ReviewID: 5, ReviewURL: "u", Round: 2, Commit: "abc", Findings: []EnvelopeFinding{},
 			Assessments: openAndAddressed()},
 		{Schema: PreviousSchema, Reason: "why"},
+		{Schema: PreviousSchema, Reason: "why", Unreadable: true},
 	} {
 		data, err := EncodePrevious(p)
 		if err != nil {
@@ -172,18 +179,37 @@ func TestPreviousRoundTripsThroughItsFile(t *testing.T) {
 	}
 }
 
+// A schema 2 file predates unreadable, so it is told apart by the one reason capture wrote when there was no review.
+func TestLoadPreviousClassifiesASchema2Reason(t *testing.T) {
+	for reason, unreadable := range map[string]bool{
+		"no earlier loupe review from alice is on https://github.com/acme/widgets/pull/42":                               false,
+		"https://github.com/acme/widgets/pull/42#pullrequestreview-5 cannot be read back: it carries no findings record": true,
+		"could not list the reviews on https://github.com/acme/widgets/pull/42: 502":                                     true,
+	} {
+		dir := t.TempDir()
+		if err := run.WriteFileAtomic(filepath.Join(dir, run.PreviousFile), fmt.Appendf(nil, `{"schema": 2, "found": false, "findings": null, "reason": %q}`, reason)); err != nil {
+			t.Fatal(err)
+		}
+		got, found, err := LoadPrevious(dir)
+		if err != nil || !found || got.Unreadable != unreadable {
+			t.Fatalf("%q: unreadable %v (%v, %v), want %v", reason, got.Unreadable, found, err, unreadable)
+		}
+	}
+}
+
 // A found round missing what capture always writes is damage, and reading it as an empty round would tell the
 // reviewer nothing was published.
 func TestLoadPreviousRefusesAnIncompleteFoundRound(t *testing.T) {
 	for name, content := range map[string]string{
-		"no findings":         `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1}`,
-		"no review id":        `{"schema": 1, "found": true, "reviewUrl": "u", "round": 1, "findings": []}`,
-		"no review url":       `{"schema": 1, "found": true, "reviewId": 5, "round": 1, "findings": []}`,
-		"no round":            `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "findings": []}`,
-		"empty id":            `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "", "title": "T"}]}`,
-		"empty title":         `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "f-001", "title": ""}]}`,
-		"reason and findings": `{"schema": 1, "reason": "why", "findings": []}`,
-		"unknown status":      `{"schema": 2, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [], "assessments": [{"ref": "e-1", "status": "fixed", "finding": {"id": "f-001", "title": "T"}}]}`,
+		"no findings":          `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1}`,
+		"no review id":         `{"schema": 1, "found": true, "reviewUrl": "u", "round": 1, "findings": []}`,
+		"no review url":        `{"schema": 1, "found": true, "reviewId": 5, "round": 1, "findings": []}`,
+		"no round":             `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "findings": []}`,
+		"empty id":             `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "", "title": "T"}]}`,
+		"empty title":          `{"schema": 1, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [{"id": "f-001", "title": ""}]}`,
+		"reason and findings":  `{"schema": 1, "reason": "why", "findings": []}`,
+		"found and unreadable": `{"schema": 3, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [], "unreadable": true}`,
+		"unknown status":       `{"schema": 2, "found": true, "reviewId": 5, "reviewUrl": "u", "round": 1, "findings": [], "assessments": [{"ref": "e-1", "status": "fixed", "finding": {"id": "f-001", "title": "T"}}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

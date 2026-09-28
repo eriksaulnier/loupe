@@ -151,8 +151,11 @@ func TestUnpublishedLocalRoundsStillReadGitHub(t *testing.T) {
 	if h.reviewLists()-lists != 1 || p["from"] != "none" || !strings.Contains(fmt.Sprint(p["reason"]), "no earlier loupe review from reviewer") {
 		t.Fatalf("capture previous %v", p)
 	}
+	h.mustRefuse("not-found", "show", "--previous", "--run", roundRef(2))
 }
 
+// A loupe review that is there but cannot be read back is refused with its own code, so a caller never reads it as a
+// pull request with no earlier findings to carry.
 func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 	t.Parallel()
 	stripRecord := func(body string) string {
@@ -170,6 +173,9 @@ func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 		want   string
 	}{
 		{"no record", func(h *harness, r github.Review) { h.GH.EditReview(owner, repo, number, r.ID, stripRecord(r.Body)) }, "carries no findings record"},
+		{"record left out by an older loupe", func(h *harness, r github.Review) {
+			h.GH.EditReview(owner, repo, number, r.ID, strings.Replace(stripRecord(r.Body), "<!-- loupe-meta ", "<!-- loupe-findings v=1 omitted=length -->\n<!-- loupe-meta ", 1))
+		}, "left out to fit GitHub's length limit"},
 		{"edited on GitHub", func(h *harness, r github.Review) {
 			h.GH.EditReview(owner, repo, number, r.ID, strings.Replace(r.Body, "A look.", "A second look.", 1))
 		}, "changed on GitHub after loupe published it"},
@@ -193,9 +199,11 @@ func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 			if p["from"] != "none" || !strings.Contains(fmt.Sprint(p["reason"]), c.want) {
 				t.Fatalf("capture previous %v, want a reason containing %q", p, c.want)
 			}
-			e := h.mustRefuse("not-found", "show", "--previous", "--run", runRef)
-			if msg, _ := e["message"].(string); !strings.Contains(msg, c.want) || e["fix"] != "loupe show --run "+runRef {
-				t.Fatalf("refusal %v", e)
+			for _, args := range [][]string{{"show", "--previous", "--run", runRef}, {"assess", "--run", runRef, "e-1", "--status", "open"}} {
+				e := h.mustRefuse("previous-unreadable", args...)
+				if msg, _ := e["message"].(string); !strings.Contains(msg, c.want) || !strings.Contains(fmt.Sprint(e["fix"]), "loupe capture "+prURL()+" --source ci-review") {
+					t.Fatalf("%s refusal %v", args[0], e)
+				}
 			}
 		})
 	}

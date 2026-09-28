@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -13,7 +14,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const PreviousSchema = 2
+const PreviousSchema = 3
 
 // Previous is the round capture read back from GitHub for a run with no earlier local receipt of its publisher's: the
 // publisher's newest loupe review and its findings when Found, and otherwise the reason there is none.
@@ -31,7 +32,14 @@ type Previous struct {
 	Findings      []EnvelopeFinding  `json:"findings"`
 	Assessments   []draft.Assessment `json:"assessments,omitempty"`
 	Reason        string             `json:"reason,omitempty"`
+	// Unreadable marks a round that is not Found although a loupe review from the publisher exists or may: one that
+	// cannot be read back, or a listing that failed.
+	Unreadable bool `json:"unreadable,omitempty"`
 }
+
+// noReviewReason opens the one reason that says the publisher has no loupe review on the pull request. A schema 2 file
+// is classified by it, since capture wrote every reason from a closed set.
+const noReviewReason = "no earlier loupe review from "
 
 // newestOwn is the publisher's newest loupe review: the viewer's own, or when viewer is empty, a [bot]'s from the same
 // source. An installation token cannot read its own login, so the source capture recorded is what tells one App's
@@ -126,21 +134,23 @@ func receiptPublisher(r Receipt) string {
 // seen superseded. It takes capture's one listing of the reviews, and listErr when that listing failed.
 func ReadPrevious(reviews []github.Review, listErr error, owner, repo string, number int, viewer, source string) Previous {
 	prURL := fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, number)
-	none := func(reason string) Previous { return Previous{Schema: PreviousSchema, Reason: reason} }
+	unreadable := func(reason string) Previous {
+		return Previous{Schema: PreviousSchema, Reason: reason, Unreadable: true}
+	}
 	if listErr != nil {
-		return none(fmt.Sprintf("could not list the reviews on %s: %v", prURL, listErr))
+		return unreadable(fmt.Sprintf("could not list the reviews on %s: %v", prURL, listErr))
 	}
 	review, ok := newestOwn(reviews, viewer, source)
 	if !ok {
-		return none(fmt.Sprintf("no earlier loupe review from %s is on %s", publisher(viewer, source), prURL))
+		return Previous{Schema: PreviousSchema, Reason: fmt.Sprintf(noReviewReason+"%s is on %s", publisher(viewer, source), prURL)}
 	}
 	records, assessed, err := render.ReadRecord(review.Body)
 	if err != nil {
-		return none(fmt.Sprintf("%s cannot be read back: %v", review.HTMLURL, err))
+		return unreadable(fmt.Sprintf("%s cannot be read back: %v", review.HTMLURL, err))
 	}
 	round := render.MetaRound(review.Body)
 	if round < 1 {
-		return none(review.HTMLURL + " cannot be read back: its loupe-meta marker carries no round=")
+		return unreadable(review.HTMLURL + " cannot be read back: its loupe-meta marker carries no round=")
 	}
 	findings := make([]EnvelopeFinding, 0, len(records))
 	for _, r := range records {
@@ -236,6 +246,9 @@ func EncodePrevious(p Previous) ([]byte, error) {
 func LoadPrevious(dir string) (Previous, bool, error) {
 	var p Previous
 	found, err := loadRecord(filepath.Join(dir, run.PreviousFile), &p, PreviousSchema, func() string { return previousProblem(p) })
+	if err == nil && found && p.Schema < 3 && !p.Found {
+		p.Unreadable = !strings.HasPrefix(p.Reason, noReviewReason)
+	}
 	return p, found, err
 }
 
@@ -245,6 +258,8 @@ func previousProblem(p Previous) string {
 	switch {
 	case !p.Found && (p.Reason == "" || p.Findings != nil):
 		return "it holds neither a round nor only a reason"
+	case p.Found && p.Unreadable:
+		return "it marks a round it read back as unreadable"
 	case !p.Found:
 		return ""
 	case p.ReviewID < 1 || p.ReviewURL == "" || p.Round < 1 || p.Findings == nil:
