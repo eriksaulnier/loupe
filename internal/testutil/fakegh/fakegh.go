@@ -286,8 +286,8 @@ func (s *Server) SetComparison(owner, repo, base, head string, c github.Comparis
 	s.comparisons[compareKey{owner, repo, base + "..." + head}] = c
 }
 
-// SetCommits is the pull request's commit list, oldest first. The fake lists at most PullRequestCommitCap of them, as
-// GitHub does.
+// SetCommits is the pull request's commit list, in the oldest-first order loupe assumes GitHub uses. The fake lists
+// at most PullRequestCommitCap of them, as GitHub does.
 func (s *Server) SetCommits(owner, repo string, number int, commits ...github.Commit) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

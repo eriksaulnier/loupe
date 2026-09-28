@@ -34,7 +34,8 @@ type Client interface {
 	CreateReview(ctx context.Context, owner, repo string, number int, req ReviewRequest) (Review, error)
 	// UpdateReview replaces a submitted review's body, and nothing else about it.
 	UpdateReview(ctx context.Context, owner, repo string, number int, id int64, body string) (Review, error)
-	// PullRequestCommits lists the pull request's commits, oldest first. GitHub stops at 250.
+	// PullRequestCommits lists the pull request's commits, which loupe assumes are oldest first, since GitHub documents
+	// no order. GitHub stops at 250.
 	PullRequestCommits(ctx context.Context, owner, repo string, number int) ([]Commit, error)
 	Compare(ctx context.Context, owner, repo, base, head string) (Comparison, error)
 	TokenKind() TokenKind

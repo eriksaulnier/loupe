@@ -2,7 +2,7 @@
 
 Evidence gathered while building v0, recorded so the rebuild does not rediscover it.
 
-- These are observations of github.com at the time noted, not documented guarantees.
+- Most entries are observations of github.com at the time noted, not documented guarantees. An entry labeled Documented quotes GitHub's documentation, and one labeled Assumed has not been observed.
 - The code MUST surface unexpected responses rather than assume they cannot happen.
 
 ## Review creation
