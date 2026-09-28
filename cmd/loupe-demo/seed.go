@@ -181,16 +181,18 @@ func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool) error {
 			Number: r.number, URL: url, Title: prTitle, State: "open", Author: author, BaseRef: "main", BaseSHA: baseSHA, HeadSHA: r.live,
 		})
 	}
+	gained := []github.Commit{
+		{SHA: "3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d", Message: "fix(cache): fall through to the TTL check without an ETag"},
+		{SHA: "4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e", Message: "test(cache): cover the 304 path"},
+		{SHA: movedSHA, Message: "docs: note the cache size limit"},
+	}
+	gh.SetCommits(owner, repo, 44, append([]github.Commit{{SHA: headSHA, Message: "feat(cache): serve 304s from the store"}}, gained...)...)
 	qualifier := owner + ":" + repo + ":"
 	gh.SetComparison(owner, repo, qualifier+headSHA, qualifier+movedSHA, github.Comparison{
 		Status:  "ahead",
 		AheadBy: 3,
-		Commits: []github.Commit{
-			{SHA: "3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d", Message: "fix(cache): fall through to the TTL check without an ETag"},
-			{SHA: "4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e", Message: "test(cache): cover the 304 path"},
-			{SHA: movedSHA, Message: "docs: note the cache size limit"},
-		},
-		Files: []github.ComparedFile{{Filename: "internal/cache/store.go"}, {Filename: "README.md"}},
+		Commits: gained,
+		Files:   []github.ComparedFile{{Filename: "internal/cache/store.go"}, {Filename: "README.md"}},
 	})
 	return nil
 }

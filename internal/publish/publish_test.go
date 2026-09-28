@@ -367,8 +367,9 @@ const (
 	laterSHA = "5555555555555555555555555555555555555555"
 )
 
-// moveHead makes head the live head, which GitHub compares as the captured head plus commits changing files. The
-// fake answers only refs qualified with the head repository, because GitHub answers bare fork shas with 404.
+// moveHead makes head the live head, which the pull request lists after the captured head and GitHub compares as the
+// captured head plus commits changing files. The fake answers only refs qualified with the head repository, because
+// GitHub answers bare fork shas with 404.
 func (fx *fixture) moveHead(head string, commits int, files ...github.ComparedFile) {
 	fx.t.Helper()
 	fx.moveHeadIn("acme:widgets:", head, commits, files...)
@@ -381,7 +382,29 @@ func (fx *fixture) moveHeadIn(qualifier, head string, commits int, files ...gith
 		cmp.Commits = append(cmp.Commits, github.Commit{SHA: fmt.Sprintf("%02d%038d", i+1, 0), Message: fmt.Sprintf("commit %d\n\nbody", i+1)})
 	}
 	fx.gh.SetComparison("acme", "widgets", qualifier+headSHA, qualifier+head, cmp)
+	fx.gh.SetCommits("acme", "widgets", 42, append([]github.Commit{{SHA: headSHA, Message: "captured"}}, cmp.Commits...)...)
 	fx.gh.SetHead("acme", "widgets", 42, head)
+}
+
+// fillCommits lists n commits on the pull request, none of them the captured head, as a pull request at GitHub's cap
+// can.
+func (fx *fixture) fillCommits(n int) {
+	fx.t.Helper()
+	commits := make([]github.Commit, n)
+	for i := range commits {
+		commits[i] = github.Commit{SHA: fmt.Sprintf("c%039d", i), Message: fmt.Sprintf("commit %d", i)}
+	}
+	fx.gh.SetCommits("acme", "widgets", 42, commits...)
+}
+
+// compared reports whether publish called the compare API.
+func (fx *fixture) compared() bool {
+	for _, r := range fx.gh.Requests() {
+		if strings.HasPrefix(r.Path, "/repos/acme/widgets/compare/") {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRunPublishesAtCapturedHeadWhenHeadMovedForward(t *testing.T) {
@@ -446,16 +469,96 @@ func TestRunHeadMovedMarksTruncatedFileList(t *testing.T) {
 }
 
 func TestRunRefusesWhenCapturedHeadLeftHistory(t *testing.T) {
-	for _, status := range []string{"diverged", "behind", "not found"} {
-		t.Run(status, func(t *testing.T) {
+	for _, unattended := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unattended=%v", unattended), func(t *testing.T) {
 			fx := newRun(t, readyDraft())
-			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
-			if status != "not found" {
-				fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: status, AheadBy: 1})
+			if unattended {
+				fx = newUnattendedRun(t, readyDraft())
 			}
+			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+			fx.fillCommits(3)
 			_, err := fx.run()
 			msg := wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)
 			if !strings.Contains(msg, "no longer in the pull request's history") {
+				t.Errorf("message %q", msg)
+			}
+			if fx.compared() {
+				t.Error("a commit list under the cap answers without compare")
+			}
+			if len(fx.previews) != 0 {
+				t.Error("confirmation shown")
+			}
+			fx.check(0)
+		})
+	}
+}
+
+// At GitHub's cap the list may have stopped before the captured commit, so compare decides.
+func TestRunComparesWhenCommitListIsAtCap(t *testing.T) {
+	for _, status := range []string{"ahead", "diverged", "behind", "not found"} {
+		t.Run(status, func(t *testing.T) {
+			fx := newUnattendedRun(t, readyDraft())
+			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+			fx.fillCommits(prCommitCap + 5)
+			if status != "not found" {
+				fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: status, AheadBy: 300})
+			}
+			_, err := fx.run()
+			if !fx.compared() {
+				t.Error("compare not called at the cap")
+			}
+			if status == "ahead" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				fx.check(1)
+				return
+			}
+			wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)
+			fx.check(0)
+		})
+	}
+}
+
+func TestRunUnattendedPublishesWhenHeadGainedCommitsWithoutCompare(t *testing.T) {
+	fx := newUnattendedRun(t, readyDraft())
+	fx.moveHead(movedSHA, 2, github.ComparedFile{Filename: "a.go"})
+	// A token narrowed to pull-requests: write gets 403 from compare.
+	fx.gh.Fail("GET", "/repos/acme/widgets/compare/acme:widgets:"+headSHA+"...acme:widgets:"+movedSHA, http.StatusForbidden)
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
+	}
+	if fx.compared() {
+		t.Error("compare called although the commit list answered")
+	}
+	fx.check(1)
+}
+
+func TestRunNamesContentsPermissionWhenCompareIsForbidden(t *testing.T) {
+	comparePath := "/repos/acme/widgets/compare/acme:widgets:" + headSHA + "...acme:widgets:" + movedSHA
+	cases := []struct {
+		name  string
+		setup func(t *testing.T) *fixture
+	}{
+		{"unattended at the cap", func(t *testing.T) *fixture {
+			fx := newUnattendedRun(t, readyDraft())
+			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+			fx.fillCommits(prCommitCap)
+			return fx
+		}},
+		{"attended confirmation", func(t *testing.T) *fixture {
+			fx := newRun(t, readyDraft())
+			fx.moveHead(movedSHA, 1, github.ComparedFile{Filename: "a.go"})
+			return fx
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fx := c.setup(t)
+			fx.gh.Fail("GET", comparePath, http.StatusForbidden)
+			_, err := fx.run()
+			msg := wantRefusal(t, err, refusal.GitHub, "contents: read", "loupe capture "+prLink)
+			if !strings.Contains(msg, "HTTP 403") || !strings.Contains(msg, "contents: read") {
 				t.Errorf("message %q", msg)
 			}
 			if len(fx.previews) != 0 {
@@ -476,6 +579,9 @@ func TestRunRefusesApproveAtMovedHead(t *testing.T) {
 	msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment", "--action request-changes", "loupe capture "+prLink)
 	if !strings.Contains(msg, "2 commits") {
 		t.Errorf("message %q", msg)
+	}
+	if fx.compared() {
+		t.Error("the commit list counts the commits without compare")
 	}
 	if len(fx.previews) != 0 {
 		t.Error("confirmation shown")

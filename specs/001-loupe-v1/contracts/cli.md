@@ -64,7 +64,7 @@ Refusal or error (exit 1 or 2):
 | `sticky` | `--sticky` found the publisher's sticky review, but its body is not in the form loupe writes, so its earlier rounds cannot be read back | `loupe publish` without `--sticky` to post a new review |
 | `viewer` | The GitHub login changed between showing the confirmation and sending; or the token's kind at publish differs from the kind capture recorded | `loupe publish` again to confirm as the current login; for the kind mismatch, capture and publish with the same token kind |
 | `timeout` | `wait --timeout` elapsed with no note handed back and no receipt | `loupe wait` again |
-| `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
+| `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub; for a comparison refused with 403, `contents: read` |
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
 | `pane-failed` | The host refused or garbled a `handoff` call; `details.host` (`herdr` or `orca`) and `details.step` name where | the same; the message carries the host's error and, after any step but `probe`, says a pane may already be open |
 | `review-open` | `handoff` while a `review` of the run is running | tell the human their review is already open, then `loupe wait` |

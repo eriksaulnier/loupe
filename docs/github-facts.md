@@ -49,6 +49,8 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - Observed 2026-09-14, read-only, on `cli/cli#14035` (a fork pull request) and `eriksaulnier/market-map#246` (same repository). `GET /repos/{owner}/{repo}/compare/{base}...{head}` on the base repository returned 404 when either side was a bare sha that exists only in the fork, even though `GET /repos/{owner}/{repo}/commits/{sha}` on the base repository resolved it.
 - On the same two pull requests, qualifying both sides as `{headOwner}:{headRepo}:{sha}` returned the comparison on the base repository, for the fork and the same-repository case alike. loupe MUST qualify both sides with the head repository.
 - `status` was `ahead` when base is an ancestor of head and `behind` for the reverse. `ahead_by` counted every commit reachable from head and not from base, including commits a merge from the base branch brought in.
+- Reported 2026-09-28 from a reviewer workflow whose GitHub App token had only `pull-requests: write`, and not reproduced by loupe: compare answered 403. That compare needs `contents: read` is inferred from that 403 and was not checked against GitHub's documentation.
+- Assumed, not observed: `GET /repos/{owner}/{repo}/pulls/{number}/commits` needs only `pull-requests: read`, lists the commits reachable from the head and not from the base, oldest first, and stops at 250. `loupe publish` reads a moved head from it, and compares only when the list reaches 250 or an attended confirmation needs the changed files.
 
 ## Markdown rendering in review bodies
 

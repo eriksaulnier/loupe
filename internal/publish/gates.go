@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -40,7 +41,7 @@ func Gates(ctx context.Context, in GateInput) (*HeadMoved, error) {
 	if err != nil {
 		return nil, err
 	}
-	moved, err := checkHead(ctx, in.GitHub, in.Target, pr, in.Action, in.Draft)
+	moved, err := checkHead(ctx, in.GitHub, in.Target, pr, in.Action, in.Draft, in.Unattended)
 	if err != nil {
 		return nil, err
 	}
@@ -117,15 +118,64 @@ const (
 	maxMovedCommits = 20
 	// compareFileCap is the most changed files GitHub lists for a comparison.
 	compareFileCap = 300
+	// prCommitCap is the most commits GitHub lists for a pull request.
+	prCommitCap = 250
 )
 
 // checkHead lets a review go out at the captured head when the pull request only gained commits on top of it, because
 // the review's commit_id pins its comments there. A captured commit that left the history has nothing to pin to, and
 // an approval would cover commits nobody reviewed.
-func checkHead(ctx context.Context, client github.Client, target run.Target, pr github.PullRequest, action string, d *draft.Draft) (*HeadMoved, error) {
+func checkHead(ctx context.Context, client github.Client, target run.Target, pr github.PullRequest, action string, d *draft.Draft, unattended bool) (*HeadMoved, error) {
 	if pr.HeadSHA == target.HeadSHA {
 		return nil, nil
 	}
+	// The commit list needs pull-requests: read and compare needs contents: read, so compare runs only when the list
+	// cannot answer or for the files an attended confirmation shows.
+	commits, err := client.PullRequestCommits(ctx, target.Owner, target.Repo, target.Number)
+	if err != nil {
+		return nil, err
+	}
+	at := slices.IndexFunc(commits, func(c github.Commit) bool { return c.SHA == target.HeadSHA })
+	var cmp *github.Comparison
+	if at < 0 {
+		// A list at the cap may have stopped before the captured commit.
+		if len(commits) < prCommitCap {
+			return nil, leftHistory(target, pr)
+		}
+		if cmp, err = compareHeads(ctx, client, target, pr, "the pull request lists 250 or more commits"); err != nil {
+			return nil, err
+		}
+		if cmp == nil || cmp.Status != "ahead" {
+			return nil, leftHistory(target, pr)
+		}
+	}
+	aheadBy := len(commits) - at - 1
+	if cmp != nil {
+		aheadBy = cmp.AheadBy
+	}
+	if action == "approve" {
+		return nil, refusal.New(refusal.HeadMoved,
+			fmt.Sprintf("cannot approve: the pull request head moved %d %s past the captured head, and an approval would cover them unreviewed", aheadBy, commitsWord(aheadBy)),
+			"use --action comment or --action request-changes, or loupe capture "+target.URL+" to review the new head")
+	}
+	if cmp == nil && unattended {
+		// No one confirms an unattended round, so the files the head changed are not read.
+		return headMoved(target.HeadSHA, pr.HeadSHA, github.Comparison{AheadBy: aheadBy, Commits: commits[at+1:]}, d), nil
+	}
+	if cmp == nil {
+		if cmp, err = compareHeads(ctx, client, target, pr, "the confirmation shows the files the new commits changed"); err != nil {
+			return nil, err
+		}
+		if cmp == nil || cmp.Status != "ahead" {
+			return nil, leftHistory(target, pr)
+		}
+	}
+	return headMoved(target.HeadSHA, pr.HeadSHA, *cmp, d), nil
+}
+
+// compareHeads compares the captured head with the live one, and is nil when GitHub has no such comparison. why says
+// why loupe compares, for the refusal a token without contents: read gets.
+func compareHeads(ctx context.Context, client github.Client, target run.Target, pr github.PullRequest, why string) (*github.Comparison, error) {
 	// GitHub answers bare shas that exist only in a fork with 404, so both refs name the repository the head lives in.
 	headOwner, headRepo := pr.HeadOwner, pr.HeadRepo
 	if headOwner == "" {
@@ -134,21 +184,24 @@ func checkHead(ctx context.Context, client github.Client, target run.Target, pr 
 	qualifier := headOwner + ":" + headRepo + ":"
 	cmp, err := client.Compare(ctx, target.Owner, target.Repo, qualifier+target.HeadSHA, qualifier+pr.HeadSHA)
 	var httpErr *github.HTTPError
-	notFound := errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound
-	if err != nil && !notFound {
-		return nil, err
+	switch {
+	case err == nil:
+		return &cmp, nil
+	case errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound:
+		return nil, nil
+	case errors.As(err, &httpErr) && httpErr.Status == http.StatusForbidden:
+		return nil, refusal.New(refusal.GitHub,
+			fmt.Sprintf("GitHub refused to compare the captured head %s with the pull request head %s (HTTP 403: %s); loupe compares them because %s, and comparing commits needs the token's contents: read permission",
+				target.HeadSHA, pr.HeadSHA, httpErr.Message, why),
+			"grant the token contents: read, or run loupe capture "+target.URL+" to review the new head")
 	}
-	if notFound || cmp.Status != "ahead" {
-		return nil, refusal.New(refusal.HeadMoved,
-			fmt.Sprintf("the pull request head moved from %s to %s and the captured commit is no longer in the pull request's history", target.HeadSHA, pr.HeadSHA),
-			"loupe capture "+target.URL)
-	}
-	if action == "approve" {
-		return nil, refusal.New(refusal.HeadMoved,
-			fmt.Sprintf("cannot approve: the pull request head moved %d %s past the captured head, and an approval would cover them unreviewed", cmp.AheadBy, commitsWord(cmp.AheadBy)),
-			"use --action comment or --action request-changes, or loupe capture "+target.URL+" to review the new head")
-	}
-	return headMoved(target.HeadSHA, pr.HeadSHA, cmp, d), nil
+	return nil, err
+}
+
+func leftHistory(target run.Target, pr github.PullRequest) error {
+	return refusal.New(refusal.HeadMoved,
+		fmt.Sprintf("the pull request head moved from %s to %s and the captured commit is no longer in the pull request's history", target.HeadSHA, pr.HeadSHA),
+		"loupe capture "+target.URL)
 }
 
 func headMoved(captured, live string, cmp github.Comparison, d *draft.Draft) *HeadMoved {
