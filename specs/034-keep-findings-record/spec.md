@@ -76,7 +76,7 @@ A caller runs `show --previous` on a round whose previous loupe review cannot be
 
 - A local receipt answers `show --previous` before any stored read-back, so a receipt of the publisher's is never unreadable.
 - After a successful publish, a `previous-unreadable` previous round warns that the earlier findings could not be checked, where a `not-found` one stays silent.
-- A reader MUST NOT refuse a capture over an unreadable review (`docs/versioning.md`). Capture's result still reports `{from: "none", reason}`.
+- A reader MUST NOT refuse a capture over an unreadable review (`docs/versioning.md`). Capture's result still reports `{from: "none", reason}`, and adds `unreadable: true`, so a caller that decides from capture's result alone, as the `human-review` skill does, can tell the two apart too.
 
 ## Requirements *(mandatory)*
 
@@ -86,8 +86,9 @@ A caller runs `show --previous` on a round whose previous loupe review cannot be
 - **FR-002**: The reader MUST keep reading `omitted=length` as a body without a readable record.
 - **FR-003**: Capture MUST record in `previous.json` whether the publisher's review was absent or present and unreadable. A failed listing counts as unreadable, since a review may exist.
 - **FR-004**: `show --previous`, and `assess` through it, MUST refuse with `previous-unreadable` when the stored round is unreadable, and with `not-found` only when no loupe review from the publisher was found. The fix MUST name the capture command.
-- **FR-005**: A schema 2 `previous.json` without a round MUST read as absent only when its reason is the one capture writes for no loupe review.
-- **FR-006**: `contracts/cli.md`, `docs/comment-format.md` and `docs/versioning.md` MUST document the change.
+- **FR-005**: A schema 1 or 2 `previous.json` without a round MUST read as absent only when its reason is the one capture writes for no loupe review.
+- **FR-006**: Capture's `previous` result MUST carry `unreadable: true` when `previous.json` marks the round unreadable.
+- **FR-007**: `contracts/cli.md`, `docs/comment-format.md`, `docs/versioning.md` and the `human-review` skill MUST document the change.
 
 ## Success Criteria *(mandatory)*
 
