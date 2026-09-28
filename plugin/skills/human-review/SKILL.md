@@ -29,7 +29,7 @@ Run `loupe capture <pr-url> --json` from a clone of the pull request's repositor
 
 - `run`: the run reference, such as `owner/repo#123@1`. Pass it as `--run <ref>` to every later command.
 - `target.headSha`, `target.baseRef` and `target.headRef`: the refs the review reads the change at.
-- `previous.from`: `receipt` or `github` when an earlier round was published, `none` otherwise. With `none`, `previous.reason` says why.
+- `previous.from`: `receipt` or `github` when an earlier round was published, `none` otherwise. With `none`, `previous.reason` says why, and `previous.unreadable` is `true` when an earlier loupe review exists but cannot be read back.
 - `comments.read`: `true` when capture read the other reviewers' feedback on the pull request. With `false`, `comments.reason` says why.
 
 To name what filed the findings in the published footer, add `--source <name>[@<version>]`, such as `--source my-reviewer@1.0.0`. To name which model produced them in the published footer, add `--model <id>` with your own model identifier, such as `--model claude-opus-4-1`, when you know it. loupe checks it against `^[a-z0-9][a-z0-9._/:-]*$`, at most 64 characters and no `--`, so lowercase it and drop any `@` qualifier before passing it. Both are optional. If you do not know your model, omit the flag rather than guess.
