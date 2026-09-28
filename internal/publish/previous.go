@@ -37,8 +37,8 @@ type Previous struct {
 	Unreadable bool `json:"unreadable,omitempty"`
 }
 
-// noReviewReason opens the one reason that says the publisher has no loupe review on the pull request. A schema 2 file
-// is classified by it, since capture wrote every reason from a closed set.
+// noReviewReason opens the one reason that says the publisher has no loupe review on the pull request. A schema 1 or 2
+// file is classified by it, since capture wrote every reason from a closed set.
 const noReviewReason = "no earlier loupe review from "
 
 // newestOwn is the publisher's newest loupe review: the viewer's own, or when viewer is empty, a [bot]'s from the same
