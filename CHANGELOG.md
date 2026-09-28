@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.0](https://github.com/eriksaulnier/loupe/compare/v0.14.0...v0.15.0) (2026-09-28)
+
+
+### Features
+
+* **publish:** never publish a review without its findings record ([#69](https://github.com/eriksaulnier/loupe/issues/69)) ([0ed2292](https://github.com/eriksaulnier/loupe/commit/0ed2292fb3ee503e46ccf04a6c12f40bf6626cd6))
+
+
+### Bug Fixes
+
+* **publish:** read a moved head from the pull request's commits ([#70](https://github.com/eriksaulnier/loupe/issues/70)) ([8de6915](https://github.com/eriksaulnier/loupe/commit/8de6915e71b1f08ab1e74347b939a47940d66db6))
+
 ## [0.14.0](https://github.com/eriksaulnier/loupe/compare/v0.13.0...v0.14.0) (2026-09-26)
 
 
