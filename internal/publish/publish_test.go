@@ -545,15 +545,25 @@ func TestRunCountsFromCompareWhenCapturedCommitIsListedAtCap(t *testing.T) {
 
 // The list and compare disagree only if GitHub does; the refusal is the old one for a compare that is not ahead.
 func TestRunRefusesWhenListedHeadDoesNotCompareAhead(t *testing.T) {
-	fx := newRun(t, readyDraft())
-	fx.gh.SetHead("acme", "widgets", 42, movedSHA)
-	fx.gh.SetCommits("acme", "widgets", 42, github.Commit{SHA: headSHA}, github.Commit{SHA: movedSHA})
-	_, err := fx.run()
-	wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)
-	if len(fx.previews) != 0 {
-		t.Error("confirmation shown")
+	for _, status := range []string{"diverged", "behind", "not found"} {
+		t.Run(status, func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+			fx.gh.SetCommits("acme", "widgets", 42, github.Commit{SHA: headSHA}, github.Commit{SHA: movedSHA})
+			if status != "not found" {
+				fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: status, AheadBy: 1})
+			}
+			_, err := fx.run()
+			wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)
+			if !fx.compared() {
+				t.Error("an attended run compares a listed head")
+			}
+			if len(fx.previews) != 0 {
+				t.Error("confirmation shown")
+			}
+			fx.check(0)
+		})
 	}
-	fx.check(0)
 }
 
 func TestRunUnattendedPublishesWhenHeadGainedCommitsWithoutCompare(t *testing.T) {
