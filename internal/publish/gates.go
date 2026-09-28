@@ -69,7 +69,7 @@ func Gates(ctx context.Context, in GateInput) (*HeadMoved, error) {
 func tokenRefusal(kind github.TokenKind, unattended bool) error {
 	if unattended && kind != github.Installation {
 		return refusal.New(refusal.Token, "loupe publish --unattended needs a GitHub App installation token",
-			"set GITHUB_TOKEN to an installation token with permissions: pull-requests: write")
+			"set GITHUB_TOKEN to an installation token with permissions: pull-requests: write, and contents: read for a pull request of 250 or more commits")
 	}
 	if !unattended && kind == github.Installation {
 		return refusal.New(refusal.Token, "an installation token can only publish with --unattended, since it posts as the App",

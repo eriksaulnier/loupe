@@ -161,7 +161,7 @@ func TestGatesBlockingCountsPendingFindings(t *testing.T) {
 func TestGatesRefusesTokenBeforeAnyCall(t *testing.T) {
 	gh, client := newFake(t)
 	in := GateInput{Unattended: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
-	wantRefusal(t, gateErr(context.Background(), in), refusal.Token, "GITHUB_TOKEN", "permissions: pull-requests: write")
+	wantRefusal(t, gateErr(context.Background(), in), refusal.Token, "GITHUB_TOKEN", "permissions: pull-requests: write", "contents: read")
 	if n := len(gh.Requests()); n != 0 {
 		t.Fatalf("token gate contacted GitHub %d times", n)
 	}

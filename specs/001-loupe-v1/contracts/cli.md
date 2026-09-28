@@ -43,7 +43,7 @@ Refusal or error (exit 1 or 2):
 | `pr` | Pull request not found, closed, or not on github.com | the capture syntax for an open pull request |
 | `same-head` | The newest round is unpublished and at the pull request's current head | `--run <ref>` for that round |
 | `auth` | GitHub authentication missing | `gh auth login --hostname github.com` |
-| `token` | `--unattended` with a user token; publish without `--unattended` with an installation token | `GITHUB_TOKEN` with `permissions: pull-requests: write`; for the second, `--unattended` |
+| `token` | `--unattended` with a user token; publish without `--unattended` with an installation token | `GITHUB_TOKEN` with `permissions: pull-requests: write`, and `contents: read` for a pull request of 250 or more commits; for the second, `--unattended`. Amended on 2026-09-28: publish reads a moved head from the pull request's commit list and compares commits, which needs `contents: read`, only past GitHub's 250-commit cap or for an attended confirmation |
 | `input` | JSON input malformed, unknown field, wrong shape, or a forbidden field | the field and the `--help` for the shape |
 | `location` | Path or line not in the stored diff, or a range spans hunks | nearest valid lines |
 | `markdown` | Body or summary fails the allowlist | the code (`limit`, `fence`, `html`, `depth`), line, and `loupe edit <id> --from -` or `loupe summary --from -` |
