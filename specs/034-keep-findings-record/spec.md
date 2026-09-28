@@ -68,7 +68,7 @@ A caller runs `show --previous` on a round whose previous loupe review cannot be
 
 1. **Given** each of those reviews, **When** `show --previous` or `assess` runs, **Then** it refuses with `previous-unreadable`, and the message carries capture's reason.
 2. **Given** a pull request with no loupe review from the publisher, **When** `show --previous` runs, **Then** it refuses with `not-found`, as today.
-3. **Given** a run captured by an older loupe, whose `previous.json` is schema 2, **When** `show --previous` runs, **Then** a stored reason capture wrote for no loupe review refuses with `not-found`, and any other stored reason refuses with `previous-unreadable`.
+3. **Given** a run captured by an older loupe, whose `previous.json` is schema 1 or 2, **When** `show --previous` runs, **Then** a stored reason capture wrote for no loupe review refuses with `not-found`, and any other stored reason refuses with `previous-unreadable`.
 
 ---
 

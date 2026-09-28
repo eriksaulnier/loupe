@@ -14,9 +14,9 @@
 
 **Primary Dependencies**: None added.
 
-**Storage**: `previous.json` schema 3 adds `unreadable`. A schema 2 file without a round is classified by the reason capture wrote.
+**Storage**: `previous.json` schema 3 adds `unreadable`. A schema 1 or 2 file without a round is classified by the reason capture wrote.
 
-**Testing**: Test-first. Envelope tests pin a near-limit body that keeps its record and one that refuses. A publish test pins that the refusal sends nothing. An integration test publishes a sticky round that sheds its earlier round and reads it back in the next. The damaged-review integration cases move to `previous-unreadable`, with an `omitted=length` case added. A publish test pins the schema 2 classification. `mise run check` closes the work.
+**Testing**: Test-first. Envelope tests pin a near-limit body that keeps its record and one that refuses. A publish test pins that the refusal sends nothing. An integration test publishes a sticky round that sheds its earlier round and reads it back in the next. The damaged-review integration cases move to `previous-unreadable`, with an `omitted=length` case added. A publish test pins the schema 1 and 2 classification. `mise run check` closes the work.
 
 **Target Platform**: Unchanged.
 
@@ -24,14 +24,14 @@
 
 **Constraints**: Constitution 3.x. `docs/comment-format.md` and `contracts/cli.md` are contracts, amended here.
 
-**Scale/Scope**: `internal/publish/{envelope,previous}.go`, `internal/render/{body,record}.go`, `internal/refusal/refusal.go`, `internal/cli/show.go`, their tests, and the three documents. `warnUnassessed` in `internal/cli/publish.go` already stays silent on `not-found` alone, so a `previous-unreadable` round warns after publishing with no change there.
+**Scale/Scope**: `internal/publish/{envelope,previous}.go`, `internal/render/{body,record}.go`, `internal/refusal/refusal.go`, `internal/cli/{show,capture}.go`, their tests, the `human-review` skill, and the three documents. `warnUnassessed` in `internal/cli/publish.go` already stays silent on `not-found` alone, so a `previous-unreadable` round warns after publishing with no change there.
 
 ## Research
 
 - **Order of shedding.** Decision: the earlier rounds, then refuse. Rationale: nothing else in the body is loupe's to shorten (spec, Clarifications).
 - **Code or field.** Decision: a code. Rationale: a field on `not-found` leaves a caller that already branches on `not-found` in the defect.
 - **Failed listing.** Decision: unreadable. Rationale: capture cannot say no review exists, and a caller that skipped assessment on it would drop findings the same way.
-- **Schema 2 files.** Decision: classify by the one reason string capture writes for no review. Rationale: capture wrote every reason from a closed set, so the prefix is exact. Reading every schema 2 file as `not-found` would keep the defect for runs captured before this change.
+- **Schema 1 and 2 files.** Decision: classify by the one reason string capture writes for no review. Rationale: capture wrote every reason from a closed set, so the prefix is exact. Reading every schema 1 or 2 file as `not-found` would keep the defect for runs captured before this change.
 
 ## Constitution Check
 
@@ -47,11 +47,13 @@
 
 ```text
 internal/publish/envelope.go     # no OmitRecord step
-internal/publish/previous.go     # Previous.Unreadable, schema 3, schema 2 classification
+internal/publish/previous.go     # Previous.Unreadable, schema 3, schema 1 and 2 classification
 internal/render/body.go          # Input.OmitRecord removed
 internal/render/record.go        # withRecord always writes the record
 internal/refusal/refusal.go      # PreviousUnreadable
 internal/cli/show.go             # previousRound refuses previous-unreadable, and its help says so
+internal/cli/capture.go          # previous result carries unreadable: true, and its help says so
+plugin/skills/human-review/SKILL.md   # tells the human when earlier findings cannot be carried
 docs/comment-format.md
 docs/versioning.md
 specs/001-loupe-v1/contracts/cli.md

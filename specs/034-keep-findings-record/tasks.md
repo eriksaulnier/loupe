@@ -16,10 +16,12 @@
 ## Phase 2: User Story 3 — unreadable is not absent (P2)
 
 - [X] T005 [US3] Move the damaged-review cases in `internal/integration/previous_test.go` to `previous-unreadable`, add an `omitted=length` case, and assert a missing review stays `not-found`.
-- [X] T006 [US3] Add a test in `internal/publish` that a schema 2 `previous.json` reads as unreadable unless its reason is the no-review one.
+- [X] T006 [US3] Add a test in `internal/publish` that a schema 1 or 2 `previous.json` reads as unreadable unless its reason is the no-review one.
 - [X] T007 [US3] Add `refusal.PreviousUnreadable`, `Previous.Unreadable` at schema 3, and the refusal in `previousRound`.
+- [X] T008 [US3] Add `unreadable: true` to capture's `previous` result when `previous.json` marks the round unreadable, document it in `capture --help`, and assert it in `internal/integration/previous_test.go` for each damaged-review case and its absence when there is no review.
+- [X] T009 [US3] Tell the human in the `human-review` skill, step 2, when `previous.unreadable` is `true`, and list `previous.unreadable` among the capture values step 1 keeps.
 
 ## Phase 3: Contracts
 
-- [X] T008 Amend `contracts/cli.md`, `docs/comment-format.md` and `docs/versioning.md`.
-- [X] T009 Run `mise run check`.
+- [X] T010 Amend `contracts/cli.md`, `docs/comment-format.md` and `docs/versioning.md`.
+- [X] T011 Run `mise run check`.
