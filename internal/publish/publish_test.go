@@ -509,14 +509,49 @@ func TestRunRefusesWhenCapturedHeadLeftHistory(t *testing.T) {
 // A stacked pull request's base can take the captured commit in, which drops it from the list while the head only
 // gained commits.
 func TestRunPublishesWhenBaseTookCapturedCommitIn(t *testing.T) {
-	fx := newUnattendedRun(t, readyDraft())
-	fx.gh.SetHead("acme", "widgets", 42, movedSHA)
-	fx.gh.SetCommits("acme", "widgets", 42, github.Commit{SHA: movedSHA, Message: "gained"})
-	fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: "ahead", AheadBy: 1})
-	if _, err := fx.run(); err != nil {
-		t.Fatal(err)
+	for _, unattended := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unattended=%v", unattended), func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			if unattended {
+				fx = newUnattendedRun(t, readyDraft())
+			}
+			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+			// Two listed commits, so a preview built from the list would say 2.
+			fx.gh.SetCommits("acme", "widgets", 42, github.Commit{SHA: laterSHA}, github.Commit{SHA: movedSHA, Message: "gained"})
+			fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: "ahead", AheadBy: 1,
+				Commits: []github.Commit{{SHA: movedSHA, Message: "gained"}}, Files: []github.ComparedFile{{Filename: "a.go"}}})
+			if _, err := fx.run(); err != nil {
+				t.Fatal(err)
+			}
+			if !unattended {
+				if len(fx.previews) != 1 || fx.previews[0].HeadMoved == nil || fx.previews[0].HeadMoved.AheadBy != 1 {
+					t.Fatalf("previews %+v", fx.previews)
+				}
+			}
+			fx.check(1)
+		})
 	}
-	fx.check(1)
+}
+
+// The list does not hold the captured commit, so only compare can count what an approval would cover.
+func TestRunRefusesApproveWhenBaseTookCapturedCommitIn(t *testing.T) {
+	d := readyDraft()
+	d.Findings[0].Blocking = false
+	fx := newRun(t, d)
+	fx.opts.Action = "approve"
+	fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+	// Three listed commits, so a count from the list would say 3.
+	fx.gh.SetCommits("acme", "widgets", 42, github.Commit{SHA: "3333333333333333333333333333333333333333"}, github.Commit{SHA: laterSHA}, github.Commit{SHA: movedSHA})
+	fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: "ahead", AheadBy: 2})
+	_, err := fx.run()
+	msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment")
+	if !strings.Contains(msg, "2 commits") {
+		t.Errorf("message %q", msg)
+	}
+	if len(fx.previews) != 0 {
+		t.Error("confirmation shown")
+	}
+	fx.check(0)
 }
 
 // At GitHub's cap the list may have stopped before the captured commit, so compare decides.
