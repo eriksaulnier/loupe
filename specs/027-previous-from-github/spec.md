@@ -130,7 +130,7 @@ The previous review cannot be read back faithfully: it was published by a loupe 
 - **FR-003**: The record MUST NOT be able to close its comment or move a round boundary, whatever the findings contain.
 - **FR-004**: The record MUST sit in the body's generated tail, next to the other markers, and a sticky round MUST drop it when the round is collapsed below a newer one. A body holds at most one record.
 - **FR-005**: A published body with no findings MUST still carry a record with an empty list.
-- **FR-006**: When a body is too long with its record, loupe MUST first drop collapsed earlier rounds as today, then leave the record out, and MUST mark the body so the omission is read back as its own reason. A body that is too long without its record is refused as today.
+- **FR-006** (replaced on 2026-09-28 by `specs/034-keep-findings-record`: the record never gives way, and a body too long with it is refused): When a body is too long with its record, loupe MUST first drop collapsed earlier rounds as today, then leave the record out, and MUST mark the body so the omission is read back as its own reason. A body that is too long without its record is refused as today.
 - **FR-007**: Terminal surfaces that show the body as raw Markdown MUST show the record as a short readable stand-in naming how many findings it copies. The payload view MUST show the exact bytes.
 
 **Reading at capture**
@@ -143,7 +143,7 @@ The previous review cannot be read back faithfully: it was published by a loupe 
 
 **Showing**
 
-- **FR-020**: `show --previous` MUST prefer the newest earlier local round with a receipt, as today. With none, it MUST answer from what capture stored. With neither, it MUST refuse with `not-found`, and its message MUST carry the stored reason when there is one.
+- **FR-020** (narrowed on 2026-09-28 by `specs/034-keep-findings-record`: a stored round that is present but unreadable refuses with `previous-unreadable`): `show --previous` MUST prefer the newest earlier local round with a receipt, as today. With none, it MUST answer from what capture stored. With neither, it MUST refuse with `not-found`, and its message MUST carry the stored reason when there is one.
 - **FR-021**: `show --previous --json` MUST keep `round`, `reviewUrl` and `findings`, and MUST add `from`: `receipt` or `github`. For `github`, `round` is the review's `loupe-meta` `round=` value.
 - **FR-022**: `show --previous` MUST NOT make any network request.
 - **FR-023**: The `human-review` skill MUST run `show --previous` when capture's result reports a previous round, not only when `target.previousRound` is set.

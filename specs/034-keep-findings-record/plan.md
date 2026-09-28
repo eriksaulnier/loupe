@@ -24,7 +24,7 @@
 
 **Constraints**: Constitution 3.x. `docs/comment-format.md` and `contracts/cli.md` are contracts, amended here.
 
-**Scale/Scope**: `internal/publish/{envelope,previous}.go`, `internal/render/{body,record}.go`, `internal/refusal/refusal.go`, `internal/cli/{show,publish}.go`, their tests, and the three documents.
+**Scale/Scope**: `internal/publish/{envelope,previous}.go`, `internal/render/{body,record}.go`, `internal/refusal/refusal.go`, `internal/cli/show.go`, their tests, and the three documents. `warnUnassessed` in `internal/cli/publish.go` already stays silent on `not-found` alone, so a `previous-unreadable` round warns after publishing with no change there.
 
 ## Research
 
@@ -51,11 +51,11 @@ internal/publish/previous.go     # Previous.Unreadable, schema 3, schema 2 class
 internal/render/body.go          # Input.OmitRecord removed
 internal/render/record.go        # withRecord always writes the record
 internal/refusal/refusal.go      # PreviousUnreadable
-internal/cli/show.go             # previousRound refuses previous-unreadable
-internal/cli/publish.go          # warnUnassessed stays silent on not-found only
+internal/cli/show.go             # previousRound refuses previous-unreadable, and its help says so
 docs/comment-format.md
 docs/versioning.md
 specs/001-loupe-v1/contracts/cli.md
+specs/027-previous-from-github/spec.md   # FR-006 and FR-020 marked as amended
 ```
 
 ## Complexity Tracking
