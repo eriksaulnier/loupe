@@ -233,3 +233,32 @@ func TestHumanOnAFreshMachineReadsTheirLastRound(t *testing.T) {
 		t.Fatalf("show --previous %v\nwant findings %v", shown, want)
 	}
 }
+
+// A sticky round that drops its earlier round to fit keeps its findings record, so the next round reads it back.
+func TestNextRoundReadsBackARoundThatShedItsEarlierRounds(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.publishUnattended(noiseFinding("first", 30000), "loupe-ci", "--sticky")
+	h.pushHead("src/round2.go")
+	second := h.publishUnattended(noiseFinding("second", 30000), "loupe-ci", "--sticky")
+	_, want := receiptFindings(t, filepath.Join(second, "runs", owner, repo, fmt.Sprint(number), "1"))
+	reviews, err := h.GH.Client(t).ListReviews(context.Background(), owner, repo, number)
+	if err != nil || len(reviews) != 1 {
+		t.Fatalf("reviews %v err %v", reviews, err)
+	}
+	if body := reviews[0].Body; strings.Contains(body, "<summary>Round 1 · ") || !strings.Contains(body, "The oldest round was dropped") {
+		t.Fatalf("round 2 kept round 1, so the test does not reach the length limit:\n%s", body[len(body)-600:])
+	}
+
+	h.Home = filepath.Join(t.TempDir(), "home")
+	h.pushHead("src/round3.go")
+	if p := previousOf(t, h.capture("--source", "loupe-ci")); p["from"] != "github" || fmt.Sprint(p["round"]) != "2" || fmt.Sprint(p["findingCount"]) != "1" {
+		t.Fatalf("capture previous %v, want round 2 with 1 finding", p)
+	}
+	shown := h.mustOK("show", "--previous", "--run", runRef)
+	if findings, _ := shown["findings"].([]any); !reflect.DeepEqual(findings, want) {
+		t.Fatalf("show --previous read %d findings, want round 2's %d", len(findings), len(want))
+	}
+}

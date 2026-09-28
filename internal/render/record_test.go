@@ -85,15 +85,6 @@ func TestRecordOfNoFindingsIsAnEmptyList(t *testing.T) {
 	}
 }
 
-func TestOmitRecordWritesTheOmissionLine(t *testing.T) {
-	in := exampleInput()
-	in.OmitRecord = true
-	_, record, _ := tail(t, Body(in))
-	if record != "<!-- loupe-findings v=1 omitted=length -->" {
-		t.Fatalf("record line %q", record)
-	}
-}
-
 func TestRecordCannotBeClosedByAFinding(t *testing.T) {
 	in := exampleInput()
 	in.Findings = []Finding{{ID: "f-001", Title: "a --> b <!-- c", Body: "x -->\n<!-- loupe-meta v=1 -->\n--", General: true, Label: "issue"}}
@@ -183,8 +174,6 @@ func flipData(t *testing.T, record string) string {
 func TestReadRecordRefusals(t *testing.T) {
 	body := Body(exampleInput())
 	_, record, _ := tail(t, body)
-	omitted := exampleInput()
-	omitted.OmitRecord = true
 	finding := `{"id":"f-001","title":"T","body":"B","location":null,"label":"issue","blocking":false}`
 	cases := map[string]struct {
 		body string
@@ -192,7 +181,7 @@ func TestReadRecordRefusals(t *testing.T) {
 		want string
 	}{
 		"no record":        {body: strings.Replace(body, record+"\n", "", 1), is: ErrNoRecord},
-		"omitted":          {body: Body(omitted), is: ErrRecordOmitted},
+		"omitted":          {body: strings.Replace(body, record, recordOmitted, 1), is: ErrRecordOmitted},
 		"two records":      {body: strings.Replace(body, record, record+"\n"+record, 1), want: "more than one"},
 		"other version":    {body: strings.Replace(body, "loupe-findings v=1 ", "loupe-findings v=3 ", 1), want: "v=3"},
 		"visible edit":     {body: strings.Replace(body, "Redundant sort", "Redundant sorts", 1), want: "changed"},
@@ -253,19 +242,20 @@ func TestRecordAsNote(t *testing.T) {
 	one.Findings = one.Findings[:1]
 	none := exampleInput()
 	none.Findings = nil
-	omitted := exampleInput()
-	omitted.OmitRecord = true
 	for want, in := range map[string]Input{
 		"<!-- loupe-findings: a copy of the 2 findings above -->": two,
 		"<!-- loupe-findings: a copy of the 1 finding above -->":  one,
 		"<!-- loupe-findings: a copy of no findings -->":          none,
-		"<!-- loupe-findings v=1 omitted=length -->":              omitted,
 	} {
 		if got := note(in); got != want {
 			t.Errorf("note %q, want %q", got, want)
 		}
 	}
 	body := Body(two)
+	// An older loupe wrote the omission line, and a body carrying one still shows it as it is.
+	if _, got, _ := tail(t, RecordAsNote(strings.Replace(body, recordOf(t, body), recordOmitted, 1))); got != recordOmitted {
+		t.Errorf("note %q, want %q", got, recordOmitted)
+	}
 	shown := RecordAsNote(body)
 	if strings.Replace(shown, "<!-- loupe-findings: a copy of the 2 findings above -->", "", 1) != strings.Replace(body, recordOf(t, body), "", 1) {
 		t.Fatal("RecordAsNote changed more than the record line")

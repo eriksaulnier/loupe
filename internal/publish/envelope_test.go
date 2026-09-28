@@ -538,21 +538,43 @@ func noise(n int) string {
 	return b.String()[:n]
 }
 
-func TestBuildLeavesTheRecordOutWhenItDoesNotFit(t *testing.T) {
+// The record is what the next round reads this one back from, so a body near the limit keeps it whole.
+func TestBuildKeepsTheRecordNearTheLimit(t *testing.T) {
 	d := readyDraft()
-	d.Findings[0].Body = noise(40000)
+	d.Findings[0].Body = noise(37000)
 	env, err := Build(buildInput(fixtureTarget(), d, "comment", "none", false))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := utf8.RuneCountInString(env.Body); n > maxBodyChars {
-		t.Fatalf("body is %d characters", n)
+	if n := utf8.RuneCountInString(env.Body); n < maxBodyChars-2000 || n > maxBodyChars {
+		t.Fatalf("body is %d characters, want just under %d", n, maxBodyChars)
 	}
-	if !strings.Contains(env.Body, "\n<!-- loupe-findings v=1 omitted=length -->\n") {
-		t.Fatalf("a body that fits only without its record does not say it was left out:\n%s", env.Body[len(env.Body)-400:])
-	}
-	if _, _, err := render.ReadRecord(env.Body); err != render.ErrRecordOmitted {
+	records, _, err := render.ReadRecord(env.Body)
+	if err != nil {
 		t.Fatalf("ReadRecord: %v", err)
+	}
+	if len(records) != len(env.Findings) || records[0].ID != "f-001" || records[0].Body != d.Findings[0].Body {
+		t.Fatalf("the record holds %d findings, the first %s, want %d starting with f-001 and its body", len(records), records[0].ID, len(env.Findings))
+	}
+}
+
+// A body that fits only without its record is refused, once the earlier rounds have given way, rather than published
+// without it.
+func TestBuildRefusesABodyTooLongForItsRecord(t *testing.T) {
+	d := readyDraft()
+	d.Findings[0].Body = noise(38000)
+	plain := buildInput(fixtureTarget(), d, "comment", "none", false)
+	earlier := fmt.Sprintf("<details>\n<summary>Round 1</summary>\n\n%s\n\n</details>", strings.Repeat("x", 20000))
+	sticky := buildInput(fixtureTarget(), d, "comment", "none", true)
+	sticky.Sticky = &StickyBuild{Review: github.Review{ID: 77}, Rounds: 2, Earlier: []render.Round{stickyRound(1, "abcdef1", earlier)}}
+	for name, in := range map[string]BuildInput{"plain": plain, "sticky": sticky} {
+		t.Run(name, func(t *testing.T) {
+			env, err := Build(in)
+			r, ok := refusal.As(err)
+			if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "limit" {
+				t.Fatalf("Build returned %v, a body of %d characters, want the limit refusal", err, utf8.RuneCountInString(env.Body))
+			}
+		})
 	}
 }
 

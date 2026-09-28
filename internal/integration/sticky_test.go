@@ -2,6 +2,9 @@ package integration
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -156,5 +159,41 @@ func TestPublishStickyAnchorsEveryRound(t *testing.T) {
 	if strings.Count(body, "Push again for another round.") != 1 || !strings.Contains(body, "> Look 1, edited on GitHub.") ||
 		strings.Contains(body, "loupe-note") {
 		t.Fatalf("note or edit wrong:\n%s", body)
+	}
+}
+
+// noiseFinding is one finding whose body deflates poorly, so its findings record is nearly as long as the finding.
+func noiseFinding(seed string, n int) string {
+	var b strings.Builder
+	sum := sha256.Sum256([]byte(seed))
+	for b.Len() < n {
+		b.WriteString(hex.EncodeToString(sum[:]))
+		sum = sha256.Sum256(sum[:])
+	}
+	return fmt.Sprintf(`[{"title": "Long evidence", "body": %q, "location": {"path": "src/app.go", "line": 3}, "label": "issue"}]`, b.String()[:n])
+}
+
+// A round that cannot fit with its findings record once its earlier rounds are dropped is refused, and nothing reaches
+// GitHub, because a round published without its record is one the next round cannot read back.
+func TestPublishRefusesARoundTooLongForItsRecord(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.publishUnattended(noiseFinding("first", 30000), "loupe-ci", "--sticky")
+
+	h.Home = filepath.Join(t.TempDir(), "home")
+	h.pushHead("src/round2.go")
+	h.capture("--source", "loupe-ci")
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", noiseFinding("second", 45000)))
+	h.mustOK("summary", "--run", runRef, "--body", "A look.", "--expect-findings", "1")
+	h.IsTerminal = false
+	creates, updates := h.GH.CreateCount(), h.GH.UpdateCount()
+	e := h.mustRefuse("markdown", "publish", runRef, "--unattended", "--sticky")
+	if details, _ := e["details"].(map[string]any); details["rule"] != "limit" {
+		t.Fatalf("refusal %v, want rule limit", e)
+	}
+	if h.GH.CreateCount() != creates || h.GH.UpdateCount() != updates {
+		t.Fatalf("creates %d updates %d after the refusal, want %d and %d", h.GH.CreateCount(), h.GH.UpdateCount(), creates, updates)
 	}
 }

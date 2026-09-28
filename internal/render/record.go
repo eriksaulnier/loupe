@@ -63,7 +63,9 @@ type recordV2 struct {
 }
 
 const (
-	recordPrefix  = "<!-- loupe-findings "
+	recordPrefix = "<!-- loupe-findings "
+	// recordOmitted is what a loupe before spec 034 wrote for a body too long to carry its record. Only the reader
+	// still knows it.
 	recordOmitted = recordPrefix + "v=1 omitted=length -->"
 	// maxRecord bounds what a record may inflate to, since a review body is text anyone who can edit it controls.
 	maxRecord = 16 << 20
@@ -122,10 +124,7 @@ func recordData(findings []Finding, assessments []RecordAssessment) (version, da
 
 // withRecord puts the record line between head, which ends with the reconciliation marker, and meta. The checksum
 // covers the rest of the body and the data, so an edit on GitHub to either is caught on read.
-func withRecord(head, meta string, findings []Finding, assessments []RecordAssessment, omit bool) string {
-	if omit {
-		return head + recordOmitted + "\n" + meta
-	}
+func withRecord(head, meta string, findings []Finding, assessments []RecordAssessment) string {
 	version, data := recordData(findings, assessments)
 	return head + recordPrefix + "v=" + version + " sha256=" + recordSum(head+meta, data) + " " + data + " -->\n" + meta
 }
