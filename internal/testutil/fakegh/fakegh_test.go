@@ -37,6 +37,24 @@ func TestCompare(t *testing.T) {
 	}
 }
 
+func TestPullRequestCommitsPagesAndStopsAtCap(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	all := make([]github.Commit, PullRequestCommitCap+10)
+	for i := range all {
+		all[i] = github.Commit{SHA: fmt.Sprintf("%040d", i), Message: fmt.Sprintf("commit %d", i)}
+	}
+	s.SetCommits("o", "r", 3, all...)
+
+	got, err := c.PullRequestCommits(ctx, "o", "r", 3)
+	if err != nil || !reflect.DeepEqual(got, all[:PullRequestCommitCap]) {
+		t.Fatalf("got %d commits, %v", len(got), err)
+	}
+	if got, err := c.PullRequestCommits(ctx, "o", "r", 4); err != nil || len(got) != 0 {
+		t.Fatalf("unset pull request: %v, %v", got, err)
+	}
+}
+
 func TestPullRequestLookups(t *testing.T) {
 	s := New(t)
 	c := s.Client(t)
