@@ -323,6 +323,9 @@ func capturePrevious(root string, ref run.Ref, reviews []github.Review, listErr 
 	if err != nil {
 		return nil, nil, err
 	}
+	if !p.Found && p.Unreadable {
+		return map[string]any{"from": "none", "reason": p.Reason, "unreadable": true}, data, nil
+	}
 	if !p.Found {
 		return map[string]any{"from": "none", "reason": p.Reason}, data, nil
 	}

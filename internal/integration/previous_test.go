@@ -148,7 +148,7 @@ func TestUnpublishedLocalRoundsStillReadGitHub(t *testing.T) {
 	h.pushHead("src/round2.go")
 	lists := h.reviewLists()
 	p := previousOf(t, h.captureRound(2))
-	if h.reviewLists()-lists != 1 || p["from"] != "none" || !strings.Contains(fmt.Sprint(p["reason"]), "no earlier loupe review from reviewer") {
+	if h.reviewLists()-lists != 1 || p["from"] != "none" || p["unreadable"] != nil || !strings.Contains(fmt.Sprint(p["reason"]), "no earlier loupe review from reviewer") {
 		t.Fatalf("capture previous %v", p)
 	}
 	h.mustRefuse("not-found", "show", "--previous", "--run", roundRef(2))
@@ -196,7 +196,7 @@ func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 			h.Home = filepath.Join(t.TempDir(), "home")
 			h.pushHead("src/round2.go")
 			p := previousOf(t, h.capture("--source", "ci-review"))
-			if p["from"] != "none" || !strings.Contains(fmt.Sprint(p["reason"]), c.want) {
+			if p["from"] != "none" || p["unreadable"] != true || !strings.Contains(fmt.Sprint(p["reason"]), c.want) {
 				t.Fatalf("capture previous %v, want a reason containing %q", p, c.want)
 			}
 			for _, args := range [][]string{{"show", "--previous", "--run", runRef}, {"assess", "--run", runRef, "e-1", "--status", "open"}} {
@@ -204,6 +204,17 @@ func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 				if msg, _ := e["message"].(string); !strings.Contains(msg, c.want) || !strings.Contains(fmt.Sprint(e["fix"]), "loupe capture "+prURL()+" --source ci-review") {
 					t.Fatalf("%s refusal %v", args[0], e)
 				}
+			}
+			// The round still publishes, and says it could not check the earlier findings rather than staying silent. A
+			// failed listing also fails publish, so that case stops here.
+			if c.name == "list fails" {
+				return
+			}
+			h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", oneFinding))
+			h.mustOK("summary", "--run", runRef, "--body", "A look.", "--expect-findings", "1")
+			h.IsTerminal = false
+			if _, stderr, exit := h.Run("publish", runRef, "--unattended"); exit != 0 || !strings.Contains(stderr, "could not check for unassessed earlier findings") {
+				t.Fatalf("publish exit %d stderr %q, want a warning", exit, stderr)
 			}
 		})
 	}
