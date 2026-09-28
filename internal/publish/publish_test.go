@@ -520,6 +520,42 @@ func TestRunComparesWhenCommitListIsAtCap(t *testing.T) {
 	}
 }
 
+// A list at the cap can stop between the captured commit and the head, so only compare can count what an approval
+// would cover.
+func TestRunCountsFromCompareWhenCapturedCommitIsListedAtCap(t *testing.T) {
+	d := readyDraft()
+	d.Findings[0].Blocking = false
+	fx := newRun(t, d)
+	fx.opts.Action = "approve"
+	fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+	commits := make([]github.Commit, prCommitCap)
+	for i := range commits {
+		commits[i] = github.Commit{SHA: fmt.Sprintf("c%039d", i)}
+	}
+	commits[200] = github.Commit{SHA: headSHA}
+	fx.gh.SetCommits("acme", "widgets", 42, commits...)
+	fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: "ahead", AheadBy: 99})
+	_, err := fx.run()
+	msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment")
+	if !strings.Contains(msg, "99 commits") {
+		t.Errorf("message %q", msg)
+	}
+	fx.check(0)
+}
+
+// The list and compare disagree only if GitHub does; the refusal is the old one for a compare that is not ahead.
+func TestRunRefusesWhenListedHeadDoesNotCompareAhead(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+	fx.gh.SetCommits("acme", "widgets", 42, github.Commit{SHA: headSHA}, github.Commit{SHA: movedSHA})
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)
+	if len(fx.previews) != 0 {
+		t.Error("confirmation shown")
+	}
+	fx.check(0)
+}
+
 func TestRunUnattendedPublishesWhenHeadGainedCommitsWithoutCompare(t *testing.T) {
 	fx := newUnattendedRun(t, readyDraft())
 	fx.moveHead(movedSHA, 2, github.ComparedFile{Filename: "a.go"})

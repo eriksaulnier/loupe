@@ -137,11 +137,11 @@ func checkHead(ctx context.Context, client github.Client, target run.Target, pr 
 	}
 	at := slices.IndexFunc(commits, func(c github.Commit) bool { return c.SHA == target.HeadSHA })
 	var cmp *github.Comparison
-	if at < 0 {
-		// A list at the cap may have stopped before the captured commit.
-		if len(commits) < prCommitCap {
-			return nil, leftHistory(target, pr)
-		}
+	if at < 0 && len(commits) < prCommitCap {
+		return nil, leftHistory(target, pr)
+	}
+	// A list at the cap may have stopped before the captured commit, or between it and the head.
+	if len(commits) >= prCommitCap {
 		if cmp, err = compareHeads(ctx, client, target, pr, "the pull request lists 250 or more commits"); err != nil {
 			return nil, err
 		}
