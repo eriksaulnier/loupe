@@ -95,6 +95,7 @@ type Server struct {
 	failAfter     map[string]failRule
 	served        map[string]int
 	comparisons   map[compareKey]github.Comparison
+	commits       map[prKey][]github.Commit
 	viewer        string
 	userForbidden bool
 	outcomes      []Outcome
@@ -126,6 +127,7 @@ func Start() (s *Server, stop func()) {
 		failAfter:     map[string]failRule{},
 		served:        map[string]int{},
 		comparisons:   map[compareKey]github.Comparison{},
+		commits:       map[prKey][]github.Commit{},
 		nextID:        1000,
 	}
 	mux := http.NewServeMux()
@@ -135,6 +137,7 @@ func Start() (s *Server, stop func()) {
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}/reviews", s.listReviews)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{number}/reviews", s.createReview)
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{number}/reviews/{id}", s.updateReview)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}/commits", s.listPullRequestCommits)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/compare/{basehead}", s.getComparison)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/issues/{number}/comments", s.listIssueComments)
 	mux.HandleFunc("POST /graphql", s.graphQL)
@@ -282,6 +285,17 @@ func (s *Server) SetComparison(owner, repo, base, head string, c github.Comparis
 	defer s.mu.Unlock()
 	s.comparisons[compareKey{owner, repo, base + "..." + head}] = c
 }
+
+// SetCommits is the pull request's commit list, in the oldest-first order loupe assumes GitHub uses. The fake lists
+// at most PullRequestCommitCap of them, as GitHub does.
+func (s *Server) SetCommits(owner, repo string, number int, commits ...github.Commit) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.commits[prKey{owner, repo, number}] = commits
+}
+
+// PullRequestCommitCap is the most commits GitHub lists for a pull request.
+const PullRequestCommitCap = 250
 
 func (s *Server) SetViewer(login string) {
 	s.mu.Lock()
@@ -491,6 +505,24 @@ func (s *Server) getComparison(w http.ResponseWriter, r *http.Request) {
 		files = append(files, file)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": c.Status, "ahead_by": c.AheadBy, "commits": commits, "files": files})
+}
+
+func (s *Server) listPullRequestCommits(w http.ResponseWriter, r *http.Request) {
+	key, ok := keyOf(r)
+	if !ok {
+		notFound(w)
+		return
+	}
+	s.mu.Lock()
+	all := s.commits[key]
+	s.mu.Unlock()
+	all = all[:min(len(all), PullRequestCommitCap)]
+	start, end := s.restPage(w, r, len(all))
+	out := make([]any, 0, end-start)
+	for _, c := range all[start:end] {
+		out = append(out, map[string]any{"sha": c.SHA, "commit": map[string]any{"message": c.Message}})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) listReviews(w http.ResponseWriter, r *http.Request) {

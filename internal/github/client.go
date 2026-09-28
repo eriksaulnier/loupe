@@ -34,6 +34,9 @@ type Client interface {
 	CreateReview(ctx context.Context, owner, repo string, number int, req ReviewRequest) (Review, error)
 	// UpdateReview replaces a submitted review's body, and nothing else about it.
 	UpdateReview(ctx context.Context, owner, repo string, number int, id int64, body string) (Review, error)
+	// PullRequestCommits lists the pull request's commits, which loupe assumes are oldest first, since GitHub documents
+	// no order. GitHub stops at 250.
+	PullRequestCommits(ctx context.Context, owner, repo string, number int) ([]Commit, error)
 	Compare(ctx context.Context, owner, repo, base, head string) (Comparison, error)
 	TokenKind() TokenKind
 }
@@ -527,16 +530,29 @@ func (c *REST) UpdateReview(ctx context.Context, owner, repo string, number int,
 	return w.review(), nil
 }
 
+type wireCommit struct {
+	SHA    string `json:"sha"`
+	Commit struct {
+		Message string `json:"message"`
+	} `json:"commit"`
+}
+
+func (c *REST) PullRequestCommits(ctx context.Context, owner, repo string, number int) ([]Commit, error) {
+	commits := []Commit{}
+	err := listPages(ctx, c, pullsPath(owner, repo)+"/"+strconv.Itoa(number)+"/commits?per_page=100", func(w wireCommit) {
+		commits = append(commits, Commit{SHA: w.SHA, Message: w.Commit.Message})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return commits, nil
+}
+
 type wireComparison struct {
-	Status  string `json:"status"`
-	AheadBy int    `json:"ahead_by"`
-	Commits []struct {
-		SHA    string `json:"sha"`
-		Commit struct {
-			Message string `json:"message"`
-		} `json:"commit"`
-	} `json:"commits"`
-	Files []struct {
+	Status  string       `json:"status"`
+	AheadBy int          `json:"ahead_by"`
+	Commits []wireCommit `json:"commits"`
+	Files   []struct {
 		Filename         string `json:"filename"`
 		PreviousFilename string `json:"previous_filename"`
 	} `json:"files"`

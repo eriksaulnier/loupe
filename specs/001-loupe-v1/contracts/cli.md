@@ -43,7 +43,7 @@ Refusal or error (exit 1 or 2):
 | `pr` | Pull request not found, closed, or not on github.com | the capture syntax for an open pull request |
 | `same-head` | The newest round is unpublished and at the pull request's current head | `--run <ref>` for that round |
 | `auth` | GitHub authentication missing | `gh auth login --hostname github.com` |
-| `token` | `--unattended` with a user token; publish without `--unattended` with an installation token | `GITHUB_TOKEN` with `permissions: pull-requests: write`; for the second, `--unattended` |
+| `token` | `--unattended` with a user token; publish without `--unattended` with an installation token | `GITHUB_TOKEN` with `permissions: pull-requests: write`, and `contents: read` for a pull request of 250 or more commits; for the second, `--unattended`. Amended on 2026-09-28: publish reads a moved head from the pull request's commit list. It compares commits, which needs `contents: read`, past GitHub's 250-commit cap, for a captured commit the list does not hold, or for an attended confirmation. Without `contents: read`, a captured commit the list does not hold is refused as `head-moved` |
 | `input` | JSON input malformed, unknown field, wrong shape, or a forbidden field | the field and the `--help` for the shape |
 | `location` | Path or line not in the stored diff, or a range spans hunks | nearest valid lines |
 | `markdown` | Body or summary fails the allowlist | the code (`limit`, `fence`, `html`, `depth`), line, and `loupe edit <id> --from -` or `loupe summary --from -` |
@@ -52,7 +52,7 @@ Refusal or error (exit 1 or 2):
 | `not-found` | Finding or note id does not exist | `loupe show` |
 | `lock` | Lock held or stale | the holder; wait for it or stop it |
 | `tty` | `review` or `publish` without an interactive terminal | run it in a terminal |
-| `head-moved` | The captured commit is no longer in the pull request's history; approve while the head differs from the captured head; or the head moved while publish was confirming | `loupe capture <url>` for a new round; for approve, `--action comment` or `request-changes`; after confirming, `loupe publish` again |
+| `head-moved` | The captured commit is no longer in the pull request's history; approve while the head differs from the captured head; or the head moved while publish was confirming | `loupe capture <url>` for a new round, and `contents: read` when GitHub refused the comparison; for approve, `--action comment` or `request-changes`; after confirming, `loupe publish` again |
 | `own-pr` | approve or request-changes on the viewer's own pull request | `--action comment` |
 | `blocking` | approve while a finding in the publishable set is blocking | `--action comment` or `request-changes`, or exclude or unblock the finding in `loupe review` |
 | `not-ready` | Pending findings or open notes | `loupe review` |
@@ -64,7 +64,7 @@ Refusal or error (exit 1 or 2):
 | `sticky` | `--sticky` found the publisher's sticky review, but its body is not in the form loupe writes, so its earlier rounds cannot be read back | `loupe publish` without `--sticky` to post a new review |
 | `viewer` | The GitHub login changed between showing the confirmation and sending; or the token's kind at publish differs from the kind capture recorded | `loupe publish` again to confirm as the current login; for the kind mismatch, capture and publish with the same token kind |
 | `timeout` | `wait --timeout` elapsed with no note handed back and no receipt | `loupe wait` again |
-| `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub |
+| `github` | Definite rejection from GitHub | the message; for a pending review, submit or discard it on GitHub; for a comparison refused with 403, `contents: read` |
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
 | `pane-failed` | The host refused or garbled a `handoff` call; `details.host` (`herdr` or `orca`) and `details.step` name where | the same; the message carries the host's error and, after any step but `probe`, says a pane may already be open |
 | `review-open` | `handoff` while a `review` of the run is running | tell the human their review is already open, then `loupe wait` |

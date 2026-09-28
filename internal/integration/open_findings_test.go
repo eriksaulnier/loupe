@@ -364,6 +364,7 @@ func TestPublishRefusesAssessmentsFromAMovedPreviousRound(t *testing.T) {
 	qualifier := owner + ":" + repo + ":"
 	h.GH.SetComparison(owner, repo, qualifier+head2, qualifier+head3, github.Comparison{Status: "ahead", AheadBy: 1,
 		Commits: []github.Commit{{SHA: head3, Message: "round 3"}}, Files: []github.ComparedFile{{Filename: "src/round3.go"}}})
+	h.GH.SetCommits(owner, repo, number, github.Commit{SHA: head2, Message: "round 2"}, github.Commit{SHA: head3, Message: "round 3"})
 	if res := h.mustOK("assess", "e-1", "e-2", "--status", "open", "--run", round3); fmt.Sprint(res["dropped"]) != "0" {
 		t.Fatalf("first assess result %v, want dropped 0", res)
 	}
@@ -416,6 +417,7 @@ func TestEmptyAssessClearsAssessmentsFromAMovedPreviousRound(t *testing.T) {
 	qualifier := owner + ":" + repo + ":"
 	h.GH.SetComparison(owner, repo, qualifier+head2, qualifier+head3, github.Comparison{Status: "ahead", AheadBy: 1,
 		Commits: []github.Commit{{SHA: head3, Message: "round 3"}}, Files: []github.ComparedFile{{Filename: "src/round3.go"}}})
+	h.GH.SetCommits(owner, repo, number, github.Commit{SHA: head2, Message: "round 2"}, github.Commit{SHA: head3, Message: "round 3"})
 	empty := h.WriteFile("empty.json", `{"assessments": []}`)
 	h.mustRefuse("input", "assess", "--run", round3, "--from", empty)
 	h.mustOK("assess", "e-1", "e-2", "--status", "open", "--run", round3)
@@ -468,6 +470,7 @@ func TestPublishRefusesWhenThePreviousRoundMovesDuringConfirmation(t *testing.T)
 	qualifier := owner + ":" + repo + ":"
 	h.GH.SetComparison(owner, repo, qualifier+head2, qualifier+head3, github.Comparison{Status: "ahead", AheadBy: 1,
 		Commits: []github.Commit{{SHA: head3, Message: "round 3"}}, Files: []github.ComparedFile{{Filename: "src/round3.go"}}})
+	h.GH.SetCommits(owner, repo, number, github.Commit{SHA: head2, Message: "round 2"}, github.Commit{SHA: head3, Message: "round 3"})
 	h.mustOK("assess", "e-1", "--status", "open", "--run", roundRef(3))
 	h.mustOK("add", "--run", roundRef(3), "--from", h.WriteFile("finding.json", generalFinding("Unbounded retries")))
 	h.IsTerminal = true

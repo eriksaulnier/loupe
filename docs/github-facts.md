@@ -2,7 +2,7 @@
 
 Evidence gathered while building v0, recorded so the rebuild does not rediscover it.
 
-- These are observations of github.com at the time noted, not documented guarantees.
+- Most entries are observations of github.com at the time noted, not documented guarantees. An entry labeled Documented quotes GitHub's documentation, and one labeled Assumed has not been observed.
 - The code MUST surface unexpected responses rather than assume they cannot happen.
 
 ## Review creation
@@ -49,6 +49,10 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - Observed 2026-09-14, read-only, on `cli/cli#14035` (a fork pull request) and `eriksaulnier/market-map#246` (same repository). `GET /repos/{owner}/{repo}/compare/{base}...{head}` on the base repository returned 404 when either side was a bare sha that exists only in the fork, even though `GET /repos/{owner}/{repo}/commits/{sha}` on the base repository resolved it.
 - On the same two pull requests, qualifying both sides as `{headOwner}:{headRepo}:{sha}` returned the comparison on the base repository, for the fork and the same-repository case alike. loupe MUST qualify both sides with the head repository.
 - `status` was `ahead` when base is an ancestor of head and `behind` for the reverse. `ahead_by` counted every commit reachable from head and not from base, including commits a merge from the base branch brought in.
+- Reported 2026-09-28 from a reviewer workflow whose GitHub App token had only `pull-requests: write`: compare answered 403.
+- Documented, read 2026-09-28 in GitHub's "Permissions required for GitHub Apps" and "Permissions required for fine-grained personal access tokens": `GET /repos/{owner}/{repo}/compare/{basehead}` is listed under Contents, read, and `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits` under Pull requests, read. Both list installation access tokens.
+- Documented, read the same day in the REST reference: the pull request commits endpoint "Lists a maximum of 250 commits for a pull request", with `per_page` at most 100. Compare without paging parameters lists at most 250 commits "in chronological order", and up to 300 changed files. The reference states no order for the pull request commit list.
+- Assumed, not observed: the pull request commit list holds the commits reachable from the head and not from the base, oldest first. `loupe publish` reads a moved head from it. It compares when the list reaches 250, when the captured commit is missing from it, or when an attended confirmation needs the changed files.
 
 ## Markdown rendering in review bodies
 
