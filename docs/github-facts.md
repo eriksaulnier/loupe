@@ -52,7 +52,7 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - Reported 2026-09-28 from a reviewer workflow whose GitHub App token had only `pull-requests: write`: compare answered 403.
 - Documented, read 2026-09-28 in GitHub's "Permissions required for GitHub Apps" and "Permissions required for fine-grained personal access tokens": `GET /repos/{owner}/{repo}/compare/{basehead}` is listed under Contents, read, and `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits` under Pull requests, read. Both list installation access tokens.
 - Documented, read the same day in the REST reference: the pull request commits endpoint "Lists a maximum of 250 commits for a pull request", with `per_page` at most 100. Compare without paging parameters lists at most 250 commits "in chronological order", and up to 300 changed files. The reference states no order for the pull request commit list.
-- Assumed, not observed: the pull request commit list holds the commits reachable from the head and not from the base, oldest first. `loupe publish` reads a moved head from it, and compares only when the list reaches 250 or an attended confirmation needs the changed files.
+- Assumed, not observed: the pull request commit list holds the commits reachable from the head and not from the base, oldest first. `loupe publish` reads a moved head from it. It compares when the list reaches 250, when the captured commit is missing from it, or when an attended confirmation needs the changed files.
 
 ## Markdown rendering in review bodies
 

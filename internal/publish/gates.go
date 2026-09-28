@@ -137,17 +137,25 @@ func checkHead(ctx context.Context, client github.Client, target run.Target, pr 
 	}
 	at := slices.IndexFunc(commits, func(c github.Commit) bool { return c.SHA == target.HeadSHA })
 	var cmp *github.Comparison
-	if at < 0 && len(commits) < prCommitCap {
-		return nil, leftHistory(target, pr)
-	}
+	switch {
 	// A list at the cap may have stopped before the captured commit, or between it and the head.
-	if len(commits) >= prCommitCap {
-		if cmp, err = compareHeads(ctx, client, target, pr, "the pull request lists 250 or more commits"); err != nil {
-			return nil, err
-		}
-		if cmp == nil || cmp.Status != "ahead" {
-			return nil, leftHistory(target, pr)
-		}
+	case len(commits) >= prCommitCap:
+		cmp, err = compareHeads(ctx, client, target, pr, contentsRefusal(target, pr, "the pull request lists 250 or more commits"))
+	// The list leaves out commits the base branch already holds, so a captured commit that a stacked pull request's
+	// base took in is missing although the head only gained commits. Only compare can tell that from a rewrite.
+	case at < 0:
+		cmp, err = compareHeads(ctx, client, target, pr, func(httpErr *github.HTTPError) error {
+			return refusal.New(refusal.HeadMoved,
+				fmt.Sprintf("the pull request head moved from %s to %s and the captured commit is not among the pull request's commits; GitHub refused to compare them (HTTP 403: %s), so loupe cannot tell a rewritten history from a base branch that took the commit in",
+					target.HeadSHA, pr.HeadSHA, httpErr.Message),
+				"loupe capture "+target.URL+", or grant the token contents: read so loupe can compare")
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	if (at < 0 || len(commits) >= prCommitCap) && (cmp == nil || cmp.Status != "ahead") {
+		return nil, leftHistory(target, pr)
 	}
 	aheadBy := len(commits) - at - 1
 	if cmp != nil {
@@ -163,7 +171,7 @@ func checkHead(ctx context.Context, client github.Client, target run.Target, pr 
 		return headMoved(target.HeadSHA, pr.HeadSHA, github.Comparison{AheadBy: aheadBy, Commits: commits[at+1:]}, d), nil
 	}
 	if cmp == nil {
-		if cmp, err = compareHeads(ctx, client, target, pr, "the confirmation shows the files the new commits changed"); err != nil {
+		if cmp, err = compareHeads(ctx, client, target, pr, contentsRefusal(target, pr, "the confirmation shows the files the new commits changed")); err != nil {
 			return nil, err
 		}
 		if cmp == nil || cmp.Status != "ahead" {
@@ -173,9 +181,9 @@ func checkHead(ctx context.Context, client github.Client, target run.Target, pr 
 	return headMoved(target.HeadSHA, pr.HeadSHA, *cmp, d), nil
 }
 
-// compareHeads compares the captured head with the live one, and is nil when GitHub has no such comparison. why says
-// why loupe compares, for the refusal a token without contents: read gets.
-func compareHeads(ctx context.Context, client github.Client, target run.Target, pr github.PullRequest, why string) (*github.Comparison, error) {
+// compareHeads compares the captured head with the live one, and is nil when GitHub has no such comparison. forbidden
+// builds the refusal for a token without contents: read.
+func compareHeads(ctx context.Context, client github.Client, target run.Target, pr github.PullRequest, forbidden func(*github.HTTPError) error) (*github.Comparison, error) {
 	// GitHub answers bare shas that exist only in a fork with 404, so both refs name the repository the head lives in.
 	headOwner, headRepo := pr.HeadOwner, pr.HeadRepo
 	if headOwner == "" {
@@ -190,12 +198,19 @@ func compareHeads(ctx context.Context, client github.Client, target run.Target, 
 	case errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound:
 		return nil, nil
 	case errors.As(err, &httpErr) && httpErr.Status == http.StatusForbidden:
-		return nil, refusal.New(refusal.GitHub,
+		return nil, forbidden(httpErr)
+	}
+	return nil, err
+}
+
+// contentsRefusal is the refusal for a comparison loupe needs, where why says what it needs it for.
+func contentsRefusal(target run.Target, pr github.PullRequest, why string) func(*github.HTTPError) error {
+	return func(httpErr *github.HTTPError) error {
+		return refusal.New(refusal.GitHub,
 			fmt.Sprintf("GitHub refused to compare the captured head %s with the pull request head %s (HTTP 403: %s); loupe compares them because %s, and comparing commits needs the token's contents: read permission",
 				target.HeadSHA, pr.HeadSHA, httpErr.Message, why),
 			"grant the token contents: read, or run loupe capture "+target.URL+" to review the new head")
 	}
-	return nil, err
 }
 
 func leftHistory(target run.Target, pr github.PullRequest) error {

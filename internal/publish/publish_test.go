@@ -386,8 +386,7 @@ func (fx *fixture) moveHeadIn(qualifier, head string, commits int, files ...gith
 	fx.gh.SetHead("acme", "widgets", 42, head)
 }
 
-// fillCommits lists n commits on the pull request, none of them the captured head, as a pull request at GitHub's cap
-// can.
+// fillCommits lists n commits on the pull request, none of them the captured head.
 func (fx *fixture) fillCommits(n int) {
 	fx.t.Helper()
 	commits := make([]github.Commit, n)
@@ -468,29 +467,56 @@ func TestRunHeadMovedMarksTruncatedFileList(t *testing.T) {
 	}
 }
 
+// A captured commit missing from the list is compared, since the list also leaves out commits the base branch holds.
 func TestRunRefusesWhenCapturedHeadLeftHistory(t *testing.T) {
 	for _, unattended := range []bool{false, true} {
-		t.Run(fmt.Sprintf("unattended=%v", unattended), func(t *testing.T) {
-			fx := newRun(t, readyDraft())
-			if unattended {
-				fx = newUnattendedRun(t, readyDraft())
-			}
-			fx.gh.SetHead("acme", "widgets", 42, movedSHA)
-			fx.fillCommits(3)
-			_, err := fx.run()
-			msg := wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink)
-			if !strings.Contains(msg, "no longer in the pull request's history") {
-				t.Errorf("message %q", msg)
-			}
-			if fx.compared() {
-				t.Error("a commit list under the cap answers without compare")
-			}
-			if len(fx.previews) != 0 {
-				t.Error("confirmation shown")
-			}
-			fx.check(0)
-		})
+		for _, status := range []string{"diverged", "behind", "not found", "forbidden"} {
+			t.Run(fmt.Sprintf("unattended=%v/%s", unattended, status), func(t *testing.T) {
+				fx := newRun(t, readyDraft())
+				if unattended {
+					fx = newUnattendedRun(t, readyDraft())
+				}
+				fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+				fx.fillCommits(3)
+				switch status {
+				case "forbidden":
+					fx.gh.Fail("GET", "/repos/acme/widgets/compare/acme:widgets:"+headSHA+"...acme:widgets:"+movedSHA, http.StatusForbidden)
+				case "not found":
+				default:
+					fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: status, AheadBy: 1})
+				}
+				_, err := fx.run()
+				if status == "forbidden" {
+					msg := wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink, "contents: read")
+					if !strings.Contains(msg, "HTTP 403") {
+						t.Errorf("message %q", msg)
+					}
+				} else if msg := wantRefusal(t, err, refusal.HeadMoved, "loupe capture "+prLink); !strings.Contains(msg, "no longer in the pull request's history") {
+					t.Errorf("message %q", msg)
+				}
+				if !fx.compared() {
+					t.Error("compare not called for a missing captured commit")
+				}
+				if len(fx.previews) != 0 {
+					t.Error("confirmation shown")
+				}
+				fx.check(0)
+			})
+		}
 	}
+}
+
+// A stacked pull request's base can take the captured commit in, which drops it from the list while the head only
+// gained commits.
+func TestRunPublishesWhenBaseTookCapturedCommitIn(t *testing.T) {
+	fx := newUnattendedRun(t, readyDraft())
+	fx.gh.SetHead("acme", "widgets", 42, movedSHA)
+	fx.gh.SetCommits("acme", "widgets", 42, github.Commit{SHA: movedSHA, Message: "gained"})
+	fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: "ahead", AheadBy: 1})
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
+	}
+	fx.check(1)
 }
 
 // At GitHub's cap the list may have stopped before the captured commit, so compare decides.
@@ -543,7 +569,7 @@ func TestRunCountsFromCompareWhenCapturedCommitIsListedAtCap(t *testing.T) {
 	fx.check(0)
 }
 
-// The list and compare disagree only if GitHub does; the refusal is the old one for a compare that is not ahead.
+// The list and compare disagree only if GitHub does, and a compare that is not ahead refuses as a left history.
 func TestRunRefusesWhenListedHeadDoesNotCompareAhead(t *testing.T) {
 	for _, status := range []string{"diverged", "behind", "not found"} {
 		t.Run(status, func(t *testing.T) {
