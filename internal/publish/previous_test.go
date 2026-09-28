@@ -179,20 +179,28 @@ func TestPreviousRoundTripsThroughItsFile(t *testing.T) {
 	}
 }
 
-// A schema 2 file predates unreadable, so it is told apart by the one reason capture wrote when there was no review.
-func TestLoadPreviousClassifiesASchema2Reason(t *testing.T) {
-	for reason, unreadable := range map[string]bool{
-		"no earlier loupe review from alice is on https://github.com/acme/widgets/pull/42":                               false,
-		"https://github.com/acme/widgets/pull/42#pullrequestreview-5 cannot be read back: it carries no findings record": true,
-		"could not list the reviews on https://github.com/acme/widgets/pull/42: 502":                                     true,
+// A schema 1 or 2 file predates unreadable, so it is told apart by the one reason capture wrote when there was no
+// review.
+func TestLoadPreviousClassifiesAnOlderSchemasReason(t *testing.T) {
+	for _, c := range []struct {
+		schema     int
+		reason     string
+		unreadable bool
+	}{
+		{2, "no earlier loupe review from alice is on https://github.com/acme/widgets/pull/42", false},
+		{2, "https://github.com/acme/widgets/pull/42#pullrequestreview-5 cannot be read back: it carries no findings record", true},
+		{2, "could not list the reviews on https://github.com/acme/widgets/pull/42: 502", true},
+		{1, "no earlier loupe review from alice is on https://github.com/acme/widgets/pull/42", false},
+		{1, "https://github.com/acme/widgets/pull/42#pullrequestreview-5 cannot be read back: it carries no findings record", true},
 	} {
 		dir := t.TempDir()
-		if err := run.WriteFileAtomic(filepath.Join(dir, run.PreviousFile), fmt.Appendf(nil, `{"schema": 2, "found": false, "findings": null, "reason": %q}`, reason)); err != nil {
+		content := fmt.Appendf(nil, `{"schema": %d, "found": false, "findings": null, "reason": %q}`, c.schema, c.reason)
+		if err := run.WriteFileAtomic(filepath.Join(dir, run.PreviousFile), content); err != nil {
 			t.Fatal(err)
 		}
 		got, found, err := LoadPrevious(dir)
-		if err != nil || !found || got.Unreadable != unreadable {
-			t.Fatalf("%q: unreadable %v (%v, %v), want %v", reason, got.Unreadable, found, err, unreadable)
+		if err != nil || !found || got.Unreadable != c.unreadable {
+			t.Fatalf("schema %d %q: unreadable %v (%v, %v), want %v", c.schema, c.reason, got.Unreadable, found, err, c.unreadable)
 		}
 	}
 }
