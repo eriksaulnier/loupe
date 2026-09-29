@@ -335,8 +335,13 @@ func carriedLocation(in Input, rl *RecordLocation, commit string) string {
 	if loc.Side == "LEFT" || !fullCommit.MatchString(commit) || in.Owner == "" || in.Repo == "" {
 		return span
 	}
+	// The record is editable on GitHub, and a browser resolves a dot segment, so one could point the link at another
+	// repository. A diff path never holds an empty or dot segment.
 	segs := strings.Split(loc.Path, "/")
 	for i, seg := range segs {
+		if seg == "" || seg == "." || seg == ".." {
+			return span
+		}
 		segs[i] = url.PathEscape(seg)
 	}
 	anchor := "#L" + strconv.Itoa(loc.Line)

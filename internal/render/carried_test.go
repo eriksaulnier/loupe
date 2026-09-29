@@ -120,3 +120,17 @@ func carriedGoldenInput(t *testing.T) Input {
 	in.Assessments = []RecordAssessment{a}
 	return in
 }
+
+func TestCarriedLocationLinkEscapesItsPath(t *testing.T) {
+	for path, want := range map[string]string{
+		"a)b](x.go":               "[`a)b](x.go:1`](https://github.com/o/r/blob/" + filingCommit + "/a%29b%5D%28x.go#L1)",
+		"../../../../evil/r/x.go": "`../../../../evil/r/x.go:1` · filed",
+		"a//b.go":                 "`a//b.go:1` · filed",
+		"./a.go":                  "`./a.go:1` · filed",
+	} {
+		body := Body(carriedInput(carried("e-1", "open", "issue", false, &RecordLocation{Path: path, Side: "RIGHT", Line: 1})))
+		if !strings.Contains(body, want) {
+			t.Errorf("path %q: want %s within\n%s", path, want, body)
+		}
+	}
+}

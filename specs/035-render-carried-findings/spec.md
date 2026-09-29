@@ -50,7 +50,7 @@ A reader opens a review whose round filed nothing new and marked an earlier find
 ### Edge Cases
 
 - A carried general finding has no location, so its line shows none.
-- A carried finding's location links to the file at the commit that filed it, since its line numbers are that commit's. A `LEFT` location, or a `filedIn` commit that is not a full lowercase hex commit, shows the location as a code span without a link.
+- A carried finding's location links to the file at the commit that filed it, since its line numbers are that commit's. A `LEFT` location, a path with an empty, `.` or `..` segment, or a `filedIn` commit that is not a full lowercase hex commit, shows the location as a code span without a link.
 - The line names the filing commit, not the round number. `filedIn.round` is loupe's `round=`, which is not the `Round N` a collapsed summary shows, while the commit matches that summary's `reviewed` commit exactly.
 - The record is text anyone who can edit the review controls, so every carried field is escaped or checked as a finding's row is.
 
