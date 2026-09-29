@@ -324,9 +324,6 @@ func TestRecordWithAssessmentsIsVersion2AndRoundTrips(t *testing.T) {
 	if len(findings) != 2 || !reflect.DeepEqual(assessments, in.Assessments) {
 		t.Fatalf("read back %d findings and %+v", len(findings), assessments)
 	}
-	if without := exampleInput(); Body(without) != strings.Replace(body, record, recordOf(t, Body(without)), 1) {
-		t.Fatal("assessments changed more than the record line")
-	}
 }
 
 func TestReadRecordVersion2Refusals(t *testing.T) {

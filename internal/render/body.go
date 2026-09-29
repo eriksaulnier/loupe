@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -99,7 +101,12 @@ func Body(in Input) string {
 		})
 	}
 
-	chips := countChips(len(blocking), rest)
+	open := openFindings(in.Assessments)
+	counted := slices.Clone(in.Findings)
+	for _, a := range open {
+		counted = append(counted, carriedFinding(a))
+	}
+	chips := countChips(counted)
 	summary := strings.TrimRight(in.Summary, "\n")
 	if in.Sticky != nil {
 		summary = trimmedLines(summary)
@@ -115,6 +122,9 @@ func Body(in Input) string {
 	}
 	if len(rest) > 0 {
 		blocks = append(blocks, sectionBlock("Worth a look", rest, in))
+	}
+	if len(open) > 0 {
+		blocks = append(blocks, carriedSection(open, in))
 	}
 
 	census := [4]int{}
@@ -143,9 +153,18 @@ func Body(in Input) string {
 	if in.Model != "" {
 		meta += " model=" + in.Model
 	}
-	sticky := ""
+	suffix := ""
+	if len(open) > 0 {
+		carriedBlocking := 0
+		for _, a := range open {
+			if a.Finding.Blocking {
+				carriedBlocking++
+			}
+		}
+		suffix = fmt.Sprintf(" carried=%d carriedblocking=%d", len(open), carriedBlocking)
+	}
 	if in.Sticky != nil {
-		sticky = fmt.Sprintf(" sticky=%d", in.Sticky.Rounds)
+		suffix += fmt.Sprintf(" sticky=%d", in.Sticky.Rounds)
 	}
 	note := ""
 	if in.Sticky != nil {
@@ -171,24 +190,29 @@ func Body(in Input) string {
 	}
 	metaLine := fmt.Sprintf(MetaPrefix+"%s inline=%s blocking=%d issues=%d suggestions=%d questions=%d other=%d excluded=%d withdrawn=%d reinstated=%d regraded=%d%s -->\n",
 		meta, in.Inline, len(blocking), census[groupIssue], census[groupSuggestion], census[groupQuestion], census[groupOther],
-		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded, sticky)
+		in.Excluded, in.Withdrawn, in.Reinstated, in.Regraded, suffix)
 
 	// A divider directly after </details> renders as literal text on GitHub, so every one follows a blank line.
 	body := top + strings.Join(blocks, "\n\n---\n\n") + "\n\n" + digest + "\n"
 	return withRecord(body, metaLine, in.Findings, in.Assessments)
 }
 
-// chipCounts is what the chips row counts: blocking findings, then the non-blocking findings of each label group. A
-// sticky round's anchor carries it, so a collapsed round's summary pills come from the same counts as its chips row.
+// chipCounts is what the chips row counts: blocking findings, then the non-blocking findings of each label group,
+// carried open findings included. A sticky round's anchor carries it, so a collapsed round's summary pills come from
+// the same counts as its chips row.
 type chipCounts struct {
 	blocking int
 	groups   [4]int
 }
 
-func countChips(blocking int, rest []Finding) chipCounts {
-	c := chipCounts{blocking: blocking}
-	for _, f := range rest {
-		c.groups[group(f.Label)]++
+func countChips(fs []Finding) chipCounts {
+	var c chipCounts
+	for _, f := range fs {
+		if f.Blocking {
+			c.blocking++
+		} else {
+			c.groups[group(f.Label)]++
+		}
 	}
 	return c
 }
@@ -253,6 +277,78 @@ func sectionBlock(title string, fs []Finding, in Input) string {
 		parts[i] = "<details>\n<summary>" + summaryLine(f, false) + "</summary>\n\n" + disclosure(f, in, true) + "\n\n</details>"
 	}
 	return "### " + title + "\n\n" + strings.Join(parts, "\n\n")
+}
+
+// openFindings are the earlier findings the round marked open, in the order the carried section lists them.
+func openFindings(assessments []RecordAssessment) []RecordAssessment {
+	var open []RecordAssessment
+	for _, a := range assessments {
+		if a.Status == "open" {
+			open = append(open, a)
+		}
+	}
+	slices.SortFunc(open, func(a, b RecordAssessment) int {
+		if a.Finding.Blocking != b.Finding.Blocking {
+			if a.Finding.Blocking {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Or(cmp.Compare(group(a.Finding.Label), group(b.Finding.Label)), findingid.Compare(a.Ref, b.Ref))
+	})
+	return open
+}
+
+func carriedFinding(a RecordAssessment) Finding {
+	return Finding{ID: a.Finding.ID, Title: a.Finding.Title, Label: a.Finding.Label, Blocking: a.Finding.Blocking}
+}
+
+var (
+	fullCommit = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	anyCommit  = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+)
+
+// carriedSection lists each open earlier finding on one line. Its body stays in the round that filed it, since the
+// record holds no severity, impact or fix to show beside it. A list item is Markdown, so the row escapes as an inline
+// comment's first line does.
+func carriedSection(open []RecordAssessment, in Input) string {
+	items := make([]string, len(open))
+	for i, a := range open {
+		f := a.Finding
+		item := "- " + summaryLine(carriedFinding(a), true)
+		if loc := f.Location; loc != nil {
+			item += " · " + carriedLocation(in, loc, f.FiledIn.Commit)
+		}
+		if commit := f.FiledIn.Commit; anyCommit.MatchString(commit) {
+			item += " · filed at " + CodeSpan(shortSHA(commit))
+		}
+		items[i] = item
+	}
+	return "### Still open from earlier rounds\n\n" + strings.Join(items, "\n")
+}
+
+// carriedLocation links to the file at the commit that filed the finding, since its line numbers are that commit's. A
+// LEFT line is the base's, which that commit does not show, so it stays a bare code span.
+func carriedLocation(in Input, rl *RecordLocation, commit string) string {
+	loc := &Location{Path: rl.Path, Side: rl.Side, Line: rl.Line, StartLine: rl.StartLine}
+	span := CodeSpan(locationText(loc, OneLine(loc.Path)))
+	if loc.Side == "LEFT" || !fullCommit.MatchString(commit) || in.Owner == "" || in.Repo == "" {
+		return span
+	}
+	// The record is editable on GitHub, and a browser resolves a dot segment, so one could point the link at another
+	// repository. A diff path never holds an empty or dot segment.
+	segs := strings.Split(loc.Path, "/")
+	for i, seg := range segs {
+		if seg == "" || seg == "." || seg == ".." {
+			return span
+		}
+		segs[i] = url.PathEscape(seg)
+	}
+	anchor := "#L" + strconv.Itoa(loc.Line)
+	if isRange(loc) {
+		anchor = "#L" + strconv.Itoa(loc.StartLine) + "-L" + strconv.Itoa(loc.Line)
+	}
+	return fmt.Sprintf("[%s](https://github.com/%s/%s/blob/%s/%s%s)", span, in.Owner, in.Repo, commit, strings.Join(segs, "/"), anchor)
 }
 
 // summaryLine is one row rule for the body and an inline comment. The location is left off, since it is the first

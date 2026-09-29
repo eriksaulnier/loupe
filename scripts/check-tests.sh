@@ -106,7 +106,8 @@ while IFS= read -r hit; do
 		"internal/markdown/allowlist_test.go https://example.com" | \
 		"internal/draft/mutate_add_test.go https://:80/x" | \
 		"internal/render/body_test.go https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" | \
-		"internal/render/body_test.go https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg")
+		"internal/render/body_test.go https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg" | \
+		"internal/render/carried_test.go https://github.com/o/r/blob/")
 		continue
 		;;
 	esac
