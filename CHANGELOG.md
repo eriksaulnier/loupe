@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/eriksaulnier/loupe/compare/v0.15.0...v0.16.0) (2026-09-29)
+
+
+### Features
+
+* **render:** show and count findings carried open from earlier rounds ([#73](https://github.com/eriksaulnier/loupe/issues/73)) ([7431efb](https://github.com/eriksaulnier/loupe/commit/7431efb30194179ca467df5b021ef8280031791a))
+
 ## [0.15.0](https://github.com/eriksaulnier/loupe/compare/v0.14.0...v0.15.0) (2026-09-28)
 
 
