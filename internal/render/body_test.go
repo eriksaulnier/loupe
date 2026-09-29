@@ -94,6 +94,7 @@ func TestBodyGoldens(t *testing.T) {
 		"modeled.md":      modeled,
 		"sticky.md":       stickyGoldenInput(t),
 		"sticky-three.md": stickyThreeGoldenInput(t),
+		"carried.md":      carriedGoldenInput(t),
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
