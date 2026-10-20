@@ -118,15 +118,10 @@ type Model struct {
 	settling bool
 	// opening is true from the program's start until settleOnOpen has passed; every key but ctrl+c is dropped.
 	opening bool
-	// awaiting is true while a handed-back note has no reply, which is the only time the draft is re-read on a timer.
-	awaiting bool
 	// polling is true while a poll tick is in flight, so there is never more than one.
 	polling bool
 	// elsewhere names what an outside process changed in other findings, found when a decision is recorded.
 	elsewhere string
-	// pollChanged is true when the last re-read found a change, which earns one more tick even with nothing
-	// awaiting: an agent that replies and then edits leaves the edit for the tick after the reply.
-	pollChanged bool
 	// pollSkipped is true when a tick found the human writing or confirming; the draft is re-read as they leave.
 	pollSkipped bool
 }
@@ -173,9 +168,6 @@ func New(cfg Config) (*Model, error) {
 		summaryCollapsed: true,
 	}
 	m.setDraft(d)
-	if err := m.refreshAwaiting(); err != nil {
-		return nil, err
-	}
 	m.cursor = initialCursor(d, m.order)
 	if st.Color {
 		m.darkBackground = st.R.HasDarkBackground()
@@ -201,7 +193,7 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} }), m.schedulePoll())
 }
 
-// pollInterval is how often the draft is re-read while a note awaits the agent's reply.
+// pollInterval is how often the draft is re-read.
 var pollInterval = 2 * time.Second
 
 type pollMsg struct{}
@@ -231,7 +223,7 @@ func (m *Model) pollHeld() bool {
 }
 
 func (m *Model) schedulePoll() tea.Cmd {
-	if !m.awaiting && !m.pollChanged || m.polling || m.err != nil {
+	if m.polling || m.err != nil {
 		return nil
 	}
 	m.polling = true
@@ -245,7 +237,6 @@ func (m *Model) checkDraft(asked bool) tea.Cmd {
 	if err != nil {
 		return m.fail(err)
 	}
-	m.pollChanged = changed != ""
 	switch {
 	case changed != "":
 		m.say(style.Note, m.changedNotice(changed))
@@ -268,7 +259,7 @@ func (m *Model) reload() (string, error) {
 		return "", err
 	}
 	if d.Version == m.version {
-		return "", m.refreshAwaiting()
+		return "", nil
 	}
 	changed := changeNotice(m.draft, d, "")
 	id, offset := "", m.body.YOffset
@@ -280,9 +271,6 @@ func (m *Model) reload() (string, error) {
 		m.cursor = j
 	}
 	m.cursor = max(min(m.cursor, len(m.order)-1), 0)
-	if err := m.refreshAwaiting(); err != nil {
-		return "", err
-	}
 	if m.view == viewDetail {
 		if err := m.refreshDetail(); err != nil {
 			return "", err
@@ -349,17 +337,6 @@ func changeNotice(before, after *draft.Draft, decided string) string {
 		return draftChanged
 	}
 	return strings.Join(parts, ", ")
-}
-
-// refreshAwaiting reads the hand-back set, which lives beside the draft, to decide whether the poll has a reason to
-// run.
-func (m *Model) refreshAwaiting() error {
-	h, err := draft.LoadHandBack(m.cfg.Dir)
-	if err != nil {
-		return err
-	}
-	m.awaiting = len(draft.Awaiting(m.draft, h)) > 0
-	return nil
 }
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -491,9 +468,6 @@ func (m *Model) Decide(findingID string, fn func(*draft.Draft) error) (bool, err
 	}
 	m.elsewhere = ""
 	m.setDraft(d)
-	if err := m.refreshAwaiting(); err != nil {
-		return false, err
-	}
 	m.elsewhere = elsewhereNotice(displayed, d, findingID)
 	if notice == "" {
 		return true, nil

@@ -21,7 +21,7 @@ These three were asked under the draft's first premise, before the finding below
 Asked under the rewritten premise:
 
 - Q: After answering every awaiting note, how should the agent continue? → A: Hand off again only when no review session is open. Review holds a session marker for its lifetime, `loupe handoff` refuses with a new `review-open` code while one is live, and the skill waits again on that refusal.
-- Q: When should the review window re-read the draft on its timer? → A: In the list and every detail view while any handed-back note awaits a reply; no timer when none does.
+- Q: When should the review window re-read the draft on its timer? → A: In the list and every detail view, always. Amended on 2026-10-20: the answer was "while any handed-back note awaits a reply; no timer when none does", which left an agent's edit or new finding off screen until the human pressed `esc` or `ctrl+r`.
 
 Owner decision after the review round, 2026-09-21:
 
@@ -82,7 +82,7 @@ The human is still in review when the agent replies, and possibly edits the find
 2. **Given** the human is in the list or on another finding when the agent replies, **When** the poll sees it, **Then** the draft is redrawn in place, the cursor stays on its finding, and the notice names the note and the finding it answers.
 3. **Given** the agent edits the finding the human is reading, **When** the poll sees it, **Then** the finding is redrawn as it now is, stays open, and the human's cleared decision is visible as such.
 4. **Given** the human's own decision writes the draft, **When** the next poll runs, **Then** nothing is announced.
-5. **Given** the agent has answered every awaiting note, **When** the reply has been shown, **Then** the timer stops until the next send-back.
+5. **Given** the agent has answered every awaiting note, **When** it then edits a finding or files a new one, **Then** the next poll shows it with a notice. Amended on 2026-10-20: the timer stopped after the last reply until the next send-back.
 
 ---
 
@@ -175,7 +175,7 @@ The human is deciding `f-002` while the agent answers a note on `f-001`. The hum
 
 #### Window
 
-- **FR-005**: While the list or a detail view is on screen and any handed-back note awaits a reply, the review window MUST re-read the draft every 2 seconds, comparing the draft's version with the version it displays. It MUST keep the timer for one more tick after a re-read that found a change, so an edit the agent writes just after its last reply still shows, and MUST NOT run it otherwise when no note awaits; a send-back from this window starts it.
+- **FR-005**: While the list or a detail view is on screen, the review window MUST re-read the draft every 2 seconds, comparing the draft's version with the version it displays. Amended on 2026-10-20: the timer ran only while a handed-back note awaited a reply, plus one tick after a change, so an agent that wrote without a pending send-back was not shown.
 - **FR-006**: When a re-read finds a change, including the reloads the window already does on `p`, on leaving a finding and after a publish, the window MUST apply it: reload the draft and redraw in place, keeping the open finding open and its scroll position, keeping the list cursor on the same finding id, and showing a notice that says what changed (a reply arrived, a finding changed, or the draft changed). A change the human's own decision caused MUST NOT produce such a notice.
 - **FR-007**: The re-read MUST be held while the send-back note editor, the label and blocking editor, a finding's file diff, the publish steps, the confirmation or a publish in progress is on screen. On returning to the list or a detail view, the window MUST apply what the held re-read would have found, as FR-006 says.
 - **FR-008**: The list and detail views MUST offer a refresh key that reloads the draft immediately, listed in the help overlay. It MUST NOT collide with an existing key in either view; `r` is already resolve in the detail view.

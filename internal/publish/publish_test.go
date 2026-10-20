@@ -859,17 +859,17 @@ func TestRunUnattendedSendsWithoutConfirmViewerOrRecheckThenReplays(t *testing.T
 	if len(fx.previews) != 0 {
 		t.Fatalf("Confirm must not be called, previews %d", len(fx.previews))
 	}
-	var post *fakegh.Request
+	var post fakegh.Request
+	sent := false
 	for _, r := range fx.gh.Requests() {
 		if r.Path == "/user" {
 			t.Fatalf("Viewer must not be called: %+v", r)
 		}
 		if r.Method == "POST" {
-			p := r
-			post = &p
+			post, sent = r, true
 		}
 	}
-	if post == nil {
+	if !sent {
 		t.Fatal("no review request sent")
 	}
 	body, _ := post.Body.(map[string]any)

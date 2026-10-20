@@ -960,6 +960,8 @@ func TestSendingFooterDoesNotOfferQuit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A running program already has its poll in flight, so the key's command is the only one Update can return.
+	m.Init()
 	m.view, m.sending = viewPublishing, true
 	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC}); cmd != nil {
 		t.Fatal("ctrl+c returned a command while sending")
