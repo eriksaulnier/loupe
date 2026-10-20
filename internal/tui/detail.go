@@ -79,7 +79,7 @@ func (m *Model) refreshDetail() error {
 
 	m.body.Width = m.width
 	m.body.Height = m.bodyHeight(detailHeaderLines)
-	m.body.SetContent(strings.Join(doc, "\n"))
+	fill(&m.body, strings.Join(doc, "\n"))
 	return nil
 }
 
