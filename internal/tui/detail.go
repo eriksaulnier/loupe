@@ -144,7 +144,10 @@ func (m *Model) references(f draft.Finding) []string {
 	}
 	out := []string{"", " " + m.styles.Head.Render("References")}
 	for _, ref := range f.References {
-		out = append(out, " "+m.styles.Dim.Render(render.ForDisplay(render.OneLine(ref))))
+		// Wrapped, since the detail cannot scroll sideways and a URL clipped at the edge cannot be read or copied.
+		for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(ref)), style.Content(m.width)-1, " "), "\n") {
+			out = append(out, m.styles.Dim.Render(line))
+		}
 	}
 	return out
 }
