@@ -356,7 +356,7 @@ func (c *confirmation) messageView(m *Model, width int) string {
 // and keeps the input on screen while it is being typed into.
 func (c *confirmation) sync(m *Model) {
 	c.scroll.Width, c.scroll.Height = m.width, m.bodyHeight(confirmHeaderLines)
-	c.scroll.SetContent(c.content(m))
+	fill(&c.scroll, c.content(m))
 	if !c.follow {
 		return
 	}

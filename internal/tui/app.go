@@ -612,6 +612,14 @@ func (m *Model) frameWith(header []string, body, notice, keys string) string {
 	return strings.Join(lines, "\n")
 }
 
+// fill sets a viewport's content and pulls its offset back to the last full page. SetContent clamps only an offset
+// past the last line, so a view scrolled to its end in a short window would keep that offset over blank rows once
+// the window grows.
+func fill(v *viewport.Model, content string) {
+	v.SetContent(content)
+	v.SetYOffset(v.YOffset)
+}
+
 func (m *Model) bodyHeight(headerLines int) int {
 	return m.bodyHeightOver(headerLines, m.viewFooter())
 }

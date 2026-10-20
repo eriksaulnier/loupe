@@ -162,6 +162,27 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 	}
 }
 
+// A view scrolled to its end in a short window and then given a taller one shows as much of its content as fits,
+// rather than keeping the old offset over blank rows.
+func TestScrolledViewsRefillWhenTheWindowGrows(t *testing.T) {
+	dir := newFixture(t)
+	withOpenNote(t, dir)
+	for _, sc := range screens {
+		m := modelOf(t, dir, testEnv, 60, 12)
+		sc.show(m)
+		for range 60 {
+			m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		}
+		m.Update(tea.WindowSizeMsg{Width: 60, Height: 45})
+		m.View()
+		for name, past := range map[string]bool{"body": m.body.PastBottom(), "file": m.file.PastBottom(), "confirmation": m.confirm.scroll.PastBottom()} {
+			if past {
+				t.Errorf("%s: the %s stays scrolled past its end after the window grows:\n%s", sc.name, name, m.View())
+			}
+		}
+	}
+}
+
 // The default tier draws no private-use glyph anywhere.
 func TestDefaultTierHasNoPrivateUseGlyphs(t *testing.T) {
 	dir := newFixture(t)

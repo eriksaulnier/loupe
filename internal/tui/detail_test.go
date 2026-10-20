@@ -293,6 +293,30 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 	}
 }
 
+// A reference wider than the window wraps, since the detail cannot scroll sideways and a clipped URL cannot be read.
+func TestDetailWrapsAReferenceWiderThanTheWindow(t *testing.T) {
+	dir := newFixture(t)
+	ref := "https://github.com/acme/widgets/pull/42/files#diff-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdefR90"
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].References = []string{ref}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, testEnv, 60, 60)
+	mustOpen(m, "f-001")
+	var joined strings.Builder
+	for _, l := range strings.Split(ansi.Strip(m.View()), "\n") {
+		if w := style.Width(l); w > 60 {
+			t.Errorf("line is %d cells wide: %q", w, l)
+		}
+		joined.WriteString(strings.TrimSpace(l))
+	}
+	if !strings.Contains(joined.String(), ref) {
+		t.Errorf("the reference is not shown whole:\n%s", m.View())
+	}
+}
+
 func TestDetailActionsFollowTheFinding(t *testing.T) {
 	g := style.Glyphs(envOf(map[string]string{"LANG": "en_US.UTF-8"}))
 	located := draft.Finding{ID: "f-001", Location: &draft.Location{Path: "a.go", Line: 1}, Included: true}

@@ -84,7 +84,7 @@ func (m *Model) refreshFileDiff() {
 	}
 	m.file.Width = m.width
 	m.file.Height = m.bodyHeight(fileDiffHeaderLines)
-	m.file.SetContent(strings.Join(rows, "\n"))
+	fill(&m.file, strings.Join(rows, "\n"))
 	switch {
 	case m.fileCursor < m.file.YOffset:
 		m.file.SetYOffset(m.fileCursor)
