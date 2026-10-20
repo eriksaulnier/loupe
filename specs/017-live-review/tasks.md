@@ -46,9 +46,9 @@ description: "Task list for handing a send-back to the agent at once and showing
 **Independent Test**: With review open on a draft holding an awaiting note, write a reply and an edit from outside and deliver one poll; both are on screen with a notice, no key pressed.
 
 - [X] T013 [US2] Add failing tests to `internal/tui/poll_test.go`: on the detail view of an awaiting note, an outside `AddReply` then a delivered `pollMsg` shows the reply and a notice naming the note and its finding; the detail stays open and the scroll offset is kept; on the list with the cursor on another finding, the same poll keeps the cursor on its id and names the note; an outside edit to the open finding redraws it as pending; a poll with no outside write changes nothing and says nothing; the human's own decision is never announced; several outside writes before one poll make one notice.
-- [X] T014 [US2] Add failing tests to `internal/tui/poll_test.go` for the timer's life: `New` on a draft with nothing awaiting schedules no poll; a send-back from the window schedules one; a poll that finds nothing awaiting any more does not reschedule; a poll that still finds one awaiting does.
+- [X] T014 [US2] Add failing tests to `internal/tui/poll_test.go` for the timer's life: `New` on a draft with nothing awaiting schedules no poll; a send-back from the window schedules one; a poll that finds nothing awaiting any more does not reschedule; a poll that still finds one awaiting does. Amended on 2026-10-20 with spec FR-005: the poll starts and reschedules whether or not anything awaits.
 - [X] T015 [US2] Add a failing test to `internal/tui/poll_test.go`: after an outside write and before any poll, accepting the open finding is refused with `staleNotice` and records nothing (FR-009).
-- [X] T016 [US2] Implement in `internal/tui/app.go`: `pollMsg`, `pollInterval = 2 * time.Second`, a `polling` flag so one tick is in flight, a `checkDraft` that loads the draft and `handback.json`, applies a moved version through `setDraft` with the notice built by comparing old and new drafts, keeps the list cursor by id and the detail scroll offset, and reschedules only while `draft.Awaiting` is non-empty. Start the chain from `Init` when something awaits and after a send-back.
+- [X] T016 [US2] Implement in `internal/tui/app.go`: `pollMsg`, `pollInterval = 2 * time.Second`, a `polling` flag so one tick is in flight, a `checkDraft` that loads the draft and `handback.json`, applies a moved version through `setDraft` with the notice built by comparing old and new drafts, keeps the list cursor by id and the detail scroll offset, and reschedules only while `draft.Awaiting` is non-empty. Start the chain from `Init` when something awaits and after a send-back. Amended on 2026-10-20 with spec FR-005: the chain starts from `Init` and always reschedules, and `handback.json` is no longer read.
 
 ## Phase 5: User Story 5 — Nothing moves under an editor or the publish flow (P1)
 
@@ -62,7 +62,7 @@ description: "Task list for handing a send-back to the agent at once and showing
 **Independent Test**: Write a change from outside and press `ctrl+r` in the list; the change shows and the cursor stays on its finding.
 
 - [X] T019 [US3] Add failing tests to `internal/tui/poll_test.go` and `internal/tui/keys_test.go`: `ctrl+r` in the list and in the detail view applies an outside change with its notice and keeps the cursor and open finding; on an unchanged draft it says the draft is current; both help overlays list `ctrl+r`.
-- [X] T020 [US3] Bind `ctrl+r` to `checkDraft` with a current-draft notice in `internal/tui/list.go` and `internal/tui/detail.go`, add it to the help overlay entries in `internal/tui/app.go`, and start the timer if the reload finds something awaiting.
+- [X] T020 [US3] Bind `ctrl+r` to `checkDraft` with a current-draft notice in `internal/tui/list.go` and `internal/tui/detail.go`, add it to the help overlay entries in `internal/tui/app.go`, and start the timer if the reload finds something awaiting. Amended on 2026-10-20 with spec FR-005: the timer is already running, so `ctrl+r` starts nothing.
 
 ## Phase 7: Contract text
 
