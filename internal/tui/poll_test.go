@@ -160,30 +160,31 @@ func TestPollWithoutAnOutsideWriteSaysNothing(t *testing.T) {
 	}
 }
 
-func TestPollRunsOnlyWhileANoteAwaits(t *testing.T) {
-	quiet := newPollModel(t, newFixture(t), 40)
-	if quiet.polling {
-		t.Fatal("a draft with nothing awaiting started the poll")
+func TestPollRunsWithNothingAwaiting(t *testing.T) {
+	dir := newFixture(t)
+	m := newPollModel(t, dir, 40)
+	if !m.polling {
+		t.Fatal("a draft with nothing awaiting did not start the poll")
 	}
-	pressKeys(t, quiet, "enter", "s")
-	pressKeys(t, quiet, "Why?", "enter")
-	if !strings.Contains(quiet.notice, "sent back as n-001; the agent has it") || !quiet.polling {
-		t.Fatalf("send-back: notice %q polling %v", quiet.notice, quiet.polling)
+	pressKeys(t, m, "enter")
+	agentRetitles(t, dir, "f-001", "Retitled one")
+	update(t, m, pollMsg{})
+	if m.view != viewDetail || !strings.Contains(m.View(), "Retitled one") || !strings.Contains(m.notice, "f-001 changed") {
+		t.Fatalf("detail: view %v notice %q\n%s", m.view, m.notice, m.View())
+	}
+	update(t, m, pollMsg{})
+	if !m.polling {
+		t.Fatal("the poll stopped after a quiet tick")
 	}
 
-	m, dir := newAwaitingModel(t, 40)
-	if !m.polling {
-		t.Fatal("a draft with an awaiting note did not start the poll")
-	}
+	pressKeys(t, m, "esc")
+	outside(t, dir, func(d *draft.Draft) error {
+		_, err := draft.Add(d, []draft.FindingInput{{Title: "Four", Body: "Body four.", General: true, Label: "nit"}}, nil, draft.ByAgent, testNow)
+		return err
+	})
 	update(t, m, pollMsg{})
-	if !m.polling {
-		t.Fatal("the poll stopped while the note still awaits")
-	}
-	agentReplies(t, dir, "n-001", "Because.")
-	update(t, m, pollMsg{})
-	update(t, m, pollMsg{})
-	if m.polling {
-		t.Fatal("the poll kept running after the last reply and a quiet tick")
+	if m.view != viewList || !strings.Contains(m.View(), "Four") || !strings.Contains(m.notice, "f-004 filed") {
+		t.Fatalf("list: view %v notice %q\n%s", m.view, m.notice, m.View())
 	}
 }
 
@@ -301,10 +302,6 @@ func TestPollShowsAnEditThatFollowsTheLastReply(t *testing.T) {
 	update(t, m, pollMsg{})
 	if !strings.Contains(m.notice, "f-001 changed") || !strings.Contains(m.View(), "Retitled one") {
 		t.Fatalf("notice %q", m.notice)
-	}
-	update(t, m, pollMsg{})
-	if m.polling {
-		t.Fatal("the poll kept running after a quiet tick with nothing awaiting")
 	}
 }
 
