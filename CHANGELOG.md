@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.1](https://github.com/eriksaulnier/loupe/compare/v0.16.0...v0.16.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **tui:** keep views readable when the window resizes or narrows ([#76](https://github.com/eriksaulnier/loupe/issues/76)) ([33a6171](https://github.com/eriksaulnier/loupe/commit/33a6171fd856cceae91bc29b9ddf03e64d2d55b5))
+* **tui:** re-read the draft on every tick, not only while a note awaits ([#77](https://github.com/eriksaulnier/loupe/issues/77)) ([8d4606a](https://github.com/eriksaulnier/loupe/commit/8d4606ab096f9205f0c6a1e8d96a62152798f020))
+
 ## [0.16.0](https://github.com/eriksaulnier/loupe/compare/v0.15.0...v0.16.0) (2026-09-29)
 
 
