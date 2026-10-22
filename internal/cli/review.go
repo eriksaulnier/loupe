@@ -90,8 +90,8 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 func reviewSession(cmd *cobra.Command, deps Deps, dir string, jsonMode bool) error {
 	ui := interactiveOutput(deps, jsonMode)
 	plain, _ := cmd.Flags().GetBool("plain")
-	width, height := terminalSize(deps)
-	mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, Width: width, Height: height, RawProbe: func() error { return rawProbe(deps) }})
+	width := terminalWidth(deps)
+	mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, RawProbe: func() error { return rawProbe(deps) }})
 	if mode == tui.Plain {
 		return tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width)
 	}
@@ -149,17 +149,17 @@ func interactiveOutput(deps Deps, jsonMode bool) io.Writer {
 	return deps.Stdout
 }
 
-// terminalSize is 0x0 when stdout is not a terminal file, which ChooseMode treats as too small.
-func terminalSize(deps Deps) (int, int) {
+// terminalWidth is plain mode's wrap width, 0 when stdout is not a terminal file.
+func terminalWidth(deps Deps) int {
 	f, ok := deps.Stdout.(*os.File)
 	if !ok {
-		return 0, 0
+		return 0
 	}
-	w, h, err := term.GetSize(int(f.Fd()))
+	w, _, err := term.GetSize(int(f.Fd()))
 	if err != nil {
-		return 0, 0
+		return 0
 	}
-	return w, h
+	return w
 }
 
 func rawProbe(deps Deps) error {

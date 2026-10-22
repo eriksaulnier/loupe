@@ -104,6 +104,7 @@ The human confirms the review. The screen changes to "Published" with the review
 
 - A window that shrinks after launch shows the "too small" screen at once, from any view, including the help overlay and a note being written.
 - A window exactly 60 by 12 is not too small.
+- Under `--json`, `review` and `publish` read the size from stdout, which is then a pipe, so they read no size and always chose plain mode. With FR-001 they draw full screen on stderr, as `contracts/cli.md` already says the interface does under `--json`.
 - A window too small to hold the message wraps it. One column is still drawn without a panic.
 - A publish that is canceled or refused returns to the list with its notice, as today. Only a sent review reaches the published screen.
 - The opener fails, for example when no browser can be found. The published screen stays, with the error as a warning, and the next key quits. The URL is still printed when review exits.

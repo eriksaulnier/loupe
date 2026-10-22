@@ -10,7 +10,7 @@ const (
 	Plain
 )
 
-// The full-screen layout needs room for a header, a hunk and a key line; below this plain mode reads better.
+// The full-screen layout needs room for a header, a hunk and a key line; below this it draws the "too small" screen.
 const (
 	minWidth  = 60
 	minHeight = 12
@@ -19,15 +19,13 @@ const (
 type Options struct {
 	Plain  bool
 	Getenv func(string) string
-	Width  int
-	Height int
 	// RawProbe reports whether stdin can enter raw mode.
 	RawProbe func() error
 }
 
 func ChooseMode(opts Options) Mode {
 	switch {
-	case opts.Plain, opts.Getenv("TERM") == "dumb", opts.RawProbe() != nil, opts.Width < minWidth, opts.Height < minHeight:
+	case opts.Plain, opts.Getenv("TERM") == "dumb", opts.RawProbe() != nil:
 		return Plain
 	}
 	return FullScreen

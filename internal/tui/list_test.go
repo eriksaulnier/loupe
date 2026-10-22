@@ -369,11 +369,10 @@ func TestListHeaderKeepsThePullRequestNumber(t *testing.T) {
 }
 
 // A split beside an agent pane is about 71 columns: the footer takes a second line rather than drop quit, and the list
-// gives up a row for it, so the selected finding stays on screen at every height. Heights under 12 make the fixture's
-// three findings scroll.
+// gives up a row for it, so the selected finding stays on screen at every height from the minimum up.
 func TestListFooterWrapsAndKeepsTheCursorRow(t *testing.T) {
 	dir := newFixture(t)
-	for height := 10; height <= 20; height++ {
+	for height := minHeight; height <= 20; height++ {
 		m := modelOf(t, dir, testEnv, 71, height)
 		m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m.Update(tea.KeyMsg{Type: tea.KeyDown})

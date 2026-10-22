@@ -343,6 +343,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		// Nothing is laid out while too small; the resize that ends it lays the view out again.
+		if tooSmall(m.width, m.height) {
+			return m, nil
+		}
 		return m, m.fail(m.layout())
 	case previewMsg:
 		title := ConfirmTitle(m.ref(), m.action, publish.InlineModes[m.pick], len(msg.preview.Comments))
@@ -360,6 +364,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.opening && msg.Type != tea.KeyCtrlC {
 			return m, nil
+		}
+		if tooSmall(m.width, m.height) {
+			var ok bool
+			if msg, ok = smallKey(msg); !ok {
+				return m, nil
+			}
 		}
 		// The confirmation comes first so that ctrl+c, like every key but y, p and the toggles, declines.
 		if m.view == viewConfirm {
@@ -410,6 +420,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() string {
+	if tooSmall(m.width, m.height) {
+		return m.smallView()
+	}
 	if m.help {
 		return m.helpView()
 	}

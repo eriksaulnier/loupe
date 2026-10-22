@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -361,5 +362,19 @@ func TestSeverityRampCoversEveryWord(t *testing.T) {
 	if len(severityKinds) != len(severity.Order) {
 		t.Fatalf("severityKinds has %d entries, severity.Order has %d: give the new word a Kind",
 			len(severityKinds), len(severity.Order))
+	}
+}
+
+// A frame too narrow for its way out gives that up before its title, each whole rather than truncated.
+func TestBoxGivesUpItsWayOutBeforeItsTitle(t *testing.T) {
+	s := New(io.Discard, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
+	for width, want := range map[int]*regexp.Regexp{
+		60: regexp.MustCompile(`^\+- send back f-001 -+ enter sends - esc cancels -\+$`),
+		40: regexp.MustCompile(`^\+- send back f-001 -+\+$`),
+		12: regexp.MustCompile(`^\+-+\+$`),
+	} {
+		if got := s.Box(nil, width, "send back f-001", "enter sends - esc cancels", Note)[0]; !want.MatchString(got) || len(got) != width {
+			t.Errorf("width %d: top edge %q", width, got)
+		}
 	}
 }

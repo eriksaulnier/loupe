@@ -587,6 +587,12 @@ func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		c.shell.width, c.shell.height = msg.Width, msg.Height
 	case tea.KeyMsg:
+		if tooSmall(c.shell.width, c.shell.height) {
+			var ok bool
+			if msg, ok = smallKey(msg); !ok {
+				return c, nil
+			}
+		}
 		answered, cmd := c.confirm.key(c.shell, msg)
 		if answered {
 			return c, tea.Quit
@@ -617,6 +623,9 @@ func (e *eofReader) Read(p []byte) (int, error) {
 }
 
 func (c *ConfirmModel) View() string {
+	if tooSmall(c.shell.width, c.shell.height) {
+		return c.shell.smallView()
+	}
 	return c.shell.confirmView(c.confirm)
 }
 
