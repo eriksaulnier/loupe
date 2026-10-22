@@ -49,6 +49,9 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	if strings.Contains(view, "<details>") || strings.ContainsAny(view, "\u202e\u2066\x1b") || strings.Contains(view, `"event"`) {
 		t.Errorf("review view has a closed <details>, a raw hidden character or the JSON:\n%q", view)
 	}
+	if strings.Contains(view, "since capture") {
+		t.Errorf("an unmoved head shows the moved-head block:\n%s", view)
+	}
 
 	toggle := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}
 	if _, cmd := m.Update(toggle); cmd != nil {
@@ -237,6 +240,40 @@ func TestConfirmKeepsAMalformedMessageOnScreen(t *testing.T) {
 	}
 	if m.Message() != "<script>bad</script>" {
 		t.Errorf("the typed text was lost: %q", m.Message())
+	}
+
+	// Reworded, the message clears the refusal and is what y publishes.
+	m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	typeInto(m, "Plainly, then.")
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}); cmd == nil || !m.Confirmed() || m.Message() != "Plainly, then." {
+		t.Fatalf("a reworded message: confirmed %v message %q", m.Confirmed(), m.Message())
+	}
+}
+
+// The message is published without the blank space around it, and a message of blank space alone is none: the body
+// stays the one composed without a message.
+func TestConfirmTrimsTheMessage(t *testing.T) {
+	for _, c := range []struct{ typed, want string }{{"  I read every one of these.  ", "I read every one of these."}, {"   ", ""}} {
+		m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+		typeInto(m, c.typed)
+		m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+		if !m.Confirmed() || m.Message() != c.want {
+			t.Fatalf("typed %q: confirmed %v message %q, want %q", c.typed, m.Confirmed(), m.Message(), c.want)
+		}
+		env, _, err := m.confirm.preview.Compose(c.want)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m.confirm.shown.Body != env.Body {
+			t.Errorf("typed %q: the body shown is not the one composed for %q:\n%s", c.typed, c.want, m.confirm.shown.Body)
+		}
+		if c.want == "" && m.confirm.shown.Body != m.confirm.preview.Body {
+			t.Errorf("a blank message changed the body:\n%s", m.confirm.shown.Body)
+		}
 	}
 }
 
@@ -527,6 +564,17 @@ func TestConfirmViewShowsMovedHead(t *testing.T) {
 	}
 	if strings.Index(view, "Head moved") > strings.Index(view, "review body") {
 		t.Errorf("the moved-head block comes after the body:\n%s", view)
+	}
+	if strings.Index(view, "and 21 earlier") > strings.Index(view, "0100000") {
+		t.Errorf("the earlier-commit count comes after the listed commits:\n%s", view)
+	}
+
+	truncated := movedPreview()
+	truncated.HeadMoved.Touched, truncated.HeadMoved.FilesTruncated = []string{}, true
+	m = NewConfirmModel(truncated, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
+	if view := m.View(); !strings.Contains(view, "Findings on changed files: none") || !strings.Contains(view, "can be incomplete") {
+		t.Errorf("truncated file list:\n%s", view)
 	}
 }
 
@@ -991,6 +1039,9 @@ func TestConfirmNamesTheReviewItEdits(t *testing.T) {
 		if !strings.Contains(view, "#pullrequestreview-") || !strings.Contains(view, "earlier rounds included") {
 			t.Errorf("width %d: the edited review's URL is not shown:\n%s", width, view)
 		}
+		if strings.Index(view, "#pullrequestreview-") > strings.Index(view, "review body") {
+			t.Errorf("width %d: the edited review is named after the body:\n%s", width, view)
+		}
 	}
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -1102,6 +1153,11 @@ func TestConfirmNamesAnEditedRound(t *testing.T) {
 	if i := strings.Index(view, notice); i < 0 || i > strings.Index(view, "review body") {
 		t.Fatalf("the edited round is not named before the body:\n%s", view)
 	}
+	typeInto(m, "Short.")
+	if view := ansi.Strip(m.confirm.content(m.shell)); !strings.Contains(view, notice) {
+		t.Fatalf("a message too short to drop the edited round unnamed it:\n%s", view)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
 	typeInto(m, "A message long enough to drop a round.")
 	if view := ansi.Strip(m.confirm.content(m.shell)); strings.Contains(view, notice) || !strings.Contains(view, "The oldest round was dropped") {
 		t.Fatalf("the notice names a round the body no longer carries:\n%s", view)

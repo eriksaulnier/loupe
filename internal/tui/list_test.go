@@ -66,6 +66,11 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 	if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
 		t.Errorf("C locale view has a non-ASCII glyph:\n%s", view)
 	}
+	for name, view := range everyView(t, modelOf(t, dir, ascii, 100, 30)) {
+		if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
+			t.Errorf("C locale %s view has a non-ASCII glyph:\n%s", name, view)
+		}
+	}
 
 	if got := modelOf(t, dir, utf8, 100, 24).View(); !strings.Contains(got, "› · f-001            ● Title one") {
 		t.Errorf("UTF-8 view does not use the Unicode glyphs:\n%s", got)

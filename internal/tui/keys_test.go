@@ -210,6 +210,14 @@ func TestListRowsEscapeTitles(t *testing.T) {
 	assertEscaped(t, "list view", m.View(), `\u202E`, `\u001B[31mred`)
 }
 
+func TestDetailEscapesFindings(t *testing.T) {
+	m := newModel(t, hostileFixture(t))
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	assertEscaped(t, "detail view", m.View(), `Title \u202Eeno \u001B[31mred`, `Body \u2066hidden \u001B]52;c;x\u0007`, `fix \u200Fmark`)
+}
+
 func TestPlainModeEscapesFindings(t *testing.T) {
 	var out bytes.Buffer
 	if err := RunPlain(hostileFixture(t), &lineReader{lines: []string{"q"}}, &out, envOf(testEnv), 0); err != nil {
