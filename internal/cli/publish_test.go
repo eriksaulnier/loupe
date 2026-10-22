@@ -20,11 +20,10 @@ func TestPublishUnattendedDefaultsActionToComment(t *testing.T) {
 	}
 }
 
-func TestPublishUnattendedRefusesOtherActionOrPlainBeforeResolving(t *testing.T) {
+func TestPublishUnattendedRefusesOtherActionBeforeResolving(t *testing.T) {
 	cases := [][]string{
 		{"publish", "o/r#1", "--unattended", "--action", "approve", "--json"},
 		{"publish", "o/r#1", "--unattended", "--action", "request-changes", "--json"},
-		{"publish", "o/r#1", "--unattended", "--plain", "--json"},
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {

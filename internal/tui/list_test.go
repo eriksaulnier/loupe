@@ -600,7 +600,7 @@ func TestEscapeKeepsTheCursorOnTheOpenFinding(t *testing.T) {
 	}
 }
 
-// The severity chip is colored on both surfaces that draw it. Nothing else notices: the chip's text is unchanged, so
+// The detail view colors the severity chip by rank. Nothing else notices: the chip's text is unchanged, so
 // reverting its kind to Dim leaves every other assertion true.
 func TestSeverityChipIsColoredByRank(t *testing.T) {
 	s := style.New(io.Discard, envOf(map[string]string{"LANG": "en_US.UTF-8"}))

@@ -2,7 +2,6 @@ package integration
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -189,19 +188,12 @@ func TestAttendedRoundCarriesItsAssessmentsThroughItsReceipt(t *testing.T) {
 	ref := roundRef(2)
 	h.mustOK("assess", "e-1", "--status", "open", "--run", ref)
 	h.mustOK("add", "--run", ref, "--from", h.WriteFile("finding.json", generalFinding("Cache race")))
-	h.IsTerminal = true
-	h.Stdin = "a\nq\n"
-	if _, stderr, exit := h.Run("review", ref, "--plain"); exit != 0 {
-		t.Fatalf("review exit %d stderr %q", exit, stderr)
-	}
-	h.Stdin = confirmPublish("", "y")
-	stdout, stderr, exit := h.Run("publish", ref, "--action", "comment", "--plain")
-	if exit != 0 {
+	h.decide(ref, "a f-001")
+	s := h.Start("publish", ref, "--action", "comment")
+	s.WaitFor("new line", "a copy of the 1 finding above, plus 1 earlier finding still open")
+	confirm(s, "", "y")
+	if _, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("publish exit %d stderr %q", exit, stderr)
-	}
-	h.IsTerminal = false
-	if !strings.Contains(stdout, "a copy of the 1 finding above, plus 1 earlier finding still open") {
-		t.Fatalf("the confirmation does not name the assessment:\n%s", stdout)
 	}
 	var receipt struct {
 		Envelope struct {
@@ -295,19 +287,15 @@ func TestAttendedRoundSkipsAnUnattendedReceipt(t *testing.T) {
 	h.mustRefuse("not-found", "assess", "e-1", "--status", "open", "--run", roundRef(2))
 
 	h.mustOK("add", "--run", roundRef(2), "--from", h.WriteFile("finding.json", generalFinding("Cache race")))
-	h.IsTerminal = true
-	h.Stdin = "a\nq\n"
-	if _, stderr, exit := h.Run("review", roundRef(2), "--plain"); exit != 0 {
-		t.Fatalf("review exit %d stderr %q", exit, stderr)
+	h.decide(roundRef(2), "a f-001")
+	s := h.Start("publish", roundRef(2), "--action", "comment")
+	// The marker closes the body, so the whole review is on screen when it shows.
+	if shown := s.WaitFor("new line", "loupe-meta"); strings.Contains(shown, "earlier finding") {
+		t.Fatalf("the confirmation carries earlier findings:\n%s", shown)
 	}
-	h.Stdin = confirmPublish("", "y")
-	stdout, stderr, exit := h.Run("publish", roundRef(2), "--action", "comment", "--plain")
-	h.IsTerminal = false
-	if exit != 0 {
+	confirm(s, "", "y")
+	if _, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("publish exit %d stderr %q", exit, stderr)
-	}
-	if strings.Contains(stdout, "earlier finding") {
-		t.Fatalf("the confirmation carries earlier findings:\n%s", stdout)
 	}
 	if _, findings := receiptFindings(t, h.RunDir(2)); len(findings) != 1 {
 		t.Fatalf("receipt findings %v, want only Cache race", findings)
@@ -441,20 +429,6 @@ func TestEmptyAssessClearsAssessmentsFromAMovedPreviousRound(t *testing.T) {
 	h.mustOK("publish", round3, "--unattended", "--sticky")
 }
 
-// confirmAfter calls during before its first read of answer, so another publish lands while the human confirms.
-type confirmAfter struct {
-	during func()
-	answer io.Reader
-}
-
-func (c *confirmAfter) Read(p []byte) (int, error) {
-	if c.during != nil {
-		c.during()
-		c.during = nil
-	}
-	return c.answer.Read(p)
-}
-
 // Round 2 publishes while the human confirms round 3, which assessed round 1: the check before the confirmation passed,
 // so the one before sending must refuse.
 func TestPublishRefusesWhenThePreviousRoundMovesDuringConfirmation(t *testing.T) {
@@ -473,21 +447,17 @@ func TestPublishRefusesWhenThePreviousRoundMovesDuringConfirmation(t *testing.T)
 	h.GH.SetCommits(owner, repo, number, github.Commit{SHA: head2, Message: "round 2"}, github.Commit{SHA: head3, Message: "round 3"})
 	h.mustOK("assess", "e-1", "--status", "open", "--run", roundRef(3))
 	h.mustOK("add", "--run", roundRef(3), "--from", h.WriteFile("finding.json", generalFinding("Unbounded retries")))
-	h.IsTerminal = true
 	for _, round := range []int{2, 3} {
-		h.Stdin = "a\nq\n"
-		if _, stderr, exit := h.Run("review", roundRef(round), "--plain"); exit != 0 {
-			t.Fatalf("review round %d exit %d stderr %q", round, exit, stderr)
-		}
+		h.decide(roundRef(round), "a f-001")
 	}
 
-	answer := &confirmAfter{answer: strings.NewReader(confirmPublish("", "y")), during: func() {
-		if stdout, stderr, exit := h.runWith(confirmPublish("", "y"), fixedNow, "publish", roundRef(2), "--action", "comment", "--plain"); exit != 0 {
-			t.Fatalf("round 2 publish exit %d stdout %q stderr %q", exit, stdout, stderr)
-		}
-	}}
-	_, stderr, exit := h.runReading(answer, fixedNow, "publish", roundRef(3), "--action", "comment", "--plain")
-	h.IsTerminal = false
+	s := h.Start("publish", roundRef(3), "--action", "comment")
+	s.WaitFor("new line")
+	if stdout, stderr, exit := h.Publish("", "y", roundRef(2), "--action", "comment"); exit != 0 {
+		t.Fatalf("round 2 publish exit %d stdout %q stderr %q", exit, stdout, stderr)
+	}
+	confirm(s, "", "y")
+	_, stderr, exit := s.Wait()
 	if exit != 1 || !strings.Contains(stderr, "error: the previous round is now round 2 (") {
 		t.Fatalf("round 3 publish exit %d stderr %q, want previous-moved", exit, stderr)
 	}
@@ -558,21 +528,17 @@ func TestPublishRefusesWhenAnotherDataRootPublishesDuringConfirmation(t *testing
 	for _, r := range []*harness{h, &other} {
 		r.captureRound(1)
 		r.mustOK("add", "--run", roundRef(1), "--from", r.WriteFile("finding.json", generalFinding("Cache race")))
-		r.IsTerminal = true
-		r.Stdin = "a\nq\n"
-		if _, stderr, exit := r.Run("review", roundRef(1), "--plain"); exit != 0 {
-			t.Fatalf("review exit %d stderr %q", exit, stderr)
-		}
+		r.decide(roundRef(1), "a f-001")
 	}
 	h.mustOK("assess", "e-1", "--status", "open", "--run", roundRef(1))
 
-	answer := &confirmAfter{answer: strings.NewReader(confirmPublish("", "y")), during: func() {
-		if stdout, stderr, exit := other.runWith(confirmPublish("", "y"), fixedNow, "publish", roundRef(1), "--action", "comment", "--plain"); exit != 0 {
-			t.Fatalf("the other root's publish exit %d stdout %q stderr %q", exit, stdout, stderr)
-		}
-	}}
-	_, stderr, exit := h.runReading(answer, fixedNow, "publish", roundRef(1), "--action", "comment", "--plain")
-	h.IsTerminal = false
+	s := h.Start("publish", roundRef(1), "--action", "comment")
+	s.WaitFor("new line")
+	if stdout, stderr, exit := other.Publish("", "y", roundRef(1), "--action", "comment"); exit != 0 {
+		t.Fatalf("the other root's publish exit %d stdout %q stderr %q", exit, stdout, stderr)
+	}
+	confirm(s, "", "y")
+	_, stderr, exit := s.Wait()
 	if exit != 1 || !strings.Contains(stderr, "error: the previous round is now round ") ||
 		!strings.Contains(stderr, "loupe capture "+prURL()+" from an empty data root") {
 		t.Fatalf("publish exit %d stderr %q, want previous-moved naming a fresh capture", exit, stderr)

@@ -72,7 +72,7 @@ var environment = [][2]string{
 	{"LOUPE_HOME", "data root (default $XDG_DATA_HOME/loupe, else ~/.local/share/loupe)"},
 	{"LOUPE_RUN", "default run reference"},
 	{"LOUPE_LOCK_TIMEOUT_MS", "how long to wait for the run lock (default 3000, max 60000)"},
-	{"NO_COLOR, TERM, LANG/LC_ALL", "honored for color, plain-mode fallback and glyph selection"},
+	{"NO_COLOR, TERM, LANG/LC_ALL", "honored for color and glyph selection; TERM=dumb refuses review and publish"},
 	{"LOUPE_ICONS", "ascii, unicode (the default) or nerd, which needs a Nerd Font"},
 }
 

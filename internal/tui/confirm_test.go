@@ -106,7 +106,7 @@ func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 	}
 }
 
-// The full-screen confirmation shows each pill as its word, in the body and in the inline comment, as plain mode does.
+// The confirmation shows each pill as its word, in the body and in the inline comment.
 func TestConfirmShowsPillsAsWords(t *testing.T) {
 	m := NewConfirmModel(pillPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "all", 1))
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 60})

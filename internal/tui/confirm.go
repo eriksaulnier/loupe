@@ -416,7 +416,7 @@ func (c *confirmation) header(m *Model) string {
 // editsHeader never gives way: an edit overwrites words already published, which y alone must not do unannounced.
 const editsHeader = "edits in place"
 
-// editLine is what both confirmations say about a sticky edit, before the body it describes.
+// editLine is what the confirmation says about a sticky edit, before the body it describes.
 func editLine(url string) string {
 	return render.ForDisplay("This replaces the whole body of " + url + " with the body below, earlier rounds included. An edit sends no notification.")
 }

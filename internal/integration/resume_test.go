@@ -55,11 +55,7 @@ func TestResumeFromBranch(t *testing.T) {
 	if env["run"] != "acme/widgets#8@1" {
 		t.Fatalf("show resolved %v", env["run"])
 	}
-	h.IsTerminal = true
-	h.Stdin = "a\nq\n"
-	if _, stderr, exit := h.Run("review", "--plain"); exit != 0 {
-		t.Fatalf("review exit %d stderr %q", exit, stderr)
-	}
+	h.decide("", "a f-001")
 	if d, _ := h.mustOK("show", "--run", "acme/widgets#8")["dispositions"].(map[string]any); d["f-001"] != "accepted" {
 		t.Fatalf("review from the branch did not decide #8: %v", d)
 	}
@@ -97,8 +93,7 @@ func TestResumeFromBranch(t *testing.T) {
 	}
 	checkList("ready", "captured")
 
-	h.Stdin = confirmPublish("", "y")
-	if stdout, stderr, exit := h.Run("publish", "--action", "comment", "--plain"); exit != 0 {
+	if stdout, stderr, exit := h.Publish("", "y", "--action", "comment"); exit != 0 {
 		t.Fatalf("publish exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(h.Home, "runs", owner, repo, "8", "1", "receipt.json")); err != nil {
@@ -115,6 +110,7 @@ func TestResumeFromBranch(t *testing.T) {
 		t.Fatalf("list rows are not aligned:\n%s", stdout)
 	}
 
+	h.IsTerminal = true
 	h.Repo.Git("checkout", "--quiet", "-b", "lonely")
 	errObj := h.mustRefuse("no-run", "review")
 	if fix, _ := errObj["fix"].(string); strings.Contains(fix, "--run") || !strings.Contains(fix, "loupe review <ref>") {

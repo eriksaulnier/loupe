@@ -78,7 +78,7 @@ func TestChangedDiffIsRefusedOnEveryLoad(t *testing.T) {
 	for _, args := range [][]string{
 		{"add", "--run", runRef, "--title", "t", "--body", "b", "--general"},
 		{"edit", "f-001", "--run", runRef, "--title", "u"},
-		{"review", runRef, "--plain"},
+		{"review", runRef},
 	} {
 		h.IsTerminal = args[0] == "review"
 		errObj := h.mustRefuse("record", args...)

@@ -532,8 +532,8 @@ func (m *Model) sayDecided(text string) {
 	m.say(style.Good, text)
 }
 
-// decide is shared by both modes. A decision is stale only when its own finding changed since displayed, so the agent
-// writing elsewhere never refuses it. It returns the draft to display next and, when nothing was recorded, the notice.
+// decide refuses a decision as stale only when its own finding changed since displayed, so the agent writing
+// elsewhere never refuses it. It returns the draft to display next and, when nothing was recorded, the notice.
 func decide(dir string, displayed *draft.Draft, findingID string, getenv func(string) string, fn func(*draft.Draft) error) (*draft.Draft, string, error) {
 	shown, err := draft.FindingState(displayed, findingID)
 	if err != nil {
@@ -1024,14 +1024,6 @@ func chips(s style.Style, f draft.Finding, disposition string, general bool) []c
 	return out
 }
 
-func chipRow(s style.Style, cs []chip) string {
-	out := make([]string, 0, len(cs))
-	for _, c := range cs {
-		out = append(out, s.Chip(c.kind, c.glyph, c.text))
-	}
-	return strings.Join(out, "   ")
-}
-
 func orderedIndex(fs []draft.Finding, id string) int {
 	for i, f := range fs {
 		if f.ID == id {
@@ -1126,4 +1118,11 @@ func (m *Model) diffStyle(l diff.ViewLine) lipgloss.Style {
 		return m.styles.Removed
 	}
 	return m.styles.R.NewStyle()
+}
+
+func joinNotice(text, elsewhere string) string {
+	if elsewhere == "" {
+		return text
+	}
+	return text + "; " + elsewhere
 }

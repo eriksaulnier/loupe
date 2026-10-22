@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/style"
@@ -18,27 +17,6 @@ func envOf(m map[string]string) func(string) string {
 			return "unicode"
 		}
 		return ""
-	}
-}
-
-func TestChooseMode(t *testing.T) {
-	rawOK := func() error { return nil }
-	cases := []struct {
-		name string
-		opts Options
-		want Mode
-	}{
-		{"full screen", Options{Getenv: envOf(nil), RawProbe: rawOK}, FullScreen},
-		{"--plain", Options{Plain: true, Getenv: envOf(nil), RawProbe: rawOK}, Plain},
-		{"TERM=dumb", Options{Getenv: envOf(map[string]string{"TERM": "dumb"}), RawProbe: rawOK}, Plain},
-		{"raw mode unavailable", Options{Getenv: envOf(nil), RawProbe: func() error { return errors.New("not a tty") }}, Plain},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := ChooseMode(c.opts); got != c.want {
-				t.Fatalf("ChooseMode = %v, want %v", got, c.want)
-			}
-		})
 	}
 }
 
