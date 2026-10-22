@@ -14,9 +14,11 @@ import (
 
 const handoffHelp = `Open loupe review for the human in a new terminal pane beside the agent's, then return.
 
-An agent runs this at the hand-off, then blocks on loupe wait. While a loupe review of the run
-is already open, in any terminal, it refuses review-open and opens nothing: the human is still
-reviewing and sees the agent's replies there, so the agent tells them and waits again.
+An agent runs this at the hand-off, then blocks on loupe wait. While a loupe review of any
+round of the pull request is open, in any terminal, it refuses review-open and opens nothing.
+Its details.run names the open run. When that is the agent's own run, the human is reviewing
+and sees the agent's replies there, so the agent tells them and waits again. When it is another
+round, the agent asks the human to finish or quit that review, then hands off again.
 
 Otherwise it tries these terminal hosts first to last and opens the pane in the first detected:
   herdr  HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH
@@ -67,19 +69,14 @@ func newHandoffCmd(deps Deps) *cobra.Command {
 }
 
 func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
-	dir, ref, err := resolveRun(cmd, deps, positional)
+	_, ref, err := resolveRun(cmd, deps, positional)
 	if err != nil {
 		return err
 	}
 	// Checked before detecting a host: without one the fallback tells the human to run review, which is wrong advice
 	// while one is already open.
-	open, err := run.SessionOpen(dir)
-	if err != nil {
+	if err := refuseOpenReview(deps, ref); err != nil {
 		return err
-	}
-	if open {
-		return refusal.New(refusal.ReviewOpen, fmt.Sprintf("loupe review is already open for %s, so no pane was opened", ref),
-			"tell the human their review is already open, then run loupe wait --run "+shellQuote(ref.String())+" --json")
 	}
 	fix := "ask the human to run loupe review " + shellQuote(ref.String())
 	host, ok := pane.Detect(deps.Getenv)
@@ -111,6 +108,27 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	_, err = fmt.Fprintf(deps.Stdout, "%s Opened loupe review for %s in a new pane %s\n",
 		s.Good.Bold(true).Render(s.Glyphs.Accepted), s.Accent.Render(ref.String()), where)
 	return err
+}
+
+// refuseOpenReview names the open run in details.run, so an agent can tell its own round from another it must ask the
+// human to finish.
+func refuseOpenReview(deps Deps, ref run.Ref) error {
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		return err
+	}
+	open, ok, err := run.OpenSession(root, ref)
+	if err != nil || !ok {
+		return err
+	}
+	fix := "tell the human their review is already open, then run loupe wait --run " + shellQuote(ref.String()) + " --json"
+	if open != ref {
+		fix = "ask the human to finish or quit loupe review of " + open.String() + ", then run loupe handoff --run " +
+			shellQuote(ref.String()) + " --json again"
+	}
+	r := refusal.New(refusal.ReviewOpen, fmt.Sprintf("loupe review is already open for %s, so no pane was opened", open), fix)
+	r.Details = map[string]any{"run": open.String()}
+	return r
 }
 
 // reviewCommand names this executable rather than loupe on PATH, so the pane runs the same build the agent ran. The

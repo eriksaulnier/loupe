@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -403,7 +404,8 @@ func TestHandoffRefusesWhileReviewIsOpen(t *testing.T) {
 			errObj, _ := e["error"].(map[string]any)
 			if code != 1 || errObj["code"] != "review-open" ||
 				errObj["message"] != "loupe review is already open for o/r#1@1, so no pane was opened" ||
-				errObj["fix"] != "tell the human their review is already open, then run loupe wait --run 'o/r#1@1' --json" {
+				errObj["fix"] != "tell the human their review is already open, then run loupe wait --run 'o/r#1@1' --json" ||
+				!reflect.DeepEqual(errObj["details"], map[string]any{"run": "o/r#1@1"}) {
 				t.Fatalf("exit %d envelope %v", code, e)
 			}
 			if calls := hostCalls(t, log); calls != nil {
@@ -428,5 +430,42 @@ func TestHandoffRefusesWhileReviewIsOpen(t *testing.T) {
 	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
 	if errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); code != 1 || errObj["code"] != "no-pane-host" {
 		t.Fatalf("after review exited: exit %d %v", code, errObj)
+	}
+}
+
+// A new round is a new run, so the guard covers the pull request: with round 1 open, handing off round 2 names round 1
+// and opens nothing, while another pull request passes, because a batch hands off several at once.
+func TestHandoffRefusesWhileAnotherRoundIsOpen(t *testing.T) {
+	home, dir := sendBackRun(t)
+	for _, other := range []string{run.RunDir(home, "o", "r", 1, 2), run.RunDir(home, "o", "r", 2, 1)} {
+		if err := os.MkdirAll(other, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	session, err := run.HoldSession(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Release() })
+	bin, log := fakeOrcaBin(t, "")
+	env := withHome(orcaEnv("term_agent", bin), home)
+	for _, ref := range []string{"o/r#1@2", "o/r#1"} {
+		deps, s := testDeps(t, env)
+		code := Execute(deps, []string{"handoff", "--run", ref, "--json"})
+		errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		if code != 1 || errObj["code"] != "review-open" ||
+			errObj["message"] != "loupe review is already open for o/r#1@1, so no pane was opened" ||
+			errObj["fix"] != "ask the human to finish or quit loupe review of o/r#1@1, then run loupe handoff --run 'o/r#1@2' --json again" ||
+			!reflect.DeepEqual(errObj["details"], map[string]any{"run": "o/r#1@1"}) {
+			t.Fatalf("%s: exit %d error %v", ref, code, errObj)
+		}
+	}
+	if calls := hostCalls(t, log); calls != nil {
+		t.Fatalf("orca was run while another round was open: %q", calls)
+	}
+
+	deps, s := testDeps(t, env)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#2", "--json"}); code != 0 {
+		t.Fatalf("another pull request: exit %d stdout %s", code, s.stdout.String())
 	}
 }
