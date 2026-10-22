@@ -308,11 +308,11 @@ func TestHandoffDirection(t *testing.T) {
 		{"herdr layout 120 over tty 80", herdr(`{"height":40,"width":120}`), ttyWidth(80), "right"},
 		{"herdr layout 119 over tty 150", herdr(`{"height":40,"width":119}`), ttyWidth(150), "down"},
 		{"herdr without a layout width takes tty 119", herdr(`{"height":40}`), ttyWidth(119), "down"},
-		{"herdr with no width anywhere", herdr(`{"height":40}`), nil, "right"},
+		{"herdr with no width anywhere", herdr(`{"height":40}`), nil, "down"},
 		{"orca tty 120", orca, ttyWidth(120), "right"},
 		{"orca tty 119", orca, ttyWidth(119), "down"},
-		{"orca tty unreadable", orca, func() (int, bool) { return 0, false }, "right"},
-		{"orca with no tty source", orca, nil, "right"},
+		{"orca tty unreadable", orca, func() (int, bool) { return 0, false }, "down"},
+		{"orca with no tty source", orca, nil, "down"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, log, env := c.setup(t)

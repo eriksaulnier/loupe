@@ -25,9 +25,10 @@ Otherwise it tries these terminal hosts first to last and opens the pane in the 
   orca   ORCA_TERMINAL_HANDLE, and orca on PATH
 A host whose conditions are met only in part is skipped. With no host it refuses no-pane-host.
 
-The pane opens below the agent's pane when that pane is known to be under 120 columns wide,
-and to the right otherwise. The width is the host's own report of the agent's pane (Herdr has
-one, Orca none), else the agent's own terminal; with neither it opens right. The pane runs
+The pane opens to the right of the agent's pane when that pane is known to be at least 120
+columns wide, and below it otherwise. The width is the host's own report of the agent's pane
+(Herdr has one, Orca none), else the agent's own terminal. With neither it opens below, since
+review needs 60 columns but only 12 rows. The pane runs
 this loupe's review for the run. In Herdr the pane takes focus. In Orca it never does: Orca
 can focus a pane only by moving the human's view to its worktree, so the pane shows in the
 agent's tab and the view stays where it is. The pane closes when review exits cleanly and
