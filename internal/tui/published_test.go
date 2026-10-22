@@ -7,7 +7,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest"
+	"github.com/muesli/termenv"
 )
 
 const reviewURLPrefix = "https://github.com/acme/widgets/pull/42#pullrequestreview-"
@@ -87,5 +89,31 @@ func TestPublishedScreenWithoutAnOpenerOffersNoO(t *testing.T) {
 	tm.Type("o")
 	if view := finalView(t, tm); strings.Contains(view, "open in browser") {
 		t.Fatalf("the screen offers o with no opener:\n%s", view)
+	}
+}
+
+// The frame leaves escapes inert, so the hyperlink has to survive it as an escape, not as text, on every row of a URL
+// cut to the window.
+func TestPublishedScreenLinksEveryRowOfTheURL(t *testing.T) {
+	url := reviewURLPrefix + "4242424242"
+	for _, width := range []int{120, 60} {
+		m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, width, 20)
+		m.styles.R.SetColorProfile(termenv.TrueColor)
+		m.styles.Color = true
+		m.view, m.published = viewPublished, url
+		view := m.View()
+		rows := strings.Count(view, ansi.SetHyperlink(url))
+		if strings.Contains(view, `\u001B`) || rows == 0 || rows != strings.Count(view, ansi.ResetHyperlink()) ||
+			!strings.Contains(strings.ReplaceAll(ansi.Strip(view), "\n  ", ""), url) {
+			t.Fatalf("width %d: %d linked rows:\n%q", width, rows, view)
+		}
+		if width == 60 && rows < 2 {
+			t.Fatalf("a URL wider than the window is not linked on each row:\n%q", view)
+		}
+	}
+	m := modelOf(t, newFixture(t), testEnv, 120, 20)
+	m.view, m.published = viewPublished, url
+	if view := m.View(); strings.ContainsRune(view, '\x1b') || !strings.Contains(view, url) {
+		t.Fatalf("NO_COLOR draws an escape or loses the URL:\n%q", view)
 	}
 }
