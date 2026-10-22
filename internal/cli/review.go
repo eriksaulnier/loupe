@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"runtime"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -12,7 +14,9 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/tui"
 )
 
@@ -29,7 +33,8 @@ shows the whole file's diff. In a finding, a accepts, x excludes, s sends it bac
 note, u restores an excluded finding to pending or reinstates a withdrawn one, accepting
 it, and r or d resolves or dismisses its open note. ? lists the keys for the current view.
 Every decision is saved immediately and is refused if the finding changed since it was
-shown.
+shown. After a review is sent, review shows its link: o opens it in the browser and any
+other key quits. The link is printed again once the interface closes.
 
 --plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 selects
 plain mode: one finding at a time with single-letter answers.
@@ -76,54 +81,62 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := reviewSession(cmd, deps, dir, jsonMode); err != nil {
+	published, err := reviewSession(cmd, deps, dir, jsonMode)
+	if err != nil {
 		_ = session.Release()
 		return err
 	}
 	if err := session.Release(); err != nil {
 		return err
 	}
-	return reviewDone(cmd, deps, dir, jsonMode, interactiveOutput(deps, jsonMode))
+	return reviewDone(cmd, deps, dir, jsonMode, interactiveOutput(deps, jsonMode), published)
 }
 
-// reviewSession runs review in the mode the terminal allows and returns when the human leaves it.
-func reviewSession(cmd *cobra.Command, deps Deps, dir string, jsonMode bool) error {
+// reviewSession runs review in the mode the terminal allows and returns when the human leaves it, with the URL of the
+// review they sent, if any.
+func reviewSession(cmd *cobra.Command, deps Deps, dir string, jsonMode bool) (string, error) {
 	ui := interactiveOutput(deps, jsonMode)
 	plain, _ := cmd.Flags().GetBool("plain")
 	width := terminalWidth(deps)
 	mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, RawProbe: func() error { return rawProbe(deps) }})
 	if mode == tui.Plain {
-		return tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width)
+		return "", tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width)
 	}
-	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub})
+	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, OpenURL: deps.OpenURL})
 	if err != nil {
-		return err
+		return "", err
 	}
 	final, err := tea.NewProgram(m, tea.WithInput(deps.Stdin), tea.WithOutput(ui), tea.WithAltScreen()).Run()
 	// A signal ends the program even while a confirmed review is being sent; the send still finishes and is recorded.
 	m.WaitForSend()
 	if err != nil {
-		return fmt.Errorf("review interface: %w", err)
+		return "", fmt.Errorf("review interface: %w", err)
 	}
 	finalModel, ok := final.(*tui.Model)
 	if !ok {
-		return fmt.Errorf("review interface ended with an unexpected model %T", final)
+		return "", fmt.Errorf("review interface ended with an unexpected model %T", final)
 	}
-	return finalModel.Err()
+	return finalModel.PublishedURL(), finalModel.Err()
 }
 
 // reviewDone records the notes the human left open and unanswered so a blocked loupe wait picks them up. Only a
-// clean exit gets here; a crash mid-session records nothing until the next clean exit.
-func reviewDone(cmd *cobra.Command, deps Deps, dir string, jsonMode bool, ui io.Writer) error {
+// clean exit gets here; a crash mid-session records nothing until the next clean exit. A review sent in the session
+// is named once the full-screen view has closed, so its link stays in the terminal's scrollback.
+func reviewDone(cmd *cobra.Command, deps Deps, dir string, jsonMode bool, ui io.Writer, published string) error {
 	handed, err := draft.RecordHandBack(dir, deps.Getenv)
 	if err != nil {
 		return err
 	}
-	if handed > 0 {
-		s := deps.outStyle()
-		if jsonMode {
-			s = deps.errStyle()
+	s := deps.outStyle()
+	if jsonMode {
+		s = deps.errStyle()
+	}
+	if published != "" {
+		if _, err := fmt.Fprintln(ui, publishedLine(s, published)); err != nil {
+			return err
 		}
+	}
+	if handed > 0 {
 		sentence := fmt.Sprintf("%d %s sent back; a waiting agent picks them up with", handed, plural(handed, "note"))
 		if _, err := fmt.Fprintf(ui, "%s %s\n", s.Note.Render(s.Glyphs.Note), next(s, deps.width(), sentence, "loupe feedback")); err != nil {
 			return err
@@ -133,6 +146,23 @@ func reviewDone(cmd *cobra.Command, deps Deps, dir string, jsonMode bool, ui io.
 		return nil
 	}
 	return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{})
+}
+
+func publishedLine(s style.Style, url string) string {
+	return s.Good.Bold(true).Render(s.Glyphs.Accepted) + " Published " + s.Link(url, render.ForDisplay(url))
+}
+
+// OpenURL opens url with the platform's own handler. Its output goes nowhere, so a browser it starts cannot hold a
+// pipe open and keep the wait from returning.
+func OpenURL(url string) error {
+	name := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		name = "open"
+	}
+	if err := exec.Command(name, url).Run(); err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	return nil
 }
 
 // interactive requires stdin and stdout to be terminals, and stderr too under --json, where interactiveOutput draws.

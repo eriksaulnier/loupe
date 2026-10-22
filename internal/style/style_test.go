@@ -378,3 +378,21 @@ func TestBoxGivesUpItsWayOutBeforeItsTitle(t *testing.T) {
 		}
 	}
 }
+
+func TestLinkWrapsOnlyASafeURLAndOnlyWithColor(t *testing.T) {
+	const url = "https://github.com/acme/widgets/pull/42#pullrequestreview-7"
+	colored := New(io.Discard, env(map[string]string{"LANG": "C"}))
+	colored.Color = true
+	if got, want := colored.Link(url, "the review"), "\x1b]8;;"+url+"\x07the review\x1b]8;;\x07"; got != want {
+		t.Errorf("Link = %q, want %q", got, want)
+	}
+	for _, unsafe := range []string{"github.com/o/r", "javascript:alert(1)", "https://github.com/o/r/\x1b]8;;evil\x07", "https://github.com/o/r/\x7f", "https://github.com/o/r/\u202e", "https://github.com/o/r/ x"} {
+		if got := colored.Link(unsafe, "text"); got != "text" {
+			t.Errorf("Link(%q) = %q, want the text alone", unsafe, got)
+		}
+	}
+	plain := New(io.Discard, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
+	if got := plain.Link(url, "the review"); got != "the review" {
+		t.Errorf("NO_COLOR Link = %q, want no escape", got)
+	}
+}

@@ -38,6 +38,7 @@ const (
 	viewInline
 	viewConfirm
 	viewPublishing
+	viewPublished
 )
 
 type Config struct {
@@ -48,6 +49,8 @@ type Config struct {
 	Output io.Writer
 	// GitHub is called only when the human publishes, so reviewing never needs credentials.
 	GitHub func() (github.Client, error)
+	// OpenURL opens the published review in a browser; nil offers no o on the published screen.
+	OpenURL func(string) error
 }
 
 // Width tiers: the label column goes first, then the location shrinks to a filename.
@@ -124,6 +127,9 @@ type Model struct {
 	elsewhere string
 	// pollSkipped is true when a tick found the human writing or confirming; the draft is re-read as they leave.
 	pollSkipped bool
+	// published is the URL of the review this program sent; openFailed is set once opening it failed.
+	published  string
+	openFailed bool
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -384,6 +390,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewPublishing {
 			return m, nil
 		}
+		if m.view == viewPublished {
+			return m, m.updatePublished(msg)
+		}
 		if m.noting {
 			return m, m.updateNote(msg)
 		}
@@ -439,6 +448,8 @@ func (m *Model) View() string {
 		return m.confirmView(&m.confirm)
 	case viewPublishing:
 		return m.frame([]string{m.listHeader(), m.headerRule()}, "", m.footerKeys())
+	case viewPublished:
+		return m.publishedView()
 	}
 	return m.listView()
 }

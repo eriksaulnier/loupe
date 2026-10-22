@@ -37,6 +37,7 @@ func main() {
 		},
 		StderrIsTerminal: func() bool { return term.IsTerminal(int(os.Stderr.Fd())) },
 		TTYWidth:         pane.TTYWidth,
+		OpenURL:          cli.OpenURL,
 		TermWidth: func() int {
 			w, _, err := term.GetSize(int(os.Stdout.Fd()))
 			if err != nil {

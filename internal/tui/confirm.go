@@ -725,16 +725,17 @@ func (m *Model) WaitForSend() {
 	}
 }
 
-// publishFinished returns to the list with the outcome as the notice; only an error that is not a refusal ends the
-// program.
+// publishFinished shows the published screen for a sent review, and otherwise returns to the list with the outcome as
+// the notice; only an error that is not a refusal ends the program.
 func (m *Model) publishFinished(done publishDone) tea.Cmd {
 	m.session, m.view, m.sending = nil, viewList, false
 	var r *refusal.Error
 	switch {
 	case done.err == nil:
 		// The review it opened is posted, so the words have been spent; a later round starts empty.
-		m.message = ""
-		m.say(style.Good, strings.TrimSpace(m.glyphs.Published+" published: "+done.receipt.ReviewURL))
+		m.message, m.notice = "", ""
+		m.view, m.published = viewPublished, done.receipt.ReviewURL
+		return nil
 	case errors.Is(done.err, publish.ErrDeclined):
 		m.say(style.Dim, strings.TrimSpace(m.glyphs.Canceled+" publish canceled; nothing was sent"))
 	case errors.As(done.err, &r):

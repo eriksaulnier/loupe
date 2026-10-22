@@ -167,3 +167,25 @@ func TestReviewWithoutSendBackRecordsNothing(t *testing.T) {
 		t.Fatalf("stdout:\n%s", s.stdout.String())
 	}
 }
+
+const testReviewURL = "https://github.com/o/r/pull/1#pullrequestreview-7"
+
+// The published screen's link goes away with the alternate screen, so review names the review again on the way out.
+func TestReviewDoneNamesThePublishedReview(t *testing.T) {
+	_, dir := sendBackRun(t)
+	deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+	if err := reviewDone(nil, deps, dir, false, deps.Stdout, testReviewURL); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.stdout.String(); !strings.HasPrefix(got, "+ Published "+testReviewURL+"\n") {
+		t.Fatalf("stdout %q", got)
+	}
+
+	deps, s = testDeps(t, map[string]string{"NO_COLOR": "1"})
+	if err := reviewDone(nil, deps, dir, false, deps.Stdout, ""); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(s.stdout.String(), "Published") {
+		t.Fatalf("a session that sent nothing names a review: %q", s.stdout.String())
+	}
+}

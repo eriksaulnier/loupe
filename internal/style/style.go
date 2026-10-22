@@ -566,6 +566,15 @@ func (s Style) boxEdge(inner int, title, right string) string {
 	return strings.Repeat(h, inner)
 }
 
+// Link makes text a terminal hyperlink to url where escapes are drawn. A URL that is not https or holds a space, a
+// control or a format character stays text, since it would end the escape early or point somewhere it does not show.
+func (s Style) Link(url, text string) string {
+	if !s.Color || !strings.HasPrefix(url, "https://") || strings.IndexFunc(url, func(r rune) bool { return r == ' ' || !unicode.IsPrint(r) }) >= 0 {
+		return text
+	}
+	return ansi.SetHyperlink(url) + text + ansi.ResetHyperlink()
+}
+
 // Rule is a horizontal rule, optionally titled at its left edge and labeled at its right.
 func (s Style) Rule(width int, title, right string) string {
 	h := s.Glyphs.HRule
