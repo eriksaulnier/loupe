@@ -12,17 +12,33 @@ import (
 // PublishedURL is the review this program sent, empty when it sent none.
 func (m *Model) PublishedURL() string { return m.published }
 
-// After a failed open the warning stays until the next key, so the human can still copy the link.
+// browserMsg is the opener's result. The opener runs outside Update since xdg-open can wait on the browser it starts.
+type browserMsg struct{ err error }
+
+func (m *Model) canOpen() bool {
+	return m.cfg.OpenURL != nil && !m.openFailed && style.LinkableURL(m.published)
+}
+
+// While the browser opens, any key still quits. After a failed open the warning stays until the next key, so the
+// human can still copy the link.
 func (m *Model) updatePublished(msg tea.KeyMsg) tea.Cmd {
-	if msg.String() != "o" || m.cfg.OpenURL == nil || m.openFailed {
+	if msg.String() != "o" || !m.canOpen() || m.browsing {
 		return tea.Quit
 	}
-	if err := m.cfg.OpenURL(m.published); err != nil {
-		m.openFailed = true
-		m.say(style.Warn, "could not open the browser: "+render.ForDisplay(err.Error())+"; any key quits")
-		return nil
+	m.browsing = true
+	m.say(style.Dim, "opening the browser; any key quits")
+	open, url := m.cfg.OpenURL, m.published
+	return func() tea.Msg { return browserMsg{open(url)} }
+}
+
+func (m *Model) browserDone(msg browserMsg) tea.Cmd {
+	m.browsing = false
+	if msg.err == nil {
+		return tea.Quit
 	}
-	return tea.Quit
+	m.openFailed = true
+	m.say(style.Warn, "could not open the browser: "+render.ForDisplay(msg.err.Error())+"; any key quits")
+	return nil
 }
 
 func (m *Model) publishedView() string {
@@ -40,7 +56,7 @@ func (m *Model) publishedView() string {
 		body = append(body, row(c))
 	}
 	hints := []style.Hint{{Verb: "any other key quits"}}
-	if m.cfg.OpenURL != nil && !m.openFailed {
+	if m.canOpen() && !m.browsing {
 		hints = append([]style.Hint{{Key: "o", Verb: "open in browser", KeyKind: style.Good}}, hints...)
 	}
 	lines := strings.Split(m.frame([]string{m.listHeader(), m.headerRule()}, strings.Join(body, "\n"), m.footer(hints)), "\n")

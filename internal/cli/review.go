@@ -156,6 +156,9 @@ func publishedLine(s style.Style, url string) string {
 // OpenURL opens url with the platform's own handler. Its output goes nowhere, so a browser it starts cannot hold a
 // pipe open and keep the wait from returning.
 func OpenURL(url string) error {
+	if !style.LinkableURL(url) {
+		return errors.New("the review link is not a plain https URL")
+	}
 	name := "xdg-open"
 	if runtime.GOOS == "darwin" {
 		name = "open"

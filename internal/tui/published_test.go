@@ -117,3 +117,37 @@ func TestPublishedScreenLinksEveryRowOfTheURL(t *testing.T) {
 		t.Fatalf("NO_COLOR draws an escape or loses the URL:\n%q", view)
 	}
 }
+
+// xdg-open can wait on the browser it starts, so the opener runs in a command and the screen keeps drawing meanwhile.
+func TestOOpensOutsideUpdate(t *testing.T) {
+	o := &opener{}
+	m := modelOf(t, newFixture(t), testEnv, 120, 20)
+	m.cfg.OpenURL = o.open
+	m.view, m.published = viewPublished, reviewURLPrefix+"1"
+	_, cmd := m.Update(keyOf("o"))
+	if cmd == nil || len(o.urls) != 0 {
+		t.Fatalf("o opened %q inside Update", o.urls)
+	}
+	msg := cmd()
+	if len(o.urls) != 1 {
+		t.Fatalf("the command opened %q", o.urls)
+	}
+	if _, next := m.Update(msg); !isQuit(next) {
+		t.Fatal("a finished open does not quit")
+	}
+}
+
+func TestPublishedScreenOffersNoOForAnUnsafeURL(t *testing.T) {
+	for _, url := range []string{"file:///tmp/x.command", "-a Calculator", "github.com/o/r"} {
+		o := &opener{}
+		m := modelOf(t, newFixture(t), testEnv, 120, 20)
+		m.cfg.OpenURL = o.open
+		m.view, m.published = viewPublished, url
+		if view := m.View(); strings.Contains(view, "open in browser") {
+			t.Fatalf("%q: the screen offers o:\n%s", url, view)
+		}
+		if _, cmd := m.Update(keyOf("o")); !isQuit(cmd) || len(o.urls) != 0 {
+			t.Fatalf("%q: o opened %q instead of quitting", url, o.urls)
+		}
+	}
+}

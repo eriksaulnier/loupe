@@ -127,8 +127,10 @@ type Model struct {
 	elsewhere string
 	// pollSkipped is true when a tick found the human writing or confirming; the draft is re-read as they leave.
 	pollSkipped bool
-	// published is the URL of the review this program sent; openFailed is set once opening it failed.
+	// published is the URL of the review this program sent. browsing is set while the opener runs, and openFailed
+	// once it failed.
 	published  string
+	browsing   bool
 	openFailed bool
 }
 
@@ -367,6 +369,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openedMsg:
 		m.opening = false
 		return m, nil
+	case browserMsg:
+		return m, m.browserDone(msg)
 	case tea.KeyMsg:
 		if m.opening && msg.Type != tea.KeyCtrlC {
 			return m, nil
