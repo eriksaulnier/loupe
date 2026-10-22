@@ -3,13 +3,12 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
 )
 
 // fastWait shortens the poll so a hand-back that appears mid-wait is seen well inside the test's timeout.
@@ -72,12 +71,12 @@ func TestWaitReturnsPublishedOnceReceiptAppears(t *testing.T) {
 	home, dir := sendBackRun(t)
 	go func() {
 		time.Sleep(60 * time.Millisecond)
-		if err := os.WriteFile(filepath.Join(dir, "receipt.json"), []byte("{}\n"), 0o644); err != nil {
+		if err := publish.SaveReceipt(dir, &publish.Receipt{ReviewID: 7, ReviewURL: testReviewURL}); err != nil {
 			t.Error(err)
 		}
 	}()
 	code, env, s := execIn(t, home, "", "wait", "--timeout", "5s")
-	if code != 0 || env["reason"] != "published" {
+	if code != 0 || env["reason"] != "published" || env["reviewUrl"] != testReviewURL {
 		t.Fatalf("exit %d envelope %v stderr %s", code, env, s.stderr.String())
 	}
 	if raw, ok := env["awaiting"].([]any); !ok || len(raw) != 0 {
@@ -159,5 +158,17 @@ func TestWaitHelpNamesTheSendBackNotTheQuit(t *testing.T) {
 		if !strings.Contains(text, "sends a finding back") {
 			t.Errorf("wait help does not name the send-back:\n%s", text)
 		}
+	}
+}
+
+func TestWaitShowsTheReviewURLWithoutJSON(t *testing.T) {
+	home, dir := sendBackRun(t)
+	if err := publish.SaveReceipt(dir, &publish.Receipt{ReviewID: 7, ReviewURL: testReviewURL}); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"wait", "--run", "o/r#1"}); code != 0 ||
+		!strings.Contains(s.stdout.String(), "Published "+testReviewURL+"; nothing more to wait for") {
+		t.Fatalf("exit %d stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
 	}
 }

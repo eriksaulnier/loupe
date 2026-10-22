@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -41,7 +42,8 @@ Result (--json):
    "findings": [{"id": "f-001", "title": "Retry loop can double-publish", "disposition": "accepted", "rev": 1}]}
 
 reason is notes or published; awaiting lists the note ids the agent has to answer, empty when
-published. The rest is the loupe feedback result.`
+published. When published, reviewUrl is the published review's link, read from the receipt.
+The rest is the loupe feedback result.`
 
 const (
 	waitReasonNotes     = "notes"
@@ -96,7 +98,7 @@ func runWait(cmd *cobra.Command, deps Deps) error {
 			return err
 		}
 		if reason != "" {
-			return writeWait(cmd, deps, ref.String(), d, reason, awaiting)
+			return writeWait(cmd, deps, dir, ref.String(), d, reason, awaiting)
 		}
 		select {
 		case <-ctx.Done():
@@ -131,17 +133,28 @@ func pollWait(dir string) (d *draft.Draft, reason string, awaiting []string, err
 	return d, "", nil, nil
 }
 
-func writeWait(cmd *cobra.Command, deps Deps, ref string, d *draft.Draft, reason string, awaiting []string) error {
+func writeWait(cmd *cobra.Command, deps Deps, dir, ref string, d *draft.Draft, reason string, awaiting []string) error {
+	var reviewURL string
+	if reason == waitReasonPublished {
+		receipt, _, err := publish.LoadReceipt(dir)
+		if err != nil {
+			return err
+		}
+		reviewURL = receipt.ReviewURL
+	}
 	if wantJSON(cmd) {
 		payload := feedbackPayload(d)
 		payload["reason"] = reason
 		payload["awaiting"] = awaiting
+		if reason == waitReasonPublished {
+			payload["reviewUrl"] = reviewURL
+		}
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}
 	s := deps.outStyle()
 	var line string
 	if reason == waitReasonPublished {
-		line = s.Good.Bold(true).Render(s.Glyphs.Accepted) + " Published; nothing more to wait for"
+		line = publishedLine(s, reviewURL) + "; nothing more to wait for"
 	} else {
 		line = fmt.Sprintf("%s %d %s handed back: %s", s.Note.Render(s.Glyphs.Note), len(awaiting), plural(len(awaiting), "note"), ids(s, awaiting...))
 	}
