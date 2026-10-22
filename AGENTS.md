@@ -23,8 +23,8 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `internal/render` | Composes what loupe shows and sends |
 | `internal/run` | The on-disk layout of review runs: paths, references, atomic writes and locking |
 | `internal/style` | The one place terminal appearance is decided: colors, glyphs and layout helpers |
-| `internal/tui` | The human review interface: a full-screen Bubble Tea program and a line-by-line plain mode |
-| `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, and `fakegh`, an in-memory GitHub REST server |
+| `internal/tui` | The human review interface: a full-screen Bubble Tea program |
+| `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, `fakegh`, an in-memory GitHub REST server, and `screen`, which types keys into the review program through a pipe and waits for what it draws |
 | `plugin/` | The agent plugin: the `human-review` workflow skill and the Claude Code and Codex manifests. It ships no review skill and no command |
 | `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add eriksaulnier/loupe` find the plugin |
 | `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add eriksaulnier/loupe` |

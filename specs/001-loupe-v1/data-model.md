@@ -29,7 +29,7 @@ Derived run state: `published` if `receipt.json` exists, else `ready` if readine
 
 Derived: a note is awaiting the agent while it is in the set, open and without a reply. `wait` returns on any awaiting note or on a receipt; a reply to one of two handed-back notes leaves the other awaiting.
 
-The exit's recording runs only on a clean exit: `q`, Ctrl-C in the full-screen program, and `q` or end of input in plain mode. A send-back is recorded whatever happens to the session afterwards.
+The exit's recording runs only on a clean exit: `q` or Ctrl-C. A send-back is recorded whatever happens to the session afterwards.
 
 ## Target (immutable)
 
