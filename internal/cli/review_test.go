@@ -193,8 +193,8 @@ func TestReviewDoneNamesThePublishedReview(t *testing.T) {
 // The URL comes from GitHub by way of the receipt, so only a plain https link reaches the platform's handler.
 func TestOpenURLRefusesAnythingButAnHTTPSLink(t *testing.T) {
 	for _, url := range []string{"file:///tmp/x.command", "-a Calculator", "github.com/o/r", "https://github.com/o/r" + "\n-a"} {
-		if err := OpenURL(url); err == nil {
-			t.Errorf("OpenURL(%q) ran the handler", url)
+		if err := OpenURL(url); !errors.Is(err, errUnsafeURL) {
+			t.Errorf("OpenURL(%q) = %v, want the URL refused before the handler runs", url, err)
 		}
 	}
 }

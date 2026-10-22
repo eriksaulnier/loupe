@@ -128,6 +128,12 @@ func TestOOpensOutsideUpdate(t *testing.T) {
 	if cmd == nil || len(o.urls) != 0 {
 		t.Fatalf("o opened %q inside Update", o.urls)
 	}
+	if view := m.View(); strings.Contains(view, "open in browser") || !strings.Contains(view, "opening the browser") {
+		t.Fatalf("the screen still offers o while the browser opens:\n%s", view)
+	}
+	if _, quit := m.Update(keyOf("o")); !isQuit(quit) {
+		t.Fatal("a key while the browser opens does not quit")
+	}
 	msg := cmd()
 	if len(o.urls) != 1 {
 		t.Fatalf("the command opened %q", o.urls)
