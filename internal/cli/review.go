@@ -105,7 +105,7 @@ func reviewSession(cmd *cobra.Command, deps Deps, dir string, jsonMode bool) (st
 	if mode == tui.Plain {
 		return "", tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width)
 	}
-	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, OpenURL: deps.OpenURL})
+	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, OpenURL: deps.OpenURL, Screen: deps.Screen})
 	if err != nil {
 		return "", err
 	}

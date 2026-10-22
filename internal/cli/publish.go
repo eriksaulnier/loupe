@@ -205,7 +205,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 			if mode == tui.Plain {
 				return tui.ConfirmPlain(deps.Stdin, ui)(preview)
 			}
-			return tui.Confirm(deps.Stdin, ui, deps.Getenv, tui.ConfirmTitle(ref.String(), action, inline, len(preview.Comments)))(preview)
+			return tui.Confirm(deps.Stdin, ui, deps.Getenv, tui.ConfirmTitle(ref.String(), action, inline, len(preview.Comments)), deps.Screen)(preview)
 		},
 		Now:        deps.Now,
 		Getenv:     deps.Getenv,

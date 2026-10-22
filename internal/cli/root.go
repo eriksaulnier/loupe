@@ -16,6 +16,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/eriksaulnier/loupe/internal/tui"
 )
 
 type Deps struct {
@@ -40,6 +41,8 @@ type Deps struct {
 	OpenURL func(string) error
 	// LockBusy, when set, runs each time capture finds its lock held; tests use it to know a second capture is waiting.
 	LockBusy func()
+	// Screen, when set, is a test's stand-in for the terminal review and publish draw on; see tui.Screen.
+	Screen *tui.Screen
 	// palettes is built once per invocation so color is detected once; a Deps built by a test has none and each
 	// caller builds its own.
 	palettes *palettes

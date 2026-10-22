@@ -780,7 +780,7 @@ func TestConfirmEndsAtEndOfInput(t *testing.T) {
 			go func() {
 				// Tab blurs the message input, which opens focused; what follows is an answer. It stands in for esc,
 				// whose byte would join the key after it into one alt-key sequence.
-				answer, err := Confirm(strings.NewReader("\t"+c.input), io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))(confirmPreview())
+				answer, err := Confirm(strings.NewReader("\t"+c.input), io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), nil)(confirmPreview())
 				done <- result{answer.Publish, err}
 			}()
 			select {

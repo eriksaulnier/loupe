@@ -51,7 +51,14 @@ type Config struct {
 	GitHub func() (github.Client, error)
 	// OpenURL opens the published review in a browser; nil offers no o on the published screen.
 	OpenURL func(string) error
+	// Screen is set only by a test, to stand in for a terminal.
+	Screen *Screen
 }
+
+// Screen is a test's stand-in for a terminal, which bubbletea cannot ask for a size. The program starts at its size
+// and drops no keys as it opens or moves to the next finding: those pauses guard a human's typeahead, and a test
+// types only once the screen shows what it waits for.
+type Screen struct{ Width, Height int }
 
 // Width tiers: the label column goes first, then the location shrinks to a filename.
 const (
@@ -175,6 +182,9 @@ func New(cfg Config) (*Model, error) {
 		// The summary starts collapsed so the findings, not the prose, fill the first screen.
 		summaryCollapsed: true,
 	}
+	if cfg.Screen != nil {
+		m.width, m.height = cfg.Screen.Width, cfg.Screen.Height
+	}
 	m.setDraft(d)
 	m.cursor = initialCursor(d, m.order)
 	if st.Color {
@@ -194,7 +204,7 @@ var settleOnOpen = 500 * time.Millisecond
 type openedMsg struct{}
 
 func (m *Model) Init() tea.Cmd {
-	if settleOnOpen <= 0 {
+	if settleOnOpen <= 0 || m.cfg.Screen != nil {
 		return m.schedulePoll()
 	}
 	m.opening = true

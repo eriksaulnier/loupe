@@ -630,8 +630,8 @@ func (c *ConfirmModel) View() string {
 }
 
 // Confirm runs the confirmation view full screen for loupe publish. title is what the header names, which loupe
-// publish builds from the run and the flags it was given.
-func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title ConfirmHeading) func(publish.Preview) (publish.Confirmation, error) {
+// publish builds from the run and the flags it was given. screen is nil except in a test, as Config.Screen is.
+func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title ConfirmHeading, screen *Screen) func(publish.Preview) (publish.Confirmation, error) {
 	return func(preview publish.Preview) (publish.Confirmation, error) {
 		var program *tea.Program
 		input := in
@@ -639,7 +639,11 @@ func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title Conf
 		if f, ok := in.(*os.File); !ok || !term.IsTerminal(int(f.Fd())) {
 			input = &eofReader{r: in, send: func() { program.Send(endOfInput{}) }}
 		}
-		program = tea.NewProgram(NewConfirmModel(preview, getenv, out, title), tea.WithInput(input), tea.WithOutput(out), tea.WithAltScreen())
+		m := NewConfirmModel(preview, getenv, out, title)
+		if screen != nil {
+			m.shell.width, m.shell.height = screen.Width, screen.Height
+		}
+		program = tea.NewProgram(m, tea.WithInput(input), tea.WithOutput(out), tea.WithAltScreen())
 		final, err := program.Run()
 		if err != nil {
 			return publish.Confirmation{}, fmt.Errorf("confirmation view: %w", err)

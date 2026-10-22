@@ -557,6 +557,9 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 	cmd := m.fail(m.openFinding(m.order[i+1].ID))
 	// The notice names what was just recorded, so it survives the move to the finding after it.
 	m.notice, m.noticeKind = notice, kind
+	if m.cfg.Screen != nil {
+		return cmd
+	}
 	m.settling = true
 	return tea.Batch(cmd, tea.Tick(settleAfterDecision, func(time.Time) tea.Msg { return settledMsg{} }))
 }
