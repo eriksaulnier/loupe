@@ -104,7 +104,8 @@ The human confirms the review. The screen changes to "Published" with the review
 
 - A window that shrinks after launch shows the "too small" screen at once, from any view, including the help overlay and a note being written.
 - A window exactly 60 by 12 is not too small.
-- Under `--json`, `review` and `publish` read the size from stdout, which is then a pipe, so they read no size and always chose plain mode. With FR-001 they draw full screen on stderr, as `contracts/cli.md` already says the interface does under `--json`.
+- Under `--json`, `review` and `publish` still require stdout to be a terminal and draw on stderr. Only the size rule changes there, as everywhere else.
+- A receipt URL that is not a plain `https://` URL is shown as text. The screen offers no `o`, and the opener refuses it, so it never reaches the handler as a flag or a local file.
 - A window too small to hold the message wraps it. One column is still drawn without a panic.
 - A publish that is canceled or refused returns to the list with its notice, as today. Only a sent review reaches the published screen.
 - The opener fails, for example when no browser can be found. The published screen stays, with the error as a warning, and the next key quits. The URL is still printed when review exits.
@@ -123,7 +124,7 @@ The human confirms the review. The screen changes to "Published" with the review
 - **FR-006**: `handoff` MUST refuse `review-open` when a review session is open on any round of the resolved run's pull request, before it detects a host. It MUST open no pane and write no run state. A session on a different pull request MUST NOT refuse it.
 - **FR-007**: The `review-open` refusal MUST carry `details.run`, the ref of the open run with its round. When the resolved run is open it MUST be that run, else the newest open round. When the open run is not the resolved run, the fix MUST tell the agent to ask the human to finish or quit that review and then hand off again.
 - **FR-008**: After a review is sent from the full-screen review, the program MUST show a published screen that says "Published" and shows the review's URL. The URL MUST be a terminal hyperlink where the style emits escape sequences, and plain text otherwise.
-- **FR-009**: On the published screen, `o` MUST open the URL in the system browser and then quit. Any other key MUST quit without opening it. A failure to open MUST be shown as a warning on that screen, and the next key MUST quit.
+- **FR-009**: On the published screen, `o` MUST open the URL in the system browser and then quit. Any other key MUST quit without opening it. A failure to open MUST be shown as a warning on that screen, and the next key MUST quit. The screen MUST keep drawing and reading keys while the browser opens.
 - **FR-010**: The browser MUST be opened through an injected function, so tests never start a browser.
 - **FR-011**: When review exits after a review was sent in that session, it MUST print the URL after the full-screen view has closed, on stdout, or on stderr under `--json`. The `--json` result MUST NOT change.
 - **FR-012**: `loupe wait`'s result MUST carry `reviewUrl`, read from the run's receipt, when `reason` is `published`. It MUST make no network call for it. The human output MUST show the URL.
