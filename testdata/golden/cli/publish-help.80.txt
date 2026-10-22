@@ -49,9 +49,10 @@ the pull request URL; after inspecting it, --retry-unknown passes every check ab
 a new confirmation and sends once. A rejection because you have a pending review on the pull
 request asks you to submit or discard it on GitHub first.
 
---plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 prints the
-review, reads your message on one line, prints the review again with it, and asks Publish this
-review? [y/N] on one line instead. An empty line is no message.
+--plain, TERM=dumb or a terminal that cannot enter raw mode prints the review, reads your
+message on one line, prints the review again with it, and asks Publish this review? [y/N] on
+one line instead. An empty line is no message. A window smaller than 60x12 shows its size and
+the size it needs until it grows; q there cancels.
 
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.

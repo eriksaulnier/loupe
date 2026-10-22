@@ -36,8 +36,9 @@ Every decision is saved immediately and is refused if the finding changed since 
 shown. After a review is sent, review shows its link: o opens it in the browser and any
 other key quits. The link is printed again once the interface closes.
 
---plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 selects
-plain mode: one finding at a time with single-letter answers.
+--plain, TERM=dumb or a terminal that cannot enter raw mode selects plain mode: one finding at
+a time with single-letter answers. A window smaller than 60x12 shows its size and the size it
+needs until it grows; only q acts there.
 
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.
