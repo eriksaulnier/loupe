@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.0](https://github.com/eriksaulnier/loupe/compare/v0.16.1...v0.17.0) (2026-10-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** remove plain mode and --plain ([#79](https://github.com/eriksaulnier/loupe/issues/79))
+
+### Features
+
+* **cli:** remove plain mode and --plain ([#79](https://github.com/eriksaulnier/loupe/issues/79)) ([7888aeb](https://github.com/eriksaulnier/loupe/commit/7888aeb0e8ace911b3d167dce4b00ff55b5adf89))
+* refuse a second review pane, show too-small and published screens ([#80](https://github.com/eriksaulnier/loupe/issues/80)) ([e127880](https://github.com/eriksaulnier/loupe/commit/e127880950cbd6a0b27c91ed4c1dd11e35a8a6fc))
+
 ## [0.16.1](https://github.com/eriksaulnier/loupe/compare/v0.16.0...v0.16.1) (2026-10-20)
 
 
