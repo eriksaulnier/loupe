@@ -118,7 +118,7 @@ The human confirms the review. The screen changes to "Published" with the review
 
 - **FR-001**: Review MUST NOT choose plain mode because of the terminal's size. `--plain`, `TERM=dumb` and a failed raw-mode probe MUST still choose it.
 - **FR-002**: The full-screen review, and the publish confirmation that `loupe publish` runs on its own, MUST draw one centered message in place of the view while the window is under 60 columns or under 12 rows. The message MUST give the current size and the size needed, and MUST say that `q` quits.
-- **FR-003**: While the message shows, `q` and `ctrl+c` MUST act as `ctrl+c` does on the screen underneath, and every other key MUST do nothing.
+- **FR-003**: While the message shows, `q` and `ctrl+c` MUST act as `ctrl+c` does on the screen underneath, and every other key MUST do nothing. Review's first 500 ms are the exception: there, on every screen, keys but `ctrl+c` are dropped, so that keys typed for the agent's pane as the split takes focus cannot quit review.
 - **FR-004**: The message MUST keep all state. The next resize to 60 by 12 or more MUST show the screen underneath as it was.
 - **FR-005**: `handoff` MUST choose `down` when neither the host nor the agent's terminal gives a width. A known width MUST keep the rule of `specs/019-pane-hosts` FR-005.
 - **FR-006**: `handoff` MUST refuse `review-open` when a review session is open on any round of the resolved run's pull request, before it detects a host. It MUST open no pane and write no run state. A session on a different pull request MUST NOT refuse it.

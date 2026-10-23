@@ -110,6 +110,18 @@ func TestQAndCtrlCQuitTheTooSmallScreen(t *testing.T) {
 	}
 }
 
+// The startup settle outranks the too-small screen: a q typed for the agent's pane as the split opens must not quit.
+func TestTooSmallScreenDropsQWhileOpening(t *testing.T) {
+	m := modelOf(t, newFixture(t), testEnv, 40, 10)
+	m.opening = true
+	if _, cmd := m.Update(keyOf("q")); cmd != nil {
+		t.Fatal("q quits the too-small screen during the startup settle")
+	}
+	if _, cmd := m.Update(keyOf("ctrl+c")); !isQuit(cmd) {
+		t.Fatal("ctrl+c does not quit the too-small screen during the startup settle")
+	}
+}
+
 // The confirmation keeps what the human typed through a shrink, and q there declines rather than sending.
 func TestTooSmallConfirmationKeepsTheMessageAndQDeclines(t *testing.T) {
 	gh := newPublishFake(t)

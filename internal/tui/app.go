@@ -372,6 +372,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case browserMsg:
 		return m, m.browserDone(msg)
 	case tea.KeyMsg:
+		// The settle comes before the too-small screen, so a q typed for the agent's pane cannot quit review.
 		if m.opening && msg.Type != tea.KeyCtrlC {
 			return m, nil
 		}
