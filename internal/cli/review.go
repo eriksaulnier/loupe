@@ -161,14 +161,27 @@ func OpenURL(url string) error {
 	if !style.LinkableURL(url) {
 		return errUnsafeURL
 	}
-	name := "xdg-open"
-	if runtime.GOOS == "darwin" {
-		name = "open"
+	name, err := urlOpener()
+	if err != nil {
+		return err
 	}
 	if err := exec.Command(name, url).Run(); err != nil {
 		return fmt.Errorf("%s: %w", name, err)
 	}
 	return nil
+}
+
+// urlOpener falls back to wslview because WSL often ships it without xdg-utils.
+func urlOpener() (string, error) {
+	if runtime.GOOS == "darwin" {
+		return "open", nil
+	}
+	for _, name := range []string{"xdg-open", "wslview"} {
+		if _, err := exec.LookPath(name); err == nil {
+			return name, nil
+		}
+	}
+	return "", errors.New("found neither xdg-open nor wslview on PATH")
 }
 
 // interactive requires stdin and stdout to be terminals, and stderr too under --json, where interactiveOutput draws.

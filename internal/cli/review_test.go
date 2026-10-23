@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -195,6 +196,26 @@ func TestOpenURLRefusesAnythingButAnHTTPSLink(t *testing.T) {
 	for _, url := range []string{"file:///tmp/x.command", "-a Calculator", "github.com/o/r", "https://github.com/o/r" + "\n-a"} {
 		if err := OpenURL(url); !errors.Is(err, errUnsafeURL) {
 			t.Errorf("OpenURL(%q) = %v, want the URL refused before the handler runs", url, err)
+		}
+	}
+}
+
+// WSL often has wslview but not xdg-utils, so a missing xdg-open falls back to it. xdg-open wins where both exist.
+func TestURLOpenerFallsBackToWslview(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("macOS always opens with open")
+	}
+	dir := t.TempDir()
+	t.Setenv("PATH", dir)
+	if name, err := urlOpener(); err == nil {
+		t.Fatalf("urlOpener() = %q with neither handler on PATH, want an error", name)
+	}
+	for _, name := range []string{"wslview", "xdg-open"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := urlOpener(); err != nil || got != name {
+			t.Fatalf("with %s on PATH, urlOpener() = %q, %v; want %q", name, got, err, name)
 		}
 	}
 }

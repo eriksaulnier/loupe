@@ -148,4 +148,4 @@ The human confirms the review. The screen changes to "Published" with the review
 
 - Out of scope: removing plain mode, `--plain`, or the `TERM=dumb` and raw-probe fallbacks (`specs/037-remove-plain-mode`). A race between two hand-offs at the same moment. Any change to the published review format.
 - Plain-mode review has no publish step, and `loupe publish` already prints the URL, so neither changes.
-- `open` on macOS and `xdg-open` elsewhere open a URL in the default browser. No other platform is supported for `o`. Elsewhere `o` shows a warning.
+- `open` on macOS and `xdg-open` elsewhere open a URL in the default browser. Where `xdg-open` is missing, `wslview` opens it, because WSL often ships wslu without xdg-utils. No other handler is supported for `o`. Without one, `o` shows a warning.
