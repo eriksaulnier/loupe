@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/muesli/termenv"
+
+	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
 const reviewURLPrefix = "https://github.com/acme/widgets/pull/42#pullrequestreview-"
@@ -154,6 +158,45 @@ func TestPublishedScreenOffersNoOForAnUnsafeURL(t *testing.T) {
 		}
 		if _, cmd := m.Update(keyOf("o")); !isQuit(cmd) || len(o.urls) != 0 {
 			t.Fatalf("%q: o opened %q instead of quitting", url, o.urls)
+		}
+	}
+}
+
+// A SIGTERM reaches the program as a QuitMsg, so Run returns cleanly while a confirmed review is still being sent. The
+// outcome then arrives after the program is gone: a posted review's link must still reach the exit line, and a refusal
+// must end the command, since no screen is left to show it on.
+func TestSendFinishedAfterQuitKeepsTheOutcome(t *testing.T) {
+	for _, refused := range []bool{false, true} {
+		gh := newPublishFake(t)
+		if refused {
+			gh.QueueCreate(fakegh.Reject422("Unprocessable: line must be part of the diff"))
+		}
+		release := make(chan struct{})
+		gh.OnCreate(func(*http.Request) { <-release })
+		tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
+		waitFor(t, tm, "+ 3 accepted")
+		tm.Type("p")
+		waitFor(t, tm, "> comment")
+		tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+		waitFor(t, tm, "> none")
+		tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+		waitFor(t, tm, "<details open>")
+		tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+		tm.Type("y")
+		waitFor(t, tm, "sending the review")
+		tm.Send(tea.QuitMsg{})
+		m, ok := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(*Model)
+		if !ok {
+			t.Fatal("the program ended with an unexpected model")
+		}
+		close(release)
+		m.WaitForSend()
+		var r *refusal.Error
+		switch url := m.PublishedURL(); {
+		case !refused && (!strings.HasPrefix(url, reviewURLPrefix) || m.Err() != nil):
+			t.Fatalf("posted: PublishedURL() = %q, Err() = %v; want the review's link and no error", url, m.Err())
+		case refused && (url != "" || !errors.As(m.Err(), &r)):
+			t.Fatalf("refused: PublishedURL() = %q, Err() = %v; want no link and the refusal", url, m.Err())
 		}
 	}
 }
