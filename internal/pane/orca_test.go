@@ -75,8 +75,8 @@ func TestOpenSendsShowAndSplitAndNeverSwitches(t *testing.T) {
 	}{
 		{"tty 120", width(120), "right", "vertical"},
 		{"tty 119", width(119), "down", "horizontal"},
-		{"tty unreadable", func() (int, bool) { return 0, false }, "right", "vertical"},
-		{"no tty source", nil, "right", "vertical"},
+		{"tty unreadable", func() (int, bool) { return 0, false }, "down", "horizontal"},
+		{"no tty source", nil, "down", "horizontal"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := &fakeRunner{replies: map[string]reply{

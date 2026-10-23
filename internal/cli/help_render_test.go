@@ -51,7 +51,7 @@ func TestSubcommandHelpIsHeadedAndKeepsItsSentences(t *testing.T) {
 		"the review is sent at the captured commit",
 		"GitHub does not mark its comments outdated for those commits",
 		"This command is human-only. An agent MUST NOT run it",
-		"--plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 prints the",
+		"--plain, TERM=dumb or a terminal that cannot enter raw mode prints the review, reads your",
 	} {
 		if !strings.Contains(help, want) {
 			t.Errorf("publish help lost %q:\n%s", want, help)

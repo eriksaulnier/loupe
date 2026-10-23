@@ -3,18 +3,21 @@ Usage
 
 Open loupe review for the human in a new terminal pane beside the agent's, then return.
 
-An agent runs this at the hand-off, then blocks on loupe wait. While a loupe review of the run
-is already open, in any terminal, it refuses review-open and opens nothing: the human is still
-reviewing and sees the agent's replies there, so the agent tells them and waits again.
+An agent runs this at the hand-off, then blocks on loupe wait. While a loupe review of any
+round of the pull request is open, in any terminal, it refuses review-open and opens nothing.
+Its details.run names the open run. When that is the agent's own run, the human is reviewing
+and sees the agent's replies there, so the agent tells them and waits again. When it is another
+round, the agent asks the human to finish or quit that review, then hands off again.
 
 Otherwise it tries these terminal hosts first to last and opens the pane in the first detected:
   herdr  HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH
   orca   ORCA_TERMINAL_HANDLE, and orca on PATH
 A host whose conditions are met only in part is skipped. With no host it refuses no-pane-host.
 
-The pane opens below the agent's pane when that pane is known to be under 120 columns wide,
-and to the right otherwise. The width is the host's own report of the agent's pane (Herdr has
-one, Orca none), else the agent's own terminal; with neither it opens right. The pane runs
+The pane opens to the right of the agent's pane when that pane is known to be at least 120
+columns wide, and below it otherwise. The width is the host's own report of the agent's pane
+(Herdr has one, Orca none), else the agent's own terminal. With neither it opens below, since
+review needs 60 columns but only 12 rows. The pane runs
 this loupe's review for the run. In Herdr the pane takes focus. In Orca it never does: Orca
 can focus a pane only by moving the human's view to its worktree, so the pane shows in the
 agent's tab and the view stays where it is. The pane closes when review exits cleanly and

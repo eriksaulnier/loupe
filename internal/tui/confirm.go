@@ -587,6 +587,12 @@ func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		c.shell.width, c.shell.height = msg.Width, msg.Height
 	case tea.KeyMsg:
+		if tooSmall(c.shell.width, c.shell.height) {
+			var ok bool
+			if msg, ok = smallKey(msg); !ok {
+				return c, nil
+			}
+		}
 		answered, cmd := c.confirm.key(c.shell, msg)
 		if answered {
 			return c, tea.Quit
@@ -617,6 +623,9 @@ func (e *eofReader) Read(p []byte) (int, error) {
 }
 
 func (c *ConfirmModel) View() string {
+	if tooSmall(c.shell.width, c.shell.height) {
+		return c.shell.smallView()
+	}
 	return c.shell.confirmView(c.confirm)
 }
 
@@ -650,6 +659,8 @@ type publishSession struct {
 	done     chan publishDone
 	// finished is closed when publish.Run returns, whoever reads done.
 	finished chan struct{}
+	// result is the outcome, set before finished closes, since an update loop that has ended leaves done unread.
+	result publishDone
 }
 
 type previewMsg struct{ preview publish.Preview }
@@ -683,7 +694,8 @@ func (m *Model) startPublish() tea.Cmd {
 	return func() tea.Msg {
 		go func() {
 			receipt, _, err := publish.Run(context.Background(), opts)
-			s.done <- publishDone{receipt, err}
+			s.result = publishDone{receipt, err}
+			s.done <- s.result
 			close(s.finished)
 		}()
 		return s.wait()
@@ -713,19 +725,26 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) tea.Cmd {
 func (m *Model) WaitForSend() {
 	if m.sending && m.session != nil {
 		<-m.session.finished
+		done := m.session.result
+		_ = m.publishFinished(done)
+		// No screen is left to show a refusal's notice on, so it ends the command instead.
+		if m.err == nil {
+			m.err = done.err
+		}
 	}
 }
 
-// publishFinished returns to the list with the outcome as the notice; only an error that is not a refusal ends the
-// program.
+// publishFinished shows the published screen for a sent review, and otherwise returns to the list with the outcome as
+// the notice; only an error that is not a refusal ends the program.
 func (m *Model) publishFinished(done publishDone) tea.Cmd {
 	m.session, m.view, m.sending = nil, viewList, false
 	var r *refusal.Error
 	switch {
 	case done.err == nil:
 		// The review it opened is posted, so the words have been spent; a later round starts empty.
-		m.message = ""
-		m.say(style.Good, strings.TrimSpace(m.glyphs.Published+" published: "+done.receipt.ReviewURL))
+		m.message, m.notice = "", ""
+		m.view, m.published = viewPublished, done.receipt.ReviewURL
+		return nil
 	case errors.Is(done.err, publish.ErrDeclined):
 		m.say(style.Dim, strings.TrimSpace(m.glyphs.Canceled+" publish canceled; nothing was sent"))
 	case errors.As(done.err, &r):

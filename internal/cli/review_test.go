@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -165,5 +166,56 @@ func TestReviewWithoutSendBackRecordsNothing(t *testing.T) {
 	}
 	if strings.Contains(s.stdout.String(), "sent back") {
 		t.Fatalf("stdout:\n%s", s.stdout.String())
+	}
+}
+
+const testReviewURL = "https://github.com/o/r/pull/1#pullrequestreview-7"
+
+// The published screen's link goes away with the alternate screen, so review names the review again on the way out.
+func TestReviewDoneNamesThePublishedReview(t *testing.T) {
+	_, dir := sendBackRun(t)
+	deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+	if err := reviewDone(nil, deps, dir, false, deps.Stdout, testReviewURL); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.stdout.String(); !strings.HasPrefix(got, "+ Published "+testReviewURL+"\n") {
+		t.Fatalf("stdout %q", got)
+	}
+
+	deps, s = testDeps(t, map[string]string{"NO_COLOR": "1"})
+	if err := reviewDone(nil, deps, dir, false, deps.Stdout, ""); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(s.stdout.String(), "Published") {
+		t.Fatalf("a session that sent nothing names a review: %q", s.stdout.String())
+	}
+}
+
+// The URL comes from GitHub by way of the receipt, so only a plain https link reaches the platform's handler.
+func TestOpenURLRefusesAnythingButAnHTTPSLink(t *testing.T) {
+	for _, url := range []string{"file:///tmp/x.command", "-a Calculator", "github.com/o/r", "https://github.com/o/r" + "\n-a"} {
+		if err := OpenURL(url); !errors.Is(err, errUnsafeURL) {
+			t.Errorf("OpenURL(%q) = %v, want the URL refused before the handler runs", url, err)
+		}
+	}
+}
+
+// WSL often has wslview but not xdg-utils, so a missing xdg-open falls back to it. xdg-open wins where both exist.
+func TestURLOpenerFallsBackToWslview(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("macOS always opens with open")
+	}
+	dir := t.TempDir()
+	t.Setenv("PATH", dir)
+	if name, err := urlOpener(); err == nil {
+		t.Fatalf("urlOpener() = %q with neither handler on PATH, want an error", name)
+	}
+	for _, name := range []string{"wslview", "xdg-open"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := urlOpener(); err != nil || got != name {
+			t.Fatalf("with %s on PATH, urlOpener() = %q, %v; want %q", name, got, err, name)
+		}
 	}
 }

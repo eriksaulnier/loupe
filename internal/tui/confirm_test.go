@@ -648,7 +648,7 @@ func TestPublishFlowKeepsTheMessageAcrossACancel(t *testing.T) {
 	tm.Type(" And read again.")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Type("y")
-	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
+	waitFor(t, tm, "Published", "https://github.com/acme/widgets/pull/42#pullrequestreview-")
 	tm.Type("q")
 	finalView(t, tm)
 
@@ -782,7 +782,12 @@ func publishEnv(dir string) func(string) string {
 
 func startPublishApp(t *testing.T, dir string, gh *fakegh.Server) *teatest.TestModel {
 	t.Helper()
-	cfg := Config{Dir: dir, Getenv: publishEnv(dir), Now: func() time.Time { return testNow }, Output: io.Discard}
+	return startPublishAppWith(t, dir, gh, nil)
+}
+
+func startPublishAppWith(t *testing.T, dir string, gh *fakegh.Server, open func(string) error) *teatest.TestModel {
+	t.Helper()
+	cfg := Config{Dir: dir, Getenv: publishEnv(dir), Now: func() time.Time { return testNow }, Output: io.Discard, OpenURL: open}
 	if gh != nil {
 		client := gh.Client(t)
 		cfg.GitHub = func() (github.Client, error) { return client, nil }
@@ -890,7 +895,7 @@ func TestPublishFlowSendsAndShowsURL(t *testing.T) {
 	waitFor(t, tm, "<details open>", "inline blocking (1)")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Type("y")
-	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
+	waitFor(t, tm, "Published", "https://github.com/acme/widgets/pull/42#pullrequestreview-")
 	tm.Type("q")
 	finalView(t, tm)
 	if gh.CreateCount() != 1 {
@@ -947,7 +952,7 @@ func TestPublishingViewIgnoresKeysWhileSending(t *testing.T) {
 	tm.Type("q")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	close(release)
-	waitFor(t, tm, "published: https://github.com/acme/widgets/pull/42#pullrequestreview-")
+	waitFor(t, tm, "Published", "https://github.com/acme/widgets/pull/42#pullrequestreview-")
 	tm.Type("q")
 	finalView(t, tm)
 	if gh.CreateCount() != 1 {

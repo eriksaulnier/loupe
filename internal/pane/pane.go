@@ -53,17 +53,16 @@ func Detect(getenv func(string) string) (Host, bool) {
 }
 
 // direction prefers the host's own report of the agent pane's width, then the agent's tty. An unknown width opens
-// right: from an agent's shell tool the tty is usually unreadable, and Orca reports no size, so down would be every
-// handoff there.
+// down: review needs 60 columns but only 12 rows, and a right split halves a pane that may already be narrow.
 func direction(hostWidth int, hostOK bool, tty func() (int, bool)) string {
 	width, ok := hostWidth, hostOK
 	if !ok && tty != nil {
 		width, ok = tty()
 	}
-	if ok && width < wideEnough {
-		return "down"
+	if ok && width >= wideEnough {
+		return "right"
 	}
-	return "right"
+	return "down"
 }
 
 // TTYWidth reads the controlling terminal rather than stdout, which is a pipe under --json.

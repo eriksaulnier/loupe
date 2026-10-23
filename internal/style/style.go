@@ -566,6 +566,20 @@ func (s Style) boxEdge(inner int, title, right string) string {
 	return strings.Repeat(h, inner)
 }
 
+// Link makes text a terminal hyperlink to url where escapes are drawn. A URL that LinkableURL refuses stays text.
+func (s Style) Link(url, text string) string {
+	if !s.Color || !LinkableURL(url) {
+		return text
+	}
+	return ansi.SetHyperlink(url) + text + ansi.ResetHyperlink()
+}
+
+// LinkableURL is an https URL with no space, control or format character: one that cannot end an escape early, point
+// somewhere it does not show, or reach a handler as a flag or a local file.
+func LinkableURL(url string) bool {
+	return strings.HasPrefix(url, "https://") && strings.IndexFunc(url, func(r rune) bool { return r == ' ' || !unicode.IsPrint(r) }) < 0
+}
+
 // Rule is a horizontal rule, optionally titled at its left edge and labeled at its right.
 func (s Style) Rule(width int, title, right string) string {
 	h := s.Glyphs.HRule

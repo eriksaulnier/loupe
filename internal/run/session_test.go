@@ -88,3 +88,49 @@ func TestSessionOpenAfterHolderIsKilled(t *testing.T) {
 	_ = helper.Wait()
 	wantSessionOpen(t, dir, false)
 }
+
+func holdFor(t *testing.T, dir string) *Session {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := HoldSession(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Release() })
+	return s
+}
+
+// The guard is per pull request: a new round is a new run, and a batch hands off several pull requests at once.
+func TestOpenSessionCoversEveryRoundOfThePullRequest(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{RunDir(root, "o", "r", 1, 1), RunDir(root, "o", "r", 1, 2), RunDir(root, "o", "r", 1, 3), RunDir(root, "o", "r", 2, 1)} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := func(ref Ref, wantRef string, wantOpen bool) {
+		t.Helper()
+		open, ok, err := OpenSession(root, ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok != wantOpen || (ok && open.String() != wantRef) {
+			t.Fatalf("OpenSession(%s) = %s, %v; want %s, %v", ref, open, ok, wantRef, wantOpen)
+		}
+	}
+	round2 := Ref{Owner: "o", Repo: "r", Number: 1, Round: 2}
+	other := Ref{Owner: "o", Repo: "r", Number: 2, Round: 1}
+	want(round2, "", false)
+
+	holdFor(t, RunDir(root, "o", "r", 1, 1))
+	want(round2, "o/r#1@1", true)
+	want(other, "", false)
+
+	holdFor(t, RunDir(root, "o", "r", 1, 3))
+	want(round2, "o/r#1@3", true)
+
+	holdFor(t, RunDir(root, "o", "r", 1, 2))
+	want(round2, "o/r#1@2", true)
+}

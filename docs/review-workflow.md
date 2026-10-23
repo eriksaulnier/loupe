@@ -39,7 +39,7 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 | `f` | Show the whole file's diff |
 | `?` | List the keys for the current view |
 
-Every decision is saved at once. A small terminal, `TERM=dumb` or `--plain` switches to a plain mode that asks about one finding at a time.
+Every decision is saved at once. `TERM=dumb` or `--plain` switches to a plain mode that asks about one finding at a time. A window smaller than 60 by 12 shows its size until it grows.
 
 ### 5. The agent answers what you send back
 

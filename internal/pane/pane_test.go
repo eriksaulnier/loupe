@@ -21,8 +21,8 @@ func TestDirection(t *testing.T) {
 	}{
 		{"tty 120", 0, false, width(120), "right"},
 		{"tty 119", 0, false, width(119), "down"},
-		{"tty unreadable", 0, false, func() (int, bool) { return 0, false }, "right"},
-		{"no tty source", 0, false, nil, "right"},
+		{"tty unreadable", 0, false, func() (int, bool) { return 0, false }, "down"},
+		{"no tty source", 0, false, nil, "down"},
 		{"host 119 over tty 150", 119, true, width(150), "down"},
 		{"host 120 over tty 80", 120, true, width(80), "right"},
 	} {

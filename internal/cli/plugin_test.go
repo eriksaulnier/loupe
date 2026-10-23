@@ -184,7 +184,8 @@ func TestPluginSkillProhibitions(t *testing.T) {
 		"- You MUST NOT run the pull request's code, check out its branch in the user's clone, or modify the user's working tree.",
 		"- When a command refuses, the result has `\"ok\": false` and an `error` object. You SHOULD read `error.code` and follow `error.fix`, which names the corrective command. You MUST NOT work around a refusal by editing loupe's files.",
 		"- In a sandboxed shell, such as Codex's default, `loupe capture` needs the network and write access to the clone's `.git`, every loupe command needs write access to loupe's data directory outside the workspace, and `loupe handoff` needs the terminal host's socket. When a `loupe` command fails because of the sandbox, rerun it with the host's approval to run outside the sandbox, even when loupe returns a refusal. For `loupe handoff` this holds only when `error.details.step` is `probe`, because a later step can already have opened a pane. You MUST NOT work around the sandbox by setting `LOUPE_HOME` or `XDG_DATA_HOME`.",
-		"When `error.code` is `review-open`, the human already has review open for this run: tell them it is there and go on to section 7.",
+		"When `error.code` is `review-open`, a review of this pull request is already open, and `error.details.run` names its run. When that is your `<ref>`, the human is reviewing this run: tell them it is there and go on to section 7. When it is another round, tell the human which round is open and ask them to finish or quit that review, then hand off again.",
+		"- `\"reason\": \"published\"`: the review is on GitHub. Give the human its link, `reviewUrl`, then stop.",
 		"On any other refusal, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.",
 	} {
 		if !slices.Contains(lines, want) {

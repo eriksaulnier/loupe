@@ -79,7 +79,7 @@ Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findin
 
 Run `loupe handoff --run <ref> --json`. On success, review is open for the human in a new pane beside yours. When `focused` is `false`, it opened without taking focus, which in Orca is every time, so tell the user it is waiting in the pane beside yours. Otherwise tell the user it is open.
 
-When `error.code` is `review-open`, the human already has review open for this run: tell them it is there and go on to section 7.
+When `error.code` is `review-open`, a review of this pull request is already open, and `error.details.run` names its run. When that is your `<ref>`, the human is reviewing this run: tell them it is there and go on to section 7. When it is another round, tell the human which round is open and ask them to finish or quit that review, then hand off again.
 
 On any other refusal, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.
 
@@ -92,7 +92,7 @@ Block on `loupe wait --run <ref> --json`. It returns as soon as the human sends 
 - In Claude Code, when the Monitor tool is available, run `loupe wait` under a persistent Monitor so the session wakes when it prints.
 - Otherwise run `loupe wait` in the foreground with `--timeout` under the shell's limit, and run it again on a `timeout` refusal.
 - `"reason": "notes"`: answer only the notes listed in `awaiting`, following section 8. The result already carries the `feedback` payload, so do not run `loupe feedback` again.
-- `"reason": "published"`: the review is on GitHub. Stop.
+- `"reason": "published"`: the review is on GitHub. Give the human its link, `reviewUrl`, then stop.
 
 ## 8. Send-back notes
 

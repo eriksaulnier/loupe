@@ -62,3 +62,30 @@ func SessionOpen(dir string) (bool, error) {
 	}
 	return false, syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 }
+
+// OpenSession reports a review running on any round of ref's pull request: the resolved run first, then the others
+// newest first. A new round is a new run, so a per-run probe would let a second pane open on the same pull request.
+func OpenSession(root string, ref Ref) (Ref, bool, error) {
+	rounds, err := Rounds(root, ref.Owner, ref.Repo, ref.Number)
+	if err != nil {
+		return Ref{}, false, err
+	}
+	order := []int{ref.Round}
+	for i := len(rounds) - 1; i >= 0; i-- {
+		if rounds[i] != ref.Round {
+			order = append(order, rounds[i])
+		}
+	}
+	for _, round := range order {
+		open, err := SessionOpen(RunDir(root, ref.Owner, ref.Repo, ref.Number, round))
+		if err != nil {
+			return Ref{}, false, err
+		}
+		if open {
+			found := ref
+			found.Round = round
+			return found, true, nil
+		}
+	}
+	return Ref{}, false, nil
+}

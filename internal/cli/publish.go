@@ -61,9 +61,10 @@ the pull request URL; after inspecting it, --retry-unknown passes every check ab
 a new confirmation and sends once. A rejection because you have a pending review on the pull
 request asks you to submit or discard it on GitHub first.
 
---plain, TERM=dumb, a terminal that cannot enter raw mode, or one smaller than 60x12 prints the
-review, reads your message on one line, prints the review again with it, and asks Publish this
-review? [y/N] on one line instead. An empty line is no message.
+--plain, TERM=dumb or a terminal that cannot enter raw mode prints the review, reads your
+message on one line, prints the review again with it, and asks Publish this review? [y/N] on
+one line instead. An empty line is no message. A window smaller than 60x12 shows its size and
+the size it needs until it grows; q there cancels.
 
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.
@@ -200,8 +201,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, Unattended: unattended, RetryUnknown: retryUnknown, Sticky: sticky, Note: note,
 		Confirm: func(preview publish.Preview) (publish.Confirmation, error) {
 			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
-			width, height := terminalSize(deps)
-			mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, Width: width, Height: height, RawProbe: func() error { return rawProbe(deps) }})
+			mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, RawProbe: func() error { return rawProbe(deps) }})
 			if mode == tui.Plain {
 				return tui.ConfirmPlain(deps.Stdin, ui)(preview)
 			}

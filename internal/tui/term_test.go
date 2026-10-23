@@ -28,13 +28,10 @@ func TestChooseMode(t *testing.T) {
 		opts Options
 		want Mode
 	}{
-		{"full screen", Options{Getenv: envOf(nil), Width: 80, Height: 24, RawProbe: rawOK}, FullScreen},
-		{"exactly the minimum size", Options{Getenv: envOf(nil), Width: 60, Height: 12, RawProbe: rawOK}, FullScreen},
-		{"--plain", Options{Plain: true, Getenv: envOf(nil), Width: 80, Height: 24, RawProbe: rawOK}, Plain},
-		{"TERM=dumb", Options{Getenv: envOf(map[string]string{"TERM": "dumb"}), Width: 80, Height: 24, RawProbe: rawOK}, Plain},
-		{"raw mode unavailable", Options{Getenv: envOf(nil), Width: 80, Height: 24, RawProbe: func() error { return errors.New("not a tty") }}, Plain},
-		{"59 columns", Options{Getenv: envOf(nil), Width: 59, Height: 40, RawProbe: rawOK}, Plain},
-		{"11 rows", Options{Getenv: envOf(nil), Width: 80, Height: 11, RawProbe: rawOK}, Plain},
+		{"full screen", Options{Getenv: envOf(nil), RawProbe: rawOK}, FullScreen},
+		{"--plain", Options{Plain: true, Getenv: envOf(nil), RawProbe: rawOK}, Plain},
+		{"TERM=dumb", Options{Getenv: envOf(map[string]string{"TERM": "dumb"}), RawProbe: rawOK}, Plain},
+		{"raw mode unavailable", Options{Getenv: envOf(nil), RawProbe: func() error { return errors.New("not a tty") }}, Plain},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -121,7 +121,7 @@ func TestOpenTakesTheDirectionFromTheLayoutWidth(t *testing.T) {
 		{"layout 119 over tty 150", `{"height":40,"width":119}`, width(150), "down"},
 		{"layout 120 over tty 80", `{"height":40,"width":120}`, width(80), "right"},
 		{"no layout width, tty 119", `{"height":40}`, width(119), "down"},
-		{"no layout width, no tty", `{"height":40}`, nil, "right"},
+		{"no layout width, no tty", `{"height":40}`, nil, "down"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			layout := strings.Replace(herdrLayout, `{"height":40,"width":80}`, c.rect, 1)

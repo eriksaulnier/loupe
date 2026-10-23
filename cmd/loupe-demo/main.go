@@ -98,6 +98,7 @@ func demo(args []string) int {
 		IsTerminal:       func() bool { return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) },
 		StderrIsTerminal: func() bool { return term.IsTerminal(int(os.Stderr.Fd())) },
 		TTYWidth:         pane.TTYWidth,
+		OpenURL:          cli.OpenURL,
 		TermWidth: func() int {
 			w, _, err := term.GetSize(int(os.Stdout.Fd()))
 			if err != nil {

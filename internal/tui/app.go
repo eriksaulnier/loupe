@@ -38,6 +38,7 @@ const (
 	viewInline
 	viewConfirm
 	viewPublishing
+	viewPublished
 )
 
 type Config struct {
@@ -48,6 +49,8 @@ type Config struct {
 	Output io.Writer
 	// GitHub is called only when the human publishes, so reviewing never needs credentials.
 	GitHub func() (github.Client, error)
+	// OpenURL opens the published review in a browser; nil offers no o on the published screen.
+	OpenURL func(string) error
 }
 
 // Width tiers: the label column goes first, then the location shrinks to a filename.
@@ -124,6 +127,11 @@ type Model struct {
 	elsewhere string
 	// pollSkipped is true when a tick found the human writing or confirming; the draft is re-read as they leave.
 	pollSkipped bool
+	// published is the URL of the review this program sent. browsing is set while the opener runs, and openFailed
+	// once it failed.
+	published  string
+	browsing   bool
+	openFailed bool
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -343,6 +351,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		// Nothing is laid out while too small; the resize that ends it lays the view out again.
+		if tooSmall(m.width, m.height) {
+			return m, nil
+		}
 		return m, m.fail(m.layout())
 	case previewMsg:
 		title := ConfirmTitle(m.ref(), m.action, publish.InlineModes[m.pick], len(msg.preview.Comments))
@@ -357,9 +369,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openedMsg:
 		m.opening = false
 		return m, nil
+	case browserMsg:
+		return m, m.browserDone(msg)
 	case tea.KeyMsg:
+		// The settle comes before the too-small screen, so a q typed for the agent's pane cannot quit review.
 		if m.opening && msg.Type != tea.KeyCtrlC {
 			return m, nil
+		}
+		if tooSmall(m.width, m.height) {
+			var ok bool
+			if msg, ok = smallKey(msg); !ok {
+				return m, nil
+			}
 		}
 		// The confirmation comes first so that ctrl+c, like every key but y, p and the toggles, declines.
 		if m.view == viewConfirm {
@@ -373,6 +394,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.view == viewPublishing {
 			return m, nil
+		}
+		if m.view == viewPublished {
+			return m, m.updatePublished(msg)
 		}
 		if m.noting {
 			return m, m.updateNote(msg)
@@ -410,6 +434,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() string {
+	if tooSmall(m.width, m.height) {
+		return m.smallView()
+	}
 	if m.help {
 		return m.helpView()
 	}
@@ -426,6 +453,8 @@ func (m *Model) View() string {
 		return m.confirmView(&m.confirm)
 	case viewPublishing:
 		return m.frame([]string{m.listHeader(), m.headerRule()}, "", m.footerKeys())
+	case viewPublished:
+		return m.publishedView()
 	}
 	return m.listView()
 }

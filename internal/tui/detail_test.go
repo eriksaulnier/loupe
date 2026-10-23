@@ -402,7 +402,7 @@ func TestDetailNoteInputNamesTheFinding(t *testing.T) {
 	}
 }
 
-func TestDetailNoteFrameFollowsTheGlyphTierAndWidth(t *testing.T) {
+func TestDetailNoteFrameFollowsTheGlyphTier(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, 30)
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
@@ -410,11 +410,6 @@ func TestDetailNoteFrameFollowsTheGlyphTierAndWidth(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
 	if view := m.View(); !regexp.MustCompile(`(?m)^ \+- send back f-001 -+ enter sends - esc cancels -\+$`).MatchString(view) {
 		t.Fatalf("the ASCII frame is not drawn in the ASCII tier:\n%s", view)
-	}
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 30})
-	view := m.View()
-	if !regexp.MustCompile(`(?m)^ \+- send back f-001 -+\+$`).MatchString(view) || strings.Contains(view, "esc cancels") {
-		t.Fatalf("a narrow frame does not give up its way out before its title:\n%s", view)
 	}
 }
 
