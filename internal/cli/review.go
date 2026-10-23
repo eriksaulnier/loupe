@@ -38,7 +38,9 @@ other key quits. The link is printed again once the interface closes.
 
 --plain, TERM=dumb or a terminal that cannot enter raw mode selects plain mode: one finding at
 a time with single-letter answers. A window smaller than 60x12 shows its size and the size it
-needs until it grows; only q acts there.
+needs until it grows; q and ctrl+c quit there, or decline at the confirmation. For its first
+half second review drops every key but ctrl+c, so keys typed for another pane as it opens
+do nothing.
 
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.
