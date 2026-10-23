@@ -61,10 +61,9 @@ the pull request URL; after inspecting it, --retry-unknown passes every check ab
 a new confirmation and sends once. A rejection because you have a pending review on the pull
 request asks you to submit or discard it on GitHub first.
 
---plain, TERM=dumb or a terminal that cannot enter raw mode prints the review, reads your
-message on one line, prints the review again with it, and asks Publish this review? [y/N] on
-one line instead. An empty line is no message. A window smaller than 60x12 shows its size and
-the size it needs until it grows; q there cancels.
+The confirmation draws full screen, so once every check above has passed, TERM=dumb or a
+terminal that cannot enter raw mode refuses with tty. A window smaller than 60x12 shows its size
+and the size it needs until it grows; q there cancels.
 
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.
@@ -73,10 +72,10 @@ of the current branch in the working directory at its newest round.
 holding a GitHub App installation token; loupe refuses with token when the resolved token is not
 one, and refuses an installation token without the flag. It publishes the publishable set, accepted
 and pending alike, and skips the tty, own-pr and not-ready refusals above; head-moved, empty,
-replay and recovery still apply. --action defaults to comment and MUST NOT be set to anything else;
---plain does not apply, since nothing is shown. The run MUST be named by <ref> or LOUPE_RUN; the
-current branch's pull request is never used. The review is posted by the App, numbered from the
-pull request's own bot reviews, and marked unattended in its footer and loupe-meta.
+replay and recovery still apply. --action defaults to comment and MUST NOT be set to anything else.
+The run MUST be named by <ref> or LOUPE_RUN; the current branch's pull request is never used.
+The review is posted by the App, numbered from the pull request's own bot reviews, and marked
+unattended in its footer and loupe-meta.
 
 --sticky keeps one review per pull request current, with or without --unattended. The first
 sticky round posts a review. Each later round replaces that review's body: the new round on top,
@@ -122,7 +121,7 @@ func newPublishCmd(deps Deps) *cobra.Command {
 		Use:     "publish [<ref>]",
 		Short:   "Confirm and post the review to GitHub (human-only)",
 		Long:    publishHelp,
-		Example: "  loupe publish owner/repo#123 --action comment\n  loupe publish owner/repo#123@2 --action request-changes --inline all --plain",
+		Example: "  loupe publish owner/repo#123 --action comment\n  loupe publish owner/repo#123@2 --action request-changes --inline all",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runPublish(cmd, deps, args)
@@ -131,7 +130,6 @@ func newPublishCmd(deps Deps) *cobra.Command {
 	cmd.Flags().String("action", "", "review action: comment, approve or request-changes")
 	cmd.Flags().String("inline", "none", "located findings that also become inline comments: none, blocking or all")
 	cmd.Flags().Bool("retry-unknown", false, "send again after an unknown outcome that matches no review on the pull request")
-	cmd.Flags().Bool("plain", false, "confirm on one line instead of the full-screen view")
 	cmd.Flags().Bool("unattended", false, "publish with no terminal, confirmation or viewer recheck, from a GitHub App installation token")
 	cmd.Flags().Bool("sticky", false, "edit your sticky review on the pull request in place instead of posting a new one")
 	cmd.Flags().String("note", "", "Markdown shown under this round's footer until a later sticky round collapses it; needs --unattended --sticky")
@@ -141,7 +139,6 @@ func newPublishCmd(deps Deps) *cobra.Command {
 func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	action, _ := cmd.Flags().GetString("action")
 	inline, _ := cmd.Flags().GetString("inline")
-	plain, _ := cmd.Flags().GetBool("plain")
 	unattended, _ := cmd.Flags().GetBool("unattended")
 	sticky, _ := cmd.Flags().GetBool("sticky")
 	note, _ := cmd.Flags().GetString("note")
@@ -162,9 +159,6 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	if unattended {
 		if action != "" && action != "comment" {
 			return refusal.New(refusal.Usage, fmt.Sprintf("--unattended only publishes as comment, got --action %q", action), publishUsage)
-		}
-		if plain {
-			return refusal.New(refusal.Usage, "--unattended shows no confirmation, so --plain does not apply", publishUsage)
 		}
 		action = "comment"
 	} else if !slices.Contains(publish.Actions, action) {
@@ -200,12 +194,11 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	receipt, replayed, err := publish.Run(cmd.Context(), publish.Options{
 		Dir: dir, Target: target, GitHub: deps.GitHub, IsTerminal: interactive(deps, jsonMode), Action: action, Inline: inline, Unattended: unattended, RetryUnknown: retryUnknown, Sticky: sticky, Note: note,
 		Confirm: func(preview publish.Preview) (publish.Confirmation, error) {
-			// The surface is chosen only once the gates have passed, so a refused publish never probes the terminal.
-			mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, RawProbe: func() error { return rawProbe(deps) }})
-			if mode == tui.Plain {
-				return tui.ConfirmPlain(deps.Stdin, ui)(preview)
+			// The terminal is probed only once the gates have passed, so a refused publish never touches it.
+			if err := drawable(deps, "publish"); err != nil {
+				return publish.Confirmation{}, err
 			}
-			return tui.Confirm(deps.Stdin, ui, deps.Getenv, tui.ConfirmTitle(ref.String(), action, inline, len(preview.Comments)))(preview)
+			return tui.Confirm(deps.Stdin, ui, deps.Getenv, tui.ConfirmTitle(ref.String(), action, inline, len(preview.Comments)), deps.Screen)(preview)
 		},
 		Now:        deps.Now,
 		Getenv:     deps.Getenv,

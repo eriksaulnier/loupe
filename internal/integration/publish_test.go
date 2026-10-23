@@ -15,6 +15,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
+	"github.com/eriksaulnier/loupe/internal/testutil/screen"
+	"github.com/eriksaulnier/loupe/internal/tui"
 )
 
 const threeFindings = `[
@@ -23,17 +25,18 @@ const threeFindings = `[
   {"title": "EXCLUDED general note", "body": "EXCLUDED body.", "general": true, "suggestedFix": "EXCLUDED fix"}
 ]`
 
-// reviewed captures, files threeFindings with a summary, and answers the plain review with answers.
-func (h *harness) reviewed(answers string, captureFlags ...string) {
+// decidedTwoOfThree accepts the two located findings of threeFindings and excludes the general one.
+var decidedTwoOfThree = []string{"a f-001", "a f-002", "x f-003"}
+
+// reviewed captures, files threeFindings with a summary, and decides them at a terminal with steps, as decide does.
+// It leaves IsTerminal set, so the publish that follows has its terminal.
+func (h *harness) reviewed(steps []string, captureFlags ...string) {
 	h.t.Helper()
 	h.capture(captureFlags...)
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
 	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
+	h.decide(runRef, steps...)
 	h.IsTerminal = true
-	h.Stdin = answers
-	if _, stderr, exit := h.Run("review", runRef, "--plain"); exit != 0 {
-		h.t.Fatalf("review exit %d stderr %q", exit, stderr)
-	}
 }
 
 // checkSends asserts the review creation count and that nothing else wrote to GitHub.
@@ -54,9 +57,8 @@ func (h *harness) checkSends(want int) {
 func TestPublishSendsCapturedSource(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n", "--source", "gadfly-review-pr@2.2.0")
-	h.Stdin = confirmPublish("", "y")
-	if _, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 {
+	h.reviewed(decidedTwoOfThree, "--source", "gadfly-review-pr@2.2.0")
+	if _, stderr, exit := h.Publish("", "y", runRef, "--action", "comment"); exit != 0 {
 		t.Fatalf("publish exit %d stderr %q", exit, stderr)
 	}
 	h.checkSends(1)
@@ -100,9 +102,8 @@ func TestPublishDefaultsToNoInlineComments(t *testing.T) {
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			h := newHarness(t)
-			h.reviewed("a\na\nx\nq\n")
-			h.Stdin = confirmPublish("", "y")
-			if _, stderr, exit := h.Run(append([]string{"publish", runRef, "--action", "comment", "--plain"}, tc.flags...)...); exit != 0 {
+			h.reviewed(decidedTwoOfThree)
+			if _, stderr, exit := h.Publish("", "y", append([]string{runRef, "--action", "comment"}, tc.flags...)...); exit != 0 {
 				t.Fatalf("publish exit %d stderr %q", exit, stderr)
 			}
 			h.checkSends(1)
@@ -128,12 +129,20 @@ const humanMessage = "I read every one of these before sending them."
 func TestPublishEndToEnd(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	draftPath := filepath.Join(h.RunDir(1), "draft.json")
 	draftBefore := readFile(t, draftPath)
 
-	h.Stdin = confirmPublish(humanMessage, "y")
-	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--inline", "all", "--plain")
+	// Tall and wide enough that the whole review sits on screen with no line wrapped.
+	h.Screen = &tui.Screen{Width: 300, Height: 200}
+	s := h.Start("publish", runRef, "--action", "comment", "--inline", "all")
+	s.WaitFor("new line")
+	s.Type(humanMessage)
+	s.Press("tab")
+	s.WaitFor("publish this review")
+	shown := shownBody(t, s.View())
+	s.Press("y")
+	stdout, stderr, exit := s.Wait()
 	if exit != 0 {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
 	}
@@ -184,8 +193,8 @@ func TestPublishEndToEnd(t *testing.T) {
 		t.Fatalf("POST body opens on the wrong prose:\n%s", body)
 	}
 	// The record shows as a note there, and the payload below carries its exact bytes.
-	if !strings.Contains(stdout, render.RecordAsNote(strings.ReplaceAll(body, "<details>", "<details open>"))) {
-		t.Fatalf("the confirmation did not show the body that was sent:\n%s", stdout)
+	if want := withoutSpace(render.RecordAsNote(strings.ReplaceAll(body, "<details>", "<details open>"))); shown != want {
+		t.Fatalf("the confirmation did not show the body that was sent:\nshown %s\nsent  %s", shown, want)
 	}
 	postJSON, err := json.Marshal(post)
 	if err != nil {
@@ -224,6 +233,35 @@ func (h *harness) lastPostBody() string {
 }
 
 // TestPublishCarriesGateCounts is SC-001: one finding of each kind the gate counts, published attended.
+// shownBody is the review body a confirmation frame shows, from its heading to the inline comments, with the message
+// box's border dropped and the words in it kept where they sit. Spaces and line breaks are dropped too, since the
+// confirmation wraps prose to the width it reads at; every other character must match the body sent.
+func shownBody(t *testing.T, frame string) string {
+	t.Helper()
+	_, rest, ok := strings.Cut(frame, "-- review body")
+	section, _, ok2 := strings.Cut(rest, "-- inline comments")
+	if !ok || !ok2 {
+		t.Fatalf("the frame has no review body section:\n%s", frame)
+	}
+	_, section, _ = strings.Cut(section, "\n")
+	var kept []string
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "+-"):
+		case strings.HasPrefix(line, "|"):
+			kept = append(kept, strings.Trim(line, "|"))
+		default:
+			kept = append(kept, line)
+		}
+	}
+	return withoutSpace(strings.Join(kept, "\n"))
+}
+
+func withoutSpace(s string) string {
+	return strings.Join(strings.Fields(s), "")
+}
+
 func TestPublishCarriesGateCounts(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -238,14 +276,27 @@ func TestPublishCarriesGateCounts(t *testing.T) {
 	h.mustOK("summary", "--run", runRef, "--body", "Five things.", "--expect-findings", "5")
 	h.mustOK("edit", "f-001", "--run", runRef, "--exclude")
 	h.mustOK("edit", "f-002", "--run", runRef, "--exclude")
-	h.IsTerminal = true
 	// Skip f-001, reinstate f-002, exclude f-003, relabel f-004 a nonblocking suggestion and accept it, accept f-005.
-	h.Stdin = "n\nu\nx\ne\nsuggestion\nn\na\na\nq\n"
-	if _, stderr, exit := h.Run("review", runRef, "--plain"); exit != 0 {
-		t.Fatalf("review exit %d stderr %q", exit, stderr)
-	}
-	h.Stdin = confirmPublish("", "y")
-	if _, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 {
+	h.review(runRef, func(s *screen.Screen) {
+		// The cursor opens on f-003, the first pending finding, so f-002 is one back.
+		s.Press("enter")
+		s.WaitFor("3 of 5")
+		s.Press("left")
+		s.WaitFor("2 of 5")
+		s.Press("u")
+		s.WaitFor("f-002 reinstated and accepted")
+		s.Press("x")
+		s.WaitFor("f-003 excluded")
+		s.Press("e")
+		s.WaitFor("edit f-004")
+		s.Press("right", "enter")
+		s.WaitFor("f-004 is now suggestion, not blocking")
+		s.Press("a")
+		s.WaitFor("f-004 accepted")
+		s.Press("a")
+		s.WaitFor("f-005 accepted")
+	})
+	if _, stderr, exit := h.Publish("", "y", runRef, "--action", "comment"); exit != 0 {
 		t.Fatalf("publish exit %d stderr %q", exit, stderr)
 	}
 	body := h.lastPostBody()
@@ -257,7 +308,7 @@ func TestPublishCarriesGateCounts(t *testing.T) {
 func TestPublishRefusesWithoutTerminalBeforePrinting(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	h.IsTerminal = false
 	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment")
 	if exit != 1 || stdout != "" || !strings.Contains(stderr, "interactive terminal") {
@@ -267,10 +318,38 @@ func TestPublishRefusesWithoutTerminalBeforePrinting(t *testing.T) {
 	h.checkSends(0)
 }
 
+// The confirmation draws full screen, so a terminal that cannot draw one refuses with tty once the gates have passed,
+// and nothing is sent or recorded.
+func TestPublishRefusesATerminalItCannotDrawOn(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name, reason string
+		setup        func(h *harness)
+	}{
+		{"TERM=dumb", "TERM=dumb", func(h *harness) { h.Env["TERM"] = "dumb" }},
+		// The harness's stdin is a reader, not a terminal file, so without a Screen the raw-mode probe fails.
+		{"no raw mode", "cannot enter raw mode", func(h *harness) { h.Screen = nil }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.reviewed(decidedTwoOfThree)
+			c.setup(h)
+			errObj := h.mustRefuse("tty", "publish", runRef, "--action", "comment")
+			if msg, _ := errObj["message"].(string); !strings.Contains(msg, c.reason) || errObj["fix"] != "run loupe publish in a terminal that can draw full screen" {
+				t.Fatalf("refusal %v", errObj)
+			}
+			if h.exists("attempt.json") || h.exists("receipt.json") {
+				t.Fatal("a refused publish recorded an attempt or a receipt")
+			}
+			h.checkSends(0)
+		})
+	}
+}
+
 func TestPublishRefusesTTYBeforeCredentialsAndRecords(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	h.IsTerminal = false
 	h.GitHubErr = errors.New("no GitHub token found for github.com")
 	h.mustRefuse("tty", "publish", runRef, "--action", "comment")
@@ -286,17 +365,16 @@ func TestPublishRefusesTTYBeforeCredentialsAndRecords(t *testing.T) {
 func TestInteractiveJSONNeedsStderrTerminal(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	h.StderrNotTerminal = true
-	errObj := h.mustRefuse("tty", "publish", runRef, "--action", "comment", "--plain")
+	errObj := h.mustRefuse("tty", "publish", runRef, "--action", "comment")
 	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "stderr") {
 		t.Fatalf("tty message %q does not name stderr", msg)
 	}
-	h.mustRefuse("tty", "review", runRef, "--plain")
+	h.mustRefuse("tty", "review", runRef)
 
 	// Without --json the interface draws on stdout, so a redirected stderr is fine.
-	h.Stdin = confirmPublish("", "n")
-	if _, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain"); exit != 0 || !strings.Contains(stderr, "canceled") {
+	if _, stderr, exit := h.Publish("", "n", runRef, "--action", "comment"); exit != 0 || !strings.Contains(stderr, "canceled") {
 		t.Fatalf("exit %d stderr %q", exit, stderr)
 	}
 	h.checkSends(0)
@@ -305,28 +383,27 @@ func TestInteractiveJSONNeedsStderrTerminal(t *testing.T) {
 func TestPublishGateRefusals(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name    string
-		answers string
-		setup   func(h *harness)
-		action  string
-		code    string
+		name   string
+		steps  []string
+		setup  func(h *harness)
+		action string
+		code   string
 	}{
-		{"head moved", "a\na\nx\nq\n", func(h *harness) {
+		{"head moved", decidedTwoOfThree, func(h *harness) {
 			h.GH.SetHead(owner, repo, number, h.Repo.PushHead(map[string]string{"src/app.go": "moved\n"}))
 		}, "comment", "head-moved"},
-		{"own pull request", "a\na\nx\nq\n", func(h *harness) { h.GH.SetViewer("author") }, "approve", "own-pr"},
-		{"blocking finding", "a\na\nx\nq\n", nil, "approve", "blocking"},
-		{"pending finding", "a\nq\n", nil, "comment", "not-ready"},
+		{"own pull request", decidedTwoOfThree, func(h *harness) { h.GH.SetViewer("author") }, "approve", "own-pr"},
+		{"blocking finding", decidedTwoOfThree, nil, "approve", "blocking"},
+		{"pending finding", []string{"a f-001"}, nil, "comment", "not-ready"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
-			h.reviewed(c.answers)
+			h.reviewed(c.steps)
 			if c.setup != nil {
 				c.setup(h)
 			}
-			h.Stdin = confirmPublish("", "y")
-			h.mustRefuse(c.code, "publish", runRef, "--action", c.action, "--plain")
+			h.mustRefuse(c.code, "publish", runRef, "--action", c.action)
 			h.checkSends(0)
 		})
 	}
@@ -335,7 +412,7 @@ func TestPublishGateRefusals(t *testing.T) {
 func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	captured := h.Repo.HeadSHA()
 	live := h.pushHead("src/app.go")
 	qualifier := owner + ":" + repo + ":"
@@ -343,17 +420,13 @@ func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
 		Commits: []github.Commit{{SHA: live, Message: "move head"}}, Files: []github.ComparedFile{{Filename: "src/app.go"}}})
 	h.GH.SetCommits(owner, repo, number, github.Commit{SHA: captured, Message: "capture"}, github.Commit{SHA: live, Message: "move head"})
 
-	h.Stdin = confirmPublish("", "y")
-	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain")
-	if exit != 0 {
+	s := h.Start("publish", runRef, "--action", "comment")
+	s.WaitFor("new line", "Head moved 1 commit since capture", live[:7]+" move head", "Findings on changed files: f-001, f-002")
+	confirm(s, "", "y")
+	if stdout, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
 	}
 	h.checkSends(1)
-	for _, want := range []string{"Head moved 1 commit since capture", live[:7] + " move head", "Findings on changed files: f-001, f-002"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("confirmation lacks %q:\n%s", want, stdout)
-		}
-	}
 	for _, r := range h.GH.Requests() {
 		if post, ok := r.Body.(map[string]any); !r.Read() && (!ok || post["commit_id"] != captured) {
 			t.Fatalf("review sent at %v, want the captured head %s", r.Body, captured)
@@ -366,8 +439,7 @@ func TestPublishRefusesEmptyDraft(t *testing.T) {
 	h := newHarness(t)
 	h.capture()
 	h.IsTerminal = true
-	h.Stdin = confirmPublish("", "y")
-	errObj := h.mustRefuse("empty", "publish", runRef, "--action", "comment", "--plain")
+	errObj := h.mustRefuse("empty", "publish", runRef, "--action", "comment")
 	if fix, _ := errObj["fix"].(string); !strings.Contains(fix, "loupe add") || !strings.Contains(fix, "loupe summary") {
 		t.Fatalf("fix %v", errObj["fix"])
 	}
@@ -397,23 +469,20 @@ func TestPublishRefusesBadFlagsFirst(t *testing.T) {
 func TestPublishJSONPrintsOneObject(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 
-	h.Stdin = confirmPublish("", "n")
-	env, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
+	env, exit := h.PublishJSON("", "n", runRef, "--action", "comment")
 	if exit != 0 || env["ok"] != true || env["sent"] != false || env["reviewUrl"] != nil || env["replayed"] != nil {
 		t.Fatalf("declined: exit %d envelope %v", exit, env)
 	}
 	h.checkSends(0)
 
-	h.Stdin = confirmPublish("", "y")
-	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain", "--json")
-	if exit != 0 || !strings.Contains(stderr, "Publish this review? [y/N]") || strings.Contains(stdout, "Publish this review?") {
+	stdout, stderr, exit := h.Publish("", "y", runRef, "--action", "comment", "--json")
+	if exit != 0 || !strings.Contains(stderr, "publish this review") || strings.Contains(stdout, "publish this review") {
 		t.Fatalf("the confirmation did not go to stderr: exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
-	h.Stdin = confirmPublish("", "y")
 	h.GitHubErr = errors.New("no GitHub credentials")
-	replay, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
+	replay, exit := h.RunJSON("publish", runRef, "--action", "comment")
 	h.GitHubErr = nil
 	if exit != 0 || replay["sent"] != false || replay["replayed"] != true || replay["reviewUrl"] == nil || replay["reviewId"] == nil {
 		t.Fatalf("replay: exit %d envelope %v", exit, replay)
@@ -579,10 +648,10 @@ func TestPublishUnattendedRefusesUserTokens(t *testing.T) {
 func TestPublishTokenMismatchAttendedRefusesInstallationToken(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	h.UseInstallationToken()
 	h.IsTerminal = true
-	h.mustRefuse("token", "publish", runRef, "--action", "comment", "--plain")
+	h.mustRefuse("token", "publish", runRef, "--action", "comment")
 	h.checkSends(0)
 }
 
@@ -605,7 +674,7 @@ func TestPublishTokenMismatchRefusesViewer(t *testing.T) {
 		h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
 		h.UseToken("ghp_user-token")
 		h.IsTerminal = true
-		h.mustRefuse("viewer", "publish", runRef, "--action", "comment", "--plain")
+		h.mustRefuse("viewer", "publish", runRef, "--action", "comment")
 		h.checkSends(0)
 	})
 }
@@ -768,9 +837,13 @@ func TestReviewJSONPrintsOneObject(t *testing.T) {
 	h := newHarness(t)
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
-	h.IsTerminal = true
-	h.Stdin = "a\nq\n"
-	stdout, stderr, exit := h.Run("review", runRef, "--plain", "--json")
+	s := h.Start("review", runRef, "--json")
+	s.Press("enter")
+	s.WaitFor("Changed line")
+	s.Press("a")
+	s.WaitFor("f-001 accepted")
+	s.Press("q")
+	stdout, stderr, exit := s.Wait()
 	var env map[string]any
 	if err := json.Unmarshal([]byte(stdout), &env); err != nil || exit != 0 || env["ok"] != true || env["command"] != "review" || env["dir"] != h.RunDir(1) || len(env) != 5 {
 		t.Fatalf("exit %d err %v stdout %q", exit, err, stdout)

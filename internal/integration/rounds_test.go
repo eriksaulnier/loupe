@@ -12,21 +12,15 @@ import (
 
 func roundRef(round int) string { return fmt.Sprintf("%s/%s#%d@%d", owner, repo, number, round) }
 
-// publishRound files oneFinding in round, accepts it in plain review and publishes it as a comment.
+// publishRound files oneFinding in round, accepts it in review and publishes it as a comment.
 func (h *harness) publishRound(round int) {
 	h.t.Helper()
 	ref := roundRef(round)
 	h.mustOK("add", "--run", ref, "--from", h.WriteFile("finding.json", oneFinding))
-	h.IsTerminal = true
-	h.Stdin = "a\nq\n"
-	if _, stderr, exit := h.Run("review", ref, "--plain"); exit != 0 {
-		h.t.Fatalf("review %s exit %d stderr %q", ref, exit, stderr)
-	}
-	h.Stdin = confirmPublish("", "y")
-	if stdout, stderr, exit := h.Run("publish", ref, "--action", "comment", "--plain"); exit != 0 {
+	h.decide(ref, "a f-001")
+	if stdout, stderr, exit := h.Publish("", "y", ref, "--action", "comment"); exit != 0 {
 		h.t.Fatalf("publish %s exit %d stdout %q stderr %q", ref, exit, stdout, stderr)
 	}
-	h.IsTerminal = false
 }
 
 // pushHead moves the pull request head on the remote and in the fake.

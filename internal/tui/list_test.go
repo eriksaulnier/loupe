@@ -66,6 +66,11 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 	if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
 		t.Errorf("C locale view has a non-ASCII glyph:\n%s", view)
 	}
+	for name, view := range everyView(t, modelOf(t, dir, ascii, 100, 30)) {
+		if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
+			t.Errorf("C locale %s view has a non-ASCII glyph:\n%s", name, view)
+		}
+	}
 
 	if got := modelOf(t, dir, utf8, 100, 24).View(); !strings.Contains(got, "› · f-001            ● Title one") {
 		t.Errorf("UTF-8 view does not use the Unicode glyphs:\n%s", got)
@@ -595,7 +600,7 @@ func TestEscapeKeepsTheCursorOnTheOpenFinding(t *testing.T) {
 	}
 }
 
-// The severity chip is colored on both surfaces that draw it. Nothing else notices: the chip's text is unchanged, so
+// The detail view colors the severity chip by rank. Nothing else notices: the chip's text is unchanged, so
 // reverting its kind to Dim leaves every other assertion true.
 func TestSeverityChipIsColoredByRank(t *testing.T) {
 	s := style.New(io.Discard, envOf(map[string]string{"LANG": "en_US.UTF-8"}))

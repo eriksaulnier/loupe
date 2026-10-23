@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -12,11 +13,13 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/screen"
+	"github.com/eriksaulnier/loupe/internal/tui"
 )
 
 func TestReviewRefusesWithoutTerminalBeforeResolving(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "loupe-home")
-	for _, args := range [][]string{{"review", "not a ref", "--json"}, {"review", "--json"}, {"review", "--plain", "--json"}} {
+	for _, args := range [][]string{{"review", "not a ref", "--json"}, {"review", "--json"}} {
 		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
 		if code := Execute(deps, args); code != 1 {
 			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
@@ -31,20 +34,63 @@ func TestReviewRefusesWithoutTerminalBeforeResolving(t *testing.T) {
 	}
 }
 
+// A terminal review cannot draw on refuses with tty before the run is resolved, and names what to run instead.
+func TestReviewRefusesATerminalItCannotDrawOn(t *testing.T) {
+	for _, c := range []struct {
+		name, term, reason string
+		screen             *tui.Screen
+	}{
+		{"TERM=dumb", "dumb", "TERM=dumb", &tui.Screen{Width: 100, Height: 30}},
+		// A reader that is not a terminal file fails the raw-mode probe, as a terminal that cannot enter raw mode does.
+		{"no raw mode", "", "cannot enter raw mode", nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home := filepath.Join(t.TempDir(), "loupe-home")
+			deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "TERM": c.term})
+			deps.IsTerminal = func() bool { return true }
+			deps.StderrIsTerminal = func() bool { return true }
+			deps.Screen = c.screen
+			if code := Execute(deps, []string{"review", "o/r#1", "--json"}); code != 1 {
+				t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+			}
+			e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+			if e["code"] != "tty" || e["fix"] != "run loupe review in a terminal that can draw full screen" || !strings.Contains(e["message"].(string), c.reason) {
+				t.Fatalf("got %v", e)
+			}
+			if _, err := os.Stat(home); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("LOUPE_HOME was touched or cannot be checked: %v", err)
+			}
+		})
+	}
+}
+
+// --plain is a usage error like any unknown flag, not a mode loupe still picks.
+func TestPlainFlagIsAUsageError(t *testing.T) {
+	for _, args := range [][]string{{"review", "o/r#1", "--plain", "--json"}, {"publish", "o/r#1", "--action", "comment", "--plain", "--json"}} {
+		deps, s := testDeps(t, nil)
+		if code := Execute(deps, args); code != 2 {
+			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
+		}
+		if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "usage" {
+			t.Fatalf("%v: got %v", args, e)
+		}
+	}
+}
+
 func TestReviewHelpSaysHumanOnly(t *testing.T) {
 	deps, s := testDeps(t, nil)
 	if code := Execute(deps, []string{"review", "--help"}); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
 	help := s.stdout.String()
-	for _, want := range []string{"human-only", "An agent MUST NOT operate it, pipe confirmation into it, drive it", "through a pseudo-terminal, or start loupe publish", "loupe handoff to start it in", "send to, read, resize, close or reuse that", "--plain"} {
+	for _, want := range []string{"human-only", "An agent MUST NOT operate it, pipe confirmation into it, drive it", "through a pseudo-terminal, or start loupe publish", "loupe handoff to start it in", "send to, read, resize, close or reuse that", "draws full screen"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("review help lacks %q:\n%s", want, help)
 		}
 	}
 }
 
-// pendingRun stores a run whose two general findings are pending with no notes, so a plain review decides both.
+// pendingRun stores a run whose two general findings are pending with no notes, so a review decides both.
 func pendingRun(t *testing.T) (home, dir string) {
 	t.Helper()
 	home = t.TempDir()
@@ -64,19 +110,41 @@ func pendingRun(t *testing.T) (home, dir string) {
 	return home, dir
 }
 
-// plainReview runs review --plain as a terminal user typing answers.
-func plainReview(t *testing.T, home, answers string, jsonMode bool) (int, *streams) {
+// screenReview runs review at a terminal: steps drive the open list, then end, a key that ends the session, is pressed.
+func screenReview(t *testing.T, home string, jsonMode bool, end string, steps func(*screen.Screen)) (int, *streams) {
 	t.Helper()
-	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
-	deps.Stdin = strings.NewReader(answers)
-	deps.IsTerminal = func() bool { return true }
-	deps.StderrIsTerminal = func() bool { return true }
-	args := []string{"review", "o/r#1", "--plain"}
+	args := []string{"review", "o/r#1"}
 	if jsonMode {
 		args = append(args, "--json")
 	}
-	return Execute(deps, args), s
+	sc := screen.Start(t, func(stdin io.Reader, stdout, stderr io.Writer) int {
+		deps, _ := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+		deps.Stdin, deps.Stdout, deps.Stderr = stdin, stdout, stderr
+		deps.IsTerminal = func() bool { return true }
+		deps.StderrIsTerminal = func() bool { return true }
+		deps.Screen = &tui.Screen{Width: 100, Height: 30}
+		return Execute(deps, args)
+	})
+	sc.WaitFor("q quit")
+	steps(sc)
+	sc.Press(end)
+	stdout, stderr, code := sc.Wait()
+	s := &streams{}
+	s.stdout.WriteString(stdout)
+	s.stderr.WriteString(stderr)
+	return code, s
 }
+
+// sendBack sends the first finding back with a note, which opens the second.
+func sendBack(s *screen.Screen) {
+	s.Press("enter", "s")
+	s.Type("Needs work.")
+	s.Press("enter")
+	s.WaitFor("f-001 sent back as n-001")
+}
+
+// endKeys are the two ways a human leaves review: q, and ctrl+c, which is what a signal or a closed pane amounts to.
+var endKeys = []string{"q", "ctrl+c"}
 
 func handBackNotes(t *testing.T, dir string) []string {
 	t.Helper()
@@ -88,10 +156,10 @@ func handBackNotes(t *testing.T, dir string) []string {
 }
 
 func TestReviewHandsBackASendBackAsItIsWritten(t *testing.T) {
-	for name, answers := range map[string]string{"quit": "s\nNeeds work.\nq\n", "eof": "s\nNeeds work.\n"} {
-		t.Run(name, func(t *testing.T) {
+	for _, end := range endKeys {
+		t.Run(end, func(t *testing.T) {
 			home, dir := pendingRun(t)
-			code, s := plainReview(t, home, answers, false)
+			code, s := screenReview(t, home, false, end, sendBack)
 			if code != 0 {
 				t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 			}
@@ -119,11 +187,11 @@ func seedUnhandedNote(t *testing.T, dir string) {
 }
 
 func TestReviewRecordsUnhandedNoteOnQuit(t *testing.T) {
-	for name, answers := range map[string]string{"quit": "q\n", "eof": ""} {
-		t.Run(name, func(t *testing.T) {
+	for _, end := range endKeys {
+		t.Run(end, func(t *testing.T) {
 			home, dir := pendingRun(t)
 			seedUnhandedNote(t, dir)
-			code, s := plainReview(t, home, answers, false)
+			code, s := screenReview(t, home, false, end, func(*screen.Screen) {})
 			if code != 0 {
 				t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 			}
@@ -140,7 +208,7 @@ func TestReviewRecordsUnhandedNoteOnQuit(t *testing.T) {
 func TestReviewHandBackLineGoesToStderrUnderJSON(t *testing.T) {
 	home, dir := pendingRun(t)
 	seedUnhandedNote(t, dir)
-	code, s := plainReview(t, home, "q\n", true)
+	code, s := screenReview(t, home, true, "q", func(*screen.Screen) {})
 	if code != 0 {
 		t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 	}
@@ -157,7 +225,10 @@ func TestReviewHandBackLineGoesToStderrUnderJSON(t *testing.T) {
 
 func TestReviewWithoutSendBackRecordsNothing(t *testing.T) {
 	home, dir := pendingRun(t)
-	code, s := plainReview(t, home, "a\nq\n", false)
+	code, s := screenReview(t, home, false, "q", func(s *screen.Screen) {
+		s.Press("enter", "a")
+		s.WaitFor("f-001 accepted")
+	})
 	if code != 0 {
 		t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 	}

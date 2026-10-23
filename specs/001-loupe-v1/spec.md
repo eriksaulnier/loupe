@@ -77,7 +77,7 @@ The human opens the review interface in their terminal. They see the summary and
 5. **Given** an open finding, **When** the human sends it back with a note, **Then** a note with a stable identifier is attached to the finding, the finding's acceptance is removed, and the note is open.
 6. **Given** a finding the human is viewing, **When** an agent edits that finding before the human decides, **Then** the decision is refused, the updated finding is shown, and no decision is recorded.
 7. **Given** decisions made, **When** the human quits, **Then** every decision persists and reopening shows the same dispositions.
-8. **Given** a terminal that cannot run the full-screen interface, **When** the human opens the review, **Then** a line-by-line mode offers the same decisions with the same meaning, including the hunk.
+8. **Given** a terminal that cannot run the full-screen interface, **When** the human opens the review, **Then** it refuses with `tty` and asks for a terminal that can draw full screen. Amended by `specs/037-remove-plain-mode`, which removed the line-by-line mode.
 
 ---
 
@@ -206,7 +206,7 @@ A Claude Code user installs the loupe plugin. Typing the slash command with a pu
 - The head is force-pushed back to an older round's commit and that round publishes, by `--retry-unknown` after a newer round published or at the same time as another round at that commit, or its `--retry-unknown` is definitely rejected after a newer round counted its attempt, so the next round to publish reuses that newer round's number: two reviews MAY name the same round. Accepted rather than refused, since it needs the force-push and numbering never blocks a publish.
 - GitHub rejects the review because the viewer already has a pending review: the refusal says to submit or discard it on GitHub first.
 - The network fails after the request was sent: the attempt is kept as unknown and reconciled on the next publish.
-- The terminal is too small, reports itself as dumb, or standard input cannot be put in raw mode: the line-by-line review mode is used.
+- The terminal reports itself as dumb, or standard input cannot be put in raw mode: review and publish refuse with `tty`, but not `publish --unattended` (`specs/037-remove-plain-mode`). A window too small for the interface is `specs/036`'s.
 - The locale is not UTF-8: glyphs fall back to plain ASCII.
 - Finding text contains control or bidirectional override characters: they are escaped in every preview and never alter what is sent.
 - A finding title holds a backtick code span or a backslash escape: the span renders as `<code>` and the escape shows its punctuation alone, in the review body and in an inline comment. Other Markdown in the title shows literally.
@@ -270,7 +270,7 @@ General
 - **FR-036**: Run state MUST be plain files in one directory per run under a user-level data directory, and no run directory MAY be deleted automatically.
 - **FR-037**: A run MUST be addressable by pull request (owner, repository, number, optional round), and commands MUST default to the newest round of the current branch's pull request when no run is named.
 - **FR-038**: Concurrent mutations of one draft MUST be serialized by an exclusive lock that is never stolen automatically.
-- **FR-039**: A send-back MUST add its note to the hand-back set in the same locked step that writes it, and on every clean exit, including plain-mode end of input, review MUST also record any open, unanswered note not yet in the set; neither changes the draft version. Amended on 2026-09-21 by `specs/017-live-review`, which moves the hand-back from the exit to the send-back and keeps the exit as a backstop.
+- **FR-039**: A send-back MUST add its note to the hand-back set in the same locked step that writes it, and on every clean exit review MUST also record any open, unanswered note not yet in the set; neither changes the draft version. Amended on 2026-09-21 by `specs/017-live-review`, which moves the hand-back from the exit to the send-back and keeps the exit as a backstop, and on 2026-10-22 by `specs/037-remove-plain-mode`, which removed plain mode's end-of-input exit.
 - **FR-040**: An agent-facing command MUST block until a handed-back note awaits a reply or the run is published, MUST honor a timeout and cancellation, and MUST refuse with `timeout` when the timeout elapses. Since `specs/017-live-review` (2026-09-21) a note awaits from its send-back, so the command returns while review is still open.
 - **FR-041**: Capture MUST accept an optional source naming what filed the findings and MUST refuse one that could close a marker, as MUST loading a run that records one; publish MUST show a source in the footer and `loupe-meta` only when capture recorded one.
 - **FR-042**: Publish MUST number a review by its position among the pull request's publications: one more than the number of the pull request's other rounds holding a receipt or an attempt. The footer and `loupe-meta` MUST both carry that number; the run's round, its references and its records MUST keep the capture round. Narrowed on 2026-09-16 by `specs/009-review-footer`, which drops the number from the footer; `loupe-meta` still carries it, derived as before.

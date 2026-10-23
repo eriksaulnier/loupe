@@ -41,13 +41,25 @@ func (h *harness) receipt() (url string, envelope map[string]any) {
 	return r.ReviewURL, r.Envelope
 }
 
+// publishRefuses runs publish at a terminal and asserts it refuses with code before showing the confirmation.
 func (h *harness) publishRefuses(code string, args ...string) map[string]any {
 	h.t.Helper()
-	h.Stdin = confirmPublish("", "y")
-	env, exit := h.RunJSON(append([]string{"publish", runRef, "--action", "comment", "--plain"}, args...)...)
+	env, exit := h.RunJSON(append([]string{"publish", runRef, "--action", "comment"}, args...)...)
+	return refusedWith(h.t, code, args, env, exit)
+}
+
+// sendRefuses confirms a publish at a terminal and asserts that sending it refuses with code.
+func (h *harness) sendRefuses(code string) map[string]any {
+	h.t.Helper()
+	env, exit := h.PublishJSON("", "y", runRef, "--action", "comment")
+	return refusedWith(h.t, code, nil, env, exit)
+}
+
+func refusedWith(t *testing.T, code string, args []string, env map[string]any, exit int) map[string]any {
+	t.Helper()
 	errObj, _ := env["error"].(map[string]any)
 	if exit != 1 || errObj["code"] != code {
-		h.t.Fatalf("publish %v: exit %d envelope %v, want refusal %s", args, exit, env, code)
+		t.Fatalf("publish %v: exit %d envelope %v, want refusal %s", args, exit, env, code)
 	}
 	return errObj
 }
@@ -55,13 +67,13 @@ func (h *harness) publishRefuses(code string, args ...string) map[string]any {
 func TestUnknownOutcomeReconcilesOnNextPublish(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	draftPath := filepath.Join(h.RunDir(1), "draft.json")
 	draftBefore := readFile(t, draftPath)
 
 	h.GH.QueueCreate(fakegh.ServerErrorAfterRecord())
 	h.GH.Fail("GET", reviewsPath, 502)
-	h.publishRefuses("attempt")
+	h.sendRefuses("attempt")
 	saved := h.attempt()
 	if saved.State != "unknown" || saved.Envelope["body"] == "" || saved.Envelope["publicationId"] == "" {
 		t.Fatalf("attempt %+v", saved)
@@ -98,10 +110,9 @@ func TestUnknownOutcomeReconcilesOnNextPublish(t *testing.T) {
 func TestAmbiguousSendReconcilesAtOnce(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	h.GH.QueueCreate(fakegh.ServerErrorAfterRecord())
-	h.Stdin = confirmPublish("", "y")
-	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain")
+	stdout, stderr, exit := h.Publish("", "y", runRef, "--action", "comment")
 	if exit != 0 {
 		t.Fatalf("exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
@@ -115,9 +126,9 @@ func TestAmbiguousSendReconcilesAtOnce(t *testing.T) {
 func TestUnknownOutcomeWithoutMatchNeedsRetry(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 	h.GH.QueueCreate(fakegh.ServerErrorDrop())
-	h.publishRefuses("attempt")
+	h.sendRefuses("attempt")
 	first := h.attempt().Envelope["publicationId"]
 
 	errObj := h.publishRefuses("attempt")
@@ -135,14 +146,16 @@ func TestUnknownOutcomeWithoutMatchNeedsRetry(t *testing.T) {
 	h.checkSends(1)
 	h.GH.SetHead(owner, repo, number, head)
 
-	h.Stdin = confirmPublish("", "y")
-	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment", "--plain", "--retry-unknown")
+	s := h.Start("publish", runRef, "--action", "comment", "--retry-unknown")
+	s.WaitFor("new line", "<details open>")
+	confirm(s, "", "y")
+	stdout, stderr, exit := s.Wait()
 	if exit != 0 {
 		t.Fatalf("retry exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
 	h.checkSends(2)
 	url, envelope := h.receipt()
-	if !strings.HasSuffix(stdout, url+"\n") || !strings.Contains(stdout, "<details open>") {
+	if !strings.HasSuffix(stdout, url+"\n") {
 		t.Fatalf("retry did not confirm and print the URL:\n%s", stdout)
 	}
 	if envelope["publicationId"] == first || h.exists("attempt.json") {

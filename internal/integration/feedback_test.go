@@ -3,24 +3,14 @@ package integration
 import (
 	"strings"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/testutil/screen"
 )
 
 const sendBackFindings = `[
   {"title": "Changed line", "body": "Evidence for line 3.", "location": {"path": "src/app.go", "line": 3}, "label": "issue"},
   {"title": "Second change", "body": "Evidence for line 35.", "location": {"path": "src/app.go", "line": 35}, "label": "suggestion"}
 ]`
-
-func (h *harness) plainReview(answers string) string {
-	h.t.Helper()
-	h.IsTerminal = true
-	h.Stdin = answers
-	stdout, stderr, exit := h.Run("review", runRef, "--plain")
-	h.IsTerminal = false
-	if exit != 0 {
-		h.t.Fatalf("review exit %d stderr %q", exit, stderr)
-	}
-	return stdout
-}
 
 func noteByID(t *testing.T, env map[string]any, id string) map[string]any {
 	t.Helper()
@@ -50,7 +40,16 @@ func TestSendBackLoop(t *testing.T) {
 	h.capture()
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", sendBackFindings))
 	h.mustOK("summary", "--run", runRef, "--body", "Two things.", "--expect-findings", "2")
-	h.plainReview("a\ns\nShow the evidence.\nq\n")
+	h.review(runRef, func(s *screen.Screen) {
+		s.Press("enter")
+		s.WaitFor("1 of 2", "Changed line")
+		s.Press("a")
+		s.WaitFor("f-001 accepted", "2 of 2")
+		s.Press("s")
+		s.Type("Show the evidence.")
+		s.Press("enter")
+		s.WaitFor("f-002 sent back as n-001")
+	})
 
 	fb := h.mustOK("feedback", "--run", runRef)
 	note := noteByID(t, fb, "n-001")
@@ -77,28 +76,40 @@ func TestSendBackLoop(t *testing.T) {
 		t.Fatalf("f-001 after edit: %v", fb["findings"])
 	}
 
-	shown := h.plainReview("a\na\nq\n")
-	noteAt := strings.Index(shown, "Show the evidence.")
-	replyAt := strings.Index(shown, "Added the evidence.")
-	if noteAt < 0 || replyAt < noteAt || !strings.Contains(shown, "r-001") {
-		t.Fatalf("plain review does not show the reply under the note:\n%s", shown)
-	}
-	if !strings.Contains(shown, "f-002 accepted - n-001 resolved") {
-		t.Fatalf("accepting f-002 does not name the note it resolved:\n%s", shown)
-	}
+	h.review(runRef, func(s *screen.Screen) {
+		s.Press("enter")
+		s.WaitFor("1 of 2", "Changed line, renamed")
+		s.Press("a")
+		shown := s.WaitFor("f-001 accepted", "2 of 2", "Show the evidence.", "Added the evidence.")
+		noteAt := strings.Index(shown, "Show the evidence.")
+		replyAt := strings.Index(shown, "Added the evidence.")
+		if replyAt < noteAt || !strings.Contains(shown, "r-001") {
+			t.Fatalf("review does not show the reply under the note:\n%s", shown)
+		}
+		s.Press("a")
+		s.WaitFor("f-002 accepted - n-001 resolved")
+	})
 	fb = h.mustOK("feedback", "--run", runRef)
 	if readiness, _ := fb["readiness"].(map[string]any); readiness["ready"] != true {
 		t.Fatalf("feedback after resolving %v", fb)
 	}
 
-	h.plainReview("n\ns\nDrop this one?\nq\n")
+	h.review(runRef, func(s *screen.Screen) {
+		s.Press("enter")
+		s.WaitFor("1 of 2")
+		s.Press("n")
+		s.WaitFor("2 of 2")
+		s.Press("s")
+		s.Type("Drop this one?")
+		s.Press("enter")
+		s.WaitFor("f-002 sent back as n-002")
+	})
 	h.mustOK("edit", "f-002", "--run", runRef, "--exclude")
 	if fb = h.mustOK("feedback", "--run", runRef); dispositionOf(fb, "f-002") != "withdrawn" {
 		t.Fatalf("f-002 after withdraw: %v", fb["findings"])
 	}
 	h.IsTerminal = true
-	h.Stdin = confirmPublish("", "y")
-	errObj := h.mustRefuse("not-ready", "publish", runRef, "--action", "comment", "--plain")
+	errObj := h.mustRefuse("not-ready", "publish", runRef, "--action", "comment")
 	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "open notes n-002") {
 		t.Fatalf("refusal %v", errObj)
 	}

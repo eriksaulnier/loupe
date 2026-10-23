@@ -48,14 +48,8 @@ func (h *harness) publishAs(p *publisher, message string, flags ...string) map[s
 	h.captureRound(p.round)
 	ref := roundRef(p.round)
 	h.mustOK("add", "--run", ref, "--from", h.WriteFile("finding.json", oneFinding))
-	h.IsTerminal = true
-	h.Stdin = "a\nq\n"
-	if _, stderr, exit := h.Run("review", ref, "--plain"); exit != 0 {
-		h.t.Fatalf("review %s exit %d stderr %q", ref, exit, stderr)
-	}
-	h.Stdin = confirmPublish(message, "y")
-	env, exit := h.RunJSON(append([]string{"publish", ref, "--plain"}, flags...)...)
-	h.IsTerminal = false
+	h.decide(ref, "a f-001")
+	env, exit := h.PublishJSON(message, "y", append([]string{ref}, flags...)...)
 	if exit != 0 || env["ok"] != true {
 		h.t.Fatalf("publish %s as %s: exit %d envelope %v", ref, p.login, exit, env)
 	}
@@ -211,18 +205,16 @@ func TestStickyUnreadableReviewIsLeftBehindByAPlainPublish(t *testing.T) {
 	h.captureRound(alice.round)
 	ref := roundRef(alice.round)
 	h.mustOK("add", "--run", ref, "--from", h.WriteFile("finding.json", oneFinding))
+	h.decide(ref, "a f-001")
 	h.IsTerminal = true
-	h.Stdin = "a\nq\n"
-	if _, stderr, exit := h.Run("review", ref, "--plain"); exit != 0 {
-		t.Fatalf("review exit %d stderr %q", exit, stderr)
-	}
-	refused := h.mustRefuse("sticky", "publish", ref, "--sticky", "--plain")
+	refused := h.mustRefuse("sticky", "publish", ref, "--sticky")
 	if fix, _ := refused["fix"].(string); !strings.Contains(fix, "without --sticky") {
 		t.Fatalf("fix %q", fix)
 	}
-	h.Stdin = confirmPublish("Plain review.", "y")
-	h.mustOK("publish", ref, "--action", "comment", "--plain")
 	h.IsTerminal = false
+	if env, exit := h.PublishJSON("Plain review.", "y", ref, "--action", "comment"); exit != 0 || env["ok"] != true {
+		t.Fatalf("exit %d envelope %v", exit, env)
+	}
 
 	h.publishAs(alice, "Sticky again.", "--sticky")
 	by := h.reviewsBy()

@@ -108,11 +108,11 @@ func TestRefusalTextWithColorNamesTheCodeAndIsolatesCommands(t *testing.T) {
 func TestRefusalTextWrapsProseToTheWidthButNeverACommand(t *testing.T) {
 	var out bytes.Buffer
 	long := strings.Repeat("a long explanation of what went wrong ", 4)
-	r := refusal.New(refusal.Usage, long, "run loupe publish owner/repo#123 --action request-changes --inline all --plain")
+	r := refusal.New(refusal.Usage, long, "run loupe publish owner/repo#123 --action request-changes --inline all --retry-unknown")
 	writeRefusalText(&out, colorStyle(t, &out), 60, r, nil)
 	for _, line := range strings.Split(strings.TrimRight(stripANSI(out.String()), "\n"), "\n") {
 		if strings.Contains(line, "loupe publish") {
-			if !strings.HasSuffix(line, "--plain") {
+			if !strings.HasSuffix(line, "--retry-unknown") {
 				t.Fatalf("the command was wrapped: %q", line)
 			}
 			continue

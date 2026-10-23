@@ -39,7 +39,7 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 | `f` | Show the whole file's diff |
 | `?` | List the keys for the current view |
 
-Every decision is saved at once. `TERM=dumb` or `--plain` switches to a plain mode that asks about one finding at a time. A window smaller than 60 by 12 shows its size until it grows.
+Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
 
 ### 5. The agent answers what you send back
 
@@ -138,7 +138,7 @@ In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-me
 | `LOUPE_RUN` | The run a command acts on when it names none |
 | `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for a run's lock. Default 3000, maximum 60000 |
 | `LOUPE_ICONS` | `ascii`, `unicode` (default) or `nerd` (needs a Nerd Font). A non-UTF-8 locale always gets ASCII |
-| `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Control color, plain-mode fallback and glyph selection |
+| `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Control color and glyph selection; `TERM=dumb` refuses review and publish, not `publish --unattended` |
 | `GH_TOKEN`, `GITHUB_TOKEN` | The github.com token, checked in that order. Without either, loupe uses the one `gh auth login` stored |
 
 [`contracts/cli.md`](../specs/001-loupe-v1/contracts/cli.md#environment) has the exact rules and refusals for the `LOUPE_` variables.

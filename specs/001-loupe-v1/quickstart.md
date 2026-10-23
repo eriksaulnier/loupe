@@ -26,7 +26,7 @@ Expected: all three exit 0. The suite MUST include the scenarios below; each map
 | Every command's `--help` renders with no data root and shows the input shape | `internal/cli` | US1 AS6, FR-033 |
 | TUI: list, open detail with hunk, accept, exclude, send back with note, quit, reopen with same dispositions | `internal/tui` (teatest) | US2 AS1 to AS7 |
 | TUI: agent edits a finding while it is open; the decision is refused and the finding redisplays | `internal/tui` | US2 AS6, FR-023 |
-| Plain mode under `TERM=dumb`, a 40x10 terminal, or `--plain`, with the same decisions from an injected reader | `internal/tui` | US2 AS8 |
+| `TERM=dumb` or no raw mode refuses with `tty`, and `--plain` is a usage error (specs/037-remove-plain-mode) | `internal/cli`, `internal/integration` | US2 AS8 |
 | Publish: confirmation view, `v` toggles payload, `y` sends exactly one request, receipt written, second publish prints URL and sends nothing | `internal/integration` with `fakegh` | US3 AS1 to AS3, FR-027 to FR-029 |
 | Publish refusals: no TTY, head moved, own PR with approve, approve with a blocking finding, pending finding, open note, empty draft, draft changed after display | `internal/publish`, `internal/integration` | US3 AS4 to AS9, FR-025, FR-028 |
 | Send-back loop: note created in review, `feedback` lists it, `reply` attaches, edit clears acceptance, human resolves, readiness true; reply carrying a decision field refused | `internal/integration` | US4 |

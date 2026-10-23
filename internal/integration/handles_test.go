@@ -27,10 +27,17 @@ func TestEveryRunResultNamesItsDirectory(t *testing.T) {
 	h.checkDir(h.mustOK("show", "--run", runRef), 1)
 	h.checkDir(h.mustOK("show", "--diff", "--run", runRef), 1)
 
-	h.IsTerminal = true
-	h.Stdin = "a\ns\nShow the evidence.\nq\n"
-	review, exit := h.RunJSON("review", runRef, "--plain")
-	h.IsTerminal = false
+	s := h.Start("review", runRef, "--json")
+	s.Press("enter")
+	s.Press("a")
+	s.WaitFor("f-001 accepted")
+	s.Press("s")
+	s.Type("Show the evidence.")
+	s.Press("enter")
+	s.WaitFor("f-002 sent back as n-001")
+	s.Press("q")
+	stdout, stderr, exit := s.Wait()
+	review := h.decodeResult([]string{"review"}, stdout, stderr)
 	if exit != 0 {
 		t.Fatalf("review exit %d envelope %v", exit, review)
 	}
@@ -44,11 +51,9 @@ func TestEveryRunResultNamesItsDirectory(t *testing.T) {
 	}
 	h.checkDir(refused, 1)
 
-	h.plainReview("a\na\nq\n")
-	h.IsTerminal = true
-	h.Stdin = confirmPublish("", "y")
-	published, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
-	h.IsTerminal = false
+	// f-001 is still accepted, so the review opens on f-002, the one pending.
+	h.decide(runRef, "a f-002")
+	published, exit := h.PublishJSON("", "y", runRef, "--action", "comment")
 	if exit != 0 {
 		t.Fatalf("publish exit %d envelope %v", exit, published)
 	}
@@ -121,16 +126,14 @@ func TestUnattendedPublishSaysSoAndNamesThePoster(t *testing.T) {
 func TestAttendedPublishKeepsItsFieldsAndAddsTheNewOnes(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.reviewed("a\na\nx\nq\n")
+	h.reviewed(decidedTwoOfThree)
 
-	h.Stdin = confirmPublish("", "n")
-	canceled, _ := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
+	canceled, _ := h.PublishJSON("", "n", runRef, "--action", "comment")
 	if got := payloadKeys(canceled); len(got) != 1 || got["sent"] != false {
 		t.Fatalf("a canceled publish carries %v, want sent false alone", got)
 	}
 
-	h.Stdin = confirmPublish("", "y")
-	sent, exit := h.RunJSON("publish", runRef, "--action", "comment", "--plain")
+	sent, exit := h.PublishJSON("", "y", runRef, "--action", "comment")
 	if exit != 0 {
 		t.Fatalf("publish exit %d envelope %v", exit, sent)
 	}

@@ -36,11 +36,10 @@ Every decision is saved immediately and is refused if the finding changed since 
 shown. After a review is sent, review shows its link: o opens it in the browser and any
 other key quits. The link is printed again once the interface closes.
 
---plain, TERM=dumb or a terminal that cannot enter raw mode selects plain mode: one finding at
-a time with single-letter answers. A window smaller than 60x12 shows its size and the size it
-needs until it grows; q and ctrl+c quit there, or decline at the confirmation. For its first
-half second review drops every key but ctrl+c, so keys typed for another pane as it opens
-do nothing.
+The interface draws full screen, so TERM=dumb or a terminal that cannot enter raw mode refuses
+with tty. A window smaller than 60x12 shows its size and the size it needs until it grows; q
+and ctrl+c quit there, or decline at the confirmation. For its first half second review drops
+every key but ctrl+c, so keys typed for another pane as it opens do nothing.
 
 The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
 of the current branch in the working directory at its newest round.
@@ -54,13 +53,12 @@ func newReviewCmd(deps Deps) *cobra.Command {
 		Use:     "review [<ref>]",
 		Short:   "Decide each finding in the review interface (human-only)",
 		Long:    reviewHelp,
-		Example: "  loupe review owner/repo#123\n  loupe review owner/repo#123@2 --plain",
+		Example: "  loupe review owner/repo#123\n  loupe review owner/repo#123@2",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runReview(cmd, deps, args)
 		},
 	}
-	cmd.Flags().Bool("plain", false, "answer one finding at a time instead of the full-screen interface")
 	return cmd
 }
 
@@ -69,6 +67,9 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if !interactive(deps, jsonMode) {
 		return refusal.New(refusal.TTY, "loupe review needs an interactive terminal on stdin and stdout, and on stderr under --json",
 			"run loupe review in an interactive terminal")
+	}
+	if err := drawable(deps, "review"); err != nil {
+		return err
 	}
 	positional := ""
 	if len(args) == 1 {
@@ -84,7 +85,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
-	published, err := reviewSession(cmd, deps, dir, jsonMode)
+	published, err := reviewSession(deps, dir, jsonMode)
 	if err != nil {
 		_ = session.Release()
 		return err
@@ -95,17 +96,11 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	return reviewDone(cmd, deps, dir, jsonMode, interactiveOutput(deps, jsonMode), published)
 }
 
-// reviewSession runs review in the mode the terminal allows and returns when the human leaves it, with the URL of the
-// review they sent, if any.
-func reviewSession(cmd *cobra.Command, deps Deps, dir string, jsonMode bool) (string, error) {
+// reviewSession runs the review interface and returns when the human leaves it, with the URL of the review they sent,
+// if any.
+func reviewSession(deps Deps, dir string, jsonMode bool) (string, error) {
 	ui := interactiveOutput(deps, jsonMode)
-	plain, _ := cmd.Flags().GetBool("plain")
-	width := terminalWidth(deps)
-	mode := tui.ChooseMode(tui.Options{Plain: plain, Getenv: deps.Getenv, RawProbe: func() error { return rawProbe(deps) }})
-	if mode == tui.Plain {
-		return "", tui.RunPlain(dir, deps.Stdin, ui, deps.Getenv, width)
-	}
-	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, OpenURL: deps.OpenURL})
+	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, OpenURL: deps.OpenURL, Screen: deps.Screen})
 	if err != nil {
 		return "", err
 	}
@@ -200,17 +195,22 @@ func interactiveOutput(deps Deps, jsonMode bool) io.Writer {
 	return deps.Stdout
 }
 
-// terminalWidth is plain mode's wrap width, 0 when stdout is not a terminal file.
-func terminalWidth(deps Deps) int {
-	f, ok := deps.Stdout.(*os.File)
-	if !ok {
-		return 0
+// drawable refuses a terminal the full-screen interface cannot draw on. A test's Screen stands in for raw mode, which
+// the pipe it types into cannot enter.
+func drawable(deps Deps, command string) error {
+	reason := ""
+	if deps.Getenv("TERM") == "dumb" {
+		reason = "TERM=dumb"
+	} else if deps.Screen == nil {
+		if err := rawProbe(deps); err != nil {
+			reason = fmt.Sprintf("the terminal cannot enter raw mode: %v", err)
+		}
 	}
-	w, _, err := term.GetSize(int(f.Fd()))
-	if err != nil {
-		return 0
+	if reason == "" {
+		return nil
 	}
-	return w
+	return refusal.New(refusal.TTY, fmt.Sprintf("loupe %s draws full screen, and %s", command, reason),
+		fmt.Sprintf("run loupe %s in a terminal that can draw full screen", command))
 }
 
 func rawProbe(deps Deps) error {

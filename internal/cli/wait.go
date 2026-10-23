@@ -80,8 +80,7 @@ func runWait(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	// The signal handling is installed here, not in main, so every other command keeps the default disposition and
-	// Ctrl-C still ends a plain-mode review or publish.
+	// The signal handling is installed here, not in main, so every other command keeps the default disposition.
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var deadline <-chan time.Time

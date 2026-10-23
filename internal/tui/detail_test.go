@@ -759,6 +759,7 @@ func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, st
 
 func TestEditKeepsTheDecision(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
+	version := loadDraft(t, dir).Version
 	for _, k := range []tea.KeyMsg{runeKey("e"), {Type: tea.KeyRight}, {Type: tea.KeySpace}} {
 		m.Update(k)
 	}
@@ -771,6 +772,9 @@ func TestEditKeepsTheDecision(t *testing.T) {
 	f := d.Findings[0]
 	if f.Label != "suggestion" || f.Blocking || draft.Dispositions(d)["f-001"] != draft.DispositionAccepted {
 		t.Fatalf("finding %+v disposition %s", f, draft.Dispositions(d)["f-001"])
+	}
+	if d.Version != version+1 {
+		t.Fatalf("an edit wrote the draft %d times, want once", d.Version-version)
 	}
 	if m.editing || !strings.Contains(m.notice, "f-001 is now suggestion, not blocking") || !strings.HasSuffix(m.notice, "still accepted") {
 		t.Fatalf("editing %v notice %q", m.editing, m.notice)

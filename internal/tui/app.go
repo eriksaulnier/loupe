@@ -51,7 +51,14 @@ type Config struct {
 	GitHub func() (github.Client, error)
 	// OpenURL opens the published review in a browser; nil offers no o on the published screen.
 	OpenURL func(string) error
+	// Screen is set only by a test, to stand in for a terminal.
+	Screen *Screen
 }
+
+// Screen is a test's stand-in for a terminal, which bubbletea cannot ask for a size. The program starts at its size
+// and drops no keys as it opens or moves to the next finding: those pauses guard a human's typeahead, and a test
+// types only once the screen shows what it waits for.
+type Screen struct{ Width, Height int }
 
 // Width tiers: the label column goes first, then the location shrinks to a filename.
 const (
@@ -175,6 +182,9 @@ func New(cfg Config) (*Model, error) {
 		// The summary starts collapsed so the findings, not the prose, fill the first screen.
 		summaryCollapsed: true,
 	}
+	if cfg.Screen != nil {
+		m.width, m.height = cfg.Screen.Width, cfg.Screen.Height
+	}
 	m.setDraft(d)
 	m.cursor = initialCursor(d, m.order)
 	if st.Color {
@@ -194,7 +204,7 @@ var settleOnOpen = 500 * time.Millisecond
 type openedMsg struct{}
 
 func (m *Model) Init() tea.Cmd {
-	if settleOnOpen <= 0 {
+	if settleOnOpen <= 0 || m.cfg.Screen != nil {
 		return m.schedulePoll()
 	}
 	m.opening = true
@@ -522,8 +532,8 @@ func (m *Model) sayDecided(text string) {
 	m.say(style.Good, text)
 }
 
-// decide is shared by both modes. A decision is stale only when its own finding changed since displayed, so the agent
-// writing elsewhere never refuses it. It returns the draft to display next and, when nothing was recorded, the notice.
+// decide refuses a decision as stale only when its own finding changed since displayed, so the agent writing
+// elsewhere never refuses it. It returns the draft to display next and, when nothing was recorded, the notice.
 func decide(dir string, displayed *draft.Draft, findingID string, getenv func(string) string, fn func(*draft.Draft) error) (*draft.Draft, string, error) {
 	shown, err := draft.FindingState(displayed, findingID)
 	if err != nil {
@@ -1014,14 +1024,6 @@ func chips(s style.Style, f draft.Finding, disposition string, general bool) []c
 	return out
 }
 
-func chipRow(s style.Style, cs []chip) string {
-	out := make([]string, 0, len(cs))
-	for _, c := range cs {
-		out = append(out, s.Chip(c.kind, c.glyph, c.text))
-	}
-	return strings.Join(out, "   ")
-}
-
 func orderedIndex(fs []draft.Finding, id string) int {
 	for i, f := range fs {
 		if f.ID == id {
@@ -1116,4 +1118,11 @@ func (m *Model) diffStyle(l diff.ViewLine) lipgloss.Style {
 		return m.styles.Removed
 	}
 	return m.styles.R.NewStyle()
+}
+
+func joinNotice(text, elsewhere string) string {
+	if elsewhere == "" {
+		return text
+	}
+	return text + "; " + elsewhere
 }
