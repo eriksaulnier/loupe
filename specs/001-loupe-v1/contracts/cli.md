@@ -182,7 +182,7 @@ The confirmation is where the human writes the review's opening prose, in the bo
 | `LOUPE_HOME` | Data root |
 | `LOUPE_RUN` | Default run reference |
 | `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for the lock, default 3000, max 60000; a value that is not an integer from 0 to 60000 refuses with `usage` (exit 2) (ruled 2026-09-13) |
-| `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Honored for color and glyph selection; `TERM=dumb` refuses `review` and `publish` with `tty` |
+| `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Honored for color and glyph selection; `TERM=dumb` refuses `review` and `publish` with `tty`, but not `publish --unattended` |
 | `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; default `unicode` under a UTF-8 locale; `nerd` is opt-in and needs a Nerd Font in the terminal; a non-UTF-8 locale forces `ascii` whatever is set; any other value refuses with `usage` (exit 2) |
 
 Human output wraps to the terminal width (80 columns when stdout is not a terminal), and `--version` prints loupe's own version, as `loupeVersion` under `--json`.

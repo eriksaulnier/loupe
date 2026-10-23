@@ -65,5 +65,5 @@ Environment
   LOUPE_HOME                    data root (default $XDG_DATA_HOME/loupe, else ~/.local/share/loupe)
   LOUPE_RUN                     default run reference
   LOUPE_LOCK_TIMEOUT_MS         how long to wait for the run lock (default 3000, max 60000)
-  NO_COLOR, TERM, LANG/LC_ALL   honored for color and glyph selection; TERM=dumb refuses review and publish
+  NO_COLOR, TERM, LANG/LC_ALL   honored for color and glyph selection; TERM=dumb refuses review and publish, not publish --unattended
   LOUPE_ICONS                   ascii, unicode (the default) or nerd, which needs a Nerd Font

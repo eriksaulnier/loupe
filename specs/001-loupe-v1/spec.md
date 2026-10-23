@@ -206,7 +206,7 @@ A Claude Code user installs the loupe plugin. Typing the slash command with a pu
 - The head is force-pushed back to an older round's commit and that round publishes, by `--retry-unknown` after a newer round published or at the same time as another round at that commit, or its `--retry-unknown` is definitely rejected after a newer round counted its attempt, so the next round to publish reuses that newer round's number: two reviews MAY name the same round. Accepted rather than refused, since it needs the force-push and numbering never blocks a publish.
 - GitHub rejects the review because the viewer already has a pending review: the refusal says to submit or discard it on GitHub first.
 - The network fails after the request was sent: the attempt is kept as unknown and reconciled on the next publish.
-- The terminal reports itself as dumb, or standard input cannot be put in raw mode: review and publish refuse with `tty` (`specs/037-remove-plain-mode`). A window too small for the interface is `specs/036`'s.
+- The terminal reports itself as dumb, or standard input cannot be put in raw mode: review and publish refuse with `tty`, but not `publish --unattended` (`specs/037-remove-plain-mode`). A window too small for the interface is `specs/036`'s.
 - The locale is not UTF-8: glyphs fall back to plain ASCII.
 - Finding text contains control or bidirectional override characters: they are escaped in every preview and never alter what is sent.
 - A finding title holds a backtick code span or a backslash escape: the span renders as `<code>` and the escape shows its punctuation alone, in the review body and in an inline comment. Other Markdown in the title shows literally.
