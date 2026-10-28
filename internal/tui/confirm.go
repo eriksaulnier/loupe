@@ -7,12 +7,12 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
+	uv "github.com/charmbracelet/ultraviolet"
 	"golang.org/x/term"
 
 	"github.com/eriksaulnier/loupe/internal/markdown"
@@ -73,9 +73,10 @@ type confirmation struct {
 func newConfirmation(preview publish.Preview, title ConfirmHeading, message string) confirmation {
 	input := textarea.New()
 	input.ShowLineNumbers, input.MaxHeight = false, 0
-	input.FocusedStyle, input.BlurredStyle = textarea.Style{}, textarea.Style{}
-	input.Cursor.SetMode(cursor.CursorStatic)
-	c := confirmation{preview: preview, shown: preview, title: title, scroll: viewport.New(80, 10), message: input}
+	input.DynamicHeight, input.MinHeight = true, minMessageRows
+	input.SetStyles(textarea.Styles{})
+
+	c := confirmation{preview: preview, shown: preview, title: title, scroll: viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)), message: input}
 	// Only publish.Run builds a preview and it always carries a closure; a fixture without one gets no input.
 	if preview.Compose == nil {
 		return c
@@ -139,22 +140,22 @@ func ConfirmTitle(ref, action, inline string, comments int) ConfirmHeading {
 // key reports whether the human answered, and the command the message input asked for. y confirms, and so does p when
 // there is a message input. Every key other than scrolling, the toggles, the input and a p with no input is an answer,
 // so a stray key can never send.
-func (c *confirmation) key(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
+func (c *confirmation) key(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	c.sync(m)
 	if c.typing {
-		switch msg.Type {
+		switch msg.String() {
 		// ctrl+c cancels from the input too; the review program hands the confirmation every key for that reason.
-		case tea.KeyCtrlC:
+		case "ctrl+c":
 			return true, nil
-		case tea.KeyEsc, tea.KeyTab:
+		case "esc", "tab":
 			c.blur()
 			return false, nil
 		// The findings are what the message is about, so they stay readable while it is written. The arrows belong
 		// to the text; these two are the keys a textarea has no use for.
-		case tea.KeyPgUp:
+		case "pgup":
 			c.scroll.PageUp()
 			return false, nil
-		case tea.KeyPgDown:
+		case "pgdown":
 			c.scroll.PageDown()
 			return false, nil
 		}
@@ -220,15 +221,9 @@ func (c *confirmation) blur() {
 
 // typeMessage routes a keystroke into the input and rebuilds the review around what it now says, so the payload and
 // any refusal on screen are the ones publication would produce.
-func (c *confirmation) typeMessage(msg tea.KeyMsg) tea.Cmd {
-	if msg.Type == tea.KeyRunes {
-		// A pasted carriage return is a line break like any other; a tab would render as a jump nothing typed.
-		msg.Runes = []rune(strings.NewReplacer("\r\n", "\n", "\r", "\n", "\t", " ").Replace(string(msg.Runes)))
-	}
+func (c *confirmation) typeMessage(msg tea.Msg) tea.Cmd {
+	msg, _ = normalizeInput(msg, "\n")
 	before := c.value()
-	// Room for every row this key could add before it is typed: the textarea scrolls itself to keep the cursor in
-	// view and never scrolls back, so a height that grows only afterwards leaves the first rows hidden for good.
-	c.message.SetHeight(c.message.Height() + len(msg.Runes) + 1)
 	var cmd tea.Cmd
 	c.message, cmd = c.message.Update(msg)
 	if c.value() != before {
@@ -271,21 +266,6 @@ func displayBody(body string) string {
 	return render.AnchorsAsNotes(render.RecordAsNote(render.PillsAsWords(markdown.OpenDetails(body))))
 }
 
-// messageRows is how many rows the input's text takes. The textarea pads its view out to the height it was given and
-// never reports the text's own height, but it asks its prompt function for one row at a time, the text's rows first
-// and the padding after, so counting the calls gives the count. The prompt's width is part of the wrapping, so the
-// counting prompt keeps it.
-func (c *confirmation) messageRows(promptWidth int) int {
-	rows := 0
-	c.message.SetPromptFunc(promptWidth, func(int) string {
-		rows++
-		return ""
-	})
-	c.message.SetHeight(1)
-	_ = c.message.View()
-	return max(minMessageRows, rows-1)
-}
-
 // minMessageRows keeps the box the shape of somewhere to write a paragraph. A frame around one row reads as a
 // field for a word, and the opening this is for is a sentence or two.
 const minMessageRows = 4
@@ -307,7 +287,7 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	if !c.typing {
 		kind, hint, way = style.Dim, messageHintBlurred, messageWayBlurred
 	}
-	tint := m.styles.R.NewStyle()
+	tint := m.styles.NewStyle()
 	if c.typing {
 		tint = m.styles.Selected
 	}
@@ -315,9 +295,11 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	// own, and a background wrapped around them would end at the first one. Focus and Blur are what point the
 	// textarea at one style set or the other, and they are called again here because Update copies the model and
 	// leaves that pointer in the copy it was made from.
-	c.message.FocusedStyle.Text, c.message.FocusedStyle.CursorLine = tint, tint
-	c.message.BlurredStyle.Text, c.message.BlurredStyle.CursorLine = tint, tint
-	c.message.FocusedStyle.EndOfBuffer, c.message.BlurredStyle.EndOfBuffer = tint, tint
+	styles := c.message.Styles()
+	styles.Focused.Text, styles.Focused.CursorLine = tint, tint
+	styles.Blurred.Text, styles.Blurred.CursorLine = tint, tint
+	styles.Focused.EndOfBuffer, styles.Blurred.EndOfBuffer = tint, tint
+	c.message.SetStyles(styles)
 	if c.typing {
 		c.message.Focus()
 	} else {
@@ -328,12 +310,10 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	const pad = 1
 	boxWidth := width - 1
 	inner := max(2*pad+1, boxWidth-2)
-	prompt := func(int) string { return tint.Render(strings.Repeat(" ", pad)) }
+	prompt := func(textarea.PromptInfo) string { return tint.Render(strings.Repeat(" ", pad)) }
 	c.message.SetPromptFunc(pad, prompt)
 	c.message.SetWidth(inner - pad)
-	c.message.SetHeight(c.messageRows(pad))
-	c.message.SetPromptFunc(pad, prompt)
-	rows := strings.Split(c.message.View(), "\n")
+	rows := strings.Split(m.styles.Render(c.message.View()), "\n")
 	// The hint is written over the empty row rather than given to the textarea as a placeholder: the placeholder
 	// path fills no row past its own text, and what pads the rest is the textarea's inner viewport, which takes no
 	// style, so a tinted box came out tinted in patches.
@@ -355,30 +335,31 @@ func (c *confirmation) messageView(m *Model, width int) string {
 // sync lays the content out for the current window before a scroll or a render, since both depend on its line count,
 // and keeps the input on screen while it is being typed into.
 func (c *confirmation) sync(m *Model) {
-	c.scroll.Width, c.scroll.Height = m.width, m.bodyHeight(confirmHeaderLines)
+	c.scroll.SetWidth(m.width)
+	c.scroll.SetHeight(m.bodyHeight(confirmHeaderLines))
 	fill(&c.scroll, c.content(m))
 	if !c.follow {
 		return
 	}
 	c.follow = false
-	if c.inputTop < c.scroll.YOffset {
+	if c.inputTop < c.scroll.YOffset() {
 		c.scroll.SetYOffset(c.inputTop)
 	}
-	if bottom := c.inputTop + c.inputRows; bottom > c.scroll.YOffset+c.scroll.Height {
-		c.scroll.SetYOffset(bottom - c.scroll.Height)
+	if bottom := c.inputTop + c.inputRows; bottom > c.scroll.YOffset()+c.scroll.Height() {
+		c.scroll.SetYOffset(bottom - c.scroll.Height())
 	}
 }
 
 func (c *confirmation) position(m *Model) string {
 	total := c.scroll.TotalLineCount()
-	return fmt.Sprintf("lines %d%s%d of %d", min(c.scroll.YOffset+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset+c.scroll.Height, total), total)
+	return fmt.Sprintf("lines %d%s%d of %d", min(c.scroll.YOffset()+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset()+c.scroll.Height(), total), total)
 }
 
 // shortPosition is the position for a window too narrow to name the action, the moved head and the long position
 // together.
 func (c *confirmation) shortPosition(m *Model) string {
 	total := c.scroll.TotalLineCount()
-	return fmt.Sprintf("%d%s%d/%d", min(c.scroll.YOffset+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset+c.scroll.Height, total), total)
+	return fmt.Sprintf("%d%s%d/%d", min(c.scroll.YOffset()+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset()+c.scroll.Height(), total), total)
 }
 
 // header carries what will be sent in the warn color, the only screen that can publish. The action and a moved head
@@ -580,13 +561,22 @@ func (c *ConfirmModel) Confirmed() bool { return c.confirm.yes }
 // Message is the opening prose the human typed, empty when they typed none.
 func (c *ConfirmModel) Message() string { return c.confirm.value() }
 
-func (c *ConfirmModel) Init() tea.Cmd { return nil }
+func (c *ConfirmModel) Init() tea.Cmd { return tea.RequestBackgroundColor }
 
 func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		_, cmd := c.shell.update(msg)
+		return c, cmd
+	case tea.PasteMsg:
+		if c.confirm.typing && !tooSmall(c.shell.width, c.shell.height) {
+			cmd := c.confirm.typeMessage(msg)
+			c.confirm.sync(c.shell)
+			return c, cmd
+		}
 	case tea.WindowSizeMsg:
 		c.shell.width, c.shell.height = msg.Width, msg.Height
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if tooSmall(c.shell.width, c.shell.height) {
 			var ok bool
 			if msg, ok = smallKey(msg); !ok {
@@ -599,51 +589,67 @@ func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return c, cmd
 	case endOfInput:
+		c.shell.err = msg.err
 		return c, tea.Quit
 	}
 	return c, nil
 }
 
 // endOfInput cancels a confirmation whose input ran out, since no y can follow.
-type endOfInput struct{}
+type endOfInput struct{ err error }
 
-// eofReader tells the program its input ended, because bubbletea drops io.EOF and would wait for a key forever.
-type eofReader struct {
-	r    io.Reader
-	once sync.Once
-	send func()
-}
-
-func (e *eofReader) Read(p []byte) (int, error) {
-	n, err := e.r.Read(p)
-	if errors.Is(err, io.EOF) {
-		e.once.Do(e.send)
-	}
-	return n, err
-}
-
-func (c *ConfirmModel) View() string {
-	if tooSmall(c.shell.width, c.shell.height) {
-		return c.shell.smallView()
-	}
-	return c.shell.confirmView(c.confirm)
-}
+func (c *ConfirmModel) View() tea.View { return c.shell.View() }
 
 // Confirm runs the confirmation view full screen for loupe publish. title is what the header names, which loupe
 // publish builds from the run and the flags it was given. screen is nil except in a test, as Config.Screen is.
 func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title ConfirmHeading, screen *Screen) func(publish.Preview) (publish.Confirmation, error) {
 	return func(preview publish.Preview) (publish.Confirmation, error) {
-		var program *tea.Program
 		input := in
-		// A terminal is passed through as a file so bubbletea can make it raw; a terminal that hangs up gets SIGHUP.
-		if f, ok := in.(*os.File); !ok || !term.IsTerminal(int(f.Fd())) {
-			input = &eofReader{r: in, send: func() { program.Send(endOfInput{}) }}
+		f, file := in.(*os.File)
+		piped := !file || !term.IsTerminal(int(f.Fd()))
+		if piped {
+			input = nil
 		}
 		m := NewConfirmModel(preview, getenv, out, title)
 		if screen != nil {
 			m.shell.width, m.shell.height = screen.Width, screen.Height
 		}
-		program = tea.NewProgram(m, tea.WithInput(input), tea.WithOutput(out), tea.WithAltScreen())
+		opts := []tea.ProgramOption{tea.WithInput(input), tea.WithOutput(out), tea.WithWindowSize(m.shell.width, m.shell.height)}
+		if screen != nil {
+			opts = append(opts, tea.WithWindowSize(screen.Width, screen.Height), tea.WithColorProfile(colorprofile.ASCII), tea.WithEnvironment([]string{"TERM=xterm-256color"}))
+		}
+		program := tea.NewProgram(m, opts...)
+		if piped {
+			reader, err := uv.NewCancelReader(in)
+			if err != nil {
+				return publish.Confirmation{}, fmt.Errorf("read confirmation input: %w", err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			defer reader.Close() //nolint:errcheck
+			defer reader.Cancel()
+			events := make(chan uv.Event)
+			ended := make(chan error, 1)
+			go func() {
+				err := uv.NewTerminalReader(reader, getenv("TERM")).StreamEvents(ctx, events)
+				ended <- err
+				close(events)
+			}()
+			go func() {
+				// EOF follows decoded events so it cannot overtake a buffered answer.
+				for event := range events {
+					switch event := event.(type) {
+					case uv.KeyPressEvent:
+						program.Send(tea.KeyPressMsg(event))
+					case uv.PasteEvent:
+						program.Send(tea.PasteMsg(event))
+					case uv.BackgroundColorEvent:
+						program.Send(tea.BackgroundColorMsg(event))
+					}
+				}
+				program.Send(endOfInput{err: <-ended})
+			}()
+		}
 		final, err := program.Run()
 		if err != nil {
 			return publish.Confirmation{}, fmt.Errorf("confirmation view: %w", err)
@@ -651,6 +657,9 @@ func Confirm(in io.Reader, out io.Writer, getenv func(string) string, title Conf
 		m, ok := final.(*ConfirmModel)
 		if !ok {
 			return publish.Confirmation{}, fmt.Errorf("confirmation view ended with an unexpected model %T", final)
+		}
+		if m.shell.err != nil {
+			return publish.Confirmation{}, fmt.Errorf("read confirmation input: %w", m.shell.err)
 		}
 		return publish.Confirmation{Publish: m.Confirmed(), Message: m.Message()}, nil
 	}
@@ -706,7 +715,7 @@ func (m *Model) startPublish() tea.Cmd {
 	}
 }
 
-func (m *Model) updateConfirm(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updateConfirm(msg tea.KeyPressMsg) tea.Cmd {
 	answered, cmd := m.confirm.key(m, msg)
 	if !answered {
 		return cmd

@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/style"
@@ -21,7 +21,7 @@ func (m *Model) canOpen() bool {
 
 // While the browser opens, any key still quits. After a failed open the warning stays until the next key, so the
 // human can still copy the link.
-func (m *Model) updatePublished(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updatePublished(msg tea.KeyPressMsg) tea.Cmd {
 	if msg.String() != "o" || !m.canOpen() || m.browsing {
 		return tea.Quit
 	}
@@ -51,7 +51,7 @@ func (m *Model) publishedView() string {
 		chunks, text = append(chunks, text[:n]), text[n:]
 	}
 	row := func(chunk string) string { return "  " + m.styles.Accent.Render(chunk) }
-	body := []string{"", "  " + m.styles.Good.Bold(true).Render(strings.TrimSpace(m.glyphs.Published+" Published")), ""}
+	body := []string{"", "  " + m.styles.Emphasis(m.styles.Good).Render(strings.TrimSpace(m.glyphs.Published+" Published")), ""}
 	for _, c := range chunks {
 		body = append(body, row(c))
 	}

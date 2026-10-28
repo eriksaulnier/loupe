@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/style"
@@ -38,7 +38,7 @@ func colorStyle(t *testing.T, w io.Writer) style.Style {
 		}
 		return ""
 	})
-	s.R.SetColorProfile(termenv.ANSI)
+	s.SetColorProfile(colorprofile.ANSI)
 	s.Color = true
 	return s
 }

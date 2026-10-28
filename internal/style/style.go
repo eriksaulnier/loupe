@@ -4,16 +4,18 @@ package style
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/eriksaulnier/loupe/internal/severity"
 )
@@ -198,29 +200,28 @@ func (g GlyphSet) Label(label string) string {
 // Content is the width prose and rows wrap at: the terminal, capped where a line stops being readable.
 func Content(width int) int { return min(width, ContentWidth) }
 
-// The palette is Catppuccin: Mocha on a dark background, Latte on a light one. Every color is named by its role in
-// the Catppuccin scheme so the two columns can be checked against it.
-func catppuccin(mocha, latte string) lipgloss.AdaptiveColor {
-	return lipgloss.AdaptiveColor{Dark: mocha, Light: latte}
+// The Catppuccin palette preserves the v1 renderer's emitted RGB and indexed values, including its rounding.
+type swatch struct {
+	rgb           string
+	ansi, ansi256 uint8
 }
 
-var (
-	colorGreen    = catppuccin("#a6e3a1", "#40a02b")
-	colorYellow   = catppuccin("#f9e2af", "#df8e1d")
-	colorPeach    = catppuccin("#fab387", "#fe640b")
-	colorRed      = catppuccin("#f38ba8", "#d20f39")
-	colorBlue     = catppuccin("#89b4fa", "#1e66f5")
-	colorOverlay1 = catppuccin("#7f849c", "#8c8fa1")
-	colorSurface0 = catppuccin("#313244", "#ccd0da")
-	colorAnchor   = catppuccin("#3b3a2e", "#f4e9c8")
-)
+func (s Style) catppuccin(mocha, latte swatch) color.Color {
+	c := latte
+	if s.Dark {
+		c = mocha
+	}
+	// Pin the existing palette because converter updates can change nearest-color matches.
+	return lipgloss.Complete(s.profile)(ansi.BasicColor(c.ansi), ansi.IndexedColor(c.ansi256), lipgloss.Color(c.rgb))
+}
 
 // Style renders text for one output. Color is false under NO_COLOR or when the output is not a terminal; then no
 // escape sequence is emitted at all and the glyphs and words carry every state.
 type Style struct {
-	R      *lipgloss.Renderer
-	Glyphs GlyphSet
-	Color  bool
+	profile colorprofile.Profile
+	Dark    bool
+	Glyphs  GlyphSet
+	Color   bool
 
 	Bold, Dim, Accent, Good, Warn, Bad, Note, Head, Cursor lipgloss.Style
 	Caution                                                lipgloss.Style
@@ -228,35 +229,76 @@ type Style struct {
 	Added, Removed                                         lipgloss.Style
 }
 
-// New builds a Style drawing on out. A renderer on a writer that is not a terminal detects no color support and
-// emits nothing; NO_COLOR forces the same by rendering to io.Discard.
+// New builds styles for one output and its environment.
 func New(out io.Writer, getenv func(string) string) Style {
-	color := getenv("NO_COLOR") == ""
-	if !color {
-		out = io.Discard
+	var env []string
+	noColor := getenv("NO_COLOR") != ""
+	for _, key := range []string{"TERM", "COLORTERM", "TERM_PROGRAM", "TMUX", "CLICOLOR", "CLICOLOR_FORCE", "NO_COLOR"} {
+		value := getenv(key)
+		if key == "CLICOLOR_FORCE" && noColor {
+			continue
+		}
+		// loupe treats every nonempty NO_COLOR value as disabling all escapes.
+		if key == "NO_COLOR" && value != "" {
+			value = "1"
+		}
+		if value != "" {
+			env = append(env, key+"="+value)
+		}
 	}
-	r := lipgloss.NewRenderer(out)
-	if r.ColorProfile() == termenv.Ascii {
-		color = false
+	s := Style{Glyphs: Glyphs(getenv), Dark: true}
+	if parts := strings.Split(getenv("COLORFGBG"), ";"); len(parts) > 1 {
+		if bg, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+			s.Dark = bg < 7 || bg == 8
+		}
 	}
-	s := Style{R: r, Glyphs: Glyphs(getenv), Color: color}
-	s.Bold = r.NewStyle().Bold(true)
-	// Dim is a color rather than the faint attribute, which Windows Terminal draws unevenly.
-	s.Dim = r.NewStyle().Foreground(colorOverlay1)
-	s.Accent = r.NewStyle().Foreground(colorBlue)
-	s.Good = r.NewStyle().Foreground(colorGreen)
-	s.Warn = r.NewStyle().Foreground(colorYellow)
-	s.Bad = r.NewStyle().Foreground(colorRed)
-	s.Caution = r.NewStyle().Foreground(colorPeach)
-	s.Note = r.NewStyle().Foreground(colorYellow)
-	s.Head = r.NewStyle().Bold(true)
-	// The cursor is the accent, so selection adds no color of its own.
-	s.Cursor = s.Accent
-	s.Selected = r.NewStyle().Background(colorSurface0)
-	s.Anchor = r.NewStyle().Bold(true).Background(colorAnchor)
-	s.Added = s.Good
-	s.Removed = s.Bad
+	s.SetColorProfile(colorprofile.Detect(out, env))
 	return s
+}
+
+// SetColorProfile rebuilds the palette for an output capability, including injected test outputs.
+func (s *Style) SetColorProfile(profile colorprofile.Profile) {
+	s.profile = profile
+	s.Color = profile > colorprofile.ASCII
+	s.SetDarkBackground(s.Dark)
+}
+
+// SetDarkBackground applies one background result to every palette color.
+func (s *Style) SetDarkBackground(dark bool) {
+	s.Dark = dark
+	s.Bold = s.NewStyle().Bold(s.Color)
+	// Dim uses a color because Windows Terminal draws the faint attribute unevenly.
+	s.Dim = s.NewStyle().Foreground(s.catppuccin(swatch{"#7f839c", 12, 103}, swatch{"#8c8fa1", 12, 103}))
+	s.Accent = s.NewStyle().Foreground(s.catppuccin(swatch{"#89b3fa", 12, 111}, swatch{"#1e66f5", 12, 27}))
+	s.Good = s.NewStyle().Foreground(s.catppuccin(swatch{"#a6e3a1", 10, 151}, swatch{"#40a02b", 2, 70}))
+	s.Warn = s.NewStyle().Foreground(s.catppuccin(swatch{"#f9e2af", 11, 223}, swatch{"#df8e1d", 9, 172}))
+	s.Bad = s.NewStyle().Foreground(s.catppuccin(swatch{"#f38ba8", 13, 211}, swatch{"#d20f38", 0, 232}))
+	s.Caution = s.NewStyle().Foreground(s.catppuccin(swatch{"#fab387", 9, 216}, swatch{"#fe640b", 9, 202}))
+	s.Note = s.Warn
+	s.Head = s.Bold
+	s.Cursor = s.Accent
+	s.Selected = s.NewStyle().Background(s.catppuccin(swatch{"#303244", 8, 59}, swatch{"#ccd0da", 7, 188}))
+	s.Anchor = s.NewStyle().Bold(s.Color).Background(s.catppuccin(swatch{"#3b3a2e", 3, 58}, swatch{"#f3e9c8", 9, 224}))
+	s.Added, s.Removed = s.Good, s.Bad
+}
+
+// NewStyle creates an unadorned layout style.
+func (s Style) NewStyle() lipgloss.Style {
+	return lipgloss.NewStyle()
+}
+
+// Emphasis applies bold only when the output supports styling.
+func (s Style) Emphasis(st lipgloss.Style) lipgloss.Style { return st.Bold(s.Color) }
+
+// Render adapts component output to the same profile as the palette.
+func (s Style) Render(text string) string {
+	if !s.Color {
+		return ansi.Strip(text)
+	}
+	var out strings.Builder
+	w := colorprofile.Writer{Forward: &out, Profile: s.profile}
+	_, _ = w.WriteString(text)
+	return out.String()
 }
 
 // Of returns the foreground style for a kind.
@@ -277,7 +319,7 @@ func (s Style) Of(k Kind) lipgloss.Style {
 	case Caution:
 		return s.Caution
 	}
-	return s.R.NewStyle()
+	return s.NewStyle()
 }
 
 // severityKinds paints a finding's severity by how bad it is, most severe first, so no surface names a color. The
@@ -392,7 +434,7 @@ func (s Style) Header(parts []HeaderPart, right string, width int) string {
 		}
 		st := s.Of(p.Kind)
 		if p.Bold {
-			st = st.Bold(true)
+			st = s.Emphasis(st)
 		}
 		b.WriteString(st.Render(p.Text))
 	}
@@ -472,7 +514,7 @@ func (s Style) Footer(hints []Hint, width int) (string, bool) {
 			segs = append(segs, s.hint(h, lv.next))
 		}
 		if len(decisions) > 0 {
-			segs[slices.Index(segs, "")] = s.Accent.Bold(true).Render(strings.Join(decisions, " "))
+			segs[slices.Index(segs, "")] = s.Emphasis(s.Accent).Render(strings.Join(decisions, " "))
 		}
 		gap := strings.Repeat(" ", lv.gap)
 		line = strings.Join(segs, gap)
@@ -522,7 +564,7 @@ func (s Style) hint(h Hint, next bool) string {
 	if h.Key != "" {
 		key := s.Of(keyKind)
 		if keyKind != Dim {
-			key = key.Bold(true)
+			key = s.Emphasis(key)
 		}
 		out = key.Render(h.Key) + " " + out
 	}

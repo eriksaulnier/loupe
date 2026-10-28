@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/eriksaulnier/loupe/internal/severity"
 )
@@ -343,7 +343,7 @@ func TestWrapBreaksTokensWiderThanTheLimit(t *testing.T) {
 // The four severity words must be four distinguishable colors, not four roles that collapse onto two.
 func TestSeverityRampIsFourDistinctColors(t *testing.T) {
 	s := New(io.Discard, func(string) string { return "" })
-	s.R.SetColorProfile(termenv.TrueColor)
+	s.SetColorProfile(colorprofile.TrueColor)
 	seen := map[string]string{}
 	for _, word := range severity.Order {
 		seen[s.Of(Severity(word)).Render("x")] = word
@@ -394,5 +394,29 @@ func TestLinkWrapsOnlyASafeURLAndOnlyWithColor(t *testing.T) {
 	plain := New(io.Discard, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
 	if got := plain.Link(url, "the review"); got != "the review" {
 		t.Errorf("NO_COLOR Link = %q, want no escape", got)
+	}
+}
+
+func TestNoColorValuesOverrideForcedColor(t *testing.T) {
+	for _, value := range []string{"1", "true", "yes", "0", "false"} {
+		s := New(io.Discard, env(map[string]string{"NO_COLOR": value, "CLICOLOR_FORCE": "1", "TERM": "xterm-256color"}))
+		if s.Color || s.Emphasis(s.Bad).Render("error:") != "error:" {
+			t.Errorf("NO_COLOR=%q retained styling", value)
+		}
+	}
+}
+
+func TestBackgroundSelectsOnePalette(t *testing.T) {
+	s := New(io.Discard, env(map[string]string{"COLORFGBG": "0;15"}))
+	s.SetColorProfile(colorprofile.TrueColor)
+	light := s.Bad.Render("x")
+	s.SetDarkBackground(true)
+	dark := s.Bad.Render("x")
+	if !strings.Contains(light, "210;15;56") || !strings.Contains(dark, "243;139;168") {
+		t.Fatalf("palette: light %q, dark %q", light, dark)
+	}
+	s.SetColorProfile(colorprofile.ANSI)
+	if got := s.Bad.Render("x"); !strings.Contains(got, "95m") {
+		t.Fatalf("ANSI critical color: %q", got)
 	}
 }

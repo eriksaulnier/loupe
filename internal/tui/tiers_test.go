@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/style"
@@ -60,7 +60,7 @@ var screens = []screen{
 	{"confirmation", func(m *Model) {
 		showConfirmation(m)
 		// The message input opens focused; the confirmation's own keys are live once it is blurred.
-		m.confirm.key(m, tea.KeyMsg{Type: tea.KeyEsc})
+		m.confirm.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
 	}, []string{"y/p", "publish", "this", "review"}},
 	{"confirmation message", showConfirmation, []string{"esc", "done", "enter", "new", "line", "ctrl+u", "clear"}},
 	{"help", func(m *Model) { mustOpen(m, "f-001"); m.help = true }, []string{"?", "close", "help"}},
@@ -68,12 +68,12 @@ var screens = []screen{
 		// The longest label a finding can carry, so the row has to wrap at 60 columns.
 		m.draft.Findings[0].Label = strings.Repeat("perf-nit.", 4) + "abcd"
 		mustOpen(m, "f-001")
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+		m.Update(runes("e"))
 	}, []string{"enter", "save", "esc", "cancel"}},
 	{"long note", func(m *Model) {
 		mustOpen(m, "f-001")
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat("a note that runs on ", 12))})
+		m.Update(runes("s"))
+		m.Update(runes(strings.Repeat("a note that runs on ", 12)))
 	}, []string{"enter", "send", "esc", "cancel"}},
 }
 
@@ -104,12 +104,12 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 			for _, sc := range screens {
 				m := modelOf(t, dir, tier.env, width, 24)
 				if tier.env["NO_COLOR"] == "" {
-					m.styles.R.SetColorProfile(termenv.TrueColor)
+					m.styles.SetColorProfile(colorprofile.TrueColor)
 					m.styles.Color = true
 				}
 				sc.show(m)
 				where := fmt.Sprintf("%s at %d: %s", tier.name, width, sc.name)
-				lines := strings.Split(m.View(), "\n")
+				lines := strings.Split(m.View().Content, "\n")
 				if len(lines) != 24 {
 					t.Errorf("%s: %d lines, want 24", where, len(lines))
 				}
@@ -171,13 +171,13 @@ func TestScrolledViewsRefillWhenTheWindowGrows(t *testing.T) {
 		m := modelOf(t, dir, testEnv, 60, 12)
 		sc.show(m)
 		for range 60 {
-			m.Update(tea.KeyMsg{Type: tea.KeyDown})
+			m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 		}
 		m.Update(tea.WindowSizeMsg{Width: 60, Height: 45})
 		m.View()
 		for name, past := range map[string]bool{"body": m.body.PastBottom(), "file": m.file.PastBottom(), "confirmation": m.confirm.scroll.PastBottom()} {
 			if past {
-				t.Errorf("%s: the %s stays scrolled past its end after the window grows:\n%s", sc.name, name, m.View())
+				t.Errorf("%s: the %s stays scrolled past its end after the window grows:\n%s", sc.name, name, m.View().Content)
 			}
 		}
 	}
@@ -189,10 +189,10 @@ func TestDefaultTierHasNoPrivateUseGlyphs(t *testing.T) {
 	withOpenNote(t, dir)
 	for _, sc := range screens {
 		m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
-		m.styles.R.SetColorProfile(termenv.TrueColor)
+		m.styles.SetColorProfile(colorprofile.TrueColor)
 		m.styles.Color = true
 		sc.show(m)
-		for _, r := range m.View() {
+		for _, r := range m.View().Content {
 			if r >= 0xE000 && r <= 0xF8FF {
 				t.Errorf("%s: private-use rune %U in the default tier", sc.name, r)
 				break
@@ -204,9 +204,9 @@ func TestDefaultTierHasNoPrivateUseGlyphs(t *testing.T) {
 func TestNerdTierDrawsIcons(t *testing.T) {
 	dir := newFixture(t)
 	m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8", style.IconsEnv: "nerd"}, 100, 30)
-	m.styles.R.SetColorProfile(termenv.TrueColor)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
 	m.styles.Color = true
-	list := m.View()
+	list := m.View().Content
 	for name, icon := range map[string]string{"pull request": "\uf407 acme/widgets#42", "pending": "\uf10c", "blocking": "\uf46e", "cursor": "\uf054"} {
 		if !strings.Contains(list, icon) {
 			t.Errorf("list lacks the %s icon %q:\n%s", name, icon, list)
@@ -221,13 +221,13 @@ func TestNerdTierDrawsIcons(t *testing.T) {
 	if err := m.openFinding("f-002"); err != nil {
 		t.Fatal(err)
 	}
-	detail := m.View()
+	detail := m.View().Content
 	if !strings.Contains(detail, "\uf0ad Suggested fix") || !strings.Contains(detail, "\uf016 multi.txt:21") {
 		t.Errorf("detail lacks its fix or file icon:\n%s", detail)
 	}
 
 	plain := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8", style.IconsEnv: "nerd"}, 100, 30)
-	if view := plain.View(); strings.ContainsRune(view, '\x1b') || !strings.Contains(view, "\uf10c") {
+	if view := plain.View().Content; strings.ContainsRune(view, '\x1b') || !strings.Contains(view, "\uf10c") {
 		t.Errorf("NO_COLOR nerd tier must keep the icons and emit no escape:\n%q", view)
 	}
 }

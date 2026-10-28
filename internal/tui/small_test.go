@@ -7,22 +7,21 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 )
 
-func keyOf(s string) tea.KeyMsg {
+func keyOf(s string) tea.KeyPressMsg {
 	switch s {
 	case "enter":
-		return tea.KeyMsg{Type: tea.KeyEnter}
+		return tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "tab":
-		return tea.KeyMsg{Type: tea.KeyTab}
+		return tea.KeyPressMsg{Code: tea.KeyTab}
 	case "ctrl+c":
-		return tea.KeyMsg{Type: tea.KeyCtrlC}
+		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	}
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+	return runes(s)
 }
 
 func isQuit(cmd tea.Cmd) bool {
@@ -45,7 +44,7 @@ func assertTooSmall(t *testing.T, view string, width, height int) {
 func TestTooSmallWindowKeepsTheListUntilItGrows(t *testing.T) {
 	dir := newFixture(t)
 	m := modelOf(t, dir, testEnv, 40, 10)
-	assertTooSmall(t, m.View(), 40, 10)
+	assertTooSmall(t, m.View().Content, 40, 10)
 	cursor, collapsed := m.cursor, m.summaryCollapsed
 	for _, k := range []string{"j", "tab", "enter", "p", "?"} {
 		if _, cmd := m.Update(keyOf(k)); isQuit(cmd) {
@@ -55,28 +54,28 @@ func TestTooSmallWindowKeepsTheListUntilItGrows(t *testing.T) {
 	if m.view != viewList || m.cursor != cursor || m.summaryCollapsed != collapsed || m.help {
 		t.Fatalf("keys acted under the too-small screen: view %v, cursor %d, collapsed %v, help %v", m.view, m.cursor, m.summaryCollapsed, m.help)
 	}
-	assertTooSmall(t, m.View(), 40, 10)
+	assertTooSmall(t, m.View().Content, 40, 10)
 
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	if view := m.View(); strings.Contains(view, "too small") || !strings.Contains(view, "Title one") {
+	if view := m.View().Content; strings.Contains(view, "too small") || !strings.Contains(view, "Title one") {
 		t.Fatalf("growing the window does not bring the list back:\n%s", view)
 	}
 }
 
 func TestTooSmallAtExactlyTheMinimumIsNot(t *testing.T) {
 	m := modelOf(t, newFixture(t), testEnv, 60, 12)
-	if view := m.View(); strings.Contains(view, "too small") {
+	if view := m.View().Content; strings.Contains(view, "too small") {
 		t.Fatalf("60 by 12 is the supported minimum:\n%s", view)
 	}
 	for _, size := range [][2]int{{59, 40}, {100, 11}} {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-		assertTooSmall(t, m.View(), size[0], size[1])
+		assertTooSmall(t, m.View().Content, size[0], size[1])
 	}
 }
 
 func TestTooSmallDrawsAtOneCell(t *testing.T) {
 	m := modelOf(t, newFixture(t), testEnv, 1, 1)
-	if view := m.View(); strings.Count(view, "\n") > 0 {
+	if view := m.View().Content; strings.Count(view, "\n") > 0 {
 		t.Fatalf("a one-row window draws more than one row:\n%q", view)
 	}
 }
@@ -86,7 +85,7 @@ func TestShrinkingADetailRecordsNothingAndGrowingRestoresIt(t *testing.T) {
 	m := modelOf(t, dir, testEnv, 100, 40)
 	mustOpen(m, "f-001")
 	m.Update(tea.WindowSizeMsg{Width: 50, Height: 30})
-	assertTooSmall(t, m.View(), 50, 30)
+	assertTooSmall(t, m.View().Content, 50, 30)
 	m.Update(keyOf("a"))
 	d, err := draft.Load(dir)
 	if err != nil {
@@ -96,7 +95,7 @@ func TestShrinkingADetailRecordsNothingAndGrowingRestoresIt(t *testing.T) {
 		t.Fatalf("a under the too-small screen recorded %s", got)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	if view := m.View(); m.view != viewDetail || m.openID != "f-001" || strings.Contains(view, "too small") {
+	if view := m.View().Content; m.view != viewDetail || m.openID != "f-001" || strings.Contains(view, "too small") {
 		t.Fatalf("growing the window does not bring the finding back:\n%s", view)
 	}
 }
@@ -131,16 +130,16 @@ func TestTooSmallConfirmationKeepsTheMessageAndQDeclines(t *testing.T) {
 	reachConfirmation(t, tm)
 	tm.Type("Kept words.")
 	waitFor(t, tm, "Kept words.")
-	tm.Send(tea.WindowSizeMsg{Width: 40, Height: 10})
+	resizeTestModel(tm, 40, 10)
 	waitFor(t, tm, "This window is 40 by 10")
-	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tm.Type("y")
-	tm.Send(tea.WindowSizeMsg{Width: 240, Height: 40})
+	resizeTestModel(tm, 240, 40)
 	waitFor(t, tm, "Kept words.")
-	tm.Send(tea.WindowSizeMsg{Width: 40, Height: 10})
+	resizeTestModel(tm, 40, 10)
 	waitFor(t, tm, "This window is 40 by 10")
 	tm.Type("q")
-	tm.Send(tea.WindowSizeMsg{Width: 240, Height: 40})
+	resizeTestModel(tm, 240, 40)
 	waitFor(t, tm, "publish canceled; nothing was sent")
 	tm.Type("q")
 	finalView(t, tm)
@@ -154,14 +153,14 @@ func TestTooSmallConfirmationKeepsTheMessageAndQDeclines(t *testing.T) {
 func TestTooSmallStandaloneConfirmation(t *testing.T) {
 	c := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	c.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
-	assertTooSmall(t, c.View(), 40, 10)
+	assertTooSmall(t, c.View().Content, 40, 10)
 	for _, k := range []string{"y", "p", "n", "enter"} {
 		if _, cmd := c.Update(keyOf(k)); isQuit(cmd) || c.Confirmed() {
 			t.Fatalf("%s acted under the too-small screen", k)
 		}
 	}
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	if view := c.View(); strings.Contains(view, "too small") || !strings.Contains(view, "your message") {
+	if view := c.View().Content; strings.Contains(view, "too small") || !strings.Contains(view, "your message") {
 		t.Fatalf("growing the window does not bring the confirmation back:\n%s", view)
 	}
 	c.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
@@ -176,9 +175,9 @@ func TestNarrowStartDrawsTheTooSmallScreen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(40, 20))
+	tm := newTestModel(t, m, 40, 20)
 	waitFor(t, tm, "This window is 40 by 20")
-	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 40})
+	resizeTestModel(tm, 120, 40)
 	waitFor(t, tm, "Title one")
 	tm.Type("q")
 	finalView(t, tm)

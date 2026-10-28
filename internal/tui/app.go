@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -106,8 +106,8 @@ type Model struct {
 	editBlocking bool
 	glamour      *glamour.TermRenderer
 	wrapWidth    int
-	// darkBackground is asked once before the program starts, while no one else is reading the terminal's replies.
-	darkBackground bool
+	// Only the first background response selects the palette for this program.
+	backgroundReceived bool
 
 	fileLines  []diff.ViewLine
 	fileCursor int
@@ -165,7 +165,7 @@ func New(cfg Config) (*Model, error) {
 	st := style.New(cfg.Output, cfg.Getenv)
 	note := textarea.New()
 	note.ShowLineNumbers, note.MaxHeight = false, 0
-	note.FocusedStyle, note.BlurredStyle = textarea.Style{}, textarea.Style{}
+	note.SetStyles(textarea.Styles{})
 	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
 		cfg:       cfg,
@@ -177,8 +177,8 @@ func New(cfg Config) (*Model, error) {
 		height:    24,
 		note:      note,
 		keptNotes: map[string]string{},
-		body:      viewport.New(80, 10),
-		file:      viewport.New(80, 10),
+		body:      viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		file:      viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
 		// The summary starts collapsed so the findings, not the prose, fill the first screen.
 		summaryCollapsed: true,
 	}
@@ -187,9 +187,7 @@ func New(cfg Config) (*Model, error) {
 	}
 	m.setDraft(d)
 	m.cursor = initialCursor(d, m.order)
-	if st.Color {
-		m.darkBackground = st.R.HasDarkBackground()
-	}
+
 	return m, nil
 }
 
@@ -205,10 +203,10 @@ type openedMsg struct{}
 
 func (m *Model) Init() tea.Cmd {
 	if settleOnOpen <= 0 || m.cfg.Screen != nil {
-		return m.schedulePoll()
+		return tea.Batch(tea.RequestBackgroundColor, m.schedulePoll())
 	}
 	m.opening = true
-	return tea.Batch(tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} }), m.schedulePoll())
+	return tea.Batch(tea.RequestBackgroundColor, tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} }), m.schedulePoll())
 }
 
 // pollInterval is how often the draft is re-read.
@@ -280,7 +278,7 @@ func (m *Model) reload() (string, error) {
 		return "", nil
 	}
 	changed := changeNotice(m.draft, d, "")
-	id, offset := "", m.body.YOffset
+	id, offset := "", m.body.YOffset()
 	if len(m.order) > 0 {
 		id = m.order[m.cursor].ID
 	}
@@ -359,6 +357,29 @@ func changeNotice(before, after *draft.Draft, decided string) string {
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		if !m.backgroundReceived {
+			m.backgroundReceived = true
+			m.styles.SetDarkBackground(msg.IsDark())
+			m.glamour = nil
+			if !tooSmall(m.width, m.height) {
+				return m, m.fail(m.layout())
+			}
+		}
+		return m, nil
+	case tea.PasteMsg:
+		if m.opening || tooSmall(m.width, m.height) || m.sending {
+			return m, nil
+		}
+		if m.view == viewConfirm && m.confirm.typing {
+			cmd := m.confirm.typeMessage(msg)
+			m.confirm.sync(m)
+			return m, cmd
+		}
+		if m.noting {
+			return m, m.typeNote(msg)
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		// Nothing is laid out while too small; the resize that ends it lays the view out again.
@@ -381,9 +402,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case browserMsg:
 		return m, m.browserDone(msg)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// The settle comes before the too-small screen, so a q typed for the agent's pane cannot quit review.
-		if m.opening && msg.Type != tea.KeyCtrlC {
+		if m.opening && msg.String() != "ctrl+c" {
 			return m, nil
 		}
 		if tooSmall(m.width, m.height) {
@@ -399,7 +420,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.sending {
 			return m, nil
 		}
-		if msg.Type == tea.KeyCtrlC {
+		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
 		if m.view == viewPublishing {
@@ -443,7 +464,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) View() string {
+func (m *Model) View() tea.View {
+	v := tea.NewView(m.content())
+	v.AltScreen = true
+	return v
+}
+
+func (m *Model) content() string {
 	if tooSmall(m.width, m.height) {
 		return m.smallView()
 	}
@@ -615,7 +642,7 @@ func (m *Model) frameWith(header []string, body, notice, keys string) string {
 	for _, k := range keyLines {
 		lines = append(lines, " "+k)
 	}
-	clip := m.styles.R.NewStyle().MaxWidth(m.width)
+	clip := m.styles.NewStyle().MaxWidth(m.width)
 	for i, l := range lines {
 		lines[i] = render.ForDisplayANSI(l)
 		if clipToWindow {
@@ -630,7 +657,7 @@ func (m *Model) frameWith(header []string, body, notice, keys string) string {
 // the window grows.
 func fill(v *viewport.Model, content string) {
 	v.SetContent(content)
-	v.SetYOffset(v.YOffset)
+	v.SetYOffset(v.YOffset())
 }
 
 func (m *Model) bodyHeight(headerLines int) int {
@@ -854,14 +881,14 @@ func (m *Model) helpColumn(sections []helpSection, keyWidth int) []string {
 }
 
 func (m *Model) helpRow(k helpKey, keyWidth int) string {
-	row := m.styles.Accent.Bold(true).Render(style.Pad(k.Keys, keyWidth)) + "  " + k.Verb
+	row := m.styles.Emphasis(m.styles.Accent).Render(style.Pad(k.Keys, keyWidth)) + "  " + k.Verb
 	if k.Alias != "" {
 		row += "  " + m.styles.Dim.Render("alias "+k.Alias)
 	}
 	return row
 }
 
-func (m *Model) updateHelp(msg tea.KeyMsg) {
+func (m *Model) updateHelp(msg tea.KeyPressMsg) {
 	lines, height := len(m.helpLines()), m.helpHeight()
 	last := max(0, lines-height)
 	m.helpTop = min(m.helpTop, last)
@@ -1097,7 +1124,7 @@ func (m *Model) anchoredRow(l diff.ViewLine) string {
 	if !m.styles.Color {
 		return " " + lead + m.glyphs.Anchor + text
 	}
-	bg, marker := m.styles.Anchor, m.styles.On(m.styles.Anchor, m.styles.Warn.Bold(true))
+	bg, marker := m.styles.Anchor, m.styles.On(m.styles.Anchor, m.styles.Emphasis(m.styles.Warn))
 	rest := style.Pad(text, max(0, style.Content(m.width)-2-style.Width(lead)))
 	return bg.Render(" "+lead) + marker.Render(m.glyphs.Anchor) + bg.Render(rest)
 }
@@ -1117,7 +1144,7 @@ func (m *Model) diffStyle(l diff.ViewLine) lipgloss.Style {
 	case diff.Delete:
 		return m.styles.Removed
 	}
-	return m.styles.R.NewStyle()
+	return m.styles.NewStyle()
 }
 
 func joinNotice(text, elsewhere string) string {

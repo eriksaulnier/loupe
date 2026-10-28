@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -62,13 +62,13 @@ func (m *Model) refreshFileDiff() {
 		cursor := i == m.fileCursor
 		paint := func(st lipgloss.Style) lipgloss.Style {
 			if cursor && m.styles.Color {
-				return m.styles.On(m.styles.Selected, st).Bold(true)
+				return m.styles.Emphasis(m.styles.On(m.styles.Selected, st))
 			}
 			return st
 		}
 		lead := " "
 		if cursor {
-			lead = m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor)
+			lead = m.styles.Emphasis(m.styles.Cursor).Render(m.glyphs.Cursor)
 		}
 		if l.Separator {
 			rows[i] = lead + paint(m.styles.Accent).Render(render.ForDisplay(l.Text))
@@ -77,19 +77,19 @@ func (m *Model) refreshFileDiff() {
 		number, text := diffCells(l)
 		mark := paint(m.styles.Dim).Render(m.glyphs.Gutter)
 		if len(l.Markers) > 0 {
-			mark = paint(m.styles.Accent.Bold(true)).Render(m.glyphs.Mark)
+			mark = paint(m.styles.Emphasis(m.styles.Accent)).Render(m.glyphs.Mark)
 		}
 		line := m.diffStyle(l)
 		rows[i] = lead + paint(line).Render(number) + mark + paint(line).Render(text)
 	}
-	m.file.Width = m.width
-	m.file.Height = m.bodyHeight(fileDiffHeaderLines)
+	m.file.SetWidth(m.width)
+	m.file.SetHeight(m.bodyHeight(fileDiffHeaderLines))
 	fill(&m.file, strings.Join(rows, "\n"))
 	switch {
-	case m.fileCursor < m.file.YOffset:
+	case m.fileCursor < m.file.YOffset():
 		m.file.SetYOffset(m.fileCursor)
-	case m.fileCursor >= m.file.YOffset+m.file.Height:
-		m.file.SetYOffset(m.fileCursor - m.file.Height + 1)
+	case m.fileCursor >= m.file.YOffset()+m.file.Height():
+		m.file.SetYOffset(m.fileCursor - m.file.Height() + 1)
 	}
 }
 
@@ -112,7 +112,7 @@ func (m *Model) fileCounts() (added, removed, findings int) {
 	return added, removed, findings
 }
 
-func (m *Model) updateFileDiff(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updateFileDiff(msg tea.KeyPressMsg) tea.Cmd {
 	m.notice = ""
 	switch msg.String() {
 	case "j", "down":

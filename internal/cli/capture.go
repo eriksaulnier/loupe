@@ -380,7 +380,7 @@ func createRound(dir string, target run.Target, diffBytes, draftJSON []byte, opt
 func printCapture(deps Deps, ref run.Ref, target run.Target, cleanup, steps []string, previous, comments map[string]any) error {
 	s, width := deps.outStyle(), deps.width()
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s %s  %s\n", s.Good.Bold(true).Render(s.Glyphs.Accepted), s.Good.Bold(true).Render("captured"),
+	fmt.Fprintf(&b, "%s %s %s  %s\n", s.Emphasis(s.Good).Render(s.Glyphs.Accepted), s.Emphasis(s.Good).Render("captured"),
 		s.Accent.Render(ref.String()), s.TruncRight(oneLine(target.Title), max(20, width-len(ref.String())-14)))
 	fmt.Fprintf(&b, "%s\n", s.Dim.Render(fmt.Sprintf("  refs written to %s", oneLine(target.ClonePath))))
 	for _, r := range []string{target.BaseRef, target.HeadRef} {

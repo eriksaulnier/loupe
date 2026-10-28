@@ -8,7 +8,8 @@ import (
 	"os/exec"
 	"runtime"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -104,7 +105,11 @@ func reviewSession(deps Deps, dir string, jsonMode bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	final, err := tea.NewProgram(m, tea.WithInput(deps.Stdin), tea.WithOutput(ui), tea.WithAltScreen()).Run()
+	opts := []tea.ProgramOption{tea.WithInput(deps.Stdin), tea.WithOutput(ui)}
+	if deps.Screen != nil {
+		opts = append(opts, tea.WithWindowSize(deps.Screen.Width, deps.Screen.Height), tea.WithColorProfile(colorprofile.ASCII), tea.WithEnvironment([]string{"TERM=xterm-256color"}))
+	}
+	final, err := tea.NewProgram(m, opts...).Run()
 	// A signal ends the program even while a confirmed review is being sent; the send still finishes and is recorded.
 	m.WaitForSend()
 	if err != nil {
@@ -147,7 +152,7 @@ func reviewDone(cmd *cobra.Command, deps Deps, dir string, jsonMode bool, ui io.
 }
 
 func publishedLine(s style.Style, url string) string {
-	return s.Good.Bold(true).Render(s.Glyphs.Accepted) + " Published " + s.Link(url, render.ForDisplay(url))
+	return s.Emphasis(s.Good).Render(s.Glyphs.Accepted) + " Published " + s.Link(url, render.ForDisplay(url))
 }
 
 var errUnsafeURL = errors.New("the review link is not a plain https URL")

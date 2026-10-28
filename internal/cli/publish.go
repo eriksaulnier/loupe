@@ -207,7 +207,7 @@ func runPublish(cmd *cobra.Command, deps Deps, args []string) error {
 	})
 	if errors.Is(err, publish.ErrDeclined) {
 		es := deps.errStyle()
-		if _, err := fmt.Fprintf(deps.Stderr, "%s  %s\n", es.Warn.Bold(true).Render(es.Glyphs.Canceled+" canceled"), es.Dim.Render("nothing was sent or written")); err != nil {
+		if _, err := fmt.Fprintf(deps.Stderr, "%s  %s\n", es.Emphasis(es.Warn).Render(es.Glyphs.Canceled+" canceled"), es.Dim.Render("nothing was sent or written")); err != nil {
 			return err
 		}
 		if jsonMode {
@@ -267,7 +267,7 @@ func refuseMovedPrevious(deps Deps, d *draft.Draft, ref run.Ref) error {
 func warnUnassessed(deps Deps, dir string, ref run.Ref) {
 	s := deps.errStyle()
 	warn := func(message string) {
-		_, _ = fmt.Fprintf(deps.Stderr, "%s %s\n", s.Warn.Bold(true).Render("warning:"), message)
+		_, _ = fmt.Fprintf(deps.Stderr, "%s %s\n", s.Emphasis(s.Warn).Render("warning:"), message)
 	}
 	root, err := run.DataRoot(deps.Getenv)
 	if err != nil {
@@ -306,7 +306,7 @@ func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bo
 	if receipt.Edited {
 		verb = "edited"
 	}
-	outcome := s.Good.Bold(true).Render(s.Glyphs.Published + " " + verb)
+	outcome := s.Emphasis(s.Good).Render(s.Glyphs.Published + " " + verb)
 	detail := ref.String()
 	if inline := len(receipt.Envelope.Comments); inline > 0 {
 		detail += fmt.Sprintf("  %s %d inline %s", s.Dim.Render("action "+receipt.Action), inline, plural(inline, "comment"))
@@ -314,7 +314,7 @@ func printPublished(deps Deps, ref run.Ref, receipt publish.Receipt, replayed bo
 		detail += "  " + s.Dim.Render("action "+receipt.Action)
 	}
 	if replayed {
-		outcome = s.Good.Bold(true).Render(s.Glyphs.Published + " already " + verb)
+		outcome = s.Emphasis(s.Good).Render(s.Glyphs.Published + " already " + verb)
 		detail = s.Dim.Render(fmt.Sprintf("%s was posted on %s", ref.String(), receipt.PostedAt.UTC().Format("2006-01-02 at 15:04 UTC")))
 	}
 	if _, err := fmt.Fprintf(deps.Stderr, "%s  %s\n", outcome, detail); err != nil {

@@ -50,7 +50,7 @@ func testDeps(t *testing.T, env map[string]string) (Deps, *streams) {
 }
 
 // paletteEnv are the variables the palette reads on every invocation to decide color and the glyph set.
-var paletteEnv = map[string]bool{"NO_COLOR": true, "TERM": true, "LC_ALL": true, "LC_CTYPE": true, "LANG": true, style.IconsEnv: true}
+var paletteEnv = map[string]bool{"COLORTERM": true, "TERM_PROGRAM": true, "TMUX": true, "CLICOLOR": true, "CLICOLOR_FORCE": true, "COLORFGBG": true, "NO_COLOR": true, "TERM": true, "LC_ALL": true, "LC_CTYPE": true, "LANG": true, style.IconsEnv: true}
 
 func TestHelpTouchesNothingButThePalette(t *testing.T) {
 	deps, s := testDeps(t, nil)

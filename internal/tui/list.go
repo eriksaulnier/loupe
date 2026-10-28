@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
@@ -16,7 +16,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updateList(msg tea.KeyPressMsg) tea.Cmd {
 	m.notice = ""
 	switch msg.String() {
 	case "j", "down":
@@ -63,7 +63,7 @@ func (m *Model) actionRefusal(action string) error {
 	return publish.ActionRefusal(action, m.target.Viewer, m.target.Author, m.draft)
 }
 
-func (m *Model) updateAction(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updateAction(msg tea.KeyPressMsg) tea.Cmd {
 	m.notice = ""
 	switch msg.String() {
 	case "j", "down":
@@ -83,7 +83,7 @@ func (m *Model) updateAction(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) updateInline(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updateInline(msg tea.KeyPressMsg) tea.Cmd {
 	m.notice = ""
 	switch msg.String() {
 	case "j", "down":
@@ -165,12 +165,12 @@ const pickerIndent = 22
 // is never clipped.
 func (m *Model) pickerRow(selected, disabled bool, name, description string) []string {
 	cursor := " "
-	nameStyle := m.styles.R.NewStyle()
+	nameStyle := m.styles.NewStyle()
 	switch {
 	case disabled:
 		nameStyle = m.styles.Dim
 	case selected:
-		cursor, nameStyle = m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor), m.styles.Accent.Bold(true)
+		cursor, nameStyle = m.styles.Emphasis(m.styles.Cursor).Render(m.glyphs.Cursor), m.styles.Emphasis(m.styles.Accent)
 	}
 	indent := strings.Repeat(" ", pickerIndent)
 	lines := strings.Split(m.styles.Wrap(render.ForDisplay(description), style.Content(m.width)-1, indent), "\n")
@@ -323,9 +323,9 @@ func (m *Model) columnHeads(cols listColumns) string {
 // row is one finding: the cursor, one disposition glyph, the quiet id, the blocking and note markers and the title,
 // which the selection bolds in the accent.
 func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, selected bool, cols listColumns) string {
-	cursor, titleStyle := " ", m.styles.R.NewStyle()
+	cursor, titleStyle := " ", m.styles.NewStyle()
 	if selected {
-		cursor, titleStyle = m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor), m.styles.Accent.Bold(true)
+		cursor, titleStyle = m.styles.Emphasis(m.styles.Cursor).Render(m.glyphs.Cursor), m.styles.Emphasis(m.styles.Accent)
 	}
 	glyph, _, kind := m.styles.Disposition(disposition)
 	titleWidth := cols.title

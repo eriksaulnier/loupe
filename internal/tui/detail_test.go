@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/exp/teatest"
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -40,7 +40,7 @@ func detailViewOf(t *testing.T, env map[string]string, body string) string {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	return m.View()
+	return m.View().Content
 }
 
 func TestDetailViewNeutralizesCharacterReferences(t *testing.T) {
@@ -91,7 +91,7 @@ func threadView(t *testing.T, env map[string]string, width int, notes []draft.No
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	return m.View()
+	return m.View().Content
 }
 
 // threadRows is the thread as drawn: the rows from the first note's header on, right-trimmed.
@@ -242,24 +242,24 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	if view := m.View(); !strings.Contains(view, "severity major") || !strings.Contains(view, "verified reproduced") {
+	if view := m.View().Content; !strings.Contains(view, "severity major") || !strings.Contains(view, "verified reproduced") {
 		t.Errorf("the chips are clipped at 60 columns:\n%s", view)
 	}
 
 	anchored := func(view string, n int) bool {
 		return regexp.MustCompile(fmt.Sprintf(`(?m)^\s+%d\s+>\s+\+big line %d\s*$`, n, n)).MatchString(view)
 	}
-	if view := m.View(); !anchored(view, 5) || strings.Contains(view, "big line 30") {
+	if view := m.View().Content; !anchored(view, 5) || strings.Contains(view, "big line 30") {
 		t.Fatalf("first view does not start at the top of the hunk:\n%s", view)
 	}
 	seen := map[string]bool{}
-	for _, keys := range []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyPgDown}} {
+	for _, keys := range []tea.KeyPressMsg{{Code: tea.KeyDown}, {Code: tea.KeyPgDown}} {
 		if err := m.openFinding("f-001"); err != nil {
 			t.Fatal(err)
 		}
 		for range 200 {
 			m.Update(keys)
-			view := m.View()
+			view := m.View().Content
 			seen["last anchored line"] = seen["last anchored line"] || anchored(view, 30)
 			seen["impact"] = seen["impact"] || strings.Contains(view, "Every wide hunk.")
 			seen["fix"] = seen["fix"] || strings.Contains(view, "| Split the range.")
@@ -268,14 +268,14 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 		}
 		for _, part := range []string{"last anchored line", "impact", "fix", "references", "reply"} {
 			if !seen[part] {
-				t.Errorf("%v never reaches the %s:\n%s", keys, part, m.View())
+				t.Errorf("%v never reaches the %s:\n%s", keys, part, m.View().Content)
 			}
 		}
-		for _, back := range []tea.KeyMsg{{Type: tea.KeyUp}, {Type: tea.KeyPgUp}} {
+		for _, back := range []tea.KeyPressMsg{{Code: tea.KeyUp}, {Code: tea.KeyPgUp}} {
 			for range 200 {
 				m.Update(back)
 			}
-			if view := m.View(); !anchored(view, 5) {
+			if view := m.View().Content; !anchored(view, 5) {
 				t.Errorf("%v does not return to the top:\n%s", back, view)
 			}
 			for range 200 {
@@ -285,9 +285,9 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 		clear(seen)
 	}
 	for _, k := range []string{"J", "K"} {
-		before := m.View()
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
-		if m.View() != before {
+		before := m.View().Content
+		m.Update(runes(k))
+		if m.View().Content != before {
 			t.Errorf("%s still scrolls something", k)
 		}
 	}
@@ -306,14 +306,14 @@ func TestDetailWrapsAReferenceWiderThanTheWindow(t *testing.T) {
 	m := modelOf(t, dir, testEnv, 60, 60)
 	mustOpen(m, "f-001")
 	var joined strings.Builder
-	for _, l := range strings.Split(ansi.Strip(m.View()), "\n") {
+	for _, l := range strings.Split(ansi.Strip(m.View().Content), "\n") {
 		if w := style.Width(l); w > 60 {
 			t.Errorf("line is %d cells wide: %q", w, l)
 		}
 		joined.WriteString(strings.TrimSpace(l))
 	}
 	if !strings.Contains(joined.String(), ref) {
-		t.Errorf("the reference is not shown whole:\n%s", m.View())
+		t.Errorf("the reference is not shown whole:\n%s", m.View().Content)
 	}
 }
 
@@ -362,7 +362,7 @@ func TestDetailShowsChipsRuleAndNumberedHunk(t *testing.T) {
 	if err := m.openFinding("f-002"); err != nil {
 		t.Fatal(err)
 	}
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{
 		"f-002 \u00b7 2 of 3",
 		"\u00b7 pending   suggestion",
@@ -388,8 +388,8 @@ func TestDetailNoteInputNamesTheFinding(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	view := m.View()
+	m.Update(runes("s"))
+	view := m.View().Content
 	if !regexp.MustCompile(`(?m)^ ╭─ send back f-001 ─+ enter sends · esc cancels ─╮$`).MatchString(view) ||
 		!regexp.MustCompile(`(?m)^ │ +│$`).MatchString(view) || !regexp.MustCompile(`(?m)^ ╰─+╯$`).MatchString(view) {
 		t.Fatalf("the send-back input is not framed with its title and way out:\n%s", view)
@@ -407,8 +407,8 @@ func TestDetailNoteFrameFollowsTheGlyphTier(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	if view := m.View(); !regexp.MustCompile(`(?m)^ \+- send back f-001 -+ enter sends - esc cancels -\+$`).MatchString(view) {
+	m.Update(runes("s"))
+	if view := m.View().Content; !regexp.MustCompile(`(?m)^ \+- send back f-001 -+ enter sends - esc cancels -\+$`).MatchString(view) {
 		t.Fatalf("the ASCII frame is not drawn in the ASCII tier:\n%s", view)
 	}
 }
@@ -418,21 +418,21 @@ func TestDetailNoteInputWrapsAndKeepsTheCursorInView(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("short note")})
-	if view := m.View(); !regexp.MustCompile(`(?m)^ │ short note +│$`).MatchString(view) {
+	m.Update(runes("s"))
+	m.Update(runes("short note"))
+	if view := m.View().Content; !regexp.MustCompile(`(?m)^ │ short note +│$`).MatchString(view) {
 		t.Fatalf("a short note is not on the frame's first row:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat(" and more", 40) + " END")})
-	view := m.View()
+	m.Update(runes(strings.Repeat(" and more", 40) + " END"))
+	view := m.View().Content
 	if !strings.Contains(view, "END") || strings.Contains(view, "short note") || !strings.Contains(view, "send back f-001") {
 		t.Fatalf("a note taller than its rows does not follow the cursor to its end inside the frame:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
-	if view := m.View(); !strings.Contains(view, "short note") || strings.Contains(view, "END") {
+	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
+	if view := m.View().Content; !strings.Contains(view, "short note") || strings.Contains(view, "END") {
 		t.Fatalf("moving to the start does not bring the first row back into view:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if n, ok := firstOpenNote(m.draft, "f-001"); !ok || !strings.HasSuffix(n.Body, " END") {
 		t.Fatalf("the wrapped note was not sent back whole: %+v", n)
 	}
@@ -443,20 +443,20 @@ func TestDetailNoteBoxGrowsFromOneRowToAThirdOfTheWindow(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m.Update(runes("s"))
 	textRows := regexp.MustCompile(`(?m)^ │.*│$`)
-	if n := len(textRows.FindAllString(m.View(), -1)); n != 1 {
-		t.Fatalf("an empty note box has %d text rows, want 1:\n%s", n, m.View())
+	if n := len(textRows.FindAllString(m.View().Content, -1)); n != 1 {
+		t.Fatalf("an empty note box has %d text rows, want 1:\n%s", n, m.View().Content)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat(" and more", 60) + " END")})
-	view := m.View()
+	m.Update(runes(strings.Repeat(" and more", 60) + " END"))
+	view := m.View().Content
 	if n := len(textRows.FindAllString(view, -1)); n != 15/3 || !strings.Contains(view, "END") {
 		t.Fatalf("a long note box has %d text rows, want %d ending at the cursor:\n%s", n, 15/3, view)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 72, Height: 15})
-	top := regexp.MustCompile(`(?m)^ ╭.*╮$`).FindString(m.View())
+	top := regexp.MustCompile(`(?m)^ ╭.*╮$`).FindString(m.View().Content)
 	if style.Width(top) != 72 {
-		t.Fatalf("after a resize the frame is %d columns, want 72:\n%s", style.Width(top), m.View())
+		t.Fatalf("after a resize the frame is %d columns, want 72:\n%s", style.Width(top), m.View().Content)
 	}
 }
 
@@ -465,8 +465,8 @@ func TestDetailEditRowStaysUnframed(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
-	view := m.View()
+	m.Update(runes("e"))
+	view := m.View().Content
 	if !strings.Contains(view, "\u270e edit f-001") || strings.ContainsAny(view, "╭╮╰╯") {
 		t.Fatalf("the edit row is a picker and is not framed:\n%s", view)
 	}
@@ -478,21 +478,21 @@ func noteBox(t *testing.T, m *Model, id, text string) {
 	if err := m.openFinding(id); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m.Update(runes("s"))
 	if text != "" {
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)})
+		m.Update(runes(text))
 	}
 }
 
 func TestDetailNoteAbandonedWithEscIsRestored(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	noteBox(t, m, "f-001", "why this name")
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if m.noting || m.notice != "" {
 		t.Fatalf("esc left the box open or the slot holding a notice: noting=%v notice=%q", m.noting, m.notice)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m.Update(runes("s"))
+	m.Update(runes("?"))
 	if got := m.note.Value(); got != "why this name?" {
 		t.Fatalf("the reopened box holds %q, want the abandoned text with typing appended", got)
 	}
@@ -501,17 +501,17 @@ func TestDetailNoteAbandonedWithEscIsRestored(t *testing.T) {
 func TestDetailNoteKeptTextBelongsToItsFinding(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	noteBox(t, m, "f-001", "about f-001")
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	noteBox(t, m, "f-002", "   ")
 	if got := m.note.Value(); got != "   " {
 		t.Fatalf("f-002's box opened with %q, want only what was typed into it", got)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	noteBox(t, m, "f-002", "")
 	if got := m.note.Value(); got != "" {
 		t.Fatalf("whitespace abandoned on f-002 came back as %q", got)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	noteBox(t, m, "f-001", "")
 	if got := m.note.Value(); got != "about f-001" {
 		t.Fatalf("f-001's box opened with %q after visiting f-002", got)
@@ -521,9 +521,9 @@ func TestDetailNoteKeptTextBelongsToItsFinding(t *testing.T) {
 func TestDetailNoteSentForgetsWhatWasKept(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	noteBox(t, m, "f-001", "first try")
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m.Update(runes("s"))
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if n, ok := firstOpenNote(m.draft, "f-001"); !ok || n.Body != "first try" {
 		t.Fatalf("the restored note was not sent: %+v", n)
 	}
@@ -536,11 +536,11 @@ func TestDetailNoteSentForgetsWhatWasKept(t *testing.T) {
 func TestDetailNoteRefusedOnSendIsKept(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	noteBox(t, m, "f-001", "see <!-- here -->")
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if _, ok := firstOpenNote(m.draft, "f-001"); ok || !strings.Contains(m.notice, "HTML comments are not allowed") {
 		t.Fatalf("the note was not refused with its reason: notice %q", m.notice)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m.Update(runes("s"))
 	if got := m.note.Value(); got != "see <!-- here -->" {
 		t.Fatalf("the refused note came back as %q", got)
 	}
@@ -552,8 +552,8 @@ func TestHelpNamesTheNoteKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.help = true
-	if !regexp.MustCompile(`(?m)^ +s +send back; enter sends, esc cancels`).MatchString(m.View()) {
-		t.Fatalf("help does not say how a send-back note is sent or canceled:\n%s", m.View())
+	if !regexp.MustCompile(`(?m)^ +s +send back; enter sends, esc cancels`).MatchString(m.View().Content) {
+		t.Fatalf("help does not say how a send-back note is sent or canceled:\n%s", m.View().Content)
 	}
 }
 
@@ -564,7 +564,7 @@ func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
 	}
 	f, _ := m.openedFinding()
 	m.openFileDiff(f)
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"multi.txt \u00b7 f-001 \u00b7 2 findings \u00b7 +3 \u22122", "\u203a    3  \u25c6  +line three", "    21  \u25c6  +inserted after 20", "@@ -18,6 +18,7 @@"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("file diff lacks %q:\n%s", want, view)
@@ -662,7 +662,7 @@ func TestCtrlCQuitsAsReviewOpens(t *testing.T) {
 	defer func() { settleOnOpen = 0 }()
 	tm := startApp(t, newFixture(t))
 	waitFor(t, tm, "Title one")
-	key(tm, tea.KeyCtrlC)
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }
 
@@ -677,9 +677,9 @@ func TestBodyWrapFillsEachLineAroundHyphens(t *testing.T) {
 		for width := 40; width <= 140; width++ {
 			m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, width, 24)
 			if theme.color {
-				m.styles.R.SetColorProfile(termenv.TrueColor)
+				m.styles.SetColorProfile(colorprofile.TrueColor)
 			}
-			m.styles.Color, m.darkBackground = theme.color, theme.dark
+			m.styles.Color, m.styles.Dark = theme.color, theme.dark
 			out, err := m.renderMarkdown(body)
 			if err != nil {
 				t.Fatal(err)
@@ -722,7 +722,7 @@ func TestBodyLinksShowAsText(t *testing.T) {
 	for _, color := range []bool{false, true} {
 		m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 24)
 		if color {
-			m.styles.R.SetColorProfile(termenv.TrueColor)
+			m.styles.SetColorProfile(colorprofile.TrueColor)
 		}
 		m.styles.Color = color
 		out, err := m.renderMarkdown(body)
@@ -741,7 +741,7 @@ func TestBodyLinksShowAsText(t *testing.T) {
 	}
 }
 
-func runeKey(r string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(r)} }
+func runeKey(r string) tea.KeyPressMsg { return runes(r) }
 
 // editModel stores fn's change to the fixture, then opens id at 100 by 40.
 func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, string) {
@@ -760,13 +760,13 @@ func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, st
 func TestEditKeepsTheDecision(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
 	version := loadDraft(t, dir).Version
-	for _, k := range []tea.KeyMsg{runeKey("e"), {Type: tea.KeyRight}, {Type: tea.KeySpace}} {
+	for _, k := range []tea.KeyPressMsg{runeKey("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}} {
 		m.Update(k)
 	}
-	if row := ansi.Strip(m.View()); !strings.Contains(row, "> suggestion") || !strings.Contains(row, "not blocking") {
+	if row := ansi.Strip(m.View().Content); !strings.Contains(row, "> suggestion") || !strings.Contains(row, "not blocking") {
 		t.Fatalf("the editor row does not show the choice:\n%s", row)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	d := loadDraft(t, dir)
 	f := d.Findings[0]
@@ -787,9 +787,9 @@ func TestEditKeepsTheDecision(t *testing.T) {
 func TestEditEscAndUnchangedRecordNothing(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
 	version := loadDraft(t, dir).Version
-	for _, keys := range [][]tea.KeyMsg{
-		{runeKey("e"), {Type: tea.KeyRight}, {Type: tea.KeySpace}, {Type: tea.KeyEsc}},
-		{runeKey("e"), {Type: tea.KeyEnter}},
+	for _, keys := range [][]tea.KeyPressMsg{
+		{runeKey("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}, {Code: tea.KeyEsc}},
+		{runeKey("e"), {Code: tea.KeyEnter}},
 	} {
 		for _, k := range keys {
 			m.Update(k)
@@ -808,14 +808,14 @@ func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
 		})
 		version := loadDraft(t, dir).Version
 		m.Update(runeKey("e"))
-		if row := ansi.Strip(m.View()); !strings.Contains(row, "> "+c.shown) {
+		if row := ansi.Strip(m.View().Content); !strings.Contains(row, "> "+c.shown) {
 			t.Fatalf("the row does not open on %q:\n%s", c.shown, row)
 		}
 		// Four moves cycle through issue, suggestion and question back to the finding's own label.
 		for range 4 {
-			m.Update(tea.KeyMsg{Type: tea.KeyRight})
+			m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 		}
-		m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 		if d := loadDraft(t, dir); d.Version != version || d.Findings[2].Label != c.label {
 			t.Fatalf("%q: cycling dropped the label: %q at version %d", c.label, d.Findings[2].Label, d.Version)
 		}
@@ -865,7 +865,7 @@ func TestEditRowWrapsBetweenParts(t *testing.T) {
 func TestEditRefusesAStaleDraft(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
 	m.Update(runeKey("e"))
-	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
 		d.Findings[0].Title = "Updated title"
 		d.Findings[0].Rev++
@@ -873,7 +873,7 @@ func TestEditRefusesAStaleDraft(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	f := loadDraft(t, dir).Findings[0]
 	if f.Label != "issue" || f.Title != "Updated title" || m.notice != staleNotice || m.editing {
 		t.Fatalf("finding %+v notice %q editing %v", f, m.notice, m.editing)
@@ -891,9 +891,9 @@ func TestDetailBodyIsSizedForItsOwnFooterAfterHelpOrANote(t *testing.T) {
 		t.Fatalf("the detail footer does not wrap at 80 columns, so this test proves nothing: %q", fresh.footerKeys())
 	}
 
-	for name, keys := range map[string][]tea.KeyMsg{
-		"help": {{Type: tea.KeyRunes, Runes: []rune("?")}},
-		"note": {{Type: tea.KeyRunes, Runes: []rune("s")}},
+	for name, keys := range map[string][]tea.KeyPressMsg{
+		"help": {{Code: '?', Text: "?"}},
+		"note": {{Code: 's', Text: "s"}},
 	} {
 		m := modelOf(t, dir, testEnv, 80, 24)
 		mustOpenFinding(t, m, "f-001")
@@ -901,12 +901,12 @@ func TestDetailBodyIsSizedForItsOwnFooterAfterHelpOrANote(t *testing.T) {
 			m.Update(k)
 		}
 		m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
-		m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 		if m.help || m.noting {
 			t.Fatalf("%s: esc did not close it", name)
 		}
-		if m.body.Height != fresh.body.Height {
-			t.Errorf("%s: detail body is %d rows after closing, want %d", name, m.body.Height, fresh.body.Height)
+		if m.body.Height() != fresh.body.Height() {
+			t.Errorf("%s: detail body is %d rows after closing, want %d", name, m.body.Height(), fresh.body.Height())
 		}
 	}
 }

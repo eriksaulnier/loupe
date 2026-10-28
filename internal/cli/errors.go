@@ -87,11 +87,11 @@ func writeRefusalText(w io.Writer, s style.Style, width int, r *refusal.Error, c
 		return st(word+":") + strings.Repeat(" ", max(1, len(indent)-style.Width(word)-1))
 	}
 	code := string(r.Code)
-	_, _ = fmt.Fprintf(w, "%s%s  %s\n", label(s.Bad.Bold(true).Render, errorWord), s.Dim.Render(code),
+	_, _ = fmt.Fprintf(w, "%s%s  %s\n", label(s.Emphasis(s.Bad).Render, errorWord), s.Dim.Render(code),
 		hanging(s, r.Message, width, indent+strings.Repeat(" ", len(code)+2)))
-	_, _ = fmt.Fprintf(w, "%s%s\n", label(s.Good.Bold(true).Render, fixWord), fixLines(s, r.Fix, width, indent))
+	_, _ = fmt.Fprintf(w, "%s%s\n", label(s.Emphasis(s.Good).Render, fixWord), fixLines(s, r.Fix, width, indent))
 	if ce != nil {
-		_, _ = fmt.Fprintf(w, "%s\n", s.Bad.Bold(true).Render("cleanup:"))
+		_, _ = fmt.Fprintf(w, "%s\n", s.Emphasis(s.Bad).Render("cleanup:"))
 		for _, c := range ce.cleanup {
 			_, _ = fmt.Fprintf(w, "  %s\n", s.Accent.Render(c))
 		}

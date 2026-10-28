@@ -1,16 +1,20 @@
 package tui
 
 import (
-	"bytes"
+	"image/color"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/teatest/v2"
+	"github.com/charmbracelet/x/vt"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -76,22 +80,135 @@ func startApp(t *testing.T, dir string) *teatest.TestModel {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return teatest.NewTestModel(t, m, teatest.WithInitialTermSize(100, 40))
+	return newTestModel(t, m, 100, 40)
+}
+
+type testTerminal struct {
+	emulator     *vt.Emulator
+	synchronized bool
+	frame        string
+	generation   uint64
+	seen         uint64
+}
+
+var testTerminals sync.Map
+
+func newTestModel(t *testing.T, m tea.Model, width, height int) *teatest.TestModel {
+	t.Helper()
+	terminal := &testTerminal{emulator: vt.NewEmulator(width, height)}
+	_, _ = terminal.emulator.WriteString(ansi.SetModeLineFeedNewLine)
+	terminal.emulator.SetCallbacks(vt.Callbacks{
+		EnableMode: func(mode ansi.Mode) {
+			if mode == ansi.ModeSynchronizedOutput {
+				terminal.synchronized = true
+			}
+		},
+		DisableMode: func(mode ansi.Mode) {
+			if mode == ansi.ModeSynchronizedOutput {
+				terminal.synchronized = false
+			}
+		},
+	})
+	repliesDone := make(chan struct{})
+	go func() { defer close(repliesDone); _, _ = io.Copy(io.Discard, terminal.emulator) }()
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(width, height), teatest.WithProgramOptions(
+		tea.WithColorProfile(colorprofile.ASCII), tea.WithEnvironment([]string{"TERM=xterm-256color"}),
+	))
+	testTerminals.Store(tm, terminal)
+	t.Cleanup(func() {
+		testTerminals.Delete(tm)
+		_ = terminal.emulator.InputPipe().(io.Closer).Close()
+		<-repliesDone
+		_ = terminal.emulator.Close()
+	})
+	return tm
+}
+
+func resizeTestModel(tm *teatest.TestModel, width, height int) {
+	value, _ := testTerminals.Load(tm)
+	value.(*testTerminal).emulator.Resize(width, height)
+	tm.Send(tea.WindowSizeMsg{Width: width, Height: height})
 }
 
 func waitFor(t *testing.T, tm *teatest.TestModel, want ...string) {
 	t.Helper()
+	value, ok := testTerminals.Load(tm)
+	if !ok {
+		t.Fatal("test model has no terminal")
+	}
+	terminal := value.(*testTerminal)
+	consumed := 0
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		for _, w := range want {
-			if !bytes.Contains(b, []byte(w)) {
-				return false
-			}
+		if len(b) == consumed {
+			return false
 		}
-		return true
+		if _, err := terminal.emulator.Write(b[consumed:]); err != nil {
+			t.Fatal(err)
+		}
+		consumed = len(b)
+		return terminal.matches(want...)
 	}, teatest.WithDuration(5*time.Second))
 }
 
-func key(tm *teatest.TestModel, k tea.KeyType) { tm.Send(tea.KeyMsg{Type: k}) }
+func (terminal *testTerminal) matches(want ...string) bool {
+	if terminal.synchronized {
+		return false
+	}
+	view := terminal.emulator.String()
+	if view != terminal.frame {
+		terminal.frame = view
+		terminal.generation++
+	}
+	if terminal.generation <= terminal.seen {
+		return false
+	}
+	for _, w := range want {
+		if !strings.Contains(view, w) {
+			return false
+		}
+	}
+	terminal.seen = terminal.generation
+	return true
+}
+
+func TestTerminalWaitRequiresFreshContent(t *testing.T) {
+	terminal := &testTerminal{emulator: vt.NewEmulator(20, 4)}
+	t.Cleanup(func() { _ = terminal.emulator.Close() })
+	_, _ = terminal.emulator.WriteString("old")
+	if !terminal.matches("old") {
+		t.Fatal("initial content did not match")
+	}
+	_, _ = terminal.emulator.WriteString("\x1b[?25l")
+	if terminal.matches("old") {
+		t.Fatal("cursor visibility matched stale content")
+	}
+	_, _ = terminal.emulator.WriteString("\rnew")
+	if !terminal.matches("new") {
+		t.Fatal("changed content did not match")
+	}
+}
+
+func TestFirstBackgroundResponseRefreshesMarkdown(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	previous := m.glamour
+	if previous == nil || !m.styles.Dark {
+		t.Fatal("initial dark markdown renderer is missing")
+	}
+	m.Update(tea.BackgroundColorMsg{Color: color.White})
+	if m.styles.Dark || m.glamour == nil || m.glamour == previous {
+		t.Fatal("first background response did not refresh the light renderer")
+	}
+	previous = m.glamour
+	m.Update(tea.BackgroundColorMsg{Color: color.Black})
+	if m.styles.Dark || m.glamour != previous {
+		t.Fatal("later background response changed the cached palette")
+	}
+}
+
+func key(tm *teatest.TestModel, k rune) { tm.Send(tea.KeyPressMsg{Code: k}) }
 
 func finalView(t *testing.T, tm *teatest.TestModel) string {
 	t.Helper()
@@ -102,7 +219,7 @@ func finalView(t *testing.T, tm *teatest.TestModel) string {
 	if m.Err() != nil {
 		t.Fatalf("model error: %v", m.Err())
 	}
-	return m.View()
+	return m.View().Content
 }
 
 func TestAppDecidesAndPersists(t *testing.T) {

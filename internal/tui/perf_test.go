@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -72,7 +72,7 @@ func TestOpenUnder100ms(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	view := m.View()
+	view := m.View().Content
 	elapsed := time.Since(start)
 
 	if !strings.Contains(view, "Finding in file 0") || !strings.Contains(view, "newest := 6") {
