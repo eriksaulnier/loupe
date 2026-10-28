@@ -17,7 +17,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const TargetSchema = 1
+const TargetSchema = 2
 
 // Target is written once by capture and never changed.
 type Target struct {
@@ -48,6 +48,8 @@ type Target struct {
 	Source string `json:"source,omitempty"`
 	// Model is the reviewer's model id as the caller names it; empty when capture was given none. Provenance only.
 	Model string `json:"model,omitempty"`
+	// PRState is the pull request's state as GitHub reported it at capture, open or closed; empty before schema 2.
+	PRState string `json:"prState,omitempty"`
 }
 
 // SourcePattern keeps a source to one token without > because loupe-meta carries it unescaped inside an HTML comment.

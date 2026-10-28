@@ -36,6 +36,8 @@ To name what filed the findings in the published footer, add `--source <name>[@<
 
 If capture refuses with `same-head`, an unpublished round already exists at this head. Follow `error.fix` and continue with that run instead of capturing again.
 
+If capture refuses with `pr` because the pull request is closed or merged, add `--allow-closed` only when the user asked to review a closed or merged pull request. Otherwise tell the user it is closed and stop.
+
 ## 2. Check earlier feedback
 
 When capture's `previous.from` is `receipt` or `github`, run `loupe show --previous --run <ref> --json`. Its `earlier` list holds every finding still open before this round, from a local receipt or as capture read it back from GitHub. Give the list to the review. Mark an earlier finding that the new head leaves unresolved as `open` in step 4. You MUST NOT file it again with `loupe add`, because an earlier finding carried as open and filed again would appear twice. File only a problem that the `earlier` list does not hold.
