@@ -257,7 +257,7 @@ func (m *Model) helpOverlay(base string) string {
 	// The header stays as drawn, link and colors included; the pane is composed over the body only.
 	out := strings.Split(m.styles.Composite(strings.Join(baseLines[1:region], "\n"), pane, m.width, m.bodyTop()-1, region-1), "\n")
 	for i, l := range footer {
-		footer[i] = m.clip(render.ForDisplayANSI(l))
+		footer[i] = m.styles.FooterBand(m.clip(render.ForDisplayANSI(l)), m.width)
 	}
 	rows := append([]string{m.clip(m.reviewHeader())}, out[:min(len(out), region-1)]...)
 	return strings.Join(append(rows, footer...), "\n")

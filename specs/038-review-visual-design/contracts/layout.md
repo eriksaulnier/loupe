@@ -123,3 +123,5 @@ A wrapped footer MUST break between whole key groups when that takes no more row
 The detail's section headings (Impact, Suggested fix, References) MUST use the accent, in bold. A suggested fix MUST hang from a bar in the good color, so a proposed change reads apart from quoted text.
 
 Status words MUST be chips in color: the disposition and `open note` in the detail title, and a note's status in its headline. A chip is the word in its tone's color on a tint of that color. The chip's padding separates it, so the `·` separator is drawn only without color.
+
+In color, every footer row MUST sit on a band of the header's surface, the width of the window, so the keys rest on the screen's bottom edge. Without a surface color, as in `NO_COLOR` or 16 colors, the footer is the bare keys.

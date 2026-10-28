@@ -432,6 +432,21 @@ func TestKeyGroupsWrapBetweenGroups(t *testing.T) {
 	}
 }
 
+// The footer sits on a band the width of the window, as the header does; without color it is the bare keys (demo
+// feedback).
+func TestFooterIsABand(t *testing.T) {
+	color := reviewStyle(t, true, nil)
+	frame := strings.Split(color.ReviewFrame("head", nil, []string{"keys"}, 20, 4), "\n")
+	footer := frame[len(frame)-1]
+	if Width(footer) != 20 || !strings.Contains(footer, "48;2;") || ansi.Strip(footer) != "keys"+strings.Repeat(" ", 16) {
+		t.Errorf("the colored footer is not a full-width band: %q", footer)
+	}
+	plain := strings.Split(reviewStyle(t, false, nil).ReviewFrame("head", nil, []string{"keys"}, 20, 4), "\n")
+	if got := plain[len(plain)-1]; got != "keys" {
+		t.Errorf("the NO_COLOR footer is %q, want the bare keys", got)
+	}
+}
+
 func heading() ReviewHeading {
 	return ReviewHeading{
 		Ref: "acme/widgets#42", URL: "https://github.com/acme/widgets/pull/42", Round: 1,

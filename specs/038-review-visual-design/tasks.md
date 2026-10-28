@@ -82,6 +82,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T038 Wrap the footer between whole key groups where that costs no extra row, in `internal/style/review.go`.
 - [X] T039 Draw the detail's section headings in the accent and the suggested fix's bar in the good color, in `internal/tui/detail.go`.
 - [X] T040 Draw status words as chips: the disposition and `open note` in the detail title, and a note's status in its headline, in `internal/style/review.go` and `internal/tui/detail.go`.
+- [X] T041 Draw the footer on a full-width band of the header's surface, in `internal/style/review.go` and the help overlay in `internal/tui/shell.go`.
 
 ## Dependencies and parallel work
 
