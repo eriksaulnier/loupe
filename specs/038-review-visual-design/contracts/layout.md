@@ -143,3 +143,5 @@ The Message step MUST open on the review as it reads. Section headings take the 
 While the review message is typed, `shift+↑` and `shift+↓` MUST scroll the review one line, and `pgup`/`pgdn` a page. The plain arrows stay with the text. Mouse-wheel scrolling waits for a mouse spec, which decides once what capturing the mouse costs text selection.
 
 Every line of the readable review MUST wrap to the pane, including summaries, headings, fenced code and notes. A popup too short for its choices MUST drop its spacing first, then the choices furthest from the selected one. The selected choice stays in view.
+
+The Message step and the sending screen MUST NOT draw the row of steps. The popup before them carries the steps, and on these screens the row added nothing. Their `Publish review` pane opens right under the header and takes the focus tab when the message is not being typed.

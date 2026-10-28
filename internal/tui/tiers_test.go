@@ -31,14 +31,9 @@ func withOpenNote(t *testing.T, dir string) {
 	}
 }
 
-// isConfirmation covers both publish confirmations: the one taking keys and the one taking the message.
-func isConfirmation(name string) bool { return strings.HasPrefix(name, "confirmation") }
-
 // showConfirmation opens the publish confirmation on a preview whose head moved, the widest this screen gets.
 func showConfirmation(m *Model) {
-	title := ConfirmTitle(m.ref(), "comment", "blocking", 1)
-	title.inFlow = true
-	m.confirm, m.view = newConfirmation(movedPreview(), title, ""), viewConfirm
+	m.confirm, m.view = newConfirmation(movedPreview(), ConfirmTitle(m.ref(), "comment", "blocking", 1), ""), viewConfirm
 }
 
 // screen is one full-screen view and the footer tokens it must keep at every width. The footer wraps to a second line
@@ -144,11 +139,8 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-4:], "\n")), confirmCancel) {
 					t.Errorf("%s: the cancel sentence is not on screen:\n%s", where, strings.Join(lines, "\n"))
 				}
-				// A titled pane opens directly under the header and its gap, or under the publish tabs.
+				// A titled pane opens directly under the header and its gap.
 				top := bodyTop(m.height)
-				if isConfirmation(sc.name) {
-					top++
-				}
 				opens := strings.HasPrefix(ansi.Strip(lines[top]), paneFrame(m.glyphs).tl+m.glyphs.HRule+" ")
 				if strings.HasPrefix(sc.name, "publish") {
 					// The choice steps are a popup centered over the list, so its title is somewhere in the body.

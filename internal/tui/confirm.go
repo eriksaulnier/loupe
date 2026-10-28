@@ -126,8 +126,6 @@ func (c *confirmation) value() string { return strings.TrimSpace(c.message.Value
 type ConfirmHeading struct {
 	ref, action, inline string
 	comments            int
-	// inFlow is set by the review program, where two choice steps come first; loupe publish takes them as flags.
-	inFlow bool
 }
 
 func ConfirmTitle(ref, action, inline string, comments int) ConfirmHeading {
@@ -366,13 +364,10 @@ func (c *confirmation) sync(m *Model) {
 	}
 }
 
-// confirmRows is the rows the preview scrolls in: the pane under the tabs, less the notice rows kept below it.
+// confirmRows is the rows the preview scrolls in: the pane, less the notice rows kept below it.
 func (m *Model) confirmRows() int {
 	footer, notice := m.confirmFooter()
 	pane := m.bodyRows(len(footer)) - style.PaneRows
-	if m.confirm.title.inFlow {
-		pane--
-	}
 	return pane - len(m.confirm.noticeLines(m, notice, pane))
 }
 
@@ -549,16 +544,12 @@ func (m *Model) confirmView(c *confirmation) string {
 	}
 	var body []string
 	height := m.bodyRows(len(footer))
-	if c.title.inFlow {
-		body = append(body, m.styles.Tabs(publishSteps, 2))
-		height--
-	}
 	lines := strings.Split(c.scroll.View(), "\n")
 	_, inner := style.PaneInner(0, height)
 	lines = m.withNotice(lines[:min(len(lines), c.scroll.Height())], c.noticeLines(m, extra, inner), inner)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: height, Lines: lines,
 		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: c.summary(m), BottomRight: m.styles.Text().Render(position)},
-		Scroll: style.Scroll{Offset: c.scroll.YOffset(), Visible: c.scroll.Height(), Total: c.scroll.TotalLineCount()}, Focus: !c.typing && !c.title.inFlow})...)
+		Scroll: style.Scroll{Offset: c.scroll.YOffset(), Visible: c.scroll.Height(), Total: c.scroll.TotalLineCount()}, Focus: !c.typing})...)
 	return m.shell(body, footer)
 }
 

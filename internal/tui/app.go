@@ -407,7 +407,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.fail(m.layout())
 	case previewMsg:
 		title := ConfirmTitle(m.ref(), m.action, publish.InlineModes[m.pick], len(msg.preview.Comments))
-		title.inFlow = true
 		m.confirm, m.view = newConfirmation(msg.preview, title, m.message), viewConfirm
 		return m, nil
 	case publishDone:

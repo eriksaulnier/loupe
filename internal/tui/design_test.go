@@ -387,15 +387,14 @@ func TestLongRefusalStaysWholeInEveryPane(t *testing.T) {
 			t.Errorf("%s cut the refusal at 60x12:\n%s", sc.name, view)
 		}
 	}
-	// The confirmation's pane also holds the cancel sentence, one row more than the refusal has, so the refusal's
-	// middle gives way and its fix and the cancel sentence both stay.
+	// The confirmation's pane also holds the cancel sentence, and both the refusal's ends and that sentence stay.
 	m := modelOf(t, newFixture(t), utf8Env, 60, 12)
 	showConfirmation(m)
 	m.confirm.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
 	m.confirm.composeErr = errors.New(refusal)
 	view := m.View().Content
 	text := paneText(view)
-	if !strings.Contains(text, "this refusal runs on and on") || !strings.Contains(text, "and ends with loupe review") || !strings.Contains(view, "more rows") || !strings.Contains(text, "nothing is sent") {
+	if !strings.Contains(text, "this refusal runs on and on") || !strings.Contains(text, "and ends with loupe review") || !strings.Contains(text, "nothing is sent") {
 		t.Errorf("the confirmation lost an end of the refusal, the mark or the cancel sentence:\n%s", view)
 	}
 }
@@ -856,9 +855,8 @@ func TestOnlyTheFocusedPaneHasATab(t *testing.T) {
 		t.Errorf("typing does not put the tab on the message:\n%q", v)
 	}
 	c.confirm.typing = false
-	// In the publish flow the current step's block marks the place, so the review's title stays plain.
-	if v := c.View().Content; strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) || strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) {
-		t.Errorf("a blurred message in the flow left a solid title:\n%q", v)
+	if v := c.View().Content; !strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) || strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) {
+		t.Errorf("a blurred message does not return the tab to the review:\n%q", v)
 	}
 }
 
@@ -985,9 +983,7 @@ func TestConfirmationReadsAsAReview(t *testing.T) {
 	env, _, _ := p.Compose("")
 	p.Body = env.Body
 	m := modelOf(t, newFixture(t), utf8Env, 100, 40)
-	title := ConfirmTitle(m.ref(), "comment", "none", 0)
-	title.inFlow = true
-	m.confirm, m.view = newConfirmation(p, title, ""), viewConfirm
+	m.confirm, m.view = newConfirmation(p, ConfirmTitle(m.ref(), "comment", "none", 0), ""), viewConfirm
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	view := m.View().Content
 	text := paneText(view)
@@ -1079,5 +1075,16 @@ func TestPopupKeepsTheSelectedChoice(t *testing.T) {
 	view := m.View().Content
 	if !strings.Contains(view, "> request-changes") {
 		t.Errorf("the selected choice is not in the popup at 60x12:\n%s", view)
+	}
+}
+
+// The Message step has no row of steps over its pane: the popup before it carried them, and here they added nothing
+// (demo feedback).
+func TestMessageStepHasNoStepsRow(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	showConfirmation(m)
+	rows := strings.Split(m.View().Content, "\n")
+	if top := rows[bodyTop(30)]; !strings.Contains(top, "─ Publish review ") || strings.Contains(m.View().Content, "Inline comments ›") {
+		t.Errorf("the Message step does not open on its pane:\n%s", m.View().Content)
 	}
 }

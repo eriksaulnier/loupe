@@ -95,6 +95,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T051 Scroll the review a line at a time with shift and an arrow while the message is typed, in `internal/tui/confirm.go`.
 - [X] T052 Wrap every line of the readable review, and keep the popup's selected choice in view at short heights, in `internal/tui/readable.go` and `internal/tui/list.go`. Found by the cross-vendor review of the demo-feedback work.
 - [X] T053 Drop the footer band that T041 added, in `internal/style/review.go` and `internal/tui/shell.go`.
+- [X] T054 Drop the row of steps from the Message step and the sending screen, in `internal/tui/confirm.go` and `internal/tui/published.go`.
 
 ## Dependencies and parallel work
 

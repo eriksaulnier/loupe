@@ -152,8 +152,7 @@ func (m *Model) publishingView() string {
 	if m.sending {
 		lines = append(lines, "", m.styles.Secondary().Render("Keys are ignored until the outcome is recorded."))
 	}
-	body := []string{m.styles.Tabs(publishSteps, 2)}
-	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - 1, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Publish review"}, Focus: true})...)
+	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)), Lines: lines,
+		Titles: style.PaneTitles{TopLeft: "Publish review"}, Focus: true})
 	return m.shell(body, footer)
 }
