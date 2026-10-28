@@ -1,0 +1,30 @@
+ loupe  acme/widgets#42  round 1  feat(cache): add a read-through cache for p…  !~==x-  3/6 decided
+╭─ Summary ─────────────────────────────────────────────────────────────────────────────────────  ─╮
+│ • Cache metadata before fetching it again.                                                       │
+│ • Blocks: expiry is missing when the ETag is absent.                                             │
+│ • Smaller findings cover locking, metrics, and docs.                                             │
+│ • Not checked: GitHub rate limits.                                                               │
+╰─  ─────────────────────────────────────────────────────────────────────────────── tab collapses ─╯
+                    ╭─ Help ──────────────────────────────────────────── list ─╮
+╭─ Findings ────────│ Move                                                     │ note · 3 pending ─╮
+│     id    severity│ ↑↓ / j/k  move through findings                          │on                 │
+│ > · f-002 [MAJOR] │ enter     open the finding                               │che/store.go:90-91 │
+│   · f-003 [MINOR] │ tab       expand or collapse the summary                 │e/metrics.go:39-40 │
+│   ✓ f-001         │                                                          │/cache/store.go:38 │
+│   ✓ f-006         │ App                                                      │/store.go:42 (old) │
+│   ↩ f-007         │ o         open the pull request                          │dgets/main.go:11   │
+│   × f-005         │ p         publish when ready                             │l                  │
+│   · f-004         │ q         quit                                           │l                  │
+│                   │                                                          │                   │
+│                   │ Progress: = accepted, x excluded, ~ open note            │                   │
+│                   │           ! pending blocking, - pending                  │                   │
+│                   │ Confidence: ■■■ high, ■■□ medium, ■□□ low                │                   │
+│                   ╰─  ────────────────────────────────────────── esc closes ─╯                   │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰─  ────────────────────────────────────────────────────────────────────────────────────── 1 of 7 ─╯
+↑↓ scroll  esc/?/q close help

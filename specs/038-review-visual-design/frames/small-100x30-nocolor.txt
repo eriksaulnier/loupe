@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+                          ╭─ loupe ───────────────────────────────────  ─╮
+                          │ Window too small                             │
+                          │ This window is 40 by 10.                     │
+                          │ Review needs 60 by 12.                       │
+                          │ Make it larger, or press q to quit.          │
+                          ╰─  ────────────────────────────────────────  ─╯
+
+
+
+
+
+
+
+
+
+
+
+

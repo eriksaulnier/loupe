@@ -1,0 +1,3 @@
+# Exact-height frames retain empty rows below centered content.
+*.txt whitespace=-blank-at-eof
+*.ansi whitespace=-blank-at-eof

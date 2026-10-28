@@ -1,0 +1,30 @@
+ ⦿ loupe   acme/widgets#42  round 1  feat(cache): add a read-through cache fo…  ▮▮▮▮▮▮  6/6 decided
+[Action]  │  Inline comments  │  Message
+╭─ Action ──────────────────────────────────────────────────────────────────────────────────────  ─╮
+│ > comment          Post findings without a verdict.                                              │
+│   approve          Unavailable: f-002 is blocking.                                               │
+│   request-changes  Post findings and request changes.                                            │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰─  ────────────────────────────────────────────────────────────────────────────────────────────  ─╯
+╭─ Message ─────────────────────────────────────────────────────────────────────────────────────  ─╮
+│ Next: choose which accepted findings become inline comments.                                     │
+│ No review has been sent.                                                                         │
+│                                                                                                  │
+│                                                                                                  │
+╰─  ────────────────────────────────────────────────────────────────────────────────────────────  ─╯
+↑↓ move  enter next  esc back  │  ? help

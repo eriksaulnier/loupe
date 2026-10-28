@@ -1,0 +1,24 @@
+ ⦿ loupe   acme/widgets#42  r1  feat(cache): add a read-t…  ▮▮▮▮▮▮  3/6 decided
+╭─ Summary ─────────────────────────────────────────────────────────────────  ─╮
+│ • Cache metadata before fetching it again.                                   │
+│ • Blocks: expiry is missing when the ETag is absent.                         │
+│ • Smaller findings cover locking, metrics, and docs.                         │
+│ • Not checked: GitHub rate limits.                                           │
+╰─  ─────────────────────────────────────────────────────────── tab collapses ─╯
+
+╭─ Findings ──────────────────────────── 1 blocking · 1 open note · 3 pending ─╮
+│     id    severity   con finding                          location           │
+│ ▌ · f-002  MAJOR     ▰▰▰ ● Cache entries never expire wh… …he/store.go:90-91 │
+│   · f-003  MINOR     ▰▰▱ ✎ Hit ratio counters reset on e… …/metrics.go:39-40 │
+│   ✓ f-001            ▰▰▰ Store.Put holds the write lock … …cache/store.go:38 │
+│   ✓ f-006            ▰▰▱ The old store dropped insertion… …store.go:42 (old) │
+│   ↩ f-007            ▰▱▱ Flag default duplicates the con… …idgets/main.go:11 │
+│   × f-005                Document the cache size limit i… general            │
+│   · f-004            ▰▱▱ Is the 304 path covered by the … general            │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰─ ✓ f-001 accepted ────────────────────────────────────────────────── 1 of 7 ─╯
+↑↓ move  enter open  tab summary  │  o open PR  p publish  ? help  q quit

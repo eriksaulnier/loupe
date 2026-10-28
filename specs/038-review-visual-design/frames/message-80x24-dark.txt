@@ -1,0 +1,24 @@
+ ⦿ loupe   acme/widgets#42  r1  feat(cache): add a read-t…  ▮▮▮▮▮▮  6/6 decided
+Action  │  Inline comments  │  [Message]
+╭─ Publish review ──────────────────────────────────────────────────────────  ─╮
+│ COMMENT · inline: none · human confirmation required                         ┃
+│                                                                              ┃
+│ ╭─ Message ─────────────────────────────────────────────────────── typing ─╮ ┃
+│ │ Please address the cache expiry issue before merging._                   │ ┃
+│ │                                                                          │ ┃
+│ │ The review opens on what you write here.                                 │ ┃
+│ │                                                                          │ ┃
+│ ╰─  ─────────────────────────────────────────────────────── esc when done ─╯ ┃
+│                                                                              ┃
+│ Review preview                                                               ┃
+│ Must fix                                                                     │
+│ [MAJOR] Cache entries never expire when the ETag is missing                  │
+│ internal/cache/store.go:90-91                                                │
+│                                                                              │
+│ Worth a look                                                                 │
+│ [MINOR] Hit ratio counters reset on every scrape                             │
+│ internal/cache/metrics.go:39-40                                              │
+│                                                                              │
+│ Store.Put holds the write lock across the network call                       │
+╰─  ───────────────────────────────────────────────────────── preview scrolls ─╯
+esc done  enter new line  ctrl+u clear  │  pgup/pgdn read findings

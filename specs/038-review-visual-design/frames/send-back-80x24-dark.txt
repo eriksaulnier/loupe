@@ -1,0 +1,24 @@
+ ⦿ loupe   acme/widgets#42  r1  feat(cache): add a read-t…  ▮▮▮▮▮▮  3/6 decided
+╭─ f-002 · pending ─────────────────────────────────────────────────────────  ─╮
+│ Cache entries never expire when the ETag is missing                          ┃
+│  MAJOR   ● blocking   issue   confidence ▰▰▰  ✓ reproduced                   ┃
+│                                                                              ┃
+│ ╭─ internal/cache/store.go:90-91 ────────────────────────────────── +8 -0 ─╮ ┃
+│ │    87 + if !ok {                                                         │ ┃
+│ │    88 +     return Entry{}, false                                        │ ┃
+│ │    89 + }                                                                │ ┃
+│ │ ┃  90 + if e.ETag == "" {                                                │ ┃
+│ │ ┃  91 +     return e, true                                               │ │
+│ │    92 + }                                                                │ │
+│ │    93 + return e, s.now().Sub(e.At) < s.ttl                              │ │
+│ │    94 + }                                                                │ │
+│ ╰─  ────────────────────────────────────────────────────────────────────  ─╯ │
+│                                                                              │
+│ When the upstream response carries no ETag, Get returns the entry as fresh   │
+╰─  ────────────────────────────────────────────────────────────────── 1 of 7 ─╯
+╭─ Send back f-002 ─────────────────────────────────────────────────────────  ─╮
+│ Please reproduce the missing ETag case.                                      │
+│ Include the failing cache test._                                             │
+│                                                                              │
+╰─  ─────────────────────────────────────────────── enter sends · esc cancels ─╯
+enter send  esc cancel  ctrl+u clear

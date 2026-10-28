@@ -1,0 +1,30 @@
+ ⦿ loupe   acme/widgets#42  round 1  feat(cache): add a read-through cache fo…  ▮▮▮▮▮▮  6/6 decided
+Action  │  Inline comments  │  [Message]
+╭─ Publish review ──────────────────────────────────────────────────────────────────────────────  ─╮
+│ COMMENT · inline: none · human confirmation required                                             ┃
+│                                                                                                  ┃
+│ ╭─ Message ─────────────────────────────────────────────────────────────────────────── typing ─╮ ┃
+│ │ Please address the cache expiry issue before merging._                                       │ ┃
+│ │                                                                                              │ ┃
+│ │ The review opens on what you write here.                                                     │ ┃
+│ │                                                                                              │ ┃
+│ ╰─  ─────────────────────────────────────────────────────────────────────────── esc when done ─╯ ┃
+│                                                                                                  ┃
+│ Review preview                                                                                   ┃
+│ Must fix                                                                                         ┃
+│ [MAJOR] Cache entries never expire when the ETag is missing                                      ┃
+│ internal/cache/store.go:90-91                                                                    ┃
+│                                                                                                  │
+│ Worth a look                                                                                     │
+│ [MINOR] Hit ratio counters reset on every scrape                                                 │
+│ internal/cache/metrics.go:39-40                                                                  │
+│                                                                                                  │
+│ Store.Put holds the write lock across the network call                                           │
+│ internal/cache/store.go:38                                                                       │
+│                                                                                                  │
+│ The old store dropped insertion order                                                            │
+│ internal/cache/store.go:42 (old)                                                                 │
+│                                                                                                  │
+│ Is the 304 path covered by the fake server?                                                      │
+╰─  ───────────────────────────────────────────────────────────────────────────── preview scrolls ─╯
+esc done  enter new line  ctrl+u clear  │  pgup/pgdn read findings
