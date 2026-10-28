@@ -235,20 +235,26 @@ func (m *Model) impact(f draft.Finding) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := []string{"", m.styles.Head.Render("Impact")}
+	out := []string{"", m.sectionHead("Impact")}
 	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
 }
 
-// suggestedFix is shown under a gutter rather than as Markdown, so a fix that is not code still reads as a quotation
-// and cannot close a fence.
+// sectionHead is a heading inside the detail document, in the accent as pane titles are, so the document reads as
+// sections.
+func (m *Model) sectionHead(text string) string {
+	return m.styles.Emphasis(m.styles.Accent).Render(text)
+}
+
+// suggestedFix is shown under a green gutter rather than as Markdown, so a fix that is not code still reads as a
+// proposed change apart from quoted text, and cannot close a fence.
 func (m *Model) suggestedFix(f draft.Finding) []string {
 	if f.SuggestedFix == "" {
 		return nil
 	}
-	out := []string{"", m.styles.Head.Render(strings.TrimSpace(m.glyphs.Fix + " Suggested fix"))}
+	out := []string{"", m.sectionHead(strings.TrimSpace(m.glyphs.Fix + " Suggested fix"))}
 	width, _ := style.PaneInner(m.width, 0)
 	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), width-2, ""), "\n") {
-		out = append(out, m.styles.Dim.Render(m.glyphs.Quote)+" "+line)
+		out = append(out, m.styles.Good.Render(m.glyphs.Quote)+" "+line)
 	}
 	return out
 }
@@ -258,7 +264,7 @@ func (m *Model) references(f draft.Finding) []string {
 	if len(f.References) == 0 {
 		return nil
 	}
-	out := []string{"", m.styles.Head.Render("References")}
+	out := []string{"", m.sectionHead("References")}
 	width, _ := style.PaneInner(m.width, 0)
 	for _, ref := range f.References {
 		// Wrapped, since the detail cannot scroll sideways and a URL clipped at the edge cannot be read or copied.

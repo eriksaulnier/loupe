@@ -804,3 +804,19 @@ func TestNoteThreadsHangFromATonedBar(t *testing.T) {
 		t.Errorf("a note is still drawn as a pane:\n%s", ansi.Strip(view))
 	}
 }
+
+// The detail's section headings take the accent, as pane titles do, and a suggested fix hangs from a green bar, so a
+// proposed change reads apart from quoted text (demo feedback).
+func TestDetailSectionsStandOut(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-002")
+	view := m.View().Content
+	head := m.styles.Emphasis(m.styles.Accent)
+	if !strings.Contains(view, head.Render(strings.TrimSpace(m.glyphs.Fix+" Suggested fix"))) {
+		t.Errorf("the suggested fix heading is not in the accent:\n%q", view)
+	}
+	if !strings.Contains(view, m.styles.Good.Render(m.glyphs.Quote)+" extract insertAfter") {
+		t.Errorf("the suggested fix does not hang from a green bar:\n%q", view)
+	}
+}

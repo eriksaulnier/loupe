@@ -119,3 +119,5 @@ A refusal taller than every row its screen can give it MUST keep its opening row
 A pane the human types or edits in MUST use the note color while it has the keys: the send-back composer, the metadata editor, and the review message while typing. The review message returns to the accent when blurred, so the border also shows where typing goes.
 
 A wrapped footer MUST break between whole key groups when that takes no more rows than breaking between hints. Otherwise it breaks between hints, as before.
+
+The detail's section headings (Impact, Suggested fix, References) MUST use the accent, in bold. A suggested fix MUST hang from a bar in the good color, so a proposed change reads apart from quoted text.

@@ -80,6 +80,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T036 Draw the send-back, edit and typing message panes in the note color, in `internal/tui/detail.go` and `internal/tui/confirm.go`.
 - [X] T037 Draw each note thread behind a left bar with a colored headline instead of a nested pane, in `internal/tui/detail.go`.
 - [X] T038 Wrap the footer between whole key groups where that costs no extra row, in `internal/style/review.go`.
+- [X] T039 Draw the detail's section headings in the accent and the suggested fix's bar in the good color, in `internal/tui/detail.go`.
 
 ## Dependencies and parallel work
 
