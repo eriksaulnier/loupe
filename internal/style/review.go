@@ -454,17 +454,26 @@ func ProgressCells(order []ProgressState) []ProgressState {
 const progressChars = "=x~!-"
 
 // Progress draws the bar: one joined ▮ per cell in its state's color, or the state characters where color or the
-// glyph is not available. ● is reserved for blocking and never appears here.
-func (s Style) Progress(order []ProgressState) string {
+// glyph is not available. ● is reserved for blocking and never appears here. current is the counted finding to mark,
+// counting from 1, or 0 for none; its cell sits on the accent while each cell is one finding.
+func (s Style) Progress(order []ProgressState, current int) string {
 	cells := ProgressCells(order)
 	var out strings.Builder
 	colors := [progressStates]color.Color{s.rv.good, s.rv.overlay1, s.rv.note, s.rv.blockingDim, s.rv.surface1}
-	for _, st := range cells {
+	marked := 0
+	if len(order) <= progressEach {
+		marked = current
+	}
+	for i, st := range cells {
 		if !s.Color || s.Glyphs.Tier == ASCII {
 			out.WriteString(s.fg(colors[st]).Render(progressChars[st : st+1]))
 			continue
 		}
-		out.WriteString(s.fg(colors[st]).Render("▮"))
+		cell := s.fg(colors[st])
+		if i+1 == marked {
+			cell = s.bg(cell, s.rv.accent)
+		}
+		out.WriteString(cell.Render("▮"))
 	}
 	return out.String()
 }
@@ -567,10 +576,12 @@ func (s Style) keyHint(h Hint) string {
 // ReviewHeading is what the one-row header shows. Ref and Title are already sanitized for display; URL is the pull
 // request, linked only when Link accepts it.
 type ReviewHeading struct {
-	Ref, URL       string
-	Round          int
-	Title          string
-	Progress       []ProgressState
+	Ref, URL string
+	Round    int
+	Title    string
+	Progress []ProgressState
+	// Current is the counted finding the bar marks, counting from 1, or 0 for none.
+	Current        int
 	Decided, Total int
 	// NoCount leaves out the progress and the count, for the standalone confirmation, which has no draft.
 	NoCount bool
@@ -607,7 +618,7 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	if !h.NoCount {
 		count = fmt.Sprintf("%d/%d decided", h.Decided, h.Total)
 		if width >= 80 && h.Total > 0 {
-			bar = s.Progress(h.Progress)
+			bar = s.Progress(h.Progress, h.Current)
 		}
 	}
 	if width < 80 {

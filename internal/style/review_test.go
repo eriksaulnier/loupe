@@ -271,12 +271,33 @@ func slicesEqual(a, b []ProgressState) bool {
 
 func TestProgressBarGlyphs(t *testing.T) {
 	order := []ProgressState{ProgressAccepted, ProgressExcluded, ProgressNote, ProgressBlocking, ProgressPending}
-	if got := reviewStyle(t, false, nil).Progress(order); got != "=x~!-" {
+	if got := reviewStyle(t, false, nil).Progress(order, 0); got != "=x~!-" {
 		t.Errorf("NO_COLOR bar %q, want =x~!-", got)
 	}
-	colored := reviewStyle(t, true, nil).Progress(order)
+	colored := reviewStyle(t, true, nil).Progress(order, 0)
 	if plain := ansi.Strip(colored); plain != "▮▮▮▮▮" || strings.Contains(colored, "●") {
 		t.Errorf("colored bar %q", plain)
+	}
+}
+
+// The current finding's cell sits on the accent in color. Monochrome marks nothing, and above 30 findings no cell is
+// one finding, so none is marked (demo feedback).
+func TestProgressMarksTheCurrentCell(t *testing.T) {
+	order := []ProgressState{ProgressAccepted, ProgressPending, ProgressPending}
+	color := reviewStyle(t, true, nil)
+	cells := splitCells(color.Progress(order, 2))
+	if len(cells) != 3 || ansi.Strip(cells[1]) != "▮" || cells[1] == cells[2] {
+		t.Errorf("the second cell is not marked: %q", cells)
+	}
+	if unmarked := splitCells(color.Progress(order, 0)); unmarked[1] != unmarked[2] {
+		t.Errorf("no current finding still marked a cell: %q", unmarked)
+	}
+	if got := reviewStyle(t, false, nil).Progress(order, 2); got != "=--" {
+		t.Errorf("NO_COLOR bar %q, want =--", got)
+	}
+	many := states(map[ProgressState]int{ProgressPending: 31})
+	if color.Progress(many, 5) != color.Progress(many, 0) {
+		t.Error("a grouped bar marked a cell")
 	}
 }
 

@@ -761,7 +761,7 @@ func (m *Model) helpLines() []string {
 // an open note from one the agent has answered.
 func (m *Model) legend() []string {
 	s := m.styles
-	cell := func(st style.ProgressState) string { return s.Progress([]style.ProgressState{st}) }
+	cell := func(st style.ProgressState) string { return s.Progress([]style.ProgressState{st}, 0) }
 	conf := func(word string) string { return s.ConfidenceScale(word) }
 	return []string{
 		"Progress: " + cell(style.ProgressAccepted) + " accepted, " + cell(style.ProgressExcluded) + " excluded, " +

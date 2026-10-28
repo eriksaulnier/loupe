@@ -73,8 +73,34 @@ func (m *Model) reviewHeader() string {
 	order, decided, total := progressOf(m.draft, m.order)
 	return m.styles.ReviewHeader(style.ReviewHeading{
 		Ref: render.ForDisplay(m.ref()), URL: m.target.URL, Round: m.target.Round, Title: m.titleText(),
-		Progress: order, Decided: decided, Total: total,
+		Progress: order, Current: m.currentCell(), Decided: decided, Total: total,
 	}, m.width)
+}
+
+// currentCell is the progress cell of the finding the human is on, counting from 1: the selected row in the list and
+// the open finding in detail. It is 0 on other screens and for a withdrawn finding, which has no cell.
+func (m *Model) currentCell() int {
+	id := ""
+	switch m.view {
+	case viewList:
+		if m.cursor < len(m.order) {
+			id = m.order[m.cursor].ID
+		}
+	case viewDetail:
+		id = m.openID
+	}
+	dispositions := draft.Dispositions(m.draft)
+	cell := 0
+	for _, f := range m.order {
+		if dispositions[f.ID] == draft.DispositionWithdrawn {
+			continue
+		}
+		cell++
+		if f.ID == id {
+			return cell
+		}
+	}
+	return 0
 }
 
 // progressOf projects the derived dispositions onto the bar, in list order. A withdrawn finding has no cell and is in

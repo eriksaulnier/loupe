@@ -581,3 +581,34 @@ func TestListPositionOnlyWhenTheFindingsScroll(t *testing.T) {
 		t.Errorf("a list that scrolls hides its position:\n%s", view)
 	}
 }
+
+// The header marks the selected finding's cell in the list and the open finding's in detail; a withdrawn finding has
+// no cell to mark (demo feedback).
+func TestProgressMarksTheCurrentFinding(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	if got := m.currentCell(); got != 1 {
+		t.Errorf("the list marks cell %d, want 1", got)
+	}
+	first := m.reviewHeader()
+	m.Update(arrow(tea.KeyDown))
+	if got := m.currentCell(); got != 2 {
+		t.Errorf("after down the list marks cell %d, want 2", got)
+	}
+	if m.reviewHeader() == first {
+		t.Error("moving the cursor left the header unchanged")
+	}
+	mustOpen(m, "f-003")
+	if got := m.currentCell(); got != 3 {
+		t.Errorf("detail marks cell %d, want 3", got)
+	}
+	w := modelOf(t, withdrawnFixture(t), utf8Env, 100, 30)
+	for i, f := range w.order {
+		if draft.Dispositions(w.draft)[f.ID] == draft.DispositionWithdrawn {
+			w.cursor = i
+			if got := w.currentCell(); got != 0 {
+				t.Errorf("a withdrawn finding marks cell %d", got)
+			}
+		}
+	}
+}
