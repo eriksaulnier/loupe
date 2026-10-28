@@ -84,6 +84,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T040 Draw status words as chips: the disposition and `open note` in the detail title, and a note's status in its headline, in `internal/style/review.go` and `internal/tui/detail.go`.
 - [X] T041 Draw the footer on a full-width band of the header's surface, in `internal/style/review.go` and the help overlay in `internal/tui/shell.go`.
 - [X] T042 Show the focused pane's name as a solid tab in its tone, through `Pane.Focus` in `internal/style/review.go` and each screen in `internal/tui`.
+- [X] T043 Flash a settling decision's notice as a solid tab for 400 ms, in `internal/tui/detail.go` and `internal/tui/shell.go`.
 
 ## Dependencies and parallel work
 

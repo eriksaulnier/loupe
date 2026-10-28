@@ -755,19 +755,34 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 		return m.fail(m.refreshDetail())
 	}
 	m.sayDecided(success())
+	flash := m.flash(findingTone(draft.Dispositions(m.draft)[m.openID]))
 	i := orderedIndex(m.order, m.openID)
 	if i < 0 || i+1 >= len(m.order) {
-		return m.fail(m.refreshDetail())
+		return tea.Batch(m.fail(m.refreshDetail()), flash)
 	}
 	notice, kind := m.notice, m.noticeKind
 	cmd := m.fail(m.openFinding(m.order[i+1].ID))
 	// The notice names what was just recorded, so it survives the move to the finding after it.
 	m.notice, m.noticeKind = notice, kind
 	if m.cfg.Screen != nil {
-		return cmd
+		return tea.Batch(cmd, flash)
 	}
 	m.settling = true
-	return tea.Batch(cmd, tea.Tick(settleAfterDecision, func(time.Time) tea.Msg { return settledMsg{} }))
+	return tea.Batch(cmd, flash, tea.Tick(settleAfterDecision, func(time.Time) tea.Msg { return settledMsg{} }))
+}
+
+// flashFor is how long a decision's notice shows as a solid tab before it reads as plain text: long enough to catch
+// the eye, short enough to be over before the next key.
+var flashFor = 400 * time.Millisecond
+
+// flashEnded ends the flash of the notice generation it was scheduled for, and nothing newer.
+type flashEnded struct{ gen int }
+
+// flash makes the current notice a solid tab in tone until its timer ends it.
+func (m *Model) flash(tone style.Tone) tea.Cmd {
+	m.flashGen, m.flashTone = m.noticeGen, tone
+	gen := m.noticeGen
+	return tea.Tick(flashFor, func(time.Time) tea.Msg { return flashEnded{gen} })
 }
 
 func (m *Model) detailView() string {

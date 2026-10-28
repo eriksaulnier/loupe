@@ -83,6 +83,9 @@ type Model struct {
 	noticeKind style.Kind
 	// noticeGen is the notice's generation, so the timer of a success notice clears only its own.
 	noticeGen int
+	// flashGen is the notice generation still flashing as a solid tab, in flashTone; 0 when none is.
+	flashGen  int
+	flashTone style.Tone
 	err       error
 
 	// order is the draft's findings as every surface presents them; the cursor and the detail's position index it.
@@ -418,6 +421,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case noticeExpired:
 		if msg.gen == m.noticeGen {
 			m.notice = ""
+		}
+		return m, nil
+	case flashEnded:
+		if msg.gen == m.flashGen {
+			m.flashGen = 0
 		}
 		return m, nil
 	case browserMsg:

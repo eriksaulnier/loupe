@@ -178,7 +178,12 @@ func (m *Model) borderNotice(room int) string {
 	if m.notice == "" || m.noticeKind == style.Warn || style.Width(m.notice) > room {
 		return ""
 	}
-	return m.styles.Of(m.noticeKind).Render(render.ForDisplay(m.notice))
+	text := render.ForDisplay(m.notice)
+	// A decision's notice flashes as a solid tab first, when the border has room for the tab's padding.
+	if m.flashGen != 0 && m.flashGen == m.noticeGen && style.Width(text)+2 <= room {
+		return m.styles.TitleTab(text, m.flashTone)
+	}
+	return m.styles.Of(m.noticeKind).Render(text)
 }
 
 // noticeRows are a notice that does not belong in a border, wrapped whole into the pane so its corrective text is

@@ -127,3 +127,5 @@ Status words MUST be chips in color: the disposition and `open note` in the deta
 In color, every footer row MUST sit on a band of the header's surface, the width of the window, so the keys rest on the screen's bottom edge. Without a surface color, as in `NO_COLOR` or 16 colors, the footer is the bare keys.
 
 In color, the pane taking the keys MUST show its name as a solid tab: bold base text on a block of the pane's tone, like the badge. The tab's padding replaces the spaces beside the title. That pane is the findings in the list and the finding's id in detail. While a composer is open, it is the composer, and the review message while typing. The choice pane, help, the published screen and the too-small screen also get the tab. Other panes keep plain titles. Without color, titles are unchanged.
+
+A decision that settles a finding MUST flash its success notice as a solid tab in the finding's new tone for 400 ms: good when accepted, overlay when excluded, the accent otherwise. The notice then reads as plain colored text until it expires. The flash needs room for the tab's padding, and it has no effect without color.

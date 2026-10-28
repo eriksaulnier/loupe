@@ -860,3 +860,23 @@ func TestOnlyTheFocusedPaneHasATab(t *testing.T) {
 		t.Errorf("a blurred message does not return the tab to the review:\n%q", v)
 	}
 }
+
+// A decision that settles a finding flashes its notice as a solid tab in the decision's color, then the notice reads as
+// plain colored text until it expires (demo feedback).
+func TestDecisionFlashesItsNotice(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-001")
+	m.Update(runes("a"))
+	if m.notice == "" {
+		t.Fatal("accepting said nothing")
+	}
+	if view := m.View().Content; !strings.Contains(view, m.styles.TitleTab(m.notice, style.ToneGood)) {
+		t.Errorf("the accept notice does not flash:\n%q", view)
+	}
+	m.Update(flashEnded{m.flashGen})
+	view := m.View().Content
+	if strings.Contains(view, m.styles.TitleTab(m.notice, style.ToneGood)) || !strings.Contains(view, m.styles.Good.Render(m.notice)) {
+		t.Errorf("the notice did not settle to plain colored text after the flash:\n%q", view)
+	}
+}
