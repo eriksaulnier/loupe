@@ -214,7 +214,7 @@ func TestSendFinishedAfterQuitKeepsTheOutcome(t *testing.T) {
 		tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 		waitFor(t, tm, "> none")
 		tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-		waitFor(t, tm, "<details open>")
+		waitFor(t, tm, messageTitle)
 		tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 		tm.Type("y")
 		waitFor(t, tm, "sending the review")

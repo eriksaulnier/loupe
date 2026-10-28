@@ -963,3 +963,57 @@ func TestMessageBoxOpensTwoRowsTall(t *testing.T) {
 		t.Errorf("the empty box holds %d rows, want 2:\n%s", bottom-top-1, m.View().Content)
 	}
 }
+
+// readableRest is a review body in the published format past its chips row: a section, one finding in its details
+// block with the location and metadata quoted, and a bold field.
+const readableRest = "### Must fix\n\n<details open>\n<summary>\u26d4 <b>issue</b> MAJOR: Cache entries never expire</summary>\n\n" +
+	"> [`internal/cache/store.go:90-91`](https://github.com/acme/widgets/pull/42/files#diff-abc)\\\n> **Confidence:** high\n\n" +
+	"**Impact:** Stale titles.\n\nBody text with `Get` in it.\n\n</details>\n"
+
+// The confirmation opens on the review as it reads, not its Markdown: no tags, link targets or emphasis markers. v
+// steps through the Markdown, then the payload, then back to the review, so the exact bytes stay one key away (demo
+// feedback).
+func TestConfirmationReadsAsAReview(t *testing.T) {
+	p := publish.Preview{EnvelopeJSON: "{}"}
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		head := previewChips
+		if message != "" {
+			head += "\n\n" + message
+		}
+		return publish.Envelope{Body: head + "\n\n---\n\n" + readableRest}, "{}", nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	m := modelOf(t, newFixture(t), utf8Env, 100, 40)
+	title := ConfirmTitle(m.ref(), "comment", "none", 0)
+	title.inFlow = true
+	m.confirm, m.view = newConfirmation(p, title, ""), viewConfirm
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	view := m.View().Content
+	text := paneText(view)
+	for _, want := range []string{"Must fix", "⛔ issue MAJOR: Cache entries never expire", "internal/cache/store.go:90-91", "Confidence: high", "Impact: Stale titles.", "Body text with `Get` in it."} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the review lacks %q:\n%s", want, view)
+		}
+	}
+	for _, raw := range []string{"<details", "<summary>", "**", "](https", "### ", "review body"} {
+		if strings.Contains(view, raw) {
+			t.Errorf("the review shows Markdown %q:\n%s", raw, view)
+		}
+	}
+	if !strings.Contains(view, "v markdown") {
+		t.Errorf("the footer does not offer the Markdown:\n%s", view)
+	}
+	m.Update(runes("v"))
+	if view := m.View().Content; !strings.Contains(view, "<details open>") || !strings.Contains(view, "v payload") {
+		t.Errorf("v did not show the Markdown:\n%s", view)
+	}
+	m.Update(runes("v"))
+	if view := m.View().Content; !strings.Contains(view, "exact request payload") || !strings.Contains(view, "v review") {
+		t.Errorf("a second v did not show the payload:\n%s", view)
+	}
+	m.Update(runes("v"))
+	if view := m.View().Content; strings.Contains(view, "<details") || !strings.Contains(paneText(view), "Must fix") {
+		t.Errorf("a third v did not return to the review:\n%s", view)
+	}
+}

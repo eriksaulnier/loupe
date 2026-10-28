@@ -33,10 +33,11 @@ type confirmation struct {
 	// shown is preview recomposed around the typed message: the payload this screen shows and publication sends.
 	shown publish.Preview
 	// title comes from the caller, which knows the run; the preview does not carry it.
-	title    ConfirmHeading
-	showJSON bool
-	yes      bool
-	scroll   viewport.Model
+	title ConfirmHeading
+	// shows is how the review is drawn: readable, its Markdown, or the request payload. v steps through them.
+	shows  confirmShows
+	yes    bool
+	scroll viewport.Model
 	// message is the human's own opening prose. It lives here and nowhere else: a canceled confirmation discards it
 	// and nothing can pre-fill it, because text that arrives already written is text that gets approved unread.
 	message textarea.Model
@@ -180,15 +181,17 @@ func (c *confirmation) key(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 		// The payload is drawn instead of the body the input sits in, so coming back to the message has to bring
 		// the body back with it; otherwise the human types into a field that is not on screen.
-		c.showJSON = false
+		if c.shows == showPayload {
+			c.shows = showReview
+		}
 		c.typing, c.follow = true, true
 		cmd := c.message.Focus()
 		c.sync(m)
 		return false, cmd
 	case "v":
 		// The payload hides the body the input is drawn into, so the keyboard comes back to the confirmation.
-		c.showJSON = !c.showJSON
-		if c.showJSON {
+		c.shows = (c.shows + 1) % showCount
+		if c.shows == showPayload {
 			c.blur()
 		}
 		c.scroll.GotoTop()
@@ -257,6 +260,16 @@ func (c *confirmation) cutAfter(body, message string) error {
 	c.after = displayBody(rest)
 	return nil
 }
+
+// confirmShows is how the confirmation draws the review, in the order v steps through them.
+type confirmShows int
+
+const (
+	showReview confirmShows = iota
+	showMarkdown
+	showPayload
+	showCount
+)
 
 func displayBody(body string) string {
 	return render.AnchorsAsNotes(render.RecordAsNote(render.PillsAsWords(markdown.OpenDetails(body))))
@@ -442,9 +455,16 @@ func shortSHA(sha string) string {
 
 func (c *confirmation) content(m *Model) string {
 	width, _ := style.PaneInner(m.width, 0)
-	if c.showJSON {
+	if c.shows == showPayload {
 		return m.styles.Rule(width, "exact request payload", "") + "\n" +
 			m.styles.Wrap(render.ForDisplay(c.shown.EnvelopeJSON), width, "")
+	}
+	// The review reads as text by default; v shows the Markdown that is sent, byte for byte.
+	body := func(markdown string) string {
+		if c.shows == showReview {
+			return m.readable(markdown, width)
+		}
+		return m.styles.Wrap(render.ForDisplay(markdown), width, "")
 	}
 	var parts []string
 	if moved := c.preview.HeadMoved; moved != nil {
@@ -461,24 +481,23 @@ func (c *confirmation) content(m *Model) string {
 			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(render.ForDisplay(publish.EditedNotice(edited)), width, "")), "")
 		}
 	}
-	parts = append(parts, m.styles.Rule(width, "review body", ""))
 	if c.inline() {
 		// The chips row sits above the box, a no-findings pill when there are none to count. Wrap drops the blank
 		// lines the split left around the box, so its sides are spaced here instead: one row each.
 		if strings.TrimSpace(c.before) != "" {
-			parts = append(parts, m.styles.Wrap(render.ForDisplay(c.before), width, ""))
+			parts = append(parts, body(c.before))
 		}
 		parts = append(parts, "")
 		c.inputTop = strings.Count(strings.Join(parts, "\n"), "\n") + 1
 		after := strings.TrimLeft(c.after, "\n")
-		parts = append(parts, c.messageView(m, width), "", m.styles.Wrap(render.ForDisplay(after), width, ""))
+		parts = append(parts, c.messageView(m, width), "", body(after))
 	} else {
-		parts = append(parts, m.styles.Wrap(render.ForDisplay(displayBody(c.shown.Body)), width, ""))
+		parts = append(parts, body(displayBody(c.shown.Body)))
 	}
 	parts = append(parts, "", m.styles.Rule(width, fmt.Sprintf("inline comments (%d)", len(c.shown.Comments)), ""))
 	for _, comment := range c.shown.Comments {
 		location := m.styles.Accent.Render(strings.TrimSpace(m.glyphs.File + " " + render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side))))
-		parts = append(parts, location, m.styles.Wrap(render.ForDisplay(render.CommentPillsAsWords(comment.Body)), width, ""), "")
+		parts = append(parts, location, body(render.CommentPillsAsWords(comment.Body)), "")
 	}
 	return strings.Join(parts, "\n")
 }
@@ -555,7 +574,8 @@ func (m *Model) confirmFooter() (keys []string, extra string) {
 		decide[0].Key = "y/p"
 		decide = append(decide, style.Hint{Key: "tab/esc", Verb: "your message"})
 	}
-	move := style.KeyGroup{{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}, {Key: "v", Verb: "payload"}}
+	next := [showCount]string{showReview: "markdown", showMarkdown: "payload", showPayload: "review"}[m.confirm.shows]
+	move := style.KeyGroup{{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}, {Key: "v", Verb: next}}
 	keys = m.keys(decide, move, style.KeyGroup{{Verb: confirmCancel}})
 	if len(keys) > 1 {
 		keys, extra = m.keys(decide, move), confirmCancel

@@ -91,6 +91,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T047 Return to the list after the last finding's decision, with the cursor on the first pending finding, in `internal/tui/detail.go`.
 - [X] T048 Tidy the publish screens: only the current step is a block, the steps are unnumbered, the publish pane titles stay plain, and the popup gets a blank row above the steps, in `internal/style/review.go`, `internal/tui/list.go` and `internal/tui/confirm.go`.
 - [X] T049 Open the review message box two rows tall, in `internal/tui/confirm.go`.
+- [X] T050 Open the Message step on a readable review, with `v` stepping to the exact Markdown and the payload, and drop the `review body` rule, in `internal/tui/readable.go` and `internal/tui/confirm.go`.
 
 ## Dependencies and parallel work
 

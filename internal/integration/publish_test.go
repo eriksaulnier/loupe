@@ -140,6 +140,9 @@ func TestPublishEndToEnd(t *testing.T) {
 	s.Type(humanMessage)
 	s.Press("tab")
 	s.WaitFor("publish this review")
+	// The confirmation opens on the review as it reads; v shows the Markdown, which is what is compared byte for byte.
+	s.Press("v")
+	s.WaitFor("v payload")
 	shown := shownBody(t, s.View())
 	s.Press("y")
 	stdout, stderr, exit := s.Wait()
@@ -233,12 +236,13 @@ func (h *harness) lastPostBody() string {
 }
 
 // TestPublishCarriesGateCounts is SC-001: one finding of each kind the gate counts, published attended.
-// shownBody is the review body a confirmation frame shows, from its heading to the inline comments, with the pane's
-// and the message box's borders dropped and the words in them kept where they sit. Spaces and line breaks are dropped too, since the
-// confirmation wraps prose to the width it reads at; every other character must match the body sent.
+// shownBody is the review body a confirmation frame shows in its Markdown view, from the pane's top border to the
+// inline comments, with the pane's and the message box's borders dropped and the words in them kept where they sit.
+// Spaces and line breaks are dropped too, since the confirmation wraps prose to the width it reads at; every other
+// character must match the body sent.
 func shownBody(t *testing.T, frame string) string {
 	t.Helper()
-	_, rest, ok := strings.Cut(frame, "-- review body")
+	_, rest, ok := strings.Cut(frame, "- Publish review ")
 	section, _, ok2 := strings.Cut(rest, "-- inline comments")
 	if !ok || !ok2 {
 		t.Fatalf("the frame has no review body section:\n%s", frame)

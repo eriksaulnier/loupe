@@ -137,3 +137,5 @@ The publish steps MUST read as a sequence joined by the cursor arrow. Done steps
 A decision that settles the last finding in the list MUST return to the list, with its notice and flash in the findings border. The cursor lands on the first finding still pending, or stays on the decided finding when none is. Changes that do not settle a finding keep detail open.
 
 The review message box MUST open two rows tall and grow with the message.
+
+The Message step MUST open on the review as it reads. Section headings take the accent and a finding's summary is bold. Quoted lines hang from a bar, links show their text, and code spans are chips. Bold markers, details tags and fences are dropped, and a hidden comment shows as a dim note. `v` MUST step from that view to the exact Markdown, then to the request payload, and back. The footer names the view it steps to next. Typing a message from the payload returns to the readable view. The `review body` rule is gone, because the pane's title already names the review.
