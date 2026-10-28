@@ -51,19 +51,35 @@ func Start(t testing.TB, width, height int, fn func(stdin io.Reader, stdout, std
 	pr, pw := io.Pipe()
 	s := &Screen{t: t, in: pw, changed: make(chan struct{})}
 	s.initTerminal(width, height)
-	repliesDone := make(chan struct{})
-	go func() {
-		defer close(repliesDone)
-		// The emulator answers terminal queries through the same input as keys.
-		_, err := io.Copy(pw, s.terminal)
-		if err != nil && !errors.Is(err, io.ErrClosedPipe) {
-			s.mu.Lock()
-			if !s.ended {
-				fmt.Fprintf(&s.stderr, "terminal response: %v", err)
+	// The emulator answers terminal queries through the same input as keys. It answers while the program's write holds
+	// the screen, so the answers wait in a queue, as a tty's input buffer holds them, rather than in a pipe the program
+	// may not read until that write returns.
+	var replies sync.WaitGroup
+	queue := newReplyQueue()
+	replies.Go(func() {
+		defer queue.close()
+		buf := make([]byte, 4096)
+		for {
+			n, err := s.terminal.Read(buf)
+			queue.push(buf[:n])
+			if err != nil {
+				if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrClosedPipe) {
+					s.failReply(err)
+				}
+				return
 			}
-			s.mu.Unlock()
 		}
-	}()
+	})
+	replies.Go(func() {
+		for reply, ok := queue.pop(); ok; reply, ok = queue.pop() {
+			if _, err := pw.Write(reply); err != nil {
+				if !errors.Is(err, io.ErrClosedPipe) {
+					s.failReply(err)
+				}
+				return
+			}
+		}
+	})
 	go func() {
 		exit := fn(pr, stream{s, &s.stdout}, stream{s, &s.stderr})
 		// The program no longer reads, so a key sent from here on fails instead of blocking on the pipe.
@@ -77,12 +93,74 @@ func Start(t testing.TB, width, height int, fn func(stdin io.Reader, stdout, std
 		_ = pw.Close()
 		// Close the response pipe before Emulator.Close touches its unsynchronized state.
 		_ = s.terminal.InputPipe().(io.Closer).Close()
-		<-repliesDone
+		replies.Wait()
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		_ = s.terminal.Close()
 	})
 	return s
+}
+
+// failReply records a terminal answer that could not be passed on, unless the program has already ended.
+func (s *Screen) failReply(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.ended {
+		fmt.Fprintf(&s.stderr, "terminal response: %v", err)
+	}
+}
+
+// replyQueue holds the emulator's answers until the program reads them. It never blocks the emulator.
+type replyQueue struct {
+	mu     sync.Mutex
+	ready  chan struct{}
+	queued [][]byte
+	closed bool
+}
+
+func newReplyQueue() *replyQueue { return &replyQueue{ready: make(chan struct{}, 1)} }
+
+func (q *replyQueue) push(p []byte) {
+	if len(p) == 0 {
+		return
+	}
+	q.mu.Lock()
+	q.queued = append(q.queued, bytes.Clone(p))
+	q.mu.Unlock()
+	q.wake()
+}
+
+func (q *replyQueue) close() {
+	q.mu.Lock()
+	q.closed = true
+	q.mu.Unlock()
+	q.wake()
+}
+
+func (q *replyQueue) wake() {
+	select {
+	case q.ready <- struct{}{}:
+	default:
+	}
+}
+
+// pop waits for the next answer. It reports false once the queue is closed and empty.
+func (q *replyQueue) pop() ([]byte, bool) {
+	for {
+		q.mu.Lock()
+		if len(q.queued) > 0 {
+			p := q.queued[0]
+			q.queued = q.queued[1:]
+			q.mu.Unlock()
+			return p, true
+		}
+		closed := q.closed
+		q.mu.Unlock()
+		if closed {
+			return nil, false
+		}
+		<-q.ready
+	}
 }
 
 type stream struct {

@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -141,4 +142,25 @@ func TestViewKeepsAlternateScreenAndSplitUnicode(t *testing.T) {
 	if got := strings.TrimSpace(s.View()); got != "main\nresize" {
 		t.Fatalf("resized screen: %q", got)
 	}
+}
+
+// A terminal buffers what it answers until the program reads it, so a program that asks several questions before it
+// reads its input never blocks on its own output. Bubble Tea does this when its renderer and its input reader race.
+func TestQueriesDoNotWaitForTheProgramToRead(t *testing.T) {
+	asked := make(chan struct{})
+	s := Start(t, 20, 3, func(stdin io.Reader, stdout, stderr io.Writer) int {
+		for range 3 {
+			_, _ = fmt.Fprint(stdout, "\x1b[?2026$p")
+		}
+		close(asked)
+		reply := make([]byte, 64)
+		_, _ = stdin.Read(reply)
+		return 0
+	})
+	select {
+	case <-asked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the program blocked writing its queries until it read their replies")
+	}
+	s.Wait()
 }
