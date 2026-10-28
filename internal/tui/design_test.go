@@ -652,3 +652,22 @@ func TestDetailTitleShowsTheStatus(t *testing.T) {
 		t.Errorf("open note is not in the note color:\n%q", view)
 	}
 }
+
+// The detail border takes the finding's status color and a note pane's border its note's (demo feedback).
+func TestDetailBordersFollowTheStatus(t *testing.T) {
+	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	corner := func(tone style.Tone) string { return m.styles.ToneStyle(tone).Render("╭") }
+	for id, tone := range map[string]style.Tone{"f-001": style.ToneGood, "f-002": style.ToneNote, "f-003": style.ToneMuted} {
+		mustOpen(m, id)
+		pane := strings.Split(m.View().Content, "\n")[1]
+		if !strings.HasPrefix(pane, corner(tone)) {
+			t.Errorf("%s border is not tone %d: %q", id, tone, pane)
+		}
+	}
+	mustOpen(m, "f-002")
+	view := m.View().Content
+	if !strings.Contains(view, m.styles.ToneStyle(style.ToneNote).Render("│")+" "+corner(style.ToneNote)) {
+		t.Errorf("the open note pane is not in the note color:\n%q", view)
+	}
+}

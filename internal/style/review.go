@@ -209,6 +209,30 @@ type Pane struct {
 	Titles        PaneTitles
 	Lines         []string
 	Scroll        Scroll
+	Tone          Tone
+}
+
+// Tone is the color a pane's border takes. The accent is the default; a finding's or a note's status may set another.
+type Tone int
+
+const (
+	ToneAccent Tone = iota
+	ToneGood
+	ToneNote
+	ToneMuted
+)
+
+// ToneStyle is the foreground a tone draws in, and nothing where color is off.
+func (s Style) ToneStyle(t Tone) lipgloss.Style {
+	switch t {
+	case ToneGood:
+		return s.fg(s.rv.good)
+	case ToneNote:
+		return s.fg(s.rv.note)
+	case ToneMuted:
+		return s.fg(s.rv.overlay1)
+	}
+	return s.fg(s.rv.accent)
 }
 
 // Pane draws p as exactly Height rows of exactly Width cells.
@@ -217,7 +241,7 @@ func (s Style) Pane(p Pane) []string {
 		return nil
 	}
 	b := s.border()
-	edge := s.fg(s.rv.accent)
+	edge := s.ToneStyle(p.Tone)
 	inner, rows := PaneInner(p.Width, p.Height)
 	thumbTop, thumbLen := thumb(p.Scroll, rows)
 	out := make([]string, 0, p.Height)
@@ -226,7 +250,7 @@ func (s Style) Pane(p Pane) []string {
 	if title != "" && !strings.Contains(title, "\x1b") {
 		title = s.Emphasis(edge).Render(title)
 	}
-	out = append(out, s.borderRow(b.tl, b.tr, title, p.Titles.TopRight, p.Width-2))
+	out = append(out, s.borderRow(edge, b.tl, b.tr, title, p.Titles.TopRight, p.Width-2))
 	for i := range rows {
 		line := ""
 		if i < len(p.Lines) {
@@ -238,7 +262,7 @@ func (s Style) Pane(p Pane) []string {
 		}
 		out = append(out, edge.Render(b.v)+" "+fit(line, inner)+" "+right)
 	}
-	return append(out, s.borderRow(b.bl, b.br, p.Titles.BottomLeft, p.Titles.BottomRight, p.Width-2))
+	return append(out, s.borderRow(edge, b.bl, b.br, p.Titles.BottomLeft, p.Titles.BottomRight, p.Width-2))
 }
 
 // fit cuts or pads a line to exactly width cells, keeping its escapes and never splitting a grapheme.
@@ -263,9 +287,8 @@ func thumb(sc Scroll, rows int) (int, int) {
 
 // borderRow is a top or bottom edge with its two titles. The right title is essential (counts, a position) and
 // survives whole; the left gives way first, truncated by display cells. An empty title is plain border.
-func (s Style) borderRow(left, right, l, r string, inner int) string {
+func (s Style) borderRow(edge lipgloss.Style, left, right, l, r string, inner int) string {
 	b := s.border()
-	edge := s.fg(s.rv.accent)
 	// Each title costs its text plus a rule cell and a space on its outer side and a space on its inner side; one
 	// rule cell always separates them.
 	cost := func(text string) int {

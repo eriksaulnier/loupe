@@ -319,6 +319,26 @@ func TestHeaderReserveLeavesTheRightEdgeBlank(t *testing.T) {
 	}
 }
 
+// A pane's tone colors its whole border; without color every tone draws the same plain border (demo feedback).
+func TestPaneToneColorsTheBorder(t *testing.T) {
+	color := reviewStyle(t, true, nil)
+	for _, tone := range []Tone{ToneGood, ToneNote, ToneMuted} {
+		pane := color.Pane(Pane{Width: 20, Height: 3, Titles: PaneTitles{TopLeft: "Name"}, Tone: tone})
+		edge := color.ToneStyle(tone)
+		if !strings.HasPrefix(pane[0], edge.Render("╭")) || !strings.HasPrefix(pane[1], edge.Render("│")) || !strings.Contains(pane[2], edge.Render("╯")) {
+			t.Errorf("tone %d does not color the border: %q", tone, pane)
+		}
+	}
+	accent := color.Pane(Pane{Width: 20, Height: 3})
+	if !strings.HasPrefix(accent[0], color.ToneStyle(ToneAccent).Render("╭")) {
+		t.Errorf("the default tone is not the accent: %q", accent)
+	}
+	plain := reviewStyle(t, false, nil)
+	if a, b := plain.Pane(Pane{Width: 20, Height: 3}), plain.Pane(Pane{Width: 20, Height: 3, Tone: ToneGood}); strings.Join(a, "\n") != strings.Join(b, "\n") {
+		t.Errorf("a tone changed a NO_COLOR pane:\n%q\n%q", a, b)
+	}
+}
+
 func TestConfidenceScaleAndPills(t *testing.T) {
 	plain, color := reviewStyle(t, false, nil), reviewStyle(t, true, nil)
 	ascii := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"})

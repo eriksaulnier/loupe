@@ -294,8 +294,12 @@ func (m *Model) noteThread(f draft.Finding) []string {
 			lines = append(lines, m.threadBlock(r.Body, inner)...)
 		}
 		out = append(out, "")
+		tone := style.ToneMuted
+		if n.Status == draft.NoteOpen {
+			tone = style.ToneNote
+		}
 		out = append(out, m.styles.Pane(style.Pane{Width: width, Height: len(lines) + style.PaneRows, Lines: lines,
-			Titles: style.PaneTitles{TopLeft: "Note " + render.ForDisplay(n.ID), TopRight: m.styles.Text().Render(noteStatus(m.glyphs, n.Status))}})...)
+			Titles: style.PaneTitles{TopLeft: "Note " + render.ForDisplay(n.ID), TopRight: m.styles.Text().Render(noteStatus(m.glyphs, n.Status))}, Tone: tone})...)
 	}
 	return out
 }
@@ -324,6 +328,20 @@ func (m *Model) threadBlock(body string, width int) []string {
 }
 
 // noteStatus is the status word behind the glyph of how the note closed; an open note has only the word.
+// findingTone is the detail border's color for a finding's status: an open note asks for the human before the
+// disposition does.
+func findingTone(disposition string, openNote bool) style.Tone {
+	switch {
+	case disposition == draft.DispositionAccepted:
+		return style.ToneGood
+	case disposition == draft.DispositionExcluded || disposition == draft.DispositionWithdrawn:
+		return style.ToneMuted
+	case openNote:
+		return style.ToneNote
+	}
+	return style.ToneAccent
+}
+
 func noteStatus(g GlyphSet, status string) string {
 	switch status {
 	case draft.NoteResolved:
@@ -717,17 +735,21 @@ func (m *Model) detailView() string {
 	lines := strings.Split(m.body.View(), "\n")
 	_, inner := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
 	lines = withNotice(lines[:min(len(lines), m.body.Height())], m.noticeRows(width, room), inner)
-	// The title leads with the list's glyph and says the disposition, and an open note, in their status colors.
+	// The title leads with the list's glyph and says the disposition, and an open note, in their status colors; the
+	// border and the id take the finding's tone.
 	disposition := draft.Dispositions(m.draft)[f.ID]
+	_, open := firstOpenNote(m.draft, f.ID)
+	tone := findingTone(disposition, open)
+	edge := m.styles.ToneStyle(tone)
 	glyph, mark, _ := m.styles.ReviewDisposition(disposition)
-	sep := m.styles.Accent.Render(" " + m.glyphs.Sep + " ")
-	title := mark.Render(glyph) + " " + m.styles.Emphasis(m.styles.Accent).Render(render.ForDisplay(f.ID)) + sep + mark.Render(disposition)
-	if _, open := firstOpenNote(m.draft, f.ID); open {
+	sep := edge.Render(" " + m.glyphs.Sep + " ")
+	title := mark.Render(glyph) + " " + m.styles.Emphasis(edge).Render(render.ForDisplay(f.ID)) + sep + mark.Render(disposition)
+	if open {
 		title += sep + m.styles.Note.Render("open note")
 	}
 	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Lines: lines,
 		Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room), BottomRight: position},
-		Scroll: style.Scroll{Offset: m.body.YOffset(), Visible: m.body.Height(), Total: m.body.TotalLineCount()}})
+		Scroll: style.Scroll{Offset: m.body.YOffset(), Visible: m.body.Height(), Total: m.body.TotalLineCount()}, Tone: tone})
 	switch {
 	case m.noting:
 		body = append(body, m.noteView()...)
