@@ -328,16 +328,14 @@ func (m *Model) threadBlock(body string, width int) []string {
 }
 
 // noteStatus is the status word behind the glyph of how the note closed; an open note has only the word.
-// findingTone is the detail border's color for a finding's status: an open note asks for the human before the
-// disposition does.
-func findingTone(disposition string, openNote bool) style.Tone {
-	switch {
-	case disposition == draft.DispositionAccepted:
+// findingTone is the detail border's color for a finding's decision. An open note colors only its own pane and the
+// title's "open note", so the two never stack.
+func findingTone(disposition string) style.Tone {
+	switch disposition {
+	case draft.DispositionAccepted:
 		return style.ToneGood
-	case disposition == draft.DispositionExcluded || disposition == draft.DispositionWithdrawn:
+	case draft.DispositionExcluded, draft.DispositionWithdrawn:
 		return style.ToneMuted
-	case openNote:
-		return style.ToneNote
 	}
 	return style.ToneAccent
 }
@@ -739,7 +737,7 @@ func (m *Model) detailView() string {
 	// border and the id take the finding's tone.
 	disposition := draft.Dispositions(m.draft)[f.ID]
 	_, open := firstOpenNote(m.draft, f.ID)
-	tone := findingTone(disposition, open)
+	tone := findingTone(disposition)
 	edge := m.styles.ToneStyle(tone)
 	glyph, mark, _ := m.styles.ReviewDisposition(disposition)
 	sep := edge.Render(" " + m.glyphs.Sep + " ")

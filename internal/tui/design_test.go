@@ -656,12 +656,13 @@ func TestDetailTitleShowsTheStatus(t *testing.T) {
 	}
 }
 
-// The detail border takes the finding's status color and a note pane's border its note's (demo feedback).
+// The detail border takes the finding's decision color and a note pane's border its note's. An open note colors only
+// its own pane, so a pending finding with one keeps the accent (demo feedback).
 func TestDetailBordersFollowTheStatus(t *testing.T) {
 	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
 	m.styles.SetColorProfile(colorprofile.TrueColor)
 	corner := func(tone style.Tone) string { return m.styles.ToneStyle(tone).Render("╭") }
-	for id, tone := range map[string]style.Tone{"f-001": style.ToneGood, "f-002": style.ToneNote, "f-003": style.ToneMuted} {
+	for id, tone := range map[string]style.Tone{"f-001": style.ToneGood, "f-002": style.ToneAccent, "f-003": style.ToneMuted} {
 		mustOpen(m, id)
 		pane := strings.Split(m.View().Content, "\n")[bodyTop(40)]
 		if !strings.HasPrefix(pane, corner(tone)) {
@@ -670,7 +671,7 @@ func TestDetailBordersFollowTheStatus(t *testing.T) {
 	}
 	mustOpen(m, "f-002")
 	view := m.View().Content
-	if !strings.Contains(view, m.styles.ToneStyle(style.ToneNote).Render("│")+" "+corner(style.ToneNote)) {
+	if !strings.Contains(view, m.styles.ToneStyle(style.ToneAccent).Render("│")+" "+corner(style.ToneNote)) {
 		t.Errorf("the open note pane is not in the note color:\n%q", view)
 	}
 }

@@ -74,6 +74,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T030 Color the detail pane's border by finding status and a note pane's border by note status through a pane tone, in `internal/style/review.go` and `internal/tui/detail.go`.
 - [X] T031 Keep a blank row under the header in windows of 20 or more rows, through `ReviewLayout` in `internal/style/review.go`, and place every row that assumed a one-row header, such as the published URL links and the help overlay, from the shell's body top.
 - [X] T032 Remove the Message pane from the Action and Inline comments steps in `internal/tui/list.go`. The choice pane's border says `nothing sent yet`.
+- [X] T033 Keep the detail border on the finding's decision color only, so an open note's amber shows on its own pane and not on the pane around it, in `internal/tui/detail.go`.
 
 ## Dependencies and parallel work
 
