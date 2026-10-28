@@ -79,6 +79,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T035 Shorten a refusal taller than the screen in its middle, keeping its opening, its fix and a count of the rows left out, in `internal/tui/shell.go` and `internal/tui/confirm.go`. Found by the cross-vendor review of the branch.
 - [X] T036 Draw the send-back, edit and typing message panes in the note color, in `internal/tui/detail.go` and `internal/tui/confirm.go`.
 - [X] T037 Draw each note thread behind a left bar with a colored headline instead of a nested pane, in `internal/tui/detail.go`.
+- [X] T038 Wrap the footer between whole key groups where that costs no extra row, in `internal/style/review.go`.
 
 ## Dependencies and parallel work
 

@@ -401,6 +401,26 @@ func TestKeyGroups(t *testing.T) {
 	}
 }
 
+// A group that fits a row of its own starts one rather than splitting across two; only a group wider than the window
+// wraps inside itself (demo feedback).
+func TestKeyGroupsWrapBetweenGroups(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	groups := []KeyGroup{
+		{{Key: "a", Verb: "accept"}, {Key: "x", Verb: "exclude"}, {Key: "s", Verb: "send back"}},
+		{{Key: "esc", Verb: "list"}, {Key: "o", Verb: "open PR"}, {Key: "?", Verb: "help"}},
+	}
+	rows := s.KeyGroups(groups, 50)
+	if len(rows) != 2 || rows[0] != "a accept  x exclude  s send back" || rows[1] != "esc list  o open PR  ? help" {
+		t.Errorf("groups split across rows: %q", rows)
+	}
+	wide := []KeyGroup{{{Key: "a", Verb: "accept"}, {Key: "x", Verb: "exclude"}, {Key: "s", Verb: "send back"}, {Key: "e", Verb: "edit"}}}
+	for _, row := range s.KeyGroups(wide, 20) {
+		if Width(row) > 20 {
+			t.Errorf("a group wider than the window did not wrap inside itself: %q", row)
+		}
+	}
+}
+
 func heading() ReviewHeading {
 	return ReviewHeading{
 		Ref: "acme/widgets#42", URL: "https://github.com/acme/widgets/pull/42", Round: 1,

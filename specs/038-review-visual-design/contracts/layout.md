@@ -117,3 +117,5 @@ The full-summary command MUST stay copyable at every width. When it does not fit
 A refusal taller than every row its screen can give it MUST keep its opening rows and its last row, which carries the fix, and MUST replace the rows between with one dim row that says how many were left out. This amends the scrollable-document option in Interaction details. Other rows the pane keeps for itself, such as the confirmation's cancel sentence, stay whole.
 
 A pane the human types or edits in MUST use the note color while it has the keys: the send-back composer, the metadata editor, and the review message while typing. The review message returns to the accent when blurred, so the border also shows where typing goes.
+
+A wrapped footer MUST break between whole key groups when that takes no more rows than breaking between hints. Otherwise it breaks between hints, as before.

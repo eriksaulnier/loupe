@@ -561,9 +561,20 @@ func (s Style) SeverityPill(word string, width int) string {
 type KeyGroup []Hint
 
 // KeyGroups lays out the footer: each key in the accent and its verb in text, the groups in order with a dim bar
-// between them, empty groups left out. It wraps between hints, and a bar that would end or start a row is dropped,
-// since the row break separates the groups there.
+// between them, empty groups left out. It wraps between whole groups where that costs no extra row, and otherwise
+// between hints; a bar that would end or start a row is dropped, since the row break separates the groups there.
 func (s Style) KeyGroups(groups []KeyGroup, width int) []string {
+	// Whole groups read better, but never at the cost of a row: the footer's height is budgeted.
+	byGroup, byHint := s.keyRows(groups, width, true), s.keyRows(groups, width, false)
+	if len(byGroup) <= len(byHint) {
+		return byGroup
+	}
+	return byHint
+}
+
+// keyRows lays the hints out in rows of width. With whole set, a group that fits a row of its own moves to the next
+// row rather than splitting across two.
+func (s Style) keyRows(groups []KeyGroup, width int, whole bool) []string {
 	bar := "│"
 	if s.Glyphs.Tier == ASCII {
 		bar = "|"
@@ -572,8 +583,18 @@ func (s Style) KeyGroups(groups []KeyGroup, width int) []string {
 	var rows []string
 	row := ""
 	for _, g := range groups {
+		if len(g) == 0 {
+			continue
+		}
+		hints := make([]string, len(g))
 		for i, h := range g {
-			text := s.keyHint(h)
+			hints[i] = s.keyHint(h)
+		}
+		if all := strings.Join(hints, "  "); whole && row != "" && Width(row)+Width(sep)+Width(all) > width && Width(all) <= width {
+			rows = append(rows, row)
+			row = ""
+		}
+		for i, text := range hints {
 			joiner := "  "
 			if i == 0 {
 				joiner = sep
