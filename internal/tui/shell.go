@@ -275,7 +275,7 @@ func (m *Model) overlay(base string, baseFooter int, pane, footer []string) stri
 	}
 	out := strings.Split(m.styles.Composite(strings.Join(baseLines[1:region], "\n"), pane, m.width, m.bodyTop()-1, region-1), "\n")
 	for i, l := range footer {
-		footer[i] = m.styles.FooterBand(m.clip(render.ForDisplayANSI(l)), m.width)
+		footer[i] = m.clip(render.ForDisplayANSI(l))
 	}
 	rows := append([]string{m.clip(m.reviewHeader())}, out[:min(len(out), region-1)]...)
 	return strings.Join(append(rows, footer...), "\n")

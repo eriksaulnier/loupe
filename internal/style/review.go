@@ -466,22 +466,11 @@ func (s Style) ReviewFrame(header string, body, footer []string, width, height i
 		}
 		rows = append(rows, line)
 	}
-	for _, f := range footer {
-		rows = append(rows, s.FooterBand(f, width))
-	}
+	rows = append(rows, footer...)
 	if len(rows) > height {
 		rows = rows[:max(0, height)]
 	}
 	return strings.Join(rows, "\n")
-}
-
-// FooterBand puts a footer row on a band the width of the window, the header's surface, so the keys sit on the
-// screen's bottom edge. Where there is no surface to draw, the row is left as it is.
-func (s Style) FooterBand(row string, width int) string {
-	if s.surface(SurfaceHeader) == nil {
-		return row
-	}
-	return s.OnSurface(SurfaceHeader, Pad(row, width))
 }
 
 // ProgressState is one counted finding's place in the progress bar, in the order grouped cells take and the
