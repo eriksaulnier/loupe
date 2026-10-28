@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -194,10 +195,30 @@ func (m *Model) noticeRows(width, room int) []string {
 }
 
 // withNotice puts the notice under a pane's document rows in rows of content. The document gives way, below the
-// viewport's one-row floor if it must, so a refusal that fits the pane is never cut.
-func withNotice(doc, notice []string, rows int) []string {
+// viewport's one-row floor if it must, so a refusal that fits the pane is never cut. One taller than every row keeps
+// its opening rows and its last row, which carries the fix, and says how many rows between were left out.
+func (m *Model) withNotice(doc, notice []string, rows int) []string {
+	if len(notice) > rows {
+		notice = m.shortenNotice(notice, rows)
+	}
 	keep := max(0, min(len(doc), rows-len(notice)))
 	return append(doc[:keep:keep], notice...)
+}
+
+// shortenNotice fits a notice into rows by dropping rows from its middle, never its first or its last.
+func (m *Model) shortenNotice(notice []string, rows int) []string {
+	switch {
+	case rows <= 0:
+		return nil
+	case rows == 1:
+		return notice[len(notice)-1:]
+	case rows == 2:
+		return []string{notice[0], notice[len(notice)-1]}
+	}
+	head := rows - 2
+	left := len(notice) - head - 1
+	mark := m.styles.Overlay().Render(fmt.Sprintf("%s %d more %s", m.glyphs.Ellipsis, left, plural(left, "row")))
+	return slices.Concat(notice[:head], []string{mark}, notice[len(notice)-1:])
 }
 
 // noticeRoom is the bottom-left border's room in a pane of width beside a right title.

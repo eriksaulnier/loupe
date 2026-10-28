@@ -361,7 +361,7 @@ func TestRefusalAtTheMinimumStaysWhole(t *testing.T) {
 	}
 }
 
-// The detail, file diff and confirmation keep a refusal too long for their pane whole, and the document gives way.
+// The detail and file diff keep a refusal too long for their pane whole, and the document gives way.
 func TestLongRefusalStaysWholeInEveryPane(t *testing.T) {
 	// Six wrapped rows: exactly the detail pane at 60x12, so only a document that gives way keeps it whole.
 	refusal := strings.Repeat("this refusal runs on and on ", 10) + "and ends with loupe review"
@@ -376,11 +376,6 @@ func TestLongRefusalStaysWholeInEveryPane(t *testing.T) {
 			m.openFileDiff(f)
 			m.say(style.Warn, refusal)
 		}},
-		{"confirmation", func(m *Model) {
-			showConfirmation(m)
-			m.confirm.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
-			m.confirm.composeErr = errors.New(refusal)
-		}},
 	} {
 		m := modelOf(t, newFixture(t), utf8Env, 60, 12)
 		sc.show(m)
@@ -391,6 +386,17 @@ func TestLongRefusalStaysWholeInEveryPane(t *testing.T) {
 		if !strings.Contains(paneText(view), refusal) {
 			t.Errorf("%s cut the refusal at 60x12:\n%s", sc.name, view)
 		}
+	}
+	// The confirmation's pane also holds the cancel sentence, one row more than the refusal has, so the refusal's
+	// middle gives way and its fix and the cancel sentence both stay.
+	m := modelOf(t, newFixture(t), utf8Env, 60, 12)
+	showConfirmation(m)
+	m.confirm.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	m.confirm.composeErr = errors.New(refusal)
+	view := m.View().Content
+	text := paneText(view)
+	if !strings.Contains(text, "this refusal runs on and on") || !strings.Contains(text, "and ends with loupe review") || !strings.Contains(view, "more rows") || !strings.Contains(text, "nothing is sent") {
+		t.Errorf("the confirmation lost an end of the refusal, the mark or the cancel sentence:\n%s", view)
 	}
 }
 
@@ -719,6 +725,36 @@ func TestSummaryCommandPastesWholeForLongNames(t *testing.T) {
 		want := []string{"loupe", "show", "--run", "acme/" + repo + "#42@1"}
 		if got := strings.Fields(pasted); !slices.Equal(got, want) {
 			t.Errorf("%s: pastes as %q, want %q", repo, got, want)
+		}
+	}
+}
+
+// A refusal taller than every row the screen can give it keeps its opening and its last row, which carries the fix,
+// and says how many rows between were left out (demo feedback: shorten the middle).
+func TestRefusalTallerThanTheScreenKeepsItsEnds(t *testing.T) {
+	var ids []string
+	for i := 1; i <= 200; i++ {
+		ids = append(ids, fmt.Sprintf("f-%03d", i))
+	}
+	refusal := "the draft is not ready: pending findings " + strings.Join(ids, ", ") + "; loupe review"
+	for _, sc := range []struct {
+		name string
+		show func(*Model)
+	}{
+		{"list", func(m *Model) {}},
+		{"detail", func(m *Model) { mustOpen(m, "f-001") }},
+		{"action", func(m *Model) { m.view, m.pick = viewAction, 0 }},
+	} {
+		m := modelOf(t, newFixture(t), utf8Env, 60, 12)
+		sc.show(m)
+		m.say(style.Warn, refusal)
+		view := m.View().Content
+		if lines := strings.Split(view, "\n"); len(lines) != 12 {
+			t.Fatalf("%s is %d rows at 60x12:\n%s", sc.name, len(lines), view)
+		}
+		text := paneText(view)
+		if !strings.Contains(text, "the draft is not ready") || !strings.Contains(text, "f-200; loupe review") || !strings.Contains(view, "more rows") {
+			t.Errorf("%s lost an end of the refusal or the mark between them:\n%s", sc.name, view)
 		}
 	}
 }

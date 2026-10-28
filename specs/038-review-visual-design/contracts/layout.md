@@ -113,3 +113,5 @@ A window of 20 or more rows MUST keep one blank row between the header and the b
 Action and Inline comments MUST NOT draw a Message pane. It repeated the footer, and its title read as the Message tab. Each step is one choice pane under the tabs, whose bottom-left border says `nothing sent yet` until a notice takes that place. A refusal goes into the pane's rows, and the choices give way to it. The Action and Inline comments reference frames predate this rule.
 
 The full-summary command MUST stay copyable at every width. When it does not fit one row under the summary pane, it MUST break into rows that paste back as the same command: each row but the last ends in a backslash. A break inside the run reference starts the next row unindented.
+
+A refusal taller than every row its screen can give it MUST keep its opening rows and its last row, which carries the fix, and MUST replace the rows between with one dim row that says how many were left out. This amends the scrollable-document option in Interaction details. Other rows the pane keeps for itself, such as the confirmation's cancel sentence, stay whole.

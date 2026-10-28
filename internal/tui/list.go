@@ -147,7 +147,7 @@ func (m *Model) publishStep(step int, title string, rows []string, enter string)
 		said = m.styles.Secondary().Render("nothing sent yet")
 	}
 	// The refusal is kept whole: the choices give way to it.
-	lines := withNotice(rows, m.noticeRows(inner, room), body-style.PaneRows)
+	lines := m.withNotice(rows, m.noticeRows(inner, room), body-style.PaneRows)
 	panes := []string{m.styles.Tabs(publishSteps, step)}
 	panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: body, Lines: lines,
 		Titles: style.PaneTitles{TopLeft: title, BottomLeft: said}})...)
@@ -454,7 +454,7 @@ func (m *Model) listView() string {
 		// A refusal taller than the findings pane takes the summary's rows too, so none of it is cut.
 		body, findingsHeight = nil, m.bodyRows(len(footer))
 	}
-	lines = withNotice(lines, notice, findingsHeight-style.PaneRows)
+	lines = m.withNotice(lines, notice, findingsHeight-style.PaneRows)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: findingsHeight, Lines: lines,
 		Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts(), BottomLeft: m.borderNotice(room), BottomRight: position},
 		Scroll: style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}})...)

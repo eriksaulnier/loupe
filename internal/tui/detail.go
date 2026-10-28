@@ -732,7 +732,7 @@ func (m *Model) detailView() string {
 	room := noticeRoom(m.width, position)
 	lines := strings.Split(m.body.View(), "\n")
 	_, inner := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
-	lines = withNotice(lines[:min(len(lines), m.body.Height())], m.noticeRows(width, room), inner)
+	lines = m.withNotice(lines[:min(len(lines), m.body.Height())], m.noticeRows(width, room), inner)
 	// The title leads with the list's glyph and says the disposition, and an open note, in their status colors; the
 	// border and the id take the finding's tone.
 	disposition := draft.Dispositions(m.draft)[f.ID]

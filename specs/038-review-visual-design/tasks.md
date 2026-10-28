@@ -76,6 +76,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T032 Remove the Message pane from the Action and Inline comments steps in `internal/tui/list.go`. The choice pane's border says `nothing sent yet`.
 - [X] T033 Keep the detail border on the finding's decision color only, so an open note's amber shows on its own pane and not on the pane around it, in `internal/tui/detail.go`.
 - [X] T034 Break a full-summary command too wide for the window into rows that paste back whole, each but the last ending in a backslash, in `internal/tui/list.go`. Found by the cross-vendor review of the branch.
+- [X] T035 Shorten a refusal taller than the screen in its middle, keeping its opening, its fix and a count of the rows left out, in `internal/tui/shell.go` and `internal/tui/confirm.go`. Found by the cross-vendor review of the branch.
 
 ## Dependencies and parallel work
 

@@ -159,7 +159,7 @@ func (m *Model) fileDiffView() string {
 	lines := []string{m.styles.Secondary().Render(fmt.Sprintf("+%d %s%d %s %d %s", added, m.sign("\u2212", "-"), removed, m.glyphs.Sep, findings, plural(findings, "finding")))}
 	lines = append(lines, strings.Split(m.file.View(), "\n")...)
 	_, inner := style.PaneInner(0, m.bodyRows(len(footer)))
-	lines = withNotice(lines[:min(len(lines), 1+m.file.Height())], m.noticeRows(width, room), inner)
+	lines = m.withNotice(lines[:min(len(lines), 1+m.file.Height())], m.noticeRows(width, room), inner)
 	title := m.styles.LocationTitle(path, max(8, width-style.Width(active)-16), true) + m.styles.Emphasis(m.styles.Accent).Render(" "+m.glyphs.Sep+" file diff")
 	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)), Lines: lines,
 		Titles: style.PaneTitles{TopLeft: title, TopRight: active, BottomLeft: m.borderNotice(room)},

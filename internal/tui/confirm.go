@@ -343,11 +343,11 @@ func (c *confirmation) sync(m *Model) {
 // confirmRows is the rows the preview scrolls in: the pane under the tabs, less the notice rows kept below it.
 func (m *Model) confirmRows() int {
 	footer, notice := m.confirmFooter()
-	rows := m.bodyRows(len(footer)) - style.PaneRows - len(m.confirm.noticeLines(m, notice))
+	pane := m.bodyRows(len(footer)) - style.PaneRows
 	if m.confirm.title.inFlow {
-		rows--
+		pane--
 	}
-	return rows
+	return pane - len(m.confirm.noticeLines(m, notice, pane))
 }
 
 func (c *confirmation) position(m *Model) string {
@@ -483,7 +483,7 @@ const confirmCancel = "any other key cancels, nothing is sent"
 
 // noticeLines are the rows kept under the preview: what the allowlist made of the typed message, why there is
 // nowhere to type one, the caller's notice, and the cancel sentence when the footer had no room for it.
-func (c *confirmation) noticeLines(m *Model, extra string) []string {
+func (c *confirmation) noticeLines(m *Model, extra string, rows int) []string {
 	width, _ := style.PaneInner(m.width, 0)
 	said := ""
 	switch {
@@ -492,16 +492,20 @@ func (c *confirmation) noticeLines(m *Model, extra string) []string {
 	case c.slotErr != nil:
 		said = "this review has no room for a message: " + refusalNotice(c.slotErr)
 	}
-	var out []string
+	var out, tail []string
 	if said != "" {
 		for _, l := range strings.Split(m.styles.Wrap(render.ForDisplay(said), width, ""), "\n") {
 			out = append(out, m.styles.Warn.Render(l))
 		}
 	}
 	if extra != "" {
-		out = append(out, m.styles.Dim.Render(extra))
+		tail = append(tail, m.styles.Dim.Render(extra))
 	}
-	return out
+	// Past rows, the refusal's middle gives way, so its fix and the cancel sentence both stay.
+	if len(out)+len(tail) > rows {
+		out = m.shortenNotice(out, max(1, rows-len(tail)))
+	}
+	return append(out, tail...)
 }
 
 func (m *Model) confirmView(c *confirmation) string {
@@ -519,7 +523,7 @@ func (m *Model) confirmView(c *confirmation) string {
 	}
 	lines := strings.Split(c.scroll.View(), "\n")
 	_, inner := style.PaneInner(0, height)
-	lines = withNotice(lines[:min(len(lines), c.scroll.Height())], c.noticeLines(m, extra), inner)
+	lines = m.withNotice(lines[:min(len(lines), c.scroll.Height())], c.noticeLines(m, extra, inner), inner)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: height, Lines: lines,
 		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: c.summary(m), BottomRight: m.styles.Text().Render(position)},
 		Scroll: style.Scroll{Offset: c.scroll.YOffset(), Visible: c.scroll.Height(), Total: c.scroll.TotalLineCount()}})...)
