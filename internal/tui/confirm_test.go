@@ -633,7 +633,7 @@ func TestConfirmHeaderKeepsActionAndMovedHead(t *testing.T) {
 			m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 		}
 		// The pane's top border carries them, above the scrolling preview.
-		header := strings.Split(m.View().Content, "\n")[1]
+		header := strings.Split(m.View().Content, "\n")[bodyTop(24)]
 		if !strings.Contains(header, "request-changes") || !strings.Contains(header, "head moved +") || style.Width(header) != width {
 			t.Errorf("width %d: header lost the action or the moved head: %q", width, header)
 		}
@@ -1034,7 +1034,7 @@ func TestConfirmNamesTheReviewItEdits(t *testing.T) {
 		m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("my-organization/my-repository#1234", "comment", "none", 0))
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
 		view := m.View().Content
-		if header := strings.Split(view, "\n")[1]; !strings.Contains(header, "edits in place") || !strings.Contains(header, "comment") {
+		if header := strings.Split(view, "\n")[bodyTop(40)]; !strings.Contains(header, "edits in place") || !strings.Contains(header, "comment") {
 			t.Errorf("width %d: header %q", width, header)
 		}
 		// A narrow window breaks the URL across lines, so only its unbreakable head is looked for.

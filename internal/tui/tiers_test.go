@@ -144,10 +144,10 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-4:], "\n")), confirmCancel) {
 					t.Errorf("%s: the cancel sentence is not on screen:\n%s", where, strings.Join(lines, "\n"))
 				}
-				// A titled pane opens directly under the header, or under the publish tabs.
-				top := 1
+				// A titled pane opens directly under the header and its gap, or under the publish tabs.
+				top := bodyTop(m.height)
 				if strings.HasPrefix(sc.name, "publish") || isConfirmation(sc.name) {
-					top = 2
+					top++
 				}
 				opens := strings.HasPrefix(ansi.Strip(lines[top]), paneFrame(m.glyphs).tl+m.glyphs.HRule+" ")
 				if sc.name == "help" {

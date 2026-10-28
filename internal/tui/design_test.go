@@ -109,6 +109,9 @@ func TestWithdrawnRowsCountInPositionOnly(t *testing.T) {
 	}
 }
 
+// bodyTop is the first row under the header and the blank row that follows it in a window of height rows.
+func bodyTop(height int) int { return 1 + style.ReviewLayout{Height: height}.Gap() }
+
 // emptyFixture is a round with no findings at all.
 func emptyFixture(t *testing.T) string {
 	t.Helper()
@@ -274,7 +277,7 @@ func TestHelpIsAnOverlayThatKeepsTheScreen(t *testing.T) {
 	if len(lines) != 30 || !strings.Contains(ansi.Strip(view), "─ Help ") || !strings.Contains(ansi.Strip(view), "Finding list") {
 		t.Fatalf("help is not a pane over the screen:\n%s", ansi.Strip(view))
 	}
-	if !strings.HasPrefix(ansi.Strip(lines[1]), "╭─ Reviewer") {
+	if !strings.HasPrefix(ansi.Strip(lines[bodyTop(30)]), "╭─ Reviewer") {
 		t.Errorf("the covered list is not drawn around the pane:\n%s", ansi.Strip(view))
 	}
 	if !strings.Contains(view, "38;2;78;80;100") {
@@ -660,7 +663,7 @@ func TestDetailBordersFollowTheStatus(t *testing.T) {
 	corner := func(tone style.Tone) string { return m.styles.ToneStyle(tone).Render("╭") }
 	for id, tone := range map[string]style.Tone{"f-001": style.ToneGood, "f-002": style.ToneNote, "f-003": style.ToneMuted} {
 		mustOpen(m, id)
-		pane := strings.Split(m.View().Content, "\n")[1]
+		pane := strings.Split(m.View().Content, "\n")[bodyTop(40)]
 		if !strings.HasPrefix(pane, corner(tone)) {
 			t.Errorf("%s border is not tone %d: %q", id, tone, pane)
 		}
@@ -669,5 +672,26 @@ func TestDetailBordersFollowTheStatus(t *testing.T) {
 	view := m.View().Content
 	if !strings.Contains(view, m.styles.ToneStyle(style.ToneNote).Render("│")+" "+corner(style.ToneNote)) {
 		t.Errorf("the open note pane is not in the note color:\n%q", view)
+	}
+}
+
+// A blank row separates the header from the body where there is room for it, and gives way first at short heights
+// (demo feedback).
+func TestHeaderGapGivesWayAtShortHeights(t *testing.T) {
+	for _, sc := range []struct {
+		width, height int
+		gap           bool
+	}{{100, 30, true}, {80, 24, true}, {80, 20, true}, {80, 19, false}, {60, 12, false}} {
+		m := modelOf(t, newFixture(t), utf8Env, sc.width, sc.height)
+		for _, show := range []func(){func() {}, func() { mustOpen(m, "f-001") }} {
+			show()
+			rows := strings.Split(m.View().Content, "\n")
+			if len(rows) != sc.height {
+				t.Fatalf("%dx%d is %d rows", sc.width, sc.height, len(rows))
+			}
+			if got := strings.TrimSpace(rows[1]) == ""; got != sc.gap {
+				t.Errorf("%dx%d: gap %v, want %v:\n%s", sc.width, sc.height, got, sc.gap, m.View().Content)
+			}
+		}
 	}
 }

@@ -386,14 +386,28 @@ func (s Style) SurfaceSpan(sf Surface, width int, spans ...Span) string {
 // a notice belongs to the pane it is about.
 type ReviewLayout struct{ Width, Height, Footer int }
 
-// Body is the rows between the header and the footer.
-func (l ReviewLayout) Body() int { return max(0, l.Height-1-l.Footer) }
+// headerGapHeight is the shortest window that keeps a blank row under the header; below it the row goes to the body.
+const headerGapHeight = 20
+
+// Gap is the blank rows between the header and the body.
+func (l ReviewLayout) Gap() int {
+	if l.Height >= headerGapHeight {
+		return 1
+	}
+	return 0
+}
+
+// Body is the rows between the header, with its gap, and the footer.
+func (l ReviewLayout) Body() int { return max(0, l.Height-1-l.Gap()-l.Footer) }
 
 // ReviewFrame stacks the header, the body cut or padded to its rows, and the footer into exactly height rows.
 func (s Style) ReviewFrame(header string, body, footer []string, width, height int) string {
 	l := ReviewLayout{Width: width, Height: height, Footer: len(footer)}
 	rows := make([]string, 0, height)
 	rows = append(rows, header)
+	for range l.Gap() {
+		rows = append(rows, "")
+	}
 	for i := range l.Body() {
 		line := ""
 		if i < len(body) {

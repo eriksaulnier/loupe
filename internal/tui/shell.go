@@ -60,6 +60,11 @@ func (m *Model) clip(line string) string {
 	return line
 }
 
+// bodyTop is the first row of the body: under the header and the blank row that follows it where there is room.
+func (m *Model) bodyTop() int {
+	return 1 + style.ReviewLayout{Height: m.height}.Gap()
+}
+
 // bodyRows is what the shell leaves between the header and a footer of footerRows.
 func (m *Model) bodyRows(footerRows int) int {
 	return style.ReviewLayout{Width: m.width, Height: m.height, Footer: footerRows}.Body()
@@ -229,7 +234,7 @@ func (m *Model) helpOverlay(base string) string {
 		baseLines = append(baseLines, "")
 	}
 	// The header stays as drawn, link and colors included; the pane is composed over the body only.
-	out := strings.Split(m.styles.Composite(strings.Join(baseLines[1:region], "\n"), pane, m.width, 0, region-1), "\n")
+	out := strings.Split(m.styles.Composite(strings.Join(baseLines[1:region], "\n"), pane, m.width, m.bodyTop()-1, region-1), "\n")
 	for i, l := range footer {
 		footer[i] = m.clip(render.ForDisplayANSI(l))
 	}
@@ -240,7 +245,7 @@ func (m *Model) helpOverlay(base string) string {
 // helpHeight is the rows help's pane shows its lines in.
 func (m *Model) helpHeight() int {
 	footer := 1
-	return max(1, min(len(m.helpLines())+style.PaneRows, m.height-footer-2)-style.PaneRows)
+	return max(1, min(len(m.helpLines())+style.PaneRows, m.height-footer-1-m.bodyTop())-style.PaneRows)
 }
 
 // position is where the selected or open finding sits among every row, withdrawn ones included.

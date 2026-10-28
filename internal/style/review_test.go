@@ -189,11 +189,14 @@ func TestSixteenColorSurfaceIsTheTerminalBackground(t *testing.T) {
 	}
 }
 
-// The shell has one header row, the body and the measured footer, with no notice row of its own.
+// The shell has one header row, a blank row under it where the window has room, the body and the measured footer,
+// with no notice row of its own.
 func TestReviewLayoutBudget(t *testing.T) {
-	l := ReviewLayout{Width: 80, Height: 24, Footer: 2}
-	if got := l.Body(); got != 21 {
-		t.Errorf("body rows %d, want 21", got)
+	if got := (ReviewLayout{Width: 80, Height: 24, Footer: 2}).Body(); got != 20 {
+		t.Errorf("body rows %d at 24 rows, want 20", got)
+	}
+	if got := (ReviewLayout{Width: 80, Height: 19, Footer: 2}).Body(); got != 16 {
+		t.Errorf("body rows %d at 19 rows, want 16", got)
 	}
 	s := reviewStyle(t, false, nil)
 	frame := s.ReviewFrame("head", []string{"one", "two"}, []string{"keys"}, 20, 6)

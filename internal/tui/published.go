@@ -135,7 +135,7 @@ func (m *Model) publishedView() string {
 	// the shell drew that row unchanged. Link refuses a URL that could end the escape early. Each row links the whole
 	// URL.
 	for i, c := range chunks {
-		at := 1 + 1 + first + i
+		at := m.bodyTop() + 1 + first + i
 		if at >= len(out) {
 			break
 		}

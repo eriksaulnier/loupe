@@ -150,7 +150,8 @@ func TestPublishStepsShowTabsAndPanes(t *testing.T) {
 			"step 2": {step2, "Action  " + bar + "  [Inline comments]  " + bar + "  Message", "Inline comments", "> blocking "},
 		} {
 			lines := strings.Split(c.view, "\n")
-			if lines[1] != c.tabs || !strings.Contains(lines[2], " "+c.title+" ") || !strings.Contains(c.view, c.choice) {
+			top := bodyTop(m.height)
+			if lines[top] != c.tabs || !strings.Contains(lines[top+1], " "+c.title+" ") || !strings.Contains(c.view, c.choice) {
 				t.Errorf("%s under %v lost its tabs, pane or cursor:\n%s", name, env, c.view)
 			}
 			if !strings.Contains(c.view, " Message ") || !strings.Contains(c.view, "No review has been sent.") {
@@ -289,7 +290,7 @@ func TestHelpLeadsWithTheCurrentView(t *testing.T) {
 	}
 	m.help, m.view, m.pick = false, viewInline, 0
 	m.help = true
-	if picker := m.View().Content; !strings.Contains(strings.Split(picker, "\n")[2], "Publish steps") {
+	if picker := m.View().Content; !strings.Contains(strings.Split(picker, "\n")[bodyTop(m.height)+1], "Publish steps") {
 		t.Errorf("help from a publish step does not lead with its keys:\n%s", picker)
 	}
 	m.help, m.view = false, viewDetail
@@ -326,7 +327,7 @@ func TestLongNoticeWrapsInsteadOfClipping(t *testing.T) {
 // unless the human can see whose words it holds.
 func TestSummaryBlockNamesTheReviewer(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 24)
-	if head := strings.Split(m.View().Content, "\n")[1]; !strings.Contains(head, "Reviewer's summary") {
+	if head := strings.Split(m.View().Content, "\n")[bodyTop(24)]; !strings.Contains(head, "Reviewer's summary") {
 		t.Errorf("the summary pane does not name the reviewer: %q", head)
 	}
 }

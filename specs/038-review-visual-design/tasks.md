@@ -65,13 +65,14 @@
 
 ## Phase 9: Demo feedback, 2026-10-28
 
-The maintainer's first demo session asked for five changes. `contracts/layout.md` records them under "Demo feedback". Each task adds its failing test first.
+The maintainer's first demo session asked for these changes. `contracts/layout.md` records them under "Demo feedback". Each task adds its failing test first.
 
 - [X] T026 Show the list's `N of M` position only when the findings overflow the pane, in `internal/tui/list.go`. Detail keeps its position.
 - [X] T027 Mark the open finding's progress cell in detail, not in the list, on an accent background in color, for 30 or fewer counted findings, in `internal/style/review.go` and `internal/tui/shell.go`.
 - [X] T028 Leave the header's last four columns blank when `ORCA_TERMINAL_HANDLE` is nonempty, in `internal/style/review.go` and `internal/tui/shell.go`.
 - [X] T029 Lead the detail title with the disposition glyph and color the disposition word and `open note` by status, in `internal/tui/detail.go`.
 - [X] T030 Color the detail pane's border by finding status and a note pane's border by note status through a pane tone, in `internal/style/review.go` and `internal/tui/detail.go`.
+- [X] T031 Keep a blank row under the header in windows of 20 or more rows, through `ReviewLayout` in `internal/style/review.go`, and place every row that assumed a one-row header, such as the published URL links and the help overlay, from the shell's body top.
 
 ## Dependencies and parallel work
 
