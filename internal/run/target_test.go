@@ -15,11 +15,11 @@ import (
 
 func sampleTarget() Target {
 	return Target{
-		Schema: 1, Owner: "o", Repo: "r", Number: 12, URL: "https://github.com/o/r/pull/12", Title: "T", Author: "alice",
+		Schema: TargetSchema, Owner: "o", Repo: "r", Number: 12, URL: "https://github.com/o/r/pull/12", Title: "T", Author: "alice",
 		Viewer: "bob", BaseSHA: "b", HeadSHA: "h", Round: 2, PreviousRound: 1,
 		CapturedAt: time.Date(2026, 9, 13, 1, 2, 3, 0, time.UTC), ClonePath: "/src/r",
 		BaseRef: "refs/loupe/o/r/12/2/base", HeadRef: "refs/loupe/o/r/12/2/head", MergeBaseSHA: "m",
-		DiffSHA256: "abc",
+		DiffSHA256: "abc", PRState: "open",
 	}
 }
 
@@ -59,7 +59,7 @@ func TestTargetJSONKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"author", "baseRef", "baseSha", "capturedAt", "clonePath", "diffSha256", "headRef", "headSha", "mergeBaseSha",
-		"number", "owner", "previousRound", "repo", "round", "schema", "title", "url", "viewer"}
+		"number", "owner", "prState", "previousRound", "repo", "round", "schema", "title", "url", "viewer"}
 	var got []string
 	for k := range m {
 		got = append(got, k)
@@ -236,5 +236,19 @@ func TestCreateRunWritesOptionalFilesOnlyWhenGiven(t *testing.T) {
 		if _, err := os.Lstat(filepath.Join(without, name)); !os.IsNotExist(err) {
 			t.Fatalf("%s was written without bytes: %v", name, err)
 		}
+	}
+}
+
+func TestLoadTargetReadsSchemaOneWithoutPRState(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte(`{"schema": 1, "owner": "o", "repo": "r", "number": 12}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	target, err := LoadTarget(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.Schema != 1 || target.PRState != "" {
+		t.Fatalf("got schema %d prState %q, want 1 and empty", target.Schema, target.PRState)
 	}
 }

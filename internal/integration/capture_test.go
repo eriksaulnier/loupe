@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
 )
 
@@ -91,7 +92,7 @@ func TestCaptureLeavesCloneUntouched(t *testing.T) {
 	if err := json.Unmarshal(readFile(t, filepath.Join(dir, "target.json")), &target); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"schema", "owner", "repo", "number", "url", "title", "author", "viewer", "baseSha", "headSha", "round", "capturedAt", "clonePath", "baseRef", "headRef", "mergeBaseSha", "diffSha256"} {
+	for _, key := range []string{"schema", "owner", "repo", "number", "url", "title", "author", "viewer", "baseSha", "headSha", "round", "capturedAt", "clonePath", "baseRef", "headRef", "mergeBaseSha", "diffSha256", "prState"} {
 		if _, ok := target[key]; !ok {
 			t.Errorf("target.json lacks %q", key)
 		}
@@ -103,7 +104,7 @@ func TestCaptureLeavesCloneUntouched(t *testing.T) {
 	if target["round"] != float64(1) || target["diffSha256"] != hex.EncodeToString(sum[:]) ||
 		target["headSha"] != h.Repo.HeadSHA() || target["baseSha"] != h.Repo.BaseSHA() || target["mergeBaseSha"] != h.Repo.BaseSHA() ||
 		target["viewer"] != "reviewer" || target["author"] != "author" || target["clonePath"] != h.Repo.Dir ||
-		target["baseRef"] != baseRef || target["headRef"] != headRef {
+		target["baseRef"] != baseRef || target["headRef"] != headRef || target["prState"] != "open" {
 		t.Fatalf("target.json %v", target)
 	}
 	envTarget, _ := env["target"].(map[string]any)
@@ -187,6 +188,120 @@ func TestCaptureHumanOutput(t *testing.T) {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout lacks %q:\n%s", want, stdout)
 		}
+	}
+}
+
+// closePR marks the fake pull request closed, the state GitHub reports for a merged one too.
+func (h *harness) closePR() {
+	h.t.Helper()
+	h.setPRState("closed")
+}
+
+func (h *harness) setPRState(state string) {
+	h.t.Helper()
+	h.GH.SetPR(owner, repo, github.PullRequest{
+		Number: number, URL: prURL(), Title: "Add widgets", State: state, Author: "author", BaseRef: "main",
+		BaseSHA: h.Repo.BaseSHA(), HeadSHA: h.Repo.HeadSHA(),
+	})
+}
+
+func TestCaptureAllowClosedRefusesAnUnknownState(t *testing.T) {
+	t.Parallel()
+	for _, state := range []string{"", "locked"} {
+		h := newHarness(t)
+		h.setPRState(state)
+		if fix, _ := h.mustRefuse("pr", "capture", prURL(), "--allow-closed")["fix"].(string); strings.Contains(fix, "--allow-closed") {
+			t.Fatalf("state %q: fix %q offers the flag that was given", state, fix)
+		}
+		if _, err := os.Stat(h.RunDir(1)); !os.IsNotExist(err) {
+			t.Fatalf("state %q: refused capture left a run: %v", state, err)
+		}
+	}
+}
+
+func TestCaptureRefusesClosedWithoutFlag(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.closePR()
+	before := h.Repo.Snapshot()
+	e := h.mustRefuse("pr", "capture", prURL())
+	if msg, _ := e["message"].(string); !strings.Contains(msg, "closed") {
+		t.Fatalf("message %q does not name the state", msg)
+	}
+	if e["fix"] != "loupe capture "+prURL()+" --allow-closed" {
+		t.Fatalf("fix %q", e["fix"])
+	}
+	if _, err := os.Stat(h.RunDir(1)); !os.IsNotExist(err) {
+		t.Fatalf("refused capture left a run: %v", err)
+	}
+	after := h.Repo.Snapshot()
+	if d := before.DiffIgnoringLoupeRefs(after); len(d) != 0 || len(after.Refs) != len(before.Refs) {
+		t.Fatalf("refused capture changed the clone: %v, refs %v", d, after.Refs)
+	}
+}
+
+func TestCaptureAllowClosed(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.closePR()
+	env := h.capture("--allow-closed")
+	if shown, _ := env["target"].(map[string]any); shown["prState"] != "closed" {
+		t.Fatalf("capture target %v", shown)
+	}
+	var target map[string]any
+	if err := json.Unmarshal(readFile(t, filepath.Join(h.RunDir(1), "target.json")), &target); err != nil {
+		t.Fatal(err)
+	}
+	if target["prState"] != "closed" || target["schema"] != float64(2) || target["headSha"] != h.Repo.HeadSHA() {
+		t.Fatalf("target.json %v", target)
+	}
+	for _, name := range []string{"pr.diff", "draft.json", "previous.json", "comments.json"} {
+		if _, err := os.Stat(filepath.Join(h.RunDir(1), name)); err != nil {
+			t.Errorf("closed capture lacks %s: %v", name, err)
+		}
+	}
+	if got := h.Repo.Snapshot().Refs["refs/loupe/acme/widgets/42/1/head"]; got != h.Repo.HeadSHA() {
+		t.Fatalf("head ref %q", got)
+	}
+}
+
+func TestCaptureAllowClosedKeepsAnOpenPullRequestOpen(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	if shown, _ := h.capture("--allow-closed")["target"].(map[string]any); shown["prState"] != "open" {
+		t.Fatalf("capture target %v", shown)
+	}
+}
+
+func TestCaptureClosedHumanOutput(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	stdout, stderr, exit := h.Run("capture", prURL())
+	if exit != 0 || strings.Contains(stdout, "closed") {
+		t.Fatalf("open capture: exit %d stderr %q stdout:\n%s", exit, stderr, stdout)
+	}
+	h2 := newHarness(t)
+	h2.closePR()
+	stdout, stderr, exit = h2.Run("capture", prURL(), "--allow-closed")
+	if exit != 0 || !strings.Contains(stdout, "pull request is closed") {
+		t.Fatalf("closed capture: exit %d stderr %q stdout:\n%s", exit, stderr, stdout)
+	}
+}
+
+func TestUnattendedPublishOfAClosedPullRequest(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.closePR()
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture("--allow-closed")
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Reviewed after the merge.", "--expect-findings", "3")
+	if sent := h.mustOK("publish", runRef, "--unattended"); sent["sent"] != true {
+		t.Fatalf("sent %v", sent)
+	}
+	if h.GH.CreateCount() != 1 {
+		t.Fatalf("create count %d, want 1", h.GH.CreateCount())
 	}
 }
 

@@ -22,7 +22,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
-const captureHelp = `Capture an open GitHub pull request into a new review round.
+const captureHelp = `Capture a GitHub pull request into a new review round.
 
 Resolves the pull request through the GitHub API, verifies that the clone's origin is the
 pull request's repository, fetches base and head into private refs under refs/loupe/,
@@ -42,6 +42,10 @@ leaves out loupe's own reviews for this source: a loupe review whose source name
 aside, matches --source and whose author is the viewer, or with an App token a [bot]. A
 listing that fails is stored as a reason, never as empty lists.
 
+A closed pull request, merged or not, is refused with pr unless --allow-closed is given.
+With it, capture runs as for an open one. target.prState records the state GitHub
+reported, open or closed, so a reader can tell a closed pull request's run apart.
+
 The clone is --repo, or the working directory.
 
 Result (--json):
@@ -53,7 +57,7 @@ Result (--json):
               "capturedAt": "2026-09-13T12:00:00Z", "clonePath": "/path/to/clone",
               "baseRef": "refs/loupe/owner/repo/123/1/base", "headRef": "refs/loupe/owner/repo/123/1/head",
               "mergeBaseSha": "...", "diffSha256": "...", "source": "my-reviewer@1.0.0",
-              "model": "anthropic/claude-sonnet-5"},
+              "model": "anthropic/claude-sonnet-5", "prState": "open"},
    "refs": {"base": "refs/loupe/owner/repo/123/1/base", "head": "refs/loupe/owner/repo/123/1/head"},
    "cleanup": ["git -C /path/to/clone update-ref -d refs/loupe/owner/repo/123/1/base",
                "git -C /path/to/clone update-ref -d refs/loupe/owner/repo/123/1/head"],
@@ -76,7 +80,7 @@ func newCaptureCmd(deps Deps) *cobra.Command {
 		Use:     "capture <pr-url>",
 		Short:   "Capture a pull request into a new review round",
 		Long:    captureHelp,
-		Example: "  loupe capture https://github.com/owner/repo/pull/123 --json\n  loupe capture https://github.com/owner/repo/pull/123 --repo ~/src/repo",
+		Example: "  loupe capture https://github.com/owner/repo/pull/123 --json\n  loupe capture https://github.com/owner/repo/pull/123 --repo ~/src/repo\n  loupe capture https://github.com/owner/repo/pull/123 --allow-closed --json",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCapture(cmd, deps, args[0])
@@ -84,6 +88,7 @@ func newCaptureCmd(deps Deps) *cobra.Command {
 	}
 	cmd.Flags().String("repo", "", "path to a clone of the pull request's repository (default: the working directory)")
 	cmd.Flags().String("source", "", "the tool filing the findings, as name[@version]; shown in the published review's footer")
+	cmd.Flags().Bool("allow-closed", false, "accept a closed or merged pull request; without it capture refuses one with pr")
 	cmd.Flags().String("model", "", "the model that produces the findings, as you name it, matching "+run.ModelPattern+", at most 64 characters, no --; recorded in the published review's footer and loupe-meta, never required")
 	return cmd
 }
@@ -134,8 +139,13 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if err != nil {
 		return githubReadRefusal(err, canonical)
 	}
-	if pr.State != "open" {
-		return refusal.New(refusal.PR, fmt.Sprintf("pull request %s/%s#%d is %s, not open", owner, repo, number, pr.State), prURLFix)
+	allowClosed, _ := cmd.Flags().GetBool("allow-closed")
+	if pr.State != "open" && (pr.State != "closed" || !allowClosed) {
+		fix := prURLFix
+		if pr.State == "closed" {
+			fix = "loupe capture " + canonical + " --allow-closed"
+		}
+		return refusal.New(refusal.PR, fmt.Sprintf("pull request %s/%s#%d is %s, not open", owner, repo, number, pr.State), fix)
 	}
 	// An installation token gets 403 on GET /user, so an empty viewer is what marks the run as pipeline-captured.
 	var viewer string
@@ -268,6 +278,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		DiffSHA256:   run.DiffSHA256(diffBytes),
 		Source:       source,
 		Model:        model,
+		PRState:      pr.State,
 	}
 	if newest > 0 {
 		target.PreviousRound = newest
@@ -382,6 +393,9 @@ func printCapture(deps Deps, ref run.Ref, target run.Target, cleanup, steps []st
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s %s  %s\n", s.Good.Bold(true).Render(s.Glyphs.Accepted), s.Good.Bold(true).Render("captured"),
 		s.Accent.Render(ref.String()), s.TruncRight(oneLine(target.Title), max(20, width-len(ref.String())-14)))
+	if target.PRState == "closed" {
+		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  pull request is closed"))
+	}
 	fmt.Fprintf(&b, "%s\n", s.Dim.Render(fmt.Sprintf("  refs written to %s", oneLine(target.ClonePath))))
 	for _, r := range []string{target.BaseRef, target.HeadRef} {
 		fmt.Fprintf(&b, "  %s\n", s.Dim.Render(oneLine(r)))

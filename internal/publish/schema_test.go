@@ -121,6 +121,11 @@ var fieldSets = []struct {
 			"mergeBaseSha", "model,omitempty", "number", "owner", "previousRound,omitempty", "repo", "round",
 			"schema", "source,omitempty", "title", "url", "viewer",
 		},
+		2: {
+			"author", "baseRef", "baseSha", "capturedAt", "clonePath", "diffSha256", "headRef", "headSha",
+			"mergeBaseSha", "model,omitempty", "number", "owner", "prState,omitempty", "previousRound,omitempty", "repo",
+			"round", "schema", "source,omitempty", "title", "url", "viewer",
+		},
 	}},
 	{reflect.TypeFor[Attempt](), RecordSchema, map[int][]string{
 		1: {
