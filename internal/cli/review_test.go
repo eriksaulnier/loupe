@@ -117,7 +117,7 @@ func screenReview(t *testing.T, home string, jsonMode bool, end string, steps fu
 	if jsonMode {
 		args = append(args, "--json")
 	}
-	sc := screen.Start(t, func(stdin io.Reader, stdout, stderr io.Writer) int {
+	sc := screen.Start(t, 100, 30, func(stdin io.Reader, stdout, stderr io.Writer) int {
 		deps, _ := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
 		deps.Stdin, deps.Stdout, deps.Stderr = stdin, stdout, stderr
 		deps.IsTerminal = func() bool { return true }

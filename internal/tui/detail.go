@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 	glamourstyles "charm.land/glamour/v2/styles"
-	"github.com/charmbracelet/bubbles/cursor"
-	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/render"
@@ -77,8 +77,8 @@ func (m *Model) refreshDetail() error {
 	doc = append(doc, m.references(f)...)
 	doc = append(doc, m.noteThread(f)...)
 
-	m.body.Width = m.width
-	m.body.Height = m.bodyHeight(detailHeaderLines)
+	m.body.SetWidth(m.width)
+	m.body.SetHeight(m.bodyHeight(detailHeaderLines))
 	fill(&m.body, strings.Join(doc, "\n"))
 	return nil
 }
@@ -222,7 +222,7 @@ func (m *Model) renderMarkdown(md string) (string, error) {
 		theme := glamourstyles.NoTTYStyleConfig
 		if m.styles.Color {
 			theme = glamourstyles.LightStyleConfig
-			if m.darkBackground {
+			if m.styles.Dark {
 				theme = glamourstyles.DarkStyleConfig
 			}
 		}
@@ -247,7 +247,7 @@ func (m *Model) renderMarkdown(md string) (string, error) {
 // output is its own, since ForDisplayMarkdown already escaped any in the body.
 var hyperlink = regexp.MustCompile("\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
 
-func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	f, i := m.openedFinding()
 	if m.settling && strings.Contains("axsurde", msg.String()) && len(msg.String()) == 1 {
 		// The finding under this key was never on screen: it arrived through typeahead or key repeat right after a
@@ -297,10 +297,10 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 		return m.decideAndStay(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
 		m.noting, m.notice = true, ""
-		m.note.SetPromptFunc(notePad, func(int) string { return strings.Repeat(" ", notePad) })
+		m.note.SetPromptFunc(notePad, func(textarea.PromptInfo) string { return strings.Repeat(" ", notePad) })
 		m.note.Reset()
 		m.note.SetValue(m.keptNotes[f.ID])
-		m.note.Cursor.SetMode(cursor.CursorStatic)
+
 		cmd := m.note.Focus()
 		m.sizeNote(0)
 		return cmd
@@ -358,8 +358,8 @@ func (m *Model) updateDetail(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
-	switch msg.Type {
+func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
+	switch msg.Code {
 	case tea.KeyEsc:
 		m.noting = false
 		m.note.Blur()
@@ -381,16 +381,30 @@ func (m *Model) updateNote(msg tea.KeyMsg) tea.Cmd {
 			return fmt.Sprintf("%s %s sent back as %s; the agent has it", m.glyphs.Note, id, noteID)
 		})
 	}
-	if msg.Type == tea.KeyRunes {
-		// A note is one paragraph, so a pasted line break or tab becomes a space.
-		msg.Runes = []rune(strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ", "\t", " ").Replace(string(msg.Runes)))
-	}
-	// Room for every row this key could add, so the input never scrolls itself and noteView can place the cursor.
-	m.sizeNote(len(msg.Runes) + 1)
+	return m.typeNote(msg)
+}
+
+func (m *Model) typeNote(msg tea.Msg) tea.Cmd {
+	msg, count := normalizeInput(msg, " ")
+	m.sizeNote(count + 1)
 	var cmd tea.Cmd
 	m.note, cmd = m.note.Update(msg)
 	m.sizeNote(0)
 	return cmd
+}
+
+// normalizeInput preserves paste events so pasted key names remain literal text.
+func normalizeInput(msg tea.Msg, newline string) (tea.Msg, int) {
+	normalize := strings.NewReplacer("\r\n", newline, "\r", newline, "\n", newline, "\t", " ")
+	switch input := msg.(type) {
+	case tea.KeyPressMsg:
+		input.Text = normalize.Replace(input.Text)
+		return input, len([]rune(input.Text))
+	case tea.PasteMsg:
+		input.Content = normalize.Replace(input.Content)
+		return input, len([]rune(input.Content))
+	}
+	return msg, 0
 }
 
 // keepNote holds text left in the note box for its finding, and forgets a box left empty.
@@ -404,7 +418,7 @@ func (m *Model) keepNote(id, text string) {
 
 // updateEdit drives the editor row. Arrows move the label rather than the finding, so the row cannot outlive the
 // finding it was opened on.
-func (m *Model) updateEdit(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updateEdit(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		m.editing = false
@@ -412,7 +426,7 @@ func (m *Model) updateEdit(msg tea.KeyMsg) tea.Cmd {
 		m.editPick = (m.editPick + len(m.editLabels) - 1) % len(m.editLabels)
 	case "right", "l":
 		m.editPick = (m.editPick + 1) % len(m.editLabels)
-	case " ":
+	case "space":
 		m.editBlocking = !m.editBlocking
 	case "enter":
 		m.editing = false
@@ -474,7 +488,7 @@ func (m *Model) editView() string {
 	parts := []string{m.styles.Note.Render(m.glyphs.Note + " edit " + m.openID)}
 	for i, l := range m.editLabels {
 		if i == m.editPick {
-			parts = append(parts, m.styles.Cursor.Bold(true).Render(m.glyphs.Cursor+" "+labelText(l)))
+			parts = append(parts, m.styles.Emphasis(m.styles.Cursor).Render(m.glyphs.Cursor+" "+labelText(l)))
 			continue
 		}
 		parts = append(parts, m.styles.Dim.Render(pad+labelText(l)))
@@ -504,7 +518,7 @@ func (m *Model) sizeNote(extra int) {
 // noteView is the note input framed as the publish message is, since both are prose the human authors. Its text is
 // capped at a third of the window; a taller note shows the rows ending at the cursor's.
 func (m *Model) noteView() string {
-	rows := strings.Split(m.note.View(), "\n")
+	rows := strings.Split(m.styles.Render(m.note.View()), "\n")
 	if limit := max(1, m.height/3); len(rows) > limit {
 		start := min(max(0, m.note.LineInfo().RowOffset-limit+1), len(rows)-limit)
 		rows = rows[start : start+limit]

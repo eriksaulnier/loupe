@@ -161,7 +161,7 @@ func (h *harness) execute(stdin io.Reader, stdout, stderr io.Writer, now func() 
 func (h *harness) Start(args ...string) *screen.Screen {
 	h.t.Helper()
 	stderrTerminal := !h.StderrNotTerminal
-	return screen.Start(h.t, func(stdin io.Reader, stdout, stderr io.Writer) int {
+	return screen.Start(h.t, h.Screen.Width, h.Screen.Height, func(stdin io.Reader, stdout, stderr io.Writer) int {
 		return h.execute(stdin, stdout, stderr, fixedNow, true, stderrTerminal, args)
 	})
 }

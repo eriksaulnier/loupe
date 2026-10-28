@@ -9,10 +9,9 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/exp/teatest"
-	"github.com/muesli/termenv"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -36,7 +35,7 @@ func TestListAtEightyColumnsDropsTheLabelColumn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
+	tm := newTestModel(t, m, 80, 24)
 	waitFor(t, tm, "acme/widgets#42", "round 1", "> . f-001            ! Title one", "multi.txt:3")
 	tm.Type("q")
 	view := finalView(t, tm)
@@ -59,7 +58,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(100, 24))
+	tm := newTestModel(t, m, 100, 24)
 	waitFor(t, tm, "> . f-001            ! Title one", "+ 0 accepted", "x 0 excluded")
 	tm.Type("q")
 	view := finalView(t, tm)
@@ -72,7 +71,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		}
 	}
 
-	if got := modelOf(t, dir, utf8, 100, 24).View(); !strings.Contains(got, "› · f-001            ● Title one") {
+	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "› · f-001            ● Title one") {
 		t.Errorf("UTF-8 view does not use the Unicode glyphs:\n%s", got)
 	}
 }
@@ -80,20 +79,20 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 // everyView renders each view of the program once, so a rule about all of them can be checked in one place.
 func everyView(t *testing.T, m *Model) map[string]string {
 	t.Helper()
-	views := map[string]string{"list": m.View()}
+	views := map[string]string{"list": m.View().Content}
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	views["detail"] = m.View()
+	views["detail"] = m.View().Content
 	f, _ := m.openedFinding()
 	m.openFileDiff(f)
-	views["file diff"] = m.View()
+	views["file diff"] = m.View().Content
 	m.view, m.pick = viewAction, 0
-	views["action"] = m.View()
+	views["action"] = m.View().Content
 	m.view, m.action = viewInline, "comment"
-	views["inline"] = m.View()
+	views["inline"] = m.View().Content
 	m.view, m.help = viewList, true
-	views["help"] = m.View()
+	views["help"] = m.View().Content
 	m.help = false
 	return views
 }
@@ -108,7 +107,7 @@ func TestNoColorEmitsNoEscapes(t *testing.T) {
 
 	// Without NO_COLOR the same views do paint, so the check above is not passing on a writer that never had color.
 	colored := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
-	colored.styles.R.SetColorProfile(termenv.ANSI)
+	colored.styles.SetColorProfile(colorprofile.ANSI)
 	colored.styles.Color = true
 	for name, view := range everyView(t, colored) {
 		if !strings.ContainsRune(view, '\x1b') {
@@ -122,13 +121,13 @@ func TestNoColorEmitsNoEscapes(t *testing.T) {
 func TestInlinePickerStartsOnNone(t *testing.T) {
 	m := modelOf(t, readyFixture(t, "author", "author"), map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, 24)
 	m.view, m.pick = viewAction, 0
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	cursor := " " + m.glyphs.Cursor + " "
-	if view := m.View(); m.view != viewInline || !strings.Contains(view, cursor+"none ") {
+	if view := m.View().Content; m.view != viewInline || !strings.Contains(view, cursor+"none ") {
 		t.Fatalf("enter on comment did not open step 2 on none:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	if view := m.View(); !strings.Contains(view, cursor+"blocking ") {
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if view := m.View().Content; !strings.Contains(view, cursor+"blocking ") {
 		t.Errorf("down from none did not reach blocking:\n%s", view)
 	}
 }
@@ -138,9 +137,9 @@ func TestPublishStepsAreUnboxed(t *testing.T) {
 	for _, env := range []map[string]string{{"NO_COLOR": "1", "LANG": "C"}, {"NO_COLOR": "1", "LANG": "en_US.UTF-8"}} {
 		m := modelOf(t, dir, env, 100, 24)
 		m.view, m.pick = viewAction, 0
-		step1 := m.View()
+		step1 := m.View().Content
 		m.view, m.action, m.pick = viewInline, "comment", 1
-		step2 := m.View()
+		step2 := m.View().Content
 		sep := m.glyphs.Sep
 		for name, view := range map[string]string{"step 1": step1, "step 2": step2} {
 			if strings.Contains(view, "+-") || strings.ContainsAny(view, "\u256d\u256e\u2570\u256f\u250c\u2510\u2514\u2518") {
@@ -161,7 +160,7 @@ func TestPublishStepsAreUnboxed(t *testing.T) {
 	narrow := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 24)
 	narrow.view, narrow.pick = viewAction, 0
 	var text []string
-	for _, l := range strings.Split(narrow.View(), "\n") {
+	for _, l := range strings.Split(narrow.View().Content, "\n") {
 		text = append(text, strings.TrimSpace(l))
 	}
 	joined := strings.Join(text, " ")
@@ -170,7 +169,7 @@ func TestPublishStepsAreUnboxed(t *testing.T) {
 		"unavailable: author is the author of this pull request and cannot request changes on it",
 	} {
 		if !strings.Contains(joined, want) {
-			t.Errorf("60-column step 1 lacks %q:\n%s", want, narrow.View())
+			t.Errorf("60-column step 1 lacks %q:\n%s", want, narrow.View().Content)
 		}
 	}
 }
@@ -222,17 +221,17 @@ func TestListRowMarksOpenNotes(t *testing.T) {
 		}
 	}
 	rowOf := func(m *Model, id string) string {
-		for _, l := range strings.Split(m.View(), "\n") {
+		for _, l := range strings.Split(m.View().Content, "\n") {
 			if strings.Contains(ansi.Strip(l), id+"  ") {
 				return l
 			}
 		}
-		t.Fatalf("no row for %s:\n%s", id, m.View())
+		t.Fatalf("no row for %s:\n%s", id, m.View().Content)
 		return ""
 	}
 	colored := func() *Model {
 		m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 24)
-		m.styles.R.SetColorProfile(termenv.TrueColor)
+		m.styles.SetColorProfile(colorprofile.TrueColor)
 		m.styles.Color = true
 		return m
 	}
@@ -270,10 +269,10 @@ func TestListRowMarksOpenNotes(t *testing.T) {
 
 func TestListIDsAreNotAccented(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 24)
-	m.styles.R.SetColorProfile(termenv.TrueColor)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
 	m.styles.Color = true
 	accented := m.styles.Accent.Render("f-001")
-	if view := m.View(); strings.Contains(view, accented) || !strings.Contains(view, m.styles.Dim.Render("f-001")) {
+	if view := m.View().Content; strings.Contains(view, accented) || !strings.Contains(view, m.styles.Dim.Render("f-001")) {
 		t.Errorf("list id is accented or not dim:\n%q", view)
 	}
 }
@@ -284,19 +283,19 @@ func TestHelpLeadsWithTheCurrentView(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.help = true
-	view := m.View()
+	view := m.View().Content
 	detail, everywhere, list := strings.Index(view, "Finding detail"), strings.Index(view, "Everywhere"), strings.Index(view, "Finding list")
 	if detail < 0 || everywhere < detail || list < everywhere {
 		t.Fatalf("help does not lead with the current view:\n%s", view)
 	}
 	m.help, m.view, m.pick = false, viewInline, 0
 	m.help = true
-	if picker := m.View(); !strings.Contains(strings.Split(picker, "\n")[2], "Publish steps") {
+	if picker := m.View().Content; !strings.Contains(strings.Split(picker, "\n")[2], "Publish steps") {
 		t.Errorf("help from a publish step does not lead with its keys:\n%s", picker)
 	}
 	m.help, m.view = false, viewDetail
 	m.help = true
-	view = m.View()
+	view = m.View().Content
 	if !strings.Contains(view, "Decisions are recorded against the draft version on screen.") {
 		t.Errorf("help lost the sentence about the version on screen:\n%s", view)
 	}
@@ -310,7 +309,7 @@ func TestLongNoticeWrapsInsteadOfClipping(t *testing.T) {
 	}
 	m.width, m.height = 100, 20
 	m.say(style.Warn, "the pull request head moved from 7f1c2ab0000000000000000000000000000beef to 29b3d00d372175bffc5fa5acfdef48eb4b7f67a1 since this round was captured; loupe capture starts a new round")
-	view := m.View()
+	view := m.View().Content
 	if !strings.Contains(strings.ReplaceAll(view, "\n ", " "), "starts a new round") {
 		t.Fatalf("notice tail clipped:\n%s", view)
 	}
@@ -379,9 +378,9 @@ func TestListFooterWrapsAndKeepsTheCursorRow(t *testing.T) {
 	dir := newFixture(t)
 	for height := minHeight; height <= 20; height++ {
 		m := modelOf(t, dir, testEnv, 71, height)
-		m.Update(tea.KeyMsg{Type: tea.KeyDown})
-		m.Update(tea.KeyMsg{Type: tea.KeyDown})
-		lines := strings.Split(ansi.Strip(m.View()), "\n")
+		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		lines := strings.Split(ansi.Strip(m.View().Content), "\n")
 		if len(lines) != height {
 			t.Fatalf("height %d: %d lines", height, len(lines))
 		}
@@ -446,9 +445,9 @@ func TestListOrdersBySeverityThenID(t *testing.T) {
 	if want := []string{"f-003", "f-004", "f-001", "f-002"}; !slices.Equal(got, want) {
 		t.Fatalf("order = %v, want %v", got, want)
 	}
-	rows := listRows(m.View())
+	rows := listRows(m.View().Content)
 	if len(rows) != 4 {
-		t.Fatalf("want 4 finding rows, got %d:\n%s", len(rows), m.View())
+		t.Fatalf("want 4 finding rows, got %d:\n%s", len(rows), m.View().Content)
 	}
 	for i, id := range []string{"f-003", "f-004", "f-001", "f-002"} {
 		if !strings.Contains(ansi.Strip(rows[i]), id) {
@@ -483,7 +482,7 @@ func cell(row string, at, width int) string {
 
 func TestListRowCarriesTheSeverityColumn(t *testing.T) {
 	m := modelOf(t, severityFixture(t), testEnv, 120, 24)
-	view := m.View()
+	view := m.View().Content
 	if !strings.Contains(ansi.Strip(view), "Severity") {
 		t.Errorf("list has no severity column head:\n%s", view)
 	}
@@ -500,10 +499,10 @@ func TestListRowCarriesTheSeverityColumn(t *testing.T) {
 // The severity column is colored by how bad the finding is, and carries no glyph of its own.
 func TestListSeverityColumnIsColoredByRank(t *testing.T) {
 	m := modelOf(t, severityFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 120, 24)
-	m.styles.R.SetColorProfile(termenv.TrueColor)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
 	m.styles.Color = true
 	seen := map[string]string{}
-	for _, row := range listRows(m.View()) {
+	for _, row := range listRows(m.View().Content) {
 		word := severityCell(row)
 		if word == "" {
 			continue
@@ -562,14 +561,14 @@ func TestDetailWalksTheListOrder(t *testing.T) {
 	if _, i := m.openedFinding(); i != 0 {
 		t.Fatalf("f-003 is at %d, want 0", i)
 	}
-	if !strings.Contains(ansi.Strip(m.View()), "1 of 4") {
-		t.Errorf("detail does not say 1 of 4:\n%s", m.View())
+	if !strings.Contains(ansi.Strip(m.View().Content), "1 of 4") {
+		t.Errorf("detail does not say 1 of 4:\n%s", m.View().Content)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if m.openID != "f-004" {
 		t.Errorf("right moved to %s, want f-004", m.openID)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if m.openID != "f-003" {
 		t.Errorf("left moved to %s, want f-003", m.openID)
 	}
@@ -591,7 +590,7 @@ func TestEscapeKeepsTheCursorOnTheOpenFinding(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if m.view != viewList {
 		t.Fatalf("esc left the view at %v", m.view)
 	}
@@ -604,7 +603,7 @@ func TestEscapeKeepsTheCursorOnTheOpenFinding(t *testing.T) {
 // reverting its kind to Dim leaves every other assertion true.
 func TestSeverityChipIsColoredByRank(t *testing.T) {
 	s := style.New(io.Discard, envOf(map[string]string{"LANG": "en_US.UTF-8"}))
-	s.R.SetColorProfile(termenv.TrueColor)
+	s.SetColorProfile(colorprofile.TrueColor)
 	s.Color = true
 	find := func(cs []chip, prefix string) chip {
 		for _, c := range cs {

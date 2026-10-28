@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 )
@@ -77,13 +77,13 @@ func pressKeys(t *testing.T, m *Model, keys ...string) {
 	for _, k := range keys {
 		switch k {
 		case "enter":
-			update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+			update(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
 		case "esc":
-			update(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+			update(t, m, tea.KeyPressMsg{Code: tea.KeyEsc})
 		case "ctrl+r":
-			update(t, m, tea.KeyMsg{Type: tea.KeyCtrlR})
+			update(t, m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 		default:
-			update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+			update(t, m, runes(k))
 		}
 	}
 }
@@ -96,21 +96,21 @@ func TestPollShowsTheReplyOnTheAwaitedFinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.body.SetYOffset(3)
-	offset := m.body.YOffset
+	offset := m.body.YOffset()
 	agentReplies(t, dir, "n-001", "Because the rename moved it.")
 
 	update(t, m, pollMsg{})
 	if m.view != viewDetail || m.openID != "f-001" {
 		t.Fatalf("view %v open %s", m.view, m.openID)
 	}
-	if m.body.YOffset != offset {
-		t.Fatalf("scroll moved from %d to %d", offset, m.body.YOffset)
+	if m.body.YOffset() != offset {
+		t.Fatalf("scroll moved from %d to %d", offset, m.body.YOffset())
 	}
 	if !strings.Contains(m.notice, "n-001 answered on f-001") {
 		t.Fatalf("notice %q", m.notice)
 	}
 	m.body.GotoBottom()
-	if view := m.View(); !strings.Contains(view, "Because the rename moved it.") {
+	if view := m.View().Content; !strings.Contains(view, "Because the rename moved it.") {
 		t.Fatalf("reply not shown:\n%s", view)
 	}
 }
@@ -129,8 +129,8 @@ func TestPollInTheListKeepsTheCursorOnItsFinding(t *testing.T) {
 		strings.Count(m.notice, "\n") != 0 {
 		t.Fatalf("one notice for both writes, got %q", m.notice)
 	}
-	if !strings.Contains(m.View(), "Retitled three") {
-		t.Fatalf("list not redrawn:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "Retitled three") {
+		t.Fatalf("list not redrawn:\n%s", m.View().Content)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestPollRedrawsAFindingTheAgentEdited(t *testing.T) {
 	}
 	agentRetitles(t, dir, "f-001", "Retitled one")
 	update(t, m, pollMsg{})
-	if view := m.View(); !strings.Contains(view, "Retitled one") || !strings.Contains(m.notice, "f-001 changed") {
+	if view := m.View().Content; !strings.Contains(view, "Retitled one") || !strings.Contains(m.notice, "f-001 changed") {
 		t.Fatalf("notice %q view:\n%s", m.notice, view)
 	}
 }
@@ -169,8 +169,8 @@ func TestPollRunsWithNothingAwaiting(t *testing.T) {
 	pressKeys(t, m, "enter")
 	agentRetitles(t, dir, "f-001", "Retitled one")
 	update(t, m, pollMsg{})
-	if m.view != viewDetail || !strings.Contains(m.View(), "Retitled one") || !strings.Contains(m.notice, "f-001 changed") {
-		t.Fatalf("detail: view %v notice %q\n%s", m.view, m.notice, m.View())
+	if m.view != viewDetail || !strings.Contains(m.View().Content, "Retitled one") || !strings.Contains(m.notice, "f-001 changed") {
+		t.Fatalf("detail: view %v notice %q\n%s", m.view, m.notice, m.View().Content)
 	}
 	update(t, m, pollMsg{})
 	if !m.polling {
@@ -183,8 +183,8 @@ func TestPollRunsWithNothingAwaiting(t *testing.T) {
 		return err
 	})
 	update(t, m, pollMsg{})
-	if m.view != viewList || !strings.Contains(m.View(), "Four") || !strings.Contains(m.notice, "f-004 filed") {
-		t.Fatalf("list: view %v notice %q\n%s", m.view, m.notice, m.View())
+	if m.view != viewList || !strings.Contains(m.View().Content, "Four") || !strings.Contains(m.notice, "f-004 filed") {
+		t.Fatalf("list: view %v notice %q\n%s", m.view, m.notice, m.View().Content)
 	}
 }
 
@@ -212,11 +212,11 @@ func TestPollHoldsWhileTheHumanWrites(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			m, dir := newAwaitingModel(t, 40)
 			open(t, m)
-			before, version := m.View(), m.version
+			before, version := m.View().Content, m.version
 			agentReplies(t, dir, "n-001", "Because.")
 			update(t, m, pollMsg{})
 			update(t, m, pollMsg{})
-			if m.version != version || m.View() != before {
+			if m.version != version || m.View().Content != before {
 				t.Fatalf("screen changed under %s", name)
 			}
 			for i := 0; i < 3 && (m.noting || m.editing || (m.view != viewList && m.view != viewDetail)); i++ {
@@ -256,14 +256,14 @@ func TestReloadKey(t *testing.T) {
 	pressKeys(t, m, "enter")
 	agentRetitles(t, dir, "f-002", "Retitled two")
 	pressKeys(t, m, "ctrl+r")
-	if m.view != viewDetail || m.openID != "f-002" || !strings.Contains(m.View(), "Retitled two") {
-		t.Fatalf("detail reload: view %v open %s\n%s", m.view, m.openID, m.View())
+	if m.view != viewDetail || m.openID != "f-002" || !strings.Contains(m.View().Content, "Retitled two") {
+		t.Fatalf("detail reload: view %v open %s\n%s", m.view, m.openID, m.View().Content)
 	}
 
 	for _, v := range []view{viewList, viewDetail} {
 		m.view, m.help = v, true
-		if !strings.Contains(m.View(), "ctrl+r") {
-			t.Errorf("help for view %v does not list ctrl+r:\n%s", v, m.View())
+		if !strings.Contains(m.View().Content, "ctrl+r") {
+			t.Errorf("help for view %v does not list ctrl+r:\n%s", v, m.View().Content)
 		}
 		m.help = false
 	}
@@ -300,7 +300,7 @@ func TestPollShowsAnEditThatFollowsTheLastReply(t *testing.T) {
 	}
 	agentRetitles(t, dir, "f-001", "Retitled one")
 	update(t, m, pollMsg{})
-	if !strings.Contains(m.notice, "f-001 changed") || !strings.Contains(m.View(), "Retitled one") {
+	if !strings.Contains(m.notice, "f-001 changed") || !strings.Contains(m.View().Content, "Retitled one") {
 		t.Fatalf("notice %q", m.notice)
 	}
 }
@@ -420,7 +420,7 @@ func TestLiveReplyJoinsTheThreadAndKeepsTheNoteBeingWritten(t *testing.T) {
 	update(t, m, pollMsg{})
 
 	m.body.GotoBottom()
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"you - n-001", "agent - r-001", "Because the rename moved it."} {
 		if !strings.Contains(view, want) {
 			t.Errorf("thread lacks %q after the live reply:\n%s", want, view)

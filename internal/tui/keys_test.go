@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -28,9 +28,9 @@ func press(m *Model, keys ...string) {
 	for _, k := range keys {
 		switch k {
 		case "enter":
-			m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 		default:
-			m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+			m.Update(runes(k))
 		}
 	}
 }
@@ -113,7 +113,7 @@ func TestDecidingAFindingClosesItsNotes(t *testing.T) {
 			}
 			m := newModel(t, dir)
 			footer := func() string {
-				lines := strings.Split(m.View(), "\n")
+				lines := strings.Split(m.View().Content, "\n")
 				return lines[len(lines)-1]
 			}
 			if f := footer(); !strings.Contains(f, "p publish (not ready)") {
@@ -132,7 +132,7 @@ func TestDecidingAFindingClosesItsNotes(t *testing.T) {
 			if r := m.readiness(); !strings.Contains(r, "ready to publish") {
 				t.Errorf("readiness %q", r)
 			}
-			m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 			if f := footer(); !strings.Contains(f, "p publish   ") || strings.Contains(f, "not ready") {
 				t.Errorf("list footer after deciding: %q", f)
 			}
@@ -172,7 +172,7 @@ func assertEscaped(t *testing.T, where, text string, want ...string) {
 
 func TestListRowsEscapeTitles(t *testing.T) {
 	m := newModel(t, hostileFixture(t))
-	assertEscaped(t, "list view", m.View(), `\u202E`, `\u001B[31mred`)
+	assertEscaped(t, "list view", m.View().Content, `\u202E`, `\u001B[31mred`)
 }
 
 func TestDetailEscapesFindings(t *testing.T) {
@@ -180,19 +180,25 @@ func TestDetailEscapesFindings(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	assertEscaped(t, "detail view", m.View(), `Title \u202Eeno \u001B[31mred`, `Body \u2066hidden \u001B]52;c;x\u0007`, `fix \u200Fmark`)
+	assertEscaped(t, "detail view", m.View().Content, `Title \u202Eeno \u001B[31mred`, `Body \u2066hidden \u001B]52;c;x\u0007`, `fix \u200Fmark`)
 }
 
-func arrow(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
+func arrow(t rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: t} }
 
-func runes(k string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)} }
+func runes(k string) tea.KeyPressMsg {
+	code := rune(0)
+	if rs := []rune(k); len(rs) == 1 {
+		code = rs[0]
+	}
+	return tea.KeyPressMsg{Code: code, Text: k}
+}
 
 // ← and → move between findings exactly as N and n do, stopping at both ends.
 func TestDetailArrowsMatchTheirAliases(t *testing.T) {
 	dir := newFixture(t)
 	for _, pair := range []struct {
 		name       string
-		prev, next tea.KeyMsg
+		prev, next tea.KeyPressMsg
 	}{
 		{"arrows", arrow(tea.KeyLeft), arrow(tea.KeyRight)},
 		{"aliases", runes("N"), runes("n")},
@@ -202,7 +208,7 @@ func TestDetailArrowsMatchTheirAliases(t *testing.T) {
 			t.Fatal(err)
 		}
 		var got []string
-		for _, k := range []tea.KeyMsg{pair.prev, pair.next, pair.next, pair.next, pair.prev} {
+		for _, k := range []tea.KeyPressMsg{pair.prev, pair.next, pair.next, pair.next, pair.prev} {
 			m.Update(k)
 			got = append(got, m.openID)
 		}
@@ -217,7 +223,7 @@ func TestFileDiffArrowsMatchTheirAliases(t *testing.T) {
 	dir := newFixture(t)
 	for _, pair := range []struct {
 		name       string
-		prev, next tea.KeyMsg
+		prev, next tea.KeyPressMsg
 	}{
 		{"arrows", arrow(tea.KeyLeft), arrow(tea.KeyRight)},
 		{"aliases", runes("["), runes("]")},
@@ -235,7 +241,7 @@ func TestFileDiffArrowsMatchTheirAliases(t *testing.T) {
 			return "none"
 		}
 		var got []string
-		for _, k := range []tea.KeyMsg{pair.prev, pair.next, pair.next, pair.prev} {
+		for _, k := range []tea.KeyPressMsg{pair.prev, pair.next, pair.next, pair.prev} {
 			m.Update(k)
 			got = append(got, marker())
 		}
@@ -250,14 +256,14 @@ func TestHelpScrolls(t *testing.T) {
 	m := newModel(t, newFixture(t))
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
 	m.Update(runes("?"))
-	first := m.View()
+	first := m.View().Content
 	if !strings.Contains(first, "lines 1-") || !strings.Contains(first, "up/down scroll") {
 		t.Fatalf("tall help does not show its position or scroll hint:\n%s", first)
 	}
 	for range 100 {
 		m.Update(arrow(tea.KeyDown))
 	}
-	last := m.View()
+	last := m.View().Content
 	if last == first || !strings.Contains(last, "shown instead.") {
 		t.Errorf("scrolling help does not reach its end:\n%s", last)
 	}
@@ -265,11 +271,11 @@ func TestHelpScrolls(t *testing.T) {
 	for range 20 {
 		m.Update(runes("k"))
 	}
-	if m.View() != first {
-		t.Errorf("scrolling back does not return to the top:\n%s", m.View())
+	if m.View().Content != first {
+		t.Errorf("scrolling back does not return to the top:\n%s", m.View().Content)
 	}
 	m.help = false
-	for _, k := range []tea.KeyMsg{runes("?"), arrow(tea.KeyEsc), runes("q")} {
+	for _, k := range []tea.KeyPressMsg{runes("?"), arrow(tea.KeyEsc), runes("q")} {
 		m.Update(runes("?"))
 		if !m.help {
 			t.Fatal("? did not open help")
@@ -315,5 +321,53 @@ func TestDetailKeyReinstatesAWithdrawnFinding(t *testing.T) {
 	}
 	if h := d.Findings[1].History; len(h) != 2 || h[1].By != draft.ByHuman {
 		t.Fatalf("history %+v", h)
+	}
+}
+
+func TestPasteAndKeyReleaseStayInsideInputs(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	m.Update(tea.PasteMsg{Content: "q"})
+	m.Update(tea.KeyReleaseMsg{Code: 'q', Text: "q"})
+	if m.noting || m.view != viewList {
+		t.Fatal("paste or release acted as a list shortcut")
+	}
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(runes("s"))
+	m.Update(tea.PasteMsg{Content: "界é\r\nnext\tline"})
+	if got := m.note.Value(); got != "界é next line" {
+		t.Fatalf("note paste: %q", got)
+	}
+	c := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	c.Update(tea.PasteMsg{Content: "界é\r\nnext\tline"})
+	if got := c.Message(); got != "界é\nnext line" {
+		t.Fatalf("confirmation paste: %q", got)
+	}
+	c.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	c.Update(tea.PasteMsg{Content: "y"})
+	if c.Confirmed() {
+		t.Fatal("a paste confirmed the review")
+	}
+}
+
+func TestPastedKeyNamesRemainText(t *testing.T) {
+	for _, text := range []string{"enter", "backspace", "ctrl+u", "tab", "q", "y"} {
+		t.Run(text, func(t *testing.T) {
+			m := newModel(t, newFixture(t))
+			if err := m.openFinding("f-001"); err != nil {
+				t.Fatal(err)
+			}
+			m.Update(runes("s"))
+			m.Update(tea.PasteMsg{Content: text})
+			if got := m.note.Value(); got != text || !m.noting {
+				t.Fatalf("note paste %q: %q", text, got)
+			}
+			c := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+			c.Update(tea.PasteMsg{Content: text})
+			if got := c.Message(); got != text || c.Confirmed() {
+				t.Fatalf("confirmation paste %q: %q", text, got)
+			}
+		})
 	}
 }

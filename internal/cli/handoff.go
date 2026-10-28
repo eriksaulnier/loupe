@@ -107,7 +107,7 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 		where += " without focus"
 	}
 	_, err = fmt.Fprintf(deps.Stdout, "%s Opened loupe review for %s in a new pane %s\n",
-		s.Good.Bold(true).Render(s.Glyphs.Accepted), s.Accent.Render(ref.String()), where)
+		s.Emphasis(s.Good).Render(s.Glyphs.Accepted), s.Accent.Render(ref.String()), where)
 	return err
 }
 

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/exp/teatest"
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
@@ -40,7 +40,7 @@ func publishThrough(t *testing.T, o *opener, want ...string) *teatest.TestModel 
 	tm := startPublishAppWith(t, dir, newPublishFake(t), open)
 	waitFor(t, tm, "+ 3 accepted")
 	reachConfirmation(t, tm)
-	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tm.Type("y")
 	waitFor(t, tm, append([]string{"Published", reviewURLPrefix}, want...)...)
 	return tm
@@ -66,7 +66,7 @@ func TestPublishEndsOnThePublishedScreenAndOOpensTheReview(t *testing.T) {
 }
 
 func TestAnyOtherKeyQuitsThePublishedScreen(t *testing.T) {
-	for _, k := range []tea.KeyMsg{keyOf("x"), keyOf("q"), keyOf("enter"), {Type: tea.KeyEsc}} {
+	for _, k := range []tea.KeyPressMsg{keyOf("x"), keyOf("q"), keyOf("enter"), {Code: tea.KeyEsc}} {
 		o := &opener{}
 		tm := publishThrough(t, o)
 		tm.Send(k)
@@ -102,10 +102,10 @@ func TestPublishedScreenLinksEveryRowOfTheURL(t *testing.T) {
 	url := reviewURLPrefix + "4242424242"
 	for _, width := range []int{120, 60} {
 		m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, width, 20)
-		m.styles.R.SetColorProfile(termenv.TrueColor)
+		m.styles.SetColorProfile(colorprofile.TrueColor)
 		m.styles.Color = true
 		m.view, m.published = viewPublished, url
-		view := m.View()
+		view := m.View().Content
 		rows := strings.Count(view, ansi.SetHyperlink(url))
 		if strings.Contains(view, `\u001B`) || rows == 0 || rows != strings.Count(view, ansi.ResetHyperlink()) ||
 			!strings.Contains(strings.ReplaceAll(ansi.Strip(view), "\n  ", ""), url) {
@@ -117,7 +117,7 @@ func TestPublishedScreenLinksEveryRowOfTheURL(t *testing.T) {
 	}
 	m := modelOf(t, newFixture(t), testEnv, 120, 20)
 	m.view, m.published = viewPublished, url
-	if view := m.View(); strings.ContainsRune(view, '\x1b') || !strings.Contains(view, url) {
+	if view := m.View().Content; strings.ContainsRune(view, '\x1b') || !strings.Contains(view, url) {
 		t.Fatalf("NO_COLOR draws an escape or loses the URL:\n%q", view)
 	}
 }
@@ -132,7 +132,7 @@ func TestOOpensOutsideUpdate(t *testing.T) {
 	if cmd == nil || len(o.urls) != 0 {
 		t.Fatalf("o opened %q inside Update", o.urls)
 	}
-	if view := m.View(); strings.Contains(view, "open in browser") || !strings.Contains(view, "opening the browser") {
+	if view := m.View().Content; strings.Contains(view, "open in browser") || !strings.Contains(view, "opening the browser") {
 		t.Fatalf("the screen still offers o while the browser opens:\n%s", view)
 	}
 	if _, quit := m.Update(keyOf("o")); !isQuit(quit) {
@@ -153,7 +153,7 @@ func TestPublishedScreenOffersNoOForAnUnsafeURL(t *testing.T) {
 		m := modelOf(t, newFixture(t), testEnv, 120, 20)
 		m.cfg.OpenURL = o.open
 		m.view, m.published = viewPublished, url
-		if view := m.View(); strings.Contains(view, "open in browser") {
+		if view := m.View().Content; strings.Contains(view, "open in browser") {
 			t.Fatalf("%q: the screen offers o:\n%s", url, view)
 		}
 		if _, cmd := m.Update(keyOf("o")); !isQuit(cmd) || len(o.urls) != 0 {
@@ -177,11 +177,11 @@ func TestSendFinishedAfterQuitKeepsTheOutcome(t *testing.T) {
 		waitFor(t, tm, "+ 3 accepted")
 		tm.Type("p")
 		waitFor(t, tm, "> comment")
-		tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+		tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 		waitFor(t, tm, "> none")
-		tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+		tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 		waitFor(t, tm, "<details open>")
-		tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+		tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 		tm.Type("y")
 		waitFor(t, tm, "sending the review")
 		tm.Send(tea.QuitMsg{})

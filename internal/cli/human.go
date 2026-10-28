@@ -48,7 +48,7 @@ func metaSep(s style.Style) string {
 // printDone ends a mutation with the version the agent has to quote back in --expect-version.
 func printDone(deps Deps, sentence string, version int) error {
 	s := deps.outStyle()
-	_, err := fmt.Fprintf(deps.Stdout, "%s %s  %s\n", s.Good.Bold(true).Render(s.Glyphs.Accepted), sentence,
+	_, err := fmt.Fprintf(deps.Stdout, "%s %s  %s\n", s.Emphasis(s.Good).Render(s.Glyphs.Accepted), sentence,
 		s.Dim.Render(fmt.Sprintf("draft version %d", version)))
 	return err
 }

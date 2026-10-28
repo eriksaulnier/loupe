@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/vt"
 )
 
 // guard only turns a hung test into a failure that shows the screen; nothing waits for it to pass.
@@ -33,19 +34,52 @@ type Screen struct {
 	// changed is closed and replaced on every write and when the program ends, so a waiter wakes on news.
 	changed        chan struct{}
 	drawn          bytes.Buffer
+	terminal       *vt.Emulator
+	synchronized   bool
+	frame          string
+	generation     uint64
+	seenGeneration uint64
 	stdout, stderr bytes.Buffer
-	// seen is how much of drawn earlier waits matched, so each wait looks only at what was drawn since.
-	seen  int
-	ended bool
-	exit  int
+	ended          bool
+	exit           int
 }
 
 // Start runs fn on its own goroutine. fn reads the keys Screen sends from stdin, and everything it writes to stdout or
 // stderr is what the screen shows.
-func Start(t testing.TB, fn func(stdin io.Reader, stdout, stderr io.Writer) int) *Screen {
+func Start(t testing.TB, width, height int, fn func(stdin io.Reader, stdout, stderr io.Writer) int) *Screen {
 	t.Helper()
 	pr, pw := io.Pipe()
 	s := &Screen{t: t, in: pw, changed: make(chan struct{})}
+	s.initTerminal(width, height)
+	// The emulator answers terminal queries through the same input as keys. It answers while the program's write holds
+	// the screen, so the answers wait in a queue, as a tty's input buffer holds them, rather than in a pipe the program
+	// may not read until that write returns.
+	var replies sync.WaitGroup
+	queue := newReplyQueue()
+	replies.Go(func() {
+		defer queue.close()
+		buf := make([]byte, 4096)
+		for {
+			n, err := s.terminal.Read(buf)
+			queue.push(buf[:n])
+			if err != nil {
+				if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrClosedPipe) {
+					s.failReply(err)
+				}
+				return
+			}
+		}
+	})
+	replies.Go(func() {
+		for reply, ok := queue.pop(); ok; reply, ok = queue.pop() {
+			if _, err := pw.Write(reply); err != nil {
+				if !errors.Is(err, io.ErrClosedPipe) {
+					s.failReply(err)
+				}
+				return
+			}
+		}
+	})
 	go func() {
 		exit := fn(pr, stream{s, &s.stdout}, stream{s, &s.stderr})
 		// The program no longer reads, so a key sent from here on fails instead of blocking on the pipe.
@@ -55,8 +89,78 @@ func Start(t testing.TB, fn func(stdin io.Reader, stdout, stderr io.Writer) int)
 		s.notify()
 		s.mu.Unlock()
 	}()
-	t.Cleanup(func() { _ = pw.Close() })
+	t.Cleanup(func() {
+		_ = pw.Close()
+		// Close the response pipe before Emulator.Close touches its unsynchronized state.
+		_ = s.terminal.InputPipe().(io.Closer).Close()
+		replies.Wait()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		_ = s.terminal.Close()
+	})
 	return s
+}
+
+// failReply records a terminal answer that could not be passed on, unless the program has already ended.
+func (s *Screen) failReply(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.ended {
+		fmt.Fprintf(&s.stderr, "terminal response: %v", err)
+	}
+}
+
+// replyQueue holds the emulator's answers until the program reads them. It never blocks the emulator.
+type replyQueue struct {
+	mu     sync.Mutex
+	ready  chan struct{}
+	queued [][]byte
+	closed bool
+}
+
+func newReplyQueue() *replyQueue { return &replyQueue{ready: make(chan struct{}, 1)} }
+
+func (q *replyQueue) push(p []byte) {
+	if len(p) == 0 {
+		return
+	}
+	q.mu.Lock()
+	q.queued = append(q.queued, bytes.Clone(p))
+	q.mu.Unlock()
+	q.wake()
+}
+
+func (q *replyQueue) close() {
+	q.mu.Lock()
+	q.closed = true
+	q.mu.Unlock()
+	q.wake()
+}
+
+func (q *replyQueue) wake() {
+	select {
+	case q.ready <- struct{}{}:
+	default:
+	}
+}
+
+// pop waits for the next answer. It reports false once the queue is closed and empty.
+func (q *replyQueue) pop() ([]byte, bool) {
+	for {
+		q.mu.Lock()
+		if len(q.queued) > 0 {
+			p := q.queued[0]
+			q.queued = q.queued[1:]
+			q.mu.Unlock()
+			return p, true
+		}
+		closed := q.closed
+		q.mu.Unlock()
+		if closed {
+			return nil, false
+		}
+		<-q.ready
+	}
 }
 
 type stream struct {
@@ -69,6 +173,15 @@ func (w stream) Write(p []byte) (int, error) {
 	defer w.s.mu.Unlock()
 	w.buf.Write(p)
 	w.s.drawn.Write(p)
+	if _, err := w.s.terminal.Write(p); err != nil {
+		return 0, err
+	}
+	if !w.s.synchronized {
+		if frame := w.s.terminal.String(); frame != w.s.frame {
+			w.s.frame = frame
+			w.s.generation++
+		}
+	}
 	w.s.notify()
 	return len(p), nil
 }
@@ -107,16 +220,15 @@ func (s *Screen) send(name, seq string) {
 	}
 }
 
-// WaitFor returns everything drawn since the last wait that returned, once it contains every one of want. It fails
-// when the program ends first.
+// WaitFor returns a fresh completed frame that contains every requested string. It fails if the program ends first.
 func (s *Screen) WaitFor(want ...string) string {
 	s.t.Helper()
 	deadline := time.After(guard)
 	for {
 		s.mu.Lock()
-		fresh, changed, ended := s.drawn.Bytes()[s.seen:], s.changed, s.ended
-		if containsAll(fresh, want) {
-			s.seen = s.drawn.Len()
+		fresh, changed, ended := []byte(s.frame), s.changed, s.ended
+		if s.generation > s.seenGeneration && containsAll(fresh, want) {
+			s.seenGeneration = s.generation
 			s.mu.Unlock()
 			return string(fresh)
 		}
@@ -134,41 +246,28 @@ func (s *Screen) WaitFor(want ...string) string {
 	}
 }
 
-// View is the frame on screen now, one line per row with trailing blanks dropped. It replays what bubbletea's renderer
-// writes: a frame starts at the home position and rewrites each changed row whole from its first column, a row it
-// leaves unchanged is skipped with a bare line feed, and a shorter frame clears below its last row. Styles and every
-// other control sequence are dropped.
+func (s *Screen) initTerminal(width, height int) {
+	s.terminal = vt.NewEmulator(width, height)
+	_, _ = s.terminal.WriteString(ansi.SetModeLineFeedNewLine)
+	s.terminal.SetCallbacks(vt.Callbacks{
+		EnableMode: func(mode ansi.Mode) {
+			if mode == ansi.ModeSynchronizedOutput {
+				s.synchronized = true
+			}
+		},
+		DisableMode: func(mode ansi.Mode) {
+			if mode == ansi.ModeSynchronizedOutput {
+				s.synchronized = false
+			}
+		},
+	})
+}
+
+// View returns the last completed frame with terminal controls interpreted.
 func (s *Screen) View() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var rows []string
-	row, fresh := 0, true
-	p := ansi.NewParser()
-	for rest := s.drawn.String(); rest != ""; {
-		seq, _, n, _ := ansi.DecodeSequence(rest, ansi.NormalState, p)
-		rest = rest[n:]
-		switch {
-		case seq == ansi.CursorHomePosition:
-			row, fresh = 0, true
-		case seq == ansi.EraseScreenBelow:
-			rows = rows[:min(len(rows), row+1)]
-		case seq == "\n":
-			row, fresh = row+1, true
-		case seq == "\r", ansi.HasCsiPrefix(seq), ansi.HasOscPrefix(seq), ansi.HasEscPrefix(seq), ansi.HasDcsPrefix(seq):
-		default:
-			for len(rows) <= row {
-				rows = append(rows, "")
-			}
-			if fresh {
-				rows[row], fresh = "", false
-			}
-			rows[row] += seq
-		}
-	}
-	for i := range rows {
-		rows[i] = strings.TrimRight(rows[i], " ")
-	}
-	return strings.Join(rows, "\n")
+	return s.frame
 }
 
 // Running reports whether the program has yet to end.
