@@ -758,3 +758,38 @@ func TestRefusalTallerThanTheScreenKeepsItsEnds(t *testing.T) {
 		}
 	}
 }
+
+// A pane the human types or edits in is drawn in the note color while it has the keys: send back, edit, and the
+// review message while typing. The blurred message pane returns to the accent (demo feedback).
+func TestInputPanesAreAmber(t *testing.T) {
+	env := map[string]string{"LANG": "en_US.UTF-8"}
+	amber := func(m *Model, title string) bool {
+		edge := m.styles.ToneStyle(style.ToneNote)
+		return strings.Contains(m.View().Content, edge.Render("╭")+edge.Render("─")+" "+m.styles.Emphasis(edge).Render(title))
+	}
+	for _, sc := range []struct {
+		name, title string
+		open        func(*Model)
+	}{
+		{"send back", "Send back f-001", func(m *Model) { mustOpen(m, "f-001"); m.Update(runes("s")) }},
+		{"edit", "Edit f-001", func(m *Model) { mustOpen(m, "f-001"); m.Update(runes("e")) }},
+	} {
+		m := modelOf(t, newFixture(t), env, 100, 30)
+		m.styles.SetColorProfile(colorprofile.TrueColor)
+		sc.open(m)
+		if !amber(m, sc.title) {
+			t.Errorf("the %s pane is not amber:\n%q", sc.name, m.View().Content)
+		}
+	}
+	m := modelOf(t, newFixture(t), env, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	showConfirmation(m)
+	m.confirm.typing = true
+	if !amber(m, "your message") {
+		t.Errorf("the message pane is not amber while typing:\n%q", m.View().Content)
+	}
+	m.confirm.typing = false
+	if amber(m, "your message") {
+		t.Errorf("the blurred message pane is still amber:\n%q", m.View().Content)
+	}
+}

@@ -315,8 +315,13 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	for i, r := range rows {
 		rows[i] = r + tint.Render(strings.Repeat(" ", max(0, inner-style.Width(r))))
 	}
+	// The pane takes the input color only while it has the keys, so its border also says where typing goes.
+	tone := style.ToneAccent
+	if c.typing {
+		tone = style.ToneNote
+	}
 	boxed := m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
-		Titles: style.PaneTitles{TopLeft: messageTitle, TopRight: m.styles.Note.Render(state), BottomRight: m.styles.Text().Render(way)}})
+		Titles: style.PaneTitles{TopLeft: messageTitle, TopRight: m.styles.Note.Render(state), BottomRight: m.styles.Text().Render(way)}, Tone: tone})
 	c.inputRows = len(boxed)
 	return strings.Join(boxed, "\n")
 }

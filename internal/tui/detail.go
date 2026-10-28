@@ -636,7 +636,7 @@ func (m *Model) editView() []string {
 	width, _ := style.PaneInner(m.width, 0)
 	lines := append(m.partLines(parts, 1, width), blocking)
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(lines) + style.PaneRows, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Edit " + m.openID}})
+		Titles: style.PaneTitles{TopLeft: "Edit " + m.openID}, Tone: style.ToneNote})
 }
 
 // sizeNote fits the note input inside its pane, as tall as its wrapped text plus extra rows.
@@ -662,7 +662,7 @@ func (m *Model) noteView() []string {
 	rows := m.noteRowsShown()
 	way := m.styles.Text().Render("enter sends " + m.glyphs.Sep + " esc cancels")
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
-		Titles: style.PaneTitles{TopLeft: "Send back " + m.openID, BottomRight: way}})
+		Titles: style.PaneTitles{TopLeft: "Send back " + m.openID, BottomRight: way}, Tone: style.ToneNote})
 }
 
 // editorRows is the height of the editor pane open under the finding, if any.

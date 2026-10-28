@@ -115,3 +115,5 @@ Action and Inline comments MUST NOT draw a Message pane. It repeated the footer,
 The full-summary command MUST stay copyable at every width. When it does not fit one row under the summary pane, it MUST break into rows that paste back as the same command: each row but the last ends in a backslash. A break inside the run reference starts the next row unindented.
 
 A refusal taller than every row its screen can give it MUST keep its opening rows and its last row, which carries the fix, and MUST replace the rows between with one dim row that says how many were left out. This amends the scrollable-document option in Interaction details. Other rows the pane keeps for itself, such as the confirmation's cancel sentence, stay whole.
+
+A pane the human types or edits in MUST use the note color while it has the keys: the send-back composer, the metadata editor, and the review message while typing. The review message returns to the accent when blurred, so the border also shows where typing goes.
