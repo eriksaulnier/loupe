@@ -924,3 +924,27 @@ func TestDecisionFlashKeepsTheNoticeInPlace(t *testing.T) {
 		t.Errorf("the notice moved from row %d column %d to row %d column %d when the flash ended", row, flashing, afterRow, after)
 	}
 }
+
+// Deciding the last finding returns to the list with the cursor on the first finding still pending, or on the one
+// just decided when none is (demo feedback).
+func TestLastDecisionReturnsToTheList(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	mustOpen(m, "f-003")
+	m.Update(runes("a"))
+	if m.view != viewList || m.cursor != 0 {
+		t.Fatalf("after the last finding: view %v, cursor %d; want the list on f-001, the first pending", m.view, m.cursor)
+	}
+	if !strings.Contains(m.View().Content, "f-003 accepted") {
+		t.Errorf("the list does not say what was decided:\n%s", m.View().Content)
+	}
+	m = modelOf(t, newFixture(t), utf8Env, 100, 30)
+	mustOpen(m, "f-001")
+	for range 3 {
+		m.Update(runes("a"))
+		// Decision keys are dropped while the view settles on the next finding.
+		m.Update(settledMsg{})
+	}
+	if m.view != viewList || m.order[m.cursor].ID != "f-003" {
+		t.Errorf("with nothing pending: view %v, cursor on %s; want the list on f-003, just decided", m.view, m.order[m.cursor].ID)
+	}
+}

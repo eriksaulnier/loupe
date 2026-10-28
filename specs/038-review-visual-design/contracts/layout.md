@@ -133,3 +133,5 @@ A decision that settles a finding MUST flash its success notice as a solid tab i
 The Action and Inline comments steps MUST be a popup titled `Publish review`, centered over the dimmed list, as help is over its screen. Its first row is the steps, and a blank row sits under them and above its bottom border. The popup is at most 72 columns wide and as tall as its rows, up to the body, and a refusal goes inside it. The Message step, with the whole review and the message input, stays a full screen.
 
 The publish steps MUST read as a sequence joined by the cursor arrow. Done steps carry the accepted glyph. The current step is numbered, and in color it is a solid accent tab. Later steps are numbered and dim. In color, done and later steps are chips. Without color, the current step is bracketed.
+
+A decision that settles the last finding in the list MUST return to the list, with its notice and flash in the findings border. The cursor lands on the first finding still pending, or stays on the decided finding when none is. Changes that do not settle a finding keep detail open.

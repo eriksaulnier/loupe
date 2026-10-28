@@ -618,11 +618,12 @@ func TestDecisionOpensTheNextFinding(t *testing.T) {
 	tm.Type("a")
 	waitFor(t, tm, "f-002 accepted", "Body three asks about tests.")
 	tm.Type("a")
-	waitFor(t, tm, "f-003 accepted")
+	// The last finding's decision returns to the list, where publishing starts.
+	waitFor(t, tm, "f-003 accepted", "3/3 decided", "Findings")
 
 	view := viewOf(t, tm)
-	if !strings.Contains(view, "Body three asks about tests.") {
-		t.Errorf("the last finding did not stay on screen:\n%s", view)
+	if strings.Contains(view, "Body three asks about tests.") {
+		t.Errorf("the last finding stayed on screen instead of returning to the list:\n%s", view)
 	}
 	d := loadDraft(t, dir)
 	for _, id := range []string{"f-001", "f-002", "f-003"} {

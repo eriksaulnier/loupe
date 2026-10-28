@@ -88,6 +88,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T044 Draw the Action and Inline comments steps as a popup over the dimmed list, through the help overlay's compositing, in `internal/tui/list.go` and `internal/tui/shell.go`.
 - [X] T045 Keep a flashing notice's text in the cells it has without the flash, through `PaneTitles.BottomLeftTab` in `internal/style/review.go`.
 - [X] T046 Draw the publish steps as a numbered sequence of chips, drop the popup's repeated step title, and give its choices room, in `internal/style/review.go` and `internal/tui/list.go`.
+- [X] T047 Return to the list after the last finding's decision, with the cursor on the first pending finding, in `internal/tui/detail.go`.
 
 ## Dependencies and parallel work
 

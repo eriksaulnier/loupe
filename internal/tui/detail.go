@@ -744,7 +744,7 @@ var settleAfterDecision = 250 * time.Millisecond
 type settledMsg struct{}
 
 // decideAndShow records a decision that settles the finding and opens the next one, the way n does, so a run of
-// decisions needs no key between them; the last finding stays on screen. success builds the notice after fn has
+// decisions needs no key between them; after the last finding it returns to the list. success builds the notice after fn has
 // run, so it can name what fn created.
 func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string) tea.Cmd {
 	recorded, err := m.Decide(m.openID, fn)
@@ -758,7 +758,8 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 	flash := m.flash(findingTone(draft.Dispositions(m.draft)[m.openID]))
 	i := orderedIndex(m.order, m.openID)
 	if i < 0 || i+1 >= len(m.order) {
-		return tea.Batch(m.fail(m.refreshDetail()), flash)
+		m.listAfterLast(i)
+		return flash
 	}
 	notice, kind := m.notice, m.noticeKind
 	cmd := m.fail(m.openFinding(m.order[i+1].ID))
@@ -769,6 +770,20 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 	}
 	m.settling = true
 	return tea.Batch(cmd, flash, tea.Tick(settleAfterDecision, func(time.Time) tea.Msg { return settledMsg{} }))
+}
+
+// listAfterLast returns to the list once the last finding is decided, since publishing and anything skipped both
+// start there. The cursor lands on the first finding still pending, or stays on the last one, at index last, when
+// none is. The decision's notice stays, so the list says what just happened.
+func (m *Model) listAfterLast(last int) {
+	m.view, m.cursor = viewList, max(0, last)
+	dispositions := draft.Dispositions(m.draft)
+	for j, f := range m.order {
+		if dispositions[f.ID] == draft.DispositionPending {
+			m.cursor = j
+			break
+		}
+	}
 }
 
 // flashFor is how long a decision's notice shows as a solid tab before it reads as plain text: long enough to catch
