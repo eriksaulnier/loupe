@@ -141,3 +141,5 @@ The review message box MUST open two rows tall and grow with the message.
 The Message step MUST open on the review as it reads. Section headings take the accent and a finding's summary is bold. Quoted lines hang from a bar, links show their text, and code spans are chips. Bold markers, details tags and fences are dropped, and a hidden comment shows as a dim note. `v` MUST step from that view to the exact Markdown, then to the request payload, and back. The footer names the view it steps to next. Typing a message from the payload returns to the readable view. The `review body` rule is gone, because the pane's title already names the review.
 
 While the review message is typed, `shift+↑` and `shift+↓` MUST scroll the review one line, and `pgup`/`pgdn` a page. The plain arrows stay with the text. Mouse-wheel scrolling waits for a mouse spec, which decides once what capturing the mouse costs text selection.
+
+Every line of the readable review MUST wrap to the pane, including summaries, headings, fenced code and notes. A popup too short for its choices MUST drop its spacing first, then the choices furthest from the selected one. The selected choice stays in view.

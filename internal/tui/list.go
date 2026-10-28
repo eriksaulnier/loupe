@@ -108,14 +108,19 @@ var actionDescriptions = map[string]string{
 
 func (m *Model) actionView() string {
 	rows := make([]string, 0, len(publish.Actions))
+	var picked [2]int
 	for i, action := range publish.Actions {
+		start := len(rows)
 		if r, ok := refusal.As(m.actionRefusal(action)); ok {
 			rows = append(rows, m.pickerRow(false, true, action, "unavailable: "+r.Message, m.popupInner())...)
-			continue
+		} else {
+			rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action], m.popupInner())...)
 		}
-		rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action], m.popupInner())...)
+		if i == m.pick {
+			picked = [2]int{start, len(rows)}
+		}
 	}
-	return m.publishStep(0, rows, actionEnter)
+	return m.publishStep(0, rows, picked, actionEnter)
 }
 
 var inlineDescriptions = map[string]string{
@@ -126,10 +131,15 @@ var inlineDescriptions = map[string]string{
 
 func (m *Model) inlineView() string {
 	rows := make([]string, 0, len(publish.InlineModes))
+	var picked [2]int
 	for i, mode := range publish.InlineModes {
+		start := len(rows)
 		rows = append(rows, m.pickerRow(i == m.pick, false, mode, inlineDescriptions[mode], m.popupInner())...)
+		if i == m.pick {
+			picked = [2]int{start, len(rows)}
+		}
 	}
-	return m.publishStep(1, rows, inlineEnter)
+	return m.publishStep(1, rows, picked, inlineEnter)
 }
 
 // publishSteps are the tabs over every publish screen. They label where the flow is and add no key.
@@ -137,8 +147,9 @@ var publishSteps = []string{"Action", "Inline comments", "Message"}
 
 // publishStep is one choice step, a popup over the dimmed list: the step tabs, then the choices, in a pane whose
 // border says nothing has been sent. The footer says what enter does next. The step that writes the message and shows
-// the whole review is a screen of its own, since it needs the room.
-func (m *Model) publishStep(step int, rows []string, enter string) string {
+// the whole review is a screen of its own, since it needs the room. picked is the selected choice's rows, which stay
+// in view however short the window.
+func (m *Model) publishStep(step int, rows []string, picked [2]int, enter string) string {
 	footer := m.keys(groupHints(m.publishStepHints(enter))...)
 	width, inner := m.popupWidth(), m.popupInner()
 	room := noticeRoom(width, "")
@@ -148,18 +159,33 @@ func (m *Model) publishStep(step int, rows []string, enter string) string {
 	}
 	// The popup is as tall as its rows, up to the body; the refusal is kept whole, and the rows above give way to it.
 	maxRows := m.height - len(footer) - m.bodyTop() - style.PaneRows
+	notice := m.noticeRows(inner, room)
 	// Blank rows around the steps and above the border give them room. The current step's block marks the focus, so
 	// the title stays plain rather than a second block on top of it.
-	doc := slices.Concat([]string{"", m.styles.Tabs(publishSteps, step), ""}, rows, []string{""})
-	lines := m.withNotice(doc, m.noticeRows(inner, room), maxRows)
+	tabs := m.styles.Tabs(publishSteps, step)
+	doc := slices.Concat([]string{"", tabs, ""}, rows, []string{""})
+	if avail := maxRows - len(notice); len(doc) > avail {
+		// Short of room the spacing goes first, then the choices furthest from the selected one.
+		doc = slices.Concat([]string{tabs}, choiceWindow(rows, picked, max(1, avail-1)))
+	}
+	lines := m.withNotice(doc, notice, maxRows)
 	pane := m.styles.Pane(style.Pane{Width: width, Height: len(lines) + style.PaneRows, Lines: lines,
 		Titles: style.PaneTitles{TopLeft: "Publish review", BottomLeft: said}})
 	// The list under the popup is drawn without the step's notice, which belongs to the popup.
-	notice := m.notice
+	kept := m.notice
 	m.notice = ""
 	base := m.listView()
-	m.notice = notice
+	m.notice = kept
 	return m.overlay(base, len(m.keys(groupHints(m.listHints())...)), pane, footer)
+}
+
+// choiceWindow is at most n of rows, as close to the top as keeps the picked rows in view.
+func choiceWindow(rows []string, picked [2]int, n int) []string {
+	if len(rows) <= n {
+		return rows
+	}
+	start := min(max(0, picked[1]-n), picked[0], len(rows)-n)
+	return rows[start : start+n]
 }
 
 // popupInner is the content width of a popup pane.

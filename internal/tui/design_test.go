@@ -1050,3 +1050,34 @@ func TestShiftArrowsScrollTheFindingsWhileTyping(t *testing.T) {
 		t.Errorf("the typing footer does not offer the line scroll:\n%s", m.View().Content)
 	}
 }
+
+// A summary, a heading or fenced code wider than the pane wraps in the readable review rather than losing its tail
+// (review finding).
+func TestReadableReviewWrapsEveryLine(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 60, 30)
+	title := "Cache entries never expire when the ETag is missing from the upstream response"
+	body := "### A section heading long enough that it cannot fit on a sixty column row\n\n<details open>\n<summary>" + title +
+		"</summary>\n\n```go\nreturn e, s.now().Sub(e.At) < s.ttl && e.ETag != \"\" && someOtherConditionThatRunsOn\n```\n\n</details>"
+	got := strings.Join(strings.Fields(m.readable(body, 56)), " ")
+	for _, want := range []string{title, "A section heading long enough that it cannot fit on a sixty column row", "someOtherConditionThatRunsOn"} {
+		if !strings.Contains(strings.ReplaceAll(got, " ", ""), strings.ReplaceAll(want, " ", "")) {
+			t.Errorf("the readable review lost part of %q:\n%s", want, m.readable(body, 56))
+		}
+	}
+	for _, line := range strings.Split(m.readable(body, 56), "\n") {
+		if style.Width(line) > 56 {
+			t.Errorf("a row is wider than the pane: %q", line)
+		}
+	}
+}
+
+// At the minimum size the popup keeps the selected choice in view, dropping its spacing first and then the choices
+// furthest from the selection (review finding).
+func TestPopupKeepsTheSelectedChoice(t *testing.T) {
+	m := modelOf(t, readyFixture(t, "reviewer", "author"), utf8Env, 60, 12)
+	m.view, m.pick = viewAction, slices.Index(publish.Actions, "request-changes")
+	view := m.View().Content
+	if !strings.Contains(view, "> request-changes") {
+		t.Errorf("the selected choice is not in the popup at 60x12:\n%s", view)
+	}
+}

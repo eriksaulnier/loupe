@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/eriksaulnier/loupe/internal/render"
 )
 
@@ -30,21 +32,27 @@ func (m *Model) readable(body string, width int) string {
 			fenced = !fenced
 			continue
 		}
+		// Every kind of line wraps to the pane, so nothing the human is approving runs past its edge.
+		wrapped := func(text string, st lipgloss.Style, indent string) {
+			for _, l := range strings.Split(m.styles.Wrap(text, width, indent), "\n") {
+				out = append(out, st.Render(l))
+			}
+		}
 		if fenced {
-			out = append(out, m.styles.Secondary().Render("  "+line))
+			wrapped("  "+line, m.styles.Secondary(), "  ")
 			continue
 		}
 		switch {
 		case trimmed == "---":
 			out = append(out, m.styles.Dim.Render(strings.Repeat(m.glyphs.HRule, width)))
 		case strings.HasPrefix(trimmed, "#"):
-			out = append(out, m.sectionHead(m.readableInline(strings.TrimSpace(strings.TrimLeft(trimmed, "#")))))
+			wrapped(m.readableInline(strings.TrimSpace(strings.TrimLeft(trimmed, "#"))), m.styles.Emphasis(m.styles.Accent), "")
 		case trimmed == "<details>" || trimmed == "<details open>" || trimmed == "</details>":
 		case strings.HasPrefix(trimmed, "<summary>"):
 			text := strings.TrimSuffix(strings.TrimPrefix(trimmed, "<summary>"), "</summary>")
-			out = append(out, m.styles.Emphasis(m.styles.Text()).Render(readableTag.ReplaceAllString(m.readableInline(text), "")))
+			wrapped(readableTag.ReplaceAllString(m.readableInline(text), ""), m.styles.Emphasis(m.styles.Text()), "")
 		case readableComment.MatchString(trimmed):
-			out = append(out, m.styles.Dim.Render(m.glyphs.Sep+" "+readableComment.FindStringSubmatch(trimmed)[1]))
+			wrapped(m.glyphs.Sep+" "+readableComment.FindStringSubmatch(trimmed)[1], m.styles.Dim, "  ")
 		case strings.HasPrefix(trimmed, ">"):
 			quoted := m.readableInline(strings.TrimSpace(strings.TrimPrefix(trimmed, ">")))
 			bar := m.styles.Dim.Render(m.glyphs.Quote) + " "
