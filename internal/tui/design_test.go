@@ -100,8 +100,12 @@ func TestWithdrawnRowsCountInPositionOnly(t *testing.T) {
 	if len(rows) != len(m.order) || total != len(m.order)-1 {
 		t.Errorf("%d rows, total %d, for %d findings with one withdrawn", len(rows), total, len(m.order))
 	}
-	if !strings.Contains(m.View().Content, fmt.Sprintf(" 1 of %d ", len(m.order))) || !strings.Contains(m.View().Content, fmt.Sprintf("%d/%d decided", decided, total)) {
-		t.Errorf("position or count:\n%s", m.View().Content)
+	if !strings.Contains(m.View().Content, fmt.Sprintf("%d/%d decided", decided, total)) {
+		t.Errorf("count:\n%s", m.View().Content)
+	}
+	mustOpen(m, m.order[0].ID)
+	if !strings.Contains(m.View().Content, fmt.Sprintf(" 1 of %d ", len(m.order))) {
+		t.Errorf("position:\n%s", m.View().Content)
 	}
 }
 
@@ -117,9 +121,9 @@ func emptyFixture(t *testing.T) string {
 	return dir
 }
 
-func TestEmptyRoundShowsZeroOfZero(t *testing.T) {
+func TestEmptyRoundShowsZeroDecided(t *testing.T) {
 	view := modelOf(t, emptyFixture(t), utf8Env, 100, 30).View().Content
-	for _, want := range []string{"0/0 decided", "No findings", " 0 of 0 ", "No summary"} {
+	for _, want := range []string{"0/0 decided", "No findings", "No summary"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("empty round lacks %q:\n%s", want, view)
 		}
@@ -553,5 +557,27 @@ func TestFileDiffTokenizesOnce(t *testing.T) {
 	}
 	if m.tokensKey != key || time.Since(start) > 2*time.Second {
 		t.Errorf("moving the cursor tokenized the file again")
+	}
+}
+
+// The list shows its position only when the findings overflow the pane; detail always shows it (demo feedback).
+func TestListPositionOnlyWhenTheFindingsScroll(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	if view := m.View().Content; strings.Contains(view, "1 of 3") {
+		t.Errorf("a list that fits shows its position:\n%s", view)
+	}
+	mustOpen(m, "f-001")
+	if view := m.View().Content; !strings.Contains(view, "1 of 3") {
+		t.Errorf("detail lost its position:\n%s", view)
+	}
+	m = modelOf(t, newFixture(t), utf8Env, 60, 12)
+	for i := 4; i <= 12; i++ {
+		f := m.order[2]
+		f.ID = fmt.Sprintf("f-%03d", i)
+		m.draft.Findings = append(m.draft.Findings, f)
+		m.order = append(m.order, f)
+	}
+	if view := m.View().Content; !strings.Contains(view, "1 of 12") {
+		t.Errorf("a list that scrolls hides its position:\n%s", view)
 	}
 }

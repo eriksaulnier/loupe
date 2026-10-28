@@ -401,6 +401,10 @@ func (m *Model) listView() string {
 	room := noticeRoom(m.width, position)
 	notice := m.noticeRows(inner, room)
 	l := m.layoutList(len(footer), len(notice))
+	if len(m.order) <= l.rows {
+		// The selection marker already shows the place in a list that fits; the position is kept for one that scrolls.
+		position = ""
+	}
 	hint := "tab collapses"
 	switch {
 	case l.collapsed && !m.summaryCollapsed:
