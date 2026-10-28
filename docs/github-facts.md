@@ -13,6 +13,7 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - Observed 2026-09-10 on a personal repository: with a pending review already open for the viewer, a direct submission with `event: COMMENT` was rejected with HTTP 422, message "User can only have one pending review per pull request". The pending review and its comments were unchanged. loupe MUST surface this and MUST NOT manage the pending review.
 - A pull request author cannot approve or request changes on their own pull request; the API rejects it with 422. loupe refuses before sending.
 - `GET /repos/{owner}/{repo}/pulls/{number}/reviews` lists submitted reviews with `user.login`, `commit_id`, `state` and `body`. Pending reviews of the viewer appear with state `PENDING`; they MUST NOT count as submitted during reconciliation.
+- Reported, not observed by loupe: the API accepts a review on a merged pull request. On `cli/cli#5038`, `gh pr review --approve` on a merged pull request recorded an approval, and a GitHub CLI maintainer wrote on 2022-01-21 that reviewing merged pull requests is "explicitly allowed by the API". Nothing shows the same for a pull request closed without a merge, or for a sticky edit on either. `loupe capture --allow-closed` relies on it, and publish does not check the state (`specs/039-capture-allow-closed`).
 
 ## Review edits
 
@@ -42,6 +43,7 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 ## Pull request refs and shas
 
 - `refs/pull/{number}/head` on the origin remote resolves to the pull request's current head sha and can be fetched without the contributor's fork. The base sha comes from the API; fetching it by sha works on github.com.
+- Assumed: `refs/pull/{number}/head` stays fetchable after a pull request closes or merges, and after its head branch is deleted. `specs/039-capture-allow-closed` relies on it; it has not been observed live.
 - The API's `head.sha` and `base.sha` are the authority for what the pull request contains. After fetching, the local refs MUST be compared to those values; a mismatch means the head moved during capture.
 
 ## Comparing commits
