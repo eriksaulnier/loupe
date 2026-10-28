@@ -109,3 +109,5 @@ The detail pane's top-left title MUST lead with the list's disposition glyph and
 The detail pane's border MUST take the finding's status color: accepted in good, excluded and withdrawn in overlay, pending with an open note in note, and other pending in the accent. A note pane's border MUST use note while the note is open and overlay once it is resolved or dismissed. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.
 
 A window of 20 or more rows MUST keep one blank row between the header and the body. Below 20 rows that row goes to the body first, before any other row budget gives way, so the 60x12 budget above is unchanged.
+
+Action and Inline comments MUST NOT draw a Message pane. It repeated the footer, and its title read as the Message tab. Each step is one choice pane under the tabs, whose bottom-left border says `nothing sent yet` until a notice takes that place. A refusal goes into the pane's rows, and the choices give way to it. The Action and Inline comments reference frames predate this rule.

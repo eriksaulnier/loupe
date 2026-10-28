@@ -154,8 +154,9 @@ func TestPublishStepsShowTabsAndPanes(t *testing.T) {
 			if lines[top] != c.tabs || !strings.Contains(lines[top+1], " "+c.title+" ") || !strings.Contains(c.view, c.choice) {
 				t.Errorf("%s under %v lost its tabs, pane or cursor:\n%s", name, env, c.view)
 			}
-			if !strings.Contains(c.view, " Message ") || !strings.Contains(c.view, "No review has been sent.") {
-				t.Errorf("%s under %v lacks the Message pane:\n%s", name, env, c.view)
+			// The footer says what enter does next, so the step has no pane explaining it; the border says nothing was sent.
+			if strings.Contains(c.view, m.glyphs.HRule+" Message ") || !strings.Contains(c.view, "nothing sent yet") {
+				t.Errorf("%s under %v has a Message pane, or does not say nothing was sent:\n%s", name, env, c.view)
 			}
 		}
 	}

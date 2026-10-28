@@ -115,7 +115,7 @@ func (m *Model) actionView() string {
 		}
 		rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action])...)
 	}
-	return m.publishStep(0, "Action", rows, "choose which accepted findings become inline comments.", actionEnter)
+	return m.publishStep(0, "Action", rows, actionEnter)
 }
 
 var inlineDescriptions = map[string]string{
@@ -129,45 +129,29 @@ func (m *Model) inlineView() string {
 	for i, mode := range publish.InlineModes {
 		rows = append(rows, m.pickerRow(i == m.pick, false, mode, inlineDescriptions[mode])...)
 	}
-	return m.publishStep(1, "Inline comments", rows, "write your message and inspect the complete review.", inlineEnter)
+	return m.publishStep(1, "Inline comments", rows, inlineEnter)
 }
 
 // publishSteps are the tabs over every publish screen. They label where the flow is and add no key.
 var publishSteps = []string{"Action", "Inline comments", "Message"}
 
-// publishStep is one choice step: the tabs, the choices in their pane, and a Message pane saying what the next step
-// prepares and that nothing has been sent. A short window folds that explanation into the choice pane.
-func (m *Model) publishStep(step int, title string, rows []string, next, enter string) string {
+// publishStep is one choice step: the tabs and the choices in their pane, whose border says nothing has been sent.
+// The footer says what enter does next.
+func (m *Model) publishStep(step int, title string, rows []string, enter string) string {
 	footer := m.keys(groupHints(m.publishStepHints(enter))...)
 	body := m.bodyRows(len(footer)) - 1
 	inner, _ := style.PaneInner(m.width, 0)
-	explain := strings.Split(m.styles.Wrap("Next: "+next, inner, ""), "\n")
-	explain = append(explain, "No review has been sent.")
 	room := noticeRoom(m.width, "")
-	notice := m.noticeRows(inner, room)
-	choices := slices.Concat(rows, notice)
+	said := m.borderNotice(room)
+	if m.notice == "" {
+		said = m.styles.Secondary().Render("nothing sent yet")
+	}
+	// The refusal is kept whole: the choices give way to it.
+	lines := withNotice(rows, m.noticeRows(inner, room), body-style.PaneRows)
 	panes := []string{m.styles.Tabs(publishSteps, step)}
-	if body-len(explain)-style.PaneRows >= len(choices)+style.PaneRows {
-		h := body - len(explain) - style.PaneRows
-		panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: h, Lines: choices,
-			Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room)}})...)
-		panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: len(explain) + style.PaneRows, Lines: m.dimLines(explain),
-			Titles: style.PaneTitles{TopLeft: "Message"}})...)
-	} else {
-		// The refusal is kept whole: the explanation, then the choices, give way to it.
-		lines := withNotice(slices.Concat(rows, []string{""}, m.dimLines(explain)), notice, body-style.PaneRows)
-		panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: body, Lines: lines,
-			Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room)}})...)
-	}
+	panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: body, Lines: lines,
+		Titles: style.PaneTitles{TopLeft: title, BottomLeft: said}})...)
 	return m.shell(panes, footer)
-}
-
-func (m *Model) dimLines(lines []string) []string {
-	out := make([]string, len(lines))
-	for i, l := range lines {
-		out[i] = m.styles.Secondary().Render(l)
-	}
-	return out
 }
 
 // actionEnter and inlineEnter are what enter does on each publish step.
