@@ -683,7 +683,7 @@ func (m *Model) editView() []string {
 	width, _ := style.PaneInner(m.width, 0)
 	lines := append(m.partLines(parts, 1, width), blocking)
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(lines) + style.PaneRows, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Edit " + m.openID}, Tone: style.ToneNote})
+		Titles: style.PaneTitles{TopLeft: "Edit " + m.openID}, Tone: style.ToneNote, Focus: true})
 }
 
 // sizeNote fits the note input inside its pane, as tall as its wrapped text plus extra rows.
@@ -709,7 +709,7 @@ func (m *Model) noteView() []string {
 	rows := m.noteRowsShown()
 	way := m.styles.Text().Render("enter sends " + m.glyphs.Sep + " esc cancels")
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
-		Titles: style.PaneTitles{TopLeft: "Send back " + m.openID, BottomRight: way}, Tone: style.ToneNote})
+		Titles: style.PaneTitles{TopLeft: "Send back " + m.openID, BottomRight: way}, Tone: style.ToneNote, Focus: true})
 }
 
 // editorRows is the height of the editor pane open under the finding, if any.
@@ -792,7 +792,12 @@ func (m *Model) detailView() string {
 	if m.styles.Color {
 		sep = " "
 	}
-	title := mark.Render(glyph) + " " + m.styles.Emphasis(edge).Render(render.ForDisplay(f.ID)) + sep + m.styles.Chip(disposition, tone)
+	// The finding's id is the pane's name, a solid tab while the finding has the keys rather than a composer.
+	id := m.styles.Emphasis(edge).Render(render.ForDisplay(f.ID))
+	if !m.noting && !m.editing && m.styles.Color {
+		id = m.styles.TitleTab(render.ForDisplay(f.ID), tone)
+	}
+	title := mark.Render(glyph) + " " + id + sep + m.styles.Chip(disposition, tone)
 	if open {
 		title += sep + m.styles.Chip("open note", style.ToneNote)
 	}

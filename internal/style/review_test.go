@@ -353,6 +353,20 @@ func TestChip(t *testing.T) {
 	}
 }
 
+// The pane with the keys has a solid title in its tone; without color its title is unchanged (demo feedback).
+func TestFocusedPaneTitleIsATab(t *testing.T) {
+	color := reviewStyle(t, true, nil)
+	pane := color.Pane(Pane{Width: 30, Height: 3, Titles: PaneTitles{TopLeft: "Findings"}, Focus: true})
+	if !strings.Contains(pane[0], color.TitleTab("Findings", ToneAccent)) || !strings.HasPrefix(ansi.Strip(pane[0]), "╭─ Findings ─") {
+		t.Errorf("the focused title is not a solid tab: %q", pane[0])
+	}
+	plain := reviewStyle(t, false, nil)
+	a, b := plain.Pane(Pane{Width: 30, Height: 3, Titles: PaneTitles{TopLeft: "Findings"}}), plain.Pane(Pane{Width: 30, Height: 3, Titles: PaneTitles{TopLeft: "Findings"}, Focus: true})
+	if strings.Join(a, "\n") != strings.Join(b, "\n") {
+		t.Errorf("focus changed a NO_COLOR pane:\n%q\n%q", a, b)
+	}
+}
+
 func TestConfidenceScaleAndPills(t *testing.T) {
 	plain, color := reviewStyle(t, false, nil), reviewStyle(t, true, nil)
 	ascii := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"})

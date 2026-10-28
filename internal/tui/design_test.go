@@ -749,7 +749,7 @@ func TestInputPanesAreAmber(t *testing.T) {
 	env := map[string]string{"LANG": "en_US.UTF-8"}
 	amber := func(m *Model, title string) bool {
 		edge := m.styles.ToneStyle(style.ToneNote)
-		return strings.Contains(m.View().Content, edge.Render("╭")+edge.Render("─")+" "+m.styles.Emphasis(edge).Render(title))
+		return strings.Contains(m.View().Content, edge.Render("╭")+edge.Render("─")+m.styles.TitleTab(title, style.ToneNote))
 	}
 	for _, sc := range []struct {
 		name, title string
@@ -825,5 +825,38 @@ func TestStatusesAreChips(t *testing.T) {
 		if !strings.Contains(view, chip) {
 			t.Errorf("%q is not shown as a chip:\n%q", ansi.Strip(chip), view)
 		}
+	}
+}
+
+// Only the pane taking the keys has a solid title: the findings in the list, the finding in detail until a composer
+// opens, the composer then, and the review message only while typing (demo feedback).
+func TestOnlyTheFocusedPaneHasATab(t *testing.T) {
+	env := map[string]string{"LANG": "en_US.UTF-8"}
+	m := modelOf(t, newFixture(t), env, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	tab := func(text string, tone style.Tone) bool {
+		return strings.Contains(m.View().Content, m.styles.TitleTab(text, tone))
+	}
+	if !tab("Findings", style.ToneAccent) || tab("Reviewer's summary", style.ToneAccent) {
+		t.Errorf("the list's tab is not on the findings alone:\n%q", m.View().Content)
+	}
+	mustOpen(m, "f-001")
+	if !tab("f-001", style.ToneAccent) {
+		t.Errorf("the open finding's id is not a tab:\n%q", m.View().Content)
+	}
+	m.Update(runes("s"))
+	if !tab("Send back f-001", style.ToneNote) || tab("f-001", style.ToneAccent) {
+		t.Errorf("the tab did not move to the send-back composer:\n%q", m.View().Content)
+	}
+	c := modelOf(t, newFixture(t), env, 100, 30)
+	c.styles.SetColorProfile(colorprofile.TrueColor)
+	showConfirmation(c)
+	c.confirm.typing = true
+	if v := c.View().Content; !strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) || strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) {
+		t.Errorf("typing does not put the tab on the message:\n%q", v)
+	}
+	c.confirm.typing = false
+	if v := c.View().Content; !strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) {
+		t.Errorf("a blurred message does not return the tab to the review:\n%q", v)
 	}
 }

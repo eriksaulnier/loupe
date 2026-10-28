@@ -125,3 +125,5 @@ The detail's section headings (Impact, Suggested fix, References) MUST use the a
 Status words MUST be chips in color: the disposition and `open note` in the detail title, and a note's status in its headline. A chip is the word in its tone's color on a tint of that color. The chip's padding separates it, so the `·` separator is drawn only without color.
 
 In color, every footer row MUST sit on a band of the header's surface, the width of the window, so the keys rest on the screen's bottom edge. Without a surface color, as in `NO_COLOR` or 16 colors, the footer is the bare keys.
+
+In color, the pane taking the keys MUST show its name as a solid tab: bold base text on a block of the pane's tone, like the badge. The tab's padding replaces the spaces beside the title. That pane is the findings in the list and the finding's id in detail. While a composer is open, it is the composer, and the review message while typing. The choice pane, help, the published screen and the too-small screen also get the tab. Other panes keep plain titles. Without color, titles are unchanged.

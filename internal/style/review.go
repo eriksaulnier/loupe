@@ -219,6 +219,8 @@ type Pane struct {
 	Lines         []string
 	Scroll        Scroll
 	Tone          Tone
+	// Focus marks the pane taking the keys; its plain title becomes a solid tab in its tone.
+	Focus bool
 }
 
 // Tone is the color a pane's border takes. The accent is the default; a finding's or a note's status may set another.
@@ -242,16 +244,27 @@ func (s Style) Chip(text string, t Tone) string {
 }
 
 // ToneStyle is the foreground a tone draws in, and nothing where color is off.
-func (s Style) ToneStyle(t Tone) lipgloss.Style {
+func (s Style) ToneStyle(t Tone) lipgloss.Style { return s.fg(s.toneColor(t)) }
+
+func (s Style) toneColor(t Tone) color.Color {
 	switch t {
 	case ToneGood:
-		return s.fg(s.rv.good)
+		return s.rv.good
 	case ToneNote:
-		return s.fg(s.rv.note)
+		return s.rv.note
 	case ToneMuted:
-		return s.fg(s.rv.overlay1)
+		return s.rv.overlay1
 	}
-	return s.fg(s.rv.accent)
+	return s.rv.accent
+}
+
+// TitleTab is a focused pane's title: the text in bold on a solid block of its tone, like the badge. Without color it
+// is the text alone.
+func (s Style) TitleTab(text string, t Tone) string {
+	if !s.Color {
+		return text
+	}
+	return s.Emphasis(s.bg(s.fg(s.rv.base), s.toneColor(t))).Render(" " + text + " ")
 }
 
 // Pane draws p as exactly Height rows of exactly Width cells.
@@ -265,11 +278,15 @@ func (s Style) Pane(p Pane) []string {
 	thumbTop, thumbLen := thumb(p.Scroll, rows)
 	out := make([]string, 0, p.Height)
 	// A plain name takes the accent; one the caller already styled, a location with its bright filename, is kept.
-	title := p.Titles.TopLeft
+	title, tab := p.Titles.TopLeft, false
 	if title != "" && !strings.Contains(title, "\x1b") {
 		title = s.Emphasis(edge).Render(title)
+		if p.Focus && s.Color {
+			// The tab's own padding spaces it from the rule, so the row adds none of its own.
+			title, tab = s.TitleTab(p.Titles.TopLeft, p.Tone), true
+		}
 	}
-	out = append(out, s.borderRow(edge, b.tl, b.tr, title, p.Titles.TopRight, p.Width-2))
+	out = append(out, s.borderRow(edge, b.tl, b.tr, title, p.Titles.TopRight, p.Width-2, tab))
 	for i := range rows {
 		line := ""
 		if i < len(p.Lines) {
@@ -281,7 +298,7 @@ func (s Style) Pane(p Pane) []string {
 		}
 		out = append(out, edge.Render(b.v)+" "+fit(line, inner)+" "+right)
 	}
-	return append(out, s.borderRow(edge, b.bl, b.br, p.Titles.BottomLeft, p.Titles.BottomRight, p.Width-2))
+	return append(out, s.borderRow(edge, b.bl, b.br, p.Titles.BottomLeft, p.Titles.BottomRight, p.Width-2, false))
 }
 
 // fit cuts or pads a line to exactly width cells, keeping its escapes and never splitting a grapheme.
@@ -306,8 +323,12 @@ func thumb(sc Scroll, rows int) (int, int) {
 
 // borderRow is a top or bottom edge with its two titles. The right title is essential (counts, a position) and
 // survives whole; the left gives way first, truncated by display cells. An empty title is plain border.
-func (s Style) borderRow(edge lipgloss.Style, left, right, l, r string, inner int) string {
+func (s Style) borderRow(edge lipgloss.Style, left, right, l, r string, inner int, tab bool) string {
 	b := s.border()
+	pad := " "
+	if tab {
+		pad = ""
+	}
 	// Each title costs its text plus a rule cell and a space on its outer side and a space on its inner side; one
 	// rule cell always separates them.
 	cost := func(text string) int {
@@ -316,14 +337,20 @@ func (s Style) borderRow(edge lipgloss.Style, left, right, l, r string, inner in
 		}
 		return Width(text) + 3
 	}
-	if over := cost(l) + cost(r) + 1 - inner; over > 0 && l != "" {
+	leftCost := func(text string) int {
+		if text == "" {
+			return 0
+		}
+		return Width(text) + 1 + 2*len(pad)
+	}
+	if over := leftCost(l) + cost(r) + 1 - inner; over > 0 && l != "" {
 		if room := Width(l) - over; room >= 1 {
 			l = s.TruncRight(l, room)
 		} else {
 			l = ""
 		}
 	}
-	if over := cost(l) + cost(r) + 1 - inner; over > 0 && r != "" {
+	if over := leftCost(l) + cost(r) + 1 - inner; over > 0 && r != "" {
 		if room := Width(r) - over; room >= 1 {
 			r = s.TruncRight(r, room)
 		} else {
@@ -333,9 +360,9 @@ func (s Style) borderRow(edge lipgloss.Style, left, right, l, r string, inner in
 	var out strings.Builder
 	out.WriteString(edge.Render(left))
 	if l != "" {
-		out.WriteString(edge.Render(b.h) + " " + l + " ")
+		out.WriteString(edge.Render(b.h) + pad + l + pad)
 	}
-	out.WriteString(edge.Render(strings.Repeat(b.h, max(0, inner-cost(l)-cost(r)))))
+	out.WriteString(edge.Render(strings.Repeat(b.h, max(0, inner-leftCost(l)-cost(r)))))
 	if r != "" {
 		out.WriteString(" " + r + " " + edge.Render(b.h))
 	}

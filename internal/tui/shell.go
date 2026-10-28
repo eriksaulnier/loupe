@@ -244,6 +244,7 @@ func (m *Model) helpOverlay(base string) string {
 		Width: width, Height: height, Lines: shown,
 		Titles: style.PaneTitles{TopLeft: "Help", TopRight: m.styles.Text().Render(strings.ToLower(m.helpCurrent().short)), BottomRight: m.styles.Text().Render("esc closes")},
 		Scroll: style.Scroll{Offset: top, Visible: visible, Total: len(lines)},
+		Focus:  true,
 	})
 	region := m.height - len(footer)
 	baseLines := strings.Split(m.styles.Muted(base), "\n")

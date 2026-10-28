@@ -129,7 +129,7 @@ func (m *Model) publishedView() string {
 		lines = append(append(lines, ""), m.noticeRows(width, 0)...)
 	}
 	footer := m.publishedKeys()
-	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)), Lines: lines, Titles: style.PaneTitles{TopLeft: "Published"}})
+	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)), Lines: lines, Titles: style.PaneTitles{TopLeft: "Published"}, Focus: true})
 	out := strings.Split(m.shell(body, footer), "\n")
 	// The shell leaves every escape but SGR inert, so each row of the URL gains its hyperlink afterwards, only where
 	// the shell drew that row unchanged. Link refuses a URL that could end the escape early. Each row links the whole
@@ -154,6 +154,6 @@ func (m *Model) publishingView() string {
 	}
 	body := []string{m.styles.Tabs(publishSteps, 2)}
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - 1, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Publish review"}})...)
+		Titles: style.PaneTitles{TopLeft: "Publish review"}, Focus: true})...)
 	return m.shell(body, footer)
 }

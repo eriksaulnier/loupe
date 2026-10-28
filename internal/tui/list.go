@@ -150,7 +150,7 @@ func (m *Model) publishStep(step int, title string, rows []string, enter string)
 	lines := m.withNotice(rows, m.noticeRows(inner, room), body-style.PaneRows)
 	panes := []string{m.styles.Tabs(publishSteps, step)}
 	panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: body, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: title, BottomLeft: said}})...)
+		Titles: style.PaneTitles{TopLeft: title, BottomLeft: said}, Focus: true})...)
 	return m.shell(panes, footer)
 }
 
@@ -457,7 +457,7 @@ func (m *Model) listView() string {
 	lines = m.withNotice(lines, notice, findingsHeight-style.PaneRows)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: findingsHeight, Lines: lines,
 		Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts(), BottomLeft: m.borderNotice(room), BottomRight: position},
-		Scroll: style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}})...)
+		Scroll: style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}, Focus: true})...)
 	return m.shell(body, footer)
 }
 

@@ -45,6 +45,6 @@ func (m *Model) smallView() string {
 		// The renderer keeps the last rows of a view taller than the window, which would cut the heading.
 		return strings.Join(out[:min(len(out), max(1, m.height))], "\n")
 	}
-	pane := m.styles.Pane(style.Pane{Width: width, Height: height, Lines: wrapped, Titles: style.PaneTitles{TopLeft: "loupe"}})
+	pane := m.styles.Pane(style.Pane{Width: width, Height: height, Lines: wrapped, Titles: style.PaneTitles{TopLeft: "loupe"}, Focus: true})
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, strings.Join(pane, "\n"))
 }
