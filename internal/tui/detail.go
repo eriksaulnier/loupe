@@ -269,19 +269,42 @@ func (m *Model) references(f draft.Finding) []string {
 	return out
 }
 
-// noteThread draws each of the finding's notes as a nested pane holding the conversation: the note, then each reply
-// under its author, as written.
+// noteThread draws each of the finding's notes as a conversation hanging from a left bar: a headline with the note's
+// id and status, then the note and each reply under its author, as written. The bar and headline are amber while the
+// note is open; a closed note recedes to overlay.
 func (m *Model) noteThread(f draft.Finding) []string {
 	width, _ := style.PaneInner(m.width, 0)
-	inner, _ := style.PaneInner(width, 0)
+	inner := max(1, width-2)
 	var out []string
-	sep := " " + m.glyphs.Sep + " "
+	sep := m.styles.Dim.Render(" " + m.glyphs.Sep + " ")
 	for _, n := range m.draft.Notes {
 		if n.FindingID != f.ID {
 			continue
 		}
-		lines := []string{m.styles.Note.Render("You") + m.styles.Dim.Render(sep+noteStatus(m.glyphs, n.Status))}
-		lines = append(lines, m.threadBlock(n.Body, inner)...)
+		open := n.Status == draft.NoteOpen
+		tone, body := style.ToneMuted, m.styles.Secondary()
+		if open {
+			tone, body = style.ToneNote, m.styles.Text()
+		}
+		edge := m.styles.ToneStyle(tone)
+		lines := []string{m.styles.Emphasis(edge).Render("Note "+render.ForDisplay(n.ID)) + sep + m.noteStatusWord(n.Status)}
+		author := func(who, id string) string {
+			name := m.styles.Emphasis(m.styles.Text()).Render(who)
+			if who == "You" {
+				name = m.styles.Emphasis(m.styles.Accent).Render(who)
+			}
+			if id == "" {
+				return name
+			}
+			return name + sep + m.styles.Dim.Render(render.ForDisplay(id))
+		}
+		block := func(text string) {
+			for _, l := range m.threadBlock(text, inner) {
+				lines = append(lines, body.Render(l))
+			}
+		}
+		lines = append(lines, author("You", ""))
+		block(n.Body)
 		for _, r := range m.draft.Replies {
 			if r.NoteID != n.ID {
 				continue
@@ -290,18 +313,32 @@ func (m *Model) noteThread(f draft.Finding) []string {
 			if r.By == draft.ByHuman {
 				who = "you"
 			}
-			lines = append(lines, "", m.styles.Note.Render(strings.ToUpper(who[:1])+who[1:])+m.styles.Dim.Render(sep+render.ForDisplay(r.ID)))
-			lines = append(lines, m.threadBlock(r.Body, inner)...)
+			lines = append(lines, "", author(strings.ToUpper(who[:1])+who[1:], r.ID))
+			block(r.Body)
 		}
 		out = append(out, "")
-		tone := style.ToneMuted
-		if n.Status == draft.NoteOpen {
-			tone = style.ToneNote
+		bar := edge.Render(m.glyphs.Quote)
+		for _, l := range lines {
+			if l == "" {
+				out = append(out, bar)
+				continue
+			}
+			out = append(out, bar+" "+l)
 		}
-		out = append(out, m.styles.Pane(style.Pane{Width: width, Height: len(lines) + style.PaneRows, Lines: lines,
-			Titles: style.PaneTitles{TopLeft: "Note " + render.ForDisplay(n.ID), TopRight: m.styles.Text().Render(noteStatus(m.glyphs, n.Status))}, Tone: tone})...)
 	}
 	return out
+}
+
+// noteStatusWord is a note's status in its color: open in the note color, resolved in good, dismissed in overlay.
+func (m *Model) noteStatusWord(status string) string {
+	word := noteStatus(m.glyphs, status)
+	switch status {
+	case draft.NoteResolved:
+		return m.styles.Good.Render(word)
+	case draft.NoteDismissed:
+		return m.styles.Overlay().Render(word)
+	}
+	return m.styles.Note.Render(word)
 }
 
 // threadBlock is one note or reply body. The author's line breaks are kept; only the ends are trimmed, so a block

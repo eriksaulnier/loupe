@@ -95,30 +95,33 @@ func threadView(t *testing.T, env map[string]string, width int, notes []draft.No
 }
 
 // nestedRows are the content rows of each nested pane whose top border carries title, right-trimmed, one pane after
-// another with an empty row between them: what the pane holds, without the outer and nested borders.
-func nestedRows(view, title string) []string {
+// threadRows is the note threads in a detail view, from the headline holding title on: each row after its left bar,
+// and a blank row between two threads.
+func threadRows(view, title string) []string {
 	var out []string
 	inside := false
 	for _, l := range strings.Split(ansi.Strip(view), "\n") {
 		r := []rune(l)
 		if len(r) < 4 {
+			inside = false
 			continue
 		}
 		inner := strings.TrimRight(string(r[2:len(r)-2]), " ")
+		rest, barred := strings.CutPrefix(inner, "┃")
+		if !barred {
+			rest, barred = strings.CutPrefix(inner, "|")
+		}
+		rest = strings.TrimPrefix(rest, " ")
 		switch {
-		case !inside && strings.HasPrefix(inner, "╭") && strings.Contains(inner, title):
+		case barred && !inside && strings.HasPrefix(rest, title):
 			if out != nil {
 				out = append(out, "")
 			}
-			out, inside = append(out, []string{}...), true
-		case inside && strings.HasPrefix(inner, "╰"):
+			out, inside = append(out, rest), true
+		case barred && inside:
+			out = append(out, rest)
+		default:
 			inside = false
-		case inside:
-			ir := []rune(inner)
-			if len(ir) >= 2 {
-				ir = ir[2:]
-			}
-			out = append(out, strings.TrimRight(strings.TrimSuffix(strings.TrimRight(string(ir), " "), "│"), " "))
 		}
 	}
 	return out
@@ -132,7 +135,8 @@ func TestDetailViewShowsRepliesUnderNotes(t *testing.T) {
 			{ID: "r-002", NoteID: "n-001", Body: "And a test.", By: draft.ByHuman, At: testNow},
 		})
 	want := []string{
-		"You · open",
+		"Note n-001 · open",
+		"You",
 		"Show the evidence.",
 		"",
 		"Agent · r-001",
@@ -141,9 +145,9 @@ func TestDetailViewShowsRepliesUnderNotes(t *testing.T) {
 		"You · r-002",
 		"And a test.",
 	}
-	rows := nestedRows(view, "Note n-001")
-	if strings.Join(rows, "\n") != strings.Join(want, "\n") || strings.ContainsRune(view, '\u202e') || !strings.Contains(view, "╭─ Note n-001 ") {
-		t.Fatalf("the thread is not drawn in its pane, replies in order under the note:\n%s\n%q", view, rows)
+	rows := threadRows(view, "Note n-001")
+	if strings.Join(rows, "\n") != strings.Join(want, "\n") || strings.ContainsRune(view, '\u202e') || strings.Contains(view, "╭─ Note") {
+		t.Fatalf("the thread is not drawn behind its bar, replies in order under the note:\n%s\n%q", view, rows)
 	}
 }
 
@@ -152,7 +156,7 @@ func TestDetailThreadKeepsABodyAsWritten(t *testing.T) {
 	view := threadView(t, utf8Env, 60,
 		[]draft.Note{{ID: "n-001", FindingID: "f-001", Body: "Why?", Status: draft.NoteOpen, At: testNow}},
 		[]draft.Reply{{ID: "r-001", NoteID: "n-001", Body: body, By: draft.ByAgent, At: testNow}})
-	rows := nestedRows(view, "Note n-001")
+	rows := threadRows(view, "Note n-001")
 	i := slices.Index(rows, "Agent · r-001")
 	if i < 0 || len(rows) < i+5 {
 		t.Fatalf("the reply's header is missing:\n%s", view)
@@ -174,7 +178,7 @@ func TestDetailThreadTrimsOnlyBlankEndsAndEscapesControlLines(t *testing.T) {
 	view := threadView(t, utf8Env, 100,
 		[]draft.Note{{ID: "n-001", FindingID: "f-001", Body: "Why?", Status: draft.NoteOpen, At: testNow}},
 		[]draft.Reply{{ID: "r-001", NoteID: "n-001", Body: "  \nTop\n\f\n\u0085\nend\n   \n", By: draft.ByAgent, At: testNow}})
-	rows := nestedRows(view, "Note n-001")
+	rows := threadRows(view, "Note n-001")
 	i := slices.Index(rows, "Agent · r-001")
 	want := []string{"Agent · r-001", "Top", `\u000C`, `\u0085`, "end"}
 	if i < 0 || strings.Join(rows[i:], "\n") != strings.Join(want, "\n") {
@@ -188,13 +192,13 @@ func TestDetailThreadsAreSeparatedAndFollowTheTier(t *testing.T) {
 		{ID: "n-002", FindingID: "f-001", Body: "Rename the flag?", Status: draft.NoteResolved, At: testNow},
 	}
 	view := threadView(t, utf8Env, 100, notes, []draft.Reply{})
-	rows := nestedRows(view, "Note n-00")
-	want := []string{"You · open", "One.", "", "You · ✓ resolved", "Rename the flag?"}
-	if strings.Join(rows, "\n") != strings.Join(want, "\n") || !strings.Contains(view, "╭─ Note n-002 ") {
-		t.Fatalf("two threads are not separate panes:\n%s\n%q", view, rows)
+	rows := threadRows(view, "Note n-00")
+	want := []string{"Note n-001 · open", "You", "One.", "", "Note n-002 · ✓ resolved", "You", "Rename the flag?"}
+	if strings.Join(rows, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("two threads are not separate:\n%s\n%q", view, rows)
 	}
 	ascii := threadView(t, map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, notes, []draft.Reply{})
-	if !strings.Contains(ascii, "| +- Note n-002 ") || !strings.Contains(ascii, "| | You - + resolved") || strings.ContainsAny(ascii, "╭│·✓") {
+	if !strings.Contains(ascii, "| | Note n-002 - + resolved") || !strings.Contains(ascii, "| | You") || strings.ContainsAny(ascii, "╭│┃·✓") {
 		t.Fatalf("the ASCII thread does not use the ASCII tier:\n%s", ascii)
 	}
 }

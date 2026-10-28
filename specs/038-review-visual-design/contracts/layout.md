@@ -106,7 +106,7 @@ When `ORCA_TERMINAL_HANDLE` is nonempty, the header MUST leave its last four col
 
 The detail pane's top-left title MUST lead with the list's disposition glyph and carry the disposition word in its status color: accepted in good, excluded and withdrawn in overlay, pending in text. `open note` takes the note color. The glyph and the word carry the status where color is unavailable.
 
-The detail pane's border MUST take the finding's decision color: accepted in good, excluded and withdrawn in overlay, and pending in the accent. An open note colors only its own pane and the title's `open note`, so a pending finding with one keeps the accent border. A note pane's border MUST use note while the note is open and overlay once it is resolved or dismissed. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.
+The detail pane's border MUST take the finding's decision color: accepted in good, excluded and withdrawn in overlay, and pending in the accent. An open note colors only its own thread and the title's `open note`, so a pending finding with one keeps the accent border. A note's thread MUST hang from a left bar, not sit in a pane: a headline with the note id and its colored status, then each author and body. The bar and headline MUST use note while the note is open and overlay once it is resolved or dismissed, and a closed note's bodies recede to secondary text. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.
 
 A window of 20 or more rows MUST keep one blank row between the header and the body. Below 20 rows that row goes to the body first, before any other row budget gives way, so the 60x12 budget above is unchanged.
 

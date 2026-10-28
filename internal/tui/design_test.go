@@ -662,8 +662,8 @@ func TestDetailTitleShowsTheStatus(t *testing.T) {
 	}
 }
 
-// The detail border takes the finding's decision color and a note pane's border its note's. An open note colors only
-// its own pane, so a pending finding with one keeps the accent (demo feedback).
+// The detail border takes the finding's decision color. An open note colors only its own thread, so a pending finding
+// with one keeps the accent (demo feedback).
 func TestDetailBordersFollowTheStatus(t *testing.T) {
 	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
 	m.styles.SetColorProfile(colorprofile.TrueColor)
@@ -674,11 +674,6 @@ func TestDetailBordersFollowTheStatus(t *testing.T) {
 		if !strings.HasPrefix(pane, corner(tone)) {
 			t.Errorf("%s border is not tone %d: %q", id, tone, pane)
 		}
-	}
-	mustOpen(m, "f-002")
-	view := m.View().Content
-	if !strings.Contains(view, m.styles.ToneStyle(style.ToneAccent).Render("│")+" "+corner(style.ToneNote)) {
-		t.Errorf("the open note pane is not in the note color:\n%q", view)
 	}
 }
 
@@ -791,5 +786,21 @@ func TestInputPanesAreAmber(t *testing.T) {
 	m.confirm.typing = false
 	if amber(m, "your message") {
 		t.Errorf("the blurred message pane is still amber:\n%q", m.View().Content)
+	}
+}
+
+// An open note's thread hangs from an amber bar under a colored headline; a closed one from an overlay bar
+// (demo feedback: notes as a left bar, not a pane).
+func TestNoteThreadsHangFromATonedBar(t *testing.T) {
+	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-002")
+	view := m.View().Content
+	bar := m.styles.ToneStyle(style.ToneNote).Render(m.glyphs.Quote)
+	if !strings.Contains(view, bar+" "+m.styles.Emphasis(m.styles.ToneStyle(style.ToneNote)).Render("Note n-001")) {
+		t.Errorf("the open note's headline does not hang from an amber bar:\n%q", view)
+	}
+	if strings.Contains(ansi.Strip(view), "╭─ Note") {
+		t.Errorf("a note is still drawn as a pane:\n%s", ansi.Strip(view))
 	}
 }
