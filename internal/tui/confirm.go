@@ -155,6 +155,13 @@ func (c *confirmation) key(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		case "pgdown":
 			c.scroll.PageDown()
 			return false, nil
+		// A line at a time too, for keyboards without page keys; the plain arrows stay with the text.
+		case "shift+up":
+			c.scroll.ScrollUp(1)
+			return false, nil
+		case "shift+down":
+			c.scroll.ScrollDown(1)
+			return false, nil
 		}
 		cmd := c.typeMessage(msg)
 		c.sync(m)
@@ -566,7 +573,7 @@ func (m *Model) confirmKeys() []string {
 func (m *Model) confirmFooter() (keys []string, extra string) {
 	if m.confirmTyping() {
 		return m.keys(style.KeyGroup{{Key: "esc", Verb: "done"}, {Key: "enter", Verb: "new line"}, {Key: "ctrl+u", Verb: "clear"}},
-			style.KeyGroup{{Key: "pgup/pgdn", Verb: "read the findings"}}), ""
+			style.KeyGroup{{Key: "shift+" + m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}, {Key: "pgup/pgdn", Verb: "read the findings"}}), ""
 	}
 	decide := style.KeyGroup{{Key: "y", Verb: "publish this review"}}
 	// A review with no room for a message has no input to offer the key for.

@@ -1017,3 +1017,36 @@ func TestConfirmationReadsAsAReview(t *testing.T) {
 		t.Errorf("a third v did not return to the review:\n%s", view)
 	}
 }
+
+// While the message is typed, shift and an arrow scroll the findings a line at a time, for keyboards without page
+// keys; the plain arrows stay with the text (demo feedback).
+func TestShiftArrowsScrollTheFindingsWhileTyping(t *testing.T) {
+	rows := make([]string, 200)
+	for i := range rows {
+		rows[i] = fmt.Sprintf("row %03d", i+1)
+	}
+	p := publish.Preview{EnvelopeJSON: "{}"}
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		return publish.Envelope{Body: previewChips + "\n\n" + message + "\n\n---\n\n" + strings.Join(rows, "\n")}, "{}", nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	m.confirm, m.view = newConfirmation(p, ConfirmTitle(m.ref(), "comment", "none", 0), ""), viewConfirm
+	m.confirm.sync(m)
+	if !m.confirm.typing {
+		t.Fatal("the confirmation did not open typing")
+	}
+	top := m.confirm.scroll.YOffset()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift})
+	if m.confirm.scroll.YOffset() != top+1 || m.confirm.value() != "" {
+		t.Errorf("shift+down moved the view from %d to %d and typed %q", top, m.confirm.scroll.YOffset(), m.confirm.value())
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModShift})
+	if m.confirm.scroll.YOffset() != top {
+		t.Errorf("shift+up left the view at %d, want %d", m.confirm.scroll.YOffset(), top)
+	}
+	if !strings.Contains(m.View().Content, "scroll") {
+		t.Errorf("the typing footer does not offer the line scroll:\n%s", m.View().Content)
+	}
+}

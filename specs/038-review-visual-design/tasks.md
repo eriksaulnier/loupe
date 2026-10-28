@@ -92,6 +92,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T048 Tidy the publish screens: only the current step is a block, the steps are unnumbered, the publish pane titles stay plain, and the popup gets a blank row above the steps, in `internal/style/review.go`, `internal/tui/list.go` and `internal/tui/confirm.go`.
 - [X] T049 Open the review message box two rows tall, in `internal/tui/confirm.go`.
 - [X] T050 Open the Message step on a readable review, with `v` stepping to the exact Markdown and the payload, and drop the `review body` rule, in `internal/tui/readable.go` and `internal/tui/confirm.go`.
+- [X] T051 Scroll the review a line at a time with shift and an arrow while the message is typed, in `internal/tui/confirm.go`.
 
 ## Dependencies and parallel work
 
