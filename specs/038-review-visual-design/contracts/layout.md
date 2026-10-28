@@ -93,3 +93,17 @@ Success notices use a two-second timer and a notice generation token. A timer MU
 `o` in list/detail targets the captured PR URL, never a finding URL or the published review URL. A pending opener MUST reject repeat launches without blocking navigation. Completion MUST be associated with its request context, so a delayed result cannot quit another view or overwrite an editor. Success keeps the current view. Failure shows `Could not open the browser: <reason>` and `Open this URL manually: <safe URL>`. No configured opener shows `No browser opener is available.` with the same URL. Invalid URLs show a safe explanation without emitting a hyperlink. Published behavior remains as implemented today.
 
 Tabs are visual step labels. They MUST NOT add Tab navigation to the action or inline picker. The Message pane on earlier steps explains preparation, not a claim that a write already happened. Final confirmation MUST display its existing cancellation instruction and input-focus hints. The status for a published review MUST distinguish it from a browser launch that failed.
+
+## Demo feedback, 2026-10-28
+
+The maintainer's first demo session added these rules. They amend the sections above where the two disagree.
+
+The findings pane's bottom border MUST show the `N of M` position only when the findings overflow the visible rows. The selection marker already shows the place in a list that fits. Detail keeps its position in every case, because there it is the place in the walk.
+
+With 30 or fewer counted findings, the progress bar MUST mark the cell of the selected finding in the list and of the open finding in detail. In color the cell keeps its state color on an accent background. Monochrome and ASCII output draw no marker, and the position text carries the place. A withdrawn finding has no cell and gets no marker. Above 30 the cells are grouped by state, so no cell is marked.
+
+When `ORCA_TERMINAL_HANDLE` is nonempty, the header MUST leave its last four columns blank, with no band, because Orca draws its pane controls over them. The body and footer keep the full width.
+
+The detail pane's top-left title MUST lead with the list's disposition glyph and carry the disposition word in its status color: accepted in good, excluded and withdrawn in overlay, pending in text. `open note` takes the note color. The glyph and the word carry the status where color is unavailable.
+
+The detail pane's border MUST take the finding's status color: accepted in good, excluded and withdrawn in overlay, pending with an open note in note, and other pending in the accent. A note pane's border MUST use note while the note is open and overlay once it is resolved or dismissed. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.

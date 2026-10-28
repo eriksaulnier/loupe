@@ -63,6 +63,16 @@
 - [X] T024 Inspect the seeded demo through a background tmux terminal. Run `mise run screenshots` and inspect `docs/assets/`. Check dark/light, muted syntax, overlay, notice, and both reference sizes. Record visual coverage and unverified maintainer checks in `specs/038-review-visual-design/quickstart.md`. Do not run `review-screenshot` (FR-018).
 - [X] T025 Obtain a read-only agent review of the implementation and its contract coverage. Fix small findings, repeat affected checks, and record the evidence in `specs/038-review-visual-design/quickstart.md`. Do not publish, push, or open a PR without a separate instruction.
 
+## Phase 9: Demo feedback, 2026-10-28
+
+The maintainer's first demo session asked for five changes. `contracts/layout.md` records them under "Demo feedback". Each task adds its failing test first.
+
+- [ ] T026 Show the list's `N of M` position only when the findings overflow the pane, in `internal/tui/list.go`. Detail keeps its position.
+- [ ] T027 Mark the selected or open finding's progress cell on an accent background in color, for 30 or fewer counted findings, in `internal/style/review.go` and `internal/tui/shell.go`.
+- [ ] T028 Leave the header's last four columns blank when `ORCA_TERMINAL_HANDLE` is nonempty, in `internal/style/review.go` and `internal/tui/shell.go`.
+- [ ] T029 Lead the detail title with the disposition glyph and color the disposition word and `open note` by status, in `internal/tui/detail.go`.
+- [ ] T030 Color the detail pane's border by finding status and a note pane's border by note status through a pane tone, in `internal/style/review.go` and `internal/tui/detail.go`.
+
 ## Dependencies and parallel work
 
 The dependency path is prerequisite migration → T001 → foundation T002–T004 → US1 → US2 → US5 → US3 → US4 → validation. Within a story, tests precede their implementation. T008 is independent of T005–T007 after the foundation because it edits the plugin and its tests. Other implementation tasks touch shared renderers, so they MUST remain sequential unless ownership is explicitly divided.
