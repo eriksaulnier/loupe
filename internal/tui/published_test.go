@@ -38,7 +38,7 @@ func publishThrough(t *testing.T, o *opener, want ...string) *teatest.TestModel 
 		open = o.open
 	}
 	tm := startPublishAppWith(t, dir, newPublishFake(t), open)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	reachConfirmation(t, tm)
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tm.Type("y")
@@ -108,7 +108,7 @@ func TestPublishedScreenLinksEveryRowOfTheURL(t *testing.T) {
 		view := m.View().Content
 		rows := strings.Count(view, ansi.SetHyperlink(url))
 		if strings.Contains(view, `\u001B`) || rows == 0 || rows != strings.Count(view, ansi.ResetHyperlink()) ||
-			!strings.Contains(strings.ReplaceAll(ansi.Strip(view), "\n  ", ""), url) {
+			!strings.Contains(paneConcat(view), url) {
 			t.Fatalf("width %d: %d linked rows:\n%q", width, rows, view)
 		}
 		if width == 60 && rows < 2 {
@@ -147,6 +147,40 @@ func TestOOpensOutsideUpdate(t *testing.T) {
 	}
 }
 
+// An o from the list whose opener has not returned does not take o from the published screen, and its late answer
+// neither quits nor reaches that screen's own request.
+func TestASlowListOpenLeavesOOnThePublishedScreen(t *testing.T) {
+	o := &opener{}
+	m := modelOf(t, newFixture(t), testEnv, 120, 20)
+	m.target.URL = "https://github.com/acme/widgets/pull/42"
+	m.cfg.OpenURL = o.open
+	_, slow := m.Update(keyOf("o"))
+	if slow == nil {
+		t.Fatal("o in the list started no opener")
+	}
+	m.view, m.published = viewPublished, reviewURLPrefix+"1"
+	if view := m.View().Content; !strings.Contains(view, "open in browser") {
+		t.Fatalf("a list open in flight hides o on the published screen:\n%s", view)
+	}
+	_, cmd := m.Update(keyOf("o"))
+	if cmd == nil {
+		t.Fatal("o on the published screen started no opener")
+	}
+	opened, ok := cmd().(browserMsg)
+	if !ok {
+		t.Fatal("o on the published screen quit instead of opening the review")
+	}
+	if _, late := m.Update(slow()); late != nil {
+		t.Fatal("the list's late answer acted on the published screen")
+	}
+	if _, done := m.Update(opened); !isQuit(done) {
+		t.Fatal("the published screen's own open did not finish it")
+	}
+	if len(o.urls) != 2 || o.urls[0] != reviewURLPrefix+"1" {
+		t.Fatalf("opened %q", o.urls)
+	}
+}
+
 func TestPublishedScreenOffersNoOForAnUnsafeURL(t *testing.T) {
 	for _, url := range []string{"file:///tmp/x.command", "-a Calculator", "github.com/o/r"} {
 		o := &opener{}
@@ -174,7 +208,7 @@ func TestSendFinishedAfterQuitKeepsTheOutcome(t *testing.T) {
 		release := make(chan struct{})
 		gh.OnCreate(func(*http.Request) { <-release })
 		tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
-		waitFor(t, tm, "+ 3 accepted")
+		waitFor(t, tm, "3/3 decided")
 		tm.Type("p")
 		waitFor(t, tm, "> comment")
 		tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})

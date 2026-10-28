@@ -12,13 +12,11 @@ import (
 	"charm.land/glamour/v2"
 	glamourstyles "charm.land/glamour/v2/styles"
 
+	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
-
-// detailHeaderLines is the header and its rule.
-const detailHeaderLines = 2
 
 func (m *Model) openFinding(id string) error {
 	m.view, m.openID, m.noting, m.editing, m.settling = viewDetail, id, false, false, false
@@ -35,7 +33,7 @@ func (m *Model) openedFinding() (draft.Finding, int) {
 }
 
 // refreshDetail rebuilds the finding's document from the current draft, so a reload shows the finding as it now is.
-// The document is one viewport: title and chips, the location and its anchored hunk, the body, the fix, the notes.
+// The document is one viewport: title and metadata, the nested location pane, the body, the fix, the notes.
 func (m *Model) refreshDetail() error {
 	f, i := m.openedFinding()
 	if i < 0 {
@@ -49,22 +47,15 @@ func (m *Model) refreshDetail() error {
 	if err != nil {
 		return err
 	}
+	width, _ := style.PaneInner(m.width, 0)
 	var doc []string
-	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), style.Content(m.width)-1, " "), "\n") {
-		doc = append(doc, m.styles.Bold.Render(line))
+	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), width, ""), "\n") {
+		doc = append(doc, m.styles.Emphasis(m.styles.Text()).Render(line))
 	}
-	// The detail has no location line for a general finding, so its chips say what it is.
-	doc = append(doc, m.chipLines(chips(m.styles, f, draft.Dispositions(m.draft)[f.ID], f.Location == nil))...)
+	doc = append(doc, m.metaLines(f, width)...)
 	doc = append(doc, "")
 	if f.Location != nil {
-		doc = append(doc, " "+m.styles.Dim.Render(strings.TrimSpace(m.glyphs.File+" "+locationText(f))))
-		for _, l := range lines {
-			if l.Anchored {
-				doc = append(doc, m.anchoredRow(l))
-				continue
-			}
-			doc = append(doc, " "+m.styleDiffLine(l, diffRow(l, m.styles.Dim.Render(m.glyphs.Gutter), 1)))
-		}
+		doc = append(doc, m.codePane(locationText(f), lines, width)...)
 		doc = append(doc, "")
 	}
 	doc = append(doc, strings.Split(body, "\n")...)
@@ -77,24 +68,148 @@ func (m *Model) refreshDetail() error {
 	doc = append(doc, m.references(f)...)
 	doc = append(doc, m.noteThread(f)...)
 
-	m.body.SetWidth(m.width)
-	m.body.SetHeight(m.bodyHeight(detailHeaderLines))
+	m.body.SetWidth(width)
+	m.sizeDetail()
 	fill(&m.body, strings.Join(doc, "\n"))
 	return nil
 }
 
-// chipLines lays the chips out over as many lines as the window needs, so a narrow one never clips a state.
-func (m *Model) chipLines(cs []chip) []string {
-	parts := make([]string, 0, len(cs))
-	for _, c := range cs {
-		parts = append(parts, m.styles.Chip(c.kind, c.glyph, c.text))
+// sizeDetail fits the document's viewport to the main pane, less an editor below it and a notice inside it.
+func (m *Model) sizeDetail() {
+	m.body.SetHeight(max(1, m.detailRows()))
+}
+
+// detailRows is the rows the document shows in.
+func (m *Model) detailRows() int {
+	footer := m.detailFooter()
+	_, rows := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
+	inner, _ := style.PaneInner(m.width, 0)
+	return rows - len(m.noticeRows(inner, noticeRoom(m.width, m.detailPosition())))
+}
+
+// metaLines are the finding's attributes in reading order, broken only between them so a narrow window never clips
+// one: severity, blocking, label, confidence, verification, and general for a finding with no location.
+func (m *Model) metaLines(f draft.Finding, width int) []string {
+	s := m.styles
+	var parts []string
+	if f.Severity != "" {
+		parts = append(parts, s.SeverityPill(render.ForDisplay(render.OneLine(f.Severity)), 0))
 	}
-	return m.partLines(parts, 3)
+	if f.Blocking {
+		parts = append(parts, s.Tag(m.glyphs.Blocking+" blocking", true))
+	}
+	if f.Label != "" {
+		parts = append(parts, s.Tag(render.ForDisplay(render.OneLine(f.Label)), false))
+	}
+	if scale := s.ConfidenceScale(f.Confidence); scale != "" {
+		parts = append(parts, s.Secondary().Render("confidence ")+scale)
+	} else if f.Confidence != "" {
+		parts = append(parts, s.Secondary().Render("confidence "+render.ForDisplay(f.Confidence)))
+	}
+	if f.Verified != "" {
+		parts = append(parts, s.Verified(render.ForDisplay(f.Verified)))
+	}
+	if f.Location == nil {
+		parts = append(parts, s.Tag("general", false))
+	}
+	return m.partLines(parts, 2, width)
+}
+
+// codePane is a location's lines in a nested pane: the path in its border, the filename bright, and what the
+// displayed lines add and remove at its right.
+func (m *Model) codePane(location string, lines []diff.ViewLine, width int) []string {
+	inner, _ := style.PaneInner(width, 0)
+	rows, added, removed := m.codeRows(location, lines, inner)
+	stat := m.styles.Text().Render(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
+	title := m.styles.LocationTitle(location, max(8, inner-style.Width(stat)-6), true)
+	return m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
+		Titles: style.PaneTitles{TopLeft: title, TopRight: stat}})
+}
+
+// codeRows draws diff lines through the shared code primitive, highlighted by the file's language when it has one,
+// and counts what they add and remove.
+func (m *Model) codeRows(location string, lines []diff.ViewLine, width int) (rows []string, added, removed int) {
+	path := location
+	if i := strings.LastIndex(path, ":"); i > 0 {
+		path = path[:i]
+	}
+	tokens := m.highlight(path, lines)
+	numWidth := 4
+	for _, l := range lines {
+		numWidth = max(numWidth, len(fmt.Sprint(max(l.NewNum, l.OldNum))))
+	}
+	for i, l := range lines {
+		if l.Separator {
+			rows = append(rows, m.styles.Overlay().Render(render.ForDisplay(l.Text)))
+			continue
+		}
+		row := codeRow(l)
+		row.Tokens = tokens[i]
+		switch l.Kind {
+		case diff.Add:
+			added++
+		case diff.Delete:
+			removed++
+		}
+		rows = append(rows, m.styles.CodeLine(row, numWidth, width))
+	}
+	return rows, added, removed
+}
+
+// codeRow is a parsed diff line as the code primitive takes it. A deleted line has no new-side number, so it keeps the
+// old one.
+func codeRow(l diff.ViewLine) style.CodeRow {
+	num := l.NewNum
+	if num == 0 {
+		num = l.OldNum
+	}
+	kind := style.CodeContext
+	switch l.Kind {
+	case diff.Add:
+		kind = style.CodeAdded
+	case diff.Delete:
+		kind = style.CodeDeleted
+	}
+	return style.CodeRow{Num: num, Kind: kind, Cited: l.Anchored || len(l.Markers) > 0, Text: codeText(l.Text)}
+}
+
+// codeText is a source line as displayed: sanitized, with each tab as four spaces, since a terminal would expand a
+// tab past the pane's border and every width here counts it as nothing.
+func codeText(text string) string {
+	return strings.ReplaceAll(render.ForDisplay(text), "\t", "    ")
+}
+
+// highlight tokenizes the displayed lines, reusing the last result while they are the same lines: a key or a notice
+// never tokenizes again. A tokenizer failure keeps the plain lines and says so on the notice line.
+func (m *Model) highlight(path string, lines []diff.ViewLine) [][]style.CodeToken {
+	texts := make([]string, 0, len(lines))
+	index := make([]int, len(lines))
+	for i, l := range lines {
+		index[i] = -1
+		if !l.Separator {
+			index[i] = len(texts)
+			texts = append(texts, codeText(l.Text))
+		}
+	}
+	key := path + "\x00" + strings.Join(texts, "\n")
+	if m.tokensKey != key {
+		tokens, err := style.Highlight(path, texts)
+		if err != nil {
+			m.say(style.Warn, "syntax highlighting is unavailable for "+render.ForDisplay(path)+": "+err.Error())
+		}
+		m.tokensKey, m.tokens = key, tokens
+	}
+	out := make([][]style.CodeToken, len(lines))
+	for i, at := range index {
+		if at >= 0 && at < len(m.tokens) {
+			out[i] = m.tokens[at]
+		}
+	}
+	return out
 }
 
 // partLines breaks lines only between parts, so a glyph never wraps away from its word.
-func (m *Model) partLines(parts []string, gap int) []string {
-	width := style.Content(m.width) - 1
+func (m *Model) partLines(parts []string, gap, width int) []string {
 	var lines []string
 	line := ""
 	for _, part := range parts {
@@ -104,11 +219,11 @@ func (m *Model) partLines(parts []string, gap int) []string {
 		case style.Width(line)+gap+style.Width(part) <= width:
 			line += strings.Repeat(" ", gap) + part
 		default:
-			lines = append(lines, " "+line)
+			lines = append(lines, line)
 			line = part
 		}
 	}
-	return append(lines, " "+line)
+	return append(lines, line)
 }
 
 // impact is Markdown by contract, so it is rendered the way the body is, under its own heading.
@@ -120,7 +235,7 @@ func (m *Model) impact(f draft.Finding) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := []string{"", " " + m.styles.Head.Render("Impact")}
+	out := []string{"", m.styles.Head.Render("Impact")}
 	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
 }
 
@@ -130,9 +245,10 @@ func (m *Model) suggestedFix(f draft.Finding) []string {
 	if f.SuggestedFix == "" {
 		return nil
 	}
-	out := []string{"", " " + m.styles.Head.Render(strings.TrimSpace(m.glyphs.Fix+" Suggested fix"))}
-	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), style.Content(m.width)-3, ""), "\n") {
-		out = append(out, " "+m.styles.Dim.Render(m.glyphs.Quote)+" "+line)
+	out := []string{"", m.styles.Head.Render(strings.TrimSpace(m.glyphs.Fix + " Suggested fix"))}
+	width, _ := style.PaneInner(m.width, 0)
+	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), width-2, ""), "\n") {
+		out = append(out, m.styles.Dim.Render(m.glyphs.Quote)+" "+line)
 	}
 	return out
 }
@@ -142,50 +258,51 @@ func (m *Model) references(f draft.Finding) []string {
 	if len(f.References) == 0 {
 		return nil
 	}
-	out := []string{"", " " + m.styles.Head.Render("References")}
+	out := []string{"", m.styles.Head.Render("References")}
+	width, _ := style.PaneInner(m.width, 0)
 	for _, ref := range f.References {
 		// Wrapped, since the detail cannot scroll sideways and a URL clipped at the edge cannot be read or copied.
-		for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(ref)), style.Content(m.width)-1, " "), "\n") {
+		for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(ref)), width, ""), "\n") {
 			out = append(out, m.styles.Dim.Render(line))
 		}
 	}
 	return out
 }
 
-// noteThread draws each of the finding's notes as a conversation: the note, then its replies indented under it, each
-// a header and its body as written, with the note color's bar down the thread and an unbarred row between threads.
+// noteThread draws each of the finding's notes as a nested pane holding the conversation: the note, then each reply
+// under its author, as written.
 func (m *Model) noteThread(f draft.Finding) []string {
+	width, _ := style.PaneInner(m.width, 0)
+	inner, _ := style.PaneInner(width, 0)
 	var out []string
-	sep := " " + m.styles.Dim.Render(m.glyphs.Sep) + " "
+	sep := " " + m.glyphs.Sep + " "
 	for _, n := range m.draft.Notes {
 		if n.FindingID != f.ID {
 			continue
 		}
-		out = append(out, "")
-		head := m.styles.Note.Render("you") + sep + m.styles.Dim.Render(n.ID) + sep + m.styles.Dim.Render(noteStatus(m.glyphs, n.Status))
-		out = append(out, m.threadBlock("", head, n.Body)...)
+		lines := []string{m.styles.Note.Render("You") + m.styles.Dim.Render(sep+noteStatus(m.glyphs, n.Status))}
+		lines = append(lines, m.threadBlock(n.Body, inner)...)
 		for _, r := range m.draft.Replies {
 			if r.NoteID != n.ID {
 				continue
 			}
-			out = append(out, " "+m.styles.Note.Render(m.glyphs.Quote))
 			who := render.ForDisplay(r.By)
 			if r.By == draft.ByHuman {
 				who = "you"
 			}
-			head := m.styles.Note.Render(who) + sep + m.styles.Dim.Render(render.ForDisplay(r.ID))
-			out = append(out, m.threadBlock("  ", head, r.Body)...)
+			lines = append(lines, "", m.styles.Note.Render(strings.ToUpper(who[:1])+who[1:])+m.styles.Dim.Render(sep+render.ForDisplay(r.ID)))
+			lines = append(lines, m.threadBlock(r.Body, inner)...)
 		}
+		out = append(out, "")
+		out = append(out, m.styles.Pane(style.Pane{Width: width, Height: len(lines) + style.PaneRows, Lines: lines,
+			Titles: style.PaneTitles{TopLeft: "Note " + render.ForDisplay(n.ID), TopRight: m.styles.Text().Render(noteStatus(m.glyphs, n.Status))}})...)
 	}
 	return out
 }
 
-// threadBlock is one note or reply under the thread's bar. The author's line breaks are kept; only the ends are
-// trimmed, so a block never opens or closes on an empty row.
-func (m *Model) threadBlock(indent, head, body string) []string {
-	bar := " " + m.styles.Note.Render(m.glyphs.Quote)
-	prefix := bar + " " + indent
-	out := []string{prefix + head}
+// threadBlock is one note or reply body. The author's line breaks are kept; only the ends are trimmed, so a block
+// never opens or closes on an empty row.
+func (m *Model) threadBlock(body string, width int) []string {
 	// Only spaces count as blank: TrimSpace would also take a form feed or U+0085, which ForDisplay shows escaped.
 	blank := func(line string) bool { return strings.Trim(line, " ") == "" }
 	lines := strings.Split(strings.NewReplacer("\r\n", "\n", "\t", " ").Replace(body), "\n")
@@ -195,12 +312,13 @@ func (m *Model) threadBlock(indent, head, body string) []string {
 	for len(lines) > 0 && blank(lines[len(lines)-1]) {
 		lines = lines[:len(lines)-1]
 	}
+	var out []string
 	for _, line := range lines {
 		if blank(line) {
-			out = append(out, bar)
+			out = append(out, "")
 			continue
 		}
-		out = append(out, strings.Split(m.styles.Wrap(render.ForDisplay(line), style.Content(m.width)-1, prefix), "\n")...)
+		out = append(out, strings.Split(m.styles.Wrap(render.ForDisplay(line), width, ""), "\n")...)
 	}
 	return out
 }
@@ -217,7 +335,7 @@ func noteStatus(g GlyphSet, status string) string {
 }
 
 func (m *Model) renderMarkdown(md string) (string, error) {
-	wrap := max(20, style.Content(m.width)-1)
+	wrap := max(20, m.width-style.PaneCols)
 	if m.glamour == nil || m.wrapWidth != wrap {
 		theme := glamourstyles.NoTTYStyleConfig
 		if m.styles.Color {
@@ -226,8 +344,8 @@ func (m *Model) renderMarkdown(md string) (string, error) {
 				theme = glamourstyles.DarkStyleConfig
 			}
 		}
-		// The body sits on the same one-cell margin as everything else on the screen.
-		margin := uint(1)
+		// The pane already pads the body.
+		margin := uint(0)
 		theme.Document.Margin = &margin
 		r, err := glamour.NewTermRenderer(glamour.WithStyles(theme), glamour.WithWordWrap(wrap))
 		if err != nil {
@@ -297,7 +415,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		return m.decideAndStay(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
 		m.noting, m.notice = true, ""
-		m.note.SetPromptFunc(notePad, func(textarea.PromptInfo) string { return strings.Repeat(" ", notePad) })
+		m.note.SetPromptFunc(0, func(textarea.PromptInfo) string { return "" })
 		m.note.Reset()
 		m.note.SetValue(m.keptNotes[f.ID])
 
@@ -341,6 +459,8 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		m.body.PageUp()
 	case "ctrl+r":
 		return m.checkDraft(true)
+	case "o":
+		return m.openPR()
 	case "esc":
 		m.view, m.notice = viewList, ""
 		changed, err := m.reload()
@@ -481,54 +601,63 @@ func editedNotice(g GlyphSet, id, label string, blocking bool, disposition strin
 	return out
 }
 
-// editView is the editor row in the notice slot. The chosen label carries the cursor glyph, not only a color, so it
-// reads under NO_COLOR; the others are padded by the glyph's width so the row does not shift as the choice moves.
-func (m *Model) editView() string {
-	pad := strings.Repeat(" ", style.Width(m.glyphs.Cursor)+1)
-	parts := []string{m.styles.Note.Render(m.glyphs.Note + " edit " + m.openID)}
+// editView is the metadata editor in its own pane under the finding. The chosen label is bracketed as well as
+// colored, so it reads under NO_COLOR.
+func (m *Model) editView() []string {
+	parts := []string{m.styles.Secondary().Render("Label:")}
 	for i, l := range m.editLabels {
 		if i == m.editPick {
-			parts = append(parts, m.styles.Emphasis(m.styles.Cursor).Render(m.glyphs.Cursor+" "+labelText(l)))
+			parts = append(parts, m.styles.Emphasis(m.styles.Accent).Render("["+labelText(l)+"]"))
 			continue
 		}
-		parts = append(parts, m.styles.Dim.Render(pad+labelText(l)))
+		parts = append(parts, m.styles.Text().Render(" "+labelText(l)+" "))
 	}
-	blocking := m.styles.Dim.Render(blockingText(false))
+	box := m.styles.Checkbox(m.editBlocking)
+	blocking := m.styles.Text().Render(box + " blocking")
 	if m.editBlocking {
-		blocking = m.styles.Chip(style.Bad, m.glyphs.Blocking, blockingText(true))
+		blocking = m.styles.BlockingMark().Render(box + " " + m.glyphs.Blocking + " blocking")
 	}
-	parts = append(parts, blocking)
-	return strings.Join(m.partLines(parts, 2), "\n")
+	width, _ := style.PaneInner(m.width, 0)
+	lines := append(m.partLines(parts, 1, width), blocking)
+	return m.styles.Pane(style.Pane{Width: m.width, Height: len(lines) + style.PaneRows, Lines: lines,
+		Titles: style.PaneTitles{TopLeft: "Edit " + m.openID}})
 }
 
-// notePad is the column kept clear inside each edge of the note's frame, so the text does not sit against it. The
-// textarea's prompt is the left one.
-const notePad = 1
-
-// noteBoxWidth is the frame's width: the window less the one-column margin every view keeps on its left.
-func (m *Model) noteBoxWidth() int { return m.width - 1 }
-
-// sizeNote fits the note input inside its frame, as tall as its wrapped text plus extra rows.
+// sizeNote fits the note input inside its pane, as tall as its wrapped text plus extra rows.
 func (m *Model) sizeNote(extra int) {
-	inner := max(2*notePad+1, m.noteBoxWidth()-2)
-	m.note.SetWidth(inner - notePad)
+	width, _ := style.PaneInner(m.width, 0)
+	m.note.SetWidth(max(1, width))
 	m.note.SetHeight(m.note.LineInfo().Height + extra)
 }
 
-// noteView is the note input framed as the publish message is, since both are prose the human authors. Its text is
-// capped at a third of the window; a taller note shows the rows ending at the cursor's.
-func (m *Model) noteView() string {
+// noteRowsShown is the note's text rows on screen: capped at a third of the window, so a long note shows the rows
+// ending at the cursor's.
+func (m *Model) noteRowsShown() []string {
 	rows := strings.Split(m.styles.Render(m.note.View()), "\n")
 	if limit := max(1, m.height/3); len(rows) > limit {
 		start := min(max(0, m.note.LineInfo().RowOffset-limit+1), len(rows)-limit)
 		rows = rows[start : start+limit]
 	}
-	way := "enter sends " + m.glyphs.Sep + " esc cancels"
-	boxed := m.styles.Box(rows, m.noteBoxWidth(), "send back "+m.openID, way, style.Note)
-	for i, r := range boxed {
-		boxed[i] = " " + r
+	return rows
+}
+
+// noteView is the send-back composer, a pane under the finding.
+func (m *Model) noteView() []string {
+	rows := m.noteRowsShown()
+	way := m.styles.Text().Render("enter sends " + m.glyphs.Sep + " esc cancels")
+	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
+		Titles: style.PaneTitles{TopLeft: "Send back " + m.openID, BottomRight: way}})
+}
+
+// editorRows is the height of the editor pane open under the finding, if any.
+func (m *Model) editorRows() int {
+	switch {
+	case m.noting:
+		return len(m.noteRowsShown()) + style.PaneRows
+	case m.editing:
+		return len(m.editView())
 	}
-	return strings.Join(boxed, "\n")
+	return 0
 }
 
 // decideAndStay records a change that does not settle the finding (a restore, a note resolved or dismissed, an
@@ -579,51 +708,87 @@ func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string
 }
 
 func (m *Model) detailView() string {
-	f, i := m.openedFinding()
-	header := []string{m.header(
-		style.HeaderPart{Text: f.ID, Kind: style.Dim},
-		style.HeaderPart{Text: fmt.Sprintf("%d of %d", i+1, len(m.order))},
-	), m.headerRule()}
+	f, _ := m.openedFinding()
+	footer := m.detailFooter()
+	m.sizeDetail()
+	width, _ := style.PaneInner(m.width, 0)
+	position := m.detailPosition()
+	room := noticeRoom(m.width, position)
+	lines := strings.Split(m.body.View(), "\n")
+	_, inner := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
+	lines = withNotice(lines[:min(len(lines), m.body.Height())], m.noticeRows(width, room), inner)
+	title := render.ForDisplay(f.ID) + " " + m.glyphs.Sep + " " + draft.Dispositions(m.draft)[f.ID]
+	if _, open := firstOpenNote(m.draft, f.ID); open {
+		title += " " + m.glyphs.Sep + " open note"
+	}
+	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Lines: lines,
+		Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room), BottomRight: position},
+		Scroll: style.Scroll{Offset: m.body.YOffset(), Visible: m.body.Height(), Total: m.body.TotalLineCount()}})
 	switch {
 	case m.noting:
-		return m.frameWith(header, m.body.View(), m.noteView(), m.footerKeys())
+		body = append(body, m.noteView()...)
 	case m.editing:
-		return m.frameWith(header, m.body.View(), m.editView(), m.footerKeys())
+		body = append(body, m.editView()...)
 	}
-	return m.frame(header, m.body.View(), m.footerKeys())
+	return m.shell(body, footer)
+}
+
+func (m *Model) detailPosition() string {
+	_, i := m.openedFinding()
+	return m.styles.Text().Render(position(i, len(m.order)))
+}
+
+// detailFooter is the footer on screen: the note or edit row's keys while one is open, the finding's otherwise.
+func (m *Model) detailFooter() []string {
+	switch {
+	case m.noting:
+		return m.keys(style.KeyGroup{{Key: "enter", Verb: "send"}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
+	case m.editing:
+		return m.keys(style.KeyGroup{{Key: "enter", Verb: "save"}, {Key: m.arrows(m.glyphs.Left, m.glyphs.Right), Verb: "label"},
+			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
+	}
+	return m.keys(groupHints(m.detailHints())...)
 }
 
 func (m *Model) detailHints() []style.Hint {
-	f, i := m.openedFinding()
+	f, _ := m.openedFinding()
 	_, hasOpenNote := firstOpenNote(m.draft, f.ID)
-	return detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote, i+1 < len(m.order))
+	hints := detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote)
+	help := hints[len(hints)-1]
+	return append(hints[:len(hints)-1], style.Hint{Key: "esc", Verb: "list", Role: style.RoleNav}, m.openHint(), help)
 }
 
 // detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An
 // action the finding cannot take is not advertised, though its key still answers with a notice.
-func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote, hasNext bool) []style.Hint {
-	hints := []style.Hint{
-		{Key: g.Left + "/" + g.Right, Verb: "finding", Role: style.RoleNav},
-		{Key: g.Up + "/" + g.Down, Verb: "scroll", Role: style.RoleNav},
+func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote bool) []style.Hint {
+	pair := func(a, b string) string {
+		if g.Tier == style.ASCII {
+			return a + "/" + b
+		}
+		return a + b
 	}
-	decide := func(key, verb string, next bool) style.Hint {
-		return style.Hint{Key: key, Verb: verb, Role: style.RoleDecision, Next: next && hasNext}
+	hints := []style.Hint{
+		{Key: pair(g.Left, g.Right), Verb: "finding", Role: style.RoleNav},
+		{Key: pair(g.Up, g.Down), Verb: "scroll", Role: style.RoleNav},
+	}
+	decide := func(key, verb string) style.Hint {
+		return style.Hint{Key: key, Verb: verb, Role: style.RoleDecision}
 	}
 	switch disposition {
 	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept", true), decide("x", "exclude", true), decide("s", "send back", true))
+		hints = append(hints, decide("a", "accept"), decide("x", "exclude"), decide("s", "send back"))
 	case draft.DispositionAccepted:
-		hints = append(hints, decide("x", "exclude", true), decide("s", "send back", true))
+		hints = append(hints, decide("x", "exclude"), decide("s", "send back"))
 	case draft.DispositionExcluded:
-		hints = append(hints, decide("u", "restore", false))
+		hints = append(hints, decide("u", "restore"))
 	case draft.DispositionWithdrawn:
-		hints = append(hints, decide("u", "reinstate", true))
+		hints = append(hints, decide("u", "reinstate"))
 	}
 	if f.Included {
-		hints = append(hints, decide("e", "edit", false))
+		hints = append(hints, decide("e", "edit"))
 	}
 	if hasOpenNote {
-		hints = append(hints, decide("r", "resolve", false), decide("d", "dismiss", false))
+		hints = append(hints, decide("r", "resolve"), decide("d", "dismiss"))
 	}
 	if f.Location != nil {
 		hints = append(hints, style.Hint{Key: "f", Verb: "file", Role: style.RoleFile})

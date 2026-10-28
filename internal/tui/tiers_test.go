@@ -63,7 +63,7 @@ var screens = []screen{
 		m.confirm.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
 	}, []string{"y/p", "publish", "this", "review"}},
 	{"confirmation message", showConfirmation, []string{"esc", "done", "enter", "new", "line", "ctrl+u", "clear"}},
-	{"help", func(m *Model) { mustOpen(m, "f-001"); m.help = true }, []string{"?", "close", "help"}},
+	{"help", func(m *Model) { mustOpen(m, "f-001"); m.help = true }, []string{"esc/?/q", "close", "help"}},
 	{"edit row", func(m *Model) {
 		// The longest label a finding can carry, so the row has to wrap at 60 columns.
 		m.draft.Findings[0].Label = strings.Repeat("perf-nit.", 4) + "abcd"
@@ -75,6 +75,16 @@ var screens = []screen{
 		m.Update(runes("s"))
 		m.Update(runes(strings.Repeat("a note that runs on ", 12)))
 	}, []string{"enter", "send", "esc", "cancel"}},
+}
+
+// frame is a pane's corners and side in one tier, as style draws them.
+type frame struct{ tl, tr, bl, br, v string }
+
+func paneFrame(g GlyphSet) frame {
+	if g.Tier == style.ASCII {
+		return frame{"+", "+", "+", "+", "|"}
+	}
+	return frame{"╭", "╮", "╰", "╯", "│"}
 }
 
 func mustOpen(m *Model, id string) {
@@ -118,41 +128,34 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 						t.Errorf("%s: line %d is %d cells wide: %q", where, i, w, l)
 					}
 				}
-				right := m.readiness()
-				switch {
-				case isConfirmation(sc.name):
-					right = m.styles.Dim.Render(m.confirm.position(m))
-				case sc.name == "help" && strings.Contains(lines[0], "lines "):
-					right = ""
-				}
-				if w := style.Width(lines[0]); w != width || (right != "" && !strings.HasSuffix(strings.TrimRight(lines[0], " "), strings.TrimRight(right, " "))) {
+				_, decided, total := progressOf(m.draft, m.order)
+				right := fmt.Sprintf("%d/%d decided", decided, total)
+				if w := style.Width(lines[0]); w != width || !strings.HasSuffix(strings.TrimRight(ansi.Strip(lines[0]), " "), right) {
 					t.Errorf("%s: header is %d cells or lost its right edge %q:\n%q", where, w, right, lines[0])
 				}
-				last := strings.Join(lines[len(lines)-2:], "\n")
+				// The footer takes at most three rows at the narrowest width.
+				last := strings.Join(lines[len(lines)-3:], "\n")
 				footer := strings.Fields(ansi.Strip(last))
 				for _, k := range sc.keys {
 					if !slices.Contains(footer, k) {
 						t.Errorf("%s: footer lacks %q: %q", where, k, last)
 					}
 				}
-				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-3:], "\n")), confirmCancel) {
+				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-4:], "\n")), confirmCancel) {
 					t.Errorf("%s: the cancel sentence is not on screen:\n%s", where, strings.Join(lines, "\n"))
 				}
-				// A rule of the window's width closes the header block on every screen but the confirmation, whose body
-				// opens with titled rules of its own.
-				rule := strings.Repeat(m.glyphs.HRule, width/style.Width(m.glyphs.HRule))
-				ruled := -1
-				for i, l := range lines[:min(4, len(lines))] {
-					if ansi.Strip(l) == rule {
-						ruled = i
-						break
-					}
+				// A titled pane opens directly under the header, or under the publish tabs.
+				top := 1
+				if strings.HasPrefix(sc.name, "publish") || isConfirmation(sc.name) {
+					top = 2
 				}
-				switch {
-				case isConfirmation(sc.name) && ruled >= 0:
-					t.Errorf("%s: the confirmation stacks a header rule on its own rules:\n%s", where, strings.Join(lines, "\n"))
-				case !isConfirmation(sc.name) && (ruled < 1 || strings.TrimSpace(ansi.Strip(lines[ruled-1])) == ""):
-					t.Errorf("%s: no rule directly under the header block:\n%s", where, strings.Join(lines[:min(5, len(lines))], "\n"))
+				opens := strings.HasPrefix(ansi.Strip(lines[top]), paneFrame(m.glyphs).tl+m.glyphs.HRule+" ")
+				if sc.name == "help" {
+					// Help lays its own pane over the screen's, so its title is what opens the body.
+					opens = strings.Contains(ansi.Strip(lines[top]), m.glyphs.HRule+" Help ")
+				}
+				if !opens {
+					t.Errorf("%s: no titled pane directly under the header:\n%s", where, strings.Join(lines[:min(5, len(lines))], "\n"))
 				}
 				if view := strings.Join(lines, "\n"); strings.ContainsAny(view, "\ue0b0\ue0b1\ue0b2\ue0b3") {
 					t.Errorf("%s: a powerline divider is drawn", where)
@@ -207,7 +210,7 @@ func TestNerdTierDrawsIcons(t *testing.T) {
 	m.styles.SetColorProfile(colorprofile.TrueColor)
 	m.styles.Color = true
 	list := m.View().Content
-	for name, icon := range map[string]string{"pull request": "\uf407 acme/widgets#42", "pending": "\uf10c", "blocking": "\uf46e", "cursor": "\uf054"} {
+	for name, icon := range map[string]string{"badge": "\uf002 loupe", "pending": "\uf10c", "blocking": "\uf46e"} {
 		if !strings.Contains(list, icon) {
 			t.Errorf("list lacks the %s icon %q:\n%s", name, icon, list)
 		}

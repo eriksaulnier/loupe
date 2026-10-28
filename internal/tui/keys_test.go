@@ -114,7 +114,7 @@ func TestDecidingAFindingClosesItsNotes(t *testing.T) {
 			m := newModel(t, dir)
 			footer := func() string {
 				lines := strings.Split(m.View().Content, "\n")
-				return lines[len(lines)-1]
+				return strings.Join(lines[len(lines)-len(m.viewFooter()):], " ")
 			}
 			if f := footer(); !strings.Contains(f, "p publish (not ready)") {
 				t.Fatalf("list footer before deciding: %q", f)
@@ -129,11 +129,11 @@ func TestDecidingAFindingClosesItsNotes(t *testing.T) {
 			if got := strings.Join(noteStatuses(loadDraft(t, dir)), ", "); got != "n-001 "+c.status {
 				t.Errorf("notes %s", got)
 			}
-			if r := m.readiness(); !strings.Contains(r, "ready to publish") {
-				t.Errorf("readiness %q", r)
+			if r := draft.ReadinessOf(m.draft); !r.Ready {
+				t.Errorf("readiness %+v", r)
 			}
 			m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-			if f := footer(); !strings.Contains(f, "p publish   ") || strings.Contains(f, "not ready") {
+			if f := footer(); !strings.Contains(f, "p publish") || strings.Contains(f, "not ready") {
 				t.Errorf("list footer after deciding: %q", f)
 			}
 			press(m, "p")
@@ -257,8 +257,8 @@ func TestHelpScrolls(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
 	m.Update(runes("?"))
 	first := m.View().Content
-	if !strings.Contains(first, "lines 1-") || !strings.Contains(first, "up/down scroll") {
-		t.Fatalf("tall help does not show its position or scroll hint:\n%s", first)
+	if !strings.Contains(first, "+- Help -") || !strings.Contains(first, "#") || !strings.Contains(first, "up/down scroll") {
+		t.Fatalf("tall help does not show its pane, its scroll thumb or its scroll hint:\n%s", first)
 	}
 	for range 100 {
 		m.Update(arrow(tea.KeyDown))
@@ -268,7 +268,7 @@ func TestHelpScrolls(t *testing.T) {
 		t.Errorf("scrolling help does not reach its end:\n%s", last)
 	}
 	m.Update(arrow(tea.KeyPgUp))
-	for range 20 {
+	for range 100 {
 		m.Update(runes("k"))
 	}
 	if m.View().Content != first {

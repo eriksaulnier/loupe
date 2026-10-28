@@ -210,6 +210,28 @@ func TestFirstBackgroundResponseRefreshesMarkdown(t *testing.T) {
 
 func key(tm *teatest.TestModel, k rune) { tm.Send(tea.KeyPressMsg{Code: k}) }
 
+// paneConcat is a rendered screen's rows run together with their borders and padding gone, so a token wrapped
+// across rows, a URL, reads whole.
+func paneConcat(view string) string {
+	var b strings.Builder
+	for _, l := range strings.Split(ansi.Strip(view), "\n") {
+		b.WriteString(strings.Trim(l, " │┃|#"))
+	}
+	return b.String()
+}
+
+// paneText is a rendered screen as prose: escapes and pane borders gone and every run of space one space, so a
+// sentence wrapped across pane rows can be found whole.
+func paneText(view string) string {
+	strip := func(r rune) rune {
+		if strings.ContainsRune("│┃╭╮╰╯─|", r) {
+			return ' '
+		}
+		return r
+	}
+	return strings.Join(strings.Fields(strings.Map(strip, ansi.Strip(view))), " ")
+}
+
 func finalView(t *testing.T, tm *teatest.TestModel) string {
 	t.Helper()
 	m, ok := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(*Model)
@@ -225,17 +247,17 @@ func finalView(t *testing.T, tm *teatest.TestModel) string {
 func TestAppDecidesAndPersists(t *testing.T) {
 	dir := newFixture(t)
 	tm := startApp(t, dir)
-	waitFor(t, tm, "acme/widgets#42", "round 1", "Two issues to look at.", "tab expands",
-		"+ 0 accepted", ". 3 pending", "x 0 excluded", "- 0 withdrawn", "~ 0 open notes",
-		"> . f-001            ! Title one", "issue", "multi.txt:3", ". f-002            Title two", "suggestion", "multi.txt:21", ". f-003            Title three", "general")
+	waitFor(t, tm, "acme/widgets#42", "round 1", "Two issues to look at.", "tab collapses", "0/3 decided",
+		"1 blocking - 0 open notes - 3 pending", "> . f-001", "### ! Title one", "multi.txt:3", ". f-002", "Title two",
+		"multi.txt:21", ". f-003", "Title three", "general", "1 of 3")
 
 	key(tm, tea.KeyEnter)
-	waitFor(t, tm, "Body one explains the rename.", "> ", "line three")
+	waitFor(t, tm, "Body one explains the rename.", "f-001 - pending", ">   3 ", "line three")
 
 	tm.Type("f")
 	waitFor(t, tm, "@@ -18,6 +18,7 @@", "inserted after 20")
 	tm.Type("]")
-	waitFor(t, tm, "multi.txt - f-002 - 2 findings", ">   21  *  +inserted after 20")
+	waitFor(t, tm, "multi.txt - file diff", "f-002", "2 findings", "> >  21 + inserted after 20")
 	key(tm, tea.KeyEnter)
 	waitFor(t, tm, "Body two suggests a helper.")
 
@@ -255,9 +277,9 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	}
 
 	tm.Type("n")
-	waitFor(t, tm, "Body three asks about tests.", ". pending   general   question")
+	waitFor(t, tm, "Body three asks about tests.", "f-003 - pending", "[question]  [general]")
 	tm.Type("s")
-	waitFor(t, tm, "send back f-003")
+	waitFor(t, tm, "Send back f-003")
 	tm.Type("Needs a test.")
 	key(tm, tea.KeyEnter)
 	waitFor(t, tm, "f-003 sent back as n-001; the agent has it")
@@ -267,12 +289,12 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	}
 
 	key(tm, tea.KeyEsc)
-	waitFor(t, tm, "+ 1 accepted")
+	waitFor(t, tm, "2/3 decided", "1 open note")
 	tm.Type("q")
 	finalView(t, tm)
 
 	again := startApp(t, dir)
-	waitFor(t, again, "+ 1 accepted", ". 1 pending", "x 1 excluded", "~ 1 open note", "+ f-001", "x f-002", ". f-003")
+	waitFor(t, again, "2/3 decided", "1 blocking - 1 open note - 1 pending", "+ f-001", "x f-002", ". f-003")
 	again.Type("q")
 	view := finalView(t, again)
 	for _, want := range []string{"+ f-001", "x f-002", ". f-003"} {

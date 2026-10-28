@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -26,9 +25,9 @@ func TestNoColorEmitsNoEscapesInEveryTier(t *testing.T) {
 		}
 		g := s.Glyphs
 		out := strings.Join([]string{
-			s.Brand(), s.Heading("findings"), s.Chip(Good, g.Accepted, "accepted"),
-			s.Header([]HeaderPart{{Text: "loupe", Bold: true}, {Text: "o/r#1", Kind: Accent}}, s.Readiness(true, 0, 0), 40),
-			footer(s, []Hint{{Key: "j", Verb: "move", Role: RoleNav}, {Key: "q", Verb: "quit"}}, 40),
+			s.Brand(), s.Heading("findings"), s.Of(Good).Render(g.Accepted + " accepted"),
+			strings.Join(s.KeyGroups([]KeyGroup{{{Key: "j", Verb: "move"}}, {{Key: "q", Verb: "quit"}}}, 40), "\n"),
+			strings.Join(s.Pane(Pane{Width: 40, Height: 3, Titles: PaneTitles{TopLeft: "Summary"}}), "\n"), s.ReviewHeader(ReviewHeading{Ref: "o/r#1"}, 40), s.Readiness(true, 0, 0),
 			s.Rule(40, "src/cli.ts:598", "f whole file"),
 			strings.Join(s.Counts(1, 2, 0, 0, 0, 80), "\n"), s.Readiness(false, 2, 0), g.Label("issue"),
 		}, "\n")
@@ -72,7 +71,7 @@ func TestTierSelection(t *testing.T) {
 			t.Errorf("%v: tier %v, want %v", c.env, got, c.want)
 		}
 	}
-	if g := Glyphs(env(map[string]string{})); g.Sep != "-" || g.Mark != "*" || g.Left != "left" || g.Right != "right" || g.Up != "up" || g.Down != "down" {
+	if g := Glyphs(env(map[string]string{})); g.Sep != "-" || g.Left != "left" || g.Right != "right" || g.Up != "up" || g.Down != "down" {
 		t.Errorf("ASCII separators and arrow names %+v", g)
 	}
 	if got := Glyphs(env(map[string]string{"LANG": "C.UTF-8", IconsEnv: "unicode"})).Accepted; got != "✓" {
@@ -114,11 +113,6 @@ func TestNerdGlyphsAreOneCell(t *testing.T) {
 	}
 }
 
-func footer(s Style, hints []Hint, width int) string {
-	line, _ := s.Footer(hints, width)
-	return line
-}
-
 // No tier carries a Powerline divider, and the ASCII tier prints no arrow characters.
 func TestNoTierCarriesPowerlineOrASCIIArrows(t *testing.T) {
 	for _, g := range []GlyphSet{nerdGlyphs, unicodeGlyphs, asciiGlyphs} {
@@ -129,97 +123,6 @@ func TestNoTierCarriesPowerlineOrASCIIArrows(t *testing.T) {
 		if g.Tier == ASCII && strings.ContainsAny(all, "←→↑↓·◆") {
 			t.Errorf("ASCII tier carries a non-ASCII character: %s", all)
 		}
-	}
-}
-
-func TestHeaderDropsInOrderAndFillsTheWidth(t *testing.T) {
-	parts := func(g GlyphSet) []HeaderPart {
-		return []HeaderPart{
-			{Text: "loupe", Drop: 3, Bold: true},
-			{Text: strings.TrimSpace(g.PR + " acme/widgets#42")},
-			{Text: "round 1", Drop: 2, Kind: Dim},
-			{Text: "feat(cache): add a read-through cache for pull request metadata", Drop: 4, Trunc: true, Kind: Dim},
-		}
-	}
-	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
-	right := s.Readiness(false, 3, 1)
-	cases := []struct {
-		width int
-		want  string
-	}{
-		{140, " loupe · acme/widgets#42 · round 1 · feat(cache): add a read-through cache for pull request metadata"},
-		{80, " loupe · acme/widgets#42 · round 1 · feat(cache): add…  "},
-		{60, " loupe · acme/widgets#42 · round 1  "},
-		{44, " acme/widgets#42  "},
-		{30, " ac…  "},
-	}
-	for _, c := range cases {
-		got := s.Header(parts(s.Glyphs), right, c.width)
-		if w := Width(got); w != c.width {
-			t.Errorf("width %d: header is %d cells: %q", c.width, w, got)
-		}
-		if !strings.HasPrefix(got, c.want) || !strings.HasSuffix(got, "3 pending · 1 open note ") {
-			t.Errorf("width %d: header %q, want prefix %q and the readiness at the right edge", c.width, got, c.want)
-		}
-	}
-
-	// A required squeezed path truncates from the left once nothing is left to drop.
-	path := []HeaderPart{{Text: "internal/cache/deeply/nested/store.go", Squeeze: true, Left: true, Bold: true}, {Text: "f-002"}, {Text: "3 findings", Kind: Dim}, {Text: "+22 -4", Drop: 1}}
-	got := s.Header(path, right, 60)
-	if Width(got) != 60 || !strings.HasPrefix(got, " …ed/store.go · f-002 · 3 findings  ") || strings.Contains(got, "+22") {
-		t.Errorf("squeezed header %q", got)
-	}
-
-	for _, tier := range []GlyphSet{nerdGlyphs, unicodeGlyphs, asciiGlyphs} {
-		c := New(&bytes.Buffer{}, env(map[string]string{"LANG": "en_US.UTF-8"}))
-		c.Color, c.Glyphs = true, tier
-		for _, width := range []int{60, 79, 80, 99, 100, 140} {
-			if got := c.Header(parts(tier), c.Readiness(true, 0, 0), width); Width(got) != width {
-				t.Errorf("tier %v width %d: header is %d cells", tier.Tier, width, Width(got))
-			}
-		}
-	}
-}
-
-func TestFooterWrapsBeforeGivingWay(t *testing.T) {
-	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
-	hints := []Hint{
-		{Key: "←/→", Verb: "finding", Role: RoleNav},
-		{Key: "↑/↓", Verb: "scroll", Role: RoleNav},
-		{Key: "a", Verb: "accept", Role: RoleDecision, Next: true},
-		{Key: "x", Verb: "exclude", Role: RoleDecision, Next: true},
-		{Key: "s", Verb: "send back", Role: RoleDecision, Next: true},
-		{Key: "f", Verb: "file", Role: RoleFile},
-		{Key: "?", Verb: "help", Role: RoleHelp},
-	}
-	for _, c := range []struct {
-		width int
-		want  string
-	}{
-		{100, "←/→ finding   ↑/↓ scroll   a accept + next   x exclude + next   s send back + next   f file   ? help"},
-		// The "+ next" suffixes go, then the wide gaps, before the footer takes a second line.
-		{99, "←/→ finding   ↑/↓ scroll   a accept   x exclude   s send back   f file   ? help"},
-		{78, "←/→ finding  ↑/↓ scroll  a accept  x exclude  s send back  f file  ? help"},
-		// Every hint stays, over two lines, before any is given up.
-		{72, "←/→ finding   ↑/↓ scroll   a accept   x exclude   s send back   f file\n? help"},
-		{46, "←/→ finding   ↑/↓ scroll   a accept\nx exclude   s send back   f file   ? help"},
-		// Two lines too narrow for every hint give way in order: navigation, the file hint, decision verbs.
-		{40, "a accept   x exclude   s send back\nf file   ? help"},
-		{28, "a accept  x exclude\ns send back  ? help"},
-		{13, "a x s  ? help"},
-		{12, "a x s\n? help"},
-	} {
-		if got, fits := s.Footer(hints, c.width); got != c.want || !fits {
-			t.Errorf("width %d: footer %q (fits %v), want %q", c.width, got, fits, c.want)
-		}
-		for _, line := range strings.Split(c.want, "\n") {
-			if Width(line) > c.width {
-				t.Errorf("width %d: want line %q is wider than the footer", c.width, line)
-			}
-		}
-	}
-	if got, fits := s.Footer(hints, 5); fits || got != "a x s  ? help" {
-		t.Errorf("too narrow: %q fits %v", got, fits)
 	}
 }
 
@@ -362,20 +265,6 @@ func TestSeverityRampCoversEveryWord(t *testing.T) {
 	if len(severityKinds) != len(severity.Order) {
 		t.Fatalf("severityKinds has %d entries, severity.Order has %d: give the new word a Kind",
 			len(severityKinds), len(severity.Order))
-	}
-}
-
-// A frame too narrow for its way out gives that up before its title, each whole rather than truncated.
-func TestBoxGivesUpItsWayOutBeforeItsTitle(t *testing.T) {
-	s := New(io.Discard, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
-	for width, want := range map[int]*regexp.Regexp{
-		60: regexp.MustCompile(`^\+- send back f-001 -+ enter sends - esc cancels -\+$`),
-		40: regexp.MustCompile(`^\+- send back f-001 -+\+$`),
-		12: regexp.MustCompile(`^\+-+\+$`),
-	} {
-		if got := s.Box(nil, width, "send back f-001", "enter sends - esc cancels", Note)[0]; !want.MatchString(got) || len(got) != width {
-			t.Errorf("width %d: top edge %q", width, got)
-		}
 	}
 }
 

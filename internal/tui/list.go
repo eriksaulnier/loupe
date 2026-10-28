@@ -32,6 +32,8 @@ func (m *Model) updateList(msg tea.KeyPressMsg) tea.Cmd {
 		return m.fail(m.openFinding(m.order[m.cursor].ID))
 	case "ctrl+r":
 		return m.checkDraft(true)
+	case "o":
+		return m.openPR()
 	case "p":
 		changed, err := m.reload()
 		if err != nil {
@@ -113,7 +115,7 @@ func (m *Model) actionView() string {
 		}
 		rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action])...)
 	}
-	return m.publishStep(1, "", "Review action", rows, actionEnter)
+	return m.publishStep(0, "Action", rows, "choose which accepted findings become inline comments.", actionEnter)
 }
 
 var inlineDescriptions = map[string]string{
@@ -127,20 +129,43 @@ func (m *Model) inlineView() string {
 	for i, mode := range publish.InlineModes {
 		rows = append(rows, m.pickerRow(i == m.pick, false, mode, inlineDescriptions[mode])...)
 	}
-	return m.publishStep(2, m.action, "Inline comments", rows, inlineEnter)
+	return m.publishStep(1, "Inline comments", rows, "write your message and inspect the complete review.", inlineEnter)
 }
 
-// publishStep is one step of the publish choice as an ordinary screen: where it sits in the flow, what it asks, and
-// the choices under it.
-func (m *Model) publishStep(step int, action, question string, rows []string, enter string) string {
-	header := m.header(
-		style.HeaderPart{Text: "Publish", Bold: true},
-		style.HeaderPart{Text: fmt.Sprintf("Step %d of 3", step), Kind: style.Dim},
-		style.HeaderPart{Text: action, Drop: 1},
-		style.HeaderPart{Text: m.prRef(), Drop: 2, Kind: style.Dim},
-	)
-	body := append([]string{" " + m.styles.Bold.Render(question), ""}, rows...)
-	return m.frame([]string{header, m.headerRule()}, strings.Join(body, "\n"), m.footer(m.publishStepHints(enter)))
+// publishSteps are the tabs over every publish screen. They label where the flow is and add no key.
+var publishSteps = []string{"Action", "Inline comments", "Message"}
+
+// publishStep is one choice step: the tabs, the choices in their pane, and a Message pane saying what the next step
+// prepares and that nothing has been sent. A short window folds that explanation into the choice pane.
+func (m *Model) publishStep(step int, title string, rows []string, next, enter string) string {
+	footer := m.keys(groupHints(m.publishStepHints(enter))...)
+	body := m.bodyRows(len(footer)) - 1
+	inner, _ := style.PaneInner(m.width, 0)
+	explain := strings.Split(m.styles.Wrap("Next: "+next, inner, ""), "\n")
+	explain = append(explain, "No review has been sent.")
+	room := noticeRoom(m.width, "")
+	choices := append(rows, m.noticeRows(inner, room)...)
+	panes := []string{m.styles.Tabs(publishSteps, step)}
+	if body-len(explain)-style.PaneRows >= len(choices)+style.PaneRows {
+		h := body - len(explain) - style.PaneRows
+		panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: h, Lines: choices,
+			Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room)}})...)
+		panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: len(explain) + style.PaneRows, Lines: m.dimLines(explain),
+			Titles: style.PaneTitles{TopLeft: "Message"}})...)
+	} else {
+		lines := append(append(choices, ""), m.dimLines(explain)...)
+		panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: body, Lines: lines,
+			Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room)}})...)
+	}
+	return m.shell(panes, footer)
+}
+
+func (m *Model) dimLines(lines []string) []string {
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		out[i] = m.styles.Secondary().Render(l)
+	}
+	return out
 }
 
 // actionEnter and inlineEnter are what enter does on each publish step.
@@ -151,230 +176,354 @@ const (
 
 func (m *Model) publishStepHints(enter string) []style.Hint {
 	return []style.Hint{
-		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "move", Role: style.RoleNav},
-		{Key: "enter", Verb: enter},
-		{Key: "esc", Verb: "back"},
+		{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "move", Role: style.RoleNav},
+		{Key: "enter", Verb: enter, Role: style.RoleNav},
+		{Key: "esc", Verb: "back", Role: style.RoleNav},
 		{Key: "?", Verb: "help", Role: style.RoleHelp},
 	}
 }
 
 // pickerIndent is where a choice's description starts, and where its wrapped lines continue.
-const pickerIndent = 22
+const pickerIndent = 19
 
 // pickerRow is the cursor, the name and the description, wrapped under the description's column so a refusal reason
 // is never clipped.
 func (m *Model) pickerRow(selected, disabled bool, name, description string) []string {
 	cursor := " "
-	nameStyle := m.styles.NewStyle()
+	nameStyle := m.styles.Text()
 	switch {
 	case disabled:
-		nameStyle = m.styles.Dim
+		nameStyle = m.styles.Overlay()
 	case selected:
-		cursor, nameStyle = m.styles.Emphasis(m.styles.Cursor).Render(m.glyphs.Cursor), m.styles.Emphasis(m.styles.Accent)
+		cursor, nameStyle = m.styles.Emphasis(m.styles.Cursor).Render(m.styles.PickerCursor()), m.styles.Emphasis(m.styles.Accent)
 	}
+	inner, _ := style.PaneInner(m.width, 0)
 	indent := strings.Repeat(" ", pickerIndent)
-	lines := strings.Split(m.styles.Wrap(render.ForDisplay(description), style.Content(m.width)-1, indent), "\n")
+	lines := strings.Split(m.styles.Wrap(render.ForDisplay(description), inner, indent), "\n")
 	for i, l := range lines {
-		lines[i] = indent + m.styles.Dim.Render(strings.TrimPrefix(l, indent))
+		lines[i] = indent + m.styles.Secondary().Render(strings.TrimPrefix(l, indent))
 	}
-	lines[0] = " " + cursor + " " + nameStyle.Render(style.Pad(name, pickerIndent-4)) + " " + strings.TrimPrefix(lines[0], indent)
+	lines[0] = cursor + " " + nameStyle.Render(style.Pad(name, pickerIndent-3)) + " " + strings.TrimPrefix(lines[0], indent)
 	return lines
 }
 
-// listColumns is the row layout for the current width: the title takes whatever the fixed columns leave. The label
-// goes first when the window narrows, then the location shrinks to a filename, then the severity badge goes.
+// listColumns is the findings table for the current width. The title takes whatever the fixed columns leave; a long
+// id takes its room from the title first, then the location, then the confidence.
 type listColumns struct {
-	title, severity, label, location int
-	// shortLocation drops the directories instead of truncating the path from the left.
+	id, title, location int
+	confidence          bool
+	// shortLocation prefers the filename and line range to the path.
 	shortLocation bool
 }
 
-// listFixed is the lead space, cursor, glyph and id columns with the gaps between them.
-const listFixed = 1 + 1 + 1 + 1 + 1 + listIDWidth + 2
-
-const (
-	listIDWidth = 5
-	// listSeverityWidth fits the longest word, and the column head is exactly as wide.
-	listSeverityWidth = 8
-	// listTitleFloor is the narrowest a title can be and still identify a finding.
-	listTitleFloor = 20
-)
+// listTitleFloor is the narrowest a title gets before an optional column gives way.
+const listTitleFloor = 8
 
 func (m *Model) listColumns() listColumns {
-	c := listColumns{severity: listSeverityWidth, label: 12, location: 28}
+	inner, _ := style.PaneInner(m.width, 0)
+	c := listColumns{id: 5}
+	for _, f := range m.order {
+		c.id = max(c.id, style.Width(f.ID))
+	}
 	switch {
 	case m.width >= wideWidth:
+		c.location, c.confidence = 24, true
 	case m.width >= midWidth:
-		c.label = 0
-	default:
-		c.label, c.location, c.shortLocation = 0, 18, true
+		c.location, c.confidence, c.shortLocation = 18, true, true
 	}
-	// Below the point where a title is readable the location gives up the rest of its width, and only then does the
-	// severity badge go: it outranks the label, and the title outranks both.
-	if c.title = m.titleColumn(c); c.title < listTitleFloor {
-		c.location = max(0, c.location+c.title-listTitleFloor)
-		if c.title = m.titleColumn(c); c.title < listTitleFloor {
-			c.severity = 0
-			c.title = max(listTitleFloor, m.titleColumn(c))
+	fixed := func() int {
+		n := 1 + 1 + 1 + 1 + c.id + 1 + style.PillWidth + 1
+		if c.confidence {
+			n += 4
 		}
+		if c.location > 0 {
+			n += 1 + c.location
+		}
+		return n
 	}
+	c.title = inner - fixed()
+	if c.title < listTitleFloor && c.location > 0 {
+		take := min(c.location, listTitleFloor-c.title)
+		if c.location -= take; c.location < 6 {
+			c.location = 0
+		}
+		c.title = inner - fixed()
+	}
+	if c.title < listTitleFloor && c.confidence {
+		c.confidence = false
+		c.title = inner - fixed()
+	}
+	c.title = max(1, c.title)
 	return c
 }
 
-// titleColumn is what the row's one variable column has left once the fixed columns and their gaps are taken.
-func (m *Model) titleColumn(c listColumns) int {
-	gaps := 2
-	for _, w := range [...]int{c.severity, c.label} {
-		if w > 0 {
-			gaps += 2
+// listCounts are the findings pane's top-border counts: blocking findings that will publish, every open note record,
+// and the pending findings.
+func (m *Model) listCounts() string {
+	blocking := 0
+	dispositions := draft.Dispositions(m.draft)
+	for _, f := range m.order {
+		if d := dispositions[f.ID]; f.Blocking && (d == draft.DispositionAccepted || d == draft.DispositionPending) {
+			blocking++
 		}
 	}
-	return style.Content(m.width) - listFixed - c.severity - c.label - c.location - gaps
+	r := draft.ReadinessOf(m.draft)
+	notes := fmt.Sprintf("%d open %s", len(r.OpenNotes), plural(len(r.OpenNotes), "note"))
+	if m.width < midWidth {
+		notes = fmt.Sprintf("%d %s", len(r.OpenNotes), plural(len(r.OpenNotes), "note"))
+	}
+	sep := " " + m.glyphs.Sep + " "
+	return m.styles.Text().Render(fmt.Sprintf("%d blocking", blocking) + sep + notes + sep + fmt.Sprintf("%d pending", len(r.Pending)))
+}
+
+// listLayout is the list's row budget, in the order the layout contract gives way: the gap between the panes, then
+// the summary collapses on its own, then the column headings, before the findings drop below what fits.
+type listLayout struct {
+	summary          []string
+	summaryClipped   bool
+	collapsed        bool
+	gap, heads, rows int
+	// command is the full-summary command on the rows under a clipped summary, in place of the gap, when the border
+	// cannot hold it whole.
+	command []string
+}
+
+// layoutList sizes the list around noticeRows, the wrapped notice the findings pane reserves before anything else.
+func (m *Model) layoutList(footerRows, noticeRows int) listLayout {
+	body := m.bodyRows(footerRows) - noticeRows
+	inner, _ := style.PaneInner(m.width, 0)
+	full := m.summaryLines(inner)
+	_, below := m.summaryCommand()
+	l := listLayout{gap: 1, heads: 1, collapsed: m.summaryCollapsed}
+	fit := func() {
+		l.command = nil
+		if l.collapsed {
+			l.summary, l.summaryClipped = m.collapsedSummary(full, inner), false
+		} else {
+			limit := max(1, body-l.gap-style.PaneRows-l.heads-3-style.PaneRows)
+			l.summary, l.summaryClipped = full, false
+			if len(full) > limit {
+				if below != nil {
+					l.command = below
+					limit = max(1, limit+l.gap-len(below))
+				}
+				l.summary = append(append([]string(nil), full[:limit-1]...), m.styles.Overlay().Render(fmt.Sprintf("%s %d more %s", m.glyphs.Ellipsis, len(full)-limit+1, plural(len(full)-limit+1, "line"))))
+				l.summaryClipped = true
+			}
+		}
+		l.rows = body - len(l.summary) - style.PaneRows - l.separation() - style.PaneRows - l.heads
+	}
+	fit()
+	if l.rows < 3 {
+		l.gap = 0
+		fit()
+	}
+	// A summary with room for nothing but its clipping line says less than its collapsed first line does.
+	if !l.collapsed && (l.rows < 3 || (l.summaryClipped && len(l.summary) < 2)) {
+		l.collapsed = true
+		fit()
+	}
+	if l.rows < 1 {
+		l.heads = 0
+		fit()
+	}
+	l.rows = max(1, l.rows)
+	return l
+}
+
+// separation is the rows between the summary and findings panes: the command when it sits there, or else the gap.
+func (l listLayout) separation() int {
+	if l.command != nil {
+		return len(l.command)
+	}
+	return l.gap
+}
+
+// summaryCommand is the command that shows a clipped summary whole: in the bottom border beside the tab hint when it
+// fits there, or else as rows for under the pane, the command never split across them so it can be copied.
+func (m *Model) summaryCommand() (border string, below []string) {
+	label, command := "full summary:", "loupe show --run "+m.runRef()
+	paint := func(text string) string { return m.styles.Overlay().Render(text) }
+	if text := label + " " + command; style.Width(text) <= noticeRoom(m.width, "tab collapses") {
+		return paint(text), nil
+	}
+	const indent = "  "
+	if text := indent + label + " " + command; style.Width(text) <= m.width {
+		return "", []string{paint(text)}
+	}
+	return "", []string{paint(indent + label), paint(indent + command)}
+}
+
+// summaryLines is the summary wrapped to width with its bullets kept: a Markdown list item becomes a bullet whose
+// wrapped lines hang under its text. Other lines wrap as prose; blank lines are dropped.
+func (m *Model) summaryLines(width int) []string {
+	if strings.TrimSpace(m.draft.Summary) == "" {
+		return []string{m.styles.Overlay().Render("No summary")}
+	}
+	bullet := m.styles.Bullet()
+	var out []string
+	for _, raw := range strings.Split(strings.ReplaceAll(m.draft.Summary, "\r\n", "\n"), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		indent := ""
+		for _, mark := range []string{"- ", "* ", "+ "} {
+			if rest, ok := strings.CutPrefix(line, mark); ok {
+				line, indent = bullet+" "+strings.TrimSpace(rest), "  "
+				break
+			}
+		}
+		wrapped := strings.Split(m.styles.Wrap(render.ForDisplay(line), width, indent), "\n")
+		wrapped[0] = strings.TrimPrefix(wrapped[0], indent)
+		for _, w := range wrapped {
+			out = append(out, m.styles.Text().Render(w))
+		}
+	}
+	return out
+}
+
+// collapsedSummary is the summary's first line, marked when more follows.
+func (m *Model) collapsedSummary(full []string, width int) []string {
+	first := full[0]
+	if len(full) > 1 {
+		first = m.styles.TruncRight(first+" "+m.glyphs.Ellipsis, width)
+	}
+	return []string{first}
 }
 
 func (m *Model) listView() string {
-	header := append(append([]string{m.listHeader()}, m.countsLines()...), m.headerRule())
+	footer := m.keys(groupHints(m.listHints())...)
+	inner, _ := style.PaneInner(m.width, 0)
+	position := m.styles.Text().Render(position(m.cursor, len(m.order)))
+	room := noticeRoom(m.width, position)
+	notice := m.noticeRows(inner, room)
+	l := m.layoutList(len(footer), len(notice))
+	hint := "tab collapses"
+	switch {
+	case l.collapsed && !m.summaryCollapsed:
+		// The window, not the human, collapsed it; tab cannot expand it until the window grows.
+		hint = "collapsed to fit"
+	case l.collapsed:
+		hint = "tab expands"
+	}
+	clipped := ""
+	if l.summaryClipped {
+		clipped, _ = m.summaryCommand()
+	}
+	body := m.styles.Pane(style.Pane{Width: m.width, Height: len(l.summary) + style.PaneRows, Lines: l.summary,
+		Titles: style.PaneTitles{TopLeft: "Reviewer's summary", BottomLeft: clipped, BottomRight: m.styles.Text().Render(hint)}})
+	if l.command != nil {
+		body = append(body, l.command...)
+	} else {
+		for range l.gap {
+			body = append(body, "")
+		}
+	}
 	cols := m.listColumns()
-
-	summary := m.summaryBlock(cols)
-	rowsHeight := max(1, m.bodyHeight(len(header))-len(summary)-1)
-	offset := max(0, m.cursor-rowsHeight+1)
+	rows := l.rows
+	offset := max(0, m.cursor-rows+1)
+	var lines []string
+	if l.heads > 0 {
+		lines = append(lines, m.columnHeads(cols))
+	}
 	dispositions, notes := draft.Dispositions(m.draft), openNotes(m.draft)
-	rows := []string{m.columnHeads(cols)}
 	if len(m.order) == 0 {
-		rows = append(rows, m.styles.Dim.Render(" No findings"))
+		lines = append(lines, m.styles.Overlay().Render("No findings"))
 	}
-	for i := offset; i < len(m.order) && i < offset+rowsHeight; i++ {
+	for i := offset; i < len(m.order) && i < offset+rows; i++ {
 		f := m.order[i]
-		rows = append(rows, m.row(f, dispositions[f.ID], notes, i == m.cursor, cols))
+		lines = append(lines, m.row(f, dispositions[f.ID], notes, i == m.cursor, cols))
 	}
-	body := strings.Join(append(summary, rows...), "\n")
-	return m.frame(header, body, m.footerKeys())
+	for len(lines) < l.heads+rows {
+		lines = append(lines, "")
+	}
+	lines = append(lines, notice...)
+	findingsHeight := m.bodyRows(len(footer)) - len(body)
+	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: findingsHeight, Lines: lines,
+		Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts(), BottomLeft: m.borderNotice(room), BottomRight: position},
+		Scroll: style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}})...)
+	return m.shell(body, footer)
 }
+
+// runRef is the run as loupe's commands name it.
+func (m *Model) runRef() string { return fmt.Sprintf("%s@%d", m.ref(), m.target.Round) }
 
 func (m *Model) listHints() []style.Hint {
 	return []style.Hint{
-		{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "move", Role: style.RoleNav},
-		{Key: "enter", Verb: "open"},
-		m.publishHint(),
+		{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "move", Role: style.RoleNav},
+		{Key: "enter", Verb: "open", Role: style.RoleNav},
 		{Key: "tab", Verb: "summary", Role: style.RoleNav},
+		m.openHint(),
+		m.publishHint(),
 		{Key: "?", Verb: "help", Role: style.RoleHelp},
-		{Key: "q", Verb: "quit", Role: style.RoleNav},
+		{Key: "q", Verb: "quit", Role: style.RoleHelp},
 	}
 }
 
-// publishHint stays on the footer while the draft is not ready, so the human knows p exists. The header already names
-// what blocks it; the words say not ready where dim alone would not, under NO_COLOR.
+// publishHint stays on the footer while the draft is not ready, so the human knows p exists. The counts already say
+// what blocks it; under NO_COLOR, where the dim cannot show, the hint says not ready.
 func (m *Model) publishHint() style.Hint {
-	if draft.ReadinessOf(m.draft).Ready {
-		return style.Hint{Key: "p", Verb: "publish"}
+	h := style.Hint{Key: "p", Verb: "publish", Role: style.RoleHelp}
+	if !draft.ReadinessOf(m.draft).Ready {
+		h.Unavailable = "not ready"
 	}
-	return style.Hint{Key: "p", Verb: "publish (not ready)", KeyKind: style.Dim, VerbKind: style.Dim}
-}
-
-// summaryBlock is the draft summary beside its heading, two lines by default so the findings stay on screen. The
-// heading names whose words they are: the reviewer wrote them, and an attended publication does not post them.
-func (m *Model) summaryBlock(cols listColumns) []string {
-	const label = " Reviewer's summary  "
-	indent := strings.Repeat(" ", len(label))
-	hint := "tab expands"
-	if !m.summaryCollapsed {
-		hint = "tab collapses"
-	}
-	heading := " " + m.styles.Heading("reviewer's summary") + "  "
-	if strings.TrimSpace(m.draft.Summary) == "" {
-		return []string{heading + m.styles.Dim.Render("none"), ""}
-	}
-	content := style.Content(m.width)
-	// The floor leaves the collapsed line room for its indent: below it the truncation width goes negative and the
-	// second line comes back empty.
-	width := max(len(indent)+10, content-1-style.Width(hint)-2)
-	lines := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(m.draft.Summary)), width, indent), "\n")
-	if m.summaryCollapsed && len(lines) > 2 {
-		// The rest of the summary is truncated once, by the helper that ends it with the ellipsis itself. Every
-		// wrapped line carries the indent, which would otherwise become a run of spaces inside the text.
-		for i := 1; i < len(lines); i++ {
-			lines[i] = strings.TrimPrefix(lines[i], indent)
-		}
-		rest := strings.TrimSpace(strings.Join(lines[1:], " "))
-		lines = []string{lines[0], indent + m.styles.TruncRight(rest, width-len(indent))}
-	}
-	lines[0] = heading + strings.TrimPrefix(lines[0], indent)
-	last := len(lines) - 1
-	lines[last] = style.Pad(lines[last], content-style.Width(hint)-1) + m.styles.Dim.Render(hint)
-	return append(lines, "")
+	return h
 }
 
 func (m *Model) columnHeads(cols listColumns) string {
-	head := strings.Repeat(" ", listFixed-listIDWidth-2) + style.Pad("ID", listIDWidth+2)
-	if cols.severity > 0 {
-		head += style.Pad("Severity", cols.severity+2)
+	head := "    " + style.Pad("id", cols.id+1) + style.Pad("severity", style.PillWidth+1)
+	if cols.confidence {
+		head += "con "
 	}
-	head += style.Pad("Title", cols.title+2)
-	if cols.label > 0 {
-		head += style.Pad("Label", cols.label+2)
-	}
+	head += style.Pad("finding", cols.title+1)
 	if cols.location > 0 {
-		head += "Location"
+		head += "location"
 	}
-	return m.styles.Dim.Render(m.styles.TruncRight(head, m.width))
+	return m.styles.Overlay().Render(strings.TrimRight(head, " "))
 }
 
-// row is one finding: the cursor, one disposition glyph, the quiet id, the blocking and note markers and the title,
-// which the selection bolds in the accent.
+// row is one finding: the selection bar, the state glyph, the quiet id, the severity pill and confidence scale, the
+// blocking and note markers before the title, and the location. Decided rows recede; the selected row is a band.
 func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, selected bool, cols listColumns) string {
-	cursor, titleStyle := " ", m.styles.NewStyle()
+	s := m.styles
+	glyph, mark, text := s.ReviewDisposition(disposition)
+	cursor := " "
 	if selected {
-		cursor, titleStyle = m.styles.Emphasis(m.styles.Cursor).Render(m.glyphs.Cursor), m.styles.Emphasis(m.styles.Accent)
+		cursor = s.Selection()
+		text = s.Emphasis(text)
 	}
-	glyph, _, kind := m.styles.Disposition(disposition)
-	titleWidth := cols.title
-	blocking := ""
-	if f.Blocking {
-		blocking = m.glyphs.Blocking + " "
-		titleWidth -= style.Width(blocking)
-	}
-	note := ""
-	replied, open := notes[f.ID]
-	if open {
-		note = m.glyphs.Note + " "
-		titleWidth -= style.Width(note)
-	}
-	title := m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Title)), titleWidth)
 	var b strings.Builder
-	b.WriteString(" " + cursor + " " + m.styles.Of(kind).Render(glyph) + " ")
-	b.WriteString(m.styles.Dim.Render(style.Pad(f.ID, listIDWidth)) + "  ")
-	if cols.severity > 0 {
-		b.WriteString(style.Pad(m.severityBadge(f.Severity), cols.severity) + "  ")
+	b.WriteString(cursor + " " + mark.Render(glyph) + " ")
+	b.WriteString(s.Overlay().Render(style.Pad(render.ForDisplay(f.ID), cols.id)) + " ")
+	word := ""
+	if severity.Rated(f.Severity) {
+		word = f.Severity
 	}
-	if blocking != "" {
-		b.WriteString(m.styles.Bad.Render(blocking))
+	b.WriteString(s.SeverityPill(word, style.PillWidth) + " ")
+	if cols.confidence {
+		b.WriteString(style.Pad(s.ConfidenceScale(f.Confidence), 3) + " ")
 	}
-	if note != "" {
-		kind := style.Dim
-		if replied {
-			kind = style.Note
-		}
-		b.WriteString(m.styles.Of(kind).Render(note))
+	titleWidth := cols.title
+	if f.Blocking {
+		b.WriteString(s.BlockingMark().Render(m.glyphs.Blocking + " "))
+		titleWidth -= style.Width(m.glyphs.Blocking) + 1
 	}
-	b.WriteString(titleStyle.Render(title) + strings.Repeat(" ", max(0, titleWidth-style.Width(title))))
-	if cols.label > 0 {
-		label := m.styles.TruncRight(render.ForDisplay(render.OneLine(f.Label)), cols.label)
-		b.WriteString(m.styles.Dim.Render("  " + style.Pad(label, cols.label)))
+	if replied, open := notes[f.ID]; open {
+		b.WriteString(s.NoteMark(replied).Render(m.glyphs.Note + " "))
+		titleWidth -= style.Width(m.glyphs.Note) + 1
 	}
+	title := s.TruncRight(render.ForDisplay(render.OneLine(f.Title)), max(0, titleWidth))
+	b.WriteString(text.Render(title) + strings.Repeat(" ", max(0, titleWidth-style.Width(title))))
 	if cols.location > 0 {
-		b.WriteString(m.styles.Dim.Render("  " + m.locationColumn(f, cols)))
+		b.WriteString(" " + m.locationColumn(f, cols))
 	}
-	return strings.TrimRight(b.String(), " ")
-}
-
-// severityBadge is the word in the color its rank paints, and nothing at all for a finding the reviewer left unrated:
-// a stand-in word there would read as a value that was never reported.
-func (m *Model) severityBadge(word string) string {
-	if !severity.Rated(word) {
-		return ""
+	inner, _ := style.PaneInner(m.width, 0)
+	line := style.Pad(b.String(), inner)
+	if selected {
+		return s.OnSurface(style.SurfaceSelected, line)
 	}
-	return m.styles.Of(style.Severity(word)).Render(word)
+	return line
 }
 
 // openNotes maps each finding with an open note to whether the agent has replied to one, which makes it the human's
@@ -395,9 +544,15 @@ func openNotes(d *draft.Draft) map[string]bool {
 
 // locationColumn keeps the end of the path, which is the part that identifies the file.
 func (m *Model) locationColumn(f draft.Finding, cols listColumns) string {
-	text := locationText(f)
-	if cols.shortLocation && f.Location != nil {
-		text = render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
+	if f.Location == nil {
+		return m.styles.Overlay().Render("general")
 	}
-	return m.styles.TruncLeft(text, cols.location)
+	text := locationText(f)
+	if cols.shortLocation {
+		short := render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
+		if style.Width(text) > cols.location {
+			text = short
+		}
+	}
+	return m.styles.LocationTitle(text, cols.location, false)
 }

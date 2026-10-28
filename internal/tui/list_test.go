@@ -16,7 +16,6 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/severity"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
@@ -36,7 +35,7 @@ func TestListAtEightyColumnsDropsTheLabelColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := newTestModel(t, m, 80, 24)
-	waitFor(t, tm, "acme/widgets#42", "round 1", "> . f-001            ! Title one", "multi.txt:3")
+	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001", "### ! Title one", "multi.txt:3")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.Contains(view, "Label") || strings.Contains(view, "suggestion") {
@@ -59,7 +58,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := newTestModel(t, m, 100, 24)
-	waitFor(t, tm, "> . f-001            ! Title one", "+ 0 accepted", "x 0 excluded")
+	waitFor(t, tm, "> . f-001", "### ! Title one", "0/3 decided")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
@@ -71,7 +70,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		}
 	}
 
-	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "› · f-001            ● Title one") {
+	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "> · f-001") || !strings.Contains(got, "■■■ ● Title one") || !strings.Contains(got, "╭─ Findings") {
 		t.Errorf("UTF-8 view does not use the Unicode glyphs:\n%s", got)
 	}
 }
@@ -132,7 +131,9 @@ func TestInlinePickerStartsOnNone(t *testing.T) {
 	}
 }
 
-func TestPublishStepsAreUnboxed(t *testing.T) {
+// The publish steps are tabs over a titled choice pane and a Message pane that says nothing has been sent yet
+// (FR-014). The tabs are labels: the pickers keep their keys.
+func TestPublishStepsShowTabsAndPanes(t *testing.T) {
 	dir := readyFixture(t, "author", "author")
 	for _, env := range []map[string]string{{"NO_COLOR": "1", "LANG": "C"}, {"NO_COLOR": "1", "LANG": "en_US.UTF-8"}} {
 		m := modelOf(t, dir, env, 100, 24)
@@ -140,30 +141,28 @@ func TestPublishStepsAreUnboxed(t *testing.T) {
 		step1 := m.View().Content
 		m.view, m.action, m.pick = viewInline, "comment", 1
 		step2 := m.View().Content
-		sep := m.glyphs.Sep
-		for name, view := range map[string]string{"step 1": step1, "step 2": step2} {
-			if strings.Contains(view, "+-") || strings.ContainsAny(view, "\u256d\u256e\u2570\u256f\u250c\u2510\u2514\u2518") {
-				t.Errorf("%s under %v draws a box:\n%s", name, env, view)
+		bar := "│"
+		if m.glyphs.Tier == style.ASCII {
+			bar = "|"
+		}
+		for name, c := range map[string]struct{ view, tabs, title, choice string }{
+			"step 1": {step1, "[Action]  " + bar + "  Inline comments  " + bar + "  Message", "Action", "> comment "},
+			"step 2": {step2, "Action  " + bar + "  [Inline comments]  " + bar + "  Message", "Inline comments", "> blocking "},
+		} {
+			lines := strings.Split(c.view, "\n")
+			if lines[1] != c.tabs || !strings.Contains(lines[2], " "+c.title+" ") || !strings.Contains(c.view, c.choice) {
+				t.Errorf("%s under %v lost its tabs, pane or cursor:\n%s", name, env, c.view)
 			}
-		}
-		if !strings.HasPrefix(step1, " Publish "+sep+" Step 1 of 3 "+sep+" acme/widgets#42") || !strings.Contains(step1, " Review action\n") ||
-			!strings.Contains(step1, " "+m.glyphs.Cursor+" comment ") {
-			t.Errorf("step 1 under %v lost its header, question or cursor:\n%s", env, step1)
-		}
-		if !strings.HasPrefix(step2, " Publish "+sep+" Step 2 of 3 "+sep+" comment "+sep+" acme/widgets#42") || !strings.Contains(step2, " Inline comments\n") ||
-			!strings.Contains(step2, " "+m.glyphs.Cursor+" blocking ") {
-			t.Errorf("step 2 under %v lost its header, question or cursor:\n%s", env, step2)
+			if !strings.Contains(c.view, " Message ") || !strings.Contains(c.view, "No review has been sent.") {
+				t.Errorf("%s under %v lacks the Message pane:\n%s", name, env, c.view)
+			}
 		}
 	}
 
 	// At the narrowest window the refusal wraps under the description column instead of being clipped.
 	narrow := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 24)
 	narrow.view, narrow.pick = viewAction, 0
-	var text []string
-	for _, l := range strings.Split(narrow.View().Content, "\n") {
-		text = append(text, strings.TrimSpace(l))
-	}
-	joined := strings.Join(text, " ")
+	joined := paneText(narrow.View().Content)
 	for _, want := range []string{
 		"unavailable: author is the author of this pull request and cannot approve it",
 		"unavailable: author is the author of this pull request and cannot request changes on it",
@@ -244,7 +243,7 @@ func TestListRowMarksOpenNotes(t *testing.T) {
 		return draft.ResolveNote(d, "n-002", testNow)
 	})
 	m := colored()
-	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.Dim.Render(m.glyphs.Note+" ")) {
+	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.NoteMark(false).Render(m.glyphs.Note+" ")) {
 		t.Errorf("unanswered note is not a dim mark: %q", row)
 	}
 	if row := ansi.Strip(rowOf(m, "f-003")); strings.Contains(row, m.glyphs.Note) {
@@ -259,7 +258,7 @@ func TestListRowMarksOpenNotes(t *testing.T) {
 		return err
 	})
 	m = colored()
-	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.Note.Render(m.glyphs.Note+" ")) {
+	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.NoteMark(true).Render(m.glyphs.Note+" ")) {
 		t.Errorf("answered note is not in the note color: %q", row)
 	}
 	if plain := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "C", style.IconsEnv: "ascii"}, 100, 24); !strings.Contains(rowOf(plain, "f-001"), "! ~ Title one") {
@@ -272,7 +271,7 @@ func TestListIDsAreNotAccented(t *testing.T) {
 	m.styles.SetColorProfile(colorprofile.TrueColor)
 	m.styles.Color = true
 	accented := m.styles.Accent.Render("f-001")
-	if view := m.View().Content; strings.Contains(view, accented) || !strings.Contains(view, m.styles.Dim.Render("f-001")) {
+	if view := m.View().Content; strings.Contains(view, accented) || !strings.Contains(view, m.styles.Overlay().Render("f-001")) {
 		t.Errorf("list id is accented or not dim:\n%q", view)
 	}
 }
@@ -295,8 +294,8 @@ func TestHelpLeadsWithTheCurrentView(t *testing.T) {
 	}
 	m.help, m.view = false, viewDetail
 	m.help = true
-	view = m.View().Content
-	if !strings.Contains(view, "Decisions are recorded against the draft version on screen.") {
+	view = strings.Join(m.helpLines(), "\n")
+	if !strings.Contains(paneText(view), "Decisions are recorded against the draft version on screen.") {
 		t.Errorf("help lost the sentence about the version on screen:\n%s", view)
 	}
 }
@@ -310,7 +309,7 @@ func TestLongNoticeWrapsInsteadOfClipping(t *testing.T) {
 	m.width, m.height = 100, 20
 	m.say(style.Warn, "the pull request head moved from 7f1c2ab0000000000000000000000000000beef to 29b3d00d372175bffc5fa5acfdef48eb4b7f67a1 since this round was captured; loupe capture starts a new round")
 	view := m.View().Content
-	if !strings.Contains(strings.ReplaceAll(view, "\n ", " "), "starts a new round") {
+	if !strings.Contains(paneText(view), "since this round was captured; loupe capture starts a new round") {
 		t.Fatalf("notice tail clipped:\n%s", view)
 	}
 	if n := strings.Count(view, "\n") + 1; n != 20 {
@@ -327,39 +326,52 @@ func TestLongNoticeWrapsInsteadOfClipping(t *testing.T) {
 // unless the human can see whose words it holds.
 func TestSummaryBlockNamesTheReviewer(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 24)
-	m.draft.Summary = "Three things stood out."
-	if head := m.summaryBlock(m.listColumns())[0]; !strings.Contains(head, "Reviewer's summary") {
-		t.Errorf("the summary block does not name the reviewer: %q", head)
+	if head := strings.Split(m.View().Content, "\n")[1]; !strings.Contains(head, "Reviewer's summary") {
+		t.Errorf("the summary pane does not name the reviewer: %q", head)
 	}
 }
 
-// A collapsed summary joins its wrapped lines; the indent each carries must not become a run of spaces in the text.
-func TestCollapsedSummaryHasNoSpaceRuns(t *testing.T) {
-	dir := newFixture(t)
-	m := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 80, 24)
-	// Uneven words leave the second wrapped line short, so the truncation lands where a joined indent would sit.
-	m.draft.Summary = strings.Repeat("a", 50) + " " + strings.Repeat("b", 20) + " " + strings.Repeat("c", 50) + " " + strings.Repeat("d", 50)
-	lines := m.summaryBlock(m.listColumns())
-	if len(lines) < 2 {
-		t.Fatalf("summary block %q", lines)
-	}
-	rest, _, ok := strings.Cut(lines[1], "tab expands")
-	rest = strings.TrimSpace(rest)
-	if !ok || !strings.HasSuffix(rest, "\u2026") || strings.Contains(rest, "  ") {
-		t.Errorf("second summary line must end with the ellipsis and carry no space run: %q", lines[1])
-	}
-}
-
-// The collapsed summary keeps its second line at the narrowest window the interface runs in; the heading's indent
-// nearly swallowed the width the truncation is given.
-func TestCollapsedSummaryKeepsItsSecondLineWhenNarrow(t *testing.T) {
-	for _, width := range []int{60, 80, 100} {
-		m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, width, 24)
-		m.draft.Summary = strings.Repeat("a summary long enough to wrap past two lines ", 6)
-		lines := m.summaryBlock(m.listColumns())
-		if len(lines) < 2 || strings.TrimSpace(strings.Split(lines[1], "tab expands")[0]) == "" {
-			t.Errorf("width %d: the collapsed summary lost its second line: %q", width, lines)
+// The summary keeps its bullets, expanded by default; tab collapses it to one marked line with no space runs from
+// the wrapped lines' indents (FR-005).
+func TestSummaryKeepsBulletsAndCollapsesToOneLine(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 80, 30)
+	m.draft.Summary = "- Cache metadata before fetching it again.\n- Blocks: expiry is missing when the ETag is absent, which " +
+		"keeps stale titles and head SHAs around until the process restarts.\n- Not checked: rate limits."
+	view := m.View().Content
+	for _, want := range []string{"│ • Cache metadata before fetching it again.", "│ • Blocks: expiry", "│ • Not checked: rate limits.", "tab collapses"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("expanded summary lacks %q:\n%s", want, view)
 		}
+	}
+	for _, l := range strings.Split(view, "\n") {
+		if strings.Contains(l, "restarts.") && !strings.HasPrefix(l, "│   ") {
+			t.Errorf("a wrapped bullet does not hang under its text: %q", l)
+		}
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	l := m.layoutList(len(m.viewFooter()), 0)
+	if len(l.summary) != 1 || !strings.HasSuffix(l.summary[0], "\u2026") || strings.Contains(l.summary[0], "  ") {
+		t.Errorf("collapsed summary %q", l.summary)
+	}
+	if !strings.Contains(m.View().Content, "tab expands") {
+		t.Errorf("collapsed summary does not offer to expand:\n%s", m.View().Content)
+	}
+}
+
+// A summary longer than its budget is clipped on screen with an indicator and the command that prints it whole; the
+// draft keeps every line (owner decision 3, 2026-10-26).
+func TestLongSummaryIsClippedWithTheShowCommand(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 80, 24)
+	m.draft.Summary = strings.Repeat("- one more legacy line\n", 20)
+	view := m.View().Content
+	if !strings.Contains(view, "more lines") || !strings.Contains(view, "loupe show --run acme/widgets#42@1") {
+		t.Errorf("clipped summary lacks its indicator or command:\n%s", view)
+	}
+	if strings.Count(m.draft.Summary, "\n") != 20 {
+		t.Error("clipping changed the stored summary")
+	}
+	if l := m.layoutList(len(m.viewFooter()), 0); l.rows < 3 {
+		t.Errorf("the summary left %d finding rows, want at least 3", l.rows)
 	}
 }
 
@@ -367,7 +379,7 @@ func TestCollapsedSummaryKeepsItsSecondLineWhenNarrow(t *testing.T) {
 func TestListHeaderKeepsThePullRequestNumber(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 20)
 	m.target.Owner, m.target.Repo, m.target.Number = "my-organization", "my-repository-with-a-long-name", 1234
-	if header := m.listHeader(); !strings.Contains(header, "name#1234") || style.Width(header) != 60 {
+	if header := m.reviewHeader(); !strings.Contains(header, "#1234") || style.Width(header) != 60 {
 		t.Errorf("header %q", header)
 	}
 }
@@ -467,13 +479,14 @@ func listRows(view string) []string {
 	return out
 }
 
-// severityCell and rowID read a drawn row by column, since the fixed columns before each are a constant width.
+// severityCell and rowID read a drawn row by column: the pane's border and padding, the selection, the state glyph,
+// then the id and the pill, one cell apart.
 func severityCell(row string) string {
-	return cell(row, listFixed, listSeverityWidth)
+	return cell(row, 2+4+5+1, 10)
 }
 
 func rowID(row string) string {
-	return cell(row, listFixed-listIDWidth-2, listIDWidth)
+	return cell(row, 2+4, 5)
 }
 
 func cell(row string, at, width int) string {
@@ -483,11 +496,11 @@ func cell(row string, at, width int) string {
 func TestListRowCarriesTheSeverityColumn(t *testing.T) {
 	m := modelOf(t, severityFixture(t), testEnv, 120, 24)
 	view := m.View().Content
-	if !strings.Contains(ansi.Strip(view), "Severity") {
+	if !strings.Contains(ansi.Strip(view), "severity") {
 		t.Errorf("list has no severity column head:\n%s", view)
 	}
 	// The unrated finding gets a blank column, never a stand-in word.
-	want := map[string]string{"f-003": "critical", "f-004": "minor", "f-001": "trivial", "f-002": ""}
+	want := map[string]string{"f-003": "[CRITICAL]", "f-004": "[MINOR]", "f-001": "[TRIVIAL]", "f-002": ""}
 	for _, row := range listRows(view) {
 		id := rowID(row)
 		if got := severityCell(row); got != want[id] {
@@ -496,11 +509,10 @@ func TestListRowCarriesTheSeverityColumn(t *testing.T) {
 	}
 }
 
-// The severity column is colored by how bad the finding is, and carries no glyph of its own.
+// The severity pill is tinted by how bad the finding is, and the hues differ.
 func TestListSeverityColumnIsColoredByRank(t *testing.T) {
 	m := modelOf(t, severityFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 120, 24)
 	m.styles.SetColorProfile(colorprofile.TrueColor)
-	m.styles.Color = true
 	seen := map[string]string{}
 	for _, row := range listRows(m.View().Content) {
 		word := severityCell(row)
@@ -513,42 +525,35 @@ func TestListSeverityColumnIsColoredByRank(t *testing.T) {
 	if len(seen) != 3 {
 		t.Fatalf("want three colored severity cells, got %v", seen)
 	}
-	for word, paint := range seen {
-		if strings.TrimSpace(ansi.Strip(paint)) != "" {
-			t.Errorf("the %s badge carries a glyph of its own: %q", word, ansi.Strip(paint))
-		}
-	}
-	if seen["critical"] == seen["minor"] || seen["minor"] == seen["trivial"] || seen["critical"] == seen["trivial"] {
-		t.Errorf("severity words share a color: %v", seen)
+	if seen["CRITICAL"] == seen["MINOR"] || seen["MINOR"] == seen["TRIVIAL"] || seen["CRITICAL"] == seen["TRIVIAL"] {
+		t.Errorf("severity pills share a color: %v", seen)
 	}
 }
 
-// The location shortens first, then the label drops, then the severity column.
-func TestListColumnsDropSeverityLast(t *testing.T) {
+// The width tiers of the layout contract: confidence and location go below 80, the location shortens below 100, and
+// the title keeps the rest.
+func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 	dir := severityFixture(t)
 	for _, c := range []struct {
-		width                           int
-		severity, label, location, wide int
+		width, title, location int
+		confidence, short      bool
 	}{
-		{140, listSeverityWidth, 12, 28, 0},
-		{100, listSeverityWidth, 12, 28, 0},
-		{99, listSeverityWidth, 0, 28, 0},
-		{80, listSeverityWidth, 0, 28, 0},
-		{79, listSeverityWidth, 0, 18, 1},
-		{60, listSeverityWidth, 0, 16, 1},
+		{100, 46, 24, true, false},
+		{99, 51, 18, true, true},
+		{80, 32, 18, true, true},
+		{79, 54, 0, false, false},
+		{60, 35, 0, false, false},
 	} {
 		got := modelOf(t, dir, testEnv, c.width, 24).listColumns()
-		if got.severity != c.severity || got.label != c.label || got.location != c.location || got.shortLocation != (c.wide == 1) {
-			t.Errorf("at %d columns: %+v, want severity %d label %d location %d short %v",
-				c.width, got, c.severity, c.label, c.location, c.wide == 1)
-		}
-		if got.title < listTitleFloor {
-			t.Errorf("at %d columns the title is %d, below the floor", c.width, got.title)
+		if got.title != c.title || got.location != c.location || got.confidence != c.confidence || got.shortLocation != c.short {
+			t.Errorf("at %d columns: %+v, want title %d location %d confidence %v short %v", c.width, got, c.title, c.location, c.confidence, c.short)
 		}
 	}
-	// Narrower than every column can fit, severity is what goes after the location has given up its width.
-	if got := modelOf(t, dir, testEnv, 40, 24).listColumns(); got.severity != 0 || got.location != 0 {
-		t.Errorf("at 40 columns severity survived the location: %+v", got)
+	// A long id takes its room from the title first, then the location, and the title keeps its floor.
+	m := modelOf(t, dir, testEnv, 80, 24)
+	m.order[0].ID = strings.Repeat("f", 30)
+	if got := m.listColumns(); got.title != listTitleFloor || got.id != 30 || got.location != 17 || !got.confidence {
+		t.Errorf("a 30-cell id: %+v", got)
 	}
 }
 
@@ -596,43 +601,6 @@ func TestEscapeKeepsTheCursorOnTheOpenFinding(t *testing.T) {
 	}
 	if got := m.order[m.cursor].ID; got != "f-001" {
 		t.Errorf("cursor landed on %s, want the finding that was open, f-001", got)
-	}
-}
-
-// The detail view colors the severity chip by rank. Nothing else notices: the chip's text is unchanged, so
-// reverting its kind to Dim leaves every other assertion true.
-func TestSeverityChipIsColoredByRank(t *testing.T) {
-	s := style.New(io.Discard, envOf(map[string]string{"LANG": "en_US.UTF-8"}))
-	s.SetColorProfile(colorprofile.TrueColor)
-	s.Color = true
-	find := func(cs []chip, prefix string) chip {
-		for _, c := range cs {
-			if strings.HasPrefix(c.text, prefix) {
-				return c
-			}
-		}
-		t.Fatalf("no %q chip in %v", prefix, cs)
-		return chip{}
-	}
-	for _, word := range severity.Order {
-		f := draft.Finding{ID: "f-001", Severity: word, Confidence: "high"}
-		cs := chips(s, f, draft.DispositionPending, false)
-		if got, want := find(cs, "severity ").kind, style.Severity(word); got != want {
-			t.Errorf("severity %s chip kind = %v, want %v", word, got, want)
-		}
-		// Confidence stays dim, so this is not passing on a row where everything is colored.
-		if got := find(cs, "confidence ").kind; got != style.Dim {
-			t.Errorf("the confidence chip is no longer dim: %v", got)
-		}
-	}
-	// A value stored before the enum has no rank, so it keeps the dim it has always had.
-	legacy := chips(s, draft.Finding{ID: "f-001", Severity: "P2"}, draft.DispositionPending, false)
-	if got := find(legacy, "severity ").kind; got != style.Dim {
-		t.Errorf("a legacy severity chip is painted %v, want Dim", got)
-	}
-	// critical must actually paint differently from trivial once rendered, not merely differ as a Kind.
-	if a, b := s.Chip(style.Severity("critical"), "", "x"), s.Chip(style.Severity("trivial"), "", "x"); a == b {
-		t.Errorf("critical and trivial chips render identically: %q", a)
 	}
 }
 

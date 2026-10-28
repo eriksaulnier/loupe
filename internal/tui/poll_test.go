@@ -421,7 +421,7 @@ func TestLiveReplyJoinsTheThreadAndKeepsTheNoteBeingWritten(t *testing.T) {
 
 	m.body.GotoBottom()
 	view := m.View().Content
-	for _, want := range []string{"you - n-001", "agent - r-001", "Because the rename moved it."} {
+	for _, want := range []string{"Note n-001", "You - open", "Agent - r-001", "Because the rename moved it."} {
 		if !strings.Contains(view, want) {
 			t.Errorf("thread lacks %q after the live reply:\n%s", want, view)
 		}

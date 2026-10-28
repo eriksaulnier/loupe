@@ -12,7 +12,6 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -82,11 +81,15 @@ type Model struct {
 	notice  string
 	// noticeKind colors the notice: a recorded decision reads as success, a refusal as a warning.
 	noticeKind style.Kind
-	err        error
+	// noticeGen is the notice's generation, so the timer of a success notice clears only its own.
+	noticeGen int
+	err       error
 
 	// order is the draft's findings as every surface presents them; the cursor and the detail's position index it.
-	order            []draft.Finding
-	cursor           int
+	order  []draft.Finding
+	cursor int
+	// summaryCollapsed is the human's choice. A short window collapses the summary on its own without changing it, so
+	// the choice comes back when the window grows.
 	summaryCollapsed bool
 
 	// helpTop is the first help line shown when help is taller than the window.
@@ -106,6 +109,9 @@ type Model struct {
 	editBlocking bool
 	glamour      *glamour.TermRenderer
 	wrapWidth    int
+	// tokensKey and tokens are the last highlighted lines, so moving or redrawing never tokenizes them again.
+	tokensKey string
+	tokens    [][]style.CodeToken
 	// Only the first background response selects the palette for this program.
 	backgroundReceived bool
 
@@ -134,11 +140,15 @@ type Model struct {
 	elsewhere string
 	// pollSkipped is true when a tick found the human writing or confirming; the draft is re-read as they leave.
 	pollSkipped bool
-	// published is the URL of the review this program sent. browsing is set while the opener runs, and openFailed
-	// once it failed.
+	// published is the URL of the review this program sent. browsing is set while the opener runs, for the view in
+	// browseFrom, and openFailed once it failed.
 	published  string
 	browsing   bool
+	browseFrom view
 	openFailed bool
+	// browseID ties the opener's answer to the request that started it, so a late answer from list or detail cannot
+	// quit the program or reach a view the human has since left.
+	browseID int
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -163,6 +173,7 @@ func New(cfg Config) (*Model, error) {
 		return nil, err
 	}
 	st := style.New(cfg.Output, cfg.Getenv)
+	st.UseReviewTheme()
 	note := textarea.New()
 	note.ShowLineNumbers, note.MaxHeight = false, 0
 	note.SetStyles(textarea.Styles{})
@@ -179,8 +190,6 @@ func New(cfg Config) (*Model, error) {
 		keptNotes: map[string]string{},
 		body:      viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
 		file:      viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
-		// The summary starts collapsed so the findings, not the prose, fill the first screen.
-		summaryCollapsed: true,
 	}
 	if cfg.Screen != nil {
 		m.width, m.height = cfg.Screen.Width, cfg.Screen.Height
@@ -216,6 +225,7 @@ type pollMsg struct{}
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	gen := m.noticeGen
 	if _, ok := msg.(pollMsg); ok {
 		m.polling = false
 		if m.pollHeld() {
@@ -230,7 +240,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pollSkipped = false
 		cmd = tea.Batch(cmd, m.checkDraft(false))
 	}
-	return m, tea.Batch(cmd, m.schedulePoll())
+	// The detail's viewport follows its editor and notice rows, which any update can open, close or change.
+	if m.view == viewDetail && !tooSmall(m.width, m.height) && m.err == nil {
+		m.sizeDetail()
+	}
+	cmd = tea.Batch(cmd, m.schedulePoll(), m.expireNotice(gen))
+	return m, cmd
 }
 
 // pollHeld is true while redrawing would move something the human is writing or confirming.
@@ -400,6 +415,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openedMsg:
 		m.opening = false
 		return m, nil
+	case noticeExpired:
+		if msg.gen == m.noticeGen {
+			m.notice = ""
+		}
+		return m, nil
 	case browserMsg:
 		return m, m.browserDone(msg)
 	case tea.KeyPressMsg:
@@ -475,8 +495,13 @@ func (m *Model) content() string {
 		return m.smallView()
 	}
 	if m.help {
-		return m.helpView()
+		return m.helpOverlay(m.viewContent())
 	}
+	return m.viewContent()
+}
+
+// viewContent is the current view without help over it.
+func (m *Model) viewContent() string {
 	switch m.view {
 	case viewDetail:
 		return m.detailView()
@@ -489,7 +514,7 @@ func (m *Model) content() string {
 	case viewConfirm:
 		return m.confirmView(&m.confirm)
 	case viewPublishing:
-		return m.frame([]string{m.listHeader(), m.headerRule()}, "", m.footerKeys())
+		return m.publishingView()
 	case viewPublished:
 		return m.publishedView()
 	}
@@ -593,65 +618,6 @@ func decide(dir string, displayed *draft.Draft, findingID string, getenv func(st
 	return reloaded, refusalNotice(r), nil
 }
 
-// clipToWindow is the frame's last guard against a line wider than the window. Tests turn it off to see whether any
-// view relies on it.
-var clipToWindow = true
-
-// maxNoticeLines bounds how far a wrapped refusal may push the body up; longer ones are clipped.
-const maxNoticeLines = 3
-
-// frame is the one layout every view renders through: header lines, a body clipped or padded to the rows left, the
-// notice and the key line, each clipped to the window width.
-func (m *Model) frame(header []string, body, keys string) string {
-	wrapped := m.noticeLines()
-	for i, l := range wrapped {
-		wrapped[i] = m.styles.Of(m.noticeKind).Render(l)
-	}
-	return m.frameWith(header, body, strings.Join(wrapped, "\n"), keys)
-}
-
-// noticeLines is the notice as the frame will print it: wrapped, capped, one empty line when there is none. Every
-// body is sized against it, so a notice that wraps takes rows from the body rather than hiding its last rows.
-func (m *Model) noticeLines() []string {
-	if m.notice == "" {
-		return []string{""}
-	}
-	// A refusal names two SHAs and a fix; on one clipped line the fix is the part that vanishes.
-	wrapped := strings.Split(m.styles.Wrap(m.notice, max(20, m.width-1), " "), "\n")
-	if len(wrapped) > maxNoticeLines {
-		wrapped = wrapped[:maxNoticeLines]
-	}
-	return wrapped
-}
-
-// frameWith is frame with the notice line spelled out, for a view that puts an input there instead.
-func (m *Model) frameWith(header []string, body, notice, keys string) string {
-	noticeLines, keyLines := strings.Split(notice, "\n"), strings.Split(keys, "\n")
-	bodyHeight := max(0, m.height-len(header)-len(noticeLines)-len(keyLines))
-	bodyLines := strings.Split(body, "\n")
-	if len(bodyLines) > bodyHeight {
-		bodyLines = bodyLines[:bodyHeight]
-	}
-	for len(bodyLines) < bodyHeight {
-		bodyLines = append(bodyLines, "")
-	}
-	lines := make([]string, 0, m.height)
-	lines = append(lines, header...)
-	lines = append(lines, bodyLines...)
-	lines = append(lines, noticeLines...)
-	for _, k := range keyLines {
-		lines = append(lines, " "+k)
-	}
-	clip := m.styles.NewStyle().MaxWidth(m.width)
-	for i, l := range lines {
-		lines[i] = render.ForDisplayANSI(l)
-		if clipToWindow {
-			lines[i] = clip.Render(lines[i])
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
 // fill sets a viewport's content and pulls its offset back to the last full page. SetContent clamps only an offset
 // past the last line, so a view scrolled to its end in a short window would keep that offset over blank rows once
 // the window grows.
@@ -660,52 +626,31 @@ func fill(v *viewport.Model, content string) {
 	v.SetYOffset(v.YOffset())
 }
 
-func (m *Model) bodyHeight(headerLines int) int {
-	return m.bodyHeightOver(headerLines, m.viewFooter())
-}
+// viewFooterRows is how many rows the current view's own footer takes.
+func (m *Model) viewFooterRows() int { return len(m.viewFooter()) }
 
-// bodyHeightOver sizes a body against the footer under it, as it is against the notice, so a footer that wraps takes
-// a row from the body rather than hiding the body's last row.
-func (m *Model) bodyHeightOver(headerLines int, footer string) int {
-	return max(1, m.height-headerLines-len(m.noticeLines())-strings.Count(footer, "\n")-1)
-}
-
-// footerKeys is the footer on screen: help's, or the note or edit row's, over the view's own.
-func (m *Model) footerKeys() string {
-	switch {
-	case m.help:
-		return m.footer(m.helpHints(true))
-	case m.view == viewDetail && m.noting:
-		return m.footer([]style.Hint{{Key: "enter", Verb: "send"}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
-	case m.view == viewDetail && m.editing:
-		return m.footer([]style.Hint{{Key: "enter", Verb: "save"}, {Key: m.glyphs.Left + "/" + m.glyphs.Right, Verb: "label"},
-			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
-	}
-	return m.viewFooter()
-}
-
-// viewFooter is the view's own footer, which its body is sized against. Help and the note and edit rows come and go
-// without a layout, so a body sized against theirs would be wrong once they close.
-func (m *Model) viewFooter() string {
+// viewFooter is the current view's own footer, which its body is sized against.
+func (m *Model) viewFooter() []string {
 	switch m.view {
 	case viewDetail:
-		return m.footer(m.detailHints())
+		return m.detailFooter()
 	case viewFileDiff:
-		return m.footer(m.fileDiffHints())
+		return m.keys(groupHints(m.fileDiffHints())...)
 	case viewAction:
-		return m.footer(m.publishStepHints(actionEnter))
+		return m.keys(groupHints(m.publishStepHints(actionEnter))...)
 	case viewInline:
-		return m.footer(m.publishStepHints(inlineEnter))
+		return m.keys(groupHints(m.publishStepHints(inlineEnter))...)
 	case viewConfirm:
-		keys, _ := m.confirmKeys()
-		return keys
+		return m.confirmKeys()
 	case viewPublishing:
 		if m.sending {
-			return m.styles.Dim.Render("keys are ignored until the outcome is recorded")
+			return []string{m.styles.Overlay().Render("keys are ignored until the outcome is recorded")}
 		}
-		return m.footer([]style.Hint{{Key: "ctrl+c", Verb: "quit"}})
+		return m.keys(style.KeyGroup{{Key: "ctrl+c", Verb: "quit"}})
+	case viewPublished:
+		return m.publishedKeys()
 	}
-	return m.footer(m.listHints())
+	return m.keys(groupHints(m.listHints())...)
 }
 
 // helpKey is one row of help: the primary key, what it does, and the compatibility alias when there is one.
@@ -715,22 +660,23 @@ type helpKey struct {
 
 // helpSection is one view's keys under the name of the view they belong to.
 type helpSection struct {
-	title string
-	keys  []helpKey
+	title, short string
+	keys         []helpKey
 }
 
 func (m *Model) helpSections() map[view]helpSection {
 	g := m.glyphs
 	upDown, leftRight := g.Up+"/"+g.Down, g.Left+"/"+g.Right
 	return map[view]helpSection{
-		viewList: {"Finding list", []helpKey{
+		viewList: {"Finding list", "list", []helpKey{
 			{upDown, "move", "k/j"},
 			{"enter", "open the finding", ""},
 			{"tab", "expand or collapse the summary", ""},
+			{"o", "open the pull request in the browser", ""},
 			{"p", "publish once the review is ready", ""},
 			{"ctrl+r", "reload the draft from disk", ""},
 		}},
-		viewDetail: {"Finding detail", []helpKey{
+		viewDetail: {"Finding detail", "detail", []helpKey{
 			{leftRight, "previous / next finding", "N/n"},
 			{upDown, "scroll the finding", "k/j"},
 			{"PgUp/PgDn", "scroll one page", ""},
@@ -742,15 +688,16 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
+			{"o", "open the pull request in the browser", ""},
 			{"ctrl+r", "reload the draft from disk", ""},
 			{"esc", "back to the list", ""},
 		}},
-		viewAction: {"Publish steps", []helpKey{
+		viewAction: {"Publish steps", "publish", []helpKey{
 			{upDown, "move", "k/j"},
 			{"enter", "choose and go on", ""},
 			{"esc", "back one step", ""},
 		}},
-		viewFileDiff: {"File diff", []helpKey{
+		viewFileDiff: {"File diff", "file diff", []helpKey{
 			{upDown, "move one line", "k/j"},
 			{leftRight, "previous / next marker", "[/]"},
 			{"enter", "open the finding on this line", ""},
@@ -759,42 +706,11 @@ func (m *Model) helpSections() map[view]helpSection {
 	}
 }
 
-var everywhere = helpSection{"Everywhere", []helpKey{
+var everywhere = helpSection{"Everywhere", "", []helpKey{
 	{"?", "toggle this help", ""},
 	{"q", "quit; decisions are saved", ""},
 	{"ctrl+c", "quit", ""},
 }}
-
-// helpView leads with the keys of the view it was opened from, then the ones that work everywhere and the other
-// views: in two columns when every row fits one, otherwise in one column that scrolls.
-func (m *Model) helpView() string {
-	lines := m.helpLines()
-	height := m.helpHeight()
-	top := min(m.helpTop, max(0, len(lines)-height))
-	right := m.readiness()
-	if len(lines) > height {
-		right = m.styles.Dim.Render(fmt.Sprintf("lines %d%s%d of %d", top+1, m.sign("\u2013", "-"), min(top+height, len(lines)), len(lines)))
-	}
-	hints := m.helpHints(len(lines) > height)
-	header := m.styles.Header([]style.HeaderPart{
-		{Text: strings.TrimSpace(m.glyphs.Help + " Keys"), Bold: true},
-		{Text: "from " + strings.ToLower(m.helpCurrent().title), Drop: 1, Kind: style.Dim},
-	}, right, m.width)
-	return m.frame([]string{header, m.headerRule()}, strings.Join(lines[top:], "\n"), m.footer(hints))
-}
-
-// helpHeight sizes help against its footer as if help scrolls, since whether it does depends on this height.
-func (m *Model) helpHeight() int {
-	return m.bodyHeightOver(helpHeaderLines, m.footer(m.helpHints(true)))
-}
-
-func (m *Model) helpHints(scrolls bool) []style.Hint {
-	var hints []style.Hint
-	if scrolls {
-		hints = append(hints, style.Hint{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav})
-	}
-	return append(hints, style.Hint{Key: "? or esc", Verb: "close help", Role: style.RoleHelp})
-}
 
 // helpCurrentView is the view whose keys help leads with; both publish steps share one section.
 func (m *Model) helpCurrentView() view {
@@ -809,6 +725,8 @@ func (m *Model) helpCurrentView() view {
 
 func (m *Model) helpCurrent() helpSection { return m.helpSections()[m.helpCurrentView()] }
 
+// helpLines leads with the keys of the view help was opened from, then the ones that work everywhere and the other
+// views, then the legend for the progress bar and the confidence scale, in one column the overlay scrolls.
 func (m *Model) helpLines() []string {
 	sections := m.helpSections()
 	current := m.helpCurrentView()
@@ -819,50 +737,40 @@ func (m *Model) helpLines() []string {
 		}
 	}
 	all := append([]helpSection{sections[current]}, rest...)
-
-	keyWidth, widest := 0, 0
+	keyWidth := 0
 	for _, section := range all {
 		for _, k := range section.keys {
 			keyWidth = max(keyWidth, style.Width(k.Keys))
 		}
 	}
-	for _, section := range all {
-		for _, k := range section.keys {
-			widest = max(widest, style.Width(m.helpRow(k, keyWidth)))
-		}
+	width, _ := style.PaneInner(min(m.width-4, 72), 0)
+	lines := append(m.helpColumn(all, keyWidth), "")
+	for _, l := range m.legend() {
+		lines = append(lines, strings.Split(m.styles.Wrap(l, width, ""), "\n")...)
 	}
-
-	// Columns are four cells apart, after the one-cell margin.
-	const helpGap = 4
-	content := style.Content(m.width)
-	column := (content - 1 - helpGap) / 2
-	var body []string
-	if column >= 30 && widest <= column {
-		left, right := m.helpColumn(all[:1], keyWidth), m.helpColumn(rest, keyWidth)
-		for i := range max(len(left), len(right)) {
-			row := " "
-			if i < len(left) {
-				row += style.Pad(left[i], column)
-			} else {
-				row += strings.Repeat(" ", column)
-			}
-			if i < len(right) {
-				row += strings.Repeat(" ", helpGap) + right[i]
-			}
-			body = append(body, strings.TrimRight(row, " "))
-		}
-	} else {
-		for _, l := range m.helpColumn(all, keyWidth) {
-			body = append(body, strings.TrimRight(" "+m.styles.TruncRight(l, content-1), " "))
-		}
-	}
-	lines := append(body, "")
+	lines = append(lines, "")
 	stale := m.styles.Wrap("Decisions are recorded against the draft version on screen. If the draft changed meanwhile, "+
-		"nothing is recorded and the current version is shown instead.", content-1, " ")
+		"nothing is recorded and the current version is shown instead.", width, "")
 	for _, l := range strings.Split(stale, "\n") {
 		lines = append(lines, m.styles.Dim.Render(l))
 	}
 	return lines
+}
+
+// legend explains the progress bar and the confidence scale in the characters this terminal draws them in, and tells
+// an open note from one the agent has answered.
+func (m *Model) legend() []string {
+	s := m.styles
+	cell := func(st style.ProgressState) string { return s.Progress([]style.ProgressState{st}) }
+	conf := func(word string) string { return s.ConfidenceScale(word) }
+	return []string{
+		"Progress: " + cell(style.ProgressAccepted) + " accepted, " + cell(style.ProgressExcluded) + " excluded, " +
+			cell(style.ProgressNote) + " pending with an open note, " + cell(style.ProgressBlocking) + " pending blocking, " +
+			cell(style.ProgressPending) + " pending. Withdrawn findings have no cell.",
+		"Confidence: " + conf("high") + " high, " + conf("medium") + " medium, " + conf("low") + " low.",
+		"Notes: " + s.NoteMark(false).Render(m.glyphs.Note) + " an open note, " + s.NoteMark(true).Render(m.glyphs.Note) +
+			" an open note the agent answered, which waits on you.",
+	}
 }
 
 // helpColumn lays sections out one under another, a blank line between them.
@@ -906,58 +814,12 @@ func (m *Model) updateHelp(msg tea.KeyPressMsg) {
 	}
 }
 
-// helpHeaderLines is the header and its rule.
-const helpHeaderLines = 2
-
-// headerRule closes the header block of every screen but the confirmation, whose body opens with titled rules. It
-// is dim, so it reads as an edge rather than a pane border.
-func (m *Model) headerRule() string { return m.styles.Rule(m.width, "", "") }
-
-// header is the flat line every view opens with, readiness at its right edge.
-func (m *Model) header(parts ...style.HeaderPart) string {
-	return m.styles.Header(parts, m.readiness(), m.width)
-}
-
-// listHeader names the program, the run and its title; the title gives way first, then the brand and the round.
-func (m *Model) listHeader() string {
-	return m.header(
-		style.HeaderPart{Text: "loupe", Drop: 3, Bold: true},
-		// A ref too long for the window keeps its pull request number.
-		style.HeaderPart{Text: m.prRef(), Squeeze: true, Left: true},
-		style.HeaderPart{Text: fmt.Sprintf("round %d", m.target.Round), Drop: 2, Kind: style.Dim},
-		style.HeaderPart{Text: m.titleText(), Drop: 4, Trunc: true, Kind: style.Dim},
-	)
-}
-
-// footer fits hints to the window, leaving the one-cell margin at each end.
-func (m *Model) footer(hints []style.Hint) string {
-	line, _ := m.styles.Footer(hints, m.width-2)
-	return line
-}
-
-// prRef is the run reference behind the pull request icon in the tier that has one.
-func (m *Model) prRef() string { return strings.TrimSpace(m.glyphs.PR + " " + m.ref()) }
-
 func (m *Model) ref() string {
 	return fmt.Sprintf("%s/%s#%d", m.target.Owner, m.target.Repo, m.target.Number)
 }
 
-func (m *Model) readiness() string {
-	r := draft.ReadinessOf(m.draft)
-	return m.styles.Readiness(r.Ready, len(r.Pending), len(r.OpenNotes))
-}
-
 func (m *Model) titleText() string {
 	return render.ForDisplay(render.OneLine(m.target.Title))
-}
-
-// countsLines is the tally under the list header, on the one-cell margin.
-func (m *Model) countsLines() []string {
-	lines := countsLines(m.draft, m.styles, m.width-1)
-	for i, l := range lines {
-		lines[i] = " " + l
-	}
-	return lines
 }
 
 // sign is a character that has a typographic form and an ASCII one; the glyph set decides which the locale can print.
@@ -966,14 +828,6 @@ func (m *Model) sign(unicode, ascii string) string {
 		return unicode
 	}
 	return ascii
-}
-
-// say sets the notice and how it reads: Good for something recorded, Warn for a refusal or a dead end.
-func (m *Model) say(kind style.Kind, text string) { m.notice, m.noticeKind = text, kind }
-
-func countsLines(d *draft.Draft, s style.Style, width int) []string {
-	r := draft.ReadinessOf(d)
-	return s.Counts(len(r.Accepted), len(r.Pending), len(r.Excluded), len(r.Withdrawn), len(r.OpenNotes), width)
 }
 
 // initialCursor selects what needs the human first: the first pending finding, then the first with an open note.
@@ -1018,39 +872,6 @@ func formatLocation(path string, line, startLine int, side string) string {
 	return loc
 }
 
-// chip is one state of a finding: a glyph, the word that names it and the color both carry.
-type chip struct {
-	glyph, text string
-	kind        style.Kind
-}
-
-// chips are the states a finding is in, in reading order. A field that is not set has no chip, so nothing is a
-// placeholder. general adds the chip for a finding with no location, where nothing else on screen says so.
-func chips(s style.Style, f draft.Finding, disposition string, general bool) []chip {
-	glyph, word, kind := s.Disposition(disposition)
-	out := []chip{{glyph, word, kind}}
-	if f.Blocking {
-		out = append(out, chip{s.Glyphs.Blocking, "blocking", style.Bad})
-	}
-	if general && f.Location == nil {
-		out = append(out, chip{"", "general", style.Dim})
-	}
-	if f.Label != "" {
-		out = append(out, chip{"", render.ForDisplay(render.OneLine(f.Label)), style.Plain})
-	}
-	if f.Confidence != "" {
-		out = append(out, chip{"", "confidence " + render.ForDisplay(f.Confidence), style.Dim})
-	}
-	if f.Severity != "" {
-		word := render.OneLine(f.Severity)
-		out = append(out, chip{"", "severity " + render.ForDisplay(word), style.Severity(word)})
-	}
-	if f.Verified != "" {
-		out = append(out, chip{"", "verified " + render.ForDisplay(f.Verified), style.Dim})
-	}
-	return out
-}
-
 func orderedIndex(fs []draft.Finding, id string) int {
 	for i, f := range fs {
 		if f.ID == id {
@@ -1084,67 +905,6 @@ func hunkView(dif *diff.Diff, f draft.Finding) ([]diff.ViewLine, error) {
 		return nil, nil
 	}
 	return dif.HunkView(f.Location.Path, f.Location.Side, f.Location.Line, f.Location.StartLine, hunkContext)
-}
-
-// diffRow is one line of a diff: its number on the new side, a gutter wide enough for the widest marker, and the
-// line as the diff carries it.
-func diffRow(l diff.ViewLine, gutter string, gutterWidth int) string {
-	if l.Separator {
-		return render.ForDisplay(l.Text)
-	}
-	lead, text := diffCells(l)
-	return lead + style.Pad(gutter, gutterWidth) + text
-}
-
-// diffCells splits a diff line around its gutter, so a painted row can color the gutter on its own. A deleted line
-// has no new-side number, so it keeps the old one.
-func diffCells(l diff.ViewLine) (lead, text string) {
-	num := l.NewNum
-	if num == 0 {
-		num = l.OldNum
-	}
-	number := ""
-	if num > 0 {
-		number = fmt.Sprint(num)
-	}
-	sign := " "
-	switch l.Kind {
-	case diff.Add:
-		sign = "+"
-	case diff.Delete:
-		sign = "-"
-	}
-	return fmt.Sprintf("%5s  ", number), "  " + sign + render.ForDisplay(l.Text)
-}
-
-// anchoredRow is the diff line a finding points at: the whole row on the anchor background, the marker in the warn
-// color, painted piece by piece because a reset inside the row would end the band.
-func (m *Model) anchoredRow(l diff.ViewLine) string {
-	lead, text := diffCells(l)
-	if !m.styles.Color {
-		return " " + lead + m.glyphs.Anchor + text
-	}
-	bg, marker := m.styles.Anchor, m.styles.On(m.styles.Anchor, m.styles.Emphasis(m.styles.Warn))
-	rest := style.Pad(text, max(0, style.Content(m.width)-2-style.Width(lead)))
-	return bg.Render(" "+lead) + marker.Render(m.glyphs.Anchor) + bg.Render(rest)
-}
-
-func (m *Model) styleDiffLine(l diff.ViewLine, text string) string {
-	if l.Separator {
-		return m.styles.Accent.Render(text)
-	}
-	return m.diffStyle(l).Render(text)
-}
-
-// diffStyle is the color of a diff line by what it does to the file.
-func (m *Model) diffStyle(l diff.ViewLine) lipgloss.Style {
-	switch l.Kind {
-	case diff.Add:
-		return m.styles.Added
-	case diff.Delete:
-		return m.styles.Removed
-	}
-	return m.styles.NewStyle()
 }
 
 func joinNotice(text, elsewhere string) string {
