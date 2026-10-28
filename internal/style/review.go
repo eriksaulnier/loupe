@@ -930,21 +930,21 @@ func (s Style) NoteMark(replied bool) lipgloss.Style {
 	return s.Overlay()
 }
 
-// Tabs is the publish steps as a sequence: done steps checked, the current one numbered and solid, later ones
-// numbered and dim, joined by arrows. In color each is a chip; without color the current step is bracketed.
+// Tabs is the publish steps as a sequence: done steps checked in good, the current one on a solid accent block, later
+// ones dim, joined by arrows. Only the current step is a block, so it is the one thing that stands out; without color
+// it is bracketed.
 func (s Style) Tabs(names []string, active int) string {
 	parts := make([]string, len(names))
 	for i, n := range names {
-		numbered := fmt.Sprintf("%d %s", i+1, n)
 		switch {
 		case i < active:
-			parts[i] = s.Chip(s.Glyphs.Accepted+" "+n, ToneGood)
+			parts[i] = s.Good.Render(s.Glyphs.Accepted + " " + n)
 		case i == active && !s.Color:
-			parts[i] = "[" + numbered + "]"
+			parts[i] = "[" + n + "]"
 		case i == active:
-			parts[i] = s.TitleTab(numbered, ToneAccent)
+			parts[i] = s.TitleTab(n, ToneAccent)
 		default:
-			parts[i] = s.Chip(numbered, ToneMuted)
+			parts[i] = s.Overlay().Render(n)
 		}
 	}
 	return strings.Join(parts, " "+s.Overlay().Render(s.Glyphs.Cursor)+" ")

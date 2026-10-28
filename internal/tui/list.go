@@ -148,11 +148,12 @@ func (m *Model) publishStep(step int, rows []string, enter string) string {
 	}
 	// The popup is as tall as its rows, up to the body; the refusal is kept whole, and the rows above give way to it.
 	maxRows := m.height - len(footer) - m.bodyTop() - style.PaneRows
-	// A blank row under the steps and one above the border give the choices room; the steps already name this one.
-	doc := slices.Concat([]string{m.styles.Tabs(publishSteps, step), ""}, rows, []string{""})
+	// Blank rows around the steps and above the border give them room. The current step's block marks the focus, so
+	// the title stays plain rather than a second block on top of it.
+	doc := slices.Concat([]string{"", m.styles.Tabs(publishSteps, step), ""}, rows, []string{""})
 	lines := m.withNotice(doc, m.noticeRows(inner, room), maxRows)
 	pane := m.styles.Pane(style.Pane{Width: width, Height: len(lines) + style.PaneRows, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Publish review", BottomLeft: said}, Focus: true})
+		Titles: style.PaneTitles{TopLeft: "Publish review", BottomLeft: said}})
 	// The list under the popup is drawn without the step's notice, which belongs to the popup.
 	notice := m.notice
 	m.notice = ""

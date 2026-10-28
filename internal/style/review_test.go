@@ -367,18 +367,19 @@ func TestFocusedPaneTitleIsATab(t *testing.T) {
 	}
 }
 
-// The publish steps read as a sequence of chips: done steps checked in good, the current one a solid numbered tab,
-// later ones dim and numbered, joined by arrows. Without color the current step is bracketed (demo feedback).
+// The publish steps read as a sequence: done steps checked in good, the current one a solid tab, later ones dim,
+// joined by arrows. Only the current step is a block. Without color it is bracketed (demo
+// feedback).
 func TestStepsAreChips(t *testing.T) {
 	names := []string{"Action", "Inline comments", "Message"}
 	plain := reviewStyle(t, false, nil)
 	arrow := " " + plain.Glyphs.Cursor + " "
-	if got, want := plain.Tabs(names, 1), plain.Glyphs.Accepted+" Action"+arrow+"[2 Inline comments]"+arrow+"3 Message"; got != want {
+	if got, want := plain.Tabs(names, 1), plain.Glyphs.Accepted+" Action"+arrow+"[Inline comments]"+arrow+"Message"; got != want {
 		t.Errorf("NO_COLOR steps %q, want %q", got, want)
 	}
 	color := reviewStyle(t, true, nil)
 	got := color.Tabs(names, 1)
-	for _, chip := range []string{color.Chip(color.Glyphs.Accepted+" Action", ToneGood), color.TitleTab("2 Inline comments", ToneAccent), color.Chip("3 Message", ToneMuted)} {
+	for _, chip := range []string{color.Good.Render(color.Glyphs.Accepted + " Action"), color.TitleTab("Inline comments", ToneAccent), color.Overlay().Render("Message")} {
 		if !strings.Contains(got, chip) {
 			t.Errorf("steps %q lack the chip %q", got, ansi.Strip(chip))
 		}

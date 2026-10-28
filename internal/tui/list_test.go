@@ -143,12 +143,12 @@ func TestPublishStepsShowTabsAndPanes(t *testing.T) {
 		step2 := m.View().Content
 		arrow := " " + m.glyphs.Cursor + " "
 		for name, c := range map[string]struct{ view, tabs, choice string }{
-			"step 1": {step1, "[1 Action]" + arrow + "2 Inline comments" + arrow + "3 Message", "> comment "},
-			"step 2": {step2, m.glyphs.Accepted + " Action" + arrow + "[2 Inline comments]" + arrow + "3 Message", "> blocking "},
+			"step 1": {step1, "[Action]" + arrow + "Inline comments" + arrow + "Message", "> comment "},
+			"step 2": {step2, m.glyphs.Accepted + " Action" + arrow + "[Inline comments]" + arrow + "Message", "> blocking "},
 		} {
 			lines := strings.Split(c.view, "\n")
 			top := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, m.glyphs.HRule+" Publish review ") })
-			if top < 0 || !strings.Contains(lines[top+1], c.tabs) || !strings.Contains(c.view, c.choice) {
+			if top < 0 || !strings.Contains(lines[top+2], c.tabs) || !strings.Contains(c.view, c.choice) {
 				t.Errorf("%s under %v lost its tabs, pane or cursor:\n%s", name, env, c.view)
 			}
 			// The footer says what enter does next, so the step has no pane explaining it; the border says nothing was sent.

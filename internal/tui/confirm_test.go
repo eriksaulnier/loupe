@@ -919,7 +919,7 @@ func TestPublishFlowDeclineSendsNothing(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	waitFor(t, tm, "> none")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "<details open>", "multi.txt:3", "[3 Message]", "comment - inline none (0)")
+	waitFor(t, tm, "<details open>", "multi.txt:3", "[Message]", "comment - inline none (0)")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tm.Type("n")
 	waitFor(t, tm, "publish canceled; nothing was sent")

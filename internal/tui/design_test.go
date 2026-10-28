@@ -856,8 +856,9 @@ func TestOnlyTheFocusedPaneHasATab(t *testing.T) {
 		t.Errorf("typing does not put the tab on the message:\n%q", v)
 	}
 	c.confirm.typing = false
-	if v := c.View().Content; !strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) {
-		t.Errorf("a blurred message does not return the tab to the review:\n%q", v)
+	// In the publish flow the current step's block marks the place, so the review's title stays plain.
+	if v := c.View().Content; strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) || strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) {
+		t.Errorf("a blurred message in the flow left a solid title:\n%q", v)
 	}
 }
 
@@ -882,7 +883,7 @@ func TestDecisionFlashesItsNotice(t *testing.T) {
 }
 
 // The Action and Inline comments steps are a popup over the dimmed list: the list stays in view around it, the popup
-// is narrower than the window, and the step tabs are its first row (demo feedback).
+// is narrower than the window, and the steps sit under a blank row at its top (demo feedback).
 func TestPublishStepsArePopups(t *testing.T) {
 	for _, step := range []func(*Model){
 		func(m *Model) { m.view, m.pick = viewAction, 0 },
@@ -896,7 +897,8 @@ func TestPublishStepsArePopups(t *testing.T) {
 			t.Fatalf("the list is not in view around the popup:\n%s", view)
 		}
 		top := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "─ Publish review ") })
-		if top < 0 || strings.HasPrefix(rows[top], "╭") || !strings.Contains(rows[top+1], "Action") || !strings.Contains(rows[top+1], "Message") {
+		if top < 0 || strings.HasPrefix(rows[top], "╭") || strings.Contains(rows[top+1], "Action") ||
+			!strings.Contains(rows[top+2], "Action") || !strings.Contains(rows[top+2], "Message") {
 			t.Errorf("no centered Publish review popup with the tabs as its first row:\n%s", view)
 		}
 	}
