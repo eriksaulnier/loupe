@@ -207,7 +207,12 @@ func (s Style) border() borderGlyphs {
 
 // PaneTitles are the four places a pane's border carries text. TopLeft is the pane's name; the others are inserted
 // as given, so a caller styles a notice or a count with the roles here.
-type PaneTitles struct{ TopLeft, TopRight, BottomLeft, BottomRight string }
+type PaneTitles struct {
+	TopLeft, TopRight, BottomLeft, BottomRight string
+	// BottomLeftTab says BottomLeft is a tab, padded inside its own block, so the row adds no spaces of its own and
+	// the text stays in the cells it has without the block.
+	BottomLeftTab bool
+}
 
 // Scroll is where a pane's content sits in a longer document. A Total no greater than Visible draws no thumb.
 type Scroll struct{ Offset, Visible, Total int }
@@ -298,7 +303,7 @@ func (s Style) Pane(p Pane) []string {
 		}
 		out = append(out, edge.Render(b.v)+" "+fit(line, inner)+" "+right)
 	}
-	return append(out, s.borderRow(edge, b.bl, b.br, p.Titles.BottomLeft, p.Titles.BottomRight, p.Width-2, false))
+	return append(out, s.borderRow(edge, b.bl, b.br, p.Titles.BottomLeft, p.Titles.BottomRight, p.Width-2, p.Titles.BottomLeftTab))
 }
 
 // fit cuts or pads a line to exactly width cells, keeping its escapes and never splitting a grapheme.

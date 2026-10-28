@@ -162,7 +162,7 @@ func (m *Model) fileDiffView() string {
 	lines = m.withNotice(lines[:min(len(lines), 1+m.file.Height())], m.noticeRows(width, room), inner)
 	title := m.styles.LocationTitle(path, max(8, width-style.Width(active)-16), true) + m.styles.Emphasis(m.styles.Accent).Render(" "+m.glyphs.Sep+" file diff")
 	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)), Lines: lines,
-		Titles: style.PaneTitles{TopLeft: title, TopRight: active, BottomLeft: m.borderNotice(room)},
+		Titles: style.PaneTitles{TopLeft: title, TopRight: active, BottomLeft: m.borderNotice(room), BottomLeftTab: m.flashing(room)},
 		Scroll: style.Scroll{Offset: m.file.YOffset(), Visible: m.file.Height(), Total: m.file.TotalLineCount()}})
 	return m.shell(body, footer)
 }

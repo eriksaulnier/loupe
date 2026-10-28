@@ -817,7 +817,7 @@ func (m *Model) detailView() string {
 		title += sep + m.styles.Chip("open note", style.ToneNote)
 	}
 	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Lines: lines,
-		Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room), BottomRight: position},
+		Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room), BottomLeftTab: m.flashing(room), BottomRight: position},
 		Scroll: style.Scroll{Offset: m.body.YOffset(), Visible: m.body.Height(), Total: m.body.TotalLineCount()}, Tone: tone})
 	switch {
 	case m.noting:

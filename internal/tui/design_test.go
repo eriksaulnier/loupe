@@ -901,3 +901,26 @@ func TestPublishStepsArePopups(t *testing.T) {
 		}
 	}
 }
+
+// The flash only changes the notice's background: its text stays in the same cells when the flash ends (demo
+// feedback).
+func TestDecisionFlashKeepsTheNoticeInPlace(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-001")
+	m.Update(runes("a"))
+	column := func() (int, int) {
+		for i, row := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+			if c := strings.Index(row, m.notice); c >= 0 {
+				return i, c
+			}
+		}
+		return -1, -1
+	}
+	row, flashing := column()
+	m.Update(flashEnded{m.flashGen})
+	afterRow, after := column()
+	if flashing < 0 || row != afterRow || flashing != after {
+		t.Errorf("the notice moved from row %d column %d to row %d column %d when the flash ended", row, flashing, afterRow, after)
+	}
+}

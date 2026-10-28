@@ -466,7 +466,7 @@ func (m *Model) listView() string {
 	}
 	lines = m.withNotice(lines, notice, findingsHeight-style.PaneRows)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: findingsHeight, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts(), BottomLeft: m.borderNotice(room), BottomRight: position},
+		Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts(), BottomLeft: m.borderNotice(room), BottomLeftTab: m.flashing(room), BottomRight: position},
 		Scroll: style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}, Focus: true})...)
 	return m.shell(body, footer)
 }

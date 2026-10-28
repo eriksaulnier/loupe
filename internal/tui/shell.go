@@ -179,11 +179,18 @@ func (m *Model) borderNotice(room int) string {
 		return ""
 	}
 	text := render.ForDisplay(m.notice)
-	// A decision's notice flashes as a solid tab first, when the border has room for the tab's padding.
-	if m.flashGen != 0 && m.flashGen == m.noticeGen && style.Width(text)+2 <= room {
+	// A decision's notice flashes as a solid tab first; the pane draws it with BottomLeftTab, so it keeps its cells.
+	if m.flashing(room) {
 		return m.styles.TitleTab(text, m.flashTone)
 	}
 	return m.styles.Of(m.noticeKind).Render(text)
+}
+
+// flashing is whether the border notice shows as a flashing tab: a decision's notice in its flash, in color, with
+// room in the border for the tab.
+func (m *Model) flashing(room int) bool {
+	return m.styles.Color && m.notice != "" && m.flashGen != 0 && m.flashGen == m.noticeGen &&
+		style.Width(render.ForDisplay(m.notice))+2 <= room
 }
 
 // noticeRows are a notice that does not belong in a border, wrapped whole into the pane so its corrective text is
