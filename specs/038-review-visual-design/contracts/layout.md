@@ -100,7 +100,7 @@ The maintainer's first demo session added these rules. They amend the sections a
 
 The findings pane's bottom border MUST show the `N of M` position only when the findings overflow the visible rows. The selection marker already shows the place in a list that fits. Detail keeps its position in every case, because there it is the place in the walk.
 
-With 30 or fewer counted findings, the progress bar MUST mark the cell of the selected finding in the list and of the open finding in detail. In color the cell keeps its state color on an accent background. Monochrome and ASCII output draw no marker, and the position text carries the place. A withdrawn finding has no cell and gets no marker. Above 30 the cells are grouped by state, so no cell is marked.
+With 30 or fewer counted findings, the progress bar MUST mark the cell of the open finding in detail. The list MUST NOT mark a cell, because its selection already shows the place. In color the cell keeps its state color on an accent background. Monochrome and ASCII output draw no marker, and the position text carries the place. A withdrawn finding has no cell and gets no marker. Above 30 the cells are grouped by state, so no cell is marked.
 
 When `ORCA_TERMINAL_HANDLE` is nonempty, the header MUST leave its last four columns blank, with no band, because Orca draws its pane controls over them. The body and footer keep the full width.
 

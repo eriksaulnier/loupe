@@ -83,18 +83,13 @@ func (m *Model) hostReserve() int {
 	return pane.HeaderReserve(m.cfg.Getenv)
 }
 
-// currentCell is the progress cell of the finding the human is on, counting from 1: the selected row in the list and
-// the open finding in detail. It is 0 on other screens and for a withdrawn finding, which has no cell.
+// currentCell is the progress cell of the open finding in detail, counting from 1. It is 0 on every other screen,
+// where the list's selection already shows the place, and for a withdrawn finding, which has no cell.
 func (m *Model) currentCell() int {
-	id := ""
-	switch m.view {
-	case viewList:
-		if m.cursor < len(m.order) {
-			id = m.order[m.cursor].ID
-		}
-	case viewDetail:
-		id = m.openID
+	if m.view != viewDetail {
+		return 0
 	}
+	id := m.openID
 	dispositions := draft.Dispositions(m.draft)
 	cell := 0
 	for _, f := range m.order {
