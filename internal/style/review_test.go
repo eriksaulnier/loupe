@@ -367,6 +367,24 @@ func TestFocusedPaneTitleIsATab(t *testing.T) {
 	}
 }
 
+// The publish steps read as a sequence of chips: done steps checked in good, the current one a solid numbered tab,
+// later ones dim and numbered, joined by arrows. Without color the current step is bracketed (demo feedback).
+func TestStepsAreChips(t *testing.T) {
+	names := []string{"Action", "Inline comments", "Message"}
+	plain := reviewStyle(t, false, nil)
+	arrow := " " + plain.Glyphs.Cursor + " "
+	if got, want := plain.Tabs(names, 1), plain.Glyphs.Accepted+" Action"+arrow+"[2 Inline comments]"+arrow+"3 Message"; got != want {
+		t.Errorf("NO_COLOR steps %q, want %q", got, want)
+	}
+	color := reviewStyle(t, true, nil)
+	got := color.Tabs(names, 1)
+	for _, chip := range []string{color.Chip(color.Glyphs.Accepted+" Action", ToneGood), color.TitleTab("2 Inline comments", ToneAccent), color.Chip("3 Message", ToneMuted)} {
+		if !strings.Contains(got, chip) {
+			t.Errorf("steps %q lack the chip %q", got, ansi.Strip(chip))
+		}
+	}
+}
+
 func TestConfidenceScaleAndPills(t *testing.T) {
 	plain, color := reviewStyle(t, false, nil), reviewStyle(t, true, nil)
 	ascii := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"})

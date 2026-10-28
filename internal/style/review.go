@@ -930,25 +930,24 @@ func (s Style) NoteMark(replied bool) lipgloss.Style {
 	return s.Overlay()
 }
 
-// Tabs are the publish steps as labels, the active one bold in the accent or in brackets under NO_COLOR. They are
-// display only and add no key.
+// Tabs is the publish steps as a sequence: done steps checked, the current one numbered and solid, later ones
+// numbered and dim, joined by arrows. In color each is a chip; without color the current step is bracketed.
 func (s Style) Tabs(names []string, active int) string {
-	bar := "│"
-	if s.Glyphs.Tier == ASCII {
-		bar = "|"
-	}
 	parts := make([]string, len(names))
 	for i, n := range names {
+		numbered := fmt.Sprintf("%d %s", i+1, n)
 		switch {
+		case i < active:
+			parts[i] = s.Chip(s.Glyphs.Accepted+" "+n, ToneGood)
 		case i == active && !s.Color:
-			parts[i] = "[" + n + "]"
+			parts[i] = "[" + numbered + "]"
 		case i == active:
-			parts[i] = s.Emphasis(s.fg(s.rv.accent)).Render(n)
+			parts[i] = s.TitleTab(numbered, ToneAccent)
 		default:
-			parts[i] = s.Overlay().Render(n)
+			parts[i] = s.Chip(numbered, ToneMuted)
 		}
 	}
-	return strings.Join(parts, "  "+s.Overlay().Render(bar)+"  ")
+	return strings.Join(parts, " "+s.Overlay().Render(s.Glyphs.Cursor)+" ")
 }
 
 // LocationTitle is a path:line location cut from the left to width, the directory dim and the filename bright, so the

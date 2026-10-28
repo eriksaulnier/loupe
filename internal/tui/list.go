@@ -115,7 +115,7 @@ func (m *Model) actionView() string {
 		}
 		rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action], m.popupInner())...)
 	}
-	return m.publishStep(0, "Action", rows, actionEnter)
+	return m.publishStep(0, rows, actionEnter)
 }
 
 var inlineDescriptions = map[string]string{
@@ -129,7 +129,7 @@ func (m *Model) inlineView() string {
 	for i, mode := range publish.InlineModes {
 		rows = append(rows, m.pickerRow(i == m.pick, false, mode, inlineDescriptions[mode], m.popupInner())...)
 	}
-	return m.publishStep(1, "Inline comments", rows, inlineEnter)
+	return m.publishStep(1, rows, inlineEnter)
 }
 
 // publishSteps are the tabs over every publish screen. They label where the flow is and add no key.
@@ -138,7 +138,7 @@ var publishSteps = []string{"Action", "Inline comments", "Message"}
 // publishStep is one choice step, a popup over the dimmed list: the step tabs, then the choices, in a pane whose
 // border says nothing has been sent. The footer says what enter does next. The step that writes the message and shows
 // the whole review is a screen of its own, since it needs the room.
-func (m *Model) publishStep(step int, title string, rows []string, enter string) string {
+func (m *Model) publishStep(step int, rows []string, enter string) string {
 	footer := m.keys(groupHints(m.publishStepHints(enter))...)
 	width, inner := m.popupWidth(), m.popupInner()
 	room := noticeRoom(width, "")
@@ -148,9 +148,11 @@ func (m *Model) publishStep(step int, title string, rows []string, enter string)
 	}
 	// The popup is as tall as its rows, up to the body; the refusal is kept whole, and the rows above give way to it.
 	maxRows := m.height - len(footer) - m.bodyTop() - style.PaneRows
-	lines := m.withNotice(slices.Concat([]string{m.styles.Tabs(publishSteps, step), ""}, rows), m.noticeRows(inner, room), maxRows)
+	// A blank row under the steps and one above the border give the choices room; the steps already name this one.
+	doc := slices.Concat([]string{m.styles.Tabs(publishSteps, step), ""}, rows, []string{""})
+	lines := m.withNotice(doc, m.noticeRows(inner, room), maxRows)
 	pane := m.styles.Pane(style.Pane{Width: width, Height: len(lines) + style.PaneRows, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: m.styles.Text().Render(title), BottomLeft: said}, Focus: true})
+		Titles: style.PaneTitles{TopLeft: "Publish review", BottomLeft: said}, Focus: true})
 	// The list under the popup is drawn without the step's notice, which belongs to the popup.
 	notice := m.notice
 	m.notice = ""
