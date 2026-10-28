@@ -135,3 +135,5 @@ The Action and Inline comments steps MUST be a popup titled `Publish review`, ce
 The publish steps MUST read as a sequence joined by the cursor arrow. Done steps carry the accepted glyph in the good color. In color the current step is a solid accent tab, the only block in the row. Later steps are dim. Without color, the current step is bracketed. On the publish screens the pane titles stay plain, because the current step marks the place.
 
 A decision that settles the last finding in the list MUST return to the list, with its notice and flash in the findings border. The cursor lands on the first finding still pending, or stays on the decided finding when none is. Changes that do not settle a finding keep detail open.
+
+The review message box MUST open two rows tall and grow with the message.

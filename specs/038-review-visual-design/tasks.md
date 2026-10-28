@@ -90,6 +90,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T046 Draw the publish steps as a numbered sequence of chips, drop the popup's repeated step title, and give its choices room, in `internal/style/review.go` and `internal/tui/list.go`.
 - [X] T047 Return to the list after the last finding's decision, with the cursor on the first pending finding, in `internal/tui/detail.go`.
 - [X] T048 Tidy the publish screens: only the current step is a block, the steps are unnumbered, the publish pane titles stay plain, and the popup gets a blank row above the steps, in `internal/style/review.go`, `internal/tui/list.go` and `internal/tui/confirm.go`.
+- [X] T049 Open the review message box two rows tall, in `internal/tui/confirm.go`.
 
 ## Dependencies and parallel work
 

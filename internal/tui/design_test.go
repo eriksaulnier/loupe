@@ -950,3 +950,16 @@ func TestLastDecisionReturnsToTheList(t *testing.T) {
 		t.Errorf("with nothing pending: view %v, cursor on %s; want the list on f-003, just decided", m.view, m.order[m.cursor].ID)
 	}
 }
+
+// The message box opens two rows tall and grows as the message does (demo feedback).
+func TestMessageBoxOpensTwoRowsTall(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	showConfirmation(m)
+	m.confirm.typing = true
+	rows := strings.Split(m.View().Content, "\n")
+	top := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "─ your message ") })
+	bottom := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "esc when done") })
+	if top < 0 || bottom-top-1 != 2 {
+		t.Errorf("the empty box holds %d rows, want 2:\n%s", bottom-top-1, m.View().Content)
+	}
+}

@@ -262,9 +262,10 @@ func displayBody(body string) string {
 	return render.AnchorsAsNotes(render.RecordAsNote(render.PillsAsWords(markdown.OpenDetails(body))))
 }
 
-// minMessageRows keeps the box the shape of somewhere to write a paragraph. A frame around one row reads as a
-// field for a word, and the opening this is for is a sentence or two.
-const minMessageRows = 4
+// minMessageRows keeps the box the shape of somewhere to write a sentence or two, which is what the opening is for. A
+// frame around one row reads as a field for a word; past two rows the empty box only pushes the findings down, and it
+// grows as the message does.
+const minMessageRows = 2
 
 // messageHint says what the empty input is for, and messageWay out of it. The box is the only part of the body the
 // human writes, and an empty one is otherwise a blank line between the chips and the findings.
