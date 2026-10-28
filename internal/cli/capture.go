@@ -51,7 +51,7 @@ The clone is --repo, or the working directory.
 Result (--json):
   {"loupe": 1, "ok": true, "command": "capture", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 0,
-   "target": {"schema": 1, "owner": "owner", "repo": "repo", "number": 123,
+   "target": {"schema": 2, "owner": "owner", "repo": "repo", "number": 123,
               "url": "https://github.com/owner/repo/pull/123", "title": "...", "author": "...",
               "viewer": "...", "baseSha": "...", "headSha": "...", "round": 1,
               "capturedAt": "2026-09-13T12:00:00Z", "clonePath": "/path/to/clone",

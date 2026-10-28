@@ -224,7 +224,14 @@ func TestCaptureRefusesClosedWithoutFlag(t *testing.T) {
 	h := newHarness(t)
 	h.closePR()
 	before := h.Repo.Snapshot()
-	e := h.mustRefuse("pr", "capture", prURL())
+	// The state check comes first: a clone that is not a repository would refuse with origin instead.
+	e := h.mustRefuse("pr", "capture", prURL(), "--repo", t.TempDir())
+	for _, req := range h.GH.Requests() {
+		if req.Path == "/user" {
+			t.Fatalf("refused capture read the viewer: %+v", req)
+		}
+	}
+	h.mustRefuse("pr", "capture", prURL())
 	if msg, _ := e["message"].(string); !strings.Contains(msg, "closed") {
 		t.Fatalf("message %q does not name the state", msg)
 	}
