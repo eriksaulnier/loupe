@@ -144,7 +144,8 @@ func (m *Model) publishStep(step int, title string, rows []string, next, enter s
 	explain := strings.Split(m.styles.Wrap("Next: "+next, inner, ""), "\n")
 	explain = append(explain, "No review has been sent.")
 	room := noticeRoom(m.width, "")
-	choices := append(rows, m.noticeRows(inner, room)...)
+	notice := m.noticeRows(inner, room)
+	choices := slices.Concat(rows, notice)
 	panes := []string{m.styles.Tabs(publishSteps, step)}
 	if body-len(explain)-style.PaneRows >= len(choices)+style.PaneRows {
 		h := body - len(explain) - style.PaneRows
@@ -153,7 +154,8 @@ func (m *Model) publishStep(step int, title string, rows []string, next, enter s
 		panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: len(explain) + style.PaneRows, Lines: m.dimLines(explain),
 			Titles: style.PaneTitles{TopLeft: "Message"}})...)
 	} else {
-		lines := append(append(choices, ""), m.dimLines(explain)...)
+		// The refusal is kept whole: the explanation, then the choices, give way to it.
+		lines := withNotice(slices.Concat(rows, []string{""}, m.dimLines(explain)), notice, body-style.PaneRows)
 		panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: body, Lines: lines,
 			Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room)}})...)
 	}
@@ -438,8 +440,12 @@ func (m *Model) listView() string {
 	for len(lines) < l.heads+rows {
 		lines = append(lines, "")
 	}
-	lines = append(lines, notice...)
 	findingsHeight := m.bodyRows(len(footer)) - len(body)
+	if len(notice) > findingsHeight-style.PaneRows {
+		// A refusal taller than the findings pane takes the summary's rows too, so none of it is cut.
+		body, findingsHeight = nil, m.bodyRows(len(footer))
+	}
+	lines = withNotice(lines, notice, findingsHeight-style.PaneRows)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: findingsHeight, Lines: lines,
 		Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts(), BottomLeft: m.borderNotice(room), BottomRight: position},
 		Scroll: style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}})...)

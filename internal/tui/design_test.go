@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -382,6 +384,45 @@ func TestLongRefusalStaysWholeInEveryPane(t *testing.T) {
 		if !strings.Contains(paneText(view), refusal) {
 			t.Errorf("%s cut the refusal at 60x12:\n%s", sc.name, view)
 		}
+	}
+}
+
+// A refusal taller than the findings pane at the minimum size stays whole: the finding rows give way, and then the
+// summary pane (layout contract: no invisible refusal below a clipped viewport).
+func TestRefusalTallerThanTheFindingsPaneStaysWhole(t *testing.T) {
+	for _, count := range []int{24, 40} {
+		var ids []string
+		for i := 1; i <= count; i++ {
+			ids = append(ids, fmt.Sprintf("f-%03d", i))
+		}
+		refusal := "the draft is not ready: pending findings " + strings.Join(ids, ", ") + "; loupe review"
+		m := modelOf(t, newFixture(t), utf8Env, 60, 12)
+		m.say(style.Warn, refusal)
+		view := m.View().Content
+		if lines := strings.Split(view, "\n"); len(lines) != 12 {
+			t.Fatalf("the list is %d rows at 60x12:\n%s", len(lines), view)
+		}
+		if !strings.Contains(paneText(view), refusal) {
+			t.Errorf("a refusal naming %d findings was cut at 60x12:\n%s", count, view)
+		}
+	}
+}
+
+// The Action step keeps its refusal whole at the minimum size, where its explanation shares the choice pane.
+func TestActionRefusalStaysWholeAtTheMinimum(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 60, 12)
+	m.target.Viewer, m.target.Author = "octocat", "octocat"
+	m.view, m.pick = viewAction, slices.Index(publish.Actions, "request-changes")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.notice == "" {
+		t.Fatal("request-changes on the viewer's own pull request said nothing")
+	}
+	view := m.View().Content
+	if lines := strings.Split(view, "\n"); len(lines) != 12 {
+		t.Fatalf("the Action step is %d rows at 60x12:\n%s", len(lines), view)
+	}
+	if !strings.Contains(paneText(view), m.notice) {
+		t.Errorf("the Action step cut its refusal at 60x12:\n%s", view)
 	}
 }
 
