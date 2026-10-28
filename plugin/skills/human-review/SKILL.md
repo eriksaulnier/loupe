@@ -77,6 +77,8 @@ Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findin
 
 **The summary is not published.** It orients the human while they sort findings: what kind of review this is, what you looked at, what you could not check. The review's own opening prose is written by the human at the publish confirmation, in their words, so write the summary for the one person who reads it before deciding, not for the pull request's author. Say plainly what the round did and did not cover; a caveat you leave out is one nobody sees.
 
+Write the summary as at most four short Markdown bullets: what the pull request changes, what blocks it, and what you did not check. Review shows the summary expanded above the findings, and a longer one is clipped on screen. Nothing refuses a longer summary, and `loupe show` still prints it whole.
+
 ## 6. Hand off
 
 Run `loupe handoff --run <ref> --json`. On success, review is open for the human in a new pane beside yours. When `focused` is `false`, it opened without taking focus, which in Orca is every time, so tell the user it is waiting in the pane beside yours. Otherwise tell the user it is open.
