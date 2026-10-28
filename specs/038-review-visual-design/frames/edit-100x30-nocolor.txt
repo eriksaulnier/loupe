@@ -1,0 +1,30 @@
+ loupe  acme/widgets#42  round 1  feat(cache): add a read-through cache for p…  !~==x-  3/6 decided
+╭─ f-002 · pending ─────────────────────────────────────────────────────────────────────────────  ─╮
+│ Cache entries never expire when the ETag is missing                                              │
+│ [MAJOR] [● blocking] [issue]  confidence ■■■  ✓ reproduced                                       │
+│                                                                                                  │
+│ ╭─ internal/cache/store.go:90-91 ────────────────────────────────────────────────────── +8 -0 ─╮ │
+│ │    87 + if !ok {                                                                             │ │
+│ │    88 +     return Entry{}, false                                                            │ │
+│ │    89 + }                                                                                    │ │
+│ │ >  90 + if e.ETag == "" {                                                                    │ │
+│ │ >  91 +     return e, true                                                                   │ │
+│ │    92 + }                                                                                    │ │
+│ │    93 + return e, s.now().Sub(e.At) < s.ttl                                                  │ │
+│ │    94 + }                                                                                    │ │
+│ ╰─  ────────────────────────────────────────────────────────────────────────────────────────  ─╯ │
+│                                                                                                  │
+│ When the upstream response carries no ETag, Get returns the entry as fresh forever. The cache    │
+│ keeps stale metadata until the process restarts.                                                 │
+│                                                                                                  │
+│ Impact                                                                                           │
+│ The cached title and head SHA stay stale.                                                        │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰─  ────────────────────────────────────────────────────────────────────────────────────── 1 of 7 ─╯
+╭─ Edit f-002 ──────────────────────────────────────────────────────────────────────────────────  ─╮
+│ Label: [issue]  suggestion  question                                                             │
+│ [x] blocking                                                                                     │
+╰─  ────────────────────────────────────────────────────────────────────────────────────────────  ─╯
+enter save  ←→ label  space blocking  esc cancel

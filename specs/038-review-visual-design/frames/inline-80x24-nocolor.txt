@@ -1,0 +1,24 @@
+ loupe  acme/widgets#42  r1  feat(cache): add a read-thro…  ====x=  6/6 decided
+Action  │  [Inline comments]  │  Message
+╭─ Inline comments ─────────────────────────────────────────────────────────  ─╮
+│ > none      Put all findings in the review body.                             │
+│   blocking  Place blocking findings inline.                                  │
+│   all       Place all located findings inline.                               │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰─  ────────────────────────────────────────────────────────────────────────  ─╯
+╭─ Message ─────────────────────────────────────────────────────────────────  ─╮
+│ Next: write your message and inspect the complete review.                    │
+│ No review has been sent.                                                     │
+│                                                                              │
+│                                                                              │
+╰─  ────────────────────────────────────────────────────────────────────────  ─╯
+↑↓ move  enter next  esc back  │  ? help

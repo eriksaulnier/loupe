@@ -1,0 +1,30 @@
+ ⦿ loupe   acme/widgets#42  round 1  feat(cache): add a read-through cache fo…  ▮▮▮▮▮▮  3/6 decided
+╭─ Summary ─────────────────────────────────────────────────────────────────────────────────────  ─╮
+│ • Cache metadata before fetching it again.                                                       │
+│ • Blocks: expiry is missing when the ETag is absent.                                             │
+│ • Smaller findings cover locking, metrics, and docs.                                             │
+│ • Not checked: GitHub rate limits.                                                               │
+╰─  ─────────────────────────────────────────────────────────────────────────────── tab collapses ─╯
+
+╭─ Findings ──────────────────────────────────────────────── 1 blocking · 1 open note · 3 pending ─╮
+│     id    severity   con finding                                        location                 │
+│ ▌ · f-002  MAJOR     ▰▰▰ ● Cache entries never expire when the ETag is… …al/cache/store.go:90-91 │
+│   · f-003  MINOR     ▰▰▱ ✎ Hit ratio counters reset on every scrape     …/cache/metrics.go:39-40 │
+│   ✓ f-001            ▰▰▰ Store.Put holds the write lock across the net… …ernal/cache/store.go:38 │
+│   ✓ f-006            ▰▰▱ The old store dropped insertion order          …cache/store.go:42 (old) │
+│   ↩ f-007            ▰▱▱ Flag default duplicates the config file value  cmd/widgets/main.go:11   │
+│   × f-005                Document the cache size limit in the README    general                  │
+│   · f-004            ▰▱▱ Is the 304 path covered by the fake server?    general                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰─  ────────────────────────────────────────────────────────────────────────────────────── 1 of 7 ─╯
+↑↓ move  enter open  tab summary  │  o open PR  p publish  ? help  q quit

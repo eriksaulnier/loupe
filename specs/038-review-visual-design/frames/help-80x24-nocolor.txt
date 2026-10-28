@@ -1,0 +1,24 @@
+ loupe  acme/widgets#42  r1  feat(cache): add a read-thro…  !~==x-  3/6 decided
+╭─ Summary ─────────────────────────────────────────────────────────────────  ─╮
+│ • Cache metadata before fetching it again.                                   │
+│ • Blocks: expiry is missing when the ETag is absent.                         │
+│ • Smalle╭─ Help ──────────────────────────────────────────── list ─╮         │
+│ • Not ch│ Move                                                     │         │
+╰─  ──────│ ↑↓ / j/k  move through findings                          │llapses ─╯
+          │ enter     open the finding                               │
+╭─ Finding│ tab       expand or collapse the summary                 │pending ─╮
+│     id  │                                                          │         │
+│ > · f-00│ App                                                      │go:90-91 │
+│   · f-00│ o         open the pull request                          │go:39-40 │
+│   ✓ f-00│ p         publish when ready                             │re.go:38 │
+│   ✓ f-00│ q         quit                                           │42 (old) │
+│   ↩ f-00│                                                          │in.go:11 │
+│   × f-00│ Progress: = accepted, x excluded, ~ open note            │         │
+│   · f-00│           ! pending blocking, - pending                  │         │
+│         │ Confidence: ■■■ high, ■■□ medium, ■□□ low                │         │
+│         ╰─  ────────────────────────────────────────── esc closes ─╯         │
+│                                                                              │
+│                                                                              │
+╰─  ────────────────────────────────────────────────────────────────── 1 of 7 ─╯
+
+↑↓ scroll  esc/?/q close help

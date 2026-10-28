@@ -1,0 +1,24 @@
+ loupe  acme/widgets#42  r1  feat(cache): add a read-thro…  !~==x-  3/6 decided
+╭─ f-002 · pending · open note ─────────────────────────────────────────────  ─╮
+│ Cache entries never expire when the ETag is missing                          │
+│                                                                              │
+│ ╭─ Note n-001 ────────────────────────────────────────────────────── open ─╮ │
+│ │ Human · open                                                             │ │
+│ │ Please reproduce the missing ETag case.                                  │ │
+│ │                                                                          │ │
+│ │ Agent · replied                                                          │ │
+│ │ The failing test now covers a missing ETag.                              │ │
+│ │ The note stays open until you decide.                                    │ │
+│ │                                                                          │ │
+│ ╰─  ────────────────────────────────────────────────────────────────────  ─╯ │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰─  ────────────────────────────────────────────────────────────────── 1 of 7 ─╯
+r resolve  d dismiss  a accept  x exclude  │  ↑↓ scroll  esc list  │  o open PR
+? help
