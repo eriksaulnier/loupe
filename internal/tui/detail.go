@@ -293,7 +293,11 @@ func (m *Model) noteThread(f draft.Finding) []string {
 			tone, body = style.ToneNote, m.styles.Text()
 		}
 		edge := m.styles.ToneStyle(tone)
-		lines := []string{m.styles.Emphasis(edge).Render("Note "+render.ForDisplay(n.ID)) + sep + m.noteStatusWord(n.Status)}
+		headSep := sep
+		if m.styles.Color {
+			headSep = " "
+		}
+		lines := []string{m.styles.Emphasis(edge).Render("Note "+render.ForDisplay(n.ID)) + headSep + m.noteStatusChip(n.Status)}
 		author := func(who, id string) string {
 			name := m.styles.Emphasis(m.styles.Text()).Render(who)
 			if who == "You" {
@@ -335,16 +339,16 @@ func (m *Model) noteThread(f draft.Finding) []string {
 	return out
 }
 
-// noteStatusWord is a note's status in its color: open in the note color, resolved in good, dismissed in overlay.
-func (m *Model) noteStatusWord(status string) string {
-	word := noteStatus(m.glyphs, status)
+// noteStatusChip is a note's status as a chip: open in the note color, resolved in good, dismissed in overlay.
+func (m *Model) noteStatusChip(status string) string {
+	tone := style.ToneNote
 	switch status {
 	case draft.NoteResolved:
-		return m.styles.Good.Render(word)
+		tone = style.ToneGood
 	case draft.NoteDismissed:
-		return m.styles.Overlay().Render(word)
+		tone = style.ToneMuted
 	}
-	return m.styles.Note.Render(word)
+	return m.styles.Chip(noteStatus(m.glyphs, status), tone)
 }
 
 // threadBlock is one note or reply body. The author's line breaks are kept; only the ends are trimmed, so a block
@@ -783,10 +787,14 @@ func (m *Model) detailView() string {
 	tone := findingTone(disposition)
 	edge := m.styles.ToneStyle(tone)
 	glyph, mark, _ := m.styles.ReviewDisposition(disposition)
+	// The statuses are chips; a chip's own padding separates it, so the separator is only for monochrome.
 	sep := edge.Render(" " + m.glyphs.Sep + " ")
-	title := mark.Render(glyph) + " " + m.styles.Emphasis(edge).Render(render.ForDisplay(f.ID)) + sep + mark.Render(disposition)
+	if m.styles.Color {
+		sep = " "
+	}
+	title := mark.Render(glyph) + " " + m.styles.Emphasis(edge).Render(render.ForDisplay(f.ID)) + sep + m.styles.Chip(disposition, tone)
 	if open {
-		title += sep + m.styles.Note.Render("open note")
+		title += sep + m.styles.Chip("open note", style.ToneNote)
 	}
 	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Lines: lines,
 		Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room), BottomRight: position},

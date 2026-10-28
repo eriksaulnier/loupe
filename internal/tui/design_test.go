@@ -636,8 +636,8 @@ func TestHeaderLeavesRoomForOrcaControls(t *testing.T) {
 	}
 }
 
-// The detail title leads with the list's disposition glyph and colors the disposition, and an open note, by status
-// (demo feedback).
+// The detail title leads with the list's disposition glyph and says the disposition, and an open note, in words that
+// read without color; TestStatusesAreChips covers their color (demo feedback).
 func TestDetailTitleShowsTheStatus(t *testing.T) {
 	m := modelOf(t, mixedFixture(t), utf8Env, 100, 30)
 	for id, want := range map[string]string{
@@ -648,17 +648,6 @@ func TestDetailTitleShowsTheStatus(t *testing.T) {
 		if view := m.View().Content; !strings.Contains(view, want) {
 			t.Errorf("%s: no %q:\n%s", id, want, view)
 		}
-	}
-	c := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
-	c.styles.SetColorProfile(colorprofile.TrueColor)
-	mustOpen(c, "f-001")
-	_, mark, _ := c.styles.ReviewDisposition("accepted")
-	if view := c.View().Content; !strings.Contains(view, mark.Render("accepted")) {
-		t.Errorf("accepted is not in its status color:\n%q", view)
-	}
-	mustOpen(c, "f-002")
-	if view := c.View().Content; !strings.Contains(view, c.styles.Note.Render("open note")) {
-		t.Errorf("open note is not in the note color:\n%q", view)
 	}
 }
 
@@ -818,5 +807,23 @@ func TestDetailSectionsStandOut(t *testing.T) {
 	}
 	if !strings.Contains(view, m.styles.Good.Render(m.glyphs.Quote)+" extract insertAfter") {
 		t.Errorf("the suggested fix does not hang from a green bar:\n%q", view)
+	}
+}
+
+// Statuses are chips: the disposition and "open note" in the detail title, and a note's status in its headline
+// (demo feedback).
+func TestStatusesAreChips(t *testing.T) {
+	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-001")
+	if view := m.View().Content; !strings.Contains(view, m.styles.Chip("accepted", style.ToneGood)) {
+		t.Errorf("accepted is not a chip:\n%q", view)
+	}
+	mustOpen(m, "f-002")
+	view := m.View().Content
+	for _, chip := range []string{m.styles.Chip("pending", style.ToneAccent), m.styles.Chip("open note", style.ToneNote), m.styles.Chip("open", style.ToneNote)} {
+		if !strings.Contains(view, chip) {
+			t.Errorf("%q is not shown as a chip:\n%q", ansi.Strip(chip), view)
+		}
 	}
 }

@@ -342,6 +342,17 @@ func TestPaneToneColorsTheBorder(t *testing.T) {
 	}
 }
 
+// A chip is its word padded on a tint in true color, and the bare word without color (demo feedback).
+func TestChip(t *testing.T) {
+	if got := reviewStyle(t, false, nil).Chip("open", ToneNote); got != "open" {
+		t.Errorf("NO_COLOR chip %q, want the bare word", got)
+	}
+	got := reviewStyle(t, true, nil).Chip("open", ToneNote)
+	if ansi.Strip(got) != " open " || !strings.Contains(got, "48;2;") {
+		t.Errorf("true-color chip %q is not the padded word on a fill", got)
+	}
+}
+
 func TestConfidenceScaleAndPills(t *testing.T) {
 	plain, color := reviewStyle(t, false, nil), reviewStyle(t, true, nil)
 	ascii := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"})

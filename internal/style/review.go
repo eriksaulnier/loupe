@@ -61,8 +61,10 @@ type reviewPalette struct {
 	base, text, surface0, surface1, accent, secondary, overlay1 color.Color
 	good, note, blockingDim, bad, muted, mutedBorder            color.Color
 	pills, pillFill                                             [4]color.Color
-	added, deleted, cited                                       color.Color
-	code                                                        [codeRoles]color.Color
+	// toneFill is each tone's chip fill, indexed by Tone.
+	toneFill              [toneCount]color.Color
+	added, deleted, cited color.Color
+	code                  [codeRoles]color.Color
 }
 
 var (
@@ -130,6 +132,13 @@ func (s *Style) buildReviewPalette() {
 		cited:       s.role(palNote.in(d).over(base, 0.14), basicNone),
 	}
 	surface := palSurface0.in(d)
+	for t, p := range [toneCount]pair{palAccent, palGood, palNote, palOverlay1} {
+		// Like a pill, a chip is tinted in true color and sits on the plain surface below it.
+		r.toneFill[t] = r.surface0
+		if s.profile == colorprofile.TrueColor {
+			r.toneFill[t] = s.role(p.in(d).over(surface, 0.16), basicNone)
+		}
+	}
 	for i, p := range palPills {
 		r.pills[i] = s.role(p.in(d), pillBasics[i])
 		// The fill is a true-color tint; 16 colors keep the uppercase word and its padding without it.
@@ -220,7 +229,17 @@ const (
 	ToneGood
 	ToneNote
 	ToneMuted
+	toneCount
 )
+
+// Chip is a short status word in its tone's color on a tint of it, set apart the way a label or severity pill is.
+// Without color it is the word alone.
+func (s Style) Chip(text string, t Tone) string {
+	if !s.Color {
+		return text
+	}
+	return s.bg(s.ToneStyle(t), s.rv.toneFill[t]).Render(" " + text + " ")
+}
 
 // ToneStyle is the foreground a tone draws in, and nothing where color is off.
 func (s Style) ToneStyle(t Tone) lipgloss.Style {
