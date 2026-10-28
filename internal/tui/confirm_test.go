@@ -862,10 +862,11 @@ func TestActionPickerDisablesBlockedApprove(t *testing.T) {
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), nil)
 	waitFor(t, tm, "3/3 decided")
 	tm.Type("p")
-	waitFor(t, tm, "> comment", "  approve", "unavailable: cannot approve while publishable findings are blocking: f-001")
+	// The popup wraps the reason, so it is looked for in pieces that stay on one row.
+	waitFor(t, tm, "> comment", "  approve", "unavailable: cannot approve while", "f-001")
 	tm.Type("j")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "or exclude or unblock the finding in loupe review")
+	waitFor(t, tm, "or exclude or unblock", "the finding in loupe review")
 	view := viewOf(t, tm)
 	if strings.Contains(view, "cannot request changes") {
 		t.Errorf("request-changes is disabled:\n%s", view)
@@ -876,9 +877,8 @@ func TestActionPickerOffersOnlyCommentOnOwnPullRequest(t *testing.T) {
 	tm := startPublishApp(t, readyFixture(t, "author", "author"), nil)
 	waitFor(t, tm, "3/3 decided")
 	tm.Type("p")
-	waitFor(t, tm, "> comment",
-		"unavailable: author is the author of this pull request and cannot approve it",
-		"unavailable: author is the author of this pull request and cannot request changes on it")
+	// The popup wraps each reason, so it is looked for in pieces that stay on one row.
+	waitFor(t, tm, "> comment", "unavailable: author is the author", "cannot approve it", "cannot request changes")
 	quitFromPicker(t, tm)
 }
 

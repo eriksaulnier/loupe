@@ -880,3 +880,24 @@ func TestDecisionFlashesItsNotice(t *testing.T) {
 		t.Errorf("the notice did not settle to plain colored text after the flash:\n%q", view)
 	}
 }
+
+// The Action and Inline comments steps are a popup over the dimmed list: the list stays in view around it, the popup
+// is narrower than the window, and the step tabs are its first row (demo feedback).
+func TestPublishStepsArePopups(t *testing.T) {
+	for _, step := range []func(*Model){
+		func(m *Model) { m.view, m.pick = viewAction, 0 },
+		func(m *Model) { m.view, m.action, m.pick = viewInline, "comment", 0 },
+	} {
+		m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+		step(m)
+		view := m.View().Content
+		rows := strings.Split(view, "\n")
+		if len(rows) != 30 || !strings.Contains(view, "Title one") {
+			t.Fatalf("the list is not in view around the popup:\n%s", view)
+		}
+		top := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "─ Publish review ") })
+		if top < 0 || strings.HasPrefix(rows[top], "╭") || !strings.Contains(rows[top+1], "Action") || !strings.Contains(rows[top+1], "Message") {
+			t.Errorf("no centered Publish review popup with the tabs as its first row:\n%s", view)
+		}
+	}
+}

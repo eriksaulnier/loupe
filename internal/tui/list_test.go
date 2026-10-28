@@ -131,8 +131,8 @@ func TestInlinePickerStartsOnNone(t *testing.T) {
 	}
 }
 
-// The publish steps are tabs over a titled choice pane and a Message pane that says nothing has been sent yet
-// (FR-014). The tabs are labels: the pickers keep their keys.
+// The publish steps are a popup whose first row is the step tabs, titled with the step, over its choices; its border
+// says nothing has been sent yet (FR-014, amended). The tabs are labels: the pickers keep their keys.
 func TestPublishStepsShowTabsAndPanes(t *testing.T) {
 	dir := readyFixture(t, "author", "author")
 	for _, env := range []map[string]string{{"NO_COLOR": "1", "LANG": "C"}, {"NO_COLOR": "1", "LANG": "en_US.UTF-8"}} {
@@ -150,8 +150,8 @@ func TestPublishStepsShowTabsAndPanes(t *testing.T) {
 			"step 2": {step2, "Action  " + bar + "  [Inline comments]  " + bar + "  Message", "Inline comments", "> blocking "},
 		} {
 			lines := strings.Split(c.view, "\n")
-			top := bodyTop(m.height)
-			if lines[top] != c.tabs || !strings.Contains(lines[top+1], " "+c.title+" ") || !strings.Contains(c.view, c.choice) {
+			top := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, m.glyphs.HRule+" Publish review ") })
+			if top < 0 || !strings.Contains(lines[top], " "+c.title+" ") || !strings.Contains(lines[top+1], c.tabs) || !strings.Contains(c.view, c.choice) {
 				t.Errorf("%s under %v lost its tabs, pane or cursor:\n%s", name, env, c.view)
 			}
 			// The footer says what enter does next, so the step has no pane explaining it; the border says nothing was sent.

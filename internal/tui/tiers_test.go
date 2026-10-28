@@ -146,10 +146,14 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 				}
 				// A titled pane opens directly under the header and its gap, or under the publish tabs.
 				top := bodyTop(m.height)
-				if strings.HasPrefix(sc.name, "publish") || isConfirmation(sc.name) {
+				if isConfirmation(sc.name) {
 					top++
 				}
 				opens := strings.HasPrefix(ansi.Strip(lines[top]), paneFrame(m.glyphs).tl+m.glyphs.HRule+" ")
+				if strings.HasPrefix(sc.name, "publish") {
+					// The choice steps are a popup centered over the list, so its title is somewhere in the body.
+					opens = slices.ContainsFunc(lines[top:], func(l string) bool { return strings.Contains(ansi.Strip(l), m.glyphs.HRule+" Publish review ") })
+				}
 				if sc.name == "help" {
 					// Help lays its own pane over the screen's, so its title is what opens the body.
 					opens = strings.Contains(ansi.Strip(lines[top]), m.glyphs.HRule+" Help ")

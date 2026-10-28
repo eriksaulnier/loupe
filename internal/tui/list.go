@@ -110,10 +110,10 @@ func (m *Model) actionView() string {
 	rows := make([]string, 0, len(publish.Actions))
 	for i, action := range publish.Actions {
 		if r, ok := refusal.As(m.actionRefusal(action)); ok {
-			rows = append(rows, m.pickerRow(false, true, action, "unavailable: "+r.Message)...)
+			rows = append(rows, m.pickerRow(false, true, action, "unavailable: "+r.Message, m.popupInner())...)
 			continue
 		}
-		rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action])...)
+		rows = append(rows, m.pickerRow(i == m.pick, false, action, actionDescriptions[action], m.popupInner())...)
 	}
 	return m.publishStep(0, "Action", rows, actionEnter)
 }
@@ -127,7 +127,7 @@ var inlineDescriptions = map[string]string{
 func (m *Model) inlineView() string {
 	rows := make([]string, 0, len(publish.InlineModes))
 	for i, mode := range publish.InlineModes {
-		rows = append(rows, m.pickerRow(i == m.pick, false, mode, inlineDescriptions[mode])...)
+		rows = append(rows, m.pickerRow(i == m.pick, false, mode, inlineDescriptions[mode], m.popupInner())...)
 	}
 	return m.publishStep(1, "Inline comments", rows, inlineEnter)
 }
@@ -135,23 +135,34 @@ func (m *Model) inlineView() string {
 // publishSteps are the tabs over every publish screen. They label where the flow is and add no key.
 var publishSteps = []string{"Action", "Inline comments", "Message"}
 
-// publishStep is one choice step: the tabs and the choices in their pane, whose border says nothing has been sent.
-// The footer says what enter does next.
+// publishStep is one choice step, a popup over the dimmed list: the step tabs, then the choices, in a pane whose
+// border says nothing has been sent. The footer says what enter does next. The step that writes the message and shows
+// the whole review is a screen of its own, since it needs the room.
 func (m *Model) publishStep(step int, title string, rows []string, enter string) string {
 	footer := m.keys(groupHints(m.publishStepHints(enter))...)
-	body := m.bodyRows(len(footer)) - 1
-	inner, _ := style.PaneInner(m.width, 0)
-	room := noticeRoom(m.width, "")
+	width, inner := m.popupWidth(), m.popupInner()
+	room := noticeRoom(width, "")
 	said := m.borderNotice(room)
 	if m.notice == "" {
 		said = m.styles.Secondary().Render("nothing sent yet")
 	}
-	// The refusal is kept whole: the choices give way to it.
-	lines := m.withNotice(rows, m.noticeRows(inner, room), body-style.PaneRows)
-	panes := []string{m.styles.Tabs(publishSteps, step)}
-	panes = append(panes, m.styles.Pane(style.Pane{Width: m.width, Height: body, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: title, BottomLeft: said}, Focus: true})...)
-	return m.shell(panes, footer)
+	// The popup is as tall as its rows, up to the body; the refusal is kept whole, and the rows above give way to it.
+	maxRows := m.height - len(footer) - m.bodyTop() - style.PaneRows
+	lines := m.withNotice(slices.Concat([]string{m.styles.Tabs(publishSteps, step), ""}, rows), m.noticeRows(inner, room), maxRows)
+	pane := m.styles.Pane(style.Pane{Width: width, Height: len(lines) + style.PaneRows, Lines: lines,
+		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: m.styles.Text().Render(title), BottomLeft: said}, Focus: true})
+	// The list under the popup is drawn without the step's notice, which belongs to the popup.
+	notice := m.notice
+	m.notice = ""
+	base := m.listView()
+	m.notice = notice
+	return m.overlay(base, len(m.keys(groupHints(m.listHints())...)), pane, footer)
+}
+
+// popupInner is the content width of a popup pane.
+func (m *Model) popupInner() int {
+	inner, _ := style.PaneInner(m.popupWidth(), 0)
+	return inner
 }
 
 // actionEnter and inlineEnter are what enter does on each publish step.
@@ -174,7 +185,7 @@ const pickerIndent = 19
 
 // pickerRow is the cursor, the name and the description, wrapped under the description's column so a refusal reason
 // is never clipped.
-func (m *Model) pickerRow(selected, disabled bool, name, description string) []string {
+func (m *Model) pickerRow(selected, disabled bool, name, description string, inner int) []string {
 	cursor := " "
 	nameStyle := m.styles.Text()
 	switch {
@@ -183,7 +194,6 @@ func (m *Model) pickerRow(selected, disabled bool, name, description string) []s
 	case selected:
 		cursor, nameStyle = m.styles.Emphasis(m.styles.Cursor).Render(m.styles.PickerCursor()), m.styles.Emphasis(m.styles.Accent)
 	}
-	inner, _ := style.PaneInner(m.width, 0)
 	indent := strings.Repeat(" ", pickerIndent)
 	lines := strings.Split(m.styles.Wrap(render.ForDisplay(description), inner, indent), "\n")
 	for i, l := range lines {

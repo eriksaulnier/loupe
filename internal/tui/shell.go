@@ -234,7 +234,7 @@ func noticeRoom(width int, right string) int {
 // helpOverlay draws help as an opaque pane over the dimmed screen it was opened from, which keeps its own state.
 func (m *Model) helpOverlay(base string) string {
 	lines := m.helpLines()
-	width := min(m.width-4, 72)
+	width := m.popupWidth()
 	inner, _ := style.PaneInner(width, 0)
 	footer := m.keys(style.KeyGroup{{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}}, style.KeyGroup{{Key: "esc/?/q", Verb: "close help"}})
 	// The header stays in view above the pane, so help still says whose review it is.
@@ -251,16 +251,21 @@ func (m *Model) helpOverlay(base string) string {
 		Scroll: style.Scroll{Offset: top, Visible: visible, Total: len(lines)},
 		Focus:  true,
 	})
+	return m.overlay(base, m.viewFooterRows(), pane, footer)
+}
+
+// overlay draws pane over the dimmed base screen, whose own footer of baseFooter rows is blanked: footer replaces it,
+// and its keys are the only ones that work now. The header stays as drawn, link and colors included, so the screen
+// still says whose review it is; the pane is composed over the body only.
+func (m *Model) overlay(base string, baseFooter int, pane, footer []string) string {
 	region := m.height - len(footer)
 	baseLines := strings.Split(m.styles.Muted(base), "\n")
-	// The covered screen's footer is blanked: help's own replaces it, and its keys are the only ones that work now.
-	for i := max(0, len(baseLines)-m.viewFooterRows()); i < len(baseLines); i++ {
+	for i := max(0, len(baseLines)-baseFooter); i < len(baseLines); i++ {
 		baseLines[i] = ""
 	}
 	for len(baseLines) < region {
 		baseLines = append(baseLines, "")
 	}
-	// The header stays as drawn, link and colors included; the pane is composed over the body only.
 	out := strings.Split(m.styles.Composite(strings.Join(baseLines[1:region], "\n"), pane, m.width, m.bodyTop()-1, region-1), "\n")
 	for i, l := range footer {
 		footer[i] = m.styles.FooterBand(m.clip(render.ForDisplayANSI(l)), m.width)
@@ -268,6 +273,9 @@ func (m *Model) helpOverlay(base string) string {
 	rows := append([]string{m.clip(m.reviewHeader())}, out[:min(len(out), region-1)]...)
 	return strings.Join(append(rows, footer...), "\n")
 }
+
+// popupWidth is the width of a pane drawn over the screen, such as help or a publish step.
+func (m *Model) popupWidth() int { return min(m.width-4, 72) }
 
 // helpHeight is the rows help's pane shows its lines in.
 func (m *Model) helpHeight() int {
