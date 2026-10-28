@@ -111,3 +111,5 @@ The detail pane's border MUST take the finding's decision color: accepted in goo
 A window of 20 or more rows MUST keep one blank row between the header and the body. Below 20 rows that row goes to the body first, before any other row budget gives way, so the 60x12 budget above is unchanged.
 
 Action and Inline comments MUST NOT draw a Message pane. It repeated the footer, and its title read as the Message tab. Each step is one choice pane under the tabs, whose bottom-left border says `nothing sent yet` until a notice takes that place. A refusal goes into the pane's rows, and the choices give way to it. The Action and Inline comments reference frames predate this rule.
+
+The full-summary command MUST stay copyable at every width. When it does not fit one row under the summary pane, it MUST break into rows that paste back as the same command: each row but the last ends in a backslash. A break inside the run reference starts the next row unindented.

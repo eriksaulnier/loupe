@@ -326,7 +326,7 @@ func (l listLayout) separation() int {
 }
 
 // summaryCommand is the command that shows a clipped summary whole: in the bottom border beside the tab hint when it
-// fits there, or else as rows for under the pane, the command never split across them so it can be copied.
+// fits there, or else as rows for under the pane, broken only where a backslash keeps it whole when pasted.
 func (m *Model) summaryCommand() (border string, below []string) {
 	label, command := "full summary:", "loupe show --run "+m.runRef()
 	paint := func(text string) string { return m.styles.Overlay().Render(text) }
@@ -337,7 +337,28 @@ func (m *Model) summaryCommand() (border string, below []string) {
 	if text := indent + label + " " + command; style.Width(text) <= m.width {
 		return "", []string{paint(text)}
 	}
-	return "", []string{paint(indent + label), paint(indent + command)}
+	below = []string{paint(indent + label)}
+	for _, row := range commandRows(indent, "loupe show --run", m.runRef(), m.width) {
+		below = append(below, paint(row))
+	}
+	return "", below
+}
+
+// commandRows is "head arg" in rows of at most width cells that paste back into a shell as the same command. Each row
+// but the last ends in a backslash, which the shell drops together with the line break: first after head, then, for
+// an arg wider than a row, inside it, where the next row starts unindented so no space enters the word.
+func commandRows(indent, head, arg string, width int) []string {
+	if text := indent + head + " " + arg; style.Width(text) <= width {
+		return []string{text}
+	}
+	rows := []string{indent + head + " \\"}
+	rest, lead := arg, indent
+	for len(lead)+len(rest) > width {
+		n := max(1, width-len(lead)-1)
+		rows = append(rows, lead+rest[:n]+"\\")
+		rest, lead = rest[n:], ""
+	}
+	return append(rows, lead+rest)
 }
 
 // summaryLines is the summary wrapped to width with its bullets kept: a Markdown list item becomes a bullet whose

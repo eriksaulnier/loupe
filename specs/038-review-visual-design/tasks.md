@@ -75,6 +75,7 @@ The maintainer's first demo session asked for these changes. `contracts/layout.m
 - [X] T031 Keep a blank row under the header in windows of 20 or more rows, through `ReviewLayout` in `internal/style/review.go`, and place every row that assumed a one-row header, such as the published URL links and the help overlay, from the shell's body top.
 - [X] T032 Remove the Message pane from the Action and Inline comments steps in `internal/tui/list.go`. The choice pane's border says `nothing sent yet`.
 - [X] T033 Keep the detail border on the finding's decision color only, so an open note's amber shows on its own pane and not on the pane around it, in `internal/tui/detail.go`.
+- [X] T034 Break a full-summary command too wide for the window into rows that paste back whole, each but the last ending in a backslash, in `internal/tui/list.go`. Found by the cross-vendor review of the branch.
 
 ## Dependencies and parallel work
 

@@ -696,3 +696,29 @@ func TestHeaderGapGivesWayAtShortHeights(t *testing.T) {
 		}
 	}
 }
+
+// A full-summary command too wide for the window breaks into rows that paste back as the same command: each row but
+// the last ends in a backslash, which the shell joins with the next (review finding, long repository names).
+func TestSummaryCommandPastesWholeForLongNames(t *testing.T) {
+	for _, repo := range []string{"repository-with-a-perfectly-valid-but-long-name", strings.Repeat("r", 100)} {
+		m := modelOf(t, newFixture(t), utf8Env, 60, 16)
+		m.target.Repo = repo
+		_, below := m.summaryCommand()
+		if len(below) < 2 {
+			t.Fatalf("%s: the command did not move under the pane: %q", repo, below)
+		}
+		var rows []string
+		for _, r := range below[1:] {
+			r = ansi.Strip(r)
+			if style.Width(r) > m.width {
+				t.Errorf("%s: row %q is wider than %d", repo, r, m.width)
+			}
+			rows = append(rows, r)
+		}
+		pasted := strings.ReplaceAll(strings.Join(rows, "\n"), "\\\n", "")
+		want := []string{"loupe", "show", "--run", "acme/" + repo + "#42@1"}
+		if got := strings.Fields(pasted); !slices.Equal(got, want) {
+			t.Errorf("%s: pastes as %q, want %q", repo, got, want)
+		}
+	}
+}
