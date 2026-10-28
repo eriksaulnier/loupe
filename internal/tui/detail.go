@@ -717,9 +717,13 @@ func (m *Model) detailView() string {
 	lines := strings.Split(m.body.View(), "\n")
 	_, inner := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
 	lines = withNotice(lines[:min(len(lines), m.body.Height())], m.noticeRows(width, room), inner)
-	title := render.ForDisplay(f.ID) + " " + m.glyphs.Sep + " " + draft.Dispositions(m.draft)[f.ID]
+	// The title leads with the list's glyph and says the disposition, and an open note, in their status colors.
+	disposition := draft.Dispositions(m.draft)[f.ID]
+	glyph, mark, _ := m.styles.ReviewDisposition(disposition)
+	sep := m.styles.Accent.Render(" " + m.glyphs.Sep + " ")
+	title := mark.Render(glyph) + " " + m.styles.Emphasis(m.styles.Accent).Render(render.ForDisplay(f.ID)) + sep + mark.Render(disposition)
 	if _, open := firstOpenNote(m.draft, f.ID); open {
-		title += " " + m.glyphs.Sep + " open note"
+		title += sep + m.styles.Note.Render("open note")
 	}
 	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Lines: lines,
 		Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room), BottomRight: position},

@@ -373,7 +373,7 @@ func TestDetailShowsMetadataAndTheNestedLocationPane(t *testing.T) {
 	}
 	view := m.View().Content
 	for _, want := range []string{
-		"╭─ f-002 · pending ─",
+		"╭─ · f-002 · pending ─",
 		" 2 of 3 ─╯",
 		"│ [suggestion]",
 		"Suggested fix",
