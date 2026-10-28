@@ -585,6 +585,8 @@ type ReviewHeading struct {
 	Decided, Total int
 	// NoCount leaves out the progress and the count, for the standalone confirmation, which has no draft.
 	NoCount bool
+	// Reserve is the columns at the right end left blank and off the band, for a host that draws over them.
+	Reserve int
 }
 
 // badge is the program's mark at the head of every review screen.
@@ -624,6 +626,8 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	if width < 80 {
 		title = ""
 	}
+	// The tiers above follow the terminal; the layout below fits what is left of it.
+	avail := width - max(0, h.Reserve)
 	gap := func(text string) int {
 		if text == "" {
 			return 0
@@ -641,18 +645,18 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 		return n
 	}
 	used := func() int { return Width(badge) + gap(ref) + gap(round) + right() }
-	if room := width - used() - 2; room >= 8 && title != "" {
+	if room := avail - used() - 2; room >= 8 && title != "" {
 		title = s.TruncRight(title, room)
 	} else {
 		title = ""
 	}
-	if used() > width {
+	if used() > avail {
 		bar = ""
 	}
-	if used() > width {
+	if used() > avail {
 		round = ""
 	}
-	if over := used() - width; over > 0 {
+	if over := used() - avail; over > 0 {
 		ref = midTrunc(ref, max(1, Width(ref)-over), s.Glyphs.Ellipsis)
 	}
 
@@ -680,7 +684,7 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 		right2.WriteString(band(Span{Text: "  " + count, Style: s.Emphasis(text)}))
 	}
 	right2.WriteString(band(Span{Text: " "}))
-	fill := width - Width(out.String()) - Width(tail) - Width(right2.String())
+	fill := avail - Width(out.String()) - Width(tail) - Width(right2.String())
 	out.WriteString(band(Span{Text: strings.Repeat(" ", max(0, fill))}))
 	if tail != "" {
 		// The bar's cells carry their own colors; each gets the band behind it.
@@ -690,10 +694,10 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	}
 	out.WriteString(right2.String())
 	line := out.String()
-	if Width(line) > width {
-		line = ansi.Truncate(line, width, "")
+	if Width(line) > avail {
+		line = ansi.Truncate(line, avail, "")
 	}
-	return line
+	return line + strings.Repeat(" ", width-avail)
 }
 
 // OnSurface puts a surface behind an already-rendered string, putting it back after every reset inside, so pieces

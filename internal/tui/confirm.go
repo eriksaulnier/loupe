@@ -567,7 +567,7 @@ func (m *Model) confirmTyping() bool { return m.view == viewConfirm && m.confirm
 func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer, title ConfirmHeading) *ConfirmModel {
 	st := style.New(output, getenv)
 	st.UseReviewTheme()
-	shell := &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24, view: viewConfirm, confirm: newConfirmation(preview, title, "")}
+	shell := &Model{cfg: Config{Getenv: getenv}, styles: st, glyphs: st.Glyphs, width: 80, height: 24, view: viewConfirm, confirm: newConfirmation(preview, title, "")}
 	return &ConfirmModel{shell: shell, confirm: &shell.confirm}
 }
 

@@ -301,6 +301,24 @@ func TestProgressMarksTheCurrentCell(t *testing.T) {
 	}
 }
 
+// Reserve leaves the header's last columns blank and off the band, while the width tier still follows the terminal.
+func TestHeaderReserveLeavesTheRightEdgeBlank(t *testing.T) {
+	s := reviewStyle(t, true, nil)
+	h := heading()
+	h.Reserve = 4
+	got := s.ReviewHeader(h, 100)
+	if w := Width(got); w != 100 {
+		t.Fatalf("the header is %d cells, want 100", w)
+	}
+	plain := ansi.Strip(got)
+	if !strings.HasSuffix(plain, "decided     ") || !strings.HasSuffix(got, "    ") {
+		t.Errorf("the last four columns are not blank and plain: %q", got)
+	}
+	if !strings.Contains(plain, "round ") {
+		t.Errorf("reserving columns dropped the header below its width tier: %q", plain)
+	}
+}
+
 func TestConfidenceScaleAndPills(t *testing.T) {
 	plain, color := reviewStyle(t, false, nil), reviewStyle(t, true, nil)
 	ascii := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"})

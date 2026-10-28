@@ -27,6 +27,18 @@ func detectOrca(getenv func(string) string) (Orca, bool) {
 
 func (Orca) Name() string { return "orca" }
 
+// orcaControls is the columns Orca's pane controls cover at the right end of a terminal's first row.
+const orcaControls = 4
+
+// HeaderReserve is the columns at the right end of the terminal's first row that the pane host draws over, which a
+// full-screen header leaves blank: Orca's pane controls, wherever its handle is set, and nothing elsewhere.
+func HeaderReserve(getenv func(string) string) int {
+	if getenv("ORCA_TERMINAL_HANDLE") != "" {
+		return orcaControls
+	}
+	return 0
+}
+
 // orcaReply is the envelope every orca --json call prints on stdout, on success and on failure.
 type orcaReply struct {
 	OK    bool `json:"ok"`

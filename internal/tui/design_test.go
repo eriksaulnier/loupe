@@ -612,3 +612,17 @@ func TestProgressMarksTheCurrentFinding(t *testing.T) {
 		}
 	}
 }
+
+// Under Orca the header leaves room for the pane controls Orca draws over its top-right corner (demo feedback).
+func TestHeaderLeavesRoomForOrcaControls(t *testing.T) {
+	for _, sc := range []struct {
+		env map[string]string
+		gap bool
+	}{{utf8Env, false}, {map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8", "ORCA_TERMINAL_HANDLE": "term_1"}, true}} {
+		m := modelOf(t, newFixture(t), sc.env, 100, 30)
+		header := strings.Split(m.View().Content, "\n")[0]
+		if got := strings.HasSuffix(header, "decided     "); got != sc.gap {
+			t.Errorf("ORCA_TERMINAL_HANDLE=%q: header %q", sc.env["ORCA_TERMINAL_HANDLE"], header)
+		}
+	}
+}

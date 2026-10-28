@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/pane"
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -68,13 +69,18 @@ func (m *Model) bodyRows(footerRows int) int {
 // request without a count.
 func (m *Model) reviewHeader() string {
 	if m.draft == nil {
-		return m.styles.ReviewHeader(style.ReviewHeading{Ref: render.ForDisplay(m.confirm.title.ref), NoCount: true}, m.width)
+		return m.styles.ReviewHeader(style.ReviewHeading{Ref: render.ForDisplay(m.confirm.title.ref), NoCount: true, Reserve: m.hostReserve()}, m.width)
 	}
 	order, decided, total := progressOf(m.draft, m.order)
 	return m.styles.ReviewHeader(style.ReviewHeading{
 		Ref: render.ForDisplay(m.ref()), URL: m.target.URL, Round: m.target.Round, Title: m.titleText(),
-		Progress: order, Current: m.currentCell(), Decided: decided, Total: total,
+		Progress: order, Current: m.currentCell(), Decided: decided, Total: total, Reserve: m.hostReserve(),
 	}, m.width)
+}
+
+// hostReserve is the header's columns a pane host draws over, which the header leaves blank.
+func (m *Model) hostReserve() int {
+	return pane.HeaderReserve(m.cfg.Getenv)
 }
 
 // currentCell is the progress cell of the finding the human is on, counting from 1: the selected row in the list and

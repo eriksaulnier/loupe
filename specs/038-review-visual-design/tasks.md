@@ -69,7 +69,7 @@ The maintainer's first demo session asked for five changes. `contracts/layout.md
 
 - [X] T026 Show the list's `N of M` position only when the findings overflow the pane, in `internal/tui/list.go`. Detail keeps its position.
 - [X] T027 Mark the selected or open finding's progress cell on an accent background in color, for 30 or fewer counted findings, in `internal/style/review.go` and `internal/tui/shell.go`.
-- [ ] T028 Leave the header's last four columns blank when `ORCA_TERMINAL_HANDLE` is nonempty, in `internal/style/review.go` and `internal/tui/shell.go`.
+- [X] T028 Leave the header's last four columns blank when `ORCA_TERMINAL_HANDLE` is nonempty, in `internal/style/review.go` and `internal/tui/shell.go`.
 - [ ] T029 Lead the detail title with the disposition glyph and color the disposition word and `open note` by status, in `internal/tui/detail.go`.
 - [ ] T030 Color the detail pane's border by finding status and a note pane's border by note status through a pane tone, in `internal/style/review.go` and `internal/tui/detail.go`.
 
