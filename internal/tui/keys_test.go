@@ -152,6 +152,7 @@ func hostileFixture(t *testing.T) string {
 	d.Findings[0].Title = "Title \u202eeno \x1b[31mred"
 	d.Findings[0].Body = "Body \u2066hidden \x1b]52;c;x\x07"
 	d.Findings[0].SuggestedFix = "fix \u200fmark"
+	d.Findings[0].Location.Heading = "Heading \u202eeno \x1b[31mred"
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +181,8 @@ func TestDetailEscapesFindings(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	assertEscaped(t, "detail view", m.View().Content, `Title \u202Eeno \u001B[31mred`, `Body \u2066hidden \u001B]52;c;x\u0007`, `fix \u200Fmark`)
+	assertEscaped(t, "detail view", m.View().Content, `Title \u202Eeno \u001B[31mred`, `Body \u2066hidden \u001B]52;c;x\u0007`, `fix \u200Fmark`,
+		`Heading \u202Eeno \u001B[31mred`)
 }
 
 func arrow(t rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: t} }
