@@ -482,6 +482,9 @@ func TestRewriteRefusals(t *testing.T) {
 			if !strings.Contains(r.Message, c.says) || !strings.Contains(r.Fix, "ctrl+s") || strings.Contains(r.Fix, "loupe") {
 				t.Fatalf("refusal %+v", r)
 			}
+			if strings.Count(r.Fix, "then ") > 1 {
+				t.Fatalf("the fix repeats itself: %q", r.Fix)
+			}
 			if f := d.Findings[0]; f.Rev != 1 || f.Title != "One" || f.Body != "Body one." {
 				t.Fatalf("a refused rewrite changed %+v", f)
 			}

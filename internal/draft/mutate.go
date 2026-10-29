@@ -672,8 +672,12 @@ func Rewritable(f Finding) error {
 }
 
 // rewriteFix is the fix for a rewrite the review interface refused: the editor stays open with the text, so the human
-// corrects it there rather than through a command.
-const rewriteFix = "correct it in the editor, then press ctrl+s"
+// corrects it there rather than through a command. A finding-id refusal's fix already says what to correct, so it ends
+// with rewriteIDRetry.
+const (
+	rewriteFix     = "correct it in the editor, then press ctrl+s"
+	rewriteIDRetry = "press ctrl+s again"
+)
 
 // Rewrite is the human's title and body edit from the review interface. It keeps a current decision and closes no
 // note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding. The
@@ -703,7 +707,7 @@ func Rewrite(d *Draft, findingID, title, body string, dif *diff.Diff, now time.T
 	if changedBody == stored.Body {
 		changedBody = ""
 	}
-	if err := checkFindingIDs(changedTitle, changedBody, "", "", rewriteFix); err != nil {
+	if err := checkFindingIDs(changedTitle, changedBody, "", "", rewriteIDRetry); err != nil {
 		return Finding{}, err
 	}
 	titleJSON, err := json.Marshal(title)
