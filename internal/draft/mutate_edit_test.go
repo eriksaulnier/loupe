@@ -380,3 +380,134 @@ func TestRecalibrateRefusals(t *testing.T) {
 		t.Fatalf("unchanged recalibration %+v err %v", f, err)
 	}
 }
+
+func TestRewriteKeepsTheDecision(t *testing.T) {
+	for _, c := range []struct {
+		name, disposition string
+		decide            func(d *Draft) error
+	}{
+		{"accepted", DispositionAccepted, func(*Draft) error { return nil }},
+		{"excluded", DispositionExcluded, func(d *Draft) error { _, err := Exclude(d, "f-001", addNow); return err }},
+		{"pending", DispositionPending, func(d *Draft) error { delete(d.Decisions, "f-001"); return nil }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			d := editable()
+			if err := c.decide(d); err != nil {
+				t.Fatal(err)
+			}
+			before, hadDecision := d.Decisions["f-001"]
+			f, err := Rewrite(d, "f-001", "One, said better", "Body one, said better.", multiHunk(t), editNow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if f.Title != "One, said better" || f.Body != "Body one, said better." || f.Rev != 2 || !reflect.DeepEqual(f, d.Findings[0]) {
+				t.Fatalf("finding %+v", f)
+			}
+			want := []HistoryEntry{{At: editNow, By: ByHuman, Changed: map[string]any{"title": "One", "body": "Body one."}}}
+			if !reflect.DeepEqual(f.History, want) {
+				t.Fatalf("history %#v", f.History)
+			}
+			if got := Dispositions(d)["f-001"]; got != c.disposition {
+				t.Fatalf("disposition %s, want %s", got, c.disposition)
+			}
+			after, hasDecision := d.Decisions["f-001"]
+			if hasDecision != hadDecision || (hadDecision && (after.Decision != before.Decision || !after.At.Equal(before.At) || after.FindingRev != 2)) {
+				t.Fatalf("decision before %+v after %+v", before, after)
+			}
+		})
+	}
+}
+
+func TestRewriteRecordsOnlyWhatChanged(t *testing.T) {
+	d := editable()
+	f, err := Rewrite(d, "f-001", "One", "Body one, said better.", multiHunk(t), editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []HistoryEntry{{At: editNow, By: ByHuman, Changed: map[string]any{"body": "Body one."}}}; !reflect.DeepEqual(f.History, want) {
+		t.Fatalf("history %#v", f.History)
+	}
+}
+
+func TestRewriteLeavesNotesOpen(t *testing.T) {
+	d := editable()
+	if _, err := SendBack(d, "f-002", "Say it plainer.", editNow); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Rewrite(d, "f-002", "Two", "Body two, plainer.", multiHunk(t), editNow); err != nil {
+		t.Fatal(err)
+	}
+	if d.Notes[0].Status != NoteOpen || d.Notes[0].ClosedAt != nil {
+		t.Fatalf("note %+v", d.Notes[0])
+	}
+}
+
+func TestRewriteDoesNotReviveAStaleDecision(t *testing.T) {
+	d := editable()
+	d.Findings[0].Rev = 2
+	f, err := Rewrite(d, "f-001", "One", "Body one, again.", multiHunk(t), editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Dispositions(d)["f-001"]; got != DispositionPending || f.Rev != 3 {
+		t.Fatalf("disposition %s rev %d", got, f.Rev)
+	}
+}
+
+func TestRewriteRefusals(t *testing.T) {
+	d := editable()
+	withdraw := false
+	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, editNow); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Rewrite(d, "f-002", "Two", "Body two, again.", multiHunk(t), editNow)
+	r := wantRefusal(t, err, refusal.Input)
+	if !strings.Contains(r.Message, "rewritten") || r.Fix != "reinstate f-002 first" {
+		t.Fatalf("refusal %+v", r)
+	}
+
+	for _, c := range []struct {
+		name, title, body, says string
+		code                    refusal.Code
+	}{
+		{"empty title", "  ", "Body one.", "title", refusal.Input},
+		{"empty body", "One", "\n\t\n", "body", refusal.Input},
+		{"raw html", "One", "Fine.\n\n<div>no</div>", "line 3", refusal.Markdown},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Rewrite(d, "f-001", c.title, c.body, multiHunk(t), editNow)
+			r := wantRefusal(t, err, c.code)
+			if !strings.Contains(r.Message, c.says) || !strings.Contains(r.Fix, "ctrl+s") || strings.Contains(r.Fix, "loupe") {
+				t.Fatalf("refusal %+v", r)
+			}
+			if f := d.Findings[0]; f.Rev != 1 || f.Title != "One" || f.Body != "Body one." {
+				t.Fatalf("a refused rewrite changed %+v", f)
+			}
+		})
+	}
+	if r, _ := refusal.As(func() error { _, err := Rewrite(d, "f-001", "One", "<div>no</div>", multiHunk(t), editNow); return err }()); r.Details["line"] != 1 || r.Details["rule"] == nil {
+		t.Fatalf("details %v", r.Details)
+	}
+
+	_, err = Rewrite(d, "f-009", "One", "Body.", multiHunk(t), editNow)
+	_ = wantRefusal(t, err, refusal.NotFound)
+
+	f, err := Rewrite(d, "f-001", "One", "Body one.", multiHunk(t), editNow)
+	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
+		t.Fatalf("unchanged rewrite %+v err %v", f, err)
+	}
+}
+
+// Keeping a decision belongs to the review interface; every Edit, whoever it names, clears it.
+func TestEditOfTheTextClearsTheDecisionForEveryBy(t *testing.T) {
+	for _, by := range []string{ByAgent, ByHuman, ""} {
+		d := editable()
+		_, cleared, err := Edit(d, "f-001", editInput(t, `{"body": "Body one, edited."}`), nil, multiHunk(t), by, editNow)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cleared || Dispositions(d)["f-001"] != DispositionPending {
+			t.Fatalf("by %q: cleared %v disposition %s", by, cleared, Dispositions(d)["f-001"])
+		}
+	}
+}
