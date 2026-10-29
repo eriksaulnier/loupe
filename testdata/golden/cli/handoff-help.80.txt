@@ -11,17 +11,20 @@ round, the agent asks the human to finish or quit that review, then hands off ag
 
 Otherwise it tries these terminal hosts first to last and opens the pane in the first detected:
   herdr  HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH
+  tmux   TMUX naming a socket that exists, TMUX_PANE, and tmux on PATH
   orca   ORCA_TERMINAL_HANDLE, and orca on PATH
-A host whose conditions are met only in part is skipped. With no host it refuses no-pane-host.
+A host whose conditions are met only in part is skipped, and so is a tmux session with no
+client attached, where nobody would see the pane. With no host it refuses no-pane-host.
 
 The pane opens to the right of the agent's pane when that pane is known to be at least 120
 columns wide, and below it otherwise. The width is the host's own report of the agent's pane
-(Herdr has one, Orca none), else the agent's own terminal. With neither it opens below, since
-review needs 60 columns but only 12 rows. The pane runs
-this loupe's review for the run. In Herdr the pane takes focus. In Orca it never does: Orca
-can focus a pane only by moving the human's view to its worktree, so the pane shows in the
-agent's tab and the view stays where it is. The pane closes when review exits cleanly and
-stays open on a refusal so the human can read it.
+(Herdr and tmux have one, Orca none), else the agent's own terminal. With neither it opens
+below, since review needs 60 columns but only 12 rows. The pane runs this loupe's review for
+the run. In Herdr the pane takes focus. In tmux it never does, so the keys the human types
+still reach the agent. In Orca it never does either: Orca can focus a pane only by moving the
+human's view to its worktree, so the pane shows in the agent's tab and the view stays where
+it is. The pane closes when review exits cleanly and stays open on a refusal so the human can
+read it.
 
 The agent MUST NOT send to, read, resize, close or reuse the pane; a hand-off that opens a pane
 opens a new one. A failed host call refuses pane-failed and is not retried; its details name
@@ -36,7 +39,7 @@ Result (--json)
    "dir": "/path/to/run", "host": "herdr",
    "paneId": "w1:p2", "direction": "right", "focused": true}
 
-host is herdr or orca. direction is right or down. focused is false when the pane opened
+host is herdr, tmux or orca. direction is right or down. focused is false when the pane opened
 without taking focus.
 
 Flags

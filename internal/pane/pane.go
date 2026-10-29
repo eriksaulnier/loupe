@@ -1,5 +1,5 @@
-// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr or Orca. It is
-// the only package that runs either.
+// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr, tmux or Orca. It
+// is the only package that runs any of them.
 package pane
 
 import (
@@ -41,13 +41,17 @@ type Opened struct {
 	Focused bool
 }
 
-// Detect returns every host whose conditions are all met, in the order they are tried. Herdr comes before Orca because
-// a Herdr session started inside an Orca terminal gives its panes both environments, and the agent sits in the Herdr
-// pane. A host whose conditions are met only in part is left out.
+// Detect returns every host whose conditions are all met, in the order they are tried. The inner host of two nested
+// ones comes first, because the agent sits in its pane: a Herdr session inside tmux or Orca, or tmux inside Orca, gives
+// its panes both environments. tmux inside Herdr loses to Herdr, whose pane still opens where the human sees it. A host
+// whose conditions are met only in part is left out.
 func Detect(getenv func(string) string, goos string) []Host {
 	var hosts []Host
 	if h, ok := detectHerdr(getenv); ok {
 		hosts = append(hosts, h)
+	}
+	if t, ok := detectTmux(getenv); ok {
+		hosts = append(hosts, t)
 	}
 	if o, ok := detectOrca(getenv); ok {
 		hosts = append(hosts, o)
