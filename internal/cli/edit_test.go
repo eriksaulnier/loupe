@@ -199,3 +199,133 @@ func TestAddAndEditHelpDocumentSuggestedFixMarkdown(t *testing.T) {
 		}
 	}
 }
+
+func storedFinding(t *testing.T, dir, id string) draft.Finding {
+	t.Helper()
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range d.Findings {
+		if f.ID == id {
+			return f
+		}
+	}
+	t.Fatalf("no %s", id)
+	return draft.Finding{}
+}
+
+func TestEditWithdrawsWithAReason(t *testing.T) {
+	home, dir := sendBackRun(t)
+	code, env, s := execIn(t, home, "", "edit", "f-001", "--exclude", "--reason", "Naming only.", "--reason-code", "no-runtime-effect")
+	if code != 0 || s.stderr.Len() != 0 {
+		t.Fatalf("exit %d envelope %v stderr %s", code, env, s.stderr.String())
+	}
+	if _, ok := env["warnings"]; ok {
+		t.Fatalf("a withdrawal with a reason warned: %v", env)
+	}
+	got := draft.CurrentReason(storedFinding(t, dir, "f-001"))
+	if got == nil || *got != (draft.Reason{Text: "Naming only.", Code: "no-runtime-effect"}) {
+		t.Fatalf("reason %+v", got)
+	}
+}
+
+func TestEditWarnsOnAWithdrawalWithoutAReason(t *testing.T) {
+	const want = "warning: f-002 was withdrawn without a reason; pass --reason <text> and --reason-code <word> so the human sees why\n"
+	home, _ := sendBackRun(t)
+	code, env, s := execIn(t, home, "", "edit", "f-002", "--exclude")
+	warnings, _ := env["warnings"].([]any)
+	if code != 0 || len(warnings) != 1 || warnings[0] != "withdraw-reason-missing" || s.stderr.String() != want {
+		t.Fatalf("exit %d envelope %v stderr %q", code, env, s.stderr.String())
+	}
+
+	home, _ = sendBackRun(t)
+	deps, text := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"edit", "f-002", "--exclude", "--run", "o/r#1"}); code != 0 || text.stderr.String() != want {
+		t.Fatalf("text mode: exit %d stderr %q", code, text.stderr.String())
+	}
+}
+
+func TestEditDoesNotWarnWhenNothingIsWithdrawnByTheAgent(t *testing.T) {
+	cases := map[string][]string{
+		"by the human":      {"edit", "f-002", "--exclude", "--by", "human"},
+		"a field edit":      {"edit", "f-002", "--title", "Renamed"},
+		"a restore":         {"edit", "f-002", "--include"},
+		"already withdrawn": {"edit", "f-002", "--exclude"},
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			home, _ := sendBackRun(t)
+			if name == "already withdrawn" || name == "a restore" {
+				if code, env, _ := execIn(t, home, "", "edit", "f-002", "--exclude"); code != 0 {
+					t.Fatalf("exit %d envelope %v", code, env)
+				}
+			}
+			code, env, s := execIn(t, home, "", args...)
+			if _, ok := env["warnings"]; code != 0 || ok || s.stderr.Len() != 0 {
+				t.Fatalf("exit %d envelope %v stderr %q", code, env, s.stderr.String())
+			}
+		})
+	}
+}
+
+func TestEditAmendsAReason(t *testing.T) {
+	home, dir := sendBackRun(t)
+	if code, env, _ := execIn(t, home, "", "edit", "f-002", "--exclude"); code != 0 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	code, env, s := execIn(t, home, "", "edit", "f-002", "--exclude", "--reason", "Duplicate of f-001.", "--reason-code", "duplicate")
+	finding, _ := env["finding"].(map[string]any)
+	if _, ok := env["warnings"]; code != 0 || ok || s.stderr.Len() != 0 || finding["rev"] != float64(2) || env["clearedDecision"] != false || env["version"] != float64(2) {
+		t.Fatalf("exit %d envelope %v stderr %q", code, env, s.stderr.String())
+	}
+	f := storedFinding(t, dir, "f-002")
+	if last := f.History[len(f.History)-1]; len(last.Changed) != 0 || last.Reason == nil || last.Reason.Code != "duplicate" {
+		t.Fatalf("history %+v", f.History)
+	}
+}
+
+func TestEditTakesAReasonFromInput(t *testing.T) {
+	home, dir := sendBackRun(t)
+	code, env, _ := execIn(t, home, `{"withdrawReason": {"text": "Style only.", "code": "style-only"}}`, "edit", "f-002", "--from", "-", "--exclude")
+	if code != 0 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if got := draft.CurrentReason(storedFinding(t, dir, "f-002")); got == nil || *got != (draft.Reason{Text: "Style only.", Code: "style-only"}) {
+		t.Fatalf("reason %+v", got)
+	}
+}
+
+func TestEditRefusesAMisplacedReason(t *testing.T) {
+	cases := []struct {
+		name  string
+		stdin string
+		args  []string
+		exit  int
+		code  string
+	}{
+		{"--reason without --exclude", "", []string{"edit", "f-001", "--reason", "t"}, 2, "usage"},
+		{"--reason-code without --exclude", "", []string{"edit", "f-001", "--reason-code", "duplicate"}, 2, "usage"},
+		{"--reason with --include", "", []string{"edit", "f-001", "--include", "--reason", "t"}, 2, "usage"},
+		{"--reason with --from", `{}`, []string{"edit", "f-001", "--from", "-", "--exclude", "--reason", "t"}, 2, "usage"},
+		{"withdrawReason without --exclude", `{"withdrawReason": {"text": "t"}}`, []string{"edit", "f-001", "--from", "-"}, 1, "input"},
+		{"a code alone", "", []string{"edit", "f-001", "--exclude", "--reason-code", "duplicate"}, 1, "input"},
+		{"a two-line reason", "", []string{"edit", "f-001", "--exclude", "--reason", "a\nb"}, 1, "input"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, dir := sendBackRun(t)
+			before, err := os.ReadFile(filepath.Join(dir, "draft.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			code, env, _ := execIn(t, home, c.stdin, c.args...)
+			if code != c.exit || errorCode(env) != c.code {
+				t.Fatalf("exit %d envelope %v", code, env)
+			}
+			if after, err := os.ReadFile(filepath.Join(dir, "draft.json")); err != nil || string(after) != string(before) {
+				t.Fatalf("draft.json changed (err %v)", err)
+			}
+		})
+	}
+}

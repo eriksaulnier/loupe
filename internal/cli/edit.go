@@ -62,8 +62,12 @@ var (
 	}
 	editContentFlags = append(append([]string{}, addContentFlags...),
 		"clear-location", "clear-label", "clear-confidence", "clear-severity", "clear-verified", "clear-impact", "clear-references",
-		"clear-suggested-fix", "not-blocking")
+		"clear-suggested-fix", "not-blocking", "reason", "reason-code")
 )
+
+// WarnWithdrawReasonMissing is the warning code an edit result carries when an agent withdrew a finding without saying
+// why.
+const WarnWithdrawReasonMissing = "withdraw-reason-missing"
 
 const editUsage = "loupe edit <finding-id> [--from <path>|-] [flags] [--include|--exclude]"
 
@@ -106,6 +110,8 @@ func newEditCmd(deps Deps) *cobra.Command {
 	f.Bool("not-blocking", false, "the finding does not block approval")
 	f.Bool("exclude", false, "withdraw the finding from the review")
 	f.Bool("include", false, "restore a withdrawn finding")
+	f.String("reason", "", "why the finding is withdrawn: one line of Markdown, with --exclude")
+	f.String("reason-code", "", "a word that groups withdrawals, such as no-runtime-effect, with --exclude and --reason")
 	addMutationFlags(cmd)
 	return cmd
 }
@@ -117,6 +123,11 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 	f := cmd.Flags()
 	if f.Changed("include") && f.Changed("exclude") {
 		return refusal.New(refusal.Usage, "--include cannot be combined with --exclude", editUsage)
+	}
+	for _, name := range []string{"reason", "reason-code"} {
+		if f.Changed(name) && !f.Changed("exclude") {
+			return refusal.New(refusal.Usage, fmt.Sprintf("--%s is allowed only with --exclude", name), editUsage)
+		}
 	}
 	for clear, sets := range editClearFlags {
 		for _, name := range sets {
@@ -150,8 +161,13 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 		return err
 	}
 	var edited draft.Finding
-	var cleared bool
+	var cleared, wasIncluded bool
 	d, err := draft.Mutate(dir, "edit", expectVersion, deps.Getenv, func(d *draft.Draft) error {
+		for _, f := range d.Findings {
+			if f.ID == findingID {
+				wasIncluded = f.Included
+			}
+		}
 		var editErr error
 		edited, cleared, editErr = draft.Edit(d, findingID, in.input(), included, dif, by, deps.Now().UTC())
 		return editErr
@@ -159,11 +175,23 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 	if err != nil {
 		return err
 	}
+	// A call that changed nothing returns the finding as it was, so only a withdrawal this call made can warn.
+	var warnings []string
+	if wasIncluded && !edited.Included && by == draft.ByAgent && in.withdrawReason == "" {
+		warnings = append(warnings, WarnWithdrawReasonMissing)
+		es := deps.errStyle()
+		_, _ = fmt.Fprintf(deps.Stderr, "%s %s was withdrawn without a reason; pass --reason <text> and --reason-code <word> so the human sees why\n",
+			es.Emphasis(es.Warn).Render("warning:"), edited.ID)
+	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, map[string]any{
+		payload := map[string]any{
 			"finding":         map[string]any{"id": edited.ID, "rev": edited.Rev, "included": edited.Included},
 			"clearedDecision": cleared,
-		})
+		}
+		if len(warnings) > 0 {
+			payload["warnings"] = warnings
+		}
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}
 	state := "included"
 	if !edited.Included {
@@ -179,7 +207,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 
 // editFields is comparable so an empty edit can be detected; each field is raw JSON as in draft.EditInput.
 type editFields struct {
-	title, body, location, general, label, blocking, confidence, severity, verified, impact, references, suggestedFix string
+	title, body, location, general, label, blocking, confidence, severity, verified, impact, references, suggestedFix, withdrawReason string
 }
 
 func (e editFields) input() draft.EditInput {
@@ -191,7 +219,7 @@ func (e editFields) input() draft.EditInput {
 	}
 	return draft.EditInput{Title: raw(e.title), Body: raw(e.body), Location: raw(e.location), General: raw(e.general), Label: raw(e.label),
 		Blocking: raw(e.blocking), Confidence: raw(e.confidence), Severity: raw(e.severity), Verified: raw(e.verified), Impact: raw(e.impact),
-		References: raw(e.references), SuggestedFix: raw(e.suggestedFix)}
+		References: raw(e.references), SuggestedFix: raw(e.suggestedFix), WithdrawReason: raw(e.withdrawReason)}
 }
 
 func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
@@ -204,7 +232,8 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 		}
 		return editFields{title: string(in.Title), body: string(in.Body), location: string(in.Location), general: string(in.General),
 			label: string(in.Label), blocking: string(in.Blocking), confidence: string(in.Confidence), severity: string(in.Severity),
-			verified: string(in.Verified), impact: string(in.Impact), references: string(in.References), suggestedFix: string(in.SuggestedFix)}, nil
+			verified: string(in.Verified), impact: string(in.Impact), references: string(in.References), suggestedFix: string(in.SuggestedFix),
+			withdrawReason: string(in.WithdrawReason)}, nil
 	}
 
 	var out editFields
@@ -234,6 +263,17 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 	set(&out.suggestedFix, "suggested-fix", str("suggested-fix"))
 	set(&out.general, "general", func() (any, error) { return f.GetBool("general") })
 	set(&out.blocking, "blocking", func() (any, error) { return f.GetBool("blocking") })
+	for _, name := range []string{"reason", "reason-code"} {
+		if f.Changed(name) {
+			set(&out.withdrawReason, name, func() (any, error) {
+				r := draft.Reason{}
+				r.Text, _ = f.GetString("reason")
+				r.Code, _ = f.GetString("reason-code")
+				return r, nil
+			})
+			break
+		}
+	}
 	for _, name := range editLocationFlags {
 		if f.Changed(name) {
 			set(&out.location, name, func() (any, error) {

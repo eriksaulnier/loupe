@@ -13,7 +13,7 @@ This is the agent-facing and human-facing command contract. `/speckit-plan` Phas
 - `--from <path>` reads JSON input from a file; `--from -` reads it from stdin. `--from` conflicts with any flag that sets the same content.
 - `--by agent|human` on `add`, `edit`, `summary`, `reply`; default `agent`.
 - `--expect-version <n>` on `add`, `edit`, `summary`, `assess`, `reply`: refuse inside the lock unless the draft version equals `n`.
-- Unknown JSON fields are refused. JSON input MUST NOT carry `included`, `decision`, `status` or any decision field; such input is refused. `assess` is the one exception: its `status` assesses a finding an earlier round filed and decides nothing in this round.
+- Unknown JSON fields are refused. JSON input MUST NOT carry `included`, `decision`, `status` or any decision field; such input is refused. `assess` is the one exception: its `status` assesses a finding an earlier round filed and decides nothing in this round. `edit` input MAY carry `withdrawReason`, and only together with `--exclude` (amended on 2026-10-28 by `specs/041-withdraw-reason`).
 - `loupe --help` describes the workflow (capture → add → summary → review → publish), the run reference syntax, and states that `review` and `publish` are human-only: an agent MUST NOT operate either, pipe confirmation into them, drive them through a pseudo-terminal, or start `publish` by any route; an agent MAY run `loupe handoff` to start `review` in a new terminal pane the human sees, and MUST NOT then send to, read, resize, close or reuse that pane (ruled 2026-09-15, `specs/006-agent-plugins`). `loupe <command> --help` is complete without any run and shows the command's JSON input and result shapes.
 
 ## Result envelope
@@ -70,6 +70,14 @@ Refusal or error (exit 1 or 2):
 | `review-open` | `handoff` while a `review` of any round of the pull request is running; `details.run` names that run (`specs/036-review-pane-guards`) | when `details.run` is the resolved run, tell the human their review is already open, then `loupe wait`; otherwise ask the human to finish or quit that review, then `loupe handoff` again |
 | `internal` | A defect | file an issue; stack on stderr |
 
+## Warning codes
+
+A warning names a problem that did not stop the command. It goes to stderr as `warning: <message>`, with and without `--json`, and a result with `--json` lists its code in the payload's `warnings` array. A warning never changes the exit code. Added on 2026-10-28 by `specs/041-withdraw-reason`.
+
+| Code | Command | Meaning |
+| :--- | :--- | :--- |
+| `withdraw-reason-missing` | `edit` | A call with `--by agent` withdrew an included finding without `--reason` or `withdrawReason`. The message names `--reason`. A later release MAY refuse it |
+
 ## Commands
 
 ### `loupe capture <pr-url> [--repo <path>] [--source <name>[@<version>]] [--model <id>] [--allow-closed] [--json]`
@@ -109,7 +117,9 @@ A batch is stored entirely or not at all. A refusal caused by one or more invali
 
 Input: an object with any subset of the fields above; `null` clears `location`, `label`, `confidence`, `severity`, `verified`, `impact`, `references` or `suggestedFix`, and an empty `references` list clears it too. Setting `location` clears `general` and vice versa. A `severity` is validated only when the edit changes it, so a finding stored with a value outside the enum stays editable; a `suggestedFix` likewise, so a fix stored before the allowlist applied to it stays editable (specs/020-review-format FR-024). `--exclude` withdraws the finding, `--include` restores it; neither records a human decision. Any publishable change or inclusion change increments `rev` and removes the finding's decision. Flag equivalents: the `add` flags plus `--clear-location`, `--clear-label`, `--clear-confidence`, `--clear-severity`, `--clear-verified`, `--clear-impact`, `--clear-references`, `--clear-suggested-fix`, `--not-blocking`.
 
-Result payload: `finding` (`{id, rev, included}`), `version`, `clearedDecision` (boolean).
+Withdrawal reason (amended on 2026-10-28 by `specs/041-withdraw-reason`): `--reason <text>` and `--reason-code <word>`, or `"withdrawReason": {"text": "...", "code": "..."}` in `--from` input, say why the finding is withdrawn, and are allowed only with `--exclude`. `text` MUST NOT be empty or only whitespace, MUST hold no line break, MUST be at most 200 characters and MUST pass the Markdown allowlist a reply body passes. `code` is optional, starts with a letter or digit, holds only letters, digits, `_`, `.` and `-`, and is at most 40 characters. A code without text is refused. The reason is stored on the history entry the call appends, as `reason` (`{text, code}`, `code` omitted when empty), never on the finding. `--reason` or `--reason-code` without `--exclude`, `--include` included, refuses with `usage`, and either with `--from` refuses as any content flag does. `withdrawReason` without `--exclude` refuses with `input`. A text or code that breaks a rule refuses with `input`, or `markdown` for the allowlist, and the fix names the rule. The recommended codes are in `docs/reason-codes.md` and `loupe edit --help`. loupe does not enforce them. On a finding already not included, a call with a reason and no other change amends the reason: it appends one history entry whose `changed` is empty, and keeps `rev`, inclusion and the decision, while the draft `version` increments. A reason equal to the current one changes nothing and writes nothing. An amend that also changes a publishable field is an ordinary edit. A call with `--by agent` that withdraws an included finding without a reason succeeds and warns `withdraw-reason-missing`. An amend, a call that withdraws nothing and a call with `--by human` do not warn.
+
+Result payload: `finding` (`{id, rev, included}`), `version`, `clearedDecision` (boolean), and `warnings` (an array of warning codes, present only when nonempty; amended on 2026-10-28 by `specs/041-withdraw-reason`). `warnings` is a payload key of `edit` only, not an envelope key, and the envelope stays `"loupe": 1`.
 
 ### `loupe summary [--from <path>|-] [--body <text>] --expect-findings <n> [--by a] [--expect-version n] [--json]`
 
