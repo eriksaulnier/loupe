@@ -804,7 +804,8 @@ func (m *Model) helpRow(k helpKey, keyWidth int) string {
 }
 
 func (m *Model) updateHelp(msg tea.KeyPressMsg) {
-	lines, height := len(m.helpLines()), m.helpHeight()
+	_, height := m.helpRows()
+	lines := len(m.helpLines())
 	last := max(0, lines-height)
 	m.helpTop = min(m.helpTop, last)
 	switch msg.String() {
@@ -814,7 +815,7 @@ func (m *Model) updateHelp(msg tea.KeyPressMsg) {
 		m.helpTop = min(m.helpTop+1, last)
 	case "k", "up":
 		m.helpTop = max(m.helpTop-1, 0)
-	case "pgdown", " ":
+	case "pgdown", "space":
 		m.helpTop = min(m.helpTop+height, last)
 	case "pgup":
 		m.helpTop = max(m.helpTop-height, 0)

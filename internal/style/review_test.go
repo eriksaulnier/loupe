@@ -2,6 +2,8 @@ package style
 
 import (
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -175,15 +177,40 @@ func TestSurfaceSpanInheritsTheBackground(t *testing.T) {
 	}
 }
 
+// sgr is one SGR escape sequence and its parameters.
+var sgr = regexp.MustCompile(`\x1b\[([0-9;:]*)m`)
+
+// paintsBackground reports whether text sets a background in any profile: a basic 40-47 or 100-107, or an extended
+// 48. The operands of an extended color are skipped, so a component that reads 48 is not taken for one.
+func paintsBackground(text string) bool {
+	for _, m := range sgr.FindAllStringSubmatch(text, -1) {
+		params := strings.FieldsFunc(m[1], func(r rune) bool { return r == ';' || r == ':' })
+		for i := 0; i < len(params); i++ {
+			n, _ := strconv.Atoi(params[i])
+			switch {
+			case n >= 40 && n <= 47, n >= 100 && n <= 107, n == 48:
+				return true
+			case n == 38 || n == 58:
+				if i+1 < len(params) && params[i+1] == "5" {
+					i += 2
+				} else if i+1 < len(params) && params[i+1] == "2" {
+					i += 4
+				}
+			}
+		}
+	}
+	return false
+}
+
 // In 16 colors the selected row and the header band are the terminal's own background, so neither path paints one.
 func TestSixteenColorSurfaceIsTheTerminalBackground(t *testing.T) {
 	s := reviewStyle(t, true, nil)
 	s.SetColorProfile(colorprofile.ANSI)
 	for _, sf := range []Surface{SurfaceSelected, SurfaceHeader} {
-		if got := s.OnSurface(sf, s.Bold.Render("f-001")); strings.Contains(got, "48;") {
+		if got := s.OnSurface(sf, s.Bold.Render("f-001")); paintsBackground(got) {
 			t.Errorf("surface %d paints a background in 16 colors: %q", sf, got)
 		}
-		if got := s.SurfaceSpan(sf, 10, Span{Text: "f-001", Style: s.Bold}); strings.Contains(got, "48;") {
+		if got := s.SurfaceSpan(sf, 10, Span{Text: "f-001", Style: s.Bold}); paintsBackground(got) {
 			t.Errorf("surface %d span paints a background in 16 colors: %q", sf, got)
 		}
 	}
@@ -357,7 +384,11 @@ func TestChip(t *testing.T) {
 func TestFocusedPaneTitleIsATab(t *testing.T) {
 	color := reviewStyle(t, true, nil)
 	pane := color.Pane(Pane{Width: 30, Height: 3, Titles: PaneTitles{TopLeft: "Findings"}, Focus: true})
-	if !strings.Contains(pane[0], color.TitleTab("Findings", ToneAccent)) || !strings.HasPrefix(ansi.Strip(pane[0]), "╭─ Findings ─") {
+	tab := color.TitleTab("Findings", ToneAccent)
+	if !strings.Contains(tab, "48;2;") || ansi.Strip(tab) != " Findings " {
+		t.Errorf("the tab %q is not the padded title on a fill", tab)
+	}
+	if !strings.Contains(pane[0], tab) || !strings.HasPrefix(ansi.Strip(pane[0]), "╭─ Findings ─") {
 		t.Errorf("the focused title is not a solid tab: %q", pane[0])
 	}
 	plain := reviewStyle(t, false, nil)

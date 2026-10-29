@@ -166,9 +166,9 @@ func (c *confirmation) key(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		return false, cmd
 	}
 	switch msg.String() {
-	case "j", "down":
+	case "j", "down", "shift+down":
 		c.scroll.ScrollDown(1)
-	case "k", "up":
+	case "k", "up", "shift+up":
 		c.scroll.ScrollUp(1)
 	case "pgdown":
 		c.scroll.PageDown()

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -36,9 +38,37 @@ func TestHighlightKnownAndUnknownLanguages(t *testing.T) {
 	if !strings.Contains(roles[TokenNeutral], "ETag") || !strings.Contains(roles[TokenNeutral], "==") {
 		t.Errorf("neutral tokens %q", roles[TokenNeutral])
 	}
+	// Built-in types are types, not keywords, so they share the neutral role too (review finding).
+	typed, err := Highlight("internal/cache/store.go", []string{"var s string"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]TokenRole{}
+	for _, tok := range typed[0] {
+		got[tok.Text] = tok.Role
+	}
+	if got["var"] != TokenKeyword || got["string"] != TokenNeutral {
+		t.Errorf("var has role %v and string %v, want keyword and neutral", got["var"], got["string"])
+	}
 	plain, err := Highlight("notes.unknownext", []string{"if x {"})
 	if err != nil || plain != nil {
 		t.Errorf("unknown language: %v, %v; want plain code with no tokens", plain, err)
+	}
+}
+
+// A lexer that changes the text fails rather than showing the reader different evidence (review finding).
+func TestHighlightRefusesALexerThatChangesTheText(t *testing.T) {
+	invent := chroma.EmitterFunc(func([]string, *chroma.LexerState) chroma.Iterator {
+		return chroma.Literator(chroma.Token{Type: chroma.Text, Value: "invented"})
+	})
+	lexer := chroma.MustNewLexer(&chroma.Config{Name: "inventing"}, func() chroma.Rules {
+		return chroma.Rules{"root": {{Pattern: `[^\n]+`, Type: invent}, {Pattern: `\n`, Type: chroma.Text}}}
+	})
+	t.Cleanup(func() { matchLexer = lexers.Match })
+	matchLexer = func(string) chroma.Lexer { return lexer }
+	lines, err := Highlight("store.go", []string{"if x {"})
+	if err == nil || !strings.Contains(err.Error(), "line 1 did not round-trip") || lines != nil {
+		t.Errorf("Highlight returned %v, %v; want the round-trip error", lines, err)
 	}
 }
 

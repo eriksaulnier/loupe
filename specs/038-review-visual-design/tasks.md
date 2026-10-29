@@ -2,7 +2,7 @@
 
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), and [layout contract](contracts/layout.md).
 
-**Status**: Implemented on 2026-10-28 in an agent session, uncommitted. T023 is open because the full `mise run check` is blocked in that session by the push gate, as recorded in [quickstart.md](quickstart.md). The separate Bubble Tea v2/lipgloss v2 migration MUST finish before T001. Each implementation task MUST follow a failing test, the change, and a passing check. Tests use injected input and the fake GitHub. No task permits live publication.
+**Status**: Implemented and committed in pull request #87, through the second demo round. The final check is recorded in [quickstart.md](quickstart.md). The separate Bubble Tea v2/lipgloss v2 migration finished before T001. Each implementation task MUST follow a failing test, the change, and a passing check. Tests use injected input and the fake GitHub. No task permits live publication.
 
 ## Phase 1: Setup
 
@@ -105,4 +105,4 @@ For US1, T008 can run alongside T006–T007. For US2, a read-only comparison of 
 
 ## Implementation strategy
 
-US1 is the first demonstrable slice: header, progress, summary, and findings. It MUST NOT ship as the completed feature without US2–US5. Complete the shared geometry first, preserve behavior while replacing each surface, then verify the integrated flow and screenshots. All 25 tasks remain unchecked until implementation starts.
+US1 is the first demonstrable slice: header, progress, summary, and findings. It MUST NOT ship as the completed feature without US2–US5. Complete the shared geometry first, preserve behavior while replacing each surface, then verify the integrated flow and screenshots.

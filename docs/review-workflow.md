@@ -49,7 +49,7 @@ A note asks the agent about one finding. The agent revises the finding or withdr
 
 ### 6. You publish
 
-When no finding is pending and no note is open, press `p` in `loupe review`, or run `loupe publish`. The confirmation shows the exact review, with every section open and each inline comment.
+When no finding is pending and no note is open, press `p` in `loupe review`, or run `loupe publish`. The confirmation opens on the review as it reads, with every section open and each inline comment. `v` steps to its exact Markdown, then to the request payload.
 
 The cursor starts in the review's opening. Type it in your own words and press Esc to leave it. Then `y` or `p` sends. Keys that scroll or switch views do nothing else. Any other key cancels, and nothing is sent.
 

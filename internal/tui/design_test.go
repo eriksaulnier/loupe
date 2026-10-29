@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -154,17 +155,38 @@ func TestLargeRoundGroupsTheBar(t *testing.T) {
 	}
 }
 
+// drain runs cmd and every command a batch or sequence holds, and returns the messages they produce.
+func drain(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		var out []tea.Msg
+		for _, c := range msg {
+			out = append(out, drain(c)...)
+		}
+		return out
+	default:
+		return []tea.Msg{msg}
+	}
+}
+
 // A recorded decision is a notice in the findings pane's bottom border that moves no row, and it expires after its
 // timer unless a newer notice took its place; a refusal does not expire (FR-010, owner decision 6).
 func TestSuccessNoticeLivesInTheBorderAndExpires(t *testing.T) {
 	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
 	before := strings.Split(m.View().Content, "\n")
 	mustOpenFinding(t, m, "f-001")
+	// The decision's command also carries the flash and the settle timers, so the expiry is looked for among them.
+	expiry, flash, settle := noticeExpiry, flashFor, settleAfterDecision
+	t.Cleanup(func() { noticeExpiry, flashFor, settleAfterDecision = expiry, flash, settle })
+	noticeExpiry, flashFor, settleAfterDecision = time.Millisecond, time.Millisecond, time.Millisecond
 	_, cmd := m.Update(runes("a"))
-	if cmd == nil {
+	gen := m.noticeGen
+	if !slices.Contains(drain(cmd), tea.Msg(noticeExpired{gen})) {
 		t.Fatal("a success notice scheduled no expiry")
 	}
-	gen := m.noticeGen
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m.say(style.Good, "✓ f-001 accepted")
 	after := strings.Split(m.View().Content, "\n")
@@ -558,14 +580,25 @@ func TestFileDiffTokenizesOnce(t *testing.T) {
 	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
 	mustOpenFinding(t, m, "f-001")
 	f, _ := m.openedFinding()
+	// Counting the tokenizer's calls checks the cache itself, which a content-derived key alone does not (review finding).
+	calls := 0
+	t.Cleanup(func() { highlightCode = style.Highlight })
+	highlightCode = func(path string, lines []string) ([][]style.CodeToken, error) {
+		calls++
+		return style.Highlight(path, lines)
+	}
 	m.openFileDiff(f)
-	key := m.tokensKey
-	start := time.Now()
+	m.View()
+	if calls == 0 {
+		t.Fatal("the file diff was never tokenized, so the test checks nothing")
+	}
+	before := calls
 	for range 20 {
 		m.Update(arrow(tea.KeyDown))
+		m.View()
 	}
-	if m.tokensKey != key || time.Since(start) > 2*time.Second {
-		t.Errorf("moving the cursor tokenized the file again")
+	if calls != before {
+		t.Errorf("moving the cursor tokenized the file %d more times", calls-before)
 	}
 }
 
@@ -834,8 +867,15 @@ func TestOnlyTheFocusedPaneHasATab(t *testing.T) {
 	env := map[string]string{"LANG": "en_US.UTF-8"}
 	m := modelOf(t, newFixture(t), env, 100, 30)
 	m.styles.SetColorProfile(colorprofile.TrueColor)
+	// A tab is a fill, so the title on screen must carry the fill escape, not only match TitleTab (review finding).
+	filled := func(tab string) string {
+		if !strings.Contains(tab, "48;2;") {
+			t.Fatalf("the tab %q has no fill", tab)
+		}
+		return tab
+	}
 	tab := func(text string, tone style.Tone) bool {
-		return strings.Contains(m.View().Content, m.styles.TitleTab(text, tone))
+		return strings.Contains(m.View().Content, filled(m.styles.TitleTab(text, tone)))
 	}
 	if !tab("Findings", style.ToneAccent) || tab("Reviewer's summary", style.ToneAccent) {
 		t.Errorf("the list's tab is not on the findings alone:\n%q", m.View().Content)
@@ -852,11 +892,11 @@ func TestOnlyTheFocusedPaneHasATab(t *testing.T) {
 	c.styles.SetColorProfile(colorprofile.TrueColor)
 	showConfirmation(c)
 	c.confirm.typing = true
-	if v := c.View().Content; !strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) || strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) {
+	if v := c.View().Content; !strings.Contains(v, filled(c.styles.TitleTab("your message", style.ToneNote))) || strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) {
 		t.Errorf("typing does not put the tab on the message:\n%q", v)
 	}
 	c.confirm.typing = false
-	if v := c.View().Content; !strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) || strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) {
+	if v := c.View().Content; !strings.Contains(v, filled(c.styles.TitleTab("Publish review", style.ToneAccent))) || strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) {
 		t.Errorf("a blurred message does not return the tab to the review:\n%q", v)
 	}
 }
@@ -988,16 +1028,30 @@ func TestConfirmationReadsAsAReview(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	view := m.View().Content
 	text := paneText(view)
-	for _, want := range []string{"Must fix", "⛔ issue MAJOR: Cache entries never expire", "internal/cache/store.go:90-91", "Confidence: high", "Impact: Stale titles.", "Body text with `Get` in it."} {
+	// Without color, bold and the accent are gone, so a heading keeps its # run and bold its markers (review finding).
+	for _, want := range []string{"### Must fix", "⛔ issue MAJOR: Cache entries never expire", "internal/cache/store.go:90-91", "**Confidence:** high", "**Impact:** Stale titles.", "Body text with `Get` in it."} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the review lacks %q:\n%s", want, view)
 		}
 	}
-	for _, raw := range []string{"<details", "<summary>", "**", "](https", "### ", "review body"} {
+	for _, raw := range []string{"<details", "<summary>", "](https", "review body"} {
 		if strings.Contains(view, raw) {
 			t.Errorf("the review shows Markdown %q:\n%s", raw, view)
 		}
 	}
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	colored := ansi.Strip(m.readable(p.Body, 96))
+	for _, want := range []string{"Must fix", "Confidence: high", "Impact: Stale titles."} {
+		if !strings.Contains(colored, want) {
+			t.Errorf("the review in color lacks %q:\n%s", want, colored)
+		}
+	}
+	for _, raw := range []string{"**", "### "} {
+		if strings.Contains(colored, raw) {
+			t.Errorf("the review in color shows Markdown %q:\n%s", raw, colored)
+		}
+	}
+	m.styles.SetColorProfile(colorprofile.NoTTY)
 	if !strings.Contains(view, "v markdown") {
 		t.Errorf("the footer does not offer the Markdown:\n%s", view)
 	}
@@ -1046,6 +1100,17 @@ func TestShiftArrowsScrollTheFindingsWhileTyping(t *testing.T) {
 	if !strings.Contains(m.View().Content, "scroll") {
 		t.Errorf("the typing footer does not offer the line scroll:\n%s", m.View().Content)
 	}
+	// Once esc leaves the message, the gesture the footer taught still scrolls and does not cancel (review finding).
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	for _, c := range []struct {
+		code rune
+		want int
+	}{{tea.KeyDown, top + 1}, {tea.KeyUp, top}} {
+		key := tea.KeyPressMsg{Code: c.code, Mod: tea.ModShift}
+		if done, _ := m.confirm.key(m, key); done || m.confirm.scroll.YOffset() != c.want {
+			t.Errorf("blurred, %s answered %v and left the view at %d, want %d", key, done, m.confirm.scroll.YOffset(), c.want)
+		}
+	}
 }
 
 // A summary, a heading or fenced code wider than the pane wraps in the readable review rather than losing its tail
@@ -1065,6 +1130,47 @@ func TestReadableReviewWrapsEveryLine(t *testing.T) {
 		if style.Width(line) > 56 {
 			t.Errorf("a row is wider than the pane: %q", line)
 		}
+	}
+}
+
+// The earlier rounds a sticky body quotes read like the current round: their headings, details tags and summaries are
+// read through the bar rather than shown as Markdown (review finding).
+func TestReadableReviewReadsQuotedRounds(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "testdata", "golden", "sticky.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	view := ansi.Strip(m.readable(string(body), 96))
+	for _, raw := range []string{"<details", "</details>", "<summary>", "### ", "<b>"} {
+		if strings.Contains(view, raw) {
+			t.Errorf("the quoted round shows Markdown %q:\n%s", raw, view)
+		}
+	}
+	for _, want := range []string{"┃ Must fix", "┃ ⛔ issue: Title f-001", "┃ Body f-001."} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the quoted round lacks %q:\n%s", want, view)
+		}
+	}
+}
+
+// A tokenizer failure keeps the plain code on screen and says so on the notice line (review finding).
+func TestDetailSaysWhenHighlightingFails(t *testing.T) {
+	t.Cleanup(func() { highlightCode = style.Highlight })
+	highlightCode = func(path string, _ []string) ([][]style.CodeToken, error) {
+		return nil, errors.New("highlight " + path + ": line 1 did not round-trip")
+	}
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	view := paneText(m.View().Content)
+	if !strings.Contains(view, "syntax highlighting is unavailable for") || !strings.Contains(view, "did not round-trip") {
+		t.Errorf("the failure is not on the notice line:\n%s", m.View().Content)
+	}
+	if !strings.Contains(view, "3 + line three") {
+		t.Errorf("the plain code is not on screen:\n%s", m.View().Content)
 	}
 }
 

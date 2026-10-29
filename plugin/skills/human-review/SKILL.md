@@ -75,9 +75,9 @@ If `loupe publish` later refuses with `previous-moved`, run `loupe show --previo
 
 Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findings <n> --from <file> --run <ref> --json`, where `<n>` is the number of findings you filed. On a `count` refusal, `error.details.included` lists the findings that landed; file the missing ones and run `summary` again.
 
-**The summary is not published.** It orients the human while they sort findings: what kind of review this is, what you looked at, what you could not check. The review's own opening prose is written by the human at the publish confirmation, in their words, so write the summary for the one person who reads it before deciding, not for the pull request's author. Say plainly what the round did and did not cover; a caveat you leave out is one nobody sees.
+**The summary is not published.** It orients the human while they sort findings, in the bullets below. The review's own opening prose is written by the human at the publish confirmation, in their words, so write the summary for the one person who reads it before deciding, not for the pull request's author. Say plainly what the round did and did not cover; a caveat you leave out is one nobody sees.
 
-Write the summary as at most four short Markdown bullets: what the pull request changes, what blocks it, and what you did not check. Review shows the summary expanded above the findings, and a longer one is clipped on screen. Nothing refuses a longer summary, and `loupe show` still prints it whole.
+Write the summary as at most four short Markdown bullets: what the pull request changes, what blocks it, and what you did not check. Review shows the summary expanded above the findings, and a longer one may be clipped on screen. Nothing refuses a longer summary, and `loupe show` still prints it whole.
 
 ## 6. Hand off
 
