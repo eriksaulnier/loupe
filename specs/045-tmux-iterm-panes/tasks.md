@@ -67,9 +67,9 @@ description: "Task list for opening review in a tmux or iTerm2 pane, tmux first 
 
 ## Phase 6: iTerm2 documents
 
-- [ ] T024 [P] `specs/001-loupe-v1/contracts/cli.md`, `docs/review-workflow.md` (iTerm2 and `osascript` in the do-not-allow list), `AGENTS.md`, `CONTRIBUTING.md`: add iTerm2.
-- [ ] T025 `specs/001-loupe-v1/validation.md`: the iTerm2 tests and every iTerm2 row of FR-018 under Unverified.
-- [ ] T026 Run `mise run check`; commit `docs(pane): document the iterm2 pane host`.
+- [X] T024 [P] `specs/001-loupe-v1/contracts/cli.md`, `docs/review-workflow.md` (iTerm2 and `osascript` in the do-not-allow list), `AGENTS.md`, `CONTRIBUTING.md`: add iTerm2.
+- [X] T025 `specs/001-loupe-v1/validation.md`: the iTerm2 tests and every iTerm2 row of FR-018 under Unverified.
+- [X] T026 Run `mise run check`; commit `docs(pane): document the iterm2 pane host`.
 
 ## Dependencies
 
