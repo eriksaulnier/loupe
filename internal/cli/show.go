@@ -17,6 +17,9 @@ import (
 const showHelp = `Show the whole draft of a run: summary, findings with their history, human decisions,
 notes and replies, plus the captured target, each finding's disposition and readiness.
 
+A finding that is not included carries withdrawReason, the reason it was last withdrawn with,
+when it has one; each history entry carries the reason it recorded.
+
 A disposition is accepted, pending, excluded or withdrawn. Readiness holds when no finding is
 pending and no note is open. The digest is the SHA-256 of the publishable set, the value that
 will appear in the published review's hidden marker.
@@ -29,7 +32,8 @@ Result (--json):
    "findings": [{"id": "f-001", "rev": 1, "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
                  "general": false, "label": "issue", "blocking": true, "by": "agent",
-                 "included": true, "createdAt": "...", "updatedAt": "...", "history": []}],
+                 "included": true, "createdAt": "...", "updatedAt": "...", "history": [],
+                 "withdrawReason": {"text": "Naming only.", "code": "no-runtime-effect"}}],
    "decisions": {"f-001": {"findingId": "f-001", "decision": "accepted", "findingRev": 1, "at": "..."}},
    "notes": [{"id": "n-001", "findingId": "f-001", "body": "...", "at": "...", "status": "open"}],
    "replies": [{"id": "r-001", "noteId": "n-001", "body": "...", "by": "agent", "at": "..."}],
@@ -157,7 +161,7 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 		payload := map[string]any{
 			"schema":       d.Schema,
 			"summary":      d.Summary,
-			"findings":     d.Findings,
+			"findings":     shownFindings(d),
 			"decisions":    d.Decisions,
 			"notes":        d.Notes,
 			"replies":      d.Replies,
@@ -176,6 +180,20 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}
 	return printShow(deps, ref, target, d, dispositions, readiness)
+}
+
+// shownFinding adds the current withdrawal reason, which is derived from history and never stored on the finding.
+type shownFinding struct {
+	draft.Finding
+	WithdrawReason *draft.Reason `json:"withdrawReason,omitempty"`
+}
+
+func shownFindings(d *draft.Draft) []shownFinding {
+	out := make([]shownFinding, 0, len(d.Findings))
+	for _, f := range d.Findings {
+		out = append(out, shownFinding{f, draft.CurrentReason(f)})
+	}
+	return out
 }
 
 // Raw mode writes the captured bytes and nothing else, so a redirect reproduces pr.diff exactly.
@@ -447,6 +465,7 @@ type findingBlock struct {
 	impact   string
 	fix      string
 	refs     []string
+	reason   *draft.Reason
 }
 
 // metaCell is one part of a finding's meta line and the role it paints in. Most parts are dim; severity carries its
@@ -509,6 +528,13 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 		for _, line := range metaLine(s, f.meta, width) {
 			fmt.Fprintf(b, "%s\n", line)
 		}
+	}
+	if f.reason != nil {
+		why := s.Dim.Render("withdrawn because") + " " + oneLine(f.reason.Text)
+		if f.reason.Code != "" {
+			why += " " + s.Dim.Render("["+oneLine(f.reason.Code)+"]")
+		}
+		fmt.Fprintf(b, "%s\n", s.Wrap(why, width, findingIndent))
 	}
 	if body := text(f.body); body != "" {
 		fmt.Fprintf(b, "%s\n", s.Wrap(body, width, findingIndent))
@@ -600,6 +626,7 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 		writeFinding(&b, s, width, findingBlock{
 			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
 			title: f.Title, meta: meta, body: f.Body, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,
+			reason: draft.CurrentReason(f),
 		})
 	}
 	fmt.Fprintf(&b, "%s\n", showFooter(s, width, ref, d, readiness))

@@ -329,3 +329,25 @@ func TestEditRefusesAMisplacedReason(t *testing.T) {
 		})
 	}
 }
+
+// SC-001: one withdrawal with a reason and one without, read back through show.
+func TestAWithdrawalWithAndWithoutAReason(t *testing.T) {
+	home, first, second := reasonRun(t)
+	if first.stderr.Len() != 0 || !strings.Contains(second.stderr.String(), "--reason") {
+		t.Fatalf("stderr %q then %q", first.stderr.String(), second.stderr.String())
+	}
+	if env := decodeOne(t, second.stdout.Bytes()); env["warnings"] == nil {
+		t.Fatalf("second edit %v", env)
+	}
+	_, env, _ := execIn(t, home, "", "show")
+	findings, _ := env["findings"].([]any)
+	have := map[string]bool{}
+	for _, f := range findings {
+		m, _ := f.(map[string]any)
+		_, ok := m["withdrawReason"]
+		have[m["id"].(string)] = ok
+	}
+	if !have["f-001"] || have["f-002"] {
+		t.Fatalf("withdrawReason on %v", have)
+	}
+}
