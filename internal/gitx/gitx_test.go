@@ -277,3 +277,22 @@ func TestRevParseMissingRef(t *testing.T) {
 		t.Fatal("RevParse accepted a missing ref")
 	}
 }
+
+func TestBlobReadsAFileAtARefAndChangesNothing(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 7)
+	baseRef, headRef := "refs/loupe/o/r/7/1/base", "refs/loupe/o/r/7/1/head"
+	if err := FetchPR(repo.Dir, 7, repo.BaseSHA(), baseRef, headRef); err != nil {
+		t.Fatal(err)
+	}
+	before := repo.Snapshot()
+	got, err := Blob(repo.Dir, headRef, "src/added.go")
+	if err != nil || string(got) != "package src\n\nconst Added = true\n" {
+		t.Fatalf("Blob = %q, %v", got, err)
+	}
+	if _, err := Blob(repo.Dir, headRef, "remove-me.txt"); err == nil {
+		t.Fatal("Blob of a path the head deleted returned no error")
+	}
+	if d := before.DiffIgnoringLoupeRefs(repo.Snapshot()); len(d) != 0 {
+		t.Fatalf("clone changed: %v", d)
+	}
+}
