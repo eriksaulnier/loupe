@@ -60,7 +60,7 @@ func (m *Model) refreshDetail() error {
 	}
 	doc = append(doc, "")
 	if f.Location != nil {
-		doc = append(doc, m.codePane(locationText(f), lines, width)...)
+		doc = append(doc, m.codePane(locationText(f), f.Location.Heading, lines, width)...)
 		doc = append(doc, "")
 	}
 	doc = append(doc, strings.Split(body, "\n")...)
@@ -121,10 +121,21 @@ func (m *Model) metaLines(f draft.Finding, width int) []string {
 }
 
 // codePane is a location's lines in a nested pane: the path in its border, the filename bright, and what the
-// displayed lines add and remove at its right.
-func (m *Model) codePane(location string, lines []diff.ViewLine, width int) []string {
+// displayed lines add and remove at its right. A heading the finding was anchored to heads the pane's body, wrapped
+// rather than clipped, since the published comment shows only the range and a long heading is the part the human
+// needs whole.
+func (m *Model) codePane(location, heading string, lines []diff.ViewLine, width int) []string {
 	inner, _ := style.PaneInner(width, 0)
 	rows, added, removed := m.codeRows(location, lines, inner)
+	if heading != "" {
+		// Every tier's separator is one cell wide, so the hanging indent lines the wrapped rows up under the text.
+		head := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(heading)), inner, "  "), "\n")
+		head[0] = m.glyphs.Sep + " " + strings.TrimPrefix(head[0], "  ")
+		for i, line := range head {
+			head[i] = m.styles.Secondary().Render(line)
+		}
+		rows = append(head, rows...)
+	}
 	stat := m.styles.Text().Render(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
 	title := m.styles.LocationTitle(location, max(8, inner-style.Width(stat)-6), true)
 	return m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,

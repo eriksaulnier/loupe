@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
@@ -69,10 +70,12 @@ func report(deps Deps, jsonMode bool, command string, inv invocation, err error)
 const refusalIndent = "        "
 
 // writeRefusalText prints the refusal on stderr. The no-color shape, `error: <message>` and `fix: <fix>`, is the
-// contract; color adds the code, wrapping and one line per command but never moves the line-start words.
+// contract; color adds the code, wrapping and one line per command but never moves the line-start words. Controls in
+// the message and the fix are made visible, since either can quote text from the pull request.
 func writeRefusalText(w io.Writer, s style.Style, width int, r *refusal.Error, ce *cleanupError) {
+	message, fix := render.ForDisplay(r.Message), render.ForDisplay(r.Fix)
 	if !s.Color {
-		_, _ = fmt.Fprintf(w, "error: %s\nfix: %s\n", r.Message, r.Fix)
+		_, _ = fmt.Fprintf(w, "error: %s\nfix: %s\n", message, fix)
 		if ce != nil {
 			_, _ = fmt.Fprintf(w, "cleanup:\n  %s\n", strings.Join(ce.cleanup, "\n  "))
 		}
@@ -88,8 +91,8 @@ func writeRefusalText(w io.Writer, s style.Style, width int, r *refusal.Error, c
 	}
 	code := string(r.Code)
 	_, _ = fmt.Fprintf(w, "%s%s  %s\n", label(s.Emphasis(s.Bad).Render, errorWord), s.Dim.Render(code),
-		hanging(s, r.Message, width, indent+strings.Repeat(" ", len(code)+2)))
-	_, _ = fmt.Fprintf(w, "%s%s\n", label(s.Emphasis(s.Good).Render, fixWord), fixLines(s, r.Fix, width, indent))
+		hanging(s, message, width, indent+strings.Repeat(" ", len(code)+2)))
+	_, _ = fmt.Fprintf(w, "%s%s\n", label(s.Emphasis(s.Good).Render, fixWord), fixLines(s, fix, width, indent))
 	if ce != nil {
 		_, _ = fmt.Fprintf(w, "%s\n", s.Emphasis(s.Bad).Render("cleanup:"))
 		for _, c := range ce.cleanup {

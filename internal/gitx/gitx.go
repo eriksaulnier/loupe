@@ -195,3 +195,8 @@ func Diff(clone, baseRef, headRef string) ([]byte, error) {
 		"--diff-algorithm=myers", "--no-relative", "-O"+os.DevNull, "--no-ext-diff", "--no-color", "--no-textconv",
 		"--src-prefix=a/", "--dst-prefix=b/", "--find-renames", baseRef+"..."+headRef)
 }
+
+// Blob returns path's bytes at ref. cat-file applies no textconv or filter, as Diff applies none.
+func Blob(clone, ref, path string) ([]byte, error) {
+	return git(clone, "cat-file", "blob", ref+":"+path)
+}

@@ -191,7 +191,15 @@ func TestOrderedSortsSeverityAcrossLabels(t *testing.T) {
 	}
 }
 
-func TestGateCountsOf(t *testing.T) {
+type gateCase struct {
+	name     string
+	finding  Finding
+	decision *Decision
+	want     GateCounts
+}
+
+// gateCases is one draft of one finding per edge case of the human gate, shared by GateCountsOf and GateOf.
+func gateCases() []gateCase {
 	entry := func(by string, changed map[string]any) HistoryEntry {
 		return HistoryEntry{By: by, Changed: changed}
 	}
@@ -204,12 +212,7 @@ func TestGateCountsOf(t *testing.T) {
 		return &Decision{FindingID: "f-001", Decision: DecisionExcluded, FindingRev: rev}
 	}
 
-	cases := []struct {
-		name     string
-		finding  Finding
-		decision *Decision
-		want     GateCounts
-	}{
+	return []gateCase{
 		{
 			name:     "withdrawn by the agent, then reinstated and accepted",
 			finding:  withHistory(finding("f-001", 3, true, ByAgent), withdraw(ByAgent), reinstate(ByHuman)),
@@ -303,17 +306,77 @@ func TestGateCountsOf(t *testing.T) {
 			want:    GateCounts{Withdrawn: 1},
 		},
 	}
-	for _, c := range cases {
+}
+
+func (c gateCase) draft(t *testing.T) *Draft {
+	t.Helper()
+	d := NewEmpty()
+	d.Findings = append(d.Findings, c.finding)
+	if c.decision != nil {
+		d.Decisions["f-001"] = *c.decision
+	}
+	return roundTrip(t, d)
+}
+
+func TestGateCountsOf(t *testing.T) {
+	for _, c := range gateCases() {
 		t.Run(c.name, func(t *testing.T) {
-			d := NewEmpty()
-			d.Findings = append(d.Findings, c.finding)
-			if c.decision != nil {
-				d.Decisions["f-001"] = *c.decision
-			}
-			if got := GateCountsOf(roundTrip(t, d)); got != c.want {
+			if got := GateCountsOf(c.draft(t)); got != c.want {
 				t.Fatalf("got %+v, want %+v", got, c.want)
 			}
 		})
+	}
+}
+
+// GateOf is the per-finding rule GateCountsOf sums, so loupe stats and the published marker cannot disagree.
+func TestGateOfSumsToGateCountsOf(t *testing.T) {
+	for _, c := range gateCases() {
+		t.Run(c.name, func(t *testing.T) {
+			d := c.draft(t)
+			var got GateCounts
+			for _, f := range d.Findings {
+				g := GateOf(d, f)
+				switch g.Disposition {
+				case DispositionExcluded:
+					got.Excluded++
+				case DispositionWithdrawn:
+					got.Withdrawn++
+				}
+				if g.Reinstated {
+					got.Reinstated++
+				}
+				if g.Regraded {
+					got.Regraded++
+				}
+			}
+			if got != c.want {
+				t.Fatalf("summed GateOf = %+v, want %+v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestGateOfDispositions(t *testing.T) {
+	withdraw := func(by string) HistoryEntry { return HistoryEntry{By: by, Changed: map[string]any{"included": true}} }
+	d := NewEmpty()
+	d.Findings = []Finding{
+		finding("f-001", 1, true, ByAgent),
+		finding("f-002", 1, true, ByAgent),
+		withHistory(finding("f-003", 2, false, ByAgent), withdraw(ByHuman)),
+		withHistory(finding("f-004", 2, false, ByAgent), withdraw(ByAgent)),
+		finding("f-005", 1, true, ByAgent),
+	}
+	d.Decisions["f-001"] = Decision{FindingID: "f-001", Decision: DecisionAccepted, FindingRev: 1}
+	d.Decisions["f-005"] = Decision{FindingID: "f-005", Decision: DecisionExcluded, FindingRev: 1}
+	d = roundTrip(t, d)
+	want := map[string]string{
+		"f-001": DispositionAccepted, "f-002": DispositionPending, "f-003": DispositionExcluded,
+		"f-004": DispositionWithdrawn, "f-005": DispositionExcluded,
+	}
+	for _, f := range d.Findings {
+		if got := GateOf(d, f); got != (FindingGate{Disposition: want[f.ID]}) {
+			t.Errorf("GateOf(%s) = %+v, want disposition %q and no flags", f.ID, got, want[f.ID])
+		}
 	}
 }
 

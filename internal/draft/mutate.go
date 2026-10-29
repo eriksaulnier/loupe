@@ -22,18 +22,28 @@ import (
 
 // FindingInput is the add input in contracts/cli.md. It has no included field because only the human changes that.
 type FindingInput struct {
-	Title        string    `json:"title"`
-	Body         string    `json:"body"`
-	Location     *Location `json:"location,omitempty"`
-	General      bool      `json:"general,omitempty"`
-	Label        string    `json:"label,omitempty"`
-	Blocking     bool      `json:"blocking,omitempty"`
-	Confidence   string    `json:"confidence,omitempty"`
-	Severity     string    `json:"severity,omitempty"`
-	Verified     string    `json:"verified,omitempty"`
-	Impact       string    `json:"impact,omitempty"`
-	References   []string  `json:"references,omitempty"`
-	SuggestedFix string    `json:"suggestedFix,omitempty"`
+	Title        string         `json:"title"`
+	Body         string         `json:"body"`
+	Location     *LocationInput `json:"location,omitempty"`
+	General      bool           `json:"general,omitempty"`
+	Label        string         `json:"label,omitempty"`
+	Blocking     bool           `json:"blocking,omitempty"`
+	Confidence   string         `json:"confidence,omitempty"`
+	Severity     string         `json:"severity,omitempty"`
+	Verified     string         `json:"verified,omitempty"`
+	Impact       string         `json:"impact,omitempty"`
+	References   []string       `json:"references,omitempty"`
+	SuggestedFix string         `json:"suggestedFix,omitempty"`
+}
+
+// LocationInput is a location as add and edit read it: a line form, or a heading anchor that resolves to one.
+type LocationInput struct {
+	Path      string `json:"path"`
+	Side      string `json:"side"`
+	Line      int    `json:"line"`
+	StartLine int    `json:"startLine,omitempty"`
+	// Heading is a pointer so an empty heading is refused rather than read as a line form with no line.
+	Heading *string `json:"heading,omitempty"`
 }
 
 const inputFix = "see loupe add --help for the input shape"
@@ -108,11 +118,12 @@ func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Ti
 	if by == "" {
 		by = ByAgent
 	}
-	if err := CheckBatch(inputs, nil, dif); err != nil {
+	locations, err := checkBatch(inputs, nil, dif)
+	if err != nil {
 		return nil, err
 	}
 	added := make([]Finding, 0, len(inputs))
-	for _, in := range inputs {
+	for i, in := range inputs {
 		f := Finding{
 			ID:           NextFindingID(d),
 			Rev:          1,
@@ -135,20 +146,25 @@ func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Ti
 		if len(in.References) > 0 {
 			f.References = slices.Clone(in.References)
 		}
-		if in.Location != nil {
-			loc := *in.Location
-			if loc.Side == "" {
-				loc.Side = SideRight
-			}
-			f.Location = &loc
-		}
+		f.Location = locations[i]
 		d.Findings = append(d.Findings, f)
 		added = append(added, f)
 	}
 	return added, nil
 }
 
-func validateInput(in FindingInput, dif *diff.Diff) error {
+// validateInput returns the location to store, which for a heading anchor is the range it resolved to.
+func validateInput(in FindingInput, dif *diff.Diff) (*FindingLocation, error) {
+	if err := validateFields(in); err != nil {
+		return nil, err
+	}
+	if in.Location == nil {
+		return nil, nil
+	}
+	return resolveLocation(*in.Location, dif)
+}
+
+func validateFields(in FindingInput) error {
 	switch {
 	case strings.TrimSpace(in.Title) == "":
 		return refusal.New(refusal.Input, "title is required and must not be empty", inputFix)
@@ -191,18 +207,39 @@ func validateInput(in FindingInput, dif *diff.Diff) error {
 			return err
 		}
 	}
-	if in.Location == nil {
-		return nil
+	return nil
+}
+
+// resolveLocation checks a location against the stored diff, and resolves a heading anchor against the outline.
+func resolveLocation(in LocationInput, dif *diff.Diff) (*FindingLocation, error) {
+	if in.Heading != nil {
+		switch {
+		case in.Line != 0 || in.StartLine != 0:
+			return nil, refusal.New(refusal.Input, "a heading anchor carries no line or startLine; loupe resolves them from the heading", inputFix)
+		case in.Side != "" && in.Side != SideRight:
+			return nil, refusal.New(refusal.Input,
+				fmt.Sprintf("a heading anchor is on side RIGHT, the new file, not %q; use a line location for side LEFT", in.Side), inputFix)
+		case strings.TrimSpace(*in.Heading) == "":
+			return nil, refusal.New(refusal.Input, "heading is empty; name the heading's text without its # marks", inputFix)
+		}
+		start, line, err := dif.ResolveHeading(in.Path, *in.Heading)
+		if err != nil {
+			return nil, err
+		}
+		return &FindingLocation{Path: in.Path, Side: SideRight, Line: line, StartLine: start, Heading: markdown.NormalizeHeading(*in.Heading)}, nil
 	}
-	side := in.Location.Side
+	side := in.Side
 	switch side {
 	case "":
 		side = SideRight
 	case SideRight, SideLeft:
 	default:
-		return refusal.New(refusal.Input, fmt.Sprintf("side %q must be RIGHT or LEFT", side), inputFix)
+		return nil, refusal.New(refusal.Input, fmt.Sprintf("side %q must be RIGHT or LEFT", side), inputFix)
 	}
-	return dif.Validate(in.Location.Path, side, in.Location.Line, in.Location.StartLine)
+	if err := dif.Validate(in.Path, side, in.Line, in.StartLine); err != nil {
+		return nil, err
+	}
+	return &FindingLocation{Path: in.Path, Side: side, Line: in.Line, StartLine: in.StartLine}, nil
 }
 
 // checkFindingIDs refuses a finding id in the title, body, impact or suggested fix, in that order. Edit passes ""
@@ -231,6 +268,13 @@ type EntryFailure struct {
 // CheckBatch validates every input not already in failed and refuses once, naming every invalid entry, so a caller
 // can fix the whole batch in one retry. The top level is the first invalid entry's own refusal.
 func CheckBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) error {
+	_, err := checkBatch(inputs, failed, dif)
+	return err
+}
+
+// checkBatch also returns each entry's location to store.
+func checkBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) ([]*FindingLocation, error) {
+	locations := make([]*FindingLocation, len(inputs))
 	known := make(map[int]bool, len(failed))
 	for _, f := range failed {
 		known[f.Entry] = true
@@ -240,23 +284,24 @@ func CheckBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) er
 		if known[i] {
 			continue
 		}
-		err := validateInput(in, dif)
+		loc, err := validateInput(in, dif)
 		if err == nil {
 			err = checkFindingIDs(in.Title, in.Body, in.Impact, in.SuggestedFix, "run loupe add again")
 		}
 		if err != nil {
 			failures = append(failures, EntryFailure{Entry: i, Err: err})
 		}
+		locations[i] = loc
 	}
 	if len(failures) == 0 {
-		return nil
+		return locations, nil
 	}
 	slices.SortFunc(failures, func(a, b EntryFailure) int { return a.Entry - b.Entry })
 	entries := make([]map[string]any, 0, len(failures))
 	for _, f := range failures {
 		r, ok := refusal.As(f.Err)
 		if !ok {
-			return f.Err
+			return nil, f.Err
 		}
 		entry := map[string]any{"entry": f.Entry, "code": string(r.Code), "message": r.Message, "fix": r.Fix}
 		if len(r.Details) > 0 {
@@ -275,7 +320,7 @@ func CheckBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) er
 		prefix = "input entry"
 	}
 	message := fmt.Sprintf("%s %d: %s%s", prefix, failures[0].Entry, first.Message, alsoRefused(failures[1:]))
-	return &refusal.Error{Code: first.Code, Message: message, Fix: first.Fix, Details: details}
+	return nil, &refusal.Error{Code: first.Code, Message: message, Fix: first.Fix, Details: details}
 }
 
 // alsoRefused tells a reader of the message alone that the first refused entry is not the only one.
@@ -492,8 +537,15 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		by = ByAgent
 	}
 	next := *stored
-	if err := applyEdit(&next, in); err != nil {
+	anchor, err := applyEdit(&next, in)
+	if err != nil {
 		return Finding{}, false, err
+	}
+	// Resolved before the comparison, so naming the heading a finding already holds changes nothing.
+	if anchor != nil {
+		if next.Location, err = resolveLocation(*anchor, dif); err != nil {
+			return Finding{}, false, err
+		}
 	}
 	if included != nil {
 		next.Included = *included
@@ -532,7 +584,12 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		if fix == stored.SuggestedFix {
 			fix = ""
 		}
-		err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: next.Location, General: next.General, Label: next.Label,
+		// The stored location is checked as the range it is; its heading was resolved when it was set.
+		var loc *LocationInput
+		if next.Location != nil {
+			loc = &LocationInput{Path: next.Location.Path, Side: next.Location.Side, Line: next.Location.Line, StartLine: next.Location.StartLine}
+		}
+		_, err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: loc, General: next.General, Label: next.Label,
 			Blocking: next.Blocking, Confidence: next.Confidence, Severity: severity, Verified: next.Verified, Impact: next.Impact,
 			References: next.References, SuggestedFix: fix}, dif)
 		if err != nil {
@@ -660,15 +717,16 @@ func Rewrite(d *Draft, findingID, title, body string, dif *diff.Diff, now time.T
 	return f, nil
 }
 
-func applyEdit(f *Finding, in EditInput) error {
+// applyEdit returns a heading anchor for Edit to resolve, since resolving it needs the diff.
+func applyEdit(f *Finding, in EditInput) (anchor *LocationInput, err error) {
 	if err := decodeRequired("title", in.Title, &f.Title); err != nil {
-		return err
+		return nil, err
 	}
 	if err := decodeRequired("body", in.Body, &f.Body); err != nil {
-		return err
+		return nil, err
 	}
 	if err := decodeRequired("blocking", in.Blocking, &f.Blocking); err != nil {
-		return err
+		return nil, err
 	}
 	for _, field := range []struct {
 		name string
@@ -677,7 +735,7 @@ func applyEdit(f *Finding, in EditInput) error {
 	}{{"label", in.Label, &f.Label}, {"confidence", in.Confidence, &f.Confidence}, {"severity", in.Severity, &f.Severity},
 		{"verified", in.Verified, &f.Verified}, {"impact", in.Impact, &f.Impact}, {"suggestedFix", in.SuggestedFix, &f.SuggestedFix}} {
 		if err := decodeOptional(field.name, field.raw, field.dst); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	switch {
@@ -687,7 +745,7 @@ func applyEdit(f *Finding, in EditInput) error {
 	default:
 		var refs []string
 		if err := decodeValue("references", in.References, &refs); err != nil {
-			return err
+			return nil, err
 		}
 		if len(refs) == 0 {
 			refs = nil
@@ -701,26 +759,31 @@ func applyEdit(f *Finding, in EditInput) error {
 		// A finding needs a location or general, so clearing the location makes it general.
 		f.Location, f.General = nil, true
 	default:
-		var loc Location
+		var loc LocationInput
 		if err := decodeValue("location", in.Location, &loc); err != nil {
-			return err
+			return nil, err
+		}
+		if loc.Heading != nil {
+			anchor = &loc
+			f.Location, f.General = nil, false
+			break
 		}
 		if loc.Side == "" {
 			loc.Side = SideRight
 		}
-		f.Location, f.General = &loc, false
+		f.Location, f.General = &FindingLocation{Path: loc.Path, Side: loc.Side, Line: loc.Line, StartLine: loc.StartLine}, false
 	}
 	if in.General != nil {
 		var general bool
 		if err := decodeRequired("general", in.General, &general); err != nil {
-			return err
+			return nil, err
 		}
 		f.General = general
 		if general && in.Location == nil {
 			f.Location = nil
 		}
 	}
-	return nil
+	return anchor, nil
 }
 
 func isNull(raw json.RawMessage) bool { return string(bytes.TrimSpace(raw)) == "null" }
@@ -755,7 +818,7 @@ func decodeValue(field string, raw json.RawMessage, dst any) error {
 	return nil
 }
 
-func sameLocation(a, b *Location) bool {
+func sameLocation(a, b *FindingLocation) bool {
 	if a == nil || b == nil {
 		return a == b
 	}

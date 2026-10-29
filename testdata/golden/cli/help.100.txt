@@ -37,6 +37,7 @@ Commands
           feedback  Read the human's notes, dispositions and readiness
   anyone  show      Show the draft, dispositions and readiness
           list      List every run with its state and counts
+          stats     Roll up what the human gate did across runs
   human   review    Decide each finding in the review interface (human-only)
           publish   Confirm and post the review to GitHub (human-only)
 

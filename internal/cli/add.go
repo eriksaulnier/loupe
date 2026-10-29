@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -34,17 +35,28 @@ Input (--from <file>, or --from - for stdin): one finding object or an array of 
 
 title and body are required. Exactly one of location or "general": true is required.
 location must be in the captured diff: side RIGHT (the default) is the new file, LEFT the old
-file, and startLine and line must be in the same hunk. label is issue, suggestion, question or
-any other word of letters, digits, _, . or -, at most 40 characters, kept verbatim. blocking
-defaults to false. confidence is high, medium or low; severity is how bad the consequence is if
-it ships, highest that fits: critical (data loss, a security hole, an outage), major (a real
-defect on a normal path), minor (an edge case, or a cost paid later) or trivial (cosmetic:
-naming, style, a preference); verified is reproduced (you ran or observed the failure) or
-plausible (you reasoned to it). body, impact and suggestedFix must pass the Markdown allowlist,
-and code in a suggestedFix belongs in a fence, since the fix is published as Markdown. references
-holds at most six http or https URLs with a host and no userinfo, each at most 200 bytes with no
-whitespace, control or format characters, <, > or backticks; an empty list is stored as absent;
-they are never fetched.
+file, and startLine and line must be in the same hunk.
+location may instead name a Markdown heading, {"path": "docs/plan.md", "heading": "Rollout"},
+on a .md, .markdown or .mdx file: the heading's text as the file writes it, without its # marks,
+matched exactly once whitespace is trimmed and collapsed. Only a top-level ATX heading counts,
+and its section runs to the next heading of the same or a higher level. add stores the lines of
+the one hunk that changes the section, with side RIGHT and the heading's text, from the run
+alone. A heading with a line, startLine or LEFT side is refused with input. It is refused with
+location when the file is not Markdown, deleted or binary, or the run was captured before
+heading anchors (the fix names a line location or a general finding), no heading matches or the
+section holds no change (the fix lists the headings whose section changes in exactly one hunk),
+the heading appears twice (the fix gives the line ranges), or more than one hunk changes the
+section (the fix says file one line-anchored finding per hunk, with each range).
+label is issue, suggestion, question or any other word of letters, digits, _, . or -, at most 40
+characters, kept verbatim. blocking defaults to false. confidence is high, medium or low;
+severity is how bad the consequence is if it ships, highest that fits: critical (data loss, a
+security hole, an outage), major (a real defect on a normal path), minor (an edge case, or a
+cost paid later) or trivial (cosmetic: naming, style, a preference); verified is reproduced (you
+ran or observed the failure) or plausible (you reasoned to it). body, impact and suggestedFix
+must pass the Markdown allowlist, and code in a suggestedFix belongs in a fence, since the fix
+is published as Markdown. references holds at most six http or https URLs with a host and no
+userinfo, each at most 200 bytes with no whitespace, control or format characters, <, > or
+backticks; an empty list is stored as absent; they are never fetched.
 title, body, impact and suggestedFix refuse a finding id, f- and three or more digits such as
 f-002, with markdown and details.rule finding-id. Ids restart at f-001 every round and the review
 shows none, so name an earlier finding by its subject. A fence or an http or https URL is exempt;
@@ -54,14 +66,15 @@ and details describe the first invalid one, whose zero-based position is details
 details.entries lists each invalid entry as {entry, code, message, fix, details?}. Each entry
 reports its first defect only. Input MUST NOT carry included, decision, status or findingRev.
 
-The flags build a single finding instead and cannot be combined with --from.
+The flags build a single finding instead and cannot be combined with --from; --heading with
+--path is the heading form.
 
 Result (--json):
   {"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 4,
    "findings": [{"id": "f-001", "rev": 1}]}`
 
-var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix"}
+var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "heading", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix"}
 
 func newAddCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -82,6 +95,7 @@ func newAddCmd(deps Deps) *cobra.Command {
 	f.Int("line", 0, "line number on --side")
 	f.Int("start-line", 0, "first line of a multi-line range")
 	f.String("side", "", "RIGHT (new file, default) or LEFT (old file)")
+	f.String("heading", "", "a Markdown heading's text, with --path and instead of --line: the section's changed lines")
 	f.Bool("general", false, "a general finding with no location")
 	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")
@@ -130,7 +144,7 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	dif, err := loadDiff(dir)
+	dif, err := loadDiff(dir, slices.ContainsFunc(inputs, func(in draft.FindingInput) bool { return in.Location != nil && in.Location.Heading != nil }))
 	if err != nil {
 		return err
 	}
@@ -209,22 +223,40 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, []draft.Ent
 	in.Impact, _ = f.GetString("impact")
 	in.References, _ = f.GetStringArray("reference")
 	in.SuggestedFix, _ = f.GetString("suggested-fix")
-	if f.Changed("path") || f.Changed("line") || f.Changed("start-line") || f.Changed("side") {
-		loc := &draft.Location{}
-		loc.Path, _ = f.GetString("path")
-		loc.Line, _ = f.GetInt("line")
-		loc.StartLine, _ = f.GetInt("start-line")
-		loc.Side, _ = f.GetString("side")
-		in.Location = loc
+	if f.Changed("path") || f.Changed("line") || f.Changed("start-line") || f.Changed("side") || f.Changed("heading") {
+		in.Location = locationFlags(cmd)
 	}
 	return []draft.FindingInput{in}, nil, nil
 }
 
-// loadDiff reads pr.diff once per command; the diff is the only authority for locations.
-func loadDiff(dir string) (*diff.Diff, error) {
+// locationFlags builds the location add and edit read from their flags.
+func locationFlags(cmd *cobra.Command) *draft.LocationInput {
+	f := cmd.Flags()
+	loc := &draft.LocationInput{}
+	loc.Path, _ = f.GetString("path")
+	loc.Line, _ = f.GetInt("line")
+	loc.StartLine, _ = f.GetInt("start-line")
+	loc.Side, _ = f.GetString("side")
+	if f.Changed("heading") {
+		heading, _ := f.GetString("heading")
+		loc.Heading = &heading
+	}
+	return loc
+}
+
+// loadDiff reads pr.diff once per command; the diff is the only authority for locations. headings also reads the
+// outline, only when an input names a heading, so a damaged outline never refuses a line location.
+func loadDiff(dir string, headings bool) (*diff.Diff, error) {
 	target, err := run.LoadTarget(dir)
 	if err != nil {
 		return nil, err
 	}
-	return run.LoadDiff(dir, target)
+	d, err := run.LoadDiff(dir, target)
+	if err != nil || !headings {
+		return d, err
+	}
+	if d.Outline, err = run.LoadOutline(dir); err != nil {
+		return nil, err
+	}
+	return d, nil
 }

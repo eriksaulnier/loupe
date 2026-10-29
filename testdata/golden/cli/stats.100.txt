@@ -1,0 +1,15 @@
+Published runs in every repository, at any time.
+
+total
+  runs        4 published, 1 unattended · 3 pull requests
+  findings    13 filed · 8 published · 3 excluded · 1 withdrawn · 1 pending
+  labels      published: 6 issue, 2 suggestion · excluded: 1 suggestion, 1 question, 1 other
+  blocking    3 published
+  revised     1 reinstated · 1 regraded
+  precision   67% (6 of 9)
+  median      1h2m from capture to publish
+
+Precision is published out of published plus excluded. It leaves out withdrawn findings, which the
+agent cut itself, and 1 unattended run. The median also leaves out the unattended run.
+1 run changed after publishing, so its counts can differ from its review:
+example-org/example-repo#12@2.

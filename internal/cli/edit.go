@@ -26,6 +26,8 @@ An absent key leaves the field unchanged. null clears location, label, confidenc
 verified, impact, references or suggestedFix, as does an empty references list, and is refused
 for title, body, general and blocking. Setting location clears
 general and "general": true clears location; clearing location makes the finding general.
+location may be a heading anchor, {"path": "docs/plan.md", "heading": "Rollout"}, resolved as
+add resolves it; setting location replaces a stored heading, and a line form removes it.
 New values follow the add rules: location must be in the captured diff, label is issue,
 suggestion, question or any other word of letters, digits, _, . or -, at most 40 characters,
 confidence is high, medium or low, severity is critical, major, minor or trivial, verified is
@@ -52,7 +54,7 @@ Result (--json):
    "finding": {"id": "f-001", "rev": 2, "included": true}, "clearedDecision": true}`
 
 var (
-	editLocationFlags = []string{"path", "line", "start-line", "side"}
+	editLocationFlags = []string{"path", "line", "start-line", "side", "heading"}
 	editClearFlags    = map[string][]string{
 		"clear-location":      editLocationFlags,
 		"clear-label":         {"label"},
@@ -90,6 +92,7 @@ func newEditCmd(deps Deps) *cobra.Command {
 	f.Int("line", 0, "line number on --side")
 	f.Int("start-line", 0, "first line of a multi-line range")
 	f.String("side", "", "RIGHT (new file, default) or LEFT (old file)")
+	f.String("heading", "", "a Markdown heading's text, with --path and instead of --line: the section's changed lines")
 	f.Bool("general", false, "make the finding general, with no location")
 	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")
@@ -149,7 +152,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 	if in == (editFields{}) && included == nil {
 		return refusal.New(refusal.Usage, "nothing to edit", "pass --from <file>|-, a field flag, --include or --exclude; see loupe edit --help")
 	}
-	dif, err := loadDiff(dir)
+	dif, err := loadDiff(dir, in.namesHeading())
 	if err != nil {
 		return err
 	}
@@ -198,6 +201,12 @@ func (e editFields) input() draft.EditInput {
 		References: raw(e.references), SuggestedFix: raw(e.suggestedFix)}
 }
 
+// namesHeading reports whether the edit sets a heading anchor, the one case that reads the outline.
+func (e editFields) namesHeading() bool {
+	var loc draft.LocationInput
+	return e.location != "" && json.Unmarshal([]byte(e.location), &loc) == nil && loc.Heading != nil
+}
+
 func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 	f := cmd.Flags()
 	if f.Changed("from") {
@@ -240,14 +249,7 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 	set(&out.blocking, "blocking", func() (any, error) { return f.GetBool("blocking") })
 	for _, name := range editLocationFlags {
 		if f.Changed(name) {
-			set(&out.location, name, func() (any, error) {
-				loc := draft.Location{}
-				loc.Path, _ = f.GetString("path")
-				loc.Line, _ = f.GetInt("line")
-				loc.StartLine, _ = f.GetInt("start-line")
-				loc.Side, _ = f.GetString("side")
-				return loc, nil
-			})
+			set(&out.location, name, func() (any, error) { return locationFlags(cmd), nil })
 			break
 		}
 	}

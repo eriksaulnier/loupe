@@ -1,0 +1,22 @@
+Published runs in example-org/example-repo and EXAMPLE-ORG/widgets, since 2026-11-01, by month.
+
+2026-11
+  runs        2 published, 1 unattended · 2 pull requests
+  findings    4 filed · 3 published · 1 pending
+  labels      published: 2 issue, 1 suggestion
+  blocking    1 published
+  precision   100% (1 of 1)
+  median      3d1h from capture to publish
+
+total
+  runs        2 published, 1 unattended · 2 pull requests
+  findings    4 filed · 3 published · 1 pending
+  labels      published: 2 issue, 1 suggestion
+  blocking    1 published
+  precision   100% (1 of 1)
+  median      3d1h from capture to publish
+
+Precision is published out of published plus excluded. It leaves out withdrawn findings, which the
+agent cut itself, and 1 unattended run. The median also leaves out the unattended run.
+1 run changed after publishing, so its counts can differ from its review:
+example-org/example-repo#12@2.
