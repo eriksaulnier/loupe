@@ -575,7 +575,8 @@ func (m *Model) columnHeads(cols listColumns) string {
 	if cols.location > 0 {
 		head += "location"
 	}
-	return m.styles.Overlay().Render(strings.TrimRight(head, " "))
+	// Bold secondary sets the headings apart from the overlay text decided rows and path prefixes recede to.
+	return m.styles.Emphasis(m.styles.Secondary()).Render(strings.TrimRight(head, " "))
 }
 
 // row is one finding: the selection bar, the state glyph, the quiet id, the severity pill and confidence scale, the
