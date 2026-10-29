@@ -39,6 +39,10 @@
 
 - Q: PR #24's review opened with `⛔ 1 blocking` directly above a `### ⛔ Blocking` heading holding that one finding, and its rows ran severity, label and title together as one string. Should the five label sections and the ` · ` prefix stay? → A: No. The body holds at most two sections, `Must fix` and `Worth a look`, each sorted by severity, then label group, then id. Every row, body and inline, leads with a dot, `⛔` when blocking and the label's dot otherwise, so the chips row is a key to the dots. It then carries the label in `<b>`, the severity as a colored pill image, a colon and the title; the file and line stay the meta block's first line. This amends the 2026-09-14 heading-dot answer and the 2026-09-15 row answer (`specs/020-review-format`).
 
+### Session 2026-10-28
+
+- Q: The 2026-09-15 amendment exempted a label or blocking change made in the review interface from FR-019. Does a title or body edit made there also keep the decision? → A: Yes (`specs/046-edit-then-accept`). It is made by the human while looking at the finding, so it keeps the decision the same way. Every `loupe edit` still clears it.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Agent files findings against a captured pull request (Priority: P1)

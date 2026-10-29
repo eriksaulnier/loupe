@@ -8,6 +8,12 @@
 
 **Input**: User description: "In `loupe review`, the human can change a finding's label and blocking flag with one `e` key that opens an inline editor row (←/→ label, space blocking, enter save, esc cancel), and in plain mode via an `e` answer. An edit made in the review interface keeps the finding's current decision (an accepted finding stays accepted) and does not close open notes. Title, body, location, suggested fix and confidence stay with the agent. `loupe edit --by human` on the CLI still clears the decision. Withdrawn findings cannot be edited. This amends spec 001's 'any edit to an accepted finding removes its acceptance' for review-interface edits only."
 
+## Clarifications
+
+### Session 2026-10-28
+
+- Q: FR-010 kept title, body, location, suggested fix and confidence with the agent, so a finding whose only fault was its wording still cost a send-back note, an agent turn and a second accept. Should the human be able to edit a finding's text in review? → A: Yes, its title and body, with the same decision-keeping rule as a label or blocking edit (`specs/046-edit-then-accept`). This reverses FR-010 for those two fields only. Location, general, suggested fix, severity and confidence stay with the agent, and `loupe edit` keeps clearing the decision for every `--by` value.
+
 ## Relationship to earlier specifications
 
 This specification amends `specs/001-loupe-v1/spec.md`. User Story 4 and its acceptance scenario 3 say any edit to an accepted finding removes its acceptance, and FR-019 says a finding edited by the human is pending until accepted in the review interface. Both stay in force for every edit made through `loupe edit`, whoever `--by` names. They no longer apply to a label or blocking change the human makes inside the review interface. A Session 2026-09-15 clarification in spec 001 records the amendment.
