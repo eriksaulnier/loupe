@@ -42,10 +42,31 @@ changes nothing.
 The flags edit a single finding instead of --from: the add flags, which replace the whole
 location when any location flag is given, plus the --clear-* flags and --not-blocking.
 
+Say why with --exclude: --reason <text> and --reason-code <word>, or in --from input
+
+  {"withdrawReason": {"text": "Test name only, assertion unchanged.", "code": "no-runtime-effect"}}
+
+The human reads the reason beside the withdrawn finding in review before deciding whether to
+reinstate it. text is one line of at most 200 characters and must pass the Markdown allowlist a
+reply passes. code is optional and follows the label rule; a code without text is refused.
+Either is refused without --exclude. On a finding already withdrawn, --exclude with a new reason
+and no other change amends the reason: rev, inclusion and the human's decision stay. An agent
+that withdraws an included finding without a reason still succeeds, with a warning on stderr
+and withdraw-reason-missing in the result's warnings.
+
+Recommended codes, not enforced; a skill MAY use its own word:
+  no-runtime-effect  the finding claims nothing changes at run time, such as naming or style
+  conceded           the agent agreed with the human's send-back note
+  duplicate          another finding in the review says the same
+  pre-existing       the problem predates the pull request
+
 Result (--json):
   {"loupe": 1, "ok": true, "command": "edit", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 6,
-   "finding": {"id": "f-001", "rev": 2, "included": true}, "clearedDecision": true}`
+   "finding": {"id": "f-001", "rev": 2, "included": true}, "clearedDecision": true}
+
+warnings, an array of warning codes, appears only when nonempty:
+  "warnings": ["withdraw-reason-missing"]`
 
 var (
 	editLocationFlags = []string{"path", "line", "start-line", "side"}
@@ -76,7 +97,7 @@ func newEditCmd(deps Deps) *cobra.Command {
 		Use:     "edit <finding-id>",
 		Short:   "Change, withdraw or restore a finding",
 		Long:    editHelp,
-		Example: "  loupe edit f-001 --run owner/repo#123 --from f.json --json\n  loupe edit f-002 --title \"Clearer title\" --clear-label\n  loupe edit f-003 --exclude",
+		Example: "  loupe edit f-001 --run owner/repo#123 --from f.json --json\n  loupe edit f-002 --title \"Clearer title\" --clear-label\n  loupe edit f-003 --exclude --reason \"Naming only.\" --reason-code no-runtime-effect",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runEdit(cmd, deps, args[0])

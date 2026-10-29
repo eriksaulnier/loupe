@@ -351,3 +351,28 @@ func TestAWithdrawalWithAndWithoutAReason(t *testing.T) {
 		t.Fatalf("withdrawReason on %v", have)
 	}
 }
+
+// Principle I: an agent finds the reason flags and the recommended codes in --help alone, with no run.
+func TestEditHelpListsTheReasonCodes(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	if code := Execute(deps, []string{"edit", "--help"}); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	help := strings.Join(strings.Fields(s.stdout.String()), " ")
+	for _, want := range []string{"--reason", "--reason-code", "withdrawReason", "no-runtime-effect", "conceded", "duplicate",
+		"pre-existing", "not enforced", "withdraw-reason-missing"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("edit help lacks %q:\n%s", want, help)
+		}
+	}
+}
+
+func TestEditKeepsACodeOutsideTheList(t *testing.T) {
+	home, dir := sendBackRun(t)
+	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--exclude", "--reason", "Style.", "--reason-code", "style-only"); code != 0 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if got := draft.CurrentReason(storedFinding(t, dir, "f-001")); got == nil || got.Code != "style-only" {
+		t.Fatalf("reason %+v", got)
+	}
+}
