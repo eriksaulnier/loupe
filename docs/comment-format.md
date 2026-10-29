@@ -360,7 +360,7 @@ The renderer wraps each finding in a generated `<details>`. Authored content tha
 
 | Field | Why it cannot escape |
 | :--- | :--- |
-| `title` | Collapsed to one line. Backslash escapes are applied, each backtick code span becomes `<code>` around its HTML-escaped content, and the text between spans is HTML-escaped, so `<code>` is the only tag the title adds |
+| `title` | Collapsed to one line. Backslash escapes are applied, each backtick code span becomes `<code>` around its HTML-escaped content, and the text between spans is HTML-escaped, so `<code>` is the only tag the title adds. It MUST NOT cite a finding id, per [Finding ids](#finding-ids) |
 | `label` | Collapsed to one line, then HTML-escaped inside a `<b>` tag; inline, ASCII punctuation is also backslash-escaped |
 | `confidence`, `verified` | Collapsed to one line, then HTML-escaped before interpolation |
 | `severity` | Collapsed to one line; an enum word selects a fixed pill on the summary line and is written as text on the meta line, and anything else is emitted inside a code span on the meta line |
@@ -383,12 +383,23 @@ A body, impact, suggested fix or summary is accepted when all of the following h
 | Every `<details>` is followed, after optional blank lines, by `<summary>` on the next content line, and `</summary>` closes it on the same line or a later one before any other content | `html` |
 | `<details>` nesting is balanced and at most 15 levels deep in a body, 16 in a summary | `depth` |
 
-- A refusal names the code, the one-based line of the first violation (line 1 for `limit`), the reason and the correction command.
+- A refusal names the field it refused (`body`, `impact`, `suggestedFix`, `summary`, the human's `message` or the round `note`) in its message and in `details.field`, the code, the one-based line of the first violation (line 1 for `limit`), the reason and the correction command (spec 043).
 - Tags inside code spans, fences, backslash escapes or entities are text, not HTML.
 - A code span that does not close on its own line hides nothing on the later lines of its paragraph, and a line indented four or more columns is never a fence or a tag line, because CommonMark may read either differently from a line scanner.
 - Ordinary Markdown (prose, headings, emphasis, links, autolinks, entities, tables, task lists, lists, quotes, hard breaks) is accepted without inspection.
 - This is deliberately a line scanner, not a parser. It refuses more than GitHub would (for example `<br>`, `<img>`, `<sub>` outside a summary) in exchange for being small and predictable.
 - GitHub matches `<details>` anywhere in a line and an unterminated `<!--` swallows the rest of the review, which is why comments are refused outright and disclosure tags must stand alone.
+
+### Finding ids
+
+A finding id such as `f-002` names one finding in one round's draft. Every round numbers its findings from `f-001`, and the published review shows no id, so a reader cannot resolve one, and an id read from an earlier round names a different finding in this one. Published text MUST name another finding by its subject instead (spec 043).
+
+- The checked fields are a finding's `title`, `body` and `impact`, the `summary`, and the round note. `suggestedFix`, `label`, `references`, reply bodies, send-back notes, the human's message at the confirmation and stored assessments are not checked.
+- A finding id is a lowercase `f-` followed by three or more ASCII digits, not preceded and not followed by an ASCII letter, an ASCII digit or `_`. `ref-002`, `f-02`, `F-002`, `f-002a` and `f-002_x` are not ids.
+- Fence content, read as the allowlist reads fences, is exempt, and so is a URL: a run that starts with `http://` or `https://` and ends at whitespace or `>`. Code spans, link text, emphasis, quotes, HTML block lines and indented lines are not exempt. A title has no fences, since it is one escaped paragraph.
+- The check runs where each field is written: in `add`, `edit` and `summary` for a finding's fields and the summary, and at publish for the round note only, because the note is never stored. `edit` checks only the fields it changes. Publish does not check findings or the summary again, so a draft stored before the check publishes as it did.
+- A value that fails the allowlist is refused by the allowlist, and the id check does not run on it.
+- A refusal has the code `markdown` with `details.rule` `finding-id`, and names the field, the first id by line and then column in `details.match`, and its line. A finding with ids in several fields names the first of `title`, `body`, `impact`.
 
 ## Refusals
 
@@ -396,4 +407,5 @@ A body, impact, suggested fix or summary is accepted when all of the following h
 | :--- | :--- |
 | A publishable finding body that fails the allowlist | `loupe edit <id> --from -` |
 | A review summary that fails the allowlist, with or without findings | `loupe summary --from -` |
+| A finding's `title`, `body` or `impact`, a summary or a round note that cites a finding id, at the write that sets it (`finding-id`) | name the earlier finding by its subject, or fence a codebase's own identifier, then `loupe add`, `loupe edit <id> --from -`, `loupe summary --from -`, or a reworded `--note` |
 | A composed body, or an inline comment body, over 65,536 characters | exclude a finding in `loupe review` or shorten bodies with `loupe edit <id> --from -` |
