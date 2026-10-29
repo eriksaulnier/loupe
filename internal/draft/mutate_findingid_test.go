@@ -116,6 +116,7 @@ func TestEditRefusesAChangedFieldCitingAnID(t *testing.T) {
 func TestEditChecksOnlyChangedFieldsForIDs(t *testing.T) {
 	stored := func() *Draft {
 		d := editable()
+		d.Findings[0].Title = "Same as f-002"
 		d.Findings[0].Body = "As f-002 showed."
 		d.Findings[0].Impact = "Like f-002."
 		return d
