@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,16 +14,20 @@ import (
 )
 
 const (
-	herdrPaneMissing = `{"error":{"code":"pane_not_found","message":"pane w1:p1 not found"},"id":"cli:pane:split"}`
-	orcaHandshake    = "[relay-connect] Handshake OK at version=0.1.0+955da90487c0"
-	orcaStale        = `{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal handle term_agent is stale"}}`
-	orcaNewHandle    = "term_28c2bdd2-5b1e"
+	herdrPaneMissing   = `{"error":{"code":"pane_not_found","message":"pane w1:p1 not found"},"id":"cli:pane:split"}`
+	orcaHandshake      = "[relay-connect] Handshake OK at version=0.1.0+955da90487c0"
+	orcaStale          = `{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal handle term_agent is stale"}}`
+	orcaNewHandle      = "term_28c2bdd2-5b1e"
+	itermSession       = "8A4C1F2E-5B3D-4E6F-9A7B-1C2D3E4F5A6B"
+	itermNewSession    = "0F1E2D3C-4B5A-4968-8776-655443322110"
+	ghosttyTerminal    = "368465FD-2E56-4B31-BA4A-2CF2FA320C81"
+	ghosttyNewTerminal = "E785B91E-11DA-4904-B62C-13AF6E67F752"
 )
 
 // fakeHostBin writes a stand-in for name that appends each call's argv to log, NUL-separated and newline-terminated,
-// prints stderr on every call, and answers "$2" from replies; at failAt it prints failure where the host prints its
-// errors and exits 1.
-func fakeHostBin(t *testing.T, name string, replies map[string]string, failAt, failure, failTo, stderr string) (bin, log string) {
+// prints stderr on every call, and answers the argument key (such as "$2") from replies; at failAt it prints failure
+// where the host prints its errors and exits 1.
+func fakeHostBin(t *testing.T, name, key string, replies map[string]string, failAt, failure, failTo, stderr string) (bin, log string) {
 	t.Helper()
 	bin = t.TempDir()
 	log = filepath.Join(t.TempDir(), "argv")
@@ -31,7 +36,7 @@ func fakeHostBin(t *testing.T, name string, replies map[string]string, failAt, f
 	if stderr != "" {
 		fmt.Fprintf(&script, "printf '%%s\\n' '%s' >&2\n", stderr)
 	}
-	script.WriteString("case \"$2\" in\n")
+	fmt.Fprintf(&script, "case \"%s\" in\n", key)
 	for step, out := range replies {
 		if step == failAt {
 			fmt.Fprintf(&script, "%s) printf '%%s\\n' '%s' %s; exit 1;;\n", step, failure, failTo)
@@ -55,7 +60,7 @@ func fakeHerdrBin(t *testing.T, failAt string) (bin, log string) {
 
 func fakeHerdrBinWithRect(t *testing.T, failAt, rect string) (bin, log string) {
 	t.Helper()
-	return fakeHostBin(t, "herdr", map[string]string{
+	return fakeHostBin(t, "herdr", "$2", map[string]string{
 		"layout": `{"id":"cli:pane:layout","result":{"layout":{"panes":[{"pane_id":"w1:p1","rect":` + rect + `}]},"type":"pane_layout"}}`,
 		"split":  `{"id":"cli:pane:split","result":{"pane":{"pane_id":"w1:p2"},"type":"pane_info"}}`,
 		"run":    `{"id":"cli:pane:run","result":{"type":"ok"}}`,
@@ -66,10 +71,88 @@ func fakeHerdrBinWithRect(t *testing.T, failAt, rect string) (bin, log string) {
 // stdout and exits 1. It answers no switch, so a hand-off that runs one fails.
 func fakeOrcaBin(t *testing.T, failAt string) (bin, log string) {
 	t.Helper()
-	return fakeHostBin(t, "orca", map[string]string{
+	return fakeHostBin(t, "orca", "$2", map[string]string{
 		"show":  `{"ok":true,"result":{"terminal":{"handle":"term_agent","connected":true}}}`,
 		"split": `{"id":"r1","ok":true,"result":{"split":{"handle":"` + orcaNewHandle + `","tabId":"t1","paneRuntimeId":1,"leafId":"l1"}},"_meta":{"runtimeId":"rt"}}`,
 	}, failAt, orcaStale, "", orcaHandshake)
+}
+
+// fakeTmuxBin answers like tmux, whose subcommand follows -S <socket>, with probe as the probe's reply; at failAt it
+// prints a tmux error on stderr and exits 1.
+func fakeTmuxBin(t *testing.T, failAt, probe string) (bin, log string) {
+	t.Helper()
+	return fakeHostBin(t, "tmux", "$3", map[string]string{
+		"display-message": probe,
+		"split-window":    "%7",
+		"send-keys":       "",
+	}, failAt, "no server running on /tmp/tmux-1000/default", ">&2", "")
+}
+
+// tmuxEnv names a socket file that exists, as a running tmux server's does.
+func tmuxEnv(t *testing.T, home, bin string) map[string]string {
+	t.Helper()
+	socket := filepath.Join(t.TempDir(), "default")
+	if err := os.WriteFile(socket, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return map[string]string{"LOUPE_HOME": home, "TMUX": socket + ",3347196,0", "TMUX_PANE": "%3", "PATH": bin}
+}
+
+// fakeOsascriptBin answers like osascript running loupe's iTerm2 scripts, telling them apart by their text: the probe
+// prints the agent session's columns, the split a new session id, and the run nothing. It logs argv like fakeHostBin.
+func fakeOsascriptBin(t *testing.T) (bin, log string) {
+	t.Helper()
+	bin = t.TempDir()
+	log = filepath.Join(t.TempDir(), "argv")
+	script := fmt.Sprintf(`#!/bin/sh
+for a in "$@"; do printf '%%s\0' "$a" >> '%[1]s'; done
+printf '\n' >> '%[1]s'
+case "$*" in
+*"write text"*) ;;
+*"split vertically"*) printf '%%s\n' '%[2]s';;
+*) printf '150\n';;
+esac
+`, log, itermNewSession)
+	if err := os.WriteFile(filepath.Join(bin, "osascript"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin, log
+}
+
+// fakeGhosttyBin answers like osascript running loupe's Ghostty scripts: the probe prints the focused terminal's id and
+// workDir, the split a new terminal id. It logs argv like fakeHostBin.
+func fakeGhosttyBin(t *testing.T, workDir string) (bin, log string) {
+	t.Helper()
+	bin = t.TempDir()
+	log = filepath.Join(t.TempDir(), "argv")
+	script := fmt.Sprintf(`#!/bin/sh
+for a in "$@"; do printf '%%s\0' "$a" >> '%[1]s'; done
+printf '\n' >> '%[1]s'
+case "$*" in
+*"split agent direction"*) printf '%%s\n' '%[2]s';;
+*) printf '%%s\n%%s\n' '%[3]s' '%[4]s';;
+esac
+`, log, ghosttyNewTerminal, ghosttyTerminal, workDir)
+	if err := os.WriteFile(filepath.Join(bin, "osascript"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin, log
+}
+
+func ghosttyEnv(home, bin, dir string) map[string]string {
+	return map[string]string{"LOUPE_HOME": home, "TERM_PROGRAM": "ghostty", "PWD": dir, "PATH": bin}
+}
+
+func itermEnv(home, bin string) map[string]string {
+	return map[string]string{"LOUPE_HOME": home, "TERM_PROGRAM": "iTerm.app", "ITERM_SESSION_ID": "w0t0p0:" + itermSession, "PATH": bin}
+}
+
+// itermArgs drops the -e script lines from an osascript argv, leaving the values the script reads.
+func itermArgs(call []string) []string {
+	for len(call) >= 2 && call[0] == "-e" {
+		call = call[2:]
+	}
+	return call
 }
 
 func hostCalls(t *testing.T, log string) [][]string {
@@ -189,11 +272,15 @@ func TestHandoffRefusesPaneFailedAndStops(t *testing.T) {
 		bin                 func(*testing.T, string) (string, string)
 		env                 func(bin string) map[string]string
 		failAt              string
+		keyAt               int
 	}{
 		{"herdr", "split", "herdr split: pane w1:p1 not found; a pane may already be open", fakeHerdrBin,
-			func(bin string) map[string]string { return herdrEnv(home, bin) }, "split"},
+			func(bin string) map[string]string { return herdrEnv(home, bin) }, "split", 1},
 		{"orca", "split", "orca split: terminal handle term_agent is stale; a pane may already be open", fakeOrcaBin,
-			func(bin string) map[string]string { return withHome(orcaEnv("term_agent", bin), home) }, "split"},
+			func(bin string) map[string]string { return withHome(orcaEnv("term_agent", bin), home) }, "split", 1},
+		{"tmux", "probe", "tmux probe: no server running on /tmp/tmux-1000/default",
+			func(t *testing.T, failAt string) (string, string) { return fakeTmuxBin(t, failAt, "%3 150 1 0") },
+			func(bin string) map[string]string { return tmuxEnv(t, home, bin) }, "display-message", 2},
 	} {
 		t.Run(c.host, func(t *testing.T) {
 			bin, log := c.bin(t, c.failAt)
@@ -206,7 +293,7 @@ func TestHandoffRefusesPaneFailedAndStops(t *testing.T) {
 				errObj["fix"] != "ask the human to run loupe review 'o/r#1@1'" || details["host"] != c.host || details["step"] != c.step {
 				t.Fatalf("exit %d envelope %v", code, e)
 			}
-			if calls := hostCalls(t, log); len(calls) == 0 || calls[len(calls)-1][1] != c.failAt {
+			if calls := hostCalls(t, log); len(calls) == 0 || calls[len(calls)-1][c.keyAt] != c.failAt {
 				t.Fatalf("%s calls after a failed %s: %q", c.host, c.failAt, calls)
 			}
 		})
@@ -286,6 +373,205 @@ func TestHandoffUsesHerdrWhenBothHostsAreDetected(t *testing.T) {
 	}
 }
 
+// The agent's pane keeps focus, since a split that took it would catch the keys the human types for the agent.
+func TestHandoffOpensReviewInATmuxSplitWithoutFocus(t *testing.T) {
+	home, _ := sendBackRun(t)
+	bin, log := fakeTmuxBin(t, "", "%3 150 1 0")
+	env := tmuxEnv(t, home, bin)
+	socket := strings.TrimSuffix(env["TMUX"], ",3347196,0")
+	deps, s := testDeps(t, env)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s stderr %s", code, s.stdout.String(), s.stderr.String())
+	}
+	got := decodeOne(t, s.stdout.Bytes())
+	if got["host"] != "tmux" || got["paneId"] != "%7" || got["direction"] != "right" || got["focused"] != false {
+		t.Fatalf("envelope %v", got)
+	}
+	want := [][]string{
+		{"-S", socket, "display-message", "-p", "-t", "%3", "#{pane_id} #{pane_width} #{session_attached} #{pane_synchronized}"},
+		{"-S", socket, "split-window", "-d", "-P", "-F", "#{pane_id}", "-h", "-t", "%3"},
+		{"-S", socket, "send-keys", "-t", "%7", "-l", paneCommand(t, home)},
+		{"-S", socket, "send-keys", "-t", "%7", "Enter"},
+	}
+	if calls := hostCalls(t, log); !slices.EqualFunc(calls, want, slices.Equal) {
+		t.Fatalf("tmux calls:\n%q\nwant:\n%q", calls, want)
+	}
+}
+
+// A TMUX whose socket is gone names a server long since exited, so tmux is skipped rather than refused.
+func TestHandoffSkipsTmuxWithAStaleSocket(t *testing.T) {
+	home, _ := sendBackRun(t)
+	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
+	orcaBin, orcaLog := fakeOrcaBin(t, "")
+	env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
+	env["TMUX"] = filepath.Join(t.TempDir(), "gone") + ",1,0"
+	env["ORCA_TERMINAL_HANDLE"] = "term_agent"
+	deps, s := testDeps(t, env)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
+	}
+	if host := decodeOne(t, s.stdout.Bytes())["host"]; host != "orca" {
+		t.Fatalf("host %v", host)
+	}
+	if calls := hostCalls(t, tmuxLog); calls != nil {
+		t.Fatalf("tmux was run with a stale socket: %q", calls)
+	}
+	if calls := hostCalls(t, orcaLog); len(calls) != 2 {
+		t.Fatalf("orca calls: %q", calls)
+	}
+}
+
+// A pane in a tmux session nobody watches would be invisible and would hold the run's review lock, so the hand-off
+// passes to the next host after the probe.
+func TestHandoffPassesAnUnwatchedTmuxSession(t *testing.T) {
+	home, _ := sendBackRun(t)
+	for _, withOrca := range []bool{true, false} {
+		t.Run(fmt.Sprintf("orca=%v", withOrca), func(t *testing.T) {
+			tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 0 0")
+			orcaBin, orcaLog := fakeOrcaBin(t, "")
+			env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
+			if withOrca {
+				env["ORCA_TERMINAL_HANDLE"] = "term_agent"
+			}
+			deps, s := testDeps(t, env)
+			code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
+			got := decodeOne(t, s.stdout.Bytes())
+			if calls := hostCalls(t, tmuxLog); len(calls) != 1 || calls[0][2] != "display-message" {
+				t.Fatalf("tmux calls after an unwatched probe: %q", calls)
+			}
+			if withOrca {
+				if code != 0 || got["host"] != "orca" || len(hostCalls(t, orcaLog)) != 2 {
+					t.Fatalf("exit %d envelope %v", code, got)
+				}
+				return
+			}
+			errObj, _ := got["error"].(map[string]any)
+			if code != 1 || errObj["code"] != "no-pane-host" {
+				t.Fatalf("exit %d envelope %v", code, got)
+			}
+		})
+	}
+}
+
+func TestHandoffUsesHerdrOverTmux(t *testing.T) {
+	home, _ := sendBackRun(t)
+	herdrBin, herdrLog := fakeHerdrBin(t, "")
+	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
+	env := tmuxEnv(t, home, herdrBin+string(os.PathListSeparator)+tmuxBin)
+	maps.Copy(env, map[string]string{"HERDR_ENV": "1", "HERDR_PANE_ID": "w1:p1"})
+	deps, s := testDeps(t, env)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
+	}
+	if host := decodeOne(t, s.stdout.Bytes())["host"]; host != "herdr" || len(hostCalls(t, herdrLog)) != 3 {
+		t.Fatalf("host %v", host)
+	}
+	if calls := hostCalls(t, tmuxLog); calls != nil {
+		t.Fatalf("tmux was run though Herdr was detected: %q", calls)
+	}
+}
+
+func TestHandoffUsesAWatchedTmuxOverOrca(t *testing.T) {
+	home, _ := sendBackRun(t)
+	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
+	orcaBin, orcaLog := fakeOrcaBin(t, "")
+	env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
+	env["ORCA_TERMINAL_HANDLE"] = "term_agent"
+	deps, s := testDeps(t, env)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
+	}
+	if host := decodeOne(t, s.stdout.Bytes())["host"]; host != "tmux" || len(hostCalls(t, tmuxLog)) != 4 {
+		t.Fatalf("host %v", host)
+	}
+	if calls := hostCalls(t, orcaLog); calls != nil {
+		t.Fatalf("orca was run though tmux was detected: %q", calls)
+	}
+}
+
+// iTerm2 gives the agent's session focus back after the split, so the result reports the pane opened without focus.
+func TestHandoffOpensReviewInAnITermSplit(t *testing.T) {
+	home, _ := sendBackRun(t)
+	bin, log := fakeOsascriptBin(t)
+	deps, s := testDeps(t, itermEnv(home, bin))
+	deps.GOOS = "darwin"
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s stderr %s", code, s.stdout.String(), s.stderr.String())
+	}
+	got := decodeOne(t, s.stdout.Bytes())
+	if got["host"] != "iterm2" || got["paneId"] != itermNewSession || got["direction"] != "right" || got["focused"] != false {
+		t.Fatalf("envelope %v", got)
+	}
+	calls := hostCalls(t, log)
+	want := [][]string{{itermSession}, {itermSession, "right"}, {itermNewSession, paneCommand(t, home)}}
+	if len(calls) != len(want) {
+		t.Fatalf("osascript calls: %q", calls)
+	}
+	for i, call := range calls {
+		if args := itermArgs(call); !slices.Equal(args, want[i]) {
+			t.Errorf("call %d arguments %q, want %q", i, args, want[i])
+		}
+	}
+}
+
+// Ghostty gives the agent's terminal focus back after the split, and reports no width, so the direction is the tty's.
+func TestHandoffOpensReviewInAGhosttySplit(t *testing.T) {
+	home, _ := sendBackRun(t)
+	dir := t.TempDir()
+	bin, log := fakeGhosttyBin(t, filepath.Dir(dir))
+	deps, s := testDeps(t, ghosttyEnv(home, bin, dir))
+	deps.GOOS = "darwin"
+	deps.TTYWidth = ttyWidth(150)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s stderr %s", code, s.stdout.String(), s.stderr.String())
+	}
+	got := decodeOne(t, s.stdout.Bytes())
+	if got["host"] != "ghostty" || got["paneId"] != ghosttyNewTerminal || got["direction"] != "right" || got["focused"] != false {
+		t.Fatalf("envelope %v", got)
+	}
+	calls := hostCalls(t, log)
+	want := [][]string{{}, {ghosttyTerminal, "right", paneCommand(t, home)}}
+	if len(calls) != len(want) {
+		t.Fatalf("osascript calls: %q", calls)
+	}
+	for i, call := range calls {
+		if args := itermArgs(call); !slices.Equal(args, want[i]) {
+			t.Errorf("call %d arguments %q, want %q", i, args, want[i])
+		}
+	}
+}
+
+// The focused terminal sits outside loupe's directory, so it belongs to something other than the agent.
+func TestHandoffPassesGhosttyFocusedElsewhere(t *testing.T) {
+	home, _ := sendBackRun(t)
+	bin, log := fakeGhosttyBin(t, t.TempDir())
+	deps, s := testDeps(t, ghosttyEnv(home, bin, t.TempDir()))
+	deps.GOOS = "darwin"
+	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
+	errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	if code != 1 || errObj["code"] != "no-pane-host" {
+		t.Fatalf("exit %d error %v", code, errObj)
+	}
+	if calls := hostCalls(t, log); len(calls) != 1 {
+		t.Fatalf("osascript calls, want the probe alone: %q", calls)
+	}
+}
+
+func TestHandoffIgnoresITermOffMac(t *testing.T) {
+	home, _ := sendBackRun(t)
+	bin, log := fakeOsascriptBin(t)
+	deps, s := testDeps(t, itermEnv(home, bin))
+	deps.GOOS = "linux"
+	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
+	errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	if code != 1 || errObj["code"] != "no-pane-host" {
+		t.Fatalf("exit %d error %v", code, errObj)
+	}
+	if calls := hostCalls(t, log); calls != nil {
+		t.Fatalf("osascript ran off macOS: %q", calls)
+	}
+}
+
 func TestHandoffDirection(t *testing.T) {
 	home, _ := sendBackRun(t)
 	herdr := func(rect string) func(*testing.T) (string, string, map[string]string) {
@@ -343,7 +629,7 @@ func TestShellQuoteMakesOneLiteralWord(t *testing.T) {
 	}
 }
 
-func TestHandoffRefusesNoPaneHostNamingBothHosts(t *testing.T) {
+func TestHandoffRefusesNoPaneHostNamingEveryHost(t *testing.T) {
 	home, _ := sendBackRun(t)
 	herdrBin, herdrLog := fakeHerdrBin(t, "")
 	orcaBin, orcaLog := fakeOrcaBin(t, "")
@@ -352,7 +638,10 @@ func TestHandoffRefusesNoPaneHostNamingBothHosts(t *testing.T) {
 	errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
 	message, _ := errObj["message"].(string)
 	if code != 1 || errObj["code"] != "no-pane-host" || !strings.Contains(message, "HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH") ||
-		!strings.Contains(message, "ORCA_TERMINAL_HANDLE and orca on PATH") {
+		!strings.Contains(message, "TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session") ||
+		!strings.Contains(message, "ORCA_TERMINAL_HANDLE and orca on PATH") ||
+		!strings.Contains(message, "macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID and osascript on PATH") ||
+		!strings.Contains(message, "macOS, TERM_PROGRAM=ghostty, PWD, osascript on PATH and the focused terminal, by its shell integration, in PWD or a parent of it") {
 		t.Fatalf("exit %d error %v", code, errObj)
 	}
 	if calls := append(hostCalls(t, herdrLog), hostCalls(t, orcaLog)...); calls != nil {
