@@ -145,7 +145,8 @@ func TestAddHeadingOnARunWithoutAnOutline(t *testing.T) {
 func TestAddAndEditHelpDescribeHeadingAnchors(t *testing.T) {
 	for cmd, wants := range map[string][]string{
 		"add": {`{"path": "docs/plan.md", "heading": "Rollout"}`, ".md, .markdown or .mdx", "without its # marks",
-			"the one hunk that changes the section", "use one of", "file one line-anchored finding per hunk", "--heading"},
+			"the one hunk that changes the section", "LEFT side is refused with input", "deleted or binary",
+			"captured before heading anchors", "changes in exactly one hunk", "file one line-anchored finding per hunk", "--heading"},
 		"edit": {`"heading"`, "a line form removes", "--heading"},
 	} {
 		deps, s := testDeps(t, nil)

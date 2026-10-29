@@ -41,11 +41,12 @@ on a .md, .markdown or .mdx file: the heading's text as the file writes it, with
 matched exactly once whitespace is trimmed and collapsed. Only a top-level ATX heading counts,
 and its section runs to the next heading of the same or a higher level. add stores the lines of
 the one hunk that changes the section, with side RIGHT and the heading's text, from the run
-alone. A heading takes no line, startLine or LEFT side. It is refused with location when the
-file is not Markdown, no heading matches or the section holds no change (the fix says use one
-of the headings that hold one), the heading appears twice (the fix gives the line ranges), or
-more than one hunk changes the section (the fix says file one line-anchored finding per hunk,
-with each range).
+alone. A heading with a line, startLine or LEFT side is refused with input. It is refused with
+location when the file is not Markdown, deleted or binary, or the run was captured before
+heading anchors (the fix names a line location or a general finding), no heading matches or the
+section holds no change (the fix lists the headings whose section changes in exactly one hunk),
+the heading appears twice (the fix gives the line ranges), or more than one hunk changes the
+section (the fix says file one line-anchored finding per hunk, with each range).
 label is issue, suggestion, question or any other word of letters, digits, _, . or -, at most 40
 characters, kept verbatim. blocking defaults to false. confidence is high, medium or low;
 severity is how bad the consequence is if it ships, highest that fits: critical (data loss, a
