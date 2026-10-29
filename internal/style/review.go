@@ -735,7 +735,8 @@ type ReviewHeading struct {
 	Decided, Total int
 	// NoCount leaves out the progress and the count, for the standalone confirmation, which has no draft.
 	NoCount bool
-	// Reserve is the columns at the right end left blank and off the band, for a host that draws over them.
+	// Reserve is the columns at the right end left empty for a host that draws over them. The band still runs under
+	// them, so the host's controls sit on it rather than in a gap.
 	Reserve int
 }
 
@@ -847,7 +848,7 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	if Width(line) > avail {
 		line = ansi.Truncate(line, avail, "")
 	}
-	return line + strings.Repeat(" ", width-avail)
+	return line + band(Span{Text: strings.Repeat(" ", width-avail)})
 }
 
 // OnSurface puts a surface behind an already-rendered string, putting it back after every reset inside, so pieces
