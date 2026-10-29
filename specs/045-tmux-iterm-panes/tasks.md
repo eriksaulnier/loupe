@@ -48,10 +48,10 @@ description: "Task list for opening review in a tmux or iTerm2 pane, tmux first 
 
 - [X] T013 Widen `scripts/check-tests.sh`'s host guard to `herdr|orca|tmux|iterm|osascript`, drop matches in `internal/style/style.go` whose text contains `"TMUX",`, and update its violation text and header comment. Check it fails by hand: add a scratch `// tmux` line to `internal/style/style.go`, `git add`, run the script, see the violation, then revert.
 - [X] T014 [P] In `internal/cli/plugin_test.go` make `TestPluginSkillNamesNoHerdrCommand` also reject `tmux` and `osascript`; the skill already passes.
-- [ ] T015 [P] Update `specs/001-loupe-v1/contracts/cli.md`: the `handoff` section's host list, order, tmux's conditions and pass, focus on tmux, the `host` values, and the `pane-failed` row's `details.host` values.
-- [ ] T016 [P] Update `docs/review-workflow.md` "Handing off in a terminal pane" for tmux, and its do-not-allow list with `tmux split-window` and `tmux send-keys`; the `AGENTS.md` `internal/pane` row; the `CONTRIBUTING.md` demo line.
-- [ ] T017 Update `specs/001-loupe-v1/validation.md`: the new tests under Automated validation, and the tmux rows of FR-018 under Unverified.
-- [ ] T018 Run `mise run check`; commit T013 and T014 as `test: keep tmux and osascript inside internal/pane`, then T015 to T017 as `docs(pane): document the tmux pane host`.
+- [X] T015 [P] Update `specs/001-loupe-v1/contracts/cli.md`: the `handoff` section's host list, order, tmux's conditions and pass, focus on tmux, the `host` values, and the `pane-failed` row's `details.host` values.
+- [X] T016 [P] Update `docs/review-workflow.md` "Handing off in a terminal pane" for tmux, and its do-not-allow list with `tmux split-window` and `tmux send-keys`; the `AGENTS.md` `internal/pane` row; the `CONTRIBUTING.md` demo line.
+- [X] T017 Update `specs/001-loupe-v1/validation.md`: the new tests under Automated validation, and the tmux rows of FR-018 under Unverified.
+- [X] T018 Run `mise run check`; commit T013 and T014 as `test: keep tmux and osascript inside internal/pane`, then T015 to T017 as `docs(pane): document the tmux pane host`.
 
 ## Phase 5: User Story 2 - iTerm2 pane (P2)
 

@@ -82,14 +82,14 @@ The `p` key in `loupe review` always posts a new review, so a sticky round goes 
 
 ## Handing off in a terminal pane
 
-Inside [Herdr](https://herdr.dev) or [Orca](https://www.onorca.dev/), `loupe handoff` opens `loupe review` in a split beside the agent's pane. The pane closes when review exits cleanly. In Orca the pane never takes focus, so a background agent never pulls your view away. The pane waits in the agent's tab.
+Inside [Herdr](https://herdr.dev), [tmux](https://github.com/tmux/tmux) or [Orca](https://www.onorca.dev/), `loupe handoff` opens `loupe review` in a split beside the agent's pane. The pane closes when review exits cleanly. In tmux the pane never takes focus, so what you type still reaches the agent: move to the review pane with your usual tmux key. tmux counts only when a client is attached to the agent's session, since a pane in a session nobody watches would be invisible. In Orca the pane never takes focus either, so a background agent never pulls your view away. The pane waits in the agent's tab.
 
 To skip the approval prompt at each hand-off, allow that one command:
 
 - Claude Code: `Bash(loupe handoff:*)`
 - Codex, in `~/.codex/rules/default.rules`: `prefix_rule(pattern=["loupe", "handoff"], decision="allow")`
 
-loupe builds the pane's command itself from the run it is asked to open. The rule lets an agent open review and nothing else. Do not allow `herdr pane split`, `herdr pane run` or `orca terminal split`. A blanket rule for any of them lets any command run in a new shell.
+loupe builds the pane's command itself from the run it is asked to open. The rule lets an agent open review and nothing else. Do not allow `herdr pane split`, `herdr pane run`, `tmux split-window`, `tmux send-keys` or `orca terminal split`. A blanket rule for any of them lets any command run in a new shell.
 
 ## Adapting a review skill you already have
 
