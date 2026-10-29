@@ -333,13 +333,13 @@ func TestSavesStampTheCurrentSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func(d, h int) { schemaVersion, handBackSchema = d, h }(schemaVersion, handBackSchema)
-	schemaVersion, handBackSchema = 2, 2
+	schemaVersion, handBackSchema = SchemaVersion+1, HandBackSchema+1
 	if _, err := sendBack(dir, "And this?"); err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"draft.json", "handback.json"} {
-		if got := storedSchema(t, filepath.Join(dir, file)); got != 2 {
-			t.Errorf("%s saved with schema %d, want 2", file, got)
+	for file, want := range map[string]int{"draft.json": SchemaVersion + 1, "handback.json": HandBackSchema + 1} {
+		if got := storedSchema(t, filepath.Join(dir, file)); got != want {
+			t.Errorf("%s saved with schema %d, want %d", file, got, want)
 		}
 	}
 }
@@ -357,4 +357,20 @@ func storedSchema(t *testing.T, path string) int {
 		t.Fatal(err)
 	}
 	return head.Schema
+}
+
+// A draft written before reasons existed loads, and its withdrawn finding has no reason.
+func TestASchema2DraftLoadsWithNoReason(t *testing.T) {
+	dir := t.TempDir()
+	stored := `{"schema": 2, "version": 2, "summary": "", "decisions": {}, "notes": [], "replies": [], "findings": [
+		{"id": "f-001", "rev": 2, "title": "T", "body": "B", "general": true, "by": "agent", "included": false,
+		 "createdAt": "2026-10-01T00:00:00Z", "updatedAt": "2026-10-01T00:00:00Z",
+		 "history": [{"at": "2026-10-01T00:00:00Z", "by": "agent", "changed": {"included": true}}]}]}`
+	if err := os.WriteFile(filepath.Join(dir, "draft.json"), []byte(stored), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := loadStored(t, dir)
+	if d.Schema != 2 || CurrentReason(d.Findings[0]) != nil {
+		t.Fatalf("schema %d, reason %+v", d.Schema, CurrentReason(d.Findings[0]))
+	}
 }

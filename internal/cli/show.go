@@ -24,7 +24,7 @@ will appear in the published review's hidden marker.
 Result (--json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 5,
-   "schema": 2,
+   "schema": 3,
    "summary": "Markdown",
    "findings": [{"id": "f-001", "rev": 1, "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},

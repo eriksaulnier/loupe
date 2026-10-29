@@ -7,7 +7,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 // schemaVersion and handBackSchema are what this loupe reads and writes, as vars so a test can play the next loupe.
 var schemaVersion, handBackSchema = SchemaVersion, HandBackSchema
@@ -168,8 +168,16 @@ type Reply struct {
 type HistoryEntry struct {
 	At time.Time `json:"at"`
 	By string    `json:"by"`
-	// Changed maps each changed field to its previous value.
+	// Changed maps each changed field to its previous value. It is empty on an entry that only amends a reason.
 	Changed map[string]any `json:"changed"`
+	// Reason is why the finding was withdrawn, on the entry that withdrew it or on a later one that amends it.
+	Reason *Reason `json:"reason,omitempty"`
+}
+
+// Reason is a withdrawal's reason: one Markdown line the human reads, and an optional word a skill picks to group by.
+type Reason struct {
+	Text string `json:"text"`
+	Code string `json:"code,omitempty"`
 }
 
 func NewEmpty() *Draft {

@@ -149,6 +149,24 @@ func lastIncludedChangeBy(f Finding) string {
 	return ""
 }
 
+// CurrentReason is the reason every surface shows: the newest one since the latest withdrawal, while the finding is
+// still not included. When it is not included, its newest inclusion change is that withdrawal, so the walk stops there.
+func CurrentReason(f Finding) *Reason {
+	if f.Included {
+		return nil
+	}
+	for i := len(f.History) - 1; i >= 0; i-- {
+		h := f.History[i]
+		if h.Reason != nil {
+			return h.Reason
+		}
+		if _, ok := h.Changed["included"]; ok {
+			return nil
+		}
+	}
+	return nil
+}
+
 func IncludedCount(d *Draft) int {
 	n := 0
 	for _, f := range d.Findings {
