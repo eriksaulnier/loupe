@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fails when tests could reach a real terminal or network, when a review could be posted from outside the one path
-# that records an attempt first, or when Herdr is named outside internal/pane and handoff. git grep sees only tracked
-# and staged files, so a new file must be added to be checked.
+# that records an attempt first, or when a pane host is named outside internal/pane and handoff. git grep sees only
+# tracked and staged files, so a new file must be added to be checked.
 #
 # The greps guard against honest mistakes in tests, not an adversary: a pseudo-terminal reached through an
 # interpreter (python3 -c, sh -c) or a command name that is not a literal passes them. The go list -deps check of the
@@ -140,12 +140,14 @@ for write in CreateReview UpdateReview; do
 	fi
 done
 
-# Herdr and Orca are run from internal/pane alone; beside it only handoff's help and refusal name either
-# (specs/006-agent-plugins FR-010, specs/019-pane-hosts FR-015). Tests are excluded because they fake them.
-herdr=$(tracked_grep -niIE 'herdr|orca' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go' \
+# Pane hosts are run from internal/pane alone; beside it only handoff's help and refusal name one (specs/006-agent-plugins
+# FR-010, specs/019-pane-hosts FR-015, specs/045-tmux-iterm-panes FR-015). Tests are excluded because they fake them.
+# internal/style reads TMUX to pick colors, and only that line of its environment key list is allowed.
+hosts=$(tracked_grep -niIE 'herdr|orca|tmux|iterm|osascript' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go' \
 	':(exclude)internal/pane/*' ':(exclude)internal/cli/handoff.go')
-if [ -n "$herdr" ]; then
-	violation "only internal/pane and internal/cli/handoff.go MAY name Herdr or Orca:" "$herdr"
+hosts=$(printf '%s' "$hosts" | grep -vE '^internal/style/style\.go:[0-9]+:.*for _, key := range \[\]string\{.*"TMUX",' || true)
+if [ -n "$hosts" ]; then
+	violation "only internal/pane and internal/cli/handoff.go MAY name a pane host:" "$hosts"
 fi
 
 exit "$failed"

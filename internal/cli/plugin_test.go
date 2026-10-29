@@ -141,15 +141,14 @@ func TestPluginShipsNoReviewCommand(t *testing.T) {
 	}
 }
 
-// Every harness reads the same skill; a herdr or orca command in it would be one an agent composes instead of
-// loupe handoff. The skill names neither host's command anywhere.
-func TestPluginSkillNamesNoHerdrCommand(t *testing.T) {
+// Every harness reads the same skill; a pane host's command in it would be one an agent composes instead of loupe
+// handoff. The skill names no host's command anywhere.
+func TestPluginSkillNamesNoHostCommand(t *testing.T) {
 	body := skillBody(t, "human-review")
-	if strings.Contains(body, "herdr") {
-		t.Error("human-review/SKILL.md names a herdr command; use loupe handoff")
-	}
-	if strings.Contains(body, "orca") {
-		t.Error("human-review/SKILL.md names an orca command; use loupe handoff")
+	for _, host := range []string{"herdr", "orca", "tmux", "osascript"} {
+		if strings.Contains(body, host) {
+			t.Errorf("human-review/SKILL.md names a %s command; use loupe handoff", host)
+		}
 	}
 }
 
