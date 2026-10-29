@@ -82,14 +82,14 @@ The `p` key in `loupe review` always posts a new review, so a sticky round goes 
 
 ## Handing off in a terminal pane
 
-Inside [Herdr](https://herdr.dev) or [Orca](https://www.onorca.dev/), `loupe handoff` opens `loupe review` in a split beside the agent's pane. The pane closes when review exits cleanly. In Orca the pane never takes focus, so a background agent never pulls your view away. The pane waits in the agent's tab.
+Inside [Herdr](https://herdr.dev), [tmux](https://github.com/tmux/tmux), [Orca](https://www.onorca.dev/) or, on macOS, [iTerm2](https://iterm2.com) or [Ghostty](https://ghostty.org), `loupe handoff` opens `loupe review` in a split beside the agent's pane. The pane closes when review exits cleanly. In tmux the pane never takes focus, so what you type still reaches the agent: move to the review pane with your usual tmux key. tmux counts only when a client is attached to the agent's session, since a pane in a session nobody watches would be invisible. In Orca the pane never takes focus either, so a background agent never pulls your view away. The pane waits in the agent's tab. In iTerm2 loupe selects the agent's session again right after the split, so keyboard focus stays with the agent. The first hand-off may make macOS ask you to let your terminal control iTerm2. Ghostty does not tell loupe which terminal the agent runs in, so loupe splits the terminal you have focused in Ghostty's front window, and only when its working directory is the agent's or a parent of it. Otherwise the hand-off falls back to asking you to run `loupe review`. Like iTerm2, loupe focuses the agent's terminal again after the split, unless another application was in front, where it leaves Ghostty's window alone.
 
 To skip the approval prompt at each hand-off, allow that one command:
 
 - Claude Code: `Bash(loupe handoff:*)`
 - Codex, in `~/.codex/rules/default.rules`: `prefix_rule(pattern=["loupe", "handoff"], decision="allow")`
 
-loupe builds the pane's command itself from the run it is asked to open. The rule lets an agent open review and nothing else. Do not allow `herdr pane split`, `herdr pane run` or `orca terminal split`. A blanket rule for any of them lets any command run in a new shell.
+loupe builds the pane's command itself from the run it is asked to open. The rule lets an agent open review and nothing else. Do not allow `herdr pane split`, `herdr pane run`, `tmux split-window`, `tmux send-keys`, `orca terminal split` or `osascript`. A blanket rule for any of them lets any command run in a new shell.
 
 ## Adapting a review skill you already have
 

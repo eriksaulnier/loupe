@@ -1,14 +1,16 @@
-// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr or Orca. It is
-// the only package that runs either.
+// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr, tmux, Orca,
+// iTerm2 or Ghostty. It is the only package that runs any of them.
 package pane
 
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/term"
 
@@ -40,16 +42,47 @@ type Opened struct {
 	Focused bool
 }
 
-// Detect tries Herdr before Orca because a Herdr session started inside an Orca terminal gives its panes both
-// environments, and the agent sits in the Herdr pane. A host whose conditions are met only in part is skipped.
-func Detect(getenv func(string) string) (Host, bool) {
+// Detect returns every host whose conditions are all met, in the order they are tried. The inner host of two nested
+// ones comes first, because the agent sits in its pane: a Herdr session inside tmux or Orca, or tmux inside Orca, gives
+// its panes both environments. tmux inside Herdr loses to Herdr, whose pane still opens where the human sees it. A host
+// whose conditions are met only in part is left out.
+func Detect(getenv func(string) string, goos string) []Host {
+	var hosts []Host
 	if h, ok := detectHerdr(getenv); ok {
-		return h, true
+		hosts = append(hosts, h)
+	}
+	if t, ok := detectTmux(getenv); ok {
+		hosts = append(hosts, t)
 	}
 	if o, ok := detectOrca(getenv); ok {
-		return o, true
+		hosts = append(hosts, o)
 	}
-	return nil, false
+	if it, ok := detectITerm(getenv, goos); ok {
+		hosts = append(hosts, it)
+	}
+	if g, ok := detectGhostty(getenv, goos); ok {
+		hosts = append(hosts, g)
+	}
+	return hosts
+}
+
+// errPass is a host declining a hand-off it detected, before it opened anything, so the next host is tried.
+var errPass = errors.New("pass to the next host")
+
+// Open opens the pane in the first host that does not pass. A refusal stops the walk, since a later step may already
+// have opened a pane. With every host passed it returns a nil Host and no error.
+func Open(ctx context.Context, hosts []Host, req Request) (Host, Opened, error) {
+	for _, h := range hosts {
+		opened, err := h.Open(ctx, req)
+		if errors.Is(err, errPass) {
+			continue
+		}
+		if err != nil {
+			return nil, Opened{}, err
+		}
+		return h, opened, nil
+	}
+	return nil, Opened{}, nil
 }
 
 // direction prefers the host's own report of the agent pane's width, then the agent's tty. An unknown width opens
@@ -100,6 +133,14 @@ func failed(host, step, message, fix string) error {
 	r := refusal.New(refusal.PaneFailed, fmt.Sprintf("%s %s: %s", host, step, message), fix)
 	r.Details = map[string]any{"host": host, "step": step}
 	return r
+}
+
+// stderrMessage is the error text of a host that prints it plainly on stderr.
+func stderrMessage(stderr []byte, err error) string {
+	if message := strings.TrimSpace(string(stderr)); message != "" {
+		return message
+	}
+	return err.Error()
 }
 
 // lookPath walks getenv's PATH, not the process's, so every detection input comes through the same getenv.

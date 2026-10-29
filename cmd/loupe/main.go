@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"golang.org/x/term"
@@ -37,6 +38,7 @@ func main() {
 		},
 		StderrIsTerminal: func() bool { return term.IsTerminal(int(os.Stderr.Fd())) },
 		TTYWidth:         pane.TTYWidth,
+		GOOS:             runtime.GOOS,
 		OpenURL:          cli.OpenURL,
 		TermWidth: func() int {
 			w, _, err := term.GetSize(int(os.Stdout.Fd()))

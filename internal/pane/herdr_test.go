@@ -12,9 +12,11 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
-// fakeRunner answers each call from replies, keyed by the argument at index key, and records every argv.
+// fakeRunner answers each call from replies, keyed by the argument at index key, or by keyOf when set, and records
+// every argv.
 type fakeRunner struct {
 	key     int
+	keyOf   func(args []string) string
 	calls   [][]string
 	replies map[string]reply
 }
@@ -26,7 +28,13 @@ type reply struct {
 
 func (f *fakeRunner) run(_ context.Context, path string, args ...string) ([]byte, []byte, error) {
 	f.calls = append(f.calls, append([]string{path}, args...))
-	r, ok := f.replies[args[f.key]]
+	var k string
+	if f.keyOf != nil {
+		k = f.keyOf(args)
+	} else {
+		k = args[f.key]
+	}
+	r, ok := f.replies[k]
 	if !ok {
 		return nil, nil, errors.New("unexpected call")
 	}
