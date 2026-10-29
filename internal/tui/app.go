@@ -111,7 +111,7 @@ type Model struct {
 	editPick     int
 	editBlocking bool
 	// rewriting is true while the title and body editor is open. rewriteRev is the revision its text started from, and
-	// rewriteOpened the text it opened on.
+	// rewriteOpened the finding's text it stands on.
 	rewriting     bool
 	rewriteTitle  textarea.Model
 	rewriteBody   textarea.Model

@@ -263,6 +263,45 @@ func TestRewriteSavedOverAnAgentEditRefusesAndKeepsTheText(t *testing.T) {
 	if !strings.Contains(screenText(m), "Agent title") {
 		t.Fatalf("the detail does not show the agent's version:\n%s", screenText(m))
 	}
+	// The title the human left alone now shows the agent's, and saving again writes only the body.
+	if got := m.rewriteTitle.Value(); got != "Agent title" {
+		t.Fatalf("the untouched title still reads %q", got)
+	}
+	m.Update(ctrlS)
+	f := findingOf(t, dir, "f-001")
+	if m.rewriting || f.Title != "Agent title" || f.Body != "Body one explains the rename. Mine." {
+		t.Fatalf("rewriting %v; the second save recorded %+v", m.rewriting, f)
+	}
+	if _, wrote := f.History[len(f.History)-1].Changed["title"]; wrote {
+		t.Fatalf("the save wrote the agent's old title back: %+v", f.History[len(f.History)-1])
+	}
+}
+
+// The human fixes the title and leaves with esc; the agent then corrects the body. The reopened editor shows the
+// agent's body, and the save leaves it as the agent wrote it.
+func TestRewriteKeptTextTakesTheAgentsNewerUntouchedField(t *testing.T) {
+	m, dir := editModel(t, "f-001", unchanged)
+	m.Update(runeKey("w"))
+	typeText(m, " fixed")
+	m.Update(escKey)
+	outside(t, dir, func(d *draft.Draft) error {
+		d.Findings[0].Body = "The agent's corrected body."
+		d.Findings[0].Rev++
+		return nil
+	})
+	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	m.Update(runeKey("w"))
+	if m.rewriteTitle.Value() != "Title one fixed" || m.rewriteBody.Value() != "The agent's corrected body." {
+		t.Fatalf("reopened on title %q body %q", m.rewriteTitle.Value(), m.rewriteBody.Value())
+	}
+	m.Update(ctrlS)
+	f := findingOf(t, dir, "f-001")
+	if m.rewriting || f.Title != "Title one fixed" || f.Body != "The agent's corrected body." {
+		t.Fatalf("rewriting %v finding %+v", m.rewriting, f)
+	}
+	if _, wrote := f.History[len(f.History)-1].Changed["body"]; wrote {
+		t.Fatalf("the save wrote the agent's old body back: %+v", f.History[len(f.History)-1])
+	}
 }
 
 func TestRewriteRefusesAWithdrawnFinding(t *testing.T) {

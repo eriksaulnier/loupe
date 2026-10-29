@@ -19,14 +19,16 @@ const (
 )
 
 // keptRewrite is text the human left with esc, and the revision it was typed against, so reopening it on a finding
-// the agent has since changed can say so.
+// the agent has since changed can say so. Typed holds only the fields the human changed: a field left alone takes
+// the finding's text on reopening, so the agent's newer version is not saved back as the human's.
 type keptRewrite struct {
-	Title, Body string
-	Rev         int
+	Typed [2]*string
+	Rev   int
 }
 
-// openedText is a field's text as the editor opened on it, and as the input shows it. The input turns a tab into
-// spaces and a CRLF into two line breaks, so while the human leaves a field alone, the opened text is what it holds.
+// openedText is a field's text in the finding the editor stands on, and as the input shows it. The input turns a
+// tab into spaces and a CRLF into two line breaks, so while the human leaves a field alone, the finding's text is
+// what it holds.
 type openedText struct{ Source, Shown string }
 
 // newRewriteInput is a textarea that grows with its text up to the height sizeRewrite allows, then scrolls to its
@@ -47,30 +49,64 @@ func (m *Model) openRewrite(f draft.Finding) tea.Cmd {
 		return nil
 	}
 	m.rewriting, m.notice = true, ""
-	title, body, rev := f.Title, f.Body, f.Rev
+	m.rewriteRev = f.Rev
+	m.rewriteTitle.SetValue(f.Title)
+	m.rewriteBody.SetValue(f.Body)
+	m.rewriteOpened = [2]openedText{{f.Title, m.rewriteTitle.Value()}, {f.Body, m.rewriteBody.Value()}}
 	if kept, ok := m.keptRewrites[f.ID]; ok {
-		title, body, rev = kept.Title, kept.Body, kept.Rev
-		if rev != f.Rev {
+		m.rewriteRev = kept.Rev
+		if kept.Rev != f.Rev {
 			m.say(style.Note, fmt.Sprintf("%s changed since the rewrite began; your text is kept", f.ID))
 		}
+		for i, input := range m.rewriteInputs() {
+			if typed := kept.Typed[i]; typed != nil {
+				input.SetValue(*typed)
+			}
+		}
 	}
-	m.rewriteRev = rev
-	m.rewriteTitle.SetValue(title)
-	m.rewriteBody.SetValue(body)
-	m.rewriteOpened = [2]openedText{{title, m.rewriteTitle.Value()}, {body, m.rewriteBody.Value()}}
 	m.sizeRewrite()
 	return m.focusRewrite(rewriteFocusTitle)
 }
 
-// rewriteText is the editor's title and body, with each field the human left alone as it was opened.
-func (m *Model) rewriteText() (title, body string) {
-	field := func(input textarea.Model, opened openedText) string {
-		if value := input.Value(); value != opened.Shown {
-			return value
+func (m *Model) rewriteInputs() [2]*textarea.Model {
+	return [2]*textarea.Model{&m.rewriteTitle, &m.rewriteBody}
+}
+
+// rewriteTyped is the editor's text in each field the human changed, and nil in each they left alone.
+func (m *Model) rewriteTyped() (typed [2]*string) {
+	for i, input := range m.rewriteInputs() {
+		if value := input.Value(); value != m.rewriteOpened[i].Shown {
+			typed[i] = &value
 		}
-		return opened.Source
 	}
-	return field(m.rewriteTitle, m.rewriteOpened[rewriteFocusTitle]), field(m.rewriteBody, m.rewriteOpened[rewriteFocusBody])
+	return typed
+}
+
+// rewriteText is the editor's title and body, with each field the human left alone as the finding has it.
+func (m *Model) rewriteText() (title, body string) {
+	text := [2]string{m.rewriteOpened[rewriteFocusTitle].Source, m.rewriteOpened[rewriteFocusBody].Source}
+	for i, typed := range m.rewriteTyped() {
+		if typed != nil {
+			text[i] = *typed
+		}
+	}
+	return text[rewriteFocusTitle], text[rewriteFocusBody]
+}
+
+// rebaseRewrite stands the editor on f as the agent left it: each field the human left alone shows f's text, and
+// each they changed keeps their text and cursor. The text the human now has began at f's revision.
+func (m *Model) rebaseRewrite(f draft.Finding) {
+	m.rewriteRev = f.Rev
+	source := [2]string{f.Title, f.Body}
+	for i, input := range m.rewriteInputs() {
+		if input.Value() == m.rewriteOpened[i].Shown && source[i] != m.rewriteOpened[i].Source {
+			input.SetValue(source[i])
+		}
+		shown := newRewriteInput(i == int(rewriteFocusBody))
+		shown.SetValue(source[i])
+		m.rewriteOpened[i] = openedText{source[i], shown.Value()}
+	}
+	m.sizeRewrite()
 }
 
 func (m *Model) focusRewrite(field rewriteField) tea.Cmd {
@@ -124,8 +160,8 @@ func (m *Model) typeRewrite(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// keepRewrite holds the editor's text for its finding until the program exits, and forgets text left as the finding
-// already reads.
+// keepRewrite holds the fields the human changed for their finding until the program exits, and forgets text left
+// as the finding already reads.
 func (m *Model) keepRewrite() {
 	f, _ := m.openedFinding()
 	title, body := m.rewriteText()
@@ -133,7 +169,7 @@ func (m *Model) keepRewrite() {
 		delete(m.keptRewrites, f.ID)
 		return
 	}
-	m.keptRewrites[f.ID] = keptRewrite{Title: title, Body: body, Rev: m.rewriteRev}
+	m.keptRewrites[f.ID] = keptRewrite{Typed: m.rewriteTyped(), Rev: m.rewriteRev}
 }
 
 // saveRewrite records the text and keeps the finding's decision. A refusal, including a finding the agent changed
@@ -156,7 +192,11 @@ func (m *Model) saveRewrite() tea.Cmd {
 		if rest, stale := strings.CutPrefix(m.notice, staleNotice); stale {
 			m.notice = fmt.Sprintf("the agent changed %s since it was displayed; nothing was saved and your text is kept", id) + rest
 		}
-		return m.fail(m.refreshDetail())
+		err := m.refreshDetail()
+		if f, i := m.openedFinding(); i >= 0 {
+			m.rebaseRewrite(f)
+		}
+		return m.fail(err)
 	}
 	m.closeRewrite()
 	delete(m.keptRewrites, id)
