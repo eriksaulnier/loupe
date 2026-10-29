@@ -28,6 +28,10 @@ It already happened. On a client pull request, round 2's agent read round 1 thro
 - Q: Is the sticky round note checked? → A: Yes. It is written only by `loupe publish --unattended --sticky --note` and never stored, so it is checked there, before any review request. This is the one exception to FR-009.
 - Q: Should the existing allowlist refusal keep calling `impact` and `suggestedFix` "body"? → A: No. It names the real field in its message and in `details.field` (FR-018).
 
+### Session 2026-10-29
+
+- Q: Is `suggestedFix` exempt from the check? → A: No (owner, 2026-10-29, reversing the board draft's exemption). The fix publishes under its own heading, and any code in it already sits in a fence, which is exempt. So the exemption let through only prose that cites an id, which is the incident's shape. `suggestedFix` is checked as `body` is (FR-001, FR-002).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An id in published text is refused at write time (Priority: P1)
@@ -63,7 +67,7 @@ An agent writes a finding about code, a URL, or a fix that happens to contain an
 
 1. **Given** a `body` with `f-002` inside a fenced code block, **When** the agent runs `loupe add`, **Then** the finding is stored.
 2. **Given** a `body` with `https://example.com/issues/f-002` as a bare URL, an autolink or a link destination, **When** the agent runs `loupe add`, **Then** the finding is stored.
-3. **Given** a `suggestedFix` that contains `f-002` outside a fence, **When** the agent runs `loupe add`, **Then** the finding is stored, because `suggestedFix` is not checked.
+3. **Given** a `suggestedFix` that contains `f-002` inside a fence, **When** the agent runs `loupe add`, **Then** the finding is stored, because fence content is exempt. The same id outside a fence is refused naming `suggestedFix`.
 4. **Given** text containing `ref-002`, `f-02`, `F-002`, `f-002a` or `f-002_x`, **When** the agent runs `loupe add`, **Then** the finding is stored, because none of them is the id shape.
 5. **Given** a `loupe reply` body or a human's send-back note that contains `f-002`, **When** it is written, **Then** it is stored, because neither is published.
 6. **Given** a human typing `f-002` in the message at the publish confirmation, **When** they publish, **Then** the message is not checked, because the words are the human's own.
@@ -123,7 +127,7 @@ An agent files a finding whose `impact` holds raw HTML. loupe refuses it as it d
 ### Edge Cases
 
 - A value that fails both the allowlist and this check is refused by the allowlist. The allowlist decides where fences are, and this check reads fences as the allowlist reads them.
-- A field with several ids reports the first, by line and then by column. A finding with ids in several fields reports the first field in the order `title`, `body`, `impact`. Each batch entry still reports its first defect only.
+- A field with several ids reports the first, by line and then by column. A finding with ids in several fields reports the first field in the order `title`, `body`, `impact`, `suggestedFix`. Each batch entry still reports its first defect only.
 - An id of the current round is refused too, whatever round it came from. The published review shows no id of any round, so a sibling finding is named by its subject as well.
 - A `--note` that is empty or only whitespace is no note, as today, and is not checked.
 - A `--note` passed without `--unattended --sticky` is still refused with `usage` first, before the run is resolved.
@@ -140,16 +144,16 @@ An agent files a finding whose `impact` holds raw HTML. loupe refuses it as it d
 
 ### Functional Requirements
 
-- **FR-001**: `loupe add` MUST refuse a finding whose `title`, `body` or `impact` contains a finding id outside the exemptions of FR-005.
-- **FR-002**: `loupe edit` MUST apply the same check to each of `title`, `body` and `impact` whose new value differs from its stored value. It MUST NOT check a field whose value after the edit equals the stored value, whether the input omits the field or repeats it. This is the rule `edit` already applies to `severity` and `suggestedFix`.
+- **FR-001**: `loupe add` MUST refuse a finding whose `title`, `body`, `impact` or `suggestedFix` contains a finding id outside the exemptions of FR-005.
+- **FR-002**: `loupe edit` MUST apply the same check to each of `title`, `body`, `impact` and `suggestedFix` whose new value differs from its stored value. It MUST NOT check a field whose value after the edit equals the stored value, whether the input omits the field or repeats it. This is the rule `edit` already applies to `severity` and to the allowlist check of `suggestedFix`.
 - **FR-003**: `loupe summary` MUST refuse a summary that contains a finding id outside the exemptions of FR-005. It MUST check every summary it writes, on every run.
 - **FR-004**: A finding id MUST be matched by its shape, not against the run's live ids: a lowercase `f-` followed by three or more ASCII digits, not preceded and not followed by an ASCII letter, an ASCII digit or `_`. A prior round's id is the dangerous case, and it is not an id of this run.
 - **FR-005**: The check MUST exempt the content of a fence, read as the allowlist reads fences, and a URL. A URL is a run of text that starts with `http://` or `https://` and ends at whitespace or `>`. The check MUST NOT exempt inline code spans, link text, emphasis, quotes, HTML block lines or indented lines.
-- **FR-006**: A refusal MUST use the existing code `markdown` and exit 1. Its message MUST name the field, the matched text and its line. Its `details` MUST carry `rule` set to `finding-id`, `field` (`title`, `body`, `impact` or `summary`), `match` and `line`. Its `fix` MUST say to name the earlier finding by its subject, or to put a codebase's own identifier in a fence, and MUST name the command to retry: `loupe add`, `loupe edit <id> --from -` or `loupe summary --from -`.
+- **FR-006**: A refusal MUST use the existing code `markdown` and exit 1. Its message MUST name the field, the matched text and its line. Its `details` MUST carry `rule` set to `finding-id`, `field` (`title`, `body`, `impact`, `suggestedFix` or `summary`), `match` and `line`. Its `fix` MUST say to name the earlier finding by its subject, or to put a codebase's own identifier in a fence, and MUST name the command to retry: `loupe add`, `loupe edit <id> --from -` or `loupe summary --from -`.
 - **FR-007**: When a value fails the allowlist, the allowlist's refusal MUST be returned and this check MUST NOT run on that value.
 - **FR-008**: In a batch, this check MUST take part in the existing batch refusal: each invalid entry reports its first defect, and the batch is stored entirely or not at all.
 - **FR-009**: `loupe publish` MUST NOT run this check on findings, on the summary or on the human's message, attended or unattended. A draft stored before this change MUST publish as it would today. The one exception is the round note of FR-019, which is written only at publish.
-- **FR-010**: The check MUST NOT apply to `suggestedFix`, `label`, `references`, `loupe reply` bodies, send-back notes, the human's message at the publish confirmation, or stored assessments.
+- **FR-010**: The check MUST NOT apply to `label`, `references`, `loupe reply` bodies, send-back notes, the human's message at the publish confirmation, or stored assessments.
 - **FR-011**: The check MUST apply whatever `--by` says and however the run was captured.
 - **FR-012**: The rendered review MUST NOT change. For every draft that passes the check, the composed body, inline comments, findings record and digest MUST be what they are today.
 - **FR-013**: `docs/comment-format.md` MUST state the rule: in The supported Markdown boundary, the `title` row and a new subsection for finding ids that names the checked fields, the shape, the exemptions and the `finding-id` code, and in Refusals, a row for it. It MUST say the check runs where each field is written: at `add`, `edit` and `summary` for the findings and the summary, and at publish for the round note only. It MUST also say that an allowlist refusal of a published field names that field.
@@ -163,7 +167,7 @@ An agent files a finding whose `impact` holds raw HTML. loupe refuses it as it d
 ### Key Entities
 
 - **Finding id**: the id loupe gives a finding in one round's draft, `f-001` onward. It is unique only within that round. The published review carries it only in the hidden findings record.
-- **Checked field**: `title`, `body` and `impact` of a finding, the draft's summary, and the round note of an unattended sticky round. These are the authored texts a reader of the review sees that an agent writes, through `add`, `edit` and `summary`, or through `publish --note`.
+- **Checked field**: `title`, `body`, `impact` and `suggestedFix` of a finding, the draft's summary, and the round note of an unattended sticky round. These are the authored texts a reader of the review sees that an agent writes, through `add`, `edit` and `summary`, or through `publish --note`.
 - **Exempt span**: the content of a fence, or a URL. An id inside one is not refused.
 
 ## Success Criteria *(mandatory)*

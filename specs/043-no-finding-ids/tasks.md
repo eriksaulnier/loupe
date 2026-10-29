@@ -57,6 +57,10 @@ Each task follows failing test, then implementation, then a passing `mise run ch
 
 - [X] T019 Run `mise run check` after the last edit and confirm `git diff --stat main -- testdata/golden` lists only the two `publish-help` goldens.
 
+## Phase 9: Review round 1
+
+- [X] T020 Check `suggestedFix` for finding ids at `add` and at `edit` when the edit changes it, after the owner reversed its exemption (2026-10-29). Pass it as the fourth field to `checkFindingIDs` in `internal/draft/mutate.go`. Test first in `internal/draft/mutate_findingid_test.go`: a prose id in `suggestedFix` refuses naming `suggestedFix`, a fenced one is stored, and an edit that leaves a stored id-citing fix unchanged is not refused. Update FR-001, FR-002, FR-006, FR-010, US2.3, the help, the skill, `docs/comment-format.md` and `contracts/cli.md`.
+
 ## Dependencies
 
 T001 and T002 first. US5 (T003–T005) before US1, because both name fields through the same kinds. T006 before T007–T011. US2 and US3 tests after T007–T010. T015–T018 after the code lands. T019 last.
