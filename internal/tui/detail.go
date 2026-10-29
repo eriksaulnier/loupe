@@ -53,6 +53,9 @@ func (m *Model) refreshDetail() error {
 		doc = append(doc, m.styles.Emphasis(m.styles.Text()).Render(line))
 	}
 	doc = append(doc, m.metaLines(f, width)...)
+	if draft.AgentChangedHumanText(f) {
+		doc = append(doc, m.styles.Note.Render(m.glyphs.Note+" the agent changed text you wrote"))
+	}
 	doc = append(doc, "")
 	if f.Location != nil {
 		doc = append(doc, m.codePane(locationText(f), lines, width)...)

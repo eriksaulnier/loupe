@@ -368,6 +368,24 @@ func TestRewriteLeavesAnOpenNoteOpen(t *testing.T) {
 	}
 }
 
+func TestDetailSaysTheAgentChangedTheHumansText(t *testing.T) {
+	m, dir := editModel(t, "f-003", unchanged)
+	m.Update(runeKey("w"))
+	typeText(m, " mine")
+	m.Update(ctrlS)
+	if strings.Contains(screenText(m), "the agent changed text you wrote") {
+		t.Fatal("the line shows before the agent changed anything")
+	}
+	outside(t, dir, func(d *draft.Draft) error {
+		_, _, err := draft.Edit(d, "f-003", draft.EditInput{Body: []byte(`"The agent's body."`)}, nil, nil, draft.ByAgent, testNow)
+		return err
+	})
+	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	if !strings.Contains(screenText(m), "the agent changed text you wrote") {
+		t.Fatalf("no line after the agent's edit:\n%s", screenText(m))
+	}
+}
+
 func TestHelpNamesTheRewriteKey(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 40)
 	if err := m.openFinding("f-001"); err != nil {
