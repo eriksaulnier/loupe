@@ -184,8 +184,47 @@ func TestResolveHeadingRefusals(t *testing.T) {
 			name: "no section holds a change", d: func(t *testing.T) *Diff { return planDiff(t, hunk{1, 1, "-   "}) },
 			path: "plan.md", heading: "Nope",
 			message: `plan.md has no heading "Nope"`,
-			fix:     `no section of plan.md holds a change; use a line location or a general finding with "general": true`,
+			fix:     `no section of plan.md changes in exactly one hunk; use a line location or a general finding with "general": true`,
 			details: map[string]any{"headings": []markdown.Heading{}},
+		},
+		{
+			name: "no match leaves out a section changed in two hunks", d: func(t *testing.T) *Diff {
+				return planDiff(t, hunk{4, 4, "   +   "}, hunk{14, 15, "   +   "})
+			},
+			path: "plan.md", heading: "Nope",
+			message: `plan.md has no heading "Nope"`,
+			fix:     "use one of: Goals, Rollout, Detail",
+			details: map[string]any{"headings": headings(planHeadings[1], planHeadings[2], planHeadings[3])},
+		},
+		{
+			name: "only sections changed in two hunks", d: func(t *testing.T) *Diff {
+				d := planDiff(t, hunk{4, 4, "   +   "}, hunk{14, 15, "   +   "})
+				d.Outline["plan.md"] = planHeadings[:1]
+				return d
+			},
+			path: "plan.md", heading: "Nope",
+			message: `plan.md has no heading "Nope"`,
+			fix:     `no section of plan.md changes in exactly one hunk; use a line location or a general finding with "general": true`,
+			details: map[string]any{"headings": []markdown.Heading{}},
+		},
+		{
+			name: "duplicate with no change falls back to the changed headings", d: func(t *testing.T) *Diff {
+				d := planDiff(t, hunk{4, 4, "   +   "})
+				d.Outline["plan.md"] = []markdown.Heading{
+					{Text: "Goals", Level: 2, Line: 1}, {Text: "Rollout", Level: 2, Line: 3}, {Text: "Goals", Level: 2, Line: 10},
+				}
+				return d
+			},
+			path: "plan.md", heading: "Goals",
+			message: `plan.md has 2 headings "Goals", on lines 1, 10`,
+			fix:     "use one of: Rollout",
+			details: map[string]any{
+				"matches": []map[string]any{
+					{"level": 2, "line": 1, "ranges": []map[string]int{}},
+					{"level": 2, "line": 10, "ranges": []map[string]int{}},
+				},
+				"headings": []markdown.Heading{{Text: "Rollout", Level: 2, Line: 3}},
+			},
 		},
 	}
 	for _, c := range cases {

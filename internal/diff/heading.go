@@ -127,19 +127,20 @@ func (f *File) sectionRanges(headings []markdown.Heading) [][][2]int {
 	return out
 }
 
-// changedHeadings completes r with the headings whose sections hold a change, which is what the agent can use instead.
+// changedHeadings completes r with the headings whose sections change in exactly one hunk, which are the ones the agent
+// can use instead: a section changed in more hunks refuses too.
 func changedHeadings(path string, headings []markdown.Heading, ranges [][][2]int, r *refusal.Error) *refusal.Error {
 	usable := []markdown.Heading{}
 	var names []string
 	for i, h := range headings {
-		if len(ranges[i]) > 0 {
+		if len(ranges[i]) == 1 {
 			usable = append(usable, h)
 			names = append(names, h.Text)
 		}
 	}
 	r.Fix = "use one of: " + strings.Join(names, ", ")
 	if len(usable) == 0 {
-		r.Fix = fmt.Sprintf("no section of %s holds a change; %s", path, generalFix)
+		r.Fix = fmt.Sprintf("no section of %s changes in exactly one hunk; %s", path, generalFix)
 	}
 	r.Details = map[string]any{"headings": usable}
 	return r
@@ -154,12 +155,14 @@ func duplicates(path, text string, headings []markdown.Heading, ranges [][][2]in
 		usable = append(usable, ranges[i]...)
 		details = append(details, map[string]any{"level": headings[i].Level, "line": headings[i].Line, "ranges": rangeDetails(ranges[i])})
 	}
-	fix := fmt.Sprintf("use a line location: %s:%s", path, formatRanges(usable))
-	if len(usable) == 0 {
-		fix = fmt.Sprintf("no section of %s holds a change; %s", path, generalFix)
-	}
 	r := refusal.New(refusal.Location,
-		fmt.Sprintf("%s has %d headings %q, on lines %s", path, len(matches), text, strings.Join(lines, ", ")), fix)
+		fmt.Sprintf("%s has %d headings %q, on lines %s", path, len(matches), text, strings.Join(lines, ", ")),
+		fmt.Sprintf("use a line location: %s:%s", path, formatRanges(usable)))
+	if len(usable) == 0 {
+		r = changedHeadings(path, headings, ranges, r)
+		r.Details["matches"] = details
+		return r
+	}
 	r.Details = map[string]any{"matches": details}
 	return r
 }
