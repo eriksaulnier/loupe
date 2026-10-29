@@ -1285,6 +1285,30 @@ func TestTheRowSplitsWhatTheBlockingMarkerLeaves(t *testing.T) {
 	}
 }
 
+// A withdrawn row's title recedes to the same color as dim, so the reason is also italic to read apart from it. Without
+// color the row carries no escape.
+func TestTheRowSetsTheReasonApartFromTheTitle(t *testing.T) {
+	rawRow := func(m *Model) string {
+		for _, row := range listRows(m.View().Content) {
+			if strings.Contains(ansi.Strip(row), " f-003 ") {
+				return row
+			}
+		}
+		t.Fatalf("no row for f-003:\n%s", m.View().Content)
+		return ""
+	}
+	dir := reasonFixture(t, "Title three", draft.Reason{Text: "Naming only."})
+	m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	if row, want := rawRow(m), m.styles.Dim.Italic(true).Render(" "+m.glyphs.Sep+" Naming only."); !strings.Contains(row, want) {
+		t.Errorf("row %q lacks the italic reason %q", row, want)
+	}
+	m = modelOf(t, dir, utf8Env, 100, 30)
+	if row := rawRow(m); strings.Contains(row, "\x1b") || !strings.Contains(row, "Title three "+m.glyphs.Sep+" Naming only.") {
+		t.Errorf("row without color %q", row)
+	}
+}
+
 // A reason passes the same one-line display rule as a title.
 func TestTheRowEscapesAReason(t *testing.T) {
 	m := modelOf(t, reasonFixture(t, "T", draft.Reason{Text: "a\x1b[31mb"}), utf8Env, 100, 30)

@@ -605,7 +605,7 @@ func (m *Model) titleCell(f draft.Finding, paint func(...string) string, width i
 		titleRoom, whyRoom = rest-style.Width(why), style.Width(why)
 	}
 	title, why = s.TruncRight(title, titleRoom), s.TruncRight(why, whyRoom)
-	cell := paint(title) + s.Dim.Render(sep+why)
+	cell := paint(title) + s.Dim.Italic(s.Color).Render(sep+why)
 	return cell + strings.Repeat(" ", max(0, width-style.Width(title)-style.Width(sep)-style.Width(why)))
 }
 
