@@ -144,10 +144,10 @@ func parseStatsQuery(cmd *cobra.Command, args []string) (statsQuery, error) {
 	q.sinceText, _ = f.GetString("since")
 	q.untilText, _ = f.GetString("until")
 	var err error
-	if q.filter.Since, err = parseBound("--since", q.sinceText, false); err != nil {
+	if q.filter.Since, err = parseBound("--since", q.sinceText, f.Changed("since"), false); err != nil {
 		return q, err
 	}
-	if q.filter.Until, err = parseBound("--until", q.untilText, true); err != nil {
+	if q.filter.Until, err = parseBound("--until", q.untilText, f.Changed("until"), true); err != nil {
 		return q, err
 	}
 	if q.filter.Since != nil && q.filter.Until != nil && q.filter.Since.After(*q.filter.Until) {
@@ -187,9 +187,10 @@ func parseStatsQuery(cmd *cobra.Command, args []string) (statsQuery, error) {
 }
 
 // parseBound reads a date as the start of its UTC day, or for an end bound the last instant of it, so an inclusive
-// --until 2026-10-31 covers October 31 whatever precision a stored time carries.
-func parseBound(flag, value string, end bool) (*time.Time, error) {
-	if value == "" {
+// --until 2026-10-31 covers October 31 whatever precision a stored time carries. Only an unset flag means no bound, so
+// an empty value refuses like any other that does not parse.
+func parseBound(flag, value string, set, end bool) (*time.Time, error) {
+	if !set {
 		return nil, nil
 	}
 	if t, err := time.Parse(time.DateOnly, value); err == nil {

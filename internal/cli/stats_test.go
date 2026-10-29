@@ -386,6 +386,8 @@ func TestStatsRefusesBadArgumentsAsUsage(t *testing.T) {
 		{"--since", "2026-11-01", "--until", "2026-10-01"},
 		{"--since", "2026-13-01"},
 		{"--until", "yesterday"},
+		{"--since", ""},
+		{"--until", ""},
 		{"--state", "merged"},
 		{"--state", ""},
 		{"--group-by", "day"},
