@@ -14,7 +14,7 @@ func digestDraft() *Draft {
 	d.Summary = "Two <issues> & more"
 	d.Findings = []Finding{
 		{ID: "f-001", Rev: 1, Title: "T1", Body: "B1", General: true, Label: "question", By: ByAgent, Included: true, CreatedAt: digestNow, UpdatedAt: digestNow, History: []HistoryEntry{}},
-		{ID: "f-002", Rev: 1, Title: "T2", Body: "B2\n", Location: &Location{Path: "a.go", Side: SideLeft, Line: 14, StartLine: 10}, Label: "issue", Blocking: true, Confidence: "high", Severity: "minor", SuggestedFix: "fix it", Impact: "Two reviews.", Verified: "reproduced", References: []string{"https://github.com/o/r/issues/1"}, By: ByAgent, Included: true, CreatedAt: digestNow, UpdatedAt: digestNow, History: []HistoryEntry{}},
+		{ID: "f-002", Rev: 1, Title: "T2", Body: "B2\n", Location: &FindingLocation{Path: "a.go", Side: SideLeft, Line: 14, StartLine: 10}, Label: "issue", Blocking: true, Confidence: "high", Severity: "minor", SuggestedFix: "fix it", Impact: "Two reviews.", Verified: "reproduced", References: []string{"https://github.com/o/r/issues/1"}, By: ByAgent, Included: true, CreatedAt: digestNow, UpdatedAt: digestNow, History: []HistoryEntry{}},
 		{ID: "f-003", Rev: 2, Title: "withdrawn", Body: "gone", General: true, By: ByAgent, Included: false, History: []HistoryEntry{}},
 		{ID: "f-004", Rev: 1, Title: "excluded", Body: "no", General: true, By: ByAgent, Included: true, History: []HistoryEntry{}},
 	}
@@ -116,7 +116,7 @@ func TestDigestChanges(t *testing.T) {
 		"pending title": {change: func(d *Draft) { d.Findings[0].Title = "T1b" }},
 		"pending body":  {change: func(d *Draft) { d.Findings[0].Body = "B1b" }},
 		"pending location": {change: func(d *Draft) {
-			d.Findings[0].General, d.Findings[0].Location = false, &Location{Path: "a.go", Side: "RIGHT", Line: 1}
+			d.Findings[0].General, d.Findings[0].Location = false, &FindingLocation{Path: "a.go", Side: "RIGHT", Line: 1}
 		}},
 		"pending label":             {change: func(d *Draft) { d.Findings[0].Label = "" }},
 		"pending blocking":          {change: func(d *Draft) { d.Findings[0].Blocking = true }},

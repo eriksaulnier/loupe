@@ -56,6 +56,23 @@ func TestRefusalTextWithoutColorKeepsTheContractShape(t *testing.T) {
 	}
 }
 
+// A refusal can carry text from the pull request, such as a heading, so its controls are made visible on stderr.
+func TestRefusalTextEscapesControls(t *testing.T) {
+	r := refusal.New(refusal.Location, "e.md has no heading \"Ti\x1b]0;pwned\atle\"", "use one of: Ti\x1b]0;pwned\atle, A\u202eB")
+	var out bytes.Buffer
+	writeRefusalText(&out, style.New(&out, func(string) string { return "" }), 100, r, nil)
+	want := "error: e.md has no heading \"Ti\\u001B]0;pwned\\u0007tle\"\n" +
+		"fix: use one of: Ti\\u001B]0;pwned\\u0007tle, A\\u202EB\n"
+	if out.String() != want {
+		t.Fatalf("stderr %q\nwant %q", out.String(), want)
+	}
+	out.Reset()
+	writeRefusalText(&out, colorStyle(t, &out), 100, r, nil)
+	if got := out.String(); strings.ContainsAny(got, "\a\u202e") || !strings.Contains(got, `\u001B]0;pwned`) {
+		t.Fatalf("color stderr keeps a control: %q", got)
+	}
+}
+
 func TestRefusalTextWithColorNamesTheCodeAndIsolatesCommands(t *testing.T) {
 	var out bytes.Buffer
 	r := refusal.New(refusal.NotReady, "o/r#1 is not ready to publish: 6 findings pending",

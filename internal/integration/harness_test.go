@@ -72,7 +72,13 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	r := gitrepo.New(t, owner, repo, number)
+	return newHarnessWithBase(t, nil)
+}
+
+// newHarnessWithBase is newHarness with base also committed in the pull request's base.
+func newHarnessWithBase(t *testing.T, base map[string]string) *harness {
+	t.Helper()
+	r := gitrepo.NewWithBase(t, owner, repo, number, base)
 	gh := fakegh.New(t)
 	gh.SetPR(owner, repo, github.PullRequest{
 		Number:  number,

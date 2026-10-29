@@ -7,7 +7,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 // schemaVersion and handBackSchema are what this loupe reads and writes, as vars so a test can play the next loupe.
 var schemaVersion, handBackSchema = SchemaVersion, HandBackSchema
@@ -103,8 +103,8 @@ type Finding struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`
 	// Exactly one of Location or General is set.
-	Location *Location `json:"location,omitempty"`
-	General  bool      `json:"general"`
+	Location *FindingLocation `json:"location,omitempty"`
+	General  bool             `json:"general"`
 	// Label is issue, suggestion, question or any other word kept verbatim; empty means none.
 	Label    string `json:"label,omitempty"`
 	Blocking bool   `json:"blocking"`
@@ -133,6 +133,21 @@ type Location struct {
 	Side      string `json:"side"`
 	Line      int    `json:"line"`
 	StartLine int    `json:"startLine,omitempty"`
+}
+
+// FindingLocation is a finding's location in the draft: the range it publishes on, and the heading it was anchored to.
+// The heading stays in the draft and the review interface; everything published reads Published.
+type FindingLocation struct {
+	Path      string `json:"path"`
+	Side      string `json:"side"`
+	Line      int    `json:"line"`
+	StartLine int    `json:"startLine,omitempty"`
+	// Heading is the section's heading as the file writes it, set when add or edit resolved a heading anchor.
+	Heading string `json:"heading,omitempty"`
+}
+
+func (l FindingLocation) Published() Location {
+	return Location{Path: l.Path, Side: l.Side, Line: l.Line, StartLine: l.StartLine}
 }
 
 type Decision struct {

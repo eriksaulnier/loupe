@@ -232,7 +232,7 @@ func bigHunkRun(t *testing.T) string {
 		t.Fatal(err)
 	}
 	d := draft.NewEmpty()
-	if _, err := draft.Add(d, []draft.FindingInput{{Title: "Wide", Body: "Spans the hunk.", Location: &draft.Location{Path: "big.go", Line: 30, StartLine: 5}}},
+	if _, err := draft.Add(d, []draft.FindingInput{{Title: "Wide", Body: "Spans the hunk.", Location: &draft.LocationInput{Path: "big.go", Line: 30, StartLine: 5}}},
 		parsed, draft.ByAgent, testNow); err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +353,7 @@ func TestDetailWrapsAReferenceWiderThanTheWindow(t *testing.T) {
 
 func TestDetailActionsFollowTheFinding(t *testing.T) {
 	g := style.Glyphs(envOf(map[string]string{"LANG": "en_US.UTF-8"}))
-	located := draft.Finding{ID: "f-001", Location: &draft.Location{Path: "a.go", Line: 1}, Included: true}
+	located := draft.Finding{ID: "f-001", Location: &draft.FindingLocation{Path: "a.go", Line: 1}, Included: true}
 	general := draft.Finding{ID: "f-002", Included: true}
 	withdrawn := located
 	withdrawn.Included = false
@@ -964,5 +964,89 @@ func mustOpenFinding(t *testing.T, m *Model, id string) {
 	t.Helper()
 	if err := m.openFinding(id); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// headingFixture is newFixture with f-002 anchored to a heading, as add stores one.
+func headingFixture(t *testing.T) string {
+	t.Helper()
+	dir := newFixture(t)
+	d := loadDraft(t, dir)
+	d.Findings[1].Location.Heading = "Rollout `plan`"
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// The heading heads the code pane's body, under the border that carries the range.
+func TestDetailShowsTheHeadingInTheCodePane(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		env     map[string]string
+		profile colorprofile.Profile
+		sep     string
+	}{
+		{"no color", map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, colorprofile.NoTTY, "·"},
+		{"ascii", map[string]string{"NO_COLOR": "1", "LANG": "C"}, colorprofile.NoTTY, "-"},
+		{"true color", map[string]string{"LANG": "en_US.UTF-8"}, colorprofile.TrueColor, "·"},
+		{"16 colors", map[string]string{"LANG": "en_US.UTF-8"}, colorprofile.ANSI, "·"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := modelOf(t, headingFixture(t), c.env, 100, 30)
+			if c.profile != colorprofile.NoTTY {
+				m.styles.SetColorProfile(c.profile)
+				m.styles.Color = true
+			}
+			if list := ansi.Strip(m.View().Content); strings.Contains(list, "Rollout") {
+				t.Errorf("the list shows the heading:\n%s", list)
+			}
+			if err := m.openFinding("f-002"); err != nil {
+				t.Fatal(err)
+			}
+			view := ansi.Strip(m.View().Content)
+			want := `(?m) multi\.txt:21 .*\n[^\w\n]*` + regexp.QuoteMeta(c.sep+" Rollout `plan`") + ` `
+			if !regexp.MustCompile(want).MatchString(view) {
+				t.Errorf("detail lacks %s:\n%s", want, view)
+			}
+		})
+	}
+}
+
+func TestDetailWithoutAHeadingIsUnchanged(t *testing.T) {
+	m := modelOf(t, headingFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	// The pane's first row is a numbered code line.
+	if view := m.View().Content; !regexp.MustCompile(`(?m) multi\.txt:3 .*\n[^\w\n]*\d+ `).MatchString(view) {
+		t.Errorf("the code pane does not start with code:\n%s", view)
+	}
+}
+
+func TestDetailKeepsALongHeadingInsideTheWindow(t *testing.T) {
+	dir := newFixture(t)
+	d := loadDraft(t, dir)
+	d.Findings[1].Location.Heading = strings.Repeat("A long heading ", 5) + "END"
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 24)
+	if err := m.openFinding("f-002"); err != nil {
+		t.Fatal(err)
+	}
+	view := m.View().Content
+	for _, l := range strings.Split(view, "\n") {
+		if w := style.Width(l); w > 60 {
+			t.Errorf("line is %d cells wide: %q", w, l)
+		}
+	}
+	// The row wraps rather than clips, so the heading's last word shows.
+	if !strings.Contains(view, "END") {
+		t.Errorf("the heading's last word is cut:\n%s", view)
+	}
+	// The wrapped row hangs under the heading's text, past the separator.
+	if !regexp.MustCompile(`(?m)· A long heading.*\n.*│ {3}[A-Za-z]`).MatchString(view) {
+		t.Errorf("the wrapped heading row does not hang under its text:\n%s", view)
 	}
 }

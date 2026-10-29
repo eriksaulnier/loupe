@@ -17,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/gitx"
+	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -229,8 +230,13 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if err != nil {
 		return leftRefs(err)
 	}
-	if _, err := diff.Parse(diffBytes); err != nil {
+	parsed, err := diff.Parse(diffBytes)
+	if err != nil {
 		return leftRefs(fmt.Errorf("git diff of %s...%s does not parse: %w", baseRef, headRef, err))
+	}
+	outlineJSON, err := captureOutline(clone, headRef, parsed)
+	if err != nil {
+		return leftRefs(err)
 	}
 
 	// One listing of the reviews serves both reads, so a round adds a single review request to GitHub.
@@ -244,7 +250,7 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if err != nil {
 		return leftRefs(err)
 	}
-	optional := map[string][]byte{run.CommentsFile: commentsJSON}
+	optional := map[string][]byte{run.CommentsFile: commentsJSON, run.OutlineFile: outlineJSON}
 	if previousJSON != nil {
 		optional[run.PreviousFile] = previousJSON
 	}
@@ -317,6 +323,25 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		})
 	}
 	return printCapture(deps, ref, target, cleanup, next, previous, comments)
+}
+
+// captureOutline reads the headings of each changed Markdown file at the head. A deleted or binary file has no head
+// text to outline, and a type change lists a path twice in the diff, so each path is read once.
+func captureOutline(clone, headRef string, d *diff.Diff) ([]byte, error) {
+	files := []run.OutlineEntry{}
+	seen := map[string]bool{}
+	for _, f := range d.Files {
+		if f.IsDelete || f.IsBinary || !markdown.IsMarkdownPath(f.NewName) || seen[f.NewName] {
+			continue
+		}
+		seen[f.NewName] = true
+		src, err := gitx.Blob(clone, headRef, f.NewName)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, run.OutlineEntry{Path: f.NewName, Headings: markdown.Headings(src)})
+	}
+	return run.EncodeOutline(files)
 }
 
 // capturePrevious finds the round show --previous will list. A local receipt from the same publisher is the exact

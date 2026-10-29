@@ -19,7 +19,7 @@ func fixtureTarget() run.Target {
 		Author: "author", Viewer: "reviewer", BaseSHA: "2222222222222222222222222222222222222222", HeadSHA: headSHA, Round: 1}
 }
 
-func finding(id, label string, blocking bool, loc *draft.Location) draft.Finding {
+func finding(id, label string, blocking bool, loc *draft.FindingLocation) draft.Finding {
 	return draft.Finding{ID: id, Rev: 1, Title: "Title " + id, Body: "Body of " + id, Location: loc, General: loc == nil,
 		Label: label, Blocking: blocking, By: draft.ByAgent, Included: true, CreatedAt: fixtureNow, UpdatedAt: fixtureNow,
 		History: []draft.HistoryEntry{}}
@@ -36,13 +36,13 @@ func readyDraft() *draft.Draft {
 	d := draft.NewEmpty()
 	d.Version = 7
 	d.Summary = "Looks mostly fine."
-	excluded := finding("f-003", "issue", true, &draft.Location{Path: "a.go", Side: draft.SideRight, Line: 5})
+	excluded := finding("f-003", "issue", true, &draft.FindingLocation{Path: "a.go", Side: draft.SideRight, Line: 5})
 	excluded.Title, excluded.Body, excluded.SuggestedFix = "EXCLUDED title", "EXCLUDED body", "EXCLUDED fix"
-	withdrawn := finding("f-004", "issue", true, &draft.Location{Path: "a.go", Side: draft.SideRight, Line: 6})
+	withdrawn := finding("f-004", "issue", true, &draft.FindingLocation{Path: "a.go", Side: draft.SideRight, Line: 6})
 	withdrawn.Title, withdrawn.Body, withdrawn.Included = "WITHDRAWN title", "WITHDRAWN body", false
 	d.Findings = []draft.Finding{
-		finding("f-001", "issue", true, &draft.Location{Path: "a.go", Side: draft.SideRight, Line: 3}),
-		finding("f-002", "suggestion", false, &draft.Location{Path: "a.go", Side: draft.SideRight, Line: 12, StartLine: 10}),
+		finding("f-001", "issue", true, &draft.FindingLocation{Path: "a.go", Side: draft.SideRight, Line: 3}),
+		finding("f-002", "suggestion", false, &draft.FindingLocation{Path: "a.go", Side: draft.SideRight, Line: 12, StartLine: 10}),
 		excluded,
 		withdrawn,
 		finding("f-005", "question", false, nil),
