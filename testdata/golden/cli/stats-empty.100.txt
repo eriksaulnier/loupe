@@ -1,7 +1,12 @@
-Published runs in every repository, at any time. Precision and median leave out unattended runs, and
-precision leaves out withdrawn findings.
+Published runs in every repository, at any time.
 
-GROUP  RUNS PRS FILED PUBLISHED EXCLUDED WITHDRAWN PENDING PRECISION MEDIAN
-total     0   0     0         0        0         0       0         -      -
+total
+  runs        0
+  findings    0 filed
+  precision   -
+  median      -
+
+Precision is published out of published plus excluded. It leaves out withdrawn findings, which the
+agent cut itself, and unattended runs. The median also leaves out unattended runs.
 
 No runs yet. loupe capture <pr-url>

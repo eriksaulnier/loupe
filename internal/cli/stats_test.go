@@ -17,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/stats"
+	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 // statsFinding is an included general finding filed by the agent.
@@ -316,8 +317,8 @@ func checkFiledInResult(t *testing.T, stdout []byte) {
 	}
 }
 
-// TestStatsGoldens pins SC-001: the JSON result for each grouping over statsRuns, and the human table at the two
-// widths that matter.
+// TestStatsGoldens pins SC-001: the JSON result for each grouping over statsRuns, and the human list at the two
+// widths that matter, where every line fits.
 func TestStatsGoldens(t *testing.T) {
 	home := statsRuns(t)
 	all := []string{"--state", "captured", "--state", "ready", "--state", "published"}
@@ -352,6 +353,12 @@ func TestStatsGoldens(t *testing.T) {
 					t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 				}
 				checkCLIGolden(t, c.name+"."+strconv.Itoa(width)+".txt", s.stdout.String()+s.stderr.String())
+				// Help text is not wrapped to the terminal, so only the list is held to the width.
+				for _, line := range strings.Split(s.stdout.String(), "\n") {
+					if c.name != "stats-help" && style.Width(line) > width {
+						t.Errorf("line wider than %d: %q", width, line)
+					}
+				}
 			})
 		}
 	}

@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 	"io"
+	"math"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +16,6 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/stats"
-	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 const statsHelp = `Roll the human gate up across every run in the data root: how many findings the agent filed,
@@ -216,63 +215,33 @@ func echoBound(t *time.Time) *string {
 	return &s
 }
 
-var statsColumns = []string{"RUNS", "PRS", "FILED", "PUBLISHED", "EXCLUDED", "WITHDRAWN", "PENDING", "PRECISION", "MEDIAN"}
+// statsNameWidth fits the longest field name, precision, and the gap after it.
+const statsNameWidth = len("precision") + 3
 
 func printStats(deps Deps, q statsQuery, result stats.Result, walked int) error {
 	s, width := deps.outStyle(), deps.width()
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", s.Wrap(statsHeader(q, result.Total.Runs.Unattended), width, ""))
-
-	rows := append(slices.Clone(result.Groups), result.Total)
-	cells := make([][]string, len(rows))
-	widths := make([]int, len(statsColumns))
-	for i, h := range statsColumns {
-		widths[i] = len(h)
-	}
-	key := len("GROUP")
-	for i, g := range rows {
-		cells[i] = statsCells(g)
-		for j, c := range cells[i] {
-			widths[j] = max(widths[j], len(c))
+	fmt.Fprintf(&b, "%s\n", s.Wrap(statsHeader(q), width, ""))
+	for _, g := range append(slices.Clone(result.Groups), result.Total) {
+		// One render per line: lipgloss pads a multi-line block to its widest line.
+		b.WriteString("\n")
+		for _, line := range strings.Split(s.Wrap(oneLine(g.Key), width, ""), "\n") {
+			fmt.Fprintf(&b, "%s\n", s.Bold.Render(line))
 		}
-		key = max(key, style.Width(oneLine(g.Key)))
-	}
-	numbers := len(widths) - 1
-	for _, w := range widths {
-		numbers += w
-	}
-	// A key too wide to share its line goes above its numbers, so no repository name is ever cut.
-	stacked := key+2+numbers > width
-	numberLine := func(c []string) string {
-		parts := make([]string, len(c))
-		for j, v := range c {
-			parts[j] = strings.Repeat(" ", widths[j]-len(v)) + v
+		for _, f := range statsFields(g) {
+			for _, line := range s.Field(f.name, statsNameWidth, f.items, metaSep(s), width) {
+				fmt.Fprintf(&b, "%s\n", line)
+			}
 		}
-		return strings.Join(parts, " ")
-	}
-	if stacked {
-		fmt.Fprintf(&b, "%s\n", s.Dim.Render("  "+numberLine(statsColumns)))
-	} else {
-		fmt.Fprintf(&b, "%s\n", s.Dim.Render(style.Pad("GROUP", key)+"  "+numberLine(statsColumns)))
-	}
-	for i, g := range rows {
-		name := s.Accent.Render(oneLine(g.Key))
-		if i == len(rows)-1 {
-			name = s.Bold.Render(g.Key)
-		}
-		if stacked {
-			fmt.Fprintf(&b, "%s\n  %s\n", name, numberLine(cells[i]))
-			continue
-		}
-		fmt.Fprintf(&b, "%s  %s\n", style.Pad(name, key), numberLine(cells[i]))
 	}
 
-	switch {
-	case walked == 0:
-		fmt.Fprintf(&b, "\n%s\n", next(s, width, "No runs yet.", "loupe capture <pr-url>"))
-	case result.Total.Runs == (stats.Runs{}):
-		fmt.Fprintf(&b, "\n%s\n", s.Dim.Render("No runs match these filters."))
+	b.WriteString("\n")
+	footnote := func(sentence string) {
+		for _, line := range strings.Split(s.Wrap(sentence, width, ""), "\n") {
+			fmt.Fprintf(&b, "%s\n", s.Dim.Render(line))
+		}
 	}
+	footnote(statsExclusions(result.Total.Runs.Unattended))
 	if d := result.Total.Drifted; len(d) > 0 {
 		refs := make([]string, len(d))
 		for i, r := range d {
@@ -283,33 +252,108 @@ func printStats(deps Deps, q statsQuery, result stats.Result, walked int) error 
 		if len(d) == 1 {
 			sentence = fmt.Sprintf("1 run changed after publishing, so its counts can differ from its review: %s.", refs[0])
 		}
-		b.WriteString("\n")
-		// One render per line: lipgloss pads a multi-line block to its widest line.
-		for _, line := range strings.Split(s.Wrap(sentence, width, ""), "\n") {
-			fmt.Fprintf(&b, "%s\n", s.Dim.Render(line))
-		}
+		footnote(sentence)
+	}
+	switch {
+	case walked == 0:
+		fmt.Fprintf(&b, "\n%s\n", next(s, width, "No runs yet.", "loupe capture <pr-url>"))
+	case result.Total.Runs == (stats.Runs{}):
+		fmt.Fprintf(&b, "\n%s\n", s.Dim.Render("No runs match these filters."))
 	}
 	_, err := io.WriteString(deps.Stdout, b.String())
 	return err
 }
 
-func statsCells(g stats.Group) []string {
-	r, f := g.Runs, g.Findings
-	precision, median := "-", "-"
-	if g.Precision != nil {
-		precision = strconv.FormatFloat(*g.Precision, 'f', 3, 64)
-	}
-	if g.MedianCaptureToPublish != nil {
-		median = compactDuration(time.Duration(*g.MedianCaptureToPublish))
-	}
-	return []string{
-		strconv.Itoa(r.Captured + r.Ready + r.Published), strconv.Itoa(g.PullRequests),
-		strconv.Itoa(f.Filed), strconv.Itoa(f.Published), strconv.Itoa(f.Excluded), strconv.Itoa(f.Withdrawn), strconv.Itoa(f.Pending),
-		precision, median,
-	}
+type statsField struct {
+	name  string
+	items []string
 }
 
-// compactDuration is the two largest units of d, such as 14m, 1h2m or 3d4h, for a table cell.
+// statsFields is one group's list. runs, findings, precision and median always print, the rest only when nonzero, and
+// within a line every count but the first is left out at zero.
+func statsFields(g stats.Group) []statsField {
+	r, f := g.Runs, g.Findings
+	fields := []statsField{
+		{"runs", statsRunItems(r, g.PullRequests)},
+		{"findings", append([]string{fmt.Sprintf("%d filed", f.Filed)},
+			counts(count{f.Published, "published"}, count{f.Excluded, "excluded"}, count{f.Withdrawn, "withdrawn"},
+				count{f.Pending, "pending"})...)},
+	}
+	var labels []string
+	for _, side := range []struct {
+		name string
+		c    stats.LabelCounts
+	}{{"published", g.ByLabel.Published}, {"excluded", g.ByLabel.Excluded}} {
+		if words := counts(count{side.c.Issue, "issue"}, count{side.c.Suggestion, "suggestion"},
+			count{side.c.Question, "question"}, count{side.c.Other, "other"}); len(words) > 0 {
+			labels = append(labels, side.name+": "+strings.Join(words, ", "))
+		}
+	}
+	if len(labels) > 0 {
+		fields = append(fields, statsField{"labels", labels})
+	}
+	if blocking := counts(count{g.Blocking.Published, "published"}, count{g.Blocking.Excluded, "excluded"}); len(blocking) > 0 {
+		fields = append(fields, statsField{"blocking", blocking})
+	}
+	if revised := counts(count{f.Reinstated, "reinstated"}, count{f.Regraded, "regraded"}); len(revised) > 0 {
+		fields = append(fields, statsField{"revised", revised})
+	}
+	precision, median := "-", "-"
+	if g.Precision != nil {
+		precision = fmt.Sprintf("%d%% (%d of %d)", int(math.Round(float64(g.Gate.Published)/float64(g.Gate.Gated)*100)),
+			g.Gate.Published, g.Gate.Gated)
+	}
+	if g.MedianCaptureToPublish != nil {
+		median = compactDuration(time.Duration(*g.MedianCaptureToPublish)) + " from capture to publish"
+	}
+	return append(fields, statsField{"precision", []string{precision}}, statsField{"median", []string{median}})
+}
+
+// statsRunItems says "2 published" when every run is in one state, and otherwise puts the total before the split.
+func statsRunItems(r stats.Runs, pullRequests int) []string {
+	published := ""
+	if r.Published > 0 {
+		published = fmt.Sprintf("%d published", r.Published)
+		switch {
+		case r.Unattended == r.Published:
+			published += ", unattended"
+		case r.Unattended > 0:
+			published += fmt.Sprintf(", %d unattended", r.Unattended)
+		}
+	}
+	items := counts(count{r.Captured, "captured"}, count{r.Ready, "ready"})
+	if published != "" {
+		items = append(items, published)
+	}
+	switch {
+	case len(items) == 0:
+		items = []string{"0"}
+	case len(items) > 1:
+		items[0] = fmt.Sprintf("%d: %s", r.Captured+r.Ready+r.Published, items[0])
+	}
+	if pullRequests > 0 {
+		items = append(items, fmt.Sprintf("%d %s", pullRequests, plural(pullRequests, "pull request")))
+	}
+	return items
+}
+
+type count struct {
+	n    int
+	word string
+}
+
+// counts is "N word" for each count that is not zero.
+func counts(cs ...count) []string {
+	var out []string
+	for _, c := range cs {
+		if c.n > 0 {
+			out = append(out, fmt.Sprintf("%d %s", c.n, c.word))
+		}
+	}
+	return out
+}
+
+// compactDuration is the two largest units of d, such as 14m, 1h2m or 3d4h.
 func compactDuration(d time.Duration) string {
 	sign := ""
 	if d < 0 {
@@ -329,9 +373,8 @@ func compactDuration(d time.Duration) string {
 	return fmt.Sprintf("%s%ds", sign, seconds)
 }
 
-// statsHeader names every filter in force, so a reader comparing the run count with loupe list sees why it differs,
-// and both exclusions behind precision and the median.
-func statsHeader(q statsQuery, unattended int) string {
+// statsHeader names every filter in force, so a reader comparing the run count with loupe list sees why it differs.
+func statsHeader(q statsQuery) string {
 	words := make([]string, len(q.filter.States))
 	copy(words, q.filter.States)
 	words[0] = strings.ToUpper(words[0][:1]) + words[0][1:]
@@ -360,12 +403,20 @@ func statsHeader(q statsQuery, unattended int) string {
 	case stats.GroupMonth:
 		sentence += ", by month"
 	}
-	sentence += "."
-	left := "unattended runs"
-	if unattended > 0 {
-		left = fmt.Sprintf("%d unattended %s", unattended, plural(unattended, "run"))
+	return sentence + "."
+}
+
+// statsExclusions names what precision and the median leave out.
+func statsExclusions(unattended int) string {
+	left, again := "unattended runs", "unattended runs"
+	switch {
+	case unattended == 1:
+		left, again = "1 unattended run", "the unattended run"
+	case unattended > 1:
+		left, again = fmt.Sprintf("%d unattended runs", unattended), "the unattended runs"
 	}
-	return sentence + " Precision and median leave out " + left + ", and precision leaves out withdrawn findings."
+	return "Precision is published out of published plus excluded. It leaves out withdrawn findings, which the agent " +
+		"cut itself, and " + left + ". The median also leaves out " + again + "."
 }
 
 func joinAnd(words []string) string {
