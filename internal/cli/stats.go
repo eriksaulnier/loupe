@@ -34,9 +34,9 @@ out withdrawn on purpose, because the agent cut those findings itself, and unatt
 purpose, because no human gated them. medianCaptureToPublish leaves out unattended runs too.
 Both are null when no run qualifies. Every other count includes unattended runs.
 
-Arguments name repositories as owner/repo, matched ignoring case; none means every repository.
-A run's time is when it was published, or captured when it is not; --since, --until and the
-week and month groups use it. A bare --until date covers that whole UTC day. It reads only the
+Arguments name repositories as owner/repo, matched ignoring case. With none, every repository
+counts. A run's time is when it was published, or captured when it is not, and --since, --until
+and the week and month groups use it. A bare --until date covers that whole UTC day. It reads only the
 data root: no lock, no Git, no network.
 
 Result (--json):
