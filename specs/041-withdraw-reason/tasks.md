@@ -87,7 +87,7 @@ description: "Task list for withdrawal reasons"
 
 - [X] T019 [US3] Add a failing test to `internal/cli/edit_test.go`: `loupe edit --help` with no run contains `--reason`, `--reason-code`, `withdrawReason`, each of `no-runtime-effect`, `conceded`, `duplicate`, `pre-existing`, the word `not enforced`, and `withdraw-reason-missing`. A code outside the list that passes the label rule, such as `style-only`, is stored unchanged (scenario 2).
 - [X] T020 [US3] Extend `editHelp` in `internal/cli/edit.go`: the reason flags and input key with FR-002's rules, the amend, the warning, the recommended codes with one line each (`no-runtime-effect`: the finding claims no runtime effect, such as naming or style; `conceded`: the agent agreed with a send-back note; `duplicate`: another finding says the same; `pre-existing`: the problem predates the pull request), "recommended, not enforced", and the optional `"warnings": ["withdraw-reason-missing"]` in the result shape. Run T019 until it passes.
-- [ ] T021 [P] [US3] Write `docs/reason-codes.md`: what a reason and a code are, the four codes with when each applies, that loupe does not enforce them because what a skill withdraws for is that skill's policy, and that a code follows the `--label` character rule. Commit `docs: recommend withdrawal reason codes`.
+- [X] T021 [P] [US3] Write `docs/reason-codes.md`: what a reason and a code are, the four codes with when each applies, that loupe does not enforce them because what a skill withdraws for is that skill's policy, and that a code follows the `--label` character rule. Commit `docs: recommend withdrawal reason codes`.
 
 ## Phase 5: Polish
 
