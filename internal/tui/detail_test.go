@@ -356,12 +356,12 @@ func TestDetailActionsFollowTheFinding(t *testing.T) {
 		openNote    bool
 		want        string
 	}{
-		{"pending located", located, draft.DispositionPending, false, "←→ ↑↓ a x s e f ?"},
-		{"accepted", located, draft.DispositionAccepted, false, "←→ ↑↓ x s e f ?"},
-		{"excluded general", general, draft.DispositionExcluded, false, "←→ ↑↓ u e ?"},
+		{"pending located", located, draft.DispositionPending, false, "←→ ↑↓ a x s e w f ?"},
+		{"accepted", located, draft.DispositionAccepted, false, "←→ ↑↓ x s e w f ?"},
+		{"excluded general", general, draft.DispositionExcluded, false, "←→ ↑↓ u e w ?"},
 		{"withdrawn", withdrawn, draft.DispositionWithdrawn, false, "←→ ↑↓ u f ?"},
 		{"excluded after withdrawal", withdrawn, draft.DispositionExcluded, false, "←→ ↑↓ u f ?"},
-		{"open note", general, draft.DispositionPending, true, "←→ ↑↓ a x s e r d ?"},
+		{"open note", general, draft.DispositionPending, true, "←→ ↑↓ a x s e w r d ?"},
 	}
 	for _, c := range cases {
 		if got := keys(detailActions(g, c.f, c.disposition, c.openNote)); got != c.want {

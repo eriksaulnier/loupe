@@ -19,7 +19,7 @@ import (
 )
 
 func (m *Model) openFinding(id string) error {
-	m.view, m.openID, m.noting, m.editing, m.settling = viewDetail, id, false, false, false
+	m.view, m.openID, m.noting, m.editing, m.rewriting, m.settling = viewDetail, id, false, false, false, false
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -430,7 +430,7 @@ var hyperlink = regexp.MustCompile("\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
 
 func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	f, i := m.openedFinding()
-	if m.settling && strings.Contains("axsurde", msg.String()) && len(msg.String()) == 1 {
+	if m.settling && strings.Contains("axsurdew", msg.String()) && len(msg.String()) == 1 {
 		// The finding under this key was never on screen: it arrived through typeahead or key repeat right after a
 		// decision moved the view. Per-finding sign-off is the product, so the key is dropped, not applied.
 		return nil
@@ -494,6 +494,8 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		m.editLabels, m.editBlocking = editLabels(f.Label), f.Blocking
 		m.editPick = slices.Index(m.editLabels, f.Label)
 		return nil
+	case "w":
+		return m.openRewrite(f)
 	case "f":
 		if f.Location == nil {
 			m.say(style.Warn, "a general finding has no file diff")
@@ -719,6 +721,8 @@ func (m *Model) editorRows() int {
 		return len(m.noteRowsShown()) + style.PaneRows
 	case m.editing:
 		return len(m.editView())
+	case m.rewriting:
+		return len(m.rewriteView())
 	}
 	return 0
 }
@@ -824,7 +828,7 @@ func (m *Model) detailView() string {
 	}
 	// The finding's id is the pane's name, a solid tab while the finding has the keys rather than a composer.
 	id := m.styles.Emphasis(edge).Render(render.ForDisplay(f.ID))
-	if !m.noting && !m.editing && m.styles.Color {
+	if !m.noting && !m.editing && !m.rewriting && m.styles.Color {
 		id = m.styles.TitleTab(render.ForDisplay(f.ID), tone)
 	}
 	title := mark.Render(glyph) + " " + id + sep + m.styles.Chip(disposition, tone)
@@ -839,6 +843,8 @@ func (m *Model) detailView() string {
 		body = append(body, m.noteView()...)
 	case m.editing:
 		body = append(body, m.editView()...)
+	case m.rewriting:
+		body = append(body, m.rewriteView()...)
 	}
 	return m.shell(body, footer)
 }
@@ -856,6 +862,8 @@ func (m *Model) detailFooter() []string {
 	case m.editing:
 		return m.keys(style.KeyGroup{{Key: "enter", Verb: "save"}, {Key: m.arrows(m.glyphs.Left, m.glyphs.Right), Verb: "label"},
 			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
+	case m.rewriting:
+		return m.keys(style.KeyGroup{{Key: "ctrl+s", Verb: "save"}, {Key: "tab", Verb: "title/body"}, {Key: "esc", Verb: "cancel"}})
 	}
 	return m.keys(groupHints(m.detailHints())...)
 }
@@ -895,7 +903,7 @@ func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote 
 		hints = append(hints, decide("u", "reinstate"))
 	}
 	if f.Included {
-		hints = append(hints, decide("e", "edit"))
+		hints = append(hints, decide("e", "edit"), decide("w", "rewrite"))
 	}
 	if hasOpenNote {
 		hints = append(hints, decide("r", "resolve"), decide("d", "dismiss"))
