@@ -182,12 +182,12 @@ func validateInput(in FindingInput, dif *diff.Diff) error {
 		return err
 	}
 	if in.Impact != "" {
-		if err := markdown.Check(in.Impact, markdown.Body, "loupe edit <id> --from -"); err != nil {
+		if err := markdown.Check(in.Impact, markdown.Impact, "loupe edit <id> --from -"); err != nil {
 			return err
 		}
 	}
 	if in.SuggestedFix != "" {
-		if err := markdown.Check(in.SuggestedFix, markdown.Body, "loupe edit <id> --from -"); err != nil {
+		if err := markdown.Check(in.SuggestedFix, markdown.SuggestedFix, "loupe edit <id> --from -"); err != nil {
 			return err
 		}
 	}

@@ -238,7 +238,8 @@ func TestBuildRechecksMarkdown(t *testing.T) {
 	bad := buildInput(fixtureTarget(), d, "comment", "none", false)
 	bad.Message = "<script>alert(1)</script>"
 	_, err = Build(bad)
-	if r, ok := refusal.As(err); !ok || r.Code != refusal.Markdown || r.Fix != messageFix {
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Markdown || r.Fix != messageFix || r.Details["field"] != "message" ||
+		!strings.HasPrefix(r.Message, "message ") {
 		t.Fatalf("message: %#v", err)
 	}
 
@@ -247,6 +248,13 @@ func TestBuildRechecksMarkdown(t *testing.T) {
 	_, err = Build(buildInput(fixtureTarget(), d, "comment", "none", false))
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.Markdown || r.Fix != "loupe edit f-002 --from -" {
 		t.Fatalf("accepted body: %#v", err)
+	}
+
+	d = readyDraft()
+	d.Findings[1].Impact = "<pre>raw</pre>"
+	_, err = Build(buildInput(fixtureTarget(), d, "comment", "none", false))
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Markdown || r.Details["field"] != "impact" || !strings.HasPrefix(r.Message, "impact ") {
+		t.Fatalf("accepted impact: %#v", err)
 	}
 
 	d = readyDraft()

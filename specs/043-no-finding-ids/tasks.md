@@ -6,16 +6,16 @@ Each task follows failing test, then implementation, then a passing `mise run ch
 
 ## Phase 1: Foundational
 
-- [ ] T001 Add `walkLines` in `internal/markdown/allowlist.go`, which calls its callback for every non-blank line outside a fence with whether the line is structural, and rebuild `walkStructural` as a filter over it. The existing `OpenDetails`, `MapSummaryLines` and `StructuralLines` tests in `internal/markdown/allowlist_test.go` MUST pass unchanged.
-- [ ] T002 Add kinds `Impact`, `SuggestedFix` and `Message` to `markdown.Kind` in `internal/markdown/allowlist.go`, at the body's, the body's and the summary's depth, named `impact`, `suggestedFix` and `message`. `scanner.refuse` adds `details.field` set to the kind's name. Test first in `internal/markdown/allowlist_test.go`: each kind's refusal message starts with its name, `details.field` equals it, and `rule` and `line` are unchanged.
+- [X] T001 Add `walkLines` in `internal/markdown/allowlist.go`, which calls its callback for every non-blank line outside a fence with whether the line is structural, and rebuild `walkStructural` as a filter over it. The existing `OpenDetails`, `MapSummaryLines` and `StructuralLines` tests in `internal/markdown/allowlist_test.go` MUST pass unchanged.
+- [X] T002 Add kinds `Impact`, `SuggestedFix` and `Message` to `markdown.Kind` in `internal/markdown/allowlist.go`, at the body's, the body's and the summary's depth, named `impact`, `suggestedFix` and `message`. `scanner.refuse` adds `details.field` set to the kind's name. Test first in `internal/markdown/allowlist_test.go`: each kind's refusal message starts with its name, `details.field` equals it, and `rule` and `line` are unchanged.
 
 ## Phase 2: User Story 5 - An allowlist refusal names the field it refused (P3, done first because US1 shares its plumbing)
 
 **Independent test**: `<br>` in `impact` and in `suggestedFix` is refused naming that field in the message and `details.field`, at `add`, `edit` and publish.
 
-- [ ] T003 [US5] Test first in `internal/draft/mutate_add_test.go` and `internal/draft/mutate_edit_test.go`: `<br>` in `impact` refuses at `Add` naming `impact`, `<br>` in `suggestedFix` refuses at `Edit` naming `suggestedFix`, and a `body` refusal keeps today's message with `details.field` `body`. Then pass `markdown.Impact` and `markdown.SuggestedFix` in `validateInput` in `internal/draft/mutate.go`.
-- [ ] T004 [US5] Test first in `internal/publish/envelope_test.go`: a stored publishable finding whose `impact` fails the allowlist refuses naming `impact`, and an attended message that fails it refuses naming `message`. Then pass `markdown.Impact` and `markdown.Message` in `Build` in `internal/publish/envelope.go`, and `markdown.SuggestedFix` in `internal/render/body.go`.
-- [ ] T005 [US5] Test first in `internal/cli`: `loupe add --json` with `<br>` in `impact` returns `error.details.field` `impact` and a message naming `impact`.
+- [X] T003 [US5] Test first in `internal/draft/mutate_add_test.go` and `internal/draft/mutate_edit_test.go`: `<br>` in `impact` refuses at `Add` naming `impact`, `<br>` in `suggestedFix` refuses at `Edit` naming `suggestedFix`, and a `body` refusal keeps today's message with `details.field` `body`. Then pass `markdown.Impact` and `markdown.SuggestedFix` in `validateInput` in `internal/draft/mutate.go`.
+- [X] T004 [US5] Test first in `internal/publish/envelope_test.go`: a stored publishable finding whose `impact` fails the allowlist refuses naming `impact`, and an attended message that fails it refuses naming `message`. Then pass `markdown.Impact` and `markdown.Message` in `Build` in `internal/publish/envelope.go`, and `markdown.SuggestedFix` in `internal/render/body.go`.
+- [X] T005 [US5] Test first in `internal/cli`: `loupe add --json` with `<br>` in `impact` returns `error.details.field` `impact` and a message naming `impact`.
 
 ## Phase 3: User Story 1 - An id in published text is refused at write time (P1)
 

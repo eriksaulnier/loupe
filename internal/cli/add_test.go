@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -123,5 +124,24 @@ func TestAddStaleExpectVersionWinsOverUndecodableEntries(t *testing.T) {
 	details, _ := errObj["details"].(map[string]any)
 	if _, listed := details["entries"]; code != 1 || errorCode(env) != "version" || listed {
 		t.Fatalf("exit %d envelope %v, want the whole-call version refusal", code, env)
+	}
+}
+
+func errorDetails(t *testing.T, env map[string]any) (message string, details map[string]any) {
+	t.Helper()
+	errObj, _ := env["error"].(map[string]any)
+	details, _ = errObj["details"].(map[string]any)
+	message, _ = errObj["message"].(string)
+	return message, details
+}
+
+func TestAddAllowlistRefusalNamesTheField(t *testing.T) {
+	home, _ := sendBackRun(t)
+	code, env, _ := execIn(t, home, `{"title": "T", "body": "Evidence.", "general": true, "impact": "one<br>two"}`, "add", "--from", "-")
+	if code != 1 || errorCode(env) != "markdown" {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if message, details := errorDetails(t, env); details["field"] != "impact" || !strings.Contains(message, "impact fails") {
+		t.Fatalf("message %q details %v", message, details)
 	}
 }

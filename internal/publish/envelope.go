@@ -90,11 +90,11 @@ func Build(in BuildInput) (Envelope, error) {
 	}
 	// Only the prose that is about to be published is checked. An attended publication does not post the draft's
 	// summary, so refusing over it would be refusing over text no reader will see.
-	opening, openingFix := in.Message, messageFix
+	opening, openingKind, openingFix := in.Message, markdown.Message, messageFix
 	if in.Unattended {
-		opening, openingFix = d.Summary, "loupe summary --from -"
+		opening, openingKind, openingFix = d.Summary, markdown.Summary, "loupe summary --from -"
 	}
-	if err := markdown.Check(opening, markdown.Summary, openingFix); err != nil {
+	if err := markdown.Check(opening, openingKind, openingFix); err != nil {
 		return Envelope{}, err
 	}
 	note := in.Note
@@ -112,7 +112,7 @@ func Build(in BuildInput) (Envelope, error) {
 			return Envelope{}, err
 		}
 		if f.Impact != "" {
-			if err := markdown.Check(f.Impact, markdown.Body, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
+			if err := markdown.Check(f.Impact, markdown.Impact, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
 				return Envelope{}, err
 			}
 		}
