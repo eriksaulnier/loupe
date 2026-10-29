@@ -21,18 +21,29 @@ and sees the agent's replies there, so the agent tells them and waits again. Whe
 round, the agent asks the human to finish or quit that review, then hands off again.
 
 Otherwise it tries these terminal hosts first to last and opens the pane in the first detected:
-  herdr  HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH
-  orca   ORCA_TERMINAL_HANDLE, and orca on PATH
-A host whose conditions are met only in part is skipped. With no host it refuses no-pane-host.
+  herdr   HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH
+  tmux    TMUX naming a socket that exists, TMUX_PANE, and tmux on PATH
+  orca    ORCA_TERMINAL_HANDLE, and orca on PATH
+  iterm2  macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID, and osascript on PATH
+  ghostty macOS, TERM_PROGRAM=ghostty, PWD, and osascript on PATH
+A host whose conditions are met only in part is skipped, and so is a tmux session with no
+client attached, where nobody would see the pane. Ghostty does not tell loupe which terminal
+the agent runs in, so it splits the focused terminal of its front window, and skips it when
+that terminal's working directory, which Ghostty learns from its shell integration, is neither
+PWD nor a parent of it. With no host it refuses
+no-pane-host.
 
 The pane opens to the right of the agent's pane when that pane is known to be at least 120
 columns wide, and below it otherwise. The width is the host's own report of the agent's pane
-(Herdr has one, Orca none), else the agent's own terminal. With neither it opens below, since
-review needs 60 columns but only 12 rows. The pane runs
-this loupe's review for the run. In Herdr the pane takes focus. In Orca it never does: Orca
-can focus a pane only by moving the human's view to its worktree, so the pane shows in the
-agent's tab and the view stays where it is. The pane closes when review exits cleanly and
-stays open on a refusal so the human can read it.
+(Herdr, tmux and iTerm2 have one, Orca and Ghostty none), else the agent's own terminal. With
+neither it opens below, since review needs 60 columns but only 12 rows. The pane runs this
+loupe's review for the run. In Herdr the pane takes focus. In tmux, iTerm2 and Ghostty it never
+takes focus, so the keys the human types still reach the agent; iTerm2 gives focus back to the
+agent's session after the split, and Ghostty to the agent's terminal when Ghostty was the
+frontmost application; otherwise Ghostty's focus stays on the new pane. In Orca it never does
+either: Orca can focus a pane only by moving the human's view to its worktree, so the pane
+shows in the agent's tab and the view stays where it is. The pane closes when review exits
+cleanly and stays open on a refusal so the human can read it.
 
 The agent MUST NOT send to, read, resize, close or reuse the pane; a hand-off that opens a pane
 opens a new one. A failed host call refuses pane-failed and is not retried; its details name
@@ -47,8 +58,8 @@ Result (--json):
    "dir": "/path/to/run", "host": "herdr",
    "paneId": "w1:p2", "direction": "right", "focused": true}
 
-host is herdr or orca. direction is right or down. focused is false when the pane opened
-without taking focus.`
+host is herdr, tmux, orca, iterm2 or ghostty. direction is right or down. focused is false when
+the pane opened without taking focus.`
 
 func newHandoffCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -80,18 +91,20 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 		return err
 	}
 	fix := "ask the human to run loupe review " + shellQuote(ref.String())
-	host, ok := pane.Detect(deps.Getenv)
-	if !ok {
-		return refusal.New(refusal.NoPaneHost, "no terminal pane can be opened here: HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH, "+
-			"or ORCA_TERMINAL_HANDLE and orca on PATH", fix)
+	hosts := pane.Detect(deps.Getenv, deps.GOOS)
+	if len(hosts) == 0 {
+		return noPaneHost(fix)
 	}
 	command, err := reviewCommand(deps, ref)
 	if err != nil {
 		return err
 	}
-	opened, err := host.Open(cmd.Context(), pane.Request{Command: command, TTYWidth: deps.TTYWidth, Fix: fix})
+	host, opened, err := pane.Open(cmd.Context(), hosts, pane.Request{Command: command, TTYWidth: deps.TTYWidth, Fix: fix})
 	if err != nil {
 		return err
+	}
+	if host == nil {
+		return noPaneHost(fix)
 	}
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{
@@ -109,6 +122,13 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	_, err = fmt.Fprintf(deps.Stdout, "%s Opened loupe review for %s in a new pane %s\n",
 		s.Emphasis(s.Good).Render(s.Glyphs.Accepted), s.Accent.Render(ref.String()), where)
 	return err
+}
+
+func noPaneHost(fix string) error {
+	return refusal.New(refusal.NoPaneHost, "no terminal pane can be opened here: HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH, "+
+		"or TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session, "+
+		"or ORCA_TERMINAL_HANDLE and orca on PATH, or macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID and osascript on PATH, "+
+		"or macOS, TERM_PROGRAM=ghostty, PWD, osascript on PATH and the focused terminal, by its shell integration, in PWD or a parent of it", fix)
 }
 
 // refuseOpenReview names the open run in details.run, so an agent can tell its own round from another it must ask the
