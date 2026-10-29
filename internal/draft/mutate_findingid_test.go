@@ -23,12 +23,15 @@ func TestAddRefusesAFindingIDInPublishedFields(t *testing.T) {
 	impact.Impact = "The retry loop returns.\nf-002's failure comes back."
 	span := general("Retry loop")
 	span.Body = "As in `f-002`."
+	fix := general("Retry loop")
+	fix.SuggestedFix = "Rename f-002 to the subject."
 	for _, c := range []struct {
 		name  string
 		in    FindingInput
 		field string
 		line  int
-	}{{"title", title, "title", 1}, {"impact", impact, "impact", 2}, {"code span in body", span, "body", 1}} {
+	}{{"title", title, "title", 1}, {"impact", impact, "impact", 2}, {"code span in body", span, "body", 1},
+		{"suggestedFix", fix, "suggestedFix", 1}} {
 		t.Run(c.name, func(t *testing.T) {
 			d := NewEmpty()
 			_, err := Add(d, []FindingInput{c.in}, multiHunk(t), ByHuman, addNow)
@@ -94,9 +97,9 @@ func TestAddStoresTextThatOnlyResemblesAnID(t *testing.T) {
 		}
 	}
 	fix := general("Retry loop")
-	fix.SuggestedFix = "Rename f-002 to the subject."
+	fix.SuggestedFix = "Rename it:\n\n```go\nf-002\n```"
 	if _, err := Add(NewEmpty(), []FindingInput{fix}, multiHunk(t), "", addNow); err != nil {
-		t.Fatalf("suggestedFix was checked: %v", err)
+		t.Fatalf("fenced suggestedFix refused: %v", err)
 	}
 }
 
@@ -119,6 +122,7 @@ func TestEditChecksOnlyChangedFieldsForIDs(t *testing.T) {
 		d.Findings[0].Title = "Same as f-002"
 		d.Findings[0].Body = "As f-002 showed."
 		d.Findings[0].Impact = "Like f-002."
+		d.Findings[0].SuggestedFix = "Rename f-002."
 		return d
 	}
 	for _, raw := range []string{
@@ -141,6 +145,8 @@ func TestEditChecksOnlyChangedFieldsForIDs(t *testing.T) {
 	}
 	_, _, err := Edit(stored(), "f-001", editInput(t, `{"impact": "Like f-003."}`), nil, multiHunk(t), ByAgent, editNow)
 	_ = wantFindingID(t, err, "impact", "f-003", 1)
+	_, _, err = Edit(stored(), "f-001", editInput(t, `{"suggestedFix": "Rename f-003."}`), nil, multiHunk(t), ByAgent, editNow)
+	_ = wantFindingID(t, err, "suggestedFix", "f-003", 1)
 }
 
 func TestSetSummaryRefusesAFindingID(t *testing.T) {

@@ -33,10 +33,10 @@ reproduced or plausible, references are at most six http or https URLs, and body
 suggestedFix must pass the Markdown allowlist, with code in a suggestedFix fenced. A severity or
 suggestedFix is checked only when the edit changes it, so a finding stored with an older value
 stays editable. Input MUST NOT carry included, decision, status or findingRev.
-A title, body or impact that the edit changes refuses a finding id, f- and three or more digits
-such as f-002, with markdown and details.rule finding-id, as in add: name an earlier finding by
-its subject. A fence or an http or https URL is exempt; a code span is not. A field the edit
-leaves unchanged is not checked.
+A title, body, impact or suggestedFix that the edit changes refuses a finding id, f- and three
+or more digits such as f-002, with markdown and details.rule finding-id, as in add: name an
+earlier finding by its subject. A fence or an http or https URL is exempt; a code span is not. A
+field the edit leaves unchanged is not checked.
 
 --exclude withdraws the finding from the review and --include restores it; neither records a
 human decision. Any change to a published field or to inclusion increments rev and clears the

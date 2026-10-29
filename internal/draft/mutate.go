@@ -205,16 +205,19 @@ func validateInput(in FindingInput, dif *diff.Diff) error {
 	return dif.Validate(in.Location.Path, side, in.Location.Line, in.Location.StartLine)
 }
 
-// checkFindingIDs refuses a finding id in the title, body or impact, in that order. Edit passes "" for a field it
-// leaves unchanged, so a finding stored before the check stays editable.
-func checkFindingIDs(title, body, impact, retry string) error {
+// checkFindingIDs refuses a finding id in the title, body, impact or suggested fix, in that order. Edit passes ""
+// for a field it leaves unchanged, so a finding stored before the check stays editable.
+func checkFindingIDs(title, body, impact, fix, retry string) error {
 	if err := markdown.TitleFindingIDs(title, retry); err != nil {
 		return err
 	}
 	if err := markdown.FindingIDs(body, markdown.Body, retry); err != nil {
 		return err
 	}
-	return markdown.FindingIDs(impact, markdown.Impact, retry)
+	if err := markdown.FindingIDs(impact, markdown.Impact, retry); err != nil {
+		return err
+	}
+	return markdown.FindingIDs(fix, markdown.SuggestedFix, retry)
 }
 
 // EntryFailure is one batch entry that was refused before or during validation.
@@ -239,7 +242,7 @@ func CheckBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) er
 		}
 		err := validateInput(in, dif)
 		if err == nil {
-			err = checkFindingIDs(in.Title, in.Body, in.Impact, "run loupe add again")
+			err = checkFindingIDs(in.Title, in.Body, in.Impact, in.SuggestedFix, "run loupe add again")
 		}
 		if err != nil {
 			failures = append(failures, EntryFailure{Entry: i, Err: err})
@@ -545,7 +548,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		if impact == stored.Impact {
 			impact = ""
 		}
-		if err := checkFindingIDs(title, body, impact, fmt.Sprintf("run loupe edit %s --from - again", next.ID)); err != nil {
+		if err := checkFindingIDs(title, body, impact, fix, fmt.Sprintf("run loupe edit %s --from - again", next.ID)); err != nil {
 			return Finding{}, false, err
 		}
 	}
