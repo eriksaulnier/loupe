@@ -68,7 +68,7 @@ func newStatsCmd(deps Deps) *cobra.Command {
 	cmd.Flags().String("since", "", "count runs from this RFC 3339 date or timestamp on, inclusive")
 	cmd.Flags().String("until", "", "count runs up to this RFC 3339 date or timestamp, inclusive")
 	cmd.Flags().StringArray("state", nil, "count runs in this state: captured, ready or published; repeatable, default published")
-	cmd.Flags().String("group-by", stats.GroupNone, "one row per none, repo, week (ISO, UTC) or month (UTC)")
+	cmd.Flags().String("group-by", stats.GroupNone, "one group per none, repo, week (ISO, UTC) or month (UTC)")
 	return cmd
 }
 

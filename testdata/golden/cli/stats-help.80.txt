@@ -38,7 +38,7 @@ Result (--json)
    "total": {"key": "total", "...": "the shape of a group, over every selected run"}}
 
 Flags
-      --group-by string     one row per none, repo, week (ISO, UTC) or month (UTC) (default "none")
+      --group-by string     one group per none, repo, week (ISO, UTC) or month (UTC) (default "none")
   -h, --help                help for stats
       --since string        count runs from this RFC 3339 date or timestamp on, inclusive
       --state stringArray   count runs in this state: captured, ready or published; repeatable, default published
