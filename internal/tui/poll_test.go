@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -429,5 +430,27 @@ func TestLiveReplyJoinsTheThreadAndKeepsTheNoteBeingWritten(t *testing.T) {
 	pressKeys(t, m, "s")
 	if !m.noting || m.note.Value() != "Also check the tests" {
 		t.Fatalf("the kept note did not survive the re-read: noting %v note %q", m.noting, m.note.Value())
+	}
+}
+
+func TestDecisionNamesAnAmendedWithdrawalReason(t *testing.T) {
+	m, dir := newAwaitingModel(t, 40)
+	withdraw := func(text string) {
+		outside(t, dir, func(d *draft.Draft) error {
+			withdrawn := false
+			_, _, err := draft.Edit(d, "f-003", draft.EditInput{WithdrawReason: json.RawMessage(`{"text": "` + text + `"}`)},
+				&withdrawn, nil, draft.ByAgent, testNow)
+			return err
+		})
+	}
+	withdraw("Already fixed upstream.")
+	pressKeys(t, m, "p")
+	if err := m.openFinding("f-002"); err != nil {
+		t.Fatal(err)
+	}
+	withdraw("Duplicate of f-001.")
+	pressKeys(t, m, "a")
+	if !strings.Contains(m.notice, "f-003 changed") {
+		t.Errorf("notice %q does not name the amended reason", m.notice)
 	}
 }

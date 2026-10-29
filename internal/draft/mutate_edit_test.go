@@ -380,3 +380,166 @@ func TestRecalibrateRefusals(t *testing.T) {
 		t.Fatalf("unchanged recalibration %+v err %v", f, err)
 	}
 }
+
+func withdrawWith(t *testing.T, d *Draft, id, reason string, by string) (Finding, bool, error) {
+	t.Helper()
+	excluded := false
+	in := EditInput{}
+	if reason != "" {
+		in.WithdrawReason = json.RawMessage(reason)
+	}
+	return Edit(d, id, in, &excluded, nil, by, editNow)
+}
+
+func TestEditWithdrawsWithAReason(t *testing.T) {
+	d := editable()
+	f, cleared, err := withdrawWith(t, d, "f-001", `{"text": "Naming only.", "code": "no-runtime-effect"}`, ByAgent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []HistoryEntry{{At: editNow, By: ByAgent, Changed: map[string]any{"included": true},
+		Reason: &Reason{Text: "Naming only.", Code: "no-runtime-effect"}}}
+	if f.Rev != 2 || f.Included || !cleared || !reflect.DeepEqual(f.History, want) {
+		t.Fatalf("finding %+v cleared %v", f, cleared)
+	}
+}
+
+func TestEditCarriesTheReasonOnTheSameEntryAsAFieldChange(t *testing.T) {
+	d := editable()
+	excluded := false
+	in := editInput(t, `{"title": "Renamed", "withdrawReason": {"text": "Duplicate of f-002."}}`)
+	f, _, err := Edit(d, "f-001", in, &excluded, multiHunk(t), ByAgent, editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []HistoryEntry{{At: editNow, By: ByAgent, Changed: map[string]any{"title": "One", "included": true},
+		Reason: &Reason{Text: "Duplicate of f-002."}}}
+	if f.Rev != 2 || !reflect.DeepEqual(f.History, want) {
+		t.Fatalf("history %#v", f.History)
+	}
+}
+
+// withdrawnUnexplained is f-002 withdrawn by the agent with no reason at rev 2, then excluded by the human.
+func withdrawnUnexplained(t *testing.T) *Draft {
+	t.Helper()
+	d := editable()
+	if _, _, err := withdrawWith(t, d, "f-002", "", ByAgent); err != nil {
+		t.Fatal(err)
+	}
+	d.Decisions["f-002"] = Decision{FindingID: "f-002", Decision: DecisionExcluded, FindingRev: 2, At: editNow}
+	return d
+}
+
+func TestEditAmendsAReasonWithoutTouchingRevOrDecision(t *testing.T) {
+	d := withdrawnUnexplained(t)
+	digest := Digest(d)
+	later := editNow.Add(time.Minute)
+	excluded := false
+	in := EditInput{WithdrawReason: json.RawMessage(`{"text": "Duplicate of f-001.", "code": "duplicate"}`)}
+	f, cleared, err := Edit(d, "f-002", in, &excluded, nil, ByHuman, later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Rev != 2 || cleared || !f.UpdatedAt.Equal(later) || len(f.History) != 2 {
+		t.Fatalf("finding %+v cleared %v", f, cleared)
+	}
+	amend := f.History[1]
+	want := HistoryEntry{At: later, By: ByHuman, Changed: map[string]any{}, Reason: &Reason{Text: "Duplicate of f-001.", Code: "duplicate"}}
+	if !reflect.DeepEqual(amend, want) || amend.Changed == nil {
+		t.Fatalf("amend %#v", amend)
+	}
+	if got := Dispositions(d)["f-002"]; got != DispositionExcluded {
+		t.Fatalf("disposition %s, want the human's exclusion to stand", got)
+	}
+	if Digest(d) != digest {
+		t.Fatal("an amend changed the digest")
+	}
+	data, err := json.Marshal(amend)
+	if err != nil || !strings.Contains(string(data), `"changed":{}`) {
+		t.Fatalf("stored as %s, %v", data, err)
+	}
+}
+
+func TestEditAmendToTheSameReasonChangesNothing(t *testing.T) {
+	d := editable()
+	reason := `{"text": "Naming only.", "code": "no-runtime-effect"}`
+	if _, _, err := withdrawWith(t, d, "f-002", reason, ByAgent); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := withdrawWith(t, d, "f-002", reason, ByAgent); !errors.Is(err, ErrNoChange) {
+		t.Fatalf("err %v, want ErrNoChange", err)
+	}
+	if n := len(d.Findings[1].History); n != 1 {
+		t.Fatalf("history has %d entries", n)
+	}
+}
+
+func TestEditAmendWithAFieldChangeIsAnOrdinaryEdit(t *testing.T) {
+	d := withdrawnUnexplained(t)
+	excluded := false
+	in := editInput(t, `{"body": "Clearer.", "withdrawReason": {"text": "Conceded."}}`)
+	f, cleared, err := Edit(d, "f-002", in, &excluded, multiHunk(t), ByAgent, editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := f.History[len(f.History)-1]
+	if f.Rev != 3 || !cleared || !reflect.DeepEqual(last.Changed, map[string]any{"body": "Body two."}) || last.Reason.Text != "Conceded." {
+		t.Fatalf("finding %+v cleared %v", f, cleared)
+	}
+}
+
+func TestEditRefusesABadReason(t *testing.T) {
+	excluded, included := false, true
+	cases := map[string]struct {
+		reason   string
+		included *bool
+		code     refusal.Code
+		fix      string
+	}{
+		"no --exclude":      {`{"text": "t"}`, nil, refusal.Input, "--exclude"},
+		"with --include":    {`{"text": "t"}`, &included, refusal.Input, "--exclude"},
+		"null":              {`null`, &excluded, refusal.Input, "loupe edit --help"},
+		"empty text":        {`{"text": ""}`, &excluded, refusal.Input, "loupe edit --help"},
+		"blank text":        {`{"text": "   "}`, &excluded, refusal.Input, "loupe edit --help"},
+		"newline":           {`{"text": "a\nb"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"carriage return":   {`{"text": "a\rb"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"line separator":    {`{"text": "a b"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"201 runes":         {`{"text": "` + strings.Repeat("é", 201) + `"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"code without text": {`{"code": "duplicate"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"code leads with -": {`{"text": "t", "code": "-x"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"code with a space": {`{"text": "t", "code": "a b"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"code of 41 runes":  {`{"text": "t", "code": "` + strings.Repeat("a", 41) + `"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"unknown key":       {`{"text": "t", "why": "x"}`, &excluded, refusal.Input, "loupe edit --help"},
+		"raw HTML":          {`{"text": "<script>x</script>"}`, &excluded, refusal.Markdown, "loupe edit --help"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			d := editable()
+			_, _, err := Edit(d, "f-002", EditInput{WithdrawReason: json.RawMessage(c.reason)}, c.included, nil, ByAgent, editNow)
+			r, ok := refusal.As(err)
+			if !ok || r.Code != c.code || !strings.Contains(r.Fix, c.fix) {
+				t.Fatalf("got %v, want a %s refusal whose fix names %q", err, c.code, c.fix)
+			}
+			if len(d.Findings[1].History) != 0 {
+				t.Fatal("a refused reason changed the finding")
+			}
+		})
+	}
+}
+
+func TestEditNamesTheReasonInAMarkdownRefusal(t *testing.T) {
+	excluded := false
+	_, _, err := Edit(editable(), "f-002", EditInput{WithdrawReason: json.RawMessage(`{"text": "<script>x</script>"}`)}, &excluded, nil, ByAgent, editNow)
+	r, ok := refusal.As(err)
+	if !ok || r.Details["field"] != "withdrawReason" || !strings.HasPrefix(r.Message, "withdrawReason ") {
+		t.Fatalf("got %v with details %v, want a refusal that names withdrawReason", err, r.Details)
+	}
+}
+
+func TestEditAcceptsTheLimits(t *testing.T) {
+	d := editable()
+	reason := `{"text": "` + strings.Repeat("é", 200) + `", "code": "` + strings.Repeat("a", 40) + `"}`
+	if _, _, err := withdrawWith(t, d, "f-002", reason, ByAgent); err != nil {
+		t.Fatal(err)
+	}
+}

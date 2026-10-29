@@ -521,13 +521,61 @@ type EditInput struct {
 	Impact       json.RawMessage `json:"impact"`
 	References   json.RawMessage `json:"references"`
 	SuggestedFix json.RawMessage `json:"suggestedFix"`
+	// WithdrawReason is not a finding field: it goes on the history entry, and only with --exclude.
+	WithdrawReason json.RawMessage `json:"withdrawReason"`
 }
 
 const editFix = "see loupe edit --help for the input shape"
 
+const maxReasonRunes = 200
+
+// ValidateReason holds a reason to one line a list row can show: a code alone is refused, since the human reads the
+// text and a code tells them nothing.
+func ValidateReason(r Reason) error {
+	refuse := func(message, rule string) error {
+		return refusal.New(refusal.Input, "withdrawReason: "+message, rule+"; see loupe edit --help")
+	}
+	switch {
+	case strings.TrimSpace(r.Text) == "":
+		return refuse("text is empty", "give a reason text with --reason, or text in withdrawReason")
+	case strings.ContainsAny(r.Text, "\r\n\u0085\u2028\u2029"):
+		return refuse("text holds a line break", "write the reason on one line")
+	case utf8.RuneCountInString(r.Text) > maxReasonRunes:
+		return refuse(fmt.Sprintf("text is %d characters", utf8.RuneCountInString(r.Text)),
+			fmt.Sprintf("shorten the reason to at most %d characters", maxReasonRunes))
+	case r.Code != "" && (!labelRE.MatchString(r.Code) || utf8.RuneCountInString(r.Code) > maxLabelRunes):
+		return refuse(fmt.Sprintf("code %q is not a word", r.Code),
+			fmt.Sprintf("use a code that matches %s and is at most %d characters, such as no-runtime-effect", LabelPattern, maxLabelRunes))
+	}
+	return markdown.Check(r.Text, markdown.WithdrawReason, "rewrite the withdrawal reason within the Markdown allowlist; see loupe edit --help")
+}
+
+// decodeReason refuses a reason on anything but a withdrawal, so a call can never record one on an included finding.
+func decodeReason(raw json.RawMessage, included *bool) (*Reason, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	if included == nil || *included {
+		return nil, refusal.New(refusal.Input, "withdrawReason is allowed only when withdrawing", "add --exclude, or drop withdrawReason")
+	}
+	if isNull(raw) {
+		return nil, refusal.New(refusal.Input, "withdrawReason cannot be null", editFix)
+	}
+	var r Reason
+	if err := decodeValue("withdrawReason", raw, &r); err != nil {
+		return nil, err
+	}
+	if err := ValidateReason(r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 // Edit applies in and, when included is not nil, sets Included. A change to a publishable field or to Included bumps
 // rev, deletes the decision and appends one history entry; cleared reports whether a decision was deleted. dif is
-// needed only when in changes a publishable field. An edit that changes nothing returns the finding with ErrNoChange.
+// needed only when in changes a publishable field. A withdrawal reason goes on that entry. A new reason for a finding
+// already not included, with nothing else changed, appends an entry of its own and keeps rev and the decision, so a
+// human's exclusion stands. An edit that changes nothing returns the finding with ErrNoChange.
 func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Diff, by string, now time.Time) (f Finding, cleared bool, err error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
@@ -535,6 +583,10 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 	}
 	if by == "" {
 		by = ByAgent
+	}
+	reason, err := decodeReason(in.WithdrawReason, included)
+	if err != nil {
+		return Finding{}, false, err
 	}
 	next := *stored
 	anchor, err := applyEdit(&next, in)
@@ -572,7 +624,13 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 	publishable := len(changed) > 0
 	note("included", next.Included != stored.Included, stored.Included)
 	if len(changed) == 0 {
-		return *stored, false, ErrNoChange
+		if current := CurrentReason(*stored); reason == nil || (current != nil && *current == *reason) {
+			return *stored, false, ErrNoChange
+		}
+		next.UpdatedAt = now
+		next.History = append(append([]HistoryEntry{}, stored.History...), HistoryEntry{At: now, By: by, Changed: changed, Reason: reason})
+		*stored = next
+		return next, false, nil
 	}
 	if publishable {
 		// A severity stored before the enum existed may be free text, and a suggested fix stored before the allowlist
@@ -612,7 +670,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 
 	next.Rev++
 	next.UpdatedAt = now
-	next.History = append(append([]HistoryEntry{}, stored.History...), HistoryEntry{At: now, By: by, Changed: changed})
+	next.History = append(append([]HistoryEntry{}, stored.History...), HistoryEntry{At: now, By: by, Changed: changed, Reason: reason})
 	_, cleared = d.Decisions[next.ID]
 	delete(d.Decisions, next.ID)
 	*stored = next

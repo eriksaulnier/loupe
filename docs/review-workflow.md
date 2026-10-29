@@ -43,7 +43,7 @@ Every decision is saved at once. The interface draws full screen, so `TERM=dumb`
 
 ### 5. The agent answers what you send back
 
-A note asks the agent about one finding. The agent revises the finding or withdraws it, then replies to your note. You resolve or dismiss the note, and only then does the finding count as decided. A revised finding comes back pending, so you decide it again.
+A note asks the agent about one finding. The agent revises the finding or withdraws it, then replies to your note. A withdrawn finding shows the agent's reason beside it, so you can judge the withdrawal before you reinstate it with `u`. You resolve or dismiss the note, and only then does the finding count as decided. A revised finding comes back pending, so you decide it again.
 
 ![A finding with an open send-back note, the agent's reply to it, resolving the note and accepting the finding.](assets/sendback.gif)
 
@@ -103,6 +103,7 @@ Edit the review skill at <path> so it hands its findings to loupe through the `h
 - Add a step before the review that follows `human-review` sections 1 and 2, and make the review read the change at the `target.headSha` that `loupe capture --json` printed.
 - Add a step after the review that follows `human-review` sections 3 to 7. The edited skill MUST point at `human-review` and `loupe add --help` for the finding fields instead of listing them.
 - Map the skill's own severity or priority words onto loupe's `severity`, `blocking` and `label`. Where a word has no clear match, leave the field unset. MUST NOT guess.
+- Where the skill withdraws a finding it filed, pass the reason it already gives as `--reason`, with a `--reason-code` from `loupe edit --help`.
 - If the skill also runs in CI, use the same capture and filing steps in CI and locally, skip `handoff` and `wait` when no human is present (for example when `CI` is set), and write the summary for the pull request's author, because an unattended round publishes it as the review's opening.
 - Show me the diff and the severity mapping before you save anything.
 ```

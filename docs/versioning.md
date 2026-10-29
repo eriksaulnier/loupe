@@ -49,7 +49,7 @@ The format of the anchor is in [`comment-format.md`](comment-format.md).
 
 | Record | Version | Note |
 | :--- | :--- | :--- |
-| draft | `schema` 3 | 2 added `assessments` and `assessedAgainst` (`specs/031-open-findings`). 3 added `findings.location.heading` (`specs/044-heading-anchors`) |
+| draft | `schema` 4 | 2 added `assessments` and `assessedAgainst` (`specs/031-open-findings`). 3 added `findings.location.heading` (`specs/044-heading-anchors`). 4 added `findings.history.reason` (`specs/041-withdraw-reason`) |
 | previous | `schema` 3 | 2 added `commit`, `publicationId` and `assessments` (`specs/031-open-findings`). 3 added `unreadable` (`specs/034-keep-findings-record`). A schema 1 or 2 file with no round reads as unreadable unless its reason is the one capture writes for no loupe review |
 | target | `schema` 2 | 2 added `prState` (`specs/039-capture-allow-closed`) |
 | hand-back, comments | `schema` 1 | Strict. Unchanged until the next field change |

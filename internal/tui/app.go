@@ -358,7 +358,7 @@ func changeNotice(before, after *draft.Draft, decided string) string {
 		case f.ID == decided:
 		case !ok:
 			parts = append(parts, f.ID+" filed")
-		case was.Rev != f.Rev || was.Included != f.Included:
+		case was.Rev != f.Rev || was.Included != f.Included || len(was.History) != len(f.History):
 			parts = append(parts, f.ID+" changed")
 		case before.Decisions[f.ID].Decision != after.Decisions[f.ID].Decision:
 			parts = append(parts, f.ID+" decided")
