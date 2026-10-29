@@ -10,7 +10,7 @@ import (
 
 // tmuxProbe echoes the pane id because tmux 3.4 answers display-message for a pane that no longer exists with empty
 // fields and exit 0.
-const tmuxProbe = "#{pane_id} #{pane_width} #{session_attached}"
+const tmuxProbe = "#{pane_id} #{pane_width} #{session_attached} #{pane_synchronized}"
 
 type Tmux struct {
 	path   string
@@ -57,7 +57,7 @@ func (t Tmux) Open(ctx context.Context, req Request) (Opened, error) {
 	if strings.TrimSpace(reply) == "" {
 		return Opened{}, failed("tmux", "probe", "tmux has no pane "+t.paneID, req.Fix)
 	}
-	width, attached, ok := t.readProbe(reply)
+	width, attached, synchronized, ok := t.readProbe(reply)
 	if !ok {
 		return Opened{}, failed("tmux", "probe", fmt.Sprintf("unreadable reply %q", reply), req.Fix)
 	}
@@ -82,6 +82,14 @@ func (t Tmux) Open(ctx context.Context, req Request) (Opened, error) {
 		return Opened{}, failed("tmux", "split", "the reply has no pane id", req.Fix)
 	}
 
+	// The new pane inherits its window's synchronize-panes, and tmux copies keys sent to a synchronized pane, Enter
+	// included, to every other synchronized pane: the agent would get the command as a prompt and each sibling shell
+	// would run it.
+	if synchronized {
+		if _, err := call("run", "set-option", "-p", "-t", paneID, "synchronize-panes", "off"); err != nil {
+			return Opened{}, err
+		}
+	}
 	// The split starts the user's shell and the command is typed into it: a command given to split-window replaces the
 	// shell, so the pane would close on a refusal before the human could read it.
 	if _, err := call("run", "send-keys", "-t", paneID, "-l", req.Command); err != nil {
@@ -94,15 +102,15 @@ func (t Tmux) Open(ctx context.Context, req Request) (Opened, error) {
 }
 
 // readProbe returns a width of 0 when tmux's is not a positive integer, which leaves the direction to the tty.
-func (t Tmux) readProbe(reply string) (width, attached int, ok bool) {
+func (t Tmux) readProbe(reply string) (width, attached int, synchronized, ok bool) {
 	fields := strings.Split(reply, " ")
-	if len(fields) != 3 || fields[0] != t.paneID {
-		return 0, 0, false
+	if len(fields) != 4 || fields[0] != t.paneID {
+		return 0, 0, false, false
 	}
 	attached, err := strconv.Atoi(fields[2])
 	if err != nil || attached < 0 {
-		return 0, 0, false
+		return 0, 0, false, false
 	}
 	width, _ = strconv.Atoi(fields[1])
-	return width, attached, true
+	return width, attached, fields[3] == "1", true
 }

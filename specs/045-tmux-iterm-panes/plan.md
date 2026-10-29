@@ -42,7 +42,7 @@ The tmux samples and every design decision are in [research.md](research.md). Tw
   - `probe` runs research's `display-message`. A non-zero exit refuses with `tmuxMessage(stderr, err)`. The reply is parsed as research says. A zero `session_attached` returns `errPass` with no further call.
   - The direction is `direction(width, width > 0, req.TTYWidth)`.
   - `split` runs `split-window -d -P -F '#{pane_id}' -h|-v -t <pane>`. The trimmed stdout is the new id, and empty refuses at `split`.
-  - `run` runs `send-keys -t <new> -l <command>`, then `send-keys -t <new> Enter`.
+  - `run` runs `set-option -p -t <new> synchronize-panes off` when the probe reports the pane synchronized, then `send-keys -t <new> -l <command>`, then `send-keys -t <new> Enter`.
   - The result is `Opened{PaneID: new, Direction: dir, Focused: false}`.
   - `tmuxMessage` returns trimmed stderr, else the exit error.
 - **`iterm.go`**: `detectITerm(getenv, goos)` needs `goos == "darwin"`, `TERM_PROGRAM == "iTerm.app"`, a non-empty id after the last colon of `ITERM_SESSION_ID`, and `osascript` on `PATH`. `ITerm{path, sessionID, run}`, `Name()` `iterm2`. `Open` runs the `probe`, `split` and `run` scripts of research, each as `osascript -e ... <args>`. The probe's columns go through `direction` as the host's width, where a reply that is not a positive integer is unknown. An empty split reply refuses at `split`. The message is trimmed stderr, else the exit error. The result's `Focused` is `false`.

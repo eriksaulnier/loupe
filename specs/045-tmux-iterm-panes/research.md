@@ -16,7 +16,7 @@ Recorded on 2026-10-28 with tmux 3.4 on Linux (WSL2), once, by hand, against a t
 
 ### The probe echoes the pane id
 
-- **Decision**: The probe format is `#{pane_id} #{pane_width} #{session_attached}`. The reply is readable only when it has three space-separated fields, the first equals `TMUX_PANE`, and the third is a non-negative integer. Otherwise the probe refuses `pane-failed` at `probe` with `unreadable reply` and the reply quoted, or, when the first field is empty, `tmux has no pane %N`. A width that is not a positive integer is unknown under FR-008, not a refusal.
+- **Decision**: The probe format is `#{pane_id} #{pane_width} #{session_attached} #{pane_synchronized}`. The reply is readable only when it has four space-separated fields, the first equals `TMUX_PANE`, and the third is a non-negative integer. A fourth field of `1` means the pane is synchronized, and anything else means it is not (added after review of #89, 2026-10-29). Otherwise the probe refuses `pane-failed` at `probe` with `unreadable reply` and the reply quoted, or, when the first field is empty, `tmux has no pane %N`. A width that is not a positive integer is unknown under FR-008, not a refusal.
 - **Rationale**: tmux 3.4 exits 0 with empty fields for a missing pane (sample above), so the id echo is the only way to see that `TMUX_PANE` is dead. This keeps acceptance scenario 1.3's outcome, a refusal at `probe` that opens nothing. Its message is loupe's, because tmux prints none. Herdr's probe does the same check against its layout ("the result does not list pane").
 - **Alternatives considered**: `list-panes -F` with a filter, which returns the same nothing for a missing pane and lists every pane to find one. `has-session`, which checks the session, not the pane.
 
@@ -26,11 +26,12 @@ Every call is `tmux -S <socket> <command> ...` (FR-004). The step key a fake rea
 
 | Step | argv after `tmux -S <socket>` |
 | :--- | :--- |
-| `probe` | `display-message -p -t <TMUX_PANE> '#{pane_id} #{pane_width} #{session_attached}'` |
+| `probe` | `display-message -p -t <TMUX_PANE> '#{pane_id} #{pane_width} #{session_attached} #{pane_synchronized}'` |
 | `split` | `split-window -d -P -F '#{pane_id}' -h\|-v -t <TMUX_PANE>` |
-| `run` | `send-keys -t <new> -l <command>`, then `send-keys -t <new> Enter` |
+| `run` | `set-option -p -t <new> synchronize-panes off` when the probe reports the pane synchronized, then `send-keys -t <new> -l <command>`, then `send-keys -t <new> Enter` |
 
-- **Decision**: `run` is two calls under one step name. `-l` makes every key literal, so Enter cannot ride in the same call. Either failing refuses at `run`.
+- **Synchronized panes.** A throwaway tmux 3.4 server sampled on 2026-10-29, with `synchronize-panes on` in the window: `#{pane_synchronized}` prints `1` (`0` with it off). After `split-window -d`, the two `send-keys` calls to the new pane also typed the line into the first pane. With `set-option -p -t <new> synchronize-panes off` before them, the first pane received nothing.
+- **Decision**: `run` is two calls under one step name, three when the pane is synchronized. `-l` makes every key literal, so Enter cannot ride in the same call. Either failing refuses at `run`.
 - **Alternatives considered**: one invocation joined with tmux's `;` separator. It saves one exec and makes a fake parse tmux's command grammar.
 
 ### The unattended skip lives in `internal/pane`

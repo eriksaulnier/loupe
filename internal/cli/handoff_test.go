@@ -253,7 +253,7 @@ func TestHandoffRefusesPaneFailedAndStops(t *testing.T) {
 		{"orca", "split", "orca split: terminal handle term_agent is stale; a pane may already be open", fakeOrcaBin,
 			func(bin string) map[string]string { return withHome(orcaEnv("term_agent", bin), home) }, "split", 1},
 		{"tmux", "probe", "tmux probe: no server running on /tmp/tmux-1000/default",
-			func(t *testing.T, failAt string) (string, string) { return fakeTmuxBin(t, failAt, "%3 150 1") },
+			func(t *testing.T, failAt string) (string, string) { return fakeTmuxBin(t, failAt, "%3 150 1 0") },
 			func(bin string) map[string]string { return tmuxEnv(t, home, bin) }, "display-message", 2},
 	} {
 		t.Run(c.host, func(t *testing.T) {
@@ -350,7 +350,7 @@ func TestHandoffUsesHerdrWhenBothHostsAreDetected(t *testing.T) {
 // The agent's pane keeps focus, since a split that took it would catch the keys the human types for the agent.
 func TestHandoffOpensReviewInATmuxSplitWithoutFocus(t *testing.T) {
 	home, _ := sendBackRun(t)
-	bin, log := fakeTmuxBin(t, "", "%3 150 1")
+	bin, log := fakeTmuxBin(t, "", "%3 150 1 0")
 	env := tmuxEnv(t, home, bin)
 	socket := strings.TrimSuffix(env["TMUX"], ",3347196,0")
 	deps, s := testDeps(t, env)
@@ -362,7 +362,7 @@ func TestHandoffOpensReviewInATmuxSplitWithoutFocus(t *testing.T) {
 		t.Fatalf("envelope %v", got)
 	}
 	want := [][]string{
-		{"-S", socket, "display-message", "-p", "-t", "%3", "#{pane_id} #{pane_width} #{session_attached}"},
+		{"-S", socket, "display-message", "-p", "-t", "%3", "#{pane_id} #{pane_width} #{session_attached} #{pane_synchronized}"},
 		{"-S", socket, "split-window", "-d", "-P", "-F", "#{pane_id}", "-h", "-t", "%3"},
 		{"-S", socket, "send-keys", "-t", "%7", "-l", paneCommand(t, home)},
 		{"-S", socket, "send-keys", "-t", "%7", "Enter"},
@@ -375,7 +375,7 @@ func TestHandoffOpensReviewInATmuxSplitWithoutFocus(t *testing.T) {
 // A TMUX whose socket is gone names a server long since exited, so tmux is skipped rather than refused.
 func TestHandoffSkipsTmuxWithAStaleSocket(t *testing.T) {
 	home, _ := sendBackRun(t)
-	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1")
+	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
 	orcaBin, orcaLog := fakeOrcaBin(t, "")
 	env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
 	env["TMUX"] = filepath.Join(t.TempDir(), "gone") + ",1,0"
@@ -401,7 +401,7 @@ func TestHandoffPassesAnUnwatchedTmuxSession(t *testing.T) {
 	home, _ := sendBackRun(t)
 	for _, withOrca := range []bool{true, false} {
 		t.Run(fmt.Sprintf("orca=%v", withOrca), func(t *testing.T) {
-			tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 0")
+			tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 0 0")
 			orcaBin, orcaLog := fakeOrcaBin(t, "")
 			env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
 			if withOrca {
@@ -430,7 +430,7 @@ func TestHandoffPassesAnUnwatchedTmuxSession(t *testing.T) {
 func TestHandoffUsesHerdrOverTmux(t *testing.T) {
 	home, _ := sendBackRun(t)
 	herdrBin, herdrLog := fakeHerdrBin(t, "")
-	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1")
+	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
 	env := tmuxEnv(t, home, herdrBin+string(os.PathListSeparator)+tmuxBin)
 	maps.Copy(env, map[string]string{"HERDR_ENV": "1", "HERDR_PANE_ID": "w1:p1"})
 	deps, s := testDeps(t, env)
@@ -447,7 +447,7 @@ func TestHandoffUsesHerdrOverTmux(t *testing.T) {
 
 func TestHandoffUsesAWatchedTmuxOverOrca(t *testing.T) {
 	home, _ := sendBackRun(t)
-	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1")
+	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
 	orcaBin, orcaLog := fakeOrcaBin(t, "")
 	env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
 	env["ORCA_TERMINAL_HANDLE"] = "term_agent"

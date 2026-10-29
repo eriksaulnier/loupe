@@ -4,7 +4,7 @@ How to check this feature. The behavior is in [spec.md](spec.md), and the contra
 
 ## Automated
 
-1. `go test ./internal/pane/ ./internal/cli/ -run 'Handoff|Open|Detect|Direction|Skill|Tmux|ITerm'`. Expected: with the fake `tmux`, the calls are `display-message`, `split-window`, `send-keys -l` and `send-keys Enter`, each with `-S <socket>`, and the result carries `host: tmux` and `focused: false`. A zero-client probe passes to Orca or refuses `no-pane-host`. With the OS injected as `darwin`, the fake `osascript` sees three calls with the session id and command as arguments, and the result carries `host: iterm2`.
+1. `go test ./internal/pane/ ./internal/cli/ -run 'Handoff|Open|Detect|Direction|Skill|Tmux|ITerm'`. Expected: with the fake `tmux`, the calls are `display-message`, `split-window`, `send-keys -l` and `send-keys Enter`, with `set-option -p ... synchronize-panes off` before the `send-keys` when the probe reports a synchronized pane, each with `-S <socket>`, and the result carries `host: tmux` and `focused: false`. A zero-client probe passes to Orca or refuses `no-pane-host`. With the OS injected as `darwin`, the fake `osascript` sees three calls with the session id and command as arguments, and the result carries `host: iterm2`.
 2. `go test ./internal/cli/ -update`, then `git diff testdata/golden/cli`. Expected: only `handoff-help.80.txt` and `handoff-help.100.txt` move.
 3. `mise run check`. Expected: green, including the widened host guard.
 

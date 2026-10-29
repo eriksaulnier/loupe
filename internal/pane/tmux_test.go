@@ -15,7 +15,7 @@ const (
 	tmuxSocket = "/tmp/tmux-1000/default"
 	tmuxPane   = "%3"
 	tmuxNew    = "%7"
-	tmuxFormat = "#{pane_id} #{pane_width} #{session_attached}"
+	tmuxFormat = "#{pane_id} #{pane_width} #{session_attached} #{pane_synchronized}"
 )
 
 func tmuxFor(f *fakeRunner) Tmux {
@@ -71,10 +71,10 @@ func TestTmuxOpenSendsProbeSplitAndRun(t *testing.T) {
 		name, probe, direction, flag string
 		tty                          func() (int, bool)
 	}{
-		{"probe 120", "%3 120 1", "right", "-h", width(80)},
-		{"probe 119", "%3 119 1", "down", "-v", width(150)},
-		{"probe width unreadable, no tty", "%3 x 1", "down", "-v", nil},
-		{"probe width unreadable, tty 150", "%3 x 2", "right", "-h", width(150)},
+		{"probe 120", "%3 120 1 0", "right", "-h", width(80)},
+		{"probe 119", "%3 119 1 0", "down", "-v", width(150)},
+		{"probe width unreadable, no tty", "%3 x 1 0", "down", "-v", nil},
+		{"probe width unreadable, tty 150", "%3 x 2 0", "right", "-h", width(150)},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := &fakeRunner{replies: map[string]reply{
@@ -102,6 +102,46 @@ func TestTmuxOpenSendsProbeSplitAndRun(t *testing.T) {
 	}
 }
 
+// tmux copies keys sent to a synchronized pane to every other synchronized pane in its window, Enter included, so the
+// typed command would reach the agent as a prompt and run in every sibling shell.
+func TestTmuxUnsynchronizesTheNewPaneBeforeTyping(t *testing.T) {
+	for _, synchronized := range []string{"1", ""} {
+		f := &fakeRunner{replies: map[string]reply{
+			"display-message": {stdout: "%3 150 1 " + synchronized + "\n"},
+			"split-window":    {stdout: tmuxNew + "\n"},
+			"set-option":      {},
+			"send-keys":       {},
+		}}
+		if _, err := tmuxFor(f).Open(context.Background(), Request{Command: command, Fix: fix}); err != nil {
+			t.Fatal(err)
+		}
+		want := [][]string{
+			tmuxCall("display-message", "-p", "-t", tmuxPane, tmuxFormat),
+			tmuxCall("split-window", "-d", "-P", "-F", "#{pane_id}", "-h", "-t", tmuxPane),
+		}
+		if synchronized == "1" {
+			want = append(want, tmuxCall("set-option", "-p", "-t", tmuxNew, "synchronize-panes", "off"))
+		}
+		want = append(want, tmuxCall("send-keys", "-t", tmuxNew, "-l", command), tmuxCall("send-keys", "-t", tmuxNew, "Enter"))
+		if !slices.EqualFunc(f.calls, want, slices.Equal) {
+			t.Fatalf("synchronized %q calls:\n%q\nwant:\n%q", synchronized, f.calls, want)
+		}
+	}
+}
+
+func TestTmuxRefusesWhenUnsynchronizingFails(t *testing.T) {
+	f := &fakeRunner{replies: map[string]reply{
+		"display-message": {stdout: "%3 150 1 1\n"},
+		"split-window":    {stdout: tmuxNew + "\n"},
+		"set-option":      {stderr: "invalid option: synchronize-panes\n", err: errExit1},
+	}}
+	_, err := tmuxFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
+	assertTmuxRefusal(t, err, "run", "tmux run: invalid option: synchronize-panes; a pane may already be open")
+	if len(f.calls) != 3 {
+		t.Fatalf("made %d calls, want 3: %q", len(f.calls), f.calls)
+	}
+}
+
 func assertTmuxRefusal(t *testing.T, err error, step, message string) {
 	t.Helper()
 	r, ok := refusal.As(err)
@@ -122,9 +162,9 @@ func TestTmuxProbeRefuses(t *testing.T) {
 		{"no server", reply{stderr: "no server running on " + tmuxSocket + "\n", err: errExit1}, "tmux probe: no server running on " + tmuxSocket},
 		{"exit without a message", reply{err: errExit1}, "tmux probe: exit status 1"},
 		{"missing pane", reply{stdout: "  \n"}, "tmux probe: tmux has no pane %3"},
-		{"two fields", reply{stdout: "%3 80\n"}, `tmux probe: unreadable reply "%3 80"`},
-		{"another pane", reply{stdout: "%4 80 1\n"}, `tmux probe: unreadable reply "%4 80 1"`},
-		{"clients not a number", reply{stdout: "%3 80 x\n"}, `tmux probe: unreadable reply "%3 80 x"`},
+		{"three fields", reply{stdout: "%3 80 1\n"}, `tmux probe: unreadable reply "%3 80 1"`},
+		{"another pane", reply{stdout: "%4 80 1 0\n"}, `tmux probe: unreadable reply "%4 80 1 0"`},
+		{"clients not a number", reply{stdout: "%3 80 x 0\n"}, `tmux probe: unreadable reply "%3 80 x 0"`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := &fakeRunner{replies: map[string]reply{"display-message": c.reply}}
@@ -139,7 +179,7 @@ func TestTmuxProbeRefuses(t *testing.T) {
 
 // A pane in a session nobody watches would be invisible, and its review would hold the run's session lock.
 func TestTmuxPassesWhenNoClientIsAttached(t *testing.T) {
-	f := &fakeRunner{replies: map[string]reply{"display-message": {stdout: "%3 150 0\n"}}}
+	f := &fakeRunner{replies: map[string]reply{"display-message": {stdout: "%3 150 0 0\n"}}}
 	_, err := tmuxFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
 	if err != errPass {
 		t.Fatalf("err = %v, want errPass", err)
@@ -151,7 +191,7 @@ func TestTmuxPassesWhenNoClientIsAttached(t *testing.T) {
 
 func TestTmuxRefusesASplitWithoutAnID(t *testing.T) {
 	f := &fakeRunner{replies: map[string]reply{
-		"display-message": {stdout: "%3 150 1\n"},
+		"display-message": {stdout: "%3 150 1 0\n"},
 		"split-window":    {stdout: "\n"},
 	}}
 	_, err := tmuxFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
@@ -164,7 +204,7 @@ func TestTmuxRefusesASplitWithoutAnID(t *testing.T) {
 // The agent never closes the pane (006 FR-008), so a failed run leaves a shell open and refuses.
 func TestTmuxRunFailureLeavesThePane(t *testing.T) {
 	f := &fakeRunner{replies: map[string]reply{
-		"display-message": {stdout: "%3 150 1\n"},
+		"display-message": {stdout: "%3 150 1 0\n"},
 		"split-window":    {stdout: tmuxNew + "\n"},
 		"send-keys":       {stderr: "can't find pane: %7\n", err: errExit1},
 	}}
