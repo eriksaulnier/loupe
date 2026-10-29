@@ -17,6 +17,9 @@ const generalFix = `use a line location or a general finding with "general": tru
 // ResolveHeading turns a heading anchor into the range of the one hunk that changes the heading's section, as
 // Validate accepts it: startLine is 0 for a single line. It reads d.Outline, never the clone.
 func (d *Diff) ResolveHeading(path, text string) (startLine, line int, err error) {
+	if path == "" {
+		return 0, 0, d.notAFile(path)
+	}
 	lineForm := fmt.Sprintf(`use a line location: {"path": %q, "line": <n>, "side": "RIGHT" or "LEFT", "startLine": <n>}`, path)
 	if !markdown.IsMarkdownPath(path) {
 		return 0, 0, refusal.New(refusal.Location,

@@ -226,6 +226,12 @@ func TestResolveHeadingRefusals(t *testing.T) {
 				"headings": []markdown.Heading{{Text: "Rollout", Level: 2, Line: 3}},
 			},
 		},
+		{
+			name: "empty path", d: func(t *testing.T) *Diff { return planDiff(t, hunk{11, 11, "   +   "}) },
+			path: "", heading: "Rollout",
+			message: " is not a file in the diff", fix: "use one of: plan.md",
+			details: map[string]any{"paths": []string{"plan.md"}},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

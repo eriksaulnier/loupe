@@ -90,7 +90,7 @@ func newAddCmd(deps Deps) *cobra.Command {
 	f.Int("line", 0, "line number on --side")
 	f.Int("start-line", 0, "first line of a multi-line range")
 	f.String("side", "", "RIGHT (new file, default) or LEFT (old file)")
-	f.String("heading", "", "a Markdown heading's text, instead of --line: the section's changed lines")
+	f.String("heading", "", "a Markdown heading's text, with --path and instead of --line: the section's changed lines")
 	f.Bool("general", false, "a general finding with no location")
 	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")
