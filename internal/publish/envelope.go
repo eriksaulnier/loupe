@@ -149,8 +149,8 @@ func Build(in BuildInput) (Envelope, error) {
 		var loc *draft.Location
 		if f.Location != nil {
 			rf.Location = &render.Location{Path: f.Location.Path, Side: f.Location.Side, Line: f.Location.Line, StartLine: f.Location.StartLine}
-			copied := *f.Location
-			loc = &copied
+			published := f.Location.Published()
+			loc = &published
 		}
 		r.Findings = append(r.Findings, rf)
 		env.Findings = append(env.Findings, EnvelopeFinding{ID: f.ID, Title: f.Title, Body: f.Body, Location: loc, Label: f.Label, Blocking: f.Blocking})

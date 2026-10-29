@@ -140,7 +140,7 @@ func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Ti
 			if loc.Side == "" {
 				loc.Side = SideRight
 			}
-			f.Location = &loc
+			f.Location = &FindingLocation{Path: loc.Path, Side: loc.Side, Line: loc.Line, StartLine: loc.StartLine}
 		}
 		d.Findings = append(d.Findings, f)
 		added = append(added, f)
@@ -510,7 +510,12 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		if fix == stored.SuggestedFix {
 			fix = ""
 		}
-		err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: next.Location, General: next.General, Label: next.Label,
+		var loc *Location
+		if next.Location != nil {
+			published := next.Location.Published()
+			loc = &published
+		}
+		err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: loc, General: next.General, Label: next.Label,
 			Blocking: next.Blocking, Confidence: next.Confidence, Severity: severity, Verified: next.Verified, Impact: next.Impact,
 			References: next.References, SuggestedFix: fix}, dif)
 		if err != nil {
@@ -617,7 +622,7 @@ func applyEdit(f *Finding, in EditInput) error {
 		if loc.Side == "" {
 			loc.Side = SideRight
 		}
-		f.Location, f.General = &loc, false
+		f.Location, f.General = &FindingLocation{Path: loc.Path, Side: loc.Side, Line: loc.Line, StartLine: loc.StartLine}, false
 	}
 	if in.General != nil {
 		var general bool
@@ -664,7 +669,7 @@ func decodeValue(field string, raw json.RawMessage, dst any) error {
 	return nil
 }
 
-func sameLocation(a, b *Location) bool {
+func sameLocation(a, b *FindingLocation) bool {
 	if a == nil || b == nil {
 		return a == b
 	}

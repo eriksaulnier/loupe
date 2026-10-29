@@ -12,7 +12,7 @@ func TestNewEmptyEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"schema":2,"version":0,"summary":"","findings":[],"decisions":{},"notes":[],"replies":[]}`
+	want := `{"schema":3,"version":0,"summary":"","findings":[],"decisions":{},"notes":[],"replies":[]}`
 	if string(got) != want {
 		t.Fatalf("got %s\nwant %s", got, want)
 	}
@@ -22,7 +22,7 @@ func TestFieldNamesAndOptionals(t *testing.T) {
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	d := NewEmpty()
 	d.Findings = append(d.Findings,
-		Finding{ID: "f-001", Rev: 2, Title: "t", Body: "b", Location: &Location{Path: "a.go", Side: SideRight, Line: 5, StartLine: 3},
+		Finding{ID: "f-001", Rev: 2, Title: "t", Body: "b", Location: &FindingLocation{Path: "a.go", Side: SideRight, Line: 5, StartLine: 3},
 			Label: "issue", Blocking: true, Confidence: "high", Severity: "major", SuggestedFix: "fix", By: ByAgent, Included: true,
 			CreatedAt: at, UpdatedAt: at, History: []HistoryEntry{{At: at, By: ByHuman, Changed: map[string]any{"title": "old"}}}},
 		Finding{ID: "f-002", Rev: 1, Title: "g", Body: "b", General: true, By: ByHuman, CreatedAt: at, UpdatedAt: at, History: []HistoryEntry{}},

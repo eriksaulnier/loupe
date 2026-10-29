@@ -333,13 +333,13 @@ func TestSavesStampTheCurrentSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func(d, h int) { schemaVersion, handBackSchema = d, h }(schemaVersion, handBackSchema)
-	schemaVersion, handBackSchema = 2, 2
+	schemaVersion, handBackSchema = SchemaVersion+1, HandBackSchema+1
 	if _, err := sendBack(dir, "And this?"); err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"draft.json", "handback.json"} {
-		if got := storedSchema(t, filepath.Join(dir, file)); got != 2 {
-			t.Errorf("%s saved with schema %d, want 2", file, got)
+	for file, want := range map[string]int{"draft.json": SchemaVersion + 1, "handback.json": HandBackSchema + 1} {
+		if got := storedSchema(t, filepath.Join(dir, file)); got != want {
+			t.Errorf("%s saved with schema %d, want %d", file, got, want)
 		}
 	}
 }

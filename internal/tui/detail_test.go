@@ -319,7 +319,7 @@ func TestDetailWrapsAReferenceWiderThanTheWindow(t *testing.T) {
 
 func TestDetailActionsFollowTheFinding(t *testing.T) {
 	g := style.Glyphs(envOf(map[string]string{"LANG": "en_US.UTF-8"}))
-	located := draft.Finding{ID: "f-001", Location: &draft.Location{Path: "a.go", Line: 1}, Included: true}
+	located := draft.Finding{ID: "f-001", Location: &draft.FindingLocation{Path: "a.go", Line: 1}, Included: true}
 	general := draft.Finding{ID: "f-002", Included: true}
 	withdrawn := located
 	withdrawn.Included = false

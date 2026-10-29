@@ -56,7 +56,7 @@ func TestAddOne(t *testing.T) {
 	}
 	want := Finding{
 		ID: "f-001", Rev: 1, Title: "First", Body: "Evidence.",
-		Location: &Location{Path: "multi.txt", Side: SideRight, Line: 3},
+		Location: &FindingLocation{Path: "multi.txt", Side: SideRight, Line: 3},
 		By:       ByAgent, Included: true, CreatedAt: addNow, UpdatedAt: addNow, History: []HistoryEntry{},
 	}
 	if len(added) != 1 || !reflect.DeepEqual(added[0], want) || !reflect.DeepEqual(d.Findings, []Finding{want}) {
@@ -80,7 +80,7 @@ func TestAddBatchAssignsSequentialIDs(t *testing.T) {
 	second := d.Findings[1]
 	if second.Rev != 1 || !second.Included || second.By != ByHuman || second.Label != "perf-nit" || !second.Blocking ||
 		second.Confidence != "low" || second.Severity != "minor" || second.SuggestedFix != "Do less." ||
-		*second.Location != (Location{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33}) {
+		*second.Location != (FindingLocation{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33}) {
 		t.Fatalf("second %+v", second)
 	}
 	if !d.Findings[0].General || d.Findings[0].Location != nil {

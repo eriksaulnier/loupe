@@ -17,7 +17,7 @@ var editNow = time.Date(2026, 9, 13, 14, 0, 0, 0, time.UTC)
 func editable() *Draft {
 	d := NewEmpty()
 	d.Findings = []Finding{
-		{ID: "f-001", Rev: 1, Title: "One", Body: "Body one.", Location: &Location{Path: "multi.txt", Side: SideRight, Line: 3},
+		{ID: "f-001", Rev: 1, Title: "One", Body: "Body one.", Location: &FindingLocation{Path: "multi.txt", Side: SideRight, Line: 3},
 			Label: "issue", Blocking: true, Confidence: "high", Severity: "major", Verified: "reproduced", Impact: "Two reviews.",
 			References: []string{"https://github.com/o/r/issues/1"}, SuggestedFix: "fix it", By: ByAgent, Included: true,
 			CreatedAt: addNow, UpdatedAt: addNow, History: []HistoryEntry{}},
@@ -47,7 +47,7 @@ func TestEditEachPublishableField(t *testing.T) {
 	}{
 		"title":      {`{"title": "New"}`, "One", func(f Finding) bool { return f.Title == "New" }},
 		"body":       {`{"body": "New body."}`, "Body one.", func(f Finding) bool { return f.Body == "New body." }},
-		"location":   {`{"location": {"path": "multi.txt", "line": 20}}`, &Location{Path: "multi.txt", Side: SideRight, Line: 3}, func(f Finding) bool { return f.Location.Line == 20 && f.Location.Side == SideRight }},
+		"location":   {`{"location": {"path": "multi.txt", "line": 20}}`, &FindingLocation{Path: "multi.txt", Side: SideRight, Line: 3}, func(f Finding) bool { return f.Location.Line == 20 && f.Location.Side == SideRight }},
 		"label":      {`{"label": "nit"}`, "issue", func(f Finding) bool { return f.Label == "nit" }},
 		"blocking":   {`{"blocking": false}`, true, func(f Finding) bool { return !f.Blocking }},
 		"confidence": {`{"confidence": "low"}`, "high", func(f Finding) bool { return f.Confidence == "low" }},
@@ -189,7 +189,7 @@ func TestEditLocationAndGeneralReplaceEachOther(t *testing.T) {
 	if f.General || f.Location == nil || f.Location.Line != 35 {
 		t.Fatalf("finding %+v", f)
 	}
-	if !reflect.DeepEqual(f.History[0].Changed, map[string]any{"location": (*Location)(nil), "general": true}) {
+	if !reflect.DeepEqual(f.History[0].Changed, map[string]any{"location": (*FindingLocation)(nil), "general": true}) {
 		t.Fatalf("history %#v", f.History[0].Changed)
 	}
 
