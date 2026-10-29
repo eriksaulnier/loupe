@@ -292,6 +292,26 @@ func TestHelpScrolls(t *testing.T) {
 	}
 }
 
+// From 20 rows up a blank row sits under the header, and the scroll still stops where the pane does: at the end, the
+// next k moves help (review finding).
+func TestHelpScrollStopsAtItsEnd(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
+	m.Update(runes("?"))
+	first := m.View().Content
+	for range 200 {
+		m.Update(runes("j"))
+	}
+	bottom := m.View().Content
+	if bottom == first {
+		t.Fatalf("help fits at 24 rows, so the test checks nothing:\n%s", bottom)
+	}
+	m.Update(runes("k"))
+	if m.View().Content == bottom {
+		t.Errorf("k at the end of help left it where it was:\n%s", bottom)
+	}
+}
+
 // withdrawnFixture sends f-002 back and has the agent answer by withdrawing it, which is how a finding reaches the
 // human withdrawn with its note still open.
 func withdrawnFixture(t *testing.T) string {

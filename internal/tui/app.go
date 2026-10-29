@@ -804,7 +804,8 @@ func (m *Model) helpRow(k helpKey, keyWidth int) string {
 }
 
 func (m *Model) updateHelp(msg tea.KeyPressMsg) {
-	lines, height := len(m.helpLines()), m.helpHeight()
+	_, height := m.helpRows()
+	lines := len(m.helpLines())
 	last := max(0, lines-height)
 	m.helpTop = min(m.helpTop, last)
 	switch msg.String() {

@@ -243,10 +243,8 @@ func (m *Model) helpOverlay(base string) string {
 	lines := m.helpLines()
 	width := m.popupWidth()
 	inner, _ := style.PaneInner(width, 0)
-	footer := m.keys(style.KeyGroup{{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}}, style.KeyGroup{{Key: "esc/?/q", Verb: "close help"}})
-	// The header stays in view above the pane, so help still says whose review it is.
-	height := min(len(lines)+style.PaneRows, m.height-len(footer)-2)
-	visible := max(1, height-style.PaneRows)
+	footer := m.helpFooter()
+	height, visible := m.helpRows()
 	top := min(m.helpTop, max(0, len(lines)-visible))
 	shown := lines[top:]
 	for i, l := range shown {
@@ -284,10 +282,16 @@ func (m *Model) overlay(base string, baseFooter int, pane, footer []string) stri
 // popupWidth is the width of a pane drawn over the screen, such as help or a publish step.
 func (m *Model) popupWidth() int { return min(m.width-4, 72) }
 
-// helpHeight is the rows help's pane shows its lines in.
-func (m *Model) helpHeight() int {
-	footer := 1
-	return max(1, min(len(m.helpLines())+style.PaneRows, m.height-footer-1-m.bodyTop())-style.PaneRows)
+// helpFooter is the keys help offers while it is open.
+func (m *Model) helpFooter() []string {
+	return m.keys(style.KeyGroup{{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}}, style.KeyGroup{{Key: "esc/?/q", Verb: "close help"}})
+}
+
+// helpRows is help's pane height and the rows it shows its lines in, which both the drawing and the scroll read so
+// the scroll stops where the pane does. The header stays in view above the pane, so help still says whose review it is.
+func (m *Model) helpRows() (height, visible int) {
+	height = min(len(m.helpLines())+style.PaneRows, m.height-len(m.helpFooter())-2)
+	return height, max(1, height-style.PaneRows)
 }
 
 // position is where the selected or open finding sits among every row, withdrawn ones included.
