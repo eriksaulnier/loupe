@@ -262,7 +262,7 @@ func TestCaptureAllowClosed(t *testing.T) {
 	if target["prState"] != "closed" || target["schema"] != float64(2) || target["headSha"] != h.Repo.HeadSHA() {
 		t.Fatalf("target.json %v", target)
 	}
-	for _, name := range []string{"pr.diff", "draft.json", "previous.json", "comments.json"} {
+	for _, name := range []string{"pr.diff", "draft.json", "previous.json", "comments.json", "outline.json"} {
 		if _, err := os.Stat(filepath.Join(h.RunDir(1), name)); err != nil {
 			t.Errorf("closed capture lacks %s: %v", name, err)
 		}
@@ -590,5 +590,43 @@ func TestConcurrentCapturesAtUnchangedHead(t *testing.T) {
 	want := []string{"refs/loupe/acme/widgets/42/1/base", "refs/loupe/acme/widgets/42/1/head"}
 	if !reflect.DeepEqual(loupeRefs, want) {
 		t.Fatalf("loupe refs %v", loupeRefs)
+	}
+}
+
+func TestCaptureStoresTheHeadingOutline(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.Repo.PushHead(map[string]string{
+		"docs/a.md":  "---\ntitle: A\n---\n# A\n\n```\n# fenced\n```\n\n## Rollout\n\ntext\n",
+		"B.MARKDOWN": "# B\n",
+		"c.md":       "# binary\x00\x01\n",
+		"notes.txt":  "# not markdown\n",
+	})
+	h.GH.SetHead(owner, repo, number, h.Repo.RemoveHead("README.md"))
+	h.capture()
+	var got map[string]any
+	if err := json.Unmarshal(readFile(t, filepath.Join(h.RunDir(1), "outline.json")), &got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"schema": float64(1), "files": []any{
+		map[string]any{"path": "B.MARKDOWN", "headings": []any{map[string]any{"heading": "B", "level": float64(1), "line": float64(1)}}},
+		map[string]any{"path": "docs/a.md", "headings": []any{
+			map[string]any{"heading": "A", "level": float64(1), "line": float64(4)},
+			map[string]any{"heading": "Rollout", "level": float64(2), "line": float64(10)},
+		}},
+		map[string]any{"path": "docs/new-name.md", "headings": []any{}},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("outline.json\n got %v\nwant %v", got, want)
+	}
+}
+
+func TestCaptureStoresAnEmptyOutlineWithoutMarkdown(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.GH.SetHead(owner, repo, number, h.Repo.RemoveHead("docs/new-name.md"))
+	h.capture()
+	if got := string(readFile(t, filepath.Join(h.RunDir(1), "outline.json"))); got != "{\n  \"schema\": 1,\n  \"files\": []\n}\n" {
+		t.Fatalf("outline.json = %q", got)
 	}
 }

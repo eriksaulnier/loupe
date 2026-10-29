@@ -133,6 +133,17 @@ func (r *Repo) PushHead(files map[string]string) string {
 	return r.head
 }
 
+// RemoveHead commits the removal of paths on top of the current pull request head and force-moves the head to it.
+func (r *Repo) RemoveHead(paths ...string) string {
+	r.t.Helper()
+	r.git(r.t, r.workDir, "checkout", "--quiet", "--detach", r.head)
+	r.git(r.t, r.workDir, append([]string{"rm", "--quiet"}, paths...)...)
+	r.commit("remove from head")
+	r.head = r.git(r.t, r.workDir, "rev-parse", "HEAD")
+	r.git(r.t, r.workDir, "push", "--quiet", "--force", r.RemoteDir, r.head+":"+r.pullRef())
+	return r.head
+}
+
 // PushBase commits files on top of the current base, off the pull request's history, and moves main to it, so the
 // base is no longer the merge base.
 func (r *Repo) PushBase(files map[string]string) string {
