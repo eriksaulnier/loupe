@@ -547,7 +547,7 @@ func ValidateReason(r Reason) error {
 		return refuse(fmt.Sprintf("code %q is not a word", r.Code),
 			fmt.Sprintf("use a code that matches %s and is at most %d characters, such as no-runtime-effect", LabelPattern, maxLabelRunes))
 	}
-	return markdown.Check(r.Text, markdown.Body, "rewrite the withdrawal reason within the Markdown allowlist; see loupe edit --help")
+	return markdown.Check(r.Text, markdown.WithdrawReason, "rewrite the withdrawal reason within the Markdown allowlist; see loupe edit --help")
 }
 
 // decodeReason refuses a reason on anything but a withdrawal, so a call can never record one on an included finding.

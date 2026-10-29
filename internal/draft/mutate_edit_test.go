@@ -527,6 +527,15 @@ func TestEditRefusesABadReason(t *testing.T) {
 	}
 }
 
+func TestEditNamesTheReasonInAMarkdownRefusal(t *testing.T) {
+	excluded := false
+	_, _, err := Edit(editable(), "f-002", EditInput{WithdrawReason: json.RawMessage(`{"text": "<script>x</script>"}`)}, &excluded, nil, ByAgent, editNow)
+	r, ok := refusal.As(err)
+	if !ok || r.Details["field"] != "withdrawReason" || !strings.HasPrefix(r.Message, "withdrawReason ") {
+		t.Fatalf("got %v with details %v, want a refusal that names withdrawReason", err, r.Details)
+	}
+}
+
 func TestEditAcceptsTheLimits(t *testing.T) {
 	d := editable()
 	reason := `{"text": "` + strings.Repeat("é", 200) + `", "code": "` + strings.Repeat("a", 40) + `"}`
