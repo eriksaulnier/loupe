@@ -22,6 +22,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `internal/refusal` | A leaf so every domain package can return refusals without importing `internal/cli` |
 | `internal/render` | Composes what loupe shows and sends |
 | `internal/run` | The on-disk layout of review runs: paths, references, atomic writes and locking |
+| `internal/stats` | Rolls the human gate up across runs for `loupe stats`, counting each finding as the `loupe-meta` marker does |
 | `internal/style` | The one place terminal appearance is decided: colors, glyphs and layout helpers |
 | `internal/tui` | The human review interface: a full-screen Bubble Tea program |
 | `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, `fakegh`, an in-memory GitHub REST server, and `screen`, which types keys into the review program through a pipe and waits for what it draws |
