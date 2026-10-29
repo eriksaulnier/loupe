@@ -41,8 +41,8 @@ description: "Task list for opening review in a tmux or iTerm2 pane, tmux first 
 
 **Independent Test**: existing Herdr and Orca tests unchanged, plus the order table.
 
-- [ ] T011 [US3] Add `TestDetectOrder` to `internal/pane/pane_test.go`: a table over env sets naming the expected `[]Host` names: Herdr+tmux → `[herdr tmux]`, tmux+Orca → `[tmux orca]`, Herdr+Orca → `[herdr orca]`, stale tmux socket + Orca → `[orca]`, tmux alone → `[tmux]`. Add to `internal/cli/handoff_test.go` `TestHandoffUsesHerdrOverTmux` (no tmux call) and `TestHandoffUsesAWatchedTmuxOverOrca` (no orca call). These pass on Phase 2's code; any failure is a bug in T007.
-- [ ] T012 [US3] Commit `test(pane): pin herdr and orca over tmux` after `mise run check`.
+- [X] T011 [US3] Add `TestDetectOrder` to `internal/pane/pane_test.go`: a table over env sets naming the expected `[]Host` names: Herdr+tmux → `[herdr tmux]`, tmux+Orca → `[tmux orca]`, Herdr+Orca → `[herdr orca]`, stale tmux socket + Orca → `[orca]`, tmux alone → `[tmux]`. Add to `internal/cli/handoff_test.go` `TestHandoffUsesHerdrOverTmux` (no tmux call) and `TestHandoffUsesAWatchedTmuxOverOrca` (no orca call). These pass on Phase 2's code; any failure is a bug in T007.
+- [X] T012 [US3] Commit `test(pane): pin herdr and orca over tmux` after `mise run check`.
 
 ## Phase 4: tmux documents and guard
 

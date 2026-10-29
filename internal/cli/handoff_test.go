@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -388,6 +389,42 @@ func TestHandoffPassesAnUnwatchedTmuxSession(t *testing.T) {
 				t.Fatalf("exit %d envelope %v", code, got)
 			}
 		})
+	}
+}
+
+func TestHandoffUsesHerdrOverTmux(t *testing.T) {
+	home, _ := sendBackRun(t)
+	herdrBin, herdrLog := fakeHerdrBin(t, "")
+	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1")
+	env := tmuxEnv(t, home, herdrBin+string(os.PathListSeparator)+tmuxBin)
+	maps.Copy(env, map[string]string{"HERDR_ENV": "1", "HERDR_PANE_ID": "w1:p1"})
+	deps, s := testDeps(t, env)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
+	}
+	if host := decodeOne(t, s.stdout.Bytes())["host"]; host != "herdr" || len(hostCalls(t, herdrLog)) != 3 {
+		t.Fatalf("host %v", host)
+	}
+	if calls := hostCalls(t, tmuxLog); calls != nil {
+		t.Fatalf("tmux was run though Herdr was detected: %q", calls)
+	}
+}
+
+func TestHandoffUsesAWatchedTmuxOverOrca(t *testing.T) {
+	home, _ := sendBackRun(t)
+	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1")
+	orcaBin, orcaLog := fakeOrcaBin(t, "")
+	env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
+	env["ORCA_TERMINAL_HANDLE"] = "term_agent"
+	deps, s := testDeps(t, env)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
+	}
+	if host := decodeOne(t, s.stdout.Bytes())["host"]; host != "tmux" || len(hostCalls(t, tmuxLog)) != 4 {
+		t.Fatalf("host %v", host)
+	}
+	if calls := hostCalls(t, orcaLog); calls != nil {
+		t.Fatalf("orca was run though tmux was detected: %q", calls)
 	}
 }
 
