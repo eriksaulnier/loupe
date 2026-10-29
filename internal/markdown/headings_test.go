@@ -31,6 +31,8 @@ func TestHeadings(t *testing.T) {
 		{"unclosed front matter", "---\n# Kept\n", []Heading{{"Kept", 1, 2}}},
 		{"thematic break later is not front matter", "# A\n---\n# B\n---\n", []Heading{{"A", 1, 1}, {"B", 1, 3}}},
 		{"crlf", "# One\r\n\r\n## Two\r\n", []Heading{{"One", 1, 1}, {"Two", 2, 3}}},
+		{"byte order mark", "\ufeff# Title\n\n## Sub\n", []Heading{{"Title", 1, 1}, {"Sub", 2, 3}}},
+		{"byte order mark before front matter", "\ufeff---\ntitle: x\n# not\n---\n# Top\n", []Heading{{"Top", 1, 5}}},
 		{"none", "plain text\n", nil},
 	}
 	for _, c := range cases {

@@ -22,9 +22,10 @@ var atxLine = regexp.MustCompile(`^ {0,3}#{1,6}([ \t]|$)`)
 
 // Headings lists the ATX headings at the top level of src, in file order. A heading inside a fence, an indented block,
 // a block quote, a list item or YAML front matter does not count, since goldmark nests the first four and the front
-// matter is blanked before the parse.
+// matter is blanked before the parse. A leading byte order mark is dropped, as GitHub's renderer drops it; it holds no
+// newline, so line numbers stay the same.
 func Headings(src []byte) []Heading {
-	src = blankFrontMatter(src)
+	src = blankFrontMatter(bytes.TrimPrefix(src, []byte("\xEF\xBB\xBF")))
 	lines := bytes.Split(src, []byte("\n"))
 	doc := gfm.Parser().Parse(text.NewReader(src))
 	var out []Heading
