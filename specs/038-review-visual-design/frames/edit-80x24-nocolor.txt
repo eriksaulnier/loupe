@@ -1,7 +1,7 @@
  loupe  acme/widgets#42  r1  feat(cache): add a read-thro…  !~==x-  3/6 decided
 ╭─ f-002 · pending ─────────────────────────────────────────────────────────  ─╮
-│ Cache entries never expire when the ETag is missing                          ┃
-│ [MAJOR] [● blocking] [issue]  confidence ■■■  ✓ reproduced                   ┃
+│ Cache entries never expire when the ETag is missing                          │
+│ [MAJOR] [● blocking] [issue]  confidence ■■■  ✓ reproduced                   │
 │                                                                              ┃
 │ ╭─ internal/cache/store.go:90-91 ────────────────────────────────── +8 -0 ─╮ ┃
 │ │    87 + if !ok {                                                         │ ┃

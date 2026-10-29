@@ -7,14 +7,14 @@
 ╰─  ─────────────────────────────────────────────────────────── tab collapses ─╯
 
 ╭─ Findings ──────────────────────────── 1 blocking · 1 open note · 3 pending ─╮
-│     id    severity   conf finding                         location           │
-│ > · f-002 [MAJOR]    ■■■  ● Cache entries never expire w… …he/store.go:90-91 │
-│   · f-003 [MINOR]    ■■□  ✎ Hit ratio counters reset on … …/metrics.go:39-40 │
-│   ✓ f-001            ■■■  Store.Put holds the write lock… …cache/store.go:38 │
-│   ✓ f-006            ■■□  The old store dropped insertio… …store.go:42 (old) │
-│   ↩ f-007            ■□□  Flag default duplicates the co… …idgets/main.go:11 │
-│   × f-005                 Document the cache size limit … general            │
-│   · f-004            ■□□  Is the 304 path covered by the… general            │
+│     id    severity   conf finding                          location          │
+│ > · f-002 [MAJOR]    ■■■  ● Cache entries never expire wh… store.go:90-91    │
+│   · f-003 [MINOR]    ■■□  ✎ Hit ratio counters reset on e… metrics.go:39-40  │
+│   ✓ f-001            ■■■  Store.Put holds the write lock … store.go:38       │
+│   ✓ f-006            ■■□  The old store dropped insertion… store.go:42 (old) │
+│   ↩ f-007            ■□□  Flag default duplicates the con… main.go:11        │
+│   × f-005                 Document the cache size limit i… general           │
+│   · f-004            ■□□  Is the 304 path covered by the … general           │
 │                                                                              │
 │                                                                              │
 │                                                                              │
