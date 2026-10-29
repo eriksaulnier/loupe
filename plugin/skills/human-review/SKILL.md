@@ -104,7 +104,7 @@ When the user asks you to handle feedback on a run, run `loupe feedback --run <r
 
 - To revise a finding, write the changed fields to a file and run `loupe edit <finding-id> --from <file> --run <ref> --json`. An absent key leaves a field unchanged. `null` clears `location`, `label`, `confidence`, `severity`, `verified`, `impact`, `references` or `suggestedFix`, and an empty `references` list clears it too; `null` is refused for `title`, `body`, `general` and `blocking`. Any change clears the human's decision, so they decide the finding again.
 - The human MAY change a finding's `label` or `blocking` in review without sending it back. Leave both out of your edit file unless a note asks you to change them, so you do not undo their call. When you do set either, re-read the finding with `loupe show --run <ref> --json` and pass its `version` as `--expect-version`, so a change they make meanwhile refuses your edit instead of being overwritten.
-- To withdraw a finding, run `loupe edit <finding-id> --exclude --run <ref> --json`.
+- To withdraw a finding, run `loupe edit <finding-id> --exclude --reason "<one line that sums up your reply>" --reason-code conceded --run <ref> --json`. The human reads the reason beside the withdrawn finding and decides from it whether to reinstate it.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.
 
 Only the human resolves or dismisses a note. When every note you were asked to answer has a reply, tell the user the revisions are ready and hand off again from section 6. While their review is still open it shows your replies, and `loupe handoff` refuses `review-open`, so no second pane opens and you go straight back to waiting.
