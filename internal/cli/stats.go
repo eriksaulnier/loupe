@@ -35,8 +35,8 @@ Both are null when no run qualifies. Every other count includes unattended runs.
 
 Arguments name repositories as owner/repo, matched ignoring case. With none, every repository
 counts. A run's time is when it was published, or captured when it is not, and --since, --until
-and the week and month groups use it. A bare --until date covers that whole UTC day. It reads only the
-data root: no lock, no Git, no network.
+and the week and month groups use it. A bare --until date covers that whole UTC day. It reads only
+the data root: no lock, no Git, no network.
 
 Result (--json):
   {"loupe": 1, "ok": true, "command": "stats",
