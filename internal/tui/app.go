@@ -190,6 +190,7 @@ func New(cfg Config) (*Model, error) {
 	note := textarea.New()
 	note.ShowLineNumbers, note.MaxHeight = false, 0
 	note.SetStyles(textarea.Styles{})
+	note.SetVirtualCursor(false)
 	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
 		cfg:          cfg,
@@ -511,8 +512,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() tea.View {
-	v := tea.NewView(m.content())
-	v.AltScreen = true
+	content, caret := placeCaret(m.content())
+	v := tea.NewView(content)
+	v.AltScreen, v.Cursor = true, caret
 	return v
 }
 

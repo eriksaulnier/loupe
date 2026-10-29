@@ -757,6 +757,7 @@ func (m *Model) sizeNote(extra int) {
 // ending at the cursor's.
 func (m *Model) noteRowsShown() []string {
 	rows := strings.Split(m.styles.Render(m.note.View()), "\n")
+	markCaret(rows, m.note.Cursor(), 0)
 	if limit := max(1, m.height/3); len(rows) > limit {
 		start := min(max(0, m.note.LineInfo().RowOffset-limit+1), len(rows)-limit)
 		rows = rows[start : start+limit]
