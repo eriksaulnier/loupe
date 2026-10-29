@@ -1,0 +1,8 @@
+Published runs in every repository, at any time. Precision and median leave out
+1 unattended run, and precision leaves out withdrawn findings.
+
+GROUP  RUNS PRS FILED PUBLISHED EXCLUDED WITHDRAWN PENDING PRECISION MEDIAN
+total     4   3    13         8        3         1       1     0.667   1h2m
+
+1 run changed after publishing, so its counts can differ from its review:
+example-org/example-repo#12@2.

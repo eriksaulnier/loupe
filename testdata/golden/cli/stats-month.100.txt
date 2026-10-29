@@ -1,0 +1,9 @@
+Published runs in example-org/example-repo and EXAMPLE-ORG/widgets, since 2026-11-01, by month.
+Precision and median leave out 1 unattended run, and precision leaves out withdrawn findings.
+
+GROUP    RUNS PRS FILED PUBLISHED EXCLUDED WITHDRAWN PENDING PRECISION MEDIAN
+2026-11     2   2     4         3        0         0       1     1.000   3d1h
+total       2   2     4         3        0         0       1     1.000   3d1h
+
+1 run changed after publishing, so its counts can differ from its review:
+example-org/example-repo#12@2.

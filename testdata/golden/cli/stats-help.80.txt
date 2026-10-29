@@ -1,0 +1,51 @@
+Usage
+  loupe stats [owner/repo]... [flags]
+
+Roll the human gate up across every run in the data root: how many findings the agent filed,
+how many were published, how many the human rejected and how many the agent cut itself.
+
+Each finding of a run's current draft counts once. published: in the review the run's receipt
+records. excluded: the human rejected it, by a decision or by withdrawing it. withdrawn: the agent
+withdrew it. pending: still waiting to be published. filed is the sum of the four, and the counts
+match each published review's loupe-meta marker unless the draft changed after publishing, which
+lists the run under drifted. reinstated counts the findings a human put back after a withdrawal,
+and regraded those whose label, blocking or severity a human changed, whatever their outcome.
+
+precision is published / (published + excluded), over attended published runs only. It leaves
+out withdrawn on purpose, because the agent cut those findings itself, and unattended runs on
+purpose, because no human gated them. medianCaptureToPublish leaves out unattended runs too.
+Both are null when no run qualifies. Every other count includes unattended runs.
+
+Arguments name repositories as owner/repo, matched ignoring case; none means every repository.
+A run's time is when it was published, or captured when it is not; --since, --until and the
+week and month groups use it. A bare --until date covers that whole UTC day. It reads only the
+data root: no lock, no Git, no network.
+
+Result (--json)
+  {"loupe": 1, "ok": true, "command": "stats",
+   "filter": {"repos": [], "since": null, "until": null, "states": ["published"], "groupBy": "repo"},
+   "groups": [{"key": "owner/repo",
+     "runs": {"captured": 0, "ready": 0, "published": 12, "unattended": 0},
+     "pullRequests": 9,
+     "findings": {"filed": 41, "published": 20, "excluded": 6, "withdrawn": 15,
+                  "pending": 0, "reinstated": 2, "regraded": 3},
+     "byLabel": {"published": {"issue": 11, "suggestion": 7, "question": 2, "other": 0},
+                 "excluded":  {"issue": 2, "suggestion": 4, "question": 0, "other": 0}},
+     "blocking": {"published": 5, "excluded": 1},
+     "precision": 0.769,
+     "drifted": ["owner/repo#123@2"],
+     "medianCaptureToPublish": "PT14M"}],
+   "total": {"key": "total", "...": "the shape of a group, over every selected run"}}
+
+Flags
+      --group-by string     one row per none, repo, week (ISO, UTC) or month (UTC) (default "none")
+  -h, --help                help for stats
+      --since string        count runs from this RFC 3339 date or timestamp on, inclusive
+      --state stringArray   count runs in this state: captured, ready or published; repeatable, default published
+      --until string        count runs up to this RFC 3339 date or timestamp, inclusive
+      --json   print exactly one JSON result object on stdout
+
+Examples
+  loupe stats
+  loupe stats --group-by month --since 2026-01-01
+  loupe stats owner/repo --group-by week --json

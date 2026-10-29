@@ -1,0 +1,7 @@
+Published runs in every repository, at any time. Precision and median leave out unattended runs, and
+precision leaves out withdrawn findings.
+
+GROUP  RUNS PRS FILED PUBLISHED EXCLUDED WITHDRAWN PENDING PRECISION MEDIAN
+total     0   0     0         0        0         0       0         -      -
+
+No runs yet. loupe capture <pr-url>
