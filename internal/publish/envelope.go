@@ -90,11 +90,11 @@ func Build(in BuildInput) (Envelope, error) {
 	}
 	// Only the prose that is about to be published is checked. An attended publication does not post the draft's
 	// summary, so refusing over it would be refusing over text no reader will see.
-	opening, openingFix := in.Message, messageFix
+	opening, openingKind, openingFix := in.Message, markdown.Message, messageFix
 	if in.Unattended {
-		opening, openingFix = d.Summary, "loupe summary --from -"
+		opening, openingKind, openingFix = d.Summary, markdown.Summary, "loupe summary --from -"
 	}
-	if err := markdown.Check(opening, markdown.Summary, openingFix); err != nil {
+	if err := markdown.Check(opening, openingKind, openingFix); err != nil {
 		return Envelope{}, err
 	}
 	note := in.Note
@@ -107,12 +107,16 @@ func Build(in BuildInput) (Envelope, error) {
 	if err := markdown.Check(note, markdown.Note, noteFix); err != nil {
 		return Envelope{}, err
 	}
+	// The note is the one published field loupe never stores, so publish is where a finding id in it is refused.
+	if err := markdown.FindingIDs(note, markdown.Note, "reword --note and run loupe publish again"); err != nil {
+		return Envelope{}, err
+	}
 	for _, f := range included {
 		if err := markdown.Check(f.Body, markdown.Body, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
 			return Envelope{}, err
 		}
 		if f.Impact != "" {
-			if err := markdown.Check(f.Impact, markdown.Body, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
+			if err := markdown.Check(f.Impact, markdown.Impact, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
 				return Envelope{}, err
 			}
 		}

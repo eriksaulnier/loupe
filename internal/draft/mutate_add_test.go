@@ -48,6 +48,14 @@ func wantRefusal(t *testing.T, err error, code refusal.Code) *refusal.Error {
 	return r
 }
 
+// wantField checks that a markdown refusal names field in its message and in details.field.
+func wantField(t *testing.T, r *refusal.Error, field string) {
+	t.Helper()
+	if r.Details["field"] != field || !strings.Contains(r.Message, field+" ") {
+		t.Fatalf("message %q details %v, want field %s", r.Message, r.Details, field)
+	}
+}
+
 func TestAddOne(t *testing.T) {
 	d := NewEmpty()
 	added, err := Add(d, []FindingInput{located("First", 3)}, multiHunk(t), "", addNow)
@@ -191,6 +199,7 @@ func TestAddRefusesImpactFailingAllowlist(t *testing.T) {
 	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
 		t.Fatalf("fix %q details %v", r.Fix, r.Details)
 	}
+	wantField(t, r, "impact")
 }
 
 func TestAddRefusesBodyFailingAllowlist(t *testing.T) {
@@ -202,6 +211,7 @@ func TestAddRefusesBodyFailingAllowlist(t *testing.T) {
 	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
 		t.Fatalf("fix %q details %v", r.Fix, r.Details)
 	}
+	wantField(t, r, "body")
 }
 
 func TestSetSummaryCountMismatch(t *testing.T) {
@@ -373,6 +383,7 @@ func TestAddRefusesSuggestedFixFailingAllowlist(t *testing.T) {
 	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
 		t.Fatalf("fix %q details %v", r.Fix, r.Details)
 	}
+	wantField(t, r, "suggestedFix")
 }
 
 // Go's url.Parse gives a URL with a port and no host the Host ":80", which names no host at all.

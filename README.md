@@ -17,7 +17,7 @@ loupe collects a review agent's findings into a local draft so you decide each o
 
 1. Your agent captures the pull request into a run and files its findings into the draft.
 2. You decide each finding in `loupe review`. A finding you send back with a note goes to the agent, which answers it.
-3. `loupe publish` shows the exact review. You write its opening, and one key posts it.
+3. `loupe publish` shows the review as it will read, with its exact Markdown one key away. You write its opening, and one key posts it.
 
 ![The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title.](docs/assets/review-dark.png)
 

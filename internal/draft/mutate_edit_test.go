@@ -152,7 +152,7 @@ func TestEditKeepsALegacySuggestedFix(t *testing.T) {
 		t.Fatalf("finding %+v", f)
 	}
 	_, _, err = Edit(d, "f-001", editInput(t, `{"suggestedFix": "three<br>four"}`), nil, multiHunk(t), ByAgent, editNow)
-	_ = wantRefusal(t, err, refusal.Markdown)
+	wantField(t, wantRefusal(t, err, refusal.Markdown), "suggestedFix")
 }
 
 func TestEditNullLocationMakesFindingGeneral(t *testing.T) {

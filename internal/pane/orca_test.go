@@ -179,3 +179,18 @@ func TestOrcaMessagePrefersStdoutErrorThenNonHandshakeStderr(t *testing.T) {
 		}
 	}
 }
+
+// Orca draws its pane controls over the last four columns of the first row; no other host covers any.
+func TestHeaderReserve(t *testing.T) {
+	for handle, want := range map[string]int{"term_1": 4, "": 0} {
+		getenv := func(key string) string {
+			if key == "ORCA_TERMINAL_HANDLE" {
+				return handle
+			}
+			return ""
+		}
+		if got := HeaderReserve(getenv); got != want {
+			t.Errorf("ORCA_TERMINAL_HANDLE=%q reserves %d, want %d", handle, got, want)
+		}
+	}
+}

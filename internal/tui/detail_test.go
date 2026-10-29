@@ -94,19 +94,37 @@ func threadView(t *testing.T, env map[string]string, width int, notes []draft.No
 	return m.View().Content
 }
 
-// threadRows is the thread as drawn: the rows from the first note's header on, right-trimmed.
-func threadRows(view, header string) []string {
-	lines := strings.Split(view, "\n")
-	for i, l := range lines {
-		if strings.Contains(l, header) {
-			out := make([]string, 0, len(lines)-i)
-			for _, l := range lines[i:] {
-				out = append(out, strings.TrimRight(l, " "))
+// nestedRows are the content rows of each nested pane whose top border carries title, right-trimmed, one pane after
+// threadRows is the note threads in a detail view, from the headline holding title on: each row after its left bar,
+// and a blank row between two threads.
+func threadRows(view, title string) []string {
+	var out []string
+	inside := false
+	for _, l := range strings.Split(ansi.Strip(view), "\n") {
+		r := []rune(l)
+		if len(r) < 4 {
+			inside = false
+			continue
+		}
+		inner := strings.TrimRight(string(r[2:len(r)-2]), " ")
+		rest, barred := strings.CutPrefix(inner, "┃")
+		if !barred {
+			rest, barred = strings.CutPrefix(inner, "|")
+		}
+		rest = strings.TrimPrefix(rest, " ")
+		switch {
+		case barred && !inside && strings.HasPrefix(rest, title):
+			if out != nil {
+				out = append(out, "")
 			}
-			return out
+			out, inside = append(out, rest), true
+		case barred && inside:
+			out = append(out, rest)
+		default:
+			inside = false
 		}
 	}
-	return nil
+	return out
 }
 
 func TestDetailViewShowsRepliesUnderNotes(t *testing.T) {
@@ -117,18 +135,34 @@ func TestDetailViewShowsRepliesUnderNotes(t *testing.T) {
 			{ID: "r-002", NoteID: "n-001", Body: "And a test.", By: draft.ByHuman, At: testNow},
 		})
 	want := []string{
-		" ┃ you · n-001 · open",
-		" ┃ Show the evidence.",
-		" ┃",
-		" ┃   agent · r-001",
-		` ┃   Added\u202E it.`,
-		" ┃",
-		" ┃   you · r-002",
-		" ┃   And a test.",
+		"Note n-001 · open",
+		"You",
+		"Show the evidence.",
+		"",
+		"Agent · r-001",
+		`Added\u202E it.`,
+		"",
+		"You · r-002",
+		"And a test.",
 	}
-	rows := threadRows(view, "n-001")
-	if len(rows) < len(want) || strings.Join(rows[:len(want)], "\n") != strings.Join(want, "\n") || strings.ContainsRune(view, '\u202e') {
-		t.Fatalf("the thread is not drawn as blocks, replies in order under the note:\n%s", view)
+	rows := threadRows(view, "Note n-001")
+	if strings.Join(rows, "\n") != strings.Join(want, "\n") || strings.ContainsRune(view, '\u202e') || strings.Contains(view, "╭─ Note") {
+		t.Fatalf("the thread is not drawn behind its bar, replies in order under the note:\n%s\n%q", view, rows)
+	}
+}
+
+// A reply's author is capitalized by its first rune, and an empty one, which only a damaged draft holds, draws no
+// name rather than stopping the program (review finding).
+func TestDetailThreadCapitalizesAnyAuthor(t *testing.T) {
+	view := threadView(t, utf8Env, 100,
+		[]draft.Note{{ID: "n-001", FindingID: "f-001", Body: "Why?", Status: draft.NoteOpen, At: testNow}},
+		[]draft.Reply{
+			{ID: "r-001", NoteID: "n-001", Body: "Blank.", By: "", At: testNow},
+			{ID: "r-002", NoteID: "n-001", Body: "Accented.", By: "émile", At: testNow},
+		})
+	rows := threadRows(view, "Note n-001")
+	if !slices.ContainsFunc(rows, func(r string) bool { return strings.HasSuffix(r, "r-001") }) || !slices.Contains(rows, "Émile · r-002") {
+		t.Fatalf("the replies are not drawn under their authors:\n%q", rows)
 	}
 }
 
@@ -137,20 +171,20 @@ func TestDetailThreadKeepsABodyAsWritten(t *testing.T) {
 	view := threadView(t, utf8Env, 60,
 		[]draft.Note{{ID: "n-001", FindingID: "f-001", Body: "Why?", Status: draft.NoteOpen, At: testNow}},
 		[]draft.Reply{{ID: "r-001", NoteID: "n-001", Body: body, By: draft.ByAgent, At: testNow}})
-	rows := threadRows(view, "n-001")
-	i := slices.Index(rows, " ┃   agent · r-001")
-	if i < 0 || len(rows) < i+6 {
+	rows := threadRows(view, "Note n-001")
+	i := slices.Index(rows, "Agent · r-001")
+	if i < 0 || len(rows) < i+5 {
 		t.Fatalf("the reply's header is missing:\n%s", view)
 	}
-	if rows[i+1] != " ┃   First line." || rows[i+2] != " ┃" || !strings.HasPrefix(rows[i+3], " ┃    Second line, long") {
+	if rows[i+1] != "First line." || rows[i+2] != "" || !strings.HasPrefix(rows[i+3], " Second line, long") {
 		t.Fatalf("the reply's lines, blank one included, are not drawn as written:\n%s", strings.Join(rows[i:], "\n"))
 	}
-	if !strings.HasPrefix(rows[i+4], " ┃   ") || !strings.Contains(strings.Join(rows[i+3:i+6], " "), "end.") {
-		t.Fatalf("a long line does not wrap under the bar and indent:\n%s", strings.Join(rows[i:], "\n"))
+	if !strings.Contains(strings.Join(rows[i+3:], " "), "end.") || len(rows) < i+5 {
+		t.Fatalf("a long line does not wrap inside the pane:\n%s", strings.Join(rows[i:], "\n"))
 	}
-	for _, r := range rows[i+3 : i+5] {
-		if style.Width(r) > 60 {
-			t.Fatalf("a wrapped row is wider than the window:\n%s", strings.Join(rows[i:], "\n"))
+	for _, l := range strings.Split(view, "\n") {
+		if style.Width(l) > 60 {
+			t.Fatalf("a row is wider than the window: %q", l)
 		}
 	}
 }
@@ -159,11 +193,11 @@ func TestDetailThreadTrimsOnlyBlankEndsAndEscapesControlLines(t *testing.T) {
 	view := threadView(t, utf8Env, 100,
 		[]draft.Note{{ID: "n-001", FindingID: "f-001", Body: "Why?", Status: draft.NoteOpen, At: testNow}},
 		[]draft.Reply{{ID: "r-001", NoteID: "n-001", Body: "  \nTop\n\f\n\u0085\nend\n   \n", By: draft.ByAgent, At: testNow}})
-	rows := threadRows(view, "n-001")
-	i := slices.Index(rows, " ┃   agent · r-001")
-	want := []string{" ┃   agent · r-001", " ┃   Top", ` ┃   \u000C`, ` ┃   \u0085`, " ┃   end", ""}
-	if i < 0 || len(rows) < i+len(want) || strings.Join(rows[i:i+len(want)], "\n") != strings.Join(want, "\n") {
-		t.Fatalf("blank ends are not trimmed or a control-only line is not shown escaped:\n%s", view)
+	rows := threadRows(view, "Note n-001")
+	i := slices.Index(rows, "Agent · r-001")
+	want := []string{"Agent · r-001", "Top", `\u000C`, `\u0085`, "end"}
+	if i < 0 || strings.Join(rows[i:], "\n") != strings.Join(want, "\n") {
+		t.Fatalf("blank ends are not trimmed or a control-only line is not shown escaped:\n%s\n%q", view, rows)
 	}
 }
 
@@ -172,15 +206,15 @@ func TestDetailThreadsAreSeparatedAndFollowTheTier(t *testing.T) {
 		{ID: "n-001", FindingID: "f-001", Body: "One.", Status: draft.NoteOpen, At: testNow},
 		{ID: "n-002", FindingID: "f-001", Body: "Rename the flag?", Status: draft.NoteResolved, At: testNow},
 	}
-	rows := threadRows(threadView(t, utf8Env, 100, notes, []draft.Reply{}), "n-001")
-	want := []string{" ┃ you · n-001 · open", " ┃ One.", "", " ┃ you · n-002 · ✓ resolved", " ┃ Rename the flag?"}
-	if len(rows) < len(want) || strings.Join(rows[:len(want)], "\n") != strings.Join(want, "\n") {
-		t.Fatalf("two threads are not separated by a row without a bar:\n%s", strings.Join(rows, "\n"))
+	view := threadView(t, utf8Env, 100, notes, []draft.Reply{})
+	rows := threadRows(view, "Note n-00")
+	want := []string{"Note n-001 · open", "You", "One.", "", "Note n-002 · ✓ resolved", "You", "Rename the flag?"}
+	if strings.Join(rows, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("two threads are not separate:\n%s\n%q", view, rows)
 	}
-	rows = threadRows(threadView(t, map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, notes, []draft.Reply{}), "n-001")
-	want = []string{" | you - n-001 - open", " | One.", "", " | you - n-002 - + resolved", " | Rename the flag?"}
-	if len(rows) < len(want) || strings.Join(rows[:len(want)], "\n") != strings.Join(want, "\n") {
-		t.Fatalf("the ASCII thread does not use the ASCII tier:\n%s", strings.Join(rows, "\n"))
+	ascii := threadView(t, map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, notes, []draft.Reply{})
+	if !strings.Contains(ascii, "| | Note n-002 - + resolved") || !strings.Contains(ascii, "| | You") || strings.ContainsAny(ascii, "╭│┃·✓") {
+		t.Fatalf("the ASCII thread does not use the ASCII tier:\n%s", ascii)
 	}
 }
 
@@ -242,18 +276,18 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	if view := m.View().Content; !strings.Contains(view, "severity major") || !strings.Contains(view, "verified reproduced") {
+	if view := m.View().Content; !strings.Contains(view, "[MAJOR]") || !strings.Contains(view, "+ reproduced") || !strings.Contains(view, "confidence ##-") {
 		t.Errorf("the chips are clipped at 60 columns:\n%s", view)
 	}
 
 	anchored := func(view string, n int) bool {
-		return regexp.MustCompile(fmt.Sprintf(`(?m)^\s+%d\s+>\s+\+big line %d\s*$`, n, n)).MatchString(view)
+		return regexp.MustCompile(fmt.Sprintf(`>\s+%d \+ big line %d\b`, n, n)).MatchString(view)
 	}
 	if view := m.View().Content; !anchored(view, 5) || strings.Contains(view, "big line 30") {
 		t.Fatalf("first view does not start at the top of the hunk:\n%s", view)
 	}
 	seen := map[string]bool{}
-	for _, keys := range []tea.KeyPressMsg{{Code: tea.KeyDown}, {Code: tea.KeyPgDown}} {
+	for _, keys := range []tea.KeyPressMsg{{Code: tea.KeyDown}, {Code: tea.KeyPgDown}, {Code: tea.KeySpace, Text: " "}} {
 		if err := m.openFinding("f-001"); err != nil {
 			t.Fatal(err)
 		}
@@ -310,7 +344,7 @@ func TestDetailWrapsAReferenceWiderThanTheWindow(t *testing.T) {
 		if w := style.Width(l); w > 60 {
 			t.Errorf("line is %d cells wide: %q", w, l)
 		}
-		joined.WriteString(strings.TrimSpace(l))
+		joined.WriteString(strings.Trim(l, " |#"))
 	}
 	if !strings.Contains(joined.String(), ref) {
 		t.Errorf("the reference is not shown whole:\n%s", m.View().Content)
@@ -326,11 +360,7 @@ func TestDetailActionsFollowTheFinding(t *testing.T) {
 	keys := func(hints []style.Hint) string {
 		var out []string
 		for _, h := range hints {
-			k := h.Key
-			if h.Next {
-				k += "+"
-			}
-			out = append(out, k)
+			out = append(out, h.Key)
 		}
 		return strings.Join(out, " ")
 	}
@@ -339,48 +369,67 @@ func TestDetailActionsFollowTheFinding(t *testing.T) {
 		f           draft.Finding
 		disposition string
 		openNote    bool
-		hasNext     bool
 		want        string
 	}{
-		{"pending located", located, draft.DispositionPending, false, true, "←/→ ↑/↓ a+ x+ s+ e f ?"},
-		{"pending last", located, draft.DispositionPending, false, false, "←/→ ↑/↓ a x s e f ?"},
-		{"accepted", located, draft.DispositionAccepted, false, true, "←/→ ↑/↓ x+ s+ e f ?"},
-		{"excluded general", general, draft.DispositionExcluded, false, true, "←/→ ↑/↓ u e ?"},
-		{"withdrawn", withdrawn, draft.DispositionWithdrawn, false, true, "←/→ ↑/↓ u+ f ?"},
-		{"excluded after withdrawal", withdrawn, draft.DispositionExcluded, false, true, "←/→ ↑/↓ u f ?"},
-		{"open note", general, draft.DispositionPending, true, false, "←/→ ↑/↓ a x s e r d ?"},
+		{"pending located", located, draft.DispositionPending, false, "←→ ↑↓ a x s e f ?"},
+		{"accepted", located, draft.DispositionAccepted, false, "←→ ↑↓ x s e f ?"},
+		{"excluded general", general, draft.DispositionExcluded, false, "←→ ↑↓ u e ?"},
+		{"withdrawn", withdrawn, draft.DispositionWithdrawn, false, "←→ ↑↓ u f ?"},
+		{"excluded after withdrawal", withdrawn, draft.DispositionExcluded, false, "←→ ↑↓ u f ?"},
+		{"open note", general, draft.DispositionPending, true, "←→ ↑↓ a x s e r d ?"},
 	}
 	for _, c := range cases {
-		if got := keys(detailActions(g, c.f, c.disposition, c.openNote, c.hasNext)); got != c.want {
+		if got := keys(detailActions(g, c.f, c.disposition, c.openNote)); got != c.want {
 			t.Errorf("%s: footer keys %q, want %q", c.name, got, c.want)
 		}
 	}
 }
 
-func TestDetailShowsChipsRuleAndNumberedHunk(t *testing.T) {
+func TestDetailShowsMetadataAndTheNestedLocationPane(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	if err := m.openFinding("f-002"); err != nil {
 		t.Fatal(err)
 	}
 	view := m.View().Content
 	for _, want := range []string{
-		"f-002 \u00b7 2 of 3",
-		"\u00b7 pending   suggestion",
+		"╭─ · f-002 · pending ─",
+		" 2 of 3 ─╯",
+		"│ [suggestion]",
 		"Suggested fix",
 		"\u2503 extract insertAfter",
-		"   20  \u2502   line 20",
-		"   21  \u258e  +inserted after 20",
+		"│ ╭─ multi.txt:21 ─",
+		" +1 −0 ─╮ │",
+		"│ │    20   line 20",
+		"│ │ >  21 + inserted after 20",
 	} {
 		if !strings.Contains(view, want) {
 			t.Errorf("detail view lacks %q:\n%s", want, view)
 		}
 	}
-	if !regexp.MustCompile(`(?m)^ multi\.txt:21\s*$`).MatchString(view) || strings.Contains(view, "whole file") {
-		t.Errorf("detail view lacks its location line or still offers the old rule:\n%s", view)
+	if strings.Contains(view, "confidence ]") || strings.Contains(view, "[]") || strings.Contains(view, "whole file") {
+		t.Errorf("detail view shows an empty tag or the old rule:\n%s", view)
 	}
-	if strings.Contains(view, "confidence ]") || strings.Contains(view, "[]") {
-		t.Errorf("detail view shows an empty chip:\n%s", view)
+}
+
+// noteTop and noteBottom are the send-back pane's borders.
+var (
+	noteTop    = regexp.MustCompile(`(?m)^╭─ Send back f-001 ─+╮$`)
+	noteBottom = regexp.MustCompile(`(?m)^╰─+ enter sends · esc cancels ─╯$`)
+)
+
+// noteTextRows counts the rows between the send-back pane's borders.
+func noteTextRows(view string) int {
+	lines := strings.Split(view, "\n")
+	for i, l := range lines {
+		if noteTop.MatchString(l) {
+			for j := i + 1; j < len(lines); j++ {
+				if strings.HasPrefix(lines[j], "╰") {
+					return j - i - 1
+				}
+			}
+		}
 	}
+	return -1
 }
 
 func TestDetailNoteInputNamesTheFinding(t *testing.T) {
@@ -390,12 +439,11 @@ func TestDetailNoteInputNamesTheFinding(t *testing.T) {
 	}
 	m.Update(runes("s"))
 	view := m.View().Content
-	if !regexp.MustCompile(`(?m)^ ╭─ send back f-001 ─+ enter sends · esc cancels ─╮$`).MatchString(view) ||
-		!regexp.MustCompile(`(?m)^ │ +│$`).MatchString(view) || !regexp.MustCompile(`(?m)^ ╰─+╯$`).MatchString(view) {
-		t.Fatalf("the send-back input is not framed with its title and way out:\n%s", view)
+	if !noteTop.MatchString(view) || !noteBottom.MatchString(view) || noteTextRows(view) != 1 {
+		t.Fatalf("the send-back input is not a titled pane with its way out:\n%s", view)
 	}
 	if strings.Contains(view, "\u203a") {
-		t.Errorf("the frame's title and the old prompt both name the finding:\n%s", view)
+		t.Errorf("the pane's title and the old prompt both name the finding:\n%s", view)
 	}
 	if !strings.Contains(view, "enter send") || !strings.Contains(view, "esc cancel") || !strings.Contains(view, "ctrl+u clear") {
 		t.Errorf("the footer no longer lists the note's keys:\n%s", view)
@@ -408,8 +456,9 @@ func TestDetailNoteFrameFollowsTheGlyphTier(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.Update(runes("s"))
-	if view := m.View().Content; !regexp.MustCompile(`(?m)^ \+- send back f-001 -+ enter sends - esc cancels -\+$`).MatchString(view) {
-		t.Fatalf("the ASCII frame is not drawn in the ASCII tier:\n%s", view)
+	if view := m.View().Content; !regexp.MustCompile(`(?m)^\+- Send back f-001 -+\+$`).MatchString(view) ||
+		!regexp.MustCompile(`(?m)^\+-+ enter sends - esc cancels -\+$`).MatchString(view) {
+		t.Fatalf("the ASCII pane is not drawn in the ASCII tier:\n%s", view)
 	}
 }
 
@@ -420,13 +469,13 @@ func TestDetailNoteInputWrapsAndKeepsTheCursorInView(t *testing.T) {
 	}
 	m.Update(runes("s"))
 	m.Update(runes("short note"))
-	if view := m.View().Content; !regexp.MustCompile(`(?m)^ │ short note +│$`).MatchString(view) {
-		t.Fatalf("a short note is not on the frame's first row:\n%s", view)
+	if view := m.View().Content; !regexp.MustCompile(`(?m)^│ short note +│$`).MatchString(view) {
+		t.Fatalf("a short note is not on the pane's first row:\n%s", view)
 	}
 	m.Update(runes(strings.Repeat(" and more", 40) + " END"))
 	view := m.View().Content
-	if !strings.Contains(view, "END") || strings.Contains(view, "short note") || !strings.Contains(view, "send back f-001") {
-		t.Fatalf("a note taller than its rows does not follow the cursor to its end inside the frame:\n%s", view)
+	if !strings.Contains(view, "END") || strings.Contains(view, "short note") || !strings.Contains(view, "Send back f-001") {
+		t.Fatalf("a note taller than its rows does not follow the cursor to its end inside the pane:\n%s", view)
 	}
 	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	if view := m.View().Content; !strings.Contains(view, "short note") || strings.Contains(view, "END") {
@@ -444,31 +493,30 @@ func TestDetailNoteBoxGrowsFromOneRowToAThirdOfTheWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.Update(runes("s"))
-	textRows := regexp.MustCompile(`(?m)^ │.*│$`)
-	if n := len(textRows.FindAllString(m.View().Content, -1)); n != 1 {
-		t.Fatalf("an empty note box has %d text rows, want 1:\n%s", n, m.View().Content)
+	if n := noteTextRows(m.View().Content); n != 1 {
+		t.Fatalf("an empty note pane has %d text rows, want 1:\n%s", n, m.View().Content)
 	}
 	m.Update(runes(strings.Repeat(" and more", 60) + " END"))
 	view := m.View().Content
-	if n := len(textRows.FindAllString(view, -1)); n != 15/3 || !strings.Contains(view, "END") {
-		t.Fatalf("a long note box has %d text rows, want %d ending at the cursor:\n%s", n, 15/3, view)
+	if n := noteTextRows(view); n != 15/3 || !strings.Contains(view, "END") {
+		t.Fatalf("a long note pane has %d text rows, want %d ending at the cursor:\n%s", n, 15/3, view)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 72, Height: 15})
-	top := regexp.MustCompile(`(?m)^ ╭.*╮$`).FindString(m.View().Content)
+	top := noteTop.FindString(m.View().Content)
 	if style.Width(top) != 72 {
-		t.Fatalf("after a resize the frame is %d columns, want 72:\n%s", style.Width(top), m.View().Content)
+		t.Fatalf("after a resize the pane is %d columns, want 72:\n%s", style.Width(top), m.View().Content)
 	}
 }
 
-func TestDetailEditRowStaysUnframed(t *testing.T) {
+func TestDetailEditOpensItsOwnPane(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
 	m.Update(runes("e"))
 	view := m.View().Content
-	if !strings.Contains(view, "\u270e edit f-001") || strings.ContainsAny(view, "╭╮╰╯") {
-		t.Fatalf("the edit row is a picker and is not framed:\n%s", view)
+	if !strings.Contains(view, "╭─ Edit f-001 ─") || !strings.Contains(view, "│ Label: [issue]  suggestion   question") || !strings.Contains(view, "│ [x] ● blocking") {
+		t.Fatalf("the editor is not its own titled pane:\n%s", view)
 	}
 }
 
@@ -552,7 +600,7 @@ func TestHelpNamesTheNoteKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.help = true
-	if !regexp.MustCompile(`(?m)^ +s +send back; enter sends, esc cancels`).MatchString(m.View().Content) {
+	if !regexp.MustCompile(`(?m)│ s +send back; enter sends, esc cancels`).MatchString(m.View().Content) {
 		t.Fatalf("help does not say how a send-back note is sent or canceled:\n%s", m.View().Content)
 	}
 }
@@ -565,7 +613,7 @@ func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
 	f, _ := m.openedFinding()
 	m.openFileDiff(f)
 	view := m.View().Content
-	for _, want := range []string{"multi.txt \u00b7 f-001 \u00b7 2 findings \u00b7 +3 \u22122", "\u203a    3  \u25c6  +line three", "    21  \u25c6  +inserted after 20", "@@ -18,6 +18,7 @@"} {
+	for _, want := range []string{"╭─ multi.txt · file diff ─", " f-001 ─╮", "│ +3 −2 · 2 findings", "│ > >   3 + line three", "│   >  21 + inserted after 20", "@@ -18,6 +18,7 @@"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("file diff lacks %q:\n%s", want, view)
 		}
@@ -585,11 +633,12 @@ func TestDecisionOpensTheNextFinding(t *testing.T) {
 	tm.Type("a")
 	waitFor(t, tm, "f-002 accepted", "Body three asks about tests.")
 	tm.Type("a")
-	waitFor(t, tm, "f-003 accepted")
+	// The last finding's decision returns to the list, where publishing starts.
+	waitFor(t, tm, "f-003 accepted", "3/3 decided", "Findings")
 
 	view := viewOf(t, tm)
-	if !strings.Contains(view, "Body three asks about tests.") {
-		t.Errorf("the last finding did not stay on screen:\n%s", view)
+	if strings.Contains(view, "Body three asks about tests.") {
+		t.Errorf("the last finding stayed on screen instead of returning to the list:\n%s", view)
 	}
 	d := loadDraft(t, dir)
 	for _, id := range []string{"f-001", "f-002", "f-003"} {
@@ -763,7 +812,7 @@ func TestEditKeepsTheDecision(t *testing.T) {
 	for _, k := range []tea.KeyPressMsg{runeKey("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}} {
 		m.Update(k)
 	}
-	if row := ansi.Strip(m.View().Content); !strings.Contains(row, "> suggestion") || !strings.Contains(row, "not blocking") {
+	if row := ansi.Strip(m.View().Content); !strings.Contains(row, "[suggestion]") || !strings.Contains(row, "[ ] blocking") {
 		t.Fatalf("the editor row does not show the choice:\n%s", row)
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -808,7 +857,7 @@ func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
 		})
 		version := loadDraft(t, dir).Version
 		m.Update(runeKey("e"))
-		if row := ansi.Strip(m.View().Content); !strings.Contains(row, "> "+c.shown) {
+		if row := ansi.Strip(m.View().Content); !strings.Contains(row, "["+c.shown+"]") {
 			t.Fatalf("the row does not open on %q:\n%s", c.shown, row)
 		}
 		// Four moves cycle through issue, suggestion and question back to the finding's own label.
@@ -850,7 +899,7 @@ func TestEditRowWrapsBetweenParts(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.Update(runeKey("e"))
-	row := m.editView()
+	row := strings.Join(m.editView(), "\n")
 	if !strings.Contains(row, m.glyphs.Blocking+" blocking") {
 		t.Fatalf("the blocking glyph wrapped away from its word:\n%s", row)
 	}
@@ -887,8 +936,8 @@ func TestDetailBodyIsSizedForItsOwnFooterAfterHelpOrANote(t *testing.T) {
 	fresh := modelOf(t, dir, testEnv, 80, 24)
 	mustOpenFinding(t, fresh, "f-001")
 	fresh.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
-	if !strings.Contains(fresh.footerKeys(), "\n") {
-		t.Fatalf("the detail footer does not wrap at 80 columns, so this test proves nothing: %q", fresh.footerKeys())
+	if len(fresh.detailFooter()) < 2 {
+		t.Fatalf("the detail footer does not wrap at 80 columns, so this test proves nothing: %q", fresh.detailFooter())
 	}
 
 	for name, keys := range map[string][]tea.KeyPressMsg{
@@ -930,17 +979,18 @@ func headingFixture(t *testing.T) string {
 	return dir
 }
 
-func TestDetailShowsTheHeadingAfterTheRange(t *testing.T) {
+// The heading heads the code pane's body, under the border that carries the range.
+func TestDetailShowsTheHeadingInTheCodePane(t *testing.T) {
 	for _, c := range []struct {
 		name    string
 		env     map[string]string
 		profile colorprofile.Profile
-		want    string
+		sep     string
 	}{
-		{"no color", map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, colorprofile.NoTTY, `(?m)^ multi\.txt:21 · Rollout ` + "`plan`" + `\s*$`},
-		{"ascii", map[string]string{"NO_COLOR": "1", "LANG": "C"}, colorprofile.NoTTY, `(?m)^ multi\.txt:21 - Rollout ` + "`plan`" + `\s*$`},
-		{"true color", map[string]string{"LANG": "en_US.UTF-8"}, colorprofile.TrueColor, `multi\.txt:21 · Rollout ` + "`plan`"},
-		{"16 colors", map[string]string{"LANG": "en_US.UTF-8"}, colorprofile.ANSI, `multi\.txt:21 · Rollout ` + "`plan`"},
+		{"no color", map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, colorprofile.NoTTY, "·"},
+		{"ascii", map[string]string{"NO_COLOR": "1", "LANG": "C"}, colorprofile.NoTTY, "-"},
+		{"true color", map[string]string{"LANG": "en_US.UTF-8"}, colorprofile.TrueColor, "·"},
+		{"16 colors", map[string]string{"LANG": "en_US.UTF-8"}, colorprofile.ANSI, "·"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			m := modelOf(t, headingFixture(t), c.env, 100, 30)
@@ -955,8 +1005,9 @@ func TestDetailShowsTheHeadingAfterTheRange(t *testing.T) {
 				t.Fatal(err)
 			}
 			view := ansi.Strip(m.View().Content)
-			if !regexp.MustCompile(c.want).MatchString(view) {
-				t.Errorf("detail lacks %s:\n%s", c.want, view)
+			want := `(?m) multi\.txt:21 .*\n[^\w\n]*` + regexp.QuoteMeta(c.sep+" Rollout `plan`") + ` `
+			if !regexp.MustCompile(want).MatchString(view) {
+				t.Errorf("detail lacks %s:\n%s", want, view)
 			}
 		})
 	}
@@ -967,15 +1018,16 @@ func TestDetailWithoutAHeadingIsUnchanged(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	if view := m.View().Content; !regexp.MustCompile(`(?m)^ multi\.txt:3\s*$`).MatchString(view) {
-		t.Errorf("detail location line changed:\n%s", view)
+	// The pane's first row is a numbered code line.
+	if view := m.View().Content; !regexp.MustCompile(`(?m) multi\.txt:3 .*\n[^\w\n]*\d+ `).MatchString(view) {
+		t.Errorf("the code pane does not start with code:\n%s", view)
 	}
 }
 
 func TestDetailKeepsALongHeadingInsideTheWindow(t *testing.T) {
 	dir := newFixture(t)
 	d := loadDraft(t, dir)
-	d.Findings[1].Location.Heading = strings.Repeat("A long heading ", 3) + "END"
+	d.Findings[1].Location.Heading = strings.Repeat("A long heading ", 5) + "END"
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
 		t.Fatal(err)
 	}
@@ -992,5 +1044,9 @@ func TestDetailKeepsALongHeadingInsideTheWindow(t *testing.T) {
 	// The row wraps rather than clips, so the heading's last word shows.
 	if !strings.Contains(view, "END") {
 		t.Errorf("the heading's last word is cut:\n%s", view)
+	}
+	// The wrapped row hangs under the heading's text, past the separator.
+	if !regexp.MustCompile(`(?m)· A long heading.*\n.*│ {3}[A-Za-z]`).MatchString(view) {
+		t.Errorf("the wrapped heading row does not hang under its text:\n%s", view)
 	}
 }

@@ -33,11 +33,12 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	if !strings.Contains(m.View().Content, "your message") {
 		t.Errorf("the confirmation opens without the message input:\n%s", m.View().Content)
 	}
-	// esc hands the keyboard back to the confirmation, which is where its own keys are live.
+	// esc hands the keyboard back to the confirmation, which is where its own keys are live; v shows the Markdown.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m.Update(runes("v"))
 	view := m.View().Content
 	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
-		"Publish - acme/widgets#42 - comment - inline blocking (1)", "review body", "inline comments (1)", "y/p publish this review"} {
+		" loupe   acme/widgets#42", "+- Publish review -", " comment - inline blocking (1) -+", "inline comments (1)", "y/p publish this review"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("review view lacks %q:\n%s", want, view)
 		}
@@ -61,11 +62,13 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") {
 		t.Errorf("JSON view after %v:\n%s", toggle, json)
 	}
-	if _, cmd := m.Update(toggle); cmd != nil {
-		t.Fatalf("toggle %v ended the program", toggle)
+	for range 2 {
+		if _, cmd := m.Update(toggle); cmd != nil {
+			t.Fatalf("toggle %v ended the program", toggle)
+		}
 	}
 	if m.View().Content != view {
-		t.Errorf("toggling %v twice did not return to the review:\n%s", toggle, m.View().Content)
+		t.Errorf("toggling %v round the review and back did not return to the Markdown:\n%s", toggle, m.View().Content)
 	}
 	if m.Confirmed() {
 		t.Fatal("confirmed without y")
@@ -81,6 +84,8 @@ func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	typeInto(m, "Fix the ETag path first.")
+	// The slot is checked against the Markdown, whose details tag marks where the findings begin.
+	m.confirm.shows = showMarkdown
 	view := m.View().Content
 	// Wrapped at this width, so the first paragraph is matched by its ends.
 	for _, want := range []string{"The cache bug is the blocker", "later.", "Fix the ETag path first."} {
@@ -110,9 +115,16 @@ func TestConfirmTypesTheOpeningInPlace(t *testing.T) {
 func TestConfirmShowsPillsAsWords(t *testing.T) {
 	m := NewConfirmModel(pillPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "all", 1))
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 60})
+	m.confirm.shows = showMarkdown
 	view := ansi.Strip(m.confirm.content(m.shell))
 	if strings.Contains(view, "<picture>") || strings.Count(view, "<b>issue</b> MAJOR: T") < 2 {
 		t.Errorf("want the pill shown as MAJOR in the body and the inline comment:\n%s", view)
+	}
+	// The readable view, which the confirmation opens on, shows the pill as its word too (review finding).
+	m.confirm.shows = showReview
+	view = ansi.Strip(m.confirm.content(m.shell))
+	if strings.Contains(view, "<picture>") || strings.Contains(view, "srcset") || strings.Count(view, "issue MAJOR: T") < 2 {
+		t.Errorf("want the pill shown as MAJOR in the readable body and the inline comment:\n%s", view)
 	}
 }
 
@@ -130,13 +142,13 @@ func TestConfirmShowsTheRecordAsANote(t *testing.T) {
 func TestConfirmBoxIsEvenlySpaced(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
-	g := m.shell.glyphs
+	g := paneFrame(m.shell.glyphs)
 	rows := strings.Split(m.confirm.content(m.shell), "\n")
 	// The ASCII tier draws every corner as +, so the edges are the first and last cornered rows, not two shapes.
 	top, bottom := -1, -1
 	for i, row := range rows {
 		trimmed := strings.TrimSpace(row)
-		if !strings.HasPrefix(trimmed, g.BoxTL) && !strings.HasPrefix(trimmed, g.BoxBL) {
+		if !strings.HasPrefix(trimmed, g.tl) && !strings.HasPrefix(trimmed, g.bl) {
 			continue
 		}
 		if top < 0 {
@@ -291,30 +303,30 @@ func TestConfirmMarksTheMessageBlock(t *testing.T) {
 		t.Errorf("the hint outlived the empty message:\n%s", view)
 	}
 	// The block is read on its own: the body's own blockquotes carry the ASCII tier's edge glyph too.
-	g := m.shell.glyphs
-	block := strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")
+	g := paneFrame(m.shell.glyphs)
+	block := strings.Split(m.confirm.messageView(m.shell, 60-style.PaneCols), "\n")
 	if len(block) < minMessageRows+2 {
 		t.Fatalf("the box is %d rows, want the frame and at least %d: %q", len(block), minMessageRows, block)
 	}
 	head, foot := strings.TrimSpace(block[0]), strings.TrimSpace(block[len(block)-1])
-	if !strings.HasPrefix(head, g.BoxTL) || !strings.HasSuffix(head, g.BoxTR) || !strings.Contains(head, messageTitle) || !strings.Contains(head, messageWay) {
-		t.Errorf("the top edge does not name the field or the way out: %q", head)
+	if !strings.HasPrefix(head, g.tl) || !strings.HasSuffix(head, g.tr) || !strings.Contains(head, messageTitle) || !strings.Contains(head, "typing") {
+		t.Errorf("the top edge does not name the field or say it has the keyboard: %q", head)
 	}
-	if !strings.HasPrefix(foot, g.BoxBL) || !strings.HasSuffix(foot, g.BoxBR) {
-		t.Errorf("the box is not closed: %q", foot)
+	if !strings.HasPrefix(foot, g.bl) || !strings.HasSuffix(foot, g.br) || !strings.Contains(foot, messageWay) {
+		t.Errorf("the box is not closed or does not name the way out: %q", foot)
 	}
 	for i, row := range block[1 : len(block)-1] {
-		if trimmed := strings.TrimSpace(row); !strings.HasPrefix(trimmed, g.Gutter) || !strings.HasSuffix(trimmed, g.Gutter) {
+		if trimmed := strings.TrimSpace(row); !strings.HasPrefix(trimmed, g.v) || !strings.HasSuffix(trimmed, g.v) {
 			t.Errorf("row %d is outside the frame: %q", i+1, row)
 		}
 	}
 	if !strings.Contains(view, strings.TrimSpace(block[0])) {
 		t.Errorf("the framed block is not what the screen shows:\n%s", view)
 	}
-	// Blurring leaves the box drawn, and its top edge names the way back in.
+	// Blurring leaves the box drawn, and its bottom edge names the way back in.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	blurred := strings.TrimSpace(strings.Split(m.confirm.messageView(m.shell, style.Content(60)-1), "\n")[0])
-	if !strings.HasPrefix(blurred, g.BoxTL) || !strings.Contains(blurred, messageWayBlurred) {
+	blurred := strings.Split(m.confirm.messageView(m.shell, 60-style.PaneCols), "\n")
+	if top, bottom := blurred[0], blurred[len(blurred)-1]; !strings.HasPrefix(top, g.tl) || strings.Contains(top, "typing") || !strings.Contains(bottom, messageWayBlurred) {
 		t.Errorf("the blurred box lost its frame or its way in: %q", blurred)
 	}
 }
@@ -328,21 +340,21 @@ func TestConfirmBoxIsTintedWholeRows(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
 
 	// An empty box is the worst case: a placeholder row whose tail the textarea never fills, then empty rows.
-	rows := strings.Split(m.confirm.messageView(m.shell, style.Content(80)-1), "\n")
+	rows := strings.Split(m.confirm.messageView(m.shell, 80-style.PaneCols), "\n")
 	content := rows[1 : len(rows)-1]
 	if len(content) < minMessageRows {
 		t.Fatalf("the box holds %d rows, want %d", len(content), minMessageRows)
 	}
 	for i, row := range content {
-		// Every cell between the frame glyphs, which carry no background of their own, nor does the margin left of
-		// the box: a row is one margin column, two frame columns and the field between them.
-		if want, got := style.Width(row)-3, tintedCells(row); got != want {
+		// Every cell of the field is tinted. The pane's two border columns and the padding column inside each carry
+		// no background of their own.
+		if want, got := style.Width(row)-4, tintedCells(row); got != want {
 			t.Errorf("row %d is tinted over %d of its %d cells: %q", i, got, want, row)
 		}
 	}
 
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	for i, row := range strings.Split(m.confirm.messageView(m.shell, style.Content(80)-1), "\n") {
+	for i, row := range strings.Split(m.confirm.messageView(m.shell, 80-style.PaneCols), "\n") {
 		if n := tintedCells(row); n != 0 {
 			t.Errorf("row %d of the blurred box is tinted over %d cells: %q", i, n, row)
 		}
@@ -472,6 +484,8 @@ func TestConfirmLeavesThePayloadToTypeTheMessage(t *testing.T) {
 		m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 		m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 		m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+		// v steps from the review to its Markdown, then to the payload.
+		m.Update(runes("v"))
 		m.Update(runes("v"))
 		if !strings.Contains(m.View().Content, `"event": "COMMENT"`) {
 			t.Fatalf("v did not show the payload:\n%s", m.View().Content)
@@ -562,7 +576,7 @@ func TestConfirmViewShowsMovedHead(t *testing.T) {
 	if strings.ContainsRune(view, '\x1b') {
 		t.Errorf("view has a raw escape:\n%q", view)
 	}
-	if strings.Index(view, "Head moved") > strings.Index(view, "review body") {
+	if strings.Index(view, "Head moved") > strings.Index(view, messageTitle) {
 		t.Errorf("the moved-head block comes after the body:\n%s", view)
 	}
 	if strings.Index(view, "and 21 earlier") > strings.Index(view, "0100000") {
@@ -587,8 +601,9 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "none", 0))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := m.View().Content
-	if !strings.Contains(view, "row 001") || strings.Contains(view, "inline comments (0)") || !strings.Contains(view, "lines 1-20 of 203") {
-		t.Fatalf("top of a long review:\n%s", view)
+	h := m.confirm.scroll.Height()
+	if !strings.Contains(view, "row 001") || strings.Contains(view, "inline comments (0)") || !strings.Contains(view, fmt.Sprintf("lines 1-%d of 202", h)) || h < 15 {
+		t.Fatalf("top of a long review, %d rows:\n%s", h, view)
 	}
 
 	keys := []tea.KeyPressMsg{{Code: tea.KeyEnd}, {Code: tea.KeyHome}, {Code: tea.KeyPgDown}, {Code: tea.KeyPgUp}, {Code: tea.KeyDown}, {Code: tea.KeyUp},
@@ -599,7 +614,7 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 		}
 	}
 	view = m.View().Content
-	if !strings.Contains(view, "inline comments (0)") || strings.Contains(view, "row 001") || !strings.Contains(view, "lines 184-203 of 203") {
+	if !strings.Contains(view, "inline comments (0)") || strings.Contains(view, "row 001") || !strings.Contains(view, fmt.Sprintf("lines %d-202 of 202", 203-h)) {
 		t.Fatalf("after end:\n%s", view)
 	}
 	if m.Confirmed() {
@@ -614,8 +629,8 @@ func TestConfirmCancelSentenceSurvivesSixtyColumns(t *testing.T) {
 	// The message input opens focused; the cancel sentence belongs to the confirmation's own keys.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	lines := strings.Split(m.View().Content, "\n")
-	// At this width the footer takes two lines, and the cancel sentence moves to the notice line above them.
-	tail := strings.Join(lines[len(lines)-3:], "\n")
+	// At this width the footer has no room for it, and the cancel sentence moves into the pane just above.
+	tail := strings.Join(lines[len(lines)-4:], "\n")
 	if !strings.Contains(tail, confirmCancel) || !strings.Contains(tail, "y/p publish this review") {
 		t.Errorf("60-column confirmation lost the cancel sentence or y/p:\n%s", strings.Join(lines, "\n"))
 	}
@@ -631,8 +646,9 @@ func TestConfirmHeaderKeepsActionAndMovedHead(t *testing.T) {
 		for range 150 {
 			m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 		}
-		header := strings.Split(m.View().Content, "\n")[0]
-		if !strings.Contains(header, "request-changes") || !strings.Contains(header, "head moved +") || strings.Contains(header, "...") || style.Width(header) != width {
+		// The pane's top border carries them, above the scrolling preview.
+		header := strings.Split(m.View().Content, "\n")[bodyTop(24)]
+		if !strings.Contains(header, "request-changes") || !strings.Contains(header, "head moved +") || style.Width(header) != width {
 			t.Errorf("width %d: header lost the action or the moved head: %q", width, header)
 		}
 	}
@@ -657,8 +673,9 @@ func TestConfirmOnlyYAndPConfirm(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			tm := newTestModel(t, NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1)),
 				100, 40)
-			waitFor(t, tm, "<details open>")
+			waitFor(t, tm, messageTitle)
 			tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
+			tm.Send(runes("v"))
 			tm.Send(runes("v"))
 			waitFor(t, tm, `"event": "COMMENT"`)
 			tm.Send(c.key)
@@ -677,7 +694,7 @@ func TestPublishFlowKeepsTheMessageAcrossACancel(t *testing.T) {
 	gh := newPublishFake(t)
 	dir := readyFixture(t, "reviewer", "author")
 	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	reachConfirmation(t, tm)
 	tm.Type("Mine to own.")
 	waitFor(t, tm, "Mine to own.")
@@ -858,12 +875,13 @@ func TestPublishKeyRefusedWhenNotReady(t *testing.T) {
 
 func TestActionPickerDisablesBlockedApprove(t *testing.T) {
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), nil)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	tm.Type("p")
-	waitFor(t, tm, "> comment", "  approve", "unavailable: cannot approve while publishable findings are blocking: f-001")
+	// The popup wraps the reason, so it is looked for in pieces that stay on one row.
+	waitFor(t, tm, "> comment", "  approve", "unavailable: cannot approve while", "f-001")
 	tm.Type("j")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "or exclude or unblock the finding in loupe review")
+	waitFor(t, tm, "or exclude or unblock", "the finding in loupe review")
 	view := viewOf(t, tm)
 	if strings.Contains(view, "cannot request changes") {
 		t.Errorf("request-changes is disabled:\n%s", view)
@@ -872,11 +890,10 @@ func TestActionPickerDisablesBlockedApprove(t *testing.T) {
 
 func TestActionPickerOffersOnlyCommentOnOwnPullRequest(t *testing.T) {
 	tm := startPublishApp(t, readyFixture(t, "author", "author"), nil)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	tm.Type("p")
-	waitFor(t, tm, "> comment",
-		"unavailable: author is the author of this pull request and cannot approve it",
-		"unavailable: author is the author of this pull request and cannot request changes on it")
+	// The popup wraps each reason, so it is looked for in pieces that stay on one row.
+	waitFor(t, tm, "> comment", "unavailable: author is the author", "cannot approve it", "cannot request changes")
 	quitFromPicker(t, tm)
 }
 
@@ -911,13 +928,13 @@ func TestPublishFlowDeclineSendsNothing(t *testing.T) {
 	gh := newPublishFake(t)
 	dir := readyFixture(t, "reviewer", "author")
 	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	tm.Type("p")
 	waitFor(t, tm, "> comment")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	waitFor(t, tm, "> none")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "<details open>", "multi.txt:3", "Publish - Step 3 of 3 - acme/widgets#42 - comment")
+	waitFor(t, tm, messageTitle, "multi.txt:3", "comment - inline none (0)")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tm.Type("n")
 	waitFor(t, tm, "publish canceled; nothing was sent")
@@ -932,7 +949,7 @@ func TestPublishFlowSendsAndShowsURL(t *testing.T) {
 	gh := newPublishFake(t)
 	dir := readyFixture(t, "reviewer", "author")
 	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	tm.Type("p")
 	waitFor(t, tm, "> comment")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -940,7 +957,7 @@ func TestPublishFlowSendsAndShowsURL(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
 	waitFor(t, tm, "> blocking")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "<details open>", "inline blocking (1)")
+	waitFor(t, tm, messageTitle, "inline blocking (1)")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tm.Type("y")
 	waitFor(t, tm, "Published", "https://github.com/acme/widgets/pull/42#pullrequestreview-")
@@ -960,7 +977,7 @@ func TestPublishFlowShowsRefusalAndReturnsToList(t *testing.T) {
 	gh := newPublishFake(t)
 	gh.SetHead("acme", "widgets", 42, "3333333333333333333333333333333333333333")
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	tm.Type("p")
 	waitFor(t, tm, "> comment")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -982,13 +999,13 @@ func TestPublishingViewIgnoresKeysWhileSending(t *testing.T) {
 		<-release
 	})
 	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	tm.Type("p")
 	waitFor(t, tm, "> comment")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	waitFor(t, tm, "> none")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "<details open>")
+	waitFor(t, tm, messageTitle)
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tm.Type("y")
 	select {
@@ -1032,14 +1049,14 @@ func TestConfirmNamesTheReviewItEdits(t *testing.T) {
 		m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("my-organization/my-repository#1234", "comment", "none", 0))
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
 		view := m.View().Content
-		if header := strings.Split(view, "\n")[0]; !strings.Contains(header, "edits in place") || !strings.Contains(header, "comment") {
+		if header := strings.Split(view, "\n")[bodyTop(40)]; !strings.Contains(header, "edits in place") || !strings.Contains(header, "comment") {
 			t.Errorf("width %d: header %q", width, header)
 		}
 		// A narrow window breaks the URL across lines, so only its unbreakable head is looked for.
-		if !strings.Contains(view, "#pullrequestreview-") || !strings.Contains(view, "earlier rounds included") {
+		if joined := paneConcat(view); !strings.Contains(joined, "#pullrequestreview-") || !strings.Contains(paneText(view), "earlier rounds included") {
 			t.Errorf("width %d: the edited review's URL is not shown:\n%s", width, view)
 		}
-		if strings.Index(view, "#pullrequestreview-") > strings.Index(view, "review body") {
+		if strings.Index(view, "#pullrequestreview-") > strings.Index(view, messageTitle) {
 			t.Errorf("width %d: the edited review is named after the body:\n%s", width, view)
 		}
 	}
@@ -1108,9 +1125,15 @@ func TestConfirmTypesIntoAStickyRound(t *testing.T) {
 	if !m.confirm.inline() || m.confirm.slotErr != nil {
 		t.Fatalf("the message is not typed in place: %v", m.confirm.slotErr)
 	}
+	m.confirm.shows = showMarkdown
 	view := ansi.Strip(m.confirm.content(m.shell))
 	if !strings.Contains(view, "<!-- loupe-round 1 -->") || strings.Contains(view, "commit=") {
 		t.Fatalf("the anchor is not shown as its round:\n%s", view)
+	}
+	// The readable view shows it as a dim note naming its round (review finding).
+	m.confirm.shows = showReview
+	if view := ansi.Strip(m.confirm.content(m.shell)); !strings.Contains(view, m.shell.glyphs.Sep+" loupe-round 1") || strings.Contains(view, "commit=") {
+		t.Fatalf("the readable view does not show the anchor as its round:\n%s", view)
 	}
 	if !strings.Contains(m.confirm.shown.Body, " prose=2 ") {
 		t.Fatalf("the body y sends does not count the message:\n%s", m.confirm.shown.Body)
@@ -1150,7 +1173,7 @@ func TestConfirmNamesAnEditedRound(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
 	notice := publish.EditedNotice([]int{1})
 	view := ansi.Strip(m.confirm.content(m.shell))
-	if i := strings.Index(view, notice); i < 0 || i > strings.Index(view, "review body") {
+	if i := strings.Index(view, notice); i < 0 || i > strings.Index(view, messageTitle) {
 		t.Fatalf("the edited round is not named before the body:\n%s", view)
 	}
 	typeInto(m, "Short.")

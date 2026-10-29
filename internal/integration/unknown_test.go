@@ -147,7 +147,7 @@ func TestUnknownOutcomeWithoutMatchNeedsRetry(t *testing.T) {
 	h.GH.SetHead(owner, repo, number, head)
 
 	s := h.Start("publish", runRef, "--action", "comment", "--retry-unknown")
-	s.WaitFor("new line", "<details open>")
+	s.WaitFor("new line", "your message")
 	confirm(s, "", "y")
 	stdout, stderr, exit := s.Wait()
 	if exit != 0 {

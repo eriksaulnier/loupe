@@ -170,6 +170,21 @@ func TestPluginSkill(t *testing.T) {
 	}
 }
 
+// Step 5 asks for the short bulleted summary the review list expands by default (specs/038-review-visual-design
+// FR-005). It asks; nothing validates it, so the wording is the whole contract.
+func TestPluginSkillAsksForAShortBulletedSummary(t *testing.T) {
+	body := skillBody(t, "human-review")
+	_, step, ok := strings.Cut(body, "## 5. Set the summary")
+	if !ok {
+		t.Fatal("human-review/SKILL.md has no step 5")
+	}
+	step, _, _ = strings.Cut(step, "\n## ")
+	want := "Write the summary as at most four short Markdown bullets: what the pull request changes, what blocks it, and what you did not check."
+	if !strings.Contains(step, want) {
+		t.Errorf("step 5 does not contain %q:\n%s", want, step)
+	}
+}
+
 // The rules and the refused-handoff fallback are pinned as whole lines, so weakening MUST NOT or dropping a route
 // fails.
 func TestPluginSkillProhibitions(t *testing.T) {

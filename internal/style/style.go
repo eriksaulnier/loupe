@@ -70,16 +70,11 @@ type GlyphSet struct {
 	Note      string
 	Reply     string
 	Cursor    string
-	Anchor    string
-	Gutter    string
 	Ellipsis  string
 	HRule     string
 	Quote     string
-	// Sep joins the parts of a header; Mark stands in the file diff's gutter for a line a finding is filed against.
-	Sep  string
-	Mark string
-	// BoxTL, BoxTR, BoxBL and BoxBR are the corners of an input's frame; its edges are HRule and Gutter.
-	BoxTL, BoxTR, BoxBL, BoxBR string
+	// Sep joins the parts of a header.
+	Sep string
 	// Up, Down, Left and Right name the arrow keys in footers and help; the ASCII tier spells them out.
 	Up, Down, Left, Right string
 
@@ -108,9 +103,8 @@ var (
 		Note:      "\uf27a", // nf-fa-commenting
 		Reply:     "\uf112", // nf-fa-reply
 		Cursor:    "\uf054", // nf-fa-chevron_right
-		Anchor:    "▎", Gutter: "│", Ellipsis: "…", HRule: "─", Quote: "┃",
-		Sep: "·", Mark: "◆", Up: "↑", Down: "↓", Left: "←", Right: "→",
-		BoxTL: "╭", BoxTR: "╮", BoxBL: "╰", BoxBR: "╯",
+		Ellipsis:  "…", HRule: "─", Quote: "┃",
+		Sep: "·", Up: "↑", Down: "↓", Left: "←", Right: "→",
 		File:            "\uf016", // nf-fa-file_o
 		General:         "\uf0ac", // nf-fa-globe
 		PR:              "\uf407", // nf-oct-git_pull_request
@@ -127,17 +121,15 @@ var (
 	unicodeGlyphs = GlyphSet{
 		Tier:     Unicode,
 		Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●", Note: "✎", Reply: "↳",
-		Cursor: "›", Anchor: "▎", Gutter: "│", Ellipsis: "…", HRule: "─", Quote: "┃",
-		Sep: "·", Mark: "◆", Up: "↑", Down: "↓", Left: "←", Right: "→",
-		BoxTL: "╭", BoxTR: "╮", BoxBL: "╰", BoxBR: "╯",
+		Cursor: "›", Ellipsis: "…", HRule: "─", Quote: "┃",
+		Sep: "·", Up: "↑", Down: "↓", Left: "←", Right: "→",
 		Published: "✓", Canceled: "–",
 	}
 	asciiGlyphs = GlyphSet{
 		Tier:     ASCII,
 		Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!", Note: "~", Reply: "->",
-		Cursor: ">", Anchor: ">", Gutter: "|", Ellipsis: "...", HRule: "-", Quote: "|",
-		Sep: "-", Mark: "*", Up: "up", Down: "down", Left: "left", Right: "right",
-		BoxTL: "+", BoxTR: "+", BoxBL: "+", BoxBR: "+",
+		Cursor: ">", Ellipsis: "...", HRule: "-", Quote: "|",
+		Sep: "-", Up: "up", Down: "down", Left: "left", Right: "right",
 		Published: "+", Canceled: "-",
 	}
 )
@@ -225,8 +217,11 @@ type Style struct {
 
 	Bold, Dim, Accent, Good, Warn, Bad, Note, Head, Cursor lipgloss.Style
 	Caution                                                lipgloss.Style
-	Anchor, Selected                                       lipgloss.Style
-	Added, Removed                                         lipgloss.Style
+	Selected                                               lipgloss.Style
+
+	// review is set by UseReviewTheme; rv is the interactive palette, resolved for this output either way.
+	review bool
+	rv     reviewPalette
 }
 
 // New builds styles for one output and its environment.
@@ -278,8 +273,7 @@ func (s *Style) SetDarkBackground(dark bool) {
 	s.Head = s.Bold
 	s.Cursor = s.Accent
 	s.Selected = s.NewStyle().Background(s.catppuccin(swatch{"#303244", 8, 59}, swatch{"#ccd0da", 7, 188}))
-	s.Anchor = s.NewStyle().Bold(s.Color).Background(s.catppuccin(swatch{"#3b3a2e", 3, 58}, swatch{"#f3e9c8", 9, 224}))
-	s.Added, s.Removed = s.Good, s.Bad
+	s.applyReviewTheme()
 }
 
 // NewStyle creates an unadorned layout style.
@@ -338,12 +332,6 @@ func Severity(word string) Kind {
 	return Dim
 }
 
-// On paints a style onto a background, for the pieces of a row that is one painted band: an inner reset would
-// otherwise cut the band at the first colored word.
-func (s Style) On(bg, fg lipgloss.Style) lipgloss.Style {
-	return fg.Background(bg.GetBackground())
-}
-
 // Brand is the program name as it appears at the head of every screen.
 func (s Style) Brand() string { return s.Bold.Render("loupe") }
 
@@ -351,101 +339,6 @@ func (s Style) Brand() string { return s.Bold.Render("loupe") }
 func (s Style) Heading(text string) string {
 	r, size := utf8.DecodeRuneInString(text)
 	return s.Head.Render(string(unicode.ToUpper(r)) + text[size:])
-}
-
-// Chip is a glyph and a word in one color: the unit every state is shown as.
-func (s Style) Chip(k Kind, glyph, text string) string {
-	return s.Of(k).Render(strings.TrimSpace(glyph + " " + text))
-}
-
-// HeaderPart is one piece of a header line.
-type HeaderPart struct {
-	Text string
-	// Drop is 0 for a part that never gives way; among the rest, the highest gives way first.
-	Drop int
-	// Trunc lets a droppable part shrink to headerTruncFloor cells before it drops.
-	Trunc bool
-	// Squeeze marks the required part that truncates once nothing is left to drop; Left keeps its tail.
-	Squeeze, Left bool
-	Kind          Kind
-	Bold          bool
-}
-
-// headerTruncFloor is the narrowest a truncating part gets before dropping it reads better than keeping it.
-const headerTruncFloor = 12
-
-// Header is the flat line every full-screen view opens with: parts joined by a dim separator after a one-cell margin,
-// and right at the right edge, at least two cells away. Optional parts give way in Drop order, and right never
-// truncates. The line is exactly width cells.
-func (s Style) Header(parts []HeaderPart, right string, width int) string {
-	sep := " " + s.Glyphs.Sep + " "
-	kept := make([]HeaderPart, 0, len(parts))
-	for _, p := range parts {
-		if p.Text != "" {
-			kept = append(kept, p)
-		}
-	}
-	room := width - 2
-	if right != "" {
-		room -= Width(right) + 2
-	}
-	total := func() int {
-		n := 0
-		for i, p := range kept {
-			if i > 0 {
-				n += Width(sep)
-			}
-			n += Width(p.Text)
-		}
-		return n
-	}
-	for len(kept) > 0 && total() > room {
-		over := total() - room
-		drop := -1
-		for i, p := range kept {
-			if p.Drop > 0 && (drop < 0 || p.Drop > kept[drop].Drop) {
-				drop = i
-			}
-		}
-		if drop < 0 {
-			i := slices.IndexFunc(kept, func(p HeaderPart) bool { return p.Squeeze })
-			if i < 0 {
-				i = len(kept) - 1
-			}
-			target := Width(kept[i].Text) - over
-			if kept[i].Left {
-				kept[i].Text = s.TruncLeft(kept[i].Text, target)
-			} else {
-				kept[i].Text = s.TruncRight(kept[i].Text, target)
-			}
-			break
-		}
-		if target := Width(kept[drop].Text) - over; kept[drop].Trunc && target >= headerTruncFloor {
-			kept[drop].Text = s.TruncRight(kept[drop].Text, target)
-			continue
-		}
-		kept = slices.Delete(kept, drop, drop+1)
-	}
-	var b strings.Builder
-	b.WriteString(" ")
-	for i, p := range kept {
-		if i > 0 {
-			b.WriteString(s.Dim.Render(sep))
-		}
-		st := s.Of(p.Kind)
-		if p.Bold {
-			st = s.Emphasis(st)
-		}
-		b.WriteString(st.Render(p.Text))
-	}
-	line := b.String()
-	if right != "" {
-		line += strings.Repeat(" ", max(2, width-1-Width(line)-Width(right))) + right
-	}
-	if Width(line) > width {
-		return ansi.Truncate(line, width, "")
-	}
-	return Pad(line, width)
 }
 
 // Role is what a footer hint is for, which decides when it gives way.
@@ -464,148 +357,13 @@ const (
 	RoleHelp
 )
 
-// Hint is one entry on a footer. KeyKind and VerbKind left Plain mean the accent key and the dim verb; a Dim key is
-// not bold, so an unavailable action reads as one.
+// Hint is one entry on a footer.
 type Hint struct {
 	Key, Verb string
 	Role      Role
-	// Next says the action opens the next finding, which the widest footer spells out.
-	Next              bool
-	KeyKind, VerbKind Kind
-}
-
-// Footer lays hints out on at most two lines of width cells, joined by a newline. It drops the "+ next" suffixes and
-// tightens the gaps before taking a second line, and takes a second line before giving up any hint; past that it gives
-// way step by step: navigation, then the file hint with tighter gaps, then decision verbs. It reports whether the
-// result fits.
-func (s Style) Footer(hints []Hint, width int) (string, bool) {
-	all := func(Hint) bool { return true }
-	noNav := func(h Hint) bool { return h.Role != RoleNav }
-	noFile := func(h Hint) bool { return h.Role != RoleNav && h.Role != RoleFile }
-	levels := []struct {
-		keep     func(Hint) bool
-		next     bool
-		gap      int
-		keysOnly bool
-		lines    int
-	}{
-		{all, true, 3, false, 1},
-		{all, false, 3, false, 1},
-		{all, false, 2, false, 1},
-		{all, false, 3, false, 2},
-		{noNav, false, 3, false, 2},
-		{noFile, false, 2, false, 2},
-		{noFile, false, 2, true, 2},
-	}
-	var line string
-	for _, lv := range levels {
-		var segs, decisions []string
-		for _, h := range hints {
-			if !lv.keep(h) {
-				continue
-			}
-			if lv.keysOnly && h.Role == RoleDecision {
-				if len(decisions) == 0 {
-					segs = append(segs, "")
-				}
-				decisions = append(decisions, h.Key)
-				continue
-			}
-			segs = append(segs, s.hint(h, lv.next))
-		}
-		if len(decisions) > 0 {
-			segs[slices.Index(segs, "")] = s.Emphasis(s.Accent).Render(strings.Join(decisions, " "))
-		}
-		gap := strings.Repeat(" ", lv.gap)
-		line = strings.Join(segs, gap)
-		if lines, ok := fillLines(segs, gap, width, lv.lines); ok {
-			return strings.Join(lines, "\n"), true
-		}
-	}
-	return line, false
-}
-
-// fillLines breaks only between segments, filling each line before starting the next.
-func fillLines(segs []string, gap string, width, most int) ([]string, bool) {
-	var lines []string
-	line := ""
-	for _, seg := range segs {
-		switch {
-		case line == "":
-			line = seg
-		case Width(line+gap+seg) <= width:
-			line += gap + seg
-		default:
-			lines = append(lines, line)
-			line = seg
-		}
-	}
-	lines = append(lines, line)
-	if len(lines) > most {
-		return nil, false
-	}
-	for _, l := range lines {
-		if Width(l) > width {
-			return nil, false
-		}
-	}
-	return lines, true
-}
-
-func (s Style) hint(h Hint, next bool) string {
-	keyKind, verbKind := h.KeyKind, h.VerbKind
-	if keyKind == Plain {
-		keyKind = Accent
-	}
-	if verbKind == Plain {
-		verbKind = Dim
-	}
-	out := s.Of(verbKind).Render(h.Verb)
-	if h.Key != "" {
-		key := s.Of(keyKind)
-		if keyKind != Dim {
-			key = s.Emphasis(key)
-		}
-		out = key.Render(h.Key) + " " + out
-	}
-	if next && h.Next {
-		out += s.Dim.Render(" + next")
-	}
-	return out
-}
-
-// Box frames rows the human types prose into, at width columns including the frame. A terminal has no form field,
-// so a border is what says one is here, and loupe frames nothing else so a frame stays unambiguous. title names the
-// field on the top edge and right names the way out, both dropped in that order when the width is short.
-// The frame takes its color from k, so focus is a color change rather than a second shape.
-func (s Style) Box(rows []string, width int, title, right string, k Kind) []string {
-	g, edge := s.Glyphs, s.Of(k)
-	inner := max(1, width-2)
-	head := g.BoxTL + s.boxEdge(inner, title, right) + g.BoxTR
-	out := make([]string, 0, len(rows)+2)
-	out = append(out, edge.Render(head))
-	for _, row := range rows {
-		out = append(out, edge.Render(g.Gutter)+Pad(row, inner)+edge.Render(g.Gutter))
-	}
-	return append(out, edge.Render(g.BoxBL+strings.Repeat(g.HRule, inner)+g.BoxBR))
-}
-
-// boxEdge is the top edge with what fits of the title and the way out, each given up whole rather than truncated.
-func (s Style) boxEdge(inner int, title, right string) string {
-	h := s.Glyphs.HRule
-	for _, parts := range [][2]string{{title, right}, {title, ""}, {"", ""}} {
-		left, tail := "", ""
-		if parts[0] != "" {
-			left = h + " " + parts[0] + " "
-		}
-		if parts[1] != "" {
-			tail = " " + parts[1] + " " + h
-		}
-		if fill := inner - ansi.StringWidth(left) - ansi.StringWidth(tail); fill >= 0 {
-			return left + strings.Repeat(h, fill) + tail
-		}
-	}
-	return strings.Repeat(h, inner)
+	// Unavailable is why the action cannot run now. KeyGroups draws such a hint dim, and under NO_COLOR, where dim is
+	// invisible, spells the reason out in parentheses.
+	Unavailable string
 }
 
 // Link makes text a terminal hyperlink to url where escapes are drawn. A URL that LinkableURL refuses stays text.

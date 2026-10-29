@@ -57,6 +57,10 @@ must pass the Markdown allowlist, and code in a suggestedFix belongs in a fence,
 is published as Markdown. references holds at most six http or https URLs with a host and no
 userinfo, each at most 200 bytes with no whitespace, control or format characters, <, > or
 backticks; an empty list is stored as absent; they are never fetched.
+title, body, impact and suggestedFix refuse a finding id, f- and three or more digits such as
+f-002, with markdown and details.rule finding-id. Ids restart at f-001 every round and the review
+shows none, so name an earlier finding by its subject. A fence or an http or https URL is exempt;
+a code span is not, so a codebase's own f-123 goes in a fence and the title is worded around it.
 A batch is stored entirely or not at all. A refused batch checks every entry: code, message, fix
 and details describe the first invalid one, whose zero-based position is details.entry, and
 details.entries lists each invalid entry as {entry, code, message, fix, details?}. Each entry

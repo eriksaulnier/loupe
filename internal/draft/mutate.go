@@ -198,12 +198,12 @@ func validateFields(in FindingInput) error {
 		return err
 	}
 	if in.Impact != "" {
-		if err := markdown.Check(in.Impact, markdown.Body, "loupe edit <id> --from -"); err != nil {
+		if err := markdown.Check(in.Impact, markdown.Impact, "loupe edit <id> --from -"); err != nil {
 			return err
 		}
 	}
 	if in.SuggestedFix != "" {
-		if err := markdown.Check(in.SuggestedFix, markdown.Body, "loupe edit <id> --from -"); err != nil {
+		if err := markdown.Check(in.SuggestedFix, markdown.SuggestedFix, "loupe edit <id> --from -"); err != nil {
 			return err
 		}
 	}
@@ -242,6 +242,21 @@ func resolveLocation(in LocationInput, dif *diff.Diff) (*FindingLocation, error)
 	return &FindingLocation{Path: in.Path, Side: side, Line: in.Line, StartLine: in.StartLine}, nil
 }
 
+// checkFindingIDs refuses a finding id in the title, body, impact or suggested fix, in that order. Edit passes ""
+// for a field it leaves unchanged, so a finding stored before the check stays editable.
+func checkFindingIDs(title, body, impact, fix, retry string) error {
+	if err := markdown.TitleFindingIDs(title, retry); err != nil {
+		return err
+	}
+	if err := markdown.FindingIDs(body, markdown.Body, retry); err != nil {
+		return err
+	}
+	if err := markdown.FindingIDs(impact, markdown.Impact, retry); err != nil {
+		return err
+	}
+	return markdown.FindingIDs(fix, markdown.SuggestedFix, retry)
+}
+
 // EntryFailure is one batch entry that was refused before or during validation.
 type EntryFailure struct {
 	Entry int
@@ -270,6 +285,9 @@ func checkBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) ([
 			continue
 		}
 		loc, err := validateInput(in, dif)
+		if err == nil {
+			err = checkFindingIDs(in.Title, in.Body, in.Impact, in.SuggestedFix, "run loupe add again")
+		}
 		if err != nil {
 			failures = append(failures, EntryFailure{Entry: i, Err: err})
 		}
@@ -324,6 +342,9 @@ func alsoRefused(rest []EntryFailure) string {
 // did not all land.
 func SetSummary(d *Draft, summary string, expectFindings *int, by string) error {
 	if err := markdown.Check(summary, markdown.Summary, "loupe summary --from -"); err != nil {
+		return err
+	}
+	if err := markdown.FindingIDs(summary, markdown.Summary, "run loupe summary --from - again"); err != nil {
 		return err
 	}
 	if expectFindings != nil {
@@ -572,6 +593,19 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 			Blocking: next.Blocking, Confidence: next.Confidence, Severity: severity, Verified: next.Verified, Impact: next.Impact,
 			References: next.References, SuggestedFix: fix}, dif)
 		if err != nil {
+			return Finding{}, false, err
+		}
+		title, body, impact := next.Title, next.Body, next.Impact
+		if title == stored.Title {
+			title = ""
+		}
+		if body == stored.Body {
+			body = ""
+		}
+		if impact == stored.Impact {
+			impact = ""
+		}
+		if err := checkFindingIDs(title, body, impact, fix, fmt.Sprintf("run loupe edit %s --from - again", next.ID)); err != nil {
 			return Finding{}, false, err
 		}
 	}

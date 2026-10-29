@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 )
@@ -73,6 +74,27 @@ func TestTooSmallAtExactlyTheMinimumIsNot(t *testing.T) {
 	}
 }
 
+// A narrow window wraps the words inside the pane instead of cutting them, so the sizes and the way out stay whole.
+func TestTooSmallPaneWrapsItsText(t *testing.T) {
+	for _, width := range []int{24, 30, 38} {
+		m := modelOf(t, newFixture(t), testEnv, width, 10)
+		view := ansi.Strip(m.View().Content)
+		if !strings.Contains(view, "+- loupe") {
+			t.Fatalf("at %d by 10 the too-small screen is not a pane:\n%s", width, view)
+		}
+		var words []string
+		for _, line := range strings.Split(view, "\n") {
+			words = append(words, strings.Fields(strings.Trim(strings.TrimSpace(line), "|+-"))...)
+		}
+		text := strings.Join(words, " ")
+		for _, want := range []string{"Window too small", fmt.Sprintf("This window is %d by 10.", width), "Review needs 60 by 12.", "Make it larger, or press q to quit."} {
+			if !strings.Contains(text, want) {
+				t.Errorf("at %d by 10 the too-small pane cut %q:\n%s", width, want, view)
+			}
+		}
+	}
+}
+
 func TestTooSmallDrawsAtOneCell(t *testing.T) {
 	m := modelOf(t, newFixture(t), testEnv, 1, 1)
 	if view := m.View().Content; strings.Count(view, "\n") > 0 {
@@ -126,7 +148,7 @@ func TestTooSmallConfirmationKeepsTheMessageAndQDeclines(t *testing.T) {
 	gh := newPublishFake(t)
 	dir := readyFixture(t, "reviewer", "author")
 	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "+ 3 accepted")
+	waitFor(t, tm, "3/3 decided")
 	reachConfirmation(t, tm)
 	tm.Type("Kept words.")
 	waitFor(t, tm, "Kept words.")
