@@ -239,7 +239,8 @@ func midReview(parsed *diff.Diff, now time.Time) func(d *draft.Draft) error {
 			return err
 		}
 		withdrawn := false
-		_, _, err = draft.Edit(d, "f-007", draft.EditInput{}, &withdrawn, parsed, draft.ByAgent, now)
+		reason := draft.EditInput{WithdrawReason: json.RawMessage(`{"text": "Both values agree, so nothing runs differently.", "code": "no-runtime-effect"}`)}
+		_, _, err = draft.Edit(d, "f-007", reason, &withdrawn, parsed, draft.ByAgent, now)
 		return err
 	}
 }

@@ -77,7 +77,7 @@ description: "Task list for withdrawal reasons"
   - after `u` on `f-001`, its row and detail show no reason, and its history still holds the reason (User Story 1, scenario 4).
   - a reason holding an ESC byte shows it escaped as `render.ForDisplay` does, in the row and in the detail.
 - [X] T017 [US1] In `internal/tui/list.go` `row`, when `draft.CurrentReason(f)` is non-nil and the title width after markers is at least 5, draw `title · reason` with the separator and reason in `Dim`, split per the plan: both whole when they fit, otherwise `rest = width - 3`, title half `rest - rest/2`, reason half `rest/2`, slack to the longer, each `TruncRight`. Pad to the column as today. In `internal/tui/detail.go` `refreshDetail`, after the meta lines, add `""`, `sectionHead("Withdrawn")`, the text through `threadBlock` in the text style, and the code: `Chip(code, ToneMuted)` in color and `[code]` without, on the last text row after two spaces when it fits, else on its own row. Run T016 until it passes. Commit `feat(tui): show why a finding was withdrawn`.
-- [ ] T018 [US1] In `cmd/loupe-demo/seed.go` `midReview`, withdraw `f-007` with `WithdrawReason` text describing why for that finding, code `no-runtime-effect`. Run `go test ./cmd/loupe-demo/`. Commit `feat(demo): seed a withdrawal reason`.
+- [X] T018 [US1] In `cmd/loupe-demo/seed.go` `midReview`, withdraw `f-007` with `WithdrawReason` text describing why for that finding, code `no-runtime-effect`. Run `go test ./cmd/loupe-demo/`. Commit `feat(demo): seed a withdrawal reason`.
 
 ## Phase 4: User Story 3 — a skill author picks a code (Priority: P2)
 
