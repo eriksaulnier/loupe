@@ -59,7 +59,7 @@ All refusals use code `location` except the shape checks of R5. `formatRanges` g
 | Two hunks (FR-010) | `the section "X" of plan.md is changed in 2 hunks` | `file one line-anchored finding per hunk: plan.md:12-18, 30-34` | `ranges` |
 | Duplicate (FR-013) | `plan.md has 2 headings "X", on lines 4, 20` | `use a line location: plan.md:6-9, 22-25` | `matches` |
 
-When no section of the file holds a change, the FR-011 fix is `no section of plan.md holds a change; use a line location or a general finding with "general": true`. When no duplicate holds a change, the FR-013 fix is the same.
+The FR-011 fix lists only headings whose section changes in exactly one hunk, since a section changed in more hunks refuses under FR-010. When no section of the file changes in exactly one hunk, the FR-011 fix is `no section of plan.md changes in exactly one hunk; use a line location or a general finding with "general": true`. When no duplicate holds a change, the FR-013 fix and `details.headings` are those of FR-011.
 
 ## R7: The review interface
 
