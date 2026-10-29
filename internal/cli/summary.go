@@ -22,7 +22,9 @@ Input (--from <file>, or --from - for stdin):
   {"summary": "Markdown"}
 
 --body <text> sets the summary directly and cannot be combined with --from. The summary must
-pass the Markdown allowlist and may be empty.
+pass the Markdown allowlist and may be empty. On every run it refuses a finding id, f- and
+three or more digits such as f-002, with markdown and details.rule finding-id: name an earlier
+finding by its subject. A fence or an http or https URL is exempt; a code span is not.
 
 --expect-findings <n> is required with --by agent (the default) and optional with --by human.
 Inside the run lock it compares n with the number of included findings; on a mismatch the

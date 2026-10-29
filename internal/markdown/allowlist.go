@@ -11,11 +11,16 @@ import (
 
 type Kind int
 
+// Each kind names the field a refusal reports. A finding's impact and suggested fix sit at the body's depth, and the
+// human's message at the confirmation sits at the summary's.
 const (
 	Body Kind = iota
 	Summary
 	// Note is a sticky round's note, which sits at the summary's depth.
 	Note
+	Impact
+	SuggestedFix
+	Message
 )
 
 const maxBytes = 64 * 1024
@@ -36,12 +41,10 @@ const (
 // Check is a line scanner, not a parser: it refuses some Markdown GitHub would render in exchange for staying small
 // and predictable.
 func Check(text string, kind Kind, fix string) error {
-	s := scanner{name: "body", maxDepth: maxDepthBody, fix: fix}
+	s := scanner{name: kind.field(), maxDepth: maxDepthBody, fix: fix}
 	switch kind {
-	case Summary:
-		s.name, s.maxDepth = "summary", maxDepthSummary
-	case Note:
-		s.name, s.maxDepth = "note", maxDepthSummary
+	case Summary, Note, Message:
+		s.maxDepth = maxDepthSummary
 	}
 	if len(text) > maxBytes {
 		return s.refuse(ruleLimit, 1, fmt.Sprintf("it is %d bytes; at most %d bytes (64 KiB) are allowed", len(text), maxBytes))
@@ -53,6 +56,22 @@ func Check(text string, kind Kind, fix string) error {
 		}
 	}
 	return s.end()
+}
+
+func (k Kind) field() string {
+	switch k {
+	case Summary:
+		return "summary"
+	case Note:
+		return "note"
+	case Impact:
+		return "impact"
+	case SuggestedFix:
+		return "suggestedFix"
+	case Message:
+		return "message"
+	}
+	return "body"
 }
 
 type scanner struct {
@@ -188,7 +207,7 @@ func (s *scanner) end() error {
 
 func (s *scanner) refuse(rule string, line int, reason string) error {
 	r := refusal.New(refusal.Markdown, fmt.Sprintf("%s fails the Markdown allowlist (%s) at line %d: %s", s.name, rule, line, reason), s.fix)
-	r.Details = map[string]any{"rule": rule, "line": line}
+	r.Details = map[string]any{"rule": rule, "field": s.name, "line": line}
 	return r
 }
 
@@ -444,6 +463,16 @@ func splitLines(text string) []string {
 
 // walkStructural calls fn for every structural line outside a fence.
 func walkStructural(lines []string, fn func(i int, trimmed string)) {
+	walkLines(lines, func(i int, trimmed string, structural bool) {
+		if structural {
+			fn(i, trimmed)
+		}
+	})
+}
+
+// walkLines calls fn for every non-blank line outside a fence, reading fences and HTML blocks as Check does. A fence's
+// opening line counts as fence, info string included.
+func walkLines(lines []string, fn func(i int, trimmed string, structural bool)) {
 	var fenceChar byte
 	var fenceLen int
 	inHTMLBlock := false
@@ -460,6 +489,7 @@ func walkStructural(lines []string, fn func(i int, trimmed string)) {
 			inHTMLBlock = false
 			continue
 		case !structural:
+			fn(i, trimmed, false)
 			continue
 		}
 		if opensHTMLBlock(trimmed) {
@@ -468,6 +498,6 @@ func walkStructural(lines []string, fn func(i int, trimmed string)) {
 			fenceChar, fenceLen = c, length
 			continue
 		}
-		fn(i, trimmed)
+		fn(i, trimmed, true)
 	}
 }

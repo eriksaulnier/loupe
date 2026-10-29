@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -123,5 +124,51 @@ func TestAddStaleExpectVersionWinsOverUndecodableEntries(t *testing.T) {
 	details, _ := errObj["details"].(map[string]any)
 	if _, listed := details["entries"]; code != 1 || errorCode(env) != "version" || listed {
 		t.Fatalf("exit %d envelope %v, want the whole-call version refusal", code, env)
+	}
+}
+
+func errorDetails(t *testing.T, env map[string]any) (message string, details map[string]any) {
+	t.Helper()
+	errObj, _ := env["error"].(map[string]any)
+	details, _ = errObj["details"].(map[string]any)
+	message, _ = errObj["message"].(string)
+	return message, details
+}
+
+func TestAddAllowlistRefusalNamesTheField(t *testing.T) {
+	home, _ := sendBackRun(t)
+	code, env, _ := execIn(t, home, `{"title": "T", "body": "Evidence.", "general": true, "impact": "one<br>two"}`, "add", "--from", "-")
+	if code != 1 || errorCode(env) != "markdown" {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if message, details := errorDetails(t, env); details["field"] != "impact" || !strings.Contains(message, "impact fails") {
+		t.Fatalf("message %q details %v", message, details)
+	}
+}
+
+func TestWriteCommandsRefuseAFindingID(t *testing.T) {
+	cases := []struct {
+		name, input, field string
+		args               []string
+	}{
+		{"add", `{"title": "Retry loop, so f-002 still reproduces", "body": "Evidence.", "general": true}`, "title", []string{"add", "--from", "-"}},
+		{"edit", `{"body": "As f-002 showed."}`, "body", []string{"edit", "f-001", "--from", "-"}},
+		{"summary", `{"summary": "f-002 is fixed."}`, "summary", []string{"summary", "--from", "-", "--by", "human"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, dir := sendBackRun(t)
+			before := draftVersion(t, dir)
+			code, env, _ := execIn(t, home, c.input, c.args...)
+			if code != 1 || errorCode(env) != "markdown" {
+				t.Fatalf("exit %d envelope %v", code, env)
+			}
+			if _, details := errorDetails(t, env); details["rule"] != "finding-id" || details["field"] != c.field || details["match"] != "f-002" {
+				t.Fatalf("details %v", details)
+			}
+			if after := draftVersion(t, dir); after != before {
+				t.Fatalf("version moved from %d to %d", before, after)
+			}
+		})
 	}
 }

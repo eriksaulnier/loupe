@@ -276,3 +276,24 @@ func TestOpenDetailsStopsAtTheQuoteBound(t *testing.T) {
 		t.Error("a line of 65536 markers was changed")
 	}
 }
+
+func TestCheckNamesTheField(t *testing.T) {
+	cases := []struct {
+		kind  Kind
+		field string
+	}{{Body, "body"}, {Impact, "impact"}, {SuggestedFix, "suggestedFix"}, {Summary, "summary"}, {Note, "note"}, {Message, "message"}}
+	for _, c := range cases {
+		t.Run(c.field, func(t *testing.T) {
+			r, ok := refusal.As(Check("one<br>two\n", c.kind, fix))
+			if !ok {
+				t.Fatal("Check accepted <br>")
+			}
+			if !strings.HasPrefix(r.Message, c.field+" fails the Markdown allowlist (html) at line 1") {
+				t.Fatalf("message %q does not name %s", r.Message, c.field)
+			}
+			if r.Details["field"] != c.field || r.Details["rule"] != "html" || r.Details["line"] != 1 {
+				t.Fatalf("details %v", r.Details)
+			}
+		})
+	}
+}
