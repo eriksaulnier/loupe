@@ -26,7 +26,7 @@ LOUPE_DEMO_HOME=<scratch>/demo mise run demo -- list   # seeds the root
 LOUPE_DEMO_HOME=<scratch>/demo mise run demo -- review acme/widgets#42
 ```
 
-The demo's diff holds no Markdown file, so the by-eye check sets a heading on a seeded finding by hand; the resolution itself is covered by the automated tests. Read that finding's detail: the location line shows `path:start-end · Rollout`. Open the whole-file diff and check that the mark sits on the range's last line. Check a second finding's detail is unchanged, and repeat under `NO_COLOR=1`.
+The demo's diff holds no Markdown file, so the by-eye check sets a heading on a seeded finding by hand; the resolution itself is covered by the automated tests. Read that finding's detail: the code pane's border shows `path:start-end`, and its first row shows `· Rollout`. Open the whole-file diff and check that the mark sits on the range's last line. Check a second finding's detail is unchanged, and repeat under `NO_COLOR=1`.
 
 ## Live probe (FR-022, owner-approved, once)
 

@@ -24,6 +24,7 @@ The board draft says the anchor resolves "against `pr.diff`, the same way line a
 ### Session 2026-10-29
 
 - Q: Which headings does the FR-011 fix offer, since a section changed in two hunks refuses under FR-010? → A: Only headings whose section changes in exactly one hunk, so the one retry SC-003 promises resolves. A duplicate with no change falls back to the same list (review finding, 2026-10-29).
+- Q: Where does the detail show the heading, now that #87 moved the location into a code pane whose border holds the path and range? → A: The heading moves into the code pane's body, as its first rows, wrapped and never clipped, after `Glyphs.Sep`. The border keeps the path and range alone, as spec 038 FR-008 puts them there. This supersedes the location-line placement in research.md, plan.md and T023 (2026-10-29, after #87 merged).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -67,7 +68,7 @@ The agent misspells a heading, names one whose section the pull request does not
 
 ### User Story 3 - The human sees which section a finding is about (Priority: P2)
 
-The human opens `loupe review`. A finding anchored to a heading shows the section's heading on its location line, next to the range it resolved to, and the diff under it shows that range as it does for any location. The human can see what the agent meant and what GitHub will show, and judge whether the range fits.
+The human opens `loupe review`. A finding anchored to a heading shows the section's heading in its code pane, under the range it resolved to, and the diff under it shows that range as it does for any location. The human can see what the agent meant and what GitHub will show, and judge whether the range fits.
 
 **Why this priority**: the human decides each finding (Principle II). A range alone does not say that the agent meant the whole section. The published review shows only the range, so the review interface is the one place the human sees the heading.
 
@@ -75,7 +76,7 @@ The human opens `loupe review`. A finding anchored to a heading shows the sectio
 
 **Acceptance Scenarios**:
 
-1. **Given** a finding with a heading, **When** the human opens its detail, **Then** the location line shows the range and the heading's text.
+1. **Given** a finding with a heading, **When** the human opens its detail, **Then** the code pane's border shows the range and its first rows show the heading's text.
 2. **Given** the same finding, **When** the human opens the whole-file diff, **Then** the finding's mark sits on the range's last line, as for a line location.
 3. **Given** a finding without a heading, **When** the human opens its detail, **Then** the detail is unchanged from today.
 
@@ -117,7 +118,7 @@ The human opens `loupe review`. A finding anchored to a heading shows the sectio
 - **FR-014**: A run with no outline file, because a loupe from before this feature captured it, MUST refuse a heading anchor with `location`. The message MUST say the run was captured before heading anchors, and the fix MUST name the line form. It MUST NOT refuse with `record`, since the run is not damaged.
 - **FR-015**: The draft MUST store the heading's text, as written, in the finding's location beside the resolved `path`, `side`, `line` and `startLine`. Any edit that sets `location` MUST replace the heading with the new location's, or remove it for a line form. `null` and `--clear-location` MUST remove it with the location.
 - **FR-016**: Every reader of a location outside the draft and the review interface, including publish, the inline comment, the review body, the findings record and the receipt, MUST use the resolved range and MUST NOT carry the heading. The published comment format in `docs/comment-format.md` MUST NOT change, and the findings record's `v=` MUST NOT change.
-- **FR-017**: The review interface MUST show a finding's heading on its detail's location line, after the range. The findings list and the hunk view under the detail MUST stay as they are. The whole-file diff MUST mark the range's last line, as for a line location. The review interface MUST NOT read the head file or show lines outside the diff.
+- **FR-017**: The review interface MUST show a finding's heading in its detail's code pane, as the pane's first rows under the border that holds the range, wrapped rather than clipped. The findings list and the hunk view under the detail MUST stay as they are. The whole-file diff MUST mark the range's last line, as for a line location. The review interface MUST NOT read the head file or show lines outside the diff.
 - **FR-018**: `loupe add --help` and `loupe edit --help` MUST describe the heading form and its refusals, so the workflow stays completable from `--help` alone (Principle I). The `human-review` skill MUST describe the heading form beside the line form.
 - **FR-019**: Heading parsing MUST NOT add a runtime dependency. goldmark is already a direct dependency (`internal/markdown`, spec 025), and the plan MUST either use it or justify a line scanner.
 - **FR-020**: `contracts/cli.md` MUST gain the heading form under `add` and `edit`, the `--heading` flag, the outline in what `capture` stores, and the widened meaning of `location` in the error table: a path or line not in the stored diff, a range that spans hunks, or a heading that is missing, repeated, holds no change or holds changes in more than one hunk.
