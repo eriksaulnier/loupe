@@ -151,6 +151,21 @@ func TestDetailViewShowsRepliesUnderNotes(t *testing.T) {
 	}
 }
 
+// A reply's author is capitalized by its first rune, and an empty one, which only a damaged draft holds, draws no
+// name rather than stopping the program (review finding).
+func TestDetailThreadCapitalizesAnyAuthor(t *testing.T) {
+	view := threadView(t, utf8Env, 100,
+		[]draft.Note{{ID: "n-001", FindingID: "f-001", Body: "Why?", Status: draft.NoteOpen, At: testNow}},
+		[]draft.Reply{
+			{ID: "r-001", NoteID: "n-001", Body: "Blank.", By: "", At: testNow},
+			{ID: "r-002", NoteID: "n-001", Body: "Accented.", By: "émile", At: testNow},
+		})
+	rows := threadRows(view, "Note n-001")
+	if !slices.ContainsFunc(rows, func(r string) bool { return strings.HasSuffix(r, "r-001") }) || !slices.Contains(rows, "Émile · r-002") {
+		t.Fatalf("the replies are not drawn under their authors:\n%q", rows)
+	}
+}
+
 func TestDetailThreadKeepsABodyAsWritten(t *testing.T) {
 	body := "\nFirst line.\r\n\n\tSecond line, " + strings.Repeat("long ", 14) + "end.\n"
 	view := threadView(t, utf8Env, 60,

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
@@ -323,7 +325,11 @@ func (m *Model) noteThread(f draft.Finding) []string {
 			if r.By == draft.ByHuman {
 				who = "you"
 			}
-			lines = append(lines, "", author(strings.ToUpper(who[:1])+who[1:], r.ID))
+			first, size := utf8.DecodeRuneInString(who)
+			if size > 0 {
+				who = string(unicode.ToUpper(first)) + who[size:]
+			}
+			lines = append(lines, "", author(who, r.ID))
 			block(r.Body)
 		}
 		out = append(out, "")
