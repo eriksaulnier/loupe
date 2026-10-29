@@ -62,7 +62,10 @@ func (m *Model) refreshDetail() error {
 		if f.Location.Heading != "" {
 			location += " " + m.glyphs.Sep + " " + render.ForDisplay(render.OneLine(f.Location.Heading))
 		}
-		doc = append(doc, " "+m.styles.Dim.Render(strings.TrimSpace(m.glyphs.File+" "+location)))
+		// Wrapped like the title, since a long heading is the part the human needs whole.
+		for _, line := range strings.Split(m.styles.Wrap(strings.TrimSpace(m.glyphs.File+" "+location), style.Content(m.width)-2, ""), "\n") {
+			doc = append(doc, " "+m.styles.Dim.Render(line))
+		}
 		for _, l := range lines {
 			if l.Anchored {
 				doc = append(doc, m.anchoredRow(l))

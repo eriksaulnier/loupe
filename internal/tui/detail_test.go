@@ -975,7 +975,7 @@ func TestDetailWithoutAHeadingIsUnchanged(t *testing.T) {
 func TestDetailKeepsALongHeadingInsideTheWindow(t *testing.T) {
 	dir := newFixture(t)
 	d := loadDraft(t, dir)
-	d.Findings[1].Location.Heading = strings.Repeat("A long heading ", 12)
+	d.Findings[1].Location.Heading = strings.Repeat("A long heading ", 3) + "END"
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
 		t.Fatal(err)
 	}
@@ -983,9 +983,14 @@ func TestDetailKeepsALongHeadingInsideTheWindow(t *testing.T) {
 	if err := m.openFinding("f-002"); err != nil {
 		t.Fatal(err)
 	}
-	for _, l := range strings.Split(m.View().Content, "\n") {
+	view := m.View().Content
+	for _, l := range strings.Split(view, "\n") {
 		if w := style.Width(l); w > 60 {
 			t.Errorf("line is %d cells wide: %q", w, l)
 		}
+	}
+	// The row wraps rather than clips, so the heading's last word shows.
+	if !strings.Contains(view, "END") {
+		t.Errorf("the heading's last word is cut:\n%s", view)
 	}
 }
