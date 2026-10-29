@@ -571,7 +571,7 @@ func TestHandoffRefusesNoPaneHostNamingEveryHost(t *testing.T) {
 	if code != 1 || errObj["code"] != "no-pane-host" || !strings.Contains(message, "HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH") ||
 		!strings.Contains(message, "TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session") ||
 		!strings.Contains(message, "ORCA_TERMINAL_HANDLE and orca on PATH") ||
-		!strings.Contains(message, "macOS, ITERM_SESSION_ID and osascript on PATH") {
+		!strings.Contains(message, "macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID and osascript on PATH") {
 		t.Fatalf("exit %d error %v", code, errObj)
 	}
 	if calls := append(hostCalls(t, herdrLog), hostCalls(t, orcaLog)...); calls != nil {

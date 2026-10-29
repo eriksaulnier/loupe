@@ -120,7 +120,7 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 func noPaneHost(fix string) error {
 	return refusal.New(refusal.NoPaneHost, "no terminal pane can be opened here: HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH, "+
 		"or TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session, "+
-		"or ORCA_TERMINAL_HANDLE and orca on PATH, or macOS, ITERM_SESSION_ID and osascript on PATH", fix)
+		"or ORCA_TERMINAL_HANDLE and orca on PATH, or macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID and osascript on PATH", fix)
 }
 
 // refuseOpenReview names the open run in details.run, so an agent can tell its own round from another it must ask the
