@@ -100,9 +100,11 @@ step never edits a review.
 It shows only while that round is the newest: when a later round collapses it under Earlier rounds,
 the note is dropped, and that round keeps its summary, findings and footer. Pass it again on each
 round that should carry one. It MUST pass the same Markdown allowlist as the summary, or publish
-refuses with markdown. It needs --unattended --sticky and refuses with usage otherwise: no flag
-sets words under a human's name, and a review that no later round edits has no use for it. It is
-not a finding, so it changes neither the digest nor which findings publish.
+refuses with markdown, and like the summary it refuses a finding id such as f-002 outside a
+fence or a URL, with details.rule finding-id: reword it and run publish again. It needs
+--unattended --sticky and refuses with usage otherwise: no flag sets words under a human's
+name, and a review that no later round edits has no use for it. It is not a finding, so it
+changes neither the digest nor which findings publish.
 
 Result (--json), alone on stdout while the confirmation draws on stderr:
   {"loupe": 1, "ok": true, "command": "publish", "run": "owner/repo#123@1",
