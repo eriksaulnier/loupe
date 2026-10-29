@@ -145,3 +145,9 @@ While the review message is typed, `shift+↑` and `shift+↓` MUST scroll the r
 Every line of the readable review MUST wrap to the pane, including summaries, headings, fenced code and notes. A popup too short for its choices MUST drop its spacing first, then the choices furthest from the selected one. The selected choice stays in view.
 
 The Message step and the sending screen MUST NOT draw the row of steps. The popup before them carries the steps, and on these screens the row added nothing. Their `Publish review` pane opens right under the header and takes the focus tab when the message is not being typed.
+
+## Release testing feedback, 2026-10-29
+
+The maintainer's testing of `main` before the next release added these rules. They amend the sections above, the demo feedback included, where the two disagree. The reference frames follow them.
+
+The confidence column's heading MUST read `conf`, not `con`. The column reserves four cells, one more than the width tiers give it, and the title gives up that cell.

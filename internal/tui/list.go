@@ -259,7 +259,7 @@ func (m *Model) listColumns() listColumns {
 	fixed := func() int {
 		n := 1 + 1 + 1 + 1 + c.id + 1 + style.PillWidth + 1
 		if c.confidence {
-			n += 4
+			n += 5
 		}
 		if c.location > 0 {
 			n += 1 + c.location
@@ -528,7 +528,7 @@ func (m *Model) publishHint() style.Hint {
 func (m *Model) columnHeads(cols listColumns) string {
 	head := "    " + style.Pad("id", cols.id+1) + style.Pad("severity", style.PillWidth+1)
 	if cols.confidence {
-		head += "con "
+		head += "conf "
 	}
 	head += style.Pad("finding", cols.title+1)
 	if cols.location > 0 {
@@ -556,7 +556,7 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 	}
 	b.WriteString(s.SeverityPill(word, style.PillWidth) + " ")
 	if cols.confidence {
-		b.WriteString(style.Pad(s.ConfidenceScale(f.Confidence), 3) + " ")
+		b.WriteString(style.Pad(s.ConfidenceScale(f.Confidence), 4) + " ")
 	}
 	titleWidth := cols.title
 	if f.Blocking {

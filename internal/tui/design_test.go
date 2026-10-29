@@ -1235,14 +1235,14 @@ func listRow(t *testing.T, m *Model, id string) string {
 func TestTheRowSaysWhyAFindingWasWithdrawn(t *testing.T) {
 	longTitle := "The retry loop resets its counter on every scrape attempt"
 	longReason := "Test name only, the assertion is unchanged and nothing runs differently"
-	for _, c := range []struct {
-		width, height, title, reason int
-	}{{80, 24, 15, 14}, {100, 30, 22, 21}} {
+	for _, c := range []struct{ width, height int }{{80, 24}, {100, 30}} {
 		t.Run(fmt.Sprint(c.width), func(t *testing.T) {
 			m := modelOf(t, reasonFixture(t, longTitle, draft.Reason{Text: longReason, Code: "no-runtime-effect"}), utf8Env, c.width, c.height)
 			row := listRow(t, m, "f-003")
-			want := m.styles.TruncRight(longTitle, c.title) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(longReason, c.reason)
-			if !strings.Contains(row, want) || !strings.HasSuffix(m.styles.TruncRight(longReason, c.reason), m.styles.Glyphs.Ellipsis) {
+			rest := m.listColumns().title - 3
+			title, reason := rest-rest/2, rest/2
+			want := m.styles.TruncRight(longTitle, title) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(longReason, reason)
+			if !strings.Contains(row, want) || !strings.HasSuffix(m.styles.TruncRight(longReason, reason), m.styles.Glyphs.Ellipsis) {
 				t.Errorf("row %q lacks %q", row, want)
 			}
 			if style.Width(row) > c.width || strings.Contains(row, "no-runtime-effect") {
@@ -1259,11 +1259,11 @@ func TestTheRowSaysWhyAFindingWasWithdrawn(t *testing.T) {
 func TestTheRowGivesTheSlackToTheLongerPart(t *testing.T) {
 	long := "Test name only, the assertion is unchanged and nothing runs differently"
 	m := modelOf(t, reasonFixture(t, "Short", draft.Reason{Text: long}), utf8Env, 80, 24)
-	if want := "Short " + m.glyphs.Sep + " " + m.styles.TruncRight(long, 32-3-5); !strings.Contains(listRow(t, m, "f-003"), want) {
+	if want := "Short " + m.glyphs.Sep + " " + m.styles.TruncRight(long, m.listColumns().title-3-5); !strings.Contains(listRow(t, m, "f-003"), want) {
 		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
 	}
 	m = modelOf(t, reasonFixture(t, long, draft.Reason{Text: "Naming."}), utf8Env, 80, 24)
-	if want := m.styles.TruncRight(long, 32-3-7) + " " + m.glyphs.Sep + " Naming."; !strings.Contains(listRow(t, m, "f-003"), want) {
+	if want := m.styles.TruncRight(long, m.listColumns().title-3-7) + " " + m.glyphs.Sep + " Naming."; !strings.Contains(listRow(t, m, "f-003"), want) {
 		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
 	}
 }
@@ -1279,7 +1279,8 @@ func TestTheRowSplitsWhatTheBlockingMarkerLeaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := modelOf(t, dir, utf8Env, 80, 24)
-	want := m.glyphs.Blocking + " " + m.styles.TruncRight(long, 14) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, 13)
+	rest := m.listColumns().title - 2 - 3
+	want := m.glyphs.Blocking + " " + m.styles.TruncRight(long, rest-rest/2) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, rest/2)
 	if row := listRow(t, m, "f-003"); !strings.Contains(row, want) {
 		t.Errorf("row %q lacks %q", row, want)
 	}

@@ -35,7 +35,7 @@ func TestListAtEightyColumnsDropsTheLabelColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := newTestModel(t, m, 80, 24)
-	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001", "### ! Title one", "multi.txt:3")
+	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001", "###  ! Title one", "multi.txt:3")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.Contains(view, "Label") || strings.Contains(view, "suggestion") {
@@ -58,7 +58,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := newTestModel(t, m, 100, 24)
-	waitFor(t, tm, "> . f-001", "### ! Title one", "0/3 decided")
+	waitFor(t, tm, "> . f-001", "###  ! Title one", "0/3 decided")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
@@ -70,7 +70,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		}
 	}
 
-	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "> · f-001") || !strings.Contains(got, "■■■ ● Title one") || !strings.Contains(got, "╭─ Findings") {
+	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "> · f-001") || !strings.Contains(got, "■■■  ● Title one") || !strings.Contains(got, "╭─ Findings") {
 		t.Errorf("UTF-8 view does not use the Unicode glyphs:\n%s", got)
 	}
 }
@@ -537,9 +537,9 @@ func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 		width, title, location int
 		confidence, short      bool
 	}{
-		{100, 46, 24, true, false},
-		{99, 51, 18, true, true},
-		{80, 32, 18, true, true},
+		{100, 45, 24, true, false},
+		{99, 50, 18, true, true},
+		{80, 31, 18, true, true},
 		{79, 54, 0, false, false},
 		{60, 35, 0, false, false},
 	} {
@@ -551,7 +551,7 @@ func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 	// A long id takes its room from the title first, then the location, and the title keeps its floor.
 	m := modelOf(t, dir, testEnv, 80, 24)
 	m.order[0].ID = strings.Repeat("f", 30)
-	if got := m.listColumns(); got.title != listTitleFloor || got.id != 30 || got.location != 17 || !got.confidence {
+	if got := m.listColumns(); got.title != listTitleFloor || got.id != 30 || got.location != 16 || !got.confidence {
 		t.Errorf("a 30-cell id: %+v", got)
 	}
 }
