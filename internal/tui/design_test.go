@@ -1191,17 +1191,31 @@ func TestTheRowEscapesAReason(t *testing.T) {
 	}
 }
 
-// The detail shows the whole reason under its own head, before the location, and the code as a tag (FR-007).
+// The detail shows the whole reason under its own head, before the location, hanging from a bar as a note thread
+// does, with the code as a chip in the headline (FR-007; owner, 2026-10-28).
 func TestTheDetailSaysWhyAFindingWasWithdrawn(t *testing.T) {
 	long := "Test name only, the assertion is unchanged and nothing runs differently at all."
 	for _, c := range []struct{ width, height int }{{80, 24}, {100, 30}} {
 		m := modelOf(t, reasonFixture(t, "Title three", draft.Reason{Text: long, Code: "no-runtime-effect"}), utf8Env, c.width, c.height+20)
 		mustOpen(m, "f-003")
 		view := paneText(m.View().Content)
-		head, text, tag := strings.Index(view, "Withdrawn "), strings.Index(view, long), strings.Index(view, "[no-runtime-effect]")
+		head, text := strings.Index(view, "Withdrawn "+m.glyphs.Sep+" no-runtime-effect"), strings.Index(view, "Test name only")
 		body := strings.Index(view, "Body three")
-		if head < 0 || text < head || tag < text || body < tag {
-			t.Errorf("%d: head %d, text %d, tag %d, body %d:\n%s", c.width, head, text, tag, body, view)
+		if head < 0 || text < head || body < text {
+			t.Errorf("%d: head %d, text %d, body %d:\n%s", c.width, head, text, body, view)
+		}
+		var hung int
+		for _, row := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+			inner := strings.TrimPrefix(strings.TrimSpace(row), "│ ")
+			if strings.Contains(inner, "Withdrawn") || strings.Contains(inner, "Test name") || strings.Contains(inner, "differently") {
+				if !strings.HasPrefix(inner, m.glyphs.Quote+" ") {
+					t.Errorf("%d: row %q does not hang from the bar", c.width, row)
+				}
+				hung++
+			}
+		}
+		if hung < 2 {
+			t.Errorf("%d: %d rows hang from the bar", c.width, hung)
 		}
 		mustOpen(m, "f-002")
 		if view := paneText(m.View().Content); strings.Contains(view, "Withdrawn ") {
@@ -1212,6 +1226,22 @@ func TestTheDetailSaysWhyAFindingWasWithdrawn(t *testing.T) {
 	mustOpen(m, "f-001")
 	if view := paneText(m.View().Content); strings.Contains(view, "Withdrawn ") {
 		t.Errorf("an included finding has a section:\n%s", view)
+	}
+}
+
+// In color the reason's bar and headline take the withdrawn tone, and the code is a muted chip.
+func TestTheWithdrawnReasonHangsFromAMutedBar(t *testing.T) {
+	m := modelOf(t, reasonFixture(t, "Title three", draft.Reason{Text: "Naming only.", Code: "no-runtime-effect"}), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-003")
+	view := m.View().Content
+	edge := m.styles.ToneStyle(style.ToneMuted)
+	bar := edge.Render(m.glyphs.Quote)
+	if !strings.Contains(view, bar+" "+m.styles.Emphasis(edge).Render("Withdrawn")+" "+m.styles.Chip("no-runtime-effect", style.ToneMuted)) {
+		t.Errorf("the headline does not hang from a muted bar:\n%q", view)
+	}
+	if !strings.Contains(view, bar+" "+m.styles.Text().Render("Naming only.")) {
+		t.Errorf("the reason does not hang from the bar:\n%q", view)
 	}
 }
 

@@ -240,30 +240,22 @@ func (m *Model) impact(f draft.Finding) ([]string, error) {
 	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
 }
 
-// withdrawReason is read before the evidence, so the human judges the withdrawal before reinstating it. It wraps as a
-// reply body does, and the code follows as a dim tag.
+// withdrawReason is read before the evidence, so the human judges the withdrawal before reinstating it. It hangs from
+// a bar in the withdrawn tone, as a note thread does: a headline with the code as a chip, then the text as a reply.
 func (m *Model) withdrawReason(f draft.Finding, width int) []string {
 	reason := draft.CurrentReason(f)
 	if reason == nil {
 		return nil
 	}
-	out := []string{"", m.sectionHead("Withdrawn")}
-	for _, line := range m.threadBlock(reason.Text, width) {
-		out = append(out, m.styles.Text().Render(line))
+	var chip string
+	if reason.Code != "" {
+		chip = m.styles.Chip(render.ForDisplay(render.OneLine(reason.Code)), style.ToneMuted)
 	}
-	if reason.Code == "" {
-		return out
+	lines := []string{m.threadHead("Withdrawn", style.ToneMuted, chip)}
+	for _, l := range m.threadBlock(reason.Text, max(1, width-2)) {
+		lines = append(lines, m.styles.Text().Render(l))
 	}
-	code := render.ForDisplay(render.OneLine(reason.Code))
-	tag := "[" + code + "]"
-	if m.styles.Color {
-		tag = m.styles.Chip(code, style.ToneMuted)
-	}
-	if last := out[len(out)-1]; style.Width(last)+2+style.Width(tag) <= width {
-		out[len(out)-1] = last + "  " + tag
-		return out
-	}
-	return append(out, tag)
+	return append([]string{""}, m.hangFromBar(lines, style.ToneMuted)...)
 }
 
 // sectionHead is a heading inside the detail document, in the accent as pane titles are, so the document reads as
@@ -319,12 +311,7 @@ func (m *Model) noteThread(f draft.Finding) []string {
 		if open {
 			tone, body = style.ToneNote, m.styles.Text()
 		}
-		edge := m.styles.ToneStyle(tone)
-		headSep := sep
-		if m.styles.Color {
-			headSep = " "
-		}
-		lines := []string{m.styles.Emphasis(edge).Render("Note "+render.ForDisplay(n.ID)) + headSep + m.noteStatusChip(n.Status)}
+		lines := []string{m.threadHead("Note "+render.ForDisplay(n.ID), tone, m.noteStatusChip(n.Status))}
 		author := func(who, id string) string {
 			name := m.styles.Emphasis(m.styles.Text()).Render(who)
 			if who == "You" {
@@ -354,14 +341,35 @@ func (m *Model) noteThread(f draft.Finding) []string {
 			block(r.Body)
 		}
 		out = append(out, "")
-		bar := edge.Render(m.glyphs.Quote)
-		for _, l := range lines {
-			if l == "" {
-				out = append(out, bar)
-				continue
-			}
-			out = append(out, bar+" "+l)
+		out = append(out, m.hangFromBar(lines, tone)...)
+	}
+	return out
+}
+
+// threadHead is a thread's headline in its tone, bold, then its chip, if any. Without color the chip is a bare word,
+// so a separator stands between them.
+func (m *Model) threadHead(title string, tone style.Tone, chip string) string {
+	head := m.styles.Emphasis(m.styles.ToneStyle(tone)).Render(title)
+	if chip == "" {
+		return head
+	}
+	if m.styles.Color {
+		return head + " " + chip
+	}
+	return head + m.styles.Dim.Render(" "+m.glyphs.Sep+" ") + chip
+}
+
+// hangFromBar draws a thread's lines from a left bar in its tone. A blank line keeps the bar, so the thread reads as one
+// block.
+func (m *Model) hangFromBar(lines []string, tone style.Tone) []string {
+	bar := m.styles.ToneStyle(tone).Render(m.glyphs.Quote)
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if l == "" {
+			out = append(out, bar)
+			continue
 		}
+		out = append(out, bar+" "+l)
 	}
 	return out
 }
