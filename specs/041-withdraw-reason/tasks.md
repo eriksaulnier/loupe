@@ -92,8 +92,8 @@ description: "Task list for withdrawal reasons"
 ## Phase 5: Polish
 
 - [X] T022 Update `plugin/skills/human-review/SKILL.md` section 8's withdraw bullet to `loupe edit <finding-id> --exclude --reason "<one line that sums up your reply>" --reason-code conceded --run <ref> --json` (FR-015). Run `go test ./internal/cli/ -run Plugin`. Commit `feat(plugin): give a reason when conceding a finding`.
-- [ ] T023 Run `mise run check` after the last edit and keep its tail for the report.
-- [ ] T024 By-eye check: `mise run demo` in tmux at 80x24 and 100x30, open the list, read `f-007`'s row, open its detail, press `u`, and confirm the reason leaves the row and detail. Capture both widths with `tmux capture-pane -p`.
+- [X] T023 Run `mise run check` after the last edit and keep its tail for the report.
+- [X] T024 By-eye check: `mise run demo` in tmux at 80x24 and 100x30, open the list, read `f-007`'s row, open its detail, press `u`, and confirm the reason leaves the row and detail. Capture both widths with `tmux capture-pane -p`.
 
 ## Dependencies
 
