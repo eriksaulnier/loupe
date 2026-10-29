@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -57,7 +58,7 @@ Result (--json):
    "dir": "/path/to/run", "version": 4,
    "findings": [{"id": "f-001", "rev": 1}]}`
 
-var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix"}
+var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "heading", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix"}
 
 func newAddCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -78,6 +79,7 @@ func newAddCmd(deps Deps) *cobra.Command {
 	f.Int("line", 0, "line number on --side")
 	f.Int("start-line", 0, "first line of a multi-line range")
 	f.String("side", "", "RIGHT (new file, default) or LEFT (old file)")
+	f.String("heading", "", "a Markdown heading's text, instead of --line: the finding covers the section's changed lines")
 	f.Bool("general", false, "a general finding with no location")
 	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")
@@ -126,7 +128,7 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	dif, err := loadDiff(dir)
+	dif, err := loadDiff(dir, slices.ContainsFunc(inputs, func(in draft.FindingInput) bool { return in.Location != nil && in.Location.Heading != nil }))
 	if err != nil {
 		return err
 	}
@@ -205,22 +207,40 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, []draft.Ent
 	in.Impact, _ = f.GetString("impact")
 	in.References, _ = f.GetStringArray("reference")
 	in.SuggestedFix, _ = f.GetString("suggested-fix")
-	if f.Changed("path") || f.Changed("line") || f.Changed("start-line") || f.Changed("side") {
-		loc := &draft.LocationInput{}
-		loc.Path, _ = f.GetString("path")
-		loc.Line, _ = f.GetInt("line")
-		loc.StartLine, _ = f.GetInt("start-line")
-		loc.Side, _ = f.GetString("side")
-		in.Location = loc
+	if f.Changed("path") || f.Changed("line") || f.Changed("start-line") || f.Changed("side") || f.Changed("heading") {
+		in.Location = locationFlags(cmd)
 	}
 	return []draft.FindingInput{in}, nil, nil
 }
 
-// loadDiff reads pr.diff once per command; the diff is the only authority for locations.
-func loadDiff(dir string) (*diff.Diff, error) {
+// locationFlags builds the location add and edit read from their flags.
+func locationFlags(cmd *cobra.Command) *draft.LocationInput {
+	f := cmd.Flags()
+	loc := &draft.LocationInput{}
+	loc.Path, _ = f.GetString("path")
+	loc.Line, _ = f.GetInt("line")
+	loc.StartLine, _ = f.GetInt("start-line")
+	loc.Side, _ = f.GetString("side")
+	if f.Changed("heading") {
+		heading, _ := f.GetString("heading")
+		loc.Heading = &heading
+	}
+	return loc
+}
+
+// loadDiff reads pr.diff once per command; the diff is the only authority for locations. headings also reads the
+// outline, only when an input names a heading, so a damaged outline never refuses a line location.
+func loadDiff(dir string, headings bool) (*diff.Diff, error) {
 	target, err := run.LoadTarget(dir)
 	if err != nil {
 		return nil, err
 	}
-	return run.LoadDiff(dir, target)
+	d, err := run.LoadDiff(dir, target)
+	if err != nil || !headings {
+		return d, err
+	}
+	if d.Outline, err = run.LoadOutline(dir); err != nil {
+		return nil, err
+	}
+	return d, nil
 }
