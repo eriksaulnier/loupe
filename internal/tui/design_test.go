@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -1086,5 +1087,154 @@ func TestMessageStepHasNoStepsRow(t *testing.T) {
 	rows := strings.Split(m.View().Content, "\n")
 	if top := rows[bodyTop(30)]; !strings.Contains(top, "─ Publish review ") || strings.Contains(m.View().Content, "Inline comments ›") {
 		t.Errorf("the Message step does not open on its pane:\n%s", m.View().Content)
+	}
+}
+
+// reasonFixture withdraws f-003 with the given title and reason, and f-002 with no reason (specs/041-withdraw-reason).
+func reasonFixture(t *testing.T, title string, reason draft.Reason) string {
+	t.Helper()
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[2].Title = title
+		raw, err := json.Marshal(reason)
+		if err != nil {
+			return err
+		}
+		withdraw := false
+		if _, _, err := draft.Edit(d, "f-003", draft.EditInput{WithdrawReason: raw}, &withdraw, nil, draft.ByAgent, testNow); err != nil {
+			return err
+		}
+		_, _, err = draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// listRow is the finding's row as the list draws it, without color.
+func listRow(t *testing.T, m *Model, id string) string {
+	t.Helper()
+	for _, row := range listRows(m.View().Content) {
+		if strings.Contains(row, " "+id+" ") {
+			return ansi.Strip(row)
+		}
+	}
+	t.Fatalf("no row for %s:\n%s", id, m.View().Content)
+	return ""
+}
+
+// The reason follows the title in the title column, and when both overflow they split it about evenly, each ending in
+// an ellipsis (FR-006).
+func TestTheRowSaysWhyAFindingWasWithdrawn(t *testing.T) {
+	longTitle := "The retry loop resets its counter on every scrape attempt"
+	longReason := "Test name only, the assertion is unchanged and nothing runs differently"
+	for _, c := range []struct {
+		width, height, title, reason int
+	}{{80, 24, 15, 14}, {100, 30, 22, 21}} {
+		t.Run(fmt.Sprint(c.width), func(t *testing.T) {
+			m := modelOf(t, reasonFixture(t, longTitle, draft.Reason{Text: longReason, Code: "no-runtime-effect"}), utf8Env, c.width, c.height)
+			row := listRow(t, m, "f-003")
+			want := m.styles.TruncRight(longTitle, c.title) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(longReason, c.reason)
+			if !strings.Contains(row, want) || !strings.HasSuffix(m.styles.TruncRight(longReason, c.reason), m.styles.Glyphs.Ellipsis) {
+				t.Errorf("row %q lacks %q", row, want)
+			}
+			if style.Width(row) > c.width || strings.Contains(row, "no-runtime-effect") {
+				t.Errorf("row %q is %d cells or carries the code", row, style.Width(row))
+			}
+			if bare := listRow(t, m, "f-002"); strings.Contains(bare, " "+m.glyphs.Sep+" ") || !strings.Contains(bare, "Title two") {
+				t.Errorf("a withdrawal with no reason drew one: %q", bare)
+			}
+		})
+	}
+}
+
+// A short title gives the reason the slack, and a short reason gives it to the title.
+func TestTheRowGivesTheSlackToTheLongerPart(t *testing.T) {
+	long := "Test name only, the assertion is unchanged and nothing runs differently"
+	m := modelOf(t, reasonFixture(t, "Short", draft.Reason{Text: long}), utf8Env, 80, 24)
+	if want := "Short " + m.glyphs.Sep + " " + m.styles.TruncRight(long, 32-3-5); !strings.Contains(listRow(t, m, "f-003"), want) {
+		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
+	}
+	m = modelOf(t, reasonFixture(t, long, draft.Reason{Text: "Naming."}), utf8Env, 80, 24)
+	if want := m.styles.TruncRight(long, 32-3-7) + " " + m.glyphs.Sep + " Naming."; !strings.Contains(listRow(t, m, "f-003"), want) {
+		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
+	}
+}
+
+// A blocking marker takes its two cells before the split.
+func TestTheRowSplitsWhatTheBlockingMarkerLeaves(t *testing.T) {
+	long := "Test name only, the assertion is unchanged and nothing runs differently"
+	dir := reasonFixture(t, long, draft.Reason{Text: long})
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[2].Blocking = true
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 80, 24)
+	want := m.glyphs.Blocking + " " + m.styles.TruncRight(long, 14) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, 13)
+	if row := listRow(t, m, "f-003"); !strings.Contains(row, want) {
+		t.Errorf("row %q lacks %q", row, want)
+	}
+}
+
+// A reason passes the same one-line display rule as a title.
+func TestTheRowEscapesAReason(t *testing.T) {
+	m := modelOf(t, reasonFixture(t, "T", draft.Reason{Text: "a\x1b[31mb"}), utf8Env, 100, 30)
+	if row := listRow(t, m, "f-003"); strings.Contains(row, "\x1b") || !strings.Contains(row, `a\u001B[31mb`) {
+		t.Errorf("row %q", row)
+	}
+	mustOpen(m, "f-003")
+	if view := m.View().Content; strings.Contains(ansi.Strip(view), "\x1b") || !strings.Contains(ansi.Strip(view), `a\u001B[31mb`) {
+		t.Errorf("detail %q", ansi.Strip(view))
+	}
+}
+
+// The detail shows the whole reason under its own head, before the location, and the code as a tag (FR-007).
+func TestTheDetailSaysWhyAFindingWasWithdrawn(t *testing.T) {
+	long := "Test name only, the assertion is unchanged and nothing runs differently at all."
+	for _, c := range []struct{ width, height int }{{80, 24}, {100, 30}} {
+		m := modelOf(t, reasonFixture(t, "Title three", draft.Reason{Text: long, Code: "no-runtime-effect"}), utf8Env, c.width, c.height+20)
+		mustOpen(m, "f-003")
+		view := paneText(m.View().Content)
+		head, text, tag := strings.Index(view, "Withdrawn "), strings.Index(view, long), strings.Index(view, "[no-runtime-effect]")
+		body := strings.Index(view, "Body three")
+		if head < 0 || text < head || tag < text || body < tag {
+			t.Errorf("%d: head %d, text %d, tag %d, body %d:\n%s", c.width, head, text, tag, body, view)
+		}
+		mustOpen(m, "f-002")
+		if view := paneText(m.View().Content); strings.Contains(view, "Withdrawn ") {
+			t.Errorf("%d: a withdrawal with no reason has a section:\n%s", c.width, view)
+		}
+	}
+	m := modelOf(t, reasonFixture(t, "Title one", draft.Reason{Text: "Naming."}), utf8Env, 100, 40)
+	mustOpen(m, "f-001")
+	if view := paneText(m.View().Content); strings.Contains(view, "Withdrawn ") {
+		t.Errorf("an included finding has a section:\n%s", view)
+	}
+}
+
+// Reinstating takes the reason off the row and the detail, and history keeps it (User Story 1, scenario 4).
+func TestReinstatingDropsTheReason(t *testing.T) {
+	m := modelOf(t, reasonFixture(t, "Title three", draft.Reason{Text: "Naming only."}), utf8Env, 100, 30)
+	mustOpen(m, "f-003")
+	m.Update(tea.KeyPressMsg{Code: 'u', Text: "u"})
+	if got := draft.Dispositions(m.draft)["f-003"]; got != draft.DispositionAccepted {
+		t.Fatalf("f-003 is %s after u", got)
+	}
+	if m.view == viewDetail {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	}
+	if row := listRow(t, m, "f-003"); strings.Contains(row, "Naming only.") {
+		t.Errorf("row %q", row)
+	}
+	mustOpen(m, "f-003")
+	if view := paneText(m.View().Content); strings.Contains(view, "Naming only.") {
+		t.Errorf("detail:\n%s", view)
+	}
+	f := m.draft.Findings[2]
+	if f.History[0].Reason == nil || f.History[0].Reason.Text != "Naming only." {
+		t.Errorf("history %+v", f.History)
 	}
 }

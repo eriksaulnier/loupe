@@ -567,8 +567,7 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 		b.WriteString(s.NoteMark(replied).Render(m.glyphs.Note + " "))
 		titleWidth -= style.Width(m.glyphs.Note) + 1
 	}
-	title := s.TruncRight(render.ForDisplay(render.OneLine(f.Title)), max(0, titleWidth))
-	b.WriteString(text.Render(title) + strings.Repeat(" ", max(0, titleWidth-style.Width(title))))
+	b.WriteString(m.titleCell(f, text.Render, max(0, titleWidth)))
 	if cols.location > 0 {
 		b.WriteString(" " + m.locationColumn(f, cols))
 	}
@@ -578,6 +577,36 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 		return s.OnSurface(style.SurfaceSelected, line)
 	}
 	return line
+}
+
+// reasonFloor is the narrowest title cell that still splits with a reason; below it each part would be one cell.
+const reasonFloor = 5
+
+// titleCell is the title, and for a finding not included its current withdrawal reason after a dim separator, padded
+// to width. When both overflow they split the cell evenly, and a part shorter than its half gives the other the slack.
+func (m *Model) titleCell(f draft.Finding, paint func(...string) string, width int) string {
+	s := m.styles
+	title := render.ForDisplay(render.OneLine(f.Title))
+	reason := draft.CurrentReason(f)
+	if reason == nil || width < reasonFloor {
+		title = s.TruncRight(title, width)
+		return paint(title) + strings.Repeat(" ", max(0, width-style.Width(title)))
+	}
+	why := render.ForDisplay(render.OneLine(reason.Text))
+	sep := " " + m.glyphs.Sep + " "
+	rest := width - style.Width(sep)
+	titleRoom, whyRoom := rest-rest/2, rest/2
+	switch {
+	case style.Width(title)+style.Width(why) <= rest:
+		titleRoom, whyRoom = style.Width(title), style.Width(why)
+	case style.Width(title) < titleRoom:
+		titleRoom, whyRoom = style.Width(title), rest-style.Width(title)
+	case style.Width(why) < whyRoom:
+		titleRoom, whyRoom = rest-style.Width(why), style.Width(why)
+	}
+	title, why = s.TruncRight(title, titleRoom), s.TruncRight(why, whyRoom)
+	cell := paint(title) + s.Dim.Render(sep+why)
+	return cell + strings.Repeat(" ", max(0, width-style.Width(title)-style.Width(sep)-style.Width(why)))
 }
 
 // openNotes maps each finding with an open note to whether the agent has replied to one, which makes it the human's

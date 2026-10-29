@@ -53,6 +53,7 @@ func (m *Model) refreshDetail() error {
 		doc = append(doc, m.styles.Emphasis(m.styles.Text()).Render(line))
 	}
 	doc = append(doc, m.metaLines(f, width)...)
+	doc = append(doc, m.withdrawReason(f, width)...)
 	doc = append(doc, "")
 	if f.Location != nil {
 		doc = append(doc, m.codePane(locationText(f), lines, width)...)
@@ -237,6 +238,32 @@ func (m *Model) impact(f draft.Finding) ([]string, error) {
 	}
 	out := []string{"", m.sectionHead("Impact")}
 	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
+}
+
+// withdrawReason is read before the evidence, so the human judges the withdrawal before reinstating it. It wraps as a
+// reply body does, and the code follows as a dim tag.
+func (m *Model) withdrawReason(f draft.Finding, width int) []string {
+	reason := draft.CurrentReason(f)
+	if reason == nil {
+		return nil
+	}
+	out := []string{"", m.sectionHead("Withdrawn")}
+	for _, line := range m.threadBlock(reason.Text, width) {
+		out = append(out, m.styles.Text().Render(line))
+	}
+	if reason.Code == "" {
+		return out
+	}
+	code := render.ForDisplay(render.OneLine(reason.Code))
+	tag := "[" + code + "]"
+	if m.styles.Color {
+		tag = m.styles.Chip(code, style.ToneMuted)
+	}
+	if last := out[len(out)-1]; style.Width(last)+2+style.Width(tag) <= width {
+		out[len(out)-1] = last + "  " + tag
+		return out
+	}
+	return append(out, tag)
 }
 
 // sectionHead is a heading inside the detail document, in the accent as pane titles are, so the document reads as
