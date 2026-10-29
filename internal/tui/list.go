@@ -273,8 +273,9 @@ func (m *Model) listColumns() listColumns {
 		// What the title and location share: the title's cell and the location's, less the gap between them.
 		shared := inner - fixed() + tier
 		if c.shortLocation && titles+natural > shared {
-			// A path that does not fit is drawn as its filename, so the column is measured by what it draws.
-			natural = short
+			// A path that does not fit is drawn as its filename, so the column takes the room the titles leave, down to
+			// the widest filename it draws.
+			natural = max(short, shared-titles)
 		}
 		c.location = natural
 		if titles+natural > shared {

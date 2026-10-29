@@ -604,10 +604,26 @@ func TestListLocationTakesItsNaturalWidth(t *testing.T) {
 			t.Errorf("%s at %d: %+v, want location %d and the title the rest", c.name, c.width, got, c.location)
 		}
 	}
-	// At 80–99 a path that does not fit is drawn as its filename, so the column is measured by the filename form.
-	// The widest filename form here is f-002's multi.txt:21.
-	if got := at("Title two", 90); got.location != len("multi.txt:21") || got.title != 86-26-1-len("multi.txt:21") {
-		t.Errorf("at 90 the location is sized for the path it does not draw: %+v", got)
+	// At 80–99 a path that does not fit is drawn as its filename, so the column takes the room the widest title leaves,
+	// and the paths that fit it keep their directories.
+	mid := newFixture(t)
+	if _, err := draft.Mutate(mid, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].Location.Path, d.Findings[1].Location.Path = path, "lib/widgets/multi.txt"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m90 := modelOf(t, mid, testEnv, 90, 24)
+	_, _, titles := m90.naturalWidths()
+	if got := m90.listColumns(); got.title != titles || got.location != 86-26-1-titles || got.location >= natural {
+		t.Errorf("at 90 the location is not the room the widest title leaves: %+v, widest title %d", got, titles)
+	}
+	if view := m90.View().Content; !strings.Contains(view, " turn.ts:3") || !strings.Contains(view, " lib/widgets/multi.txt:21") {
+		t.Errorf("at 90 a path that fits is not drawn whole beside one drawn by its filename:\n%s", view)
+	}
+	// When the titles leave less than the widest filename form, f-002's multi.txt:21, the column is that form.
+	if got := at(strings.Repeat("t", 60), 90); got.location != len("multi.txt:21") {
+		t.Errorf("at 90 beside a long title: %+v", got)
 	}
 	// A long filename falls back to the tier's width, and a long id still takes from the location below it, so the
 	// title keeps its floor.
