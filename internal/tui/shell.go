@@ -172,8 +172,8 @@ func groupHints(hints []style.Hint) []style.KeyGroup {
 	return []style.KeyGroup{decide, move, app}
 }
 
-// borderNotice is the notice drawn at the right of the active pane's top border, when it is short and not a refusal.
-// room is the cells that border has for it.
+// borderNotice is the notice a border draws when it is short and not a refusal: at the right of the active pane's top
+// border, or at the left of the publish popup's bottom border. room is the cells that border has for it.
 func (m *Model) borderNotice(room int) string {
 	if m.notice == "" || m.noticeKind == style.Warn || style.Width(m.notice) > room {
 		return ""

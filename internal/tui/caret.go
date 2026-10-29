@@ -13,16 +13,12 @@ import (
 const caretMark = "\x1b[7419m"
 
 // markCaret puts the caret mark into an editor's rendered rows at its terminal cursor, which a textarea reports only
-// while it has focus. dropped is how many of the textarea's rows were cut from the top of rows.
-func markCaret(rows []string, c *tea.Cursor, dropped int) {
-	if c == nil {
+// while it has focus.
+func markCaret(rows []string, c *tea.Cursor) {
+	if c == nil || c.Y < 0 || c.Y >= len(rows) {
 		return
 	}
-	y := c.Y - dropped
-	if y < 0 || y >= len(rows) {
-		return
-	}
-	rows[y] = insertAtCell(rows[y], c.X, caretMark)
+	rows[c.Y] = insertAtCell(rows[c.Y], c.X, caretMark)
 }
 
 // insertAtCell inserts mark before the grapheme that starts at cell col of s, or at its end.

@@ -335,7 +335,7 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	for i, r := range rows {
 		rows[i] = r + tint.Render(strings.Repeat(" ", max(0, inner-style.Width(r))))
 	}
-	markCaret(rows, c.message.Cursor(), 0)
+	markCaret(rows, c.message.Cursor())
 	// The pane takes the input color only while it has the keys, so its border also says where typing goes.
 	tone := style.ToneAccent
 	if c.typing {

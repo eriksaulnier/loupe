@@ -231,10 +231,10 @@ func (m *Model) sizeRewrite() {
 func (m *Model) rewriteView() []string {
 	width, _ := style.PaneInner(m.width, 0)
 	rows := strings.Split(m.styles.Render(m.rewriteTitle.View()), "\n")
-	markCaret(rows, m.rewriteTitle.Cursor(), 0)
+	markCaret(rows, m.rewriteTitle.Cursor())
 	rows = append(rows, m.styles.Dim.Render(strings.Repeat(m.glyphs.HRule, max(1, width))))
 	body := strings.Split(m.styles.Render(m.rewriteBody.View()), "\n")
-	markCaret(body, m.rewriteBody.Cursor(), 0)
+	markCaret(body, m.rewriteBody.Cursor())
 	rows = append(rows, body...)
 	field := "title"
 	if m.rewriteFocus == rewriteFocusBody {
