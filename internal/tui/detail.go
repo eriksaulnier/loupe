@@ -522,7 +522,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		m.body.ScrollDown(1)
 	case "k", "up":
 		m.body.ScrollUp(1)
-	case "pgdown", " ":
+	case "pgdown", "space":
 		m.body.PageDown()
 	case "pgup":
 		m.body.PageUp()

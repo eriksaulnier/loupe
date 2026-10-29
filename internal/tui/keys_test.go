@@ -274,6 +274,11 @@ func TestHelpScrolls(t *testing.T) {
 	if m.View().Content != first {
 		t.Errorf("scrolling back does not return to the top:\n%s", m.View().Content)
 	}
+	// Help lists space as a page down, so it pages (review finding).
+	m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if m.helpTop == 0 {
+		t.Errorf("space did not page help:\n%s", m.View().Content)
+	}
 	m.help = false
 	for _, k := range []tea.KeyPressMsg{runes("?"), arrow(tea.KeyEsc), runes("q")} {
 		m.Update(runes("?"))

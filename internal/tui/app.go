@@ -814,7 +814,7 @@ func (m *Model) updateHelp(msg tea.KeyPressMsg) {
 		m.helpTop = min(m.helpTop+1, last)
 	case "k", "up":
 		m.helpTop = max(m.helpTop-1, 0)
-	case "pgdown", " ":
+	case "pgdown", "space":
 		m.helpTop = min(m.helpTop+height, last)
 	case "pgup":
 		m.helpTop = max(m.helpTop-height, 0)

@@ -287,7 +287,7 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 		t.Fatalf("first view does not start at the top of the hunk:\n%s", view)
 	}
 	seen := map[string]bool{}
-	for _, keys := range []tea.KeyPressMsg{{Code: tea.KeyDown}, {Code: tea.KeyPgDown}} {
+	for _, keys := range []tea.KeyPressMsg{{Code: tea.KeyDown}, {Code: tea.KeyPgDown}, {Code: tea.KeySpace, Text: " "}} {
 		if err := m.openFinding("f-001"); err != nil {
 			t.Fatal(err)
 		}
