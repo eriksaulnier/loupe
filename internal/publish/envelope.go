@@ -107,6 +107,10 @@ func Build(in BuildInput) (Envelope, error) {
 	if err := markdown.Check(note, markdown.Note, noteFix); err != nil {
 		return Envelope{}, err
 	}
+	// The note is the one published field loupe never stores, so publish is where a finding id in it is refused.
+	if err := markdown.FindingIDs(note, markdown.Note, "reword --note and run loupe publish again"); err != nil {
+		return Envelope{}, err
+	}
 	for _, f := range included {
 		if err := markdown.Check(f.Body, markdown.Body, fmt.Sprintf("loupe edit %s --from -", f.ID)); err != nil {
 			return Envelope{}, err

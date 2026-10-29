@@ -666,3 +666,24 @@ func TestBuildNamesTheNoteOverTheLimit(t *testing.T) {
 		t.Fatalf("got %v, want a limit refusal naming the note", err)
 	}
 }
+
+// Publish rechecks the allowlist, never finding ids: a stored draft publishes as it would have before the check, and
+// the human's message is their own words.
+func TestBuildDoesNotCheckFindingIDs(t *testing.T) {
+	d := readyDraft()
+	d.Summary = "f-001 is the retry loop."
+	for i := range d.Findings {
+		d.Findings[i].Title, d.Findings[i].Body, d.Findings[i].Impact = "So f-002 reproduces", "As f-002 showed.", "Like f-003."
+	}
+	attended := buildInput(fixtureTarget(), d, "comment", "none", false)
+	attended.Message = "Thanks; f-002 is the one to look at."
+	for name, in := range map[string]BuildInput{"attended": attended, "unattended": buildInput(fixtureTarget(), d, "comment", "none", true)} {
+		env, err := Build(in)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !strings.Contains(env.Body, "As f-002 showed.") {
+			t.Fatalf("%s: the stored body is not published as stored:\n%s", name, env.Body)
+		}
+	}
+}

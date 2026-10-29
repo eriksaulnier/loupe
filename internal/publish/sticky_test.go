@@ -538,3 +538,40 @@ func TestEditedRoundsNamesOnlyRoundsTheBodyCarries(t *testing.T) {
 		t.Fatalf("edited %v, want [3]", got)
 	}
 }
+
+// The note is the one checked field loupe never stores, so publish is where a finding id in it is refused.
+func TestRunStickyRefusesANoteCitingAFindingID(t *testing.T) {
+	fx := newStickyRun(t, readyDraft(), nil, 1)
+	fx.opts.Note = "Round 1's f-002 is fixed."
+	_, err := fx.run()
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.Markdown || r.Details["rule"] != "finding-id" || r.Details["field"] != "note" ||
+		!strings.HasSuffix(r.Fix, "reword --note and run loupe publish again") {
+		t.Fatalf("got %v, want a finding-id refusal naming the note", err)
+	}
+	fx.checkWrites(0, 0)
+	if _, found, err := LoadAttempt(fx.opts.Dir); err != nil || found {
+		t.Fatalf("attempt found %v err %v", found, err)
+	}
+	blank := newStickyRun(t, readyDraft(), nil, 1)
+	blank.opts.Note = "  \n"
+	if _, err := blank.run(); err != nil {
+		t.Fatalf("a whitespace-only note was checked: %v", err)
+	}
+}
+
+// A draft filed before the check may cite ids, and publish does not recheck them.
+func TestRunStickyPublishesADraftCitingFindingIDs(t *testing.T) {
+	d := readyDraft()
+	d.Summary = "f-001 is the retry loop."
+	for i := range d.Findings {
+		d.Findings[i].Body = "As f-002 showed."
+	}
+	fx := newStickyRun(t, d, nil, 1)
+	if _, err := fx.run(); err != nil {
+		t.Fatalf("publish refused a stored id: %v", err)
+	}
+	if body := onlyReview(t, fx).Body; !strings.Contains(body, "f-001 is the retry loop.") || !strings.Contains(body, "As f-002 showed.") {
+		t.Fatalf("the stored text is not published as stored:\n%s", body)
+	}
+}
