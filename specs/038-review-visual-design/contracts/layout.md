@@ -104,7 +104,7 @@ With 30 or fewer counted findings, the progress bar MUST mark the cell of the op
 
 When `ORCA_TERMINAL_HANDLE` is nonempty, the header MUST leave its last four columns blank, with no band, because Orca draws its pane controls over them. The body and footer keep the full width.
 
-The detail pane's top-left title MUST lead with the list's disposition glyph and carry the disposition word in its status color: accepted in good, excluded and withdrawn in overlay, pending in text. `open note` takes the note color. The glyph and the word carry the status where color is unavailable.
+The detail pane's top-left title MUST lead with the list's disposition glyph and carry the disposition word in its status color: accepted in good, excluded and withdrawn in overlay, pending in the accent. `open note` takes the note color. The glyph and the word carry the status where color is unavailable.
 
 The detail pane's border MUST take the finding's decision color: accepted in good, excluded and withdrawn in overlay, and pending in the accent. An open note colors only its own thread and the title's `open note`, so a pending finding with one keeps the accent border. A note's thread MUST hang from a left bar, not sit in a pane: a headline with the note id and its colored status, then each author and body. The bar and headline MUST use note while the note is open and overlay once it is resolved or dismissed, and a closed note's bodies recede to secondary text. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.
 
@@ -126,7 +126,7 @@ Status words MUST be chips in color: the disposition and `open note` in the deta
 
 The footer MUST be the bare keys on the terminal's own background. A band behind it was tried after the first demo and dropped.
 
-In color, the pane taking the keys MUST show its name as a solid tab: bold base text on a block of the pane's tone, like the badge. The tab's padding replaces the spaces beside the title. That pane is the findings in the list and the finding's id in detail. While a composer is open, it is the composer, and the review message while typing. The choice pane, help, the published screen and the too-small screen also get the tab. Other panes keep plain titles. Without color, titles are unchanged.
+In color, the pane taking the keys MUST show its name as a solid tab: bold base text on a block of the pane's tone, like the badge. The tab's padding replaces the spaces beside the title. That pane is the findings in the list and the finding's id in detail. While a composer is open, it is the composer, and the review message while typing. Help, the published screen and the too-small screen also get the tab. The publish steps' choice pane keeps a plain title, as the publish steps rule below says. Other panes keep plain titles. Without color, titles are unchanged.
 
 A decision that settles a finding MUST flash its success notice as a solid tab in the finding's new tone for 400 ms: good when accepted, overlay when excluded, the accent otherwise. The notice then reads as plain colored text until it expires. Its text MUST stay in the same cells through the flash, so only the background changes. The flash needs room for the tab's padding, and it has no effect without color.
 
@@ -138,7 +138,7 @@ A decision that settles the last finding in the list MUST return to the list, wi
 
 The review message box MUST open two rows tall and grow with the message.
 
-The Message step MUST open on the review as it reads. Section headings take the accent and a finding's summary is bold. Quoted lines hang from a bar, links show their text, and code spans are chips. Bold markers, details tags and fences are dropped, and a hidden comment shows as a dim note. `v` MUST step from that view to the exact Markdown, then to the request payload, and back. The footer names the view it steps to next. Typing a message from the payload returns to the readable view. The `review body` rule is gone, because the pane's title already names the review.
+The Message step MUST open on the review as it reads. Section headings take the accent and a finding's summary is bold. Quoted lines hang from a bar, links show their text, and code spans are chips. Bold markers, details tags and fences are dropped, and a hidden comment shows as a dim note. Quoted lines are read the same way behind the bar, so the earlier rounds a sticky body quotes lose their tags too. Without color, a heading keeps its `#` run and bold keeps its `**` markers, because the accent and bold that replace them are gone. `v` MUST step from that view to the exact Markdown, then to the request payload, and back. The footer names the view it steps to next. Typing a message from the payload returns to the readable view. The `review body` rule is gone, because the pane's title already names the review.
 
 While the review message is typed, `shift+↑` and `shift+↓` MUST scroll the review one line, and `pgup`/`pgdn` a page. The plain arrows stay with the text. Mouse-wheel scrolling waits for a mouse spec, which decides once what capturing the mouse costs text selection.
 
