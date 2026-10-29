@@ -195,6 +195,10 @@ func (s Style) Text() lipgloss.Style      { return s.fg(s.rv.text) }
 func (s Style) Secondary() lipgloss.Style { return s.fg(s.rv.secondary) }
 func (s Style) Overlay() lipgloss.Style   { return s.fg(s.rv.overlay1) }
 
+// ColumnHead is a list's column headings: bold secondary, so they read apart from the overlay text that decided rows
+// and path prefixes recede to.
+func (s Style) ColumnHead() lipgloss.Style { return s.Emphasis(s.Secondary()) }
+
 // borderGlyphs are the pane's edges in the current tier.
 type borderGlyphs struct{ tl, tr, bl, br, h, v, thumb string }
 

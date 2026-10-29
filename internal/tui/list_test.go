@@ -566,7 +566,7 @@ func TestListHeadsConfidenceConf(t *testing.T) {
 	// In color the headings are bold secondary, apart from the overlay text of decided rows and path prefixes.
 	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
 	m.styles.SetColorProfile(colorprofile.TrueColor)
-	sample := m.styles.Emphasis(m.styles.Secondary()).Render("x")
+	sample := m.styles.ColumnHead().Render("x")
 	if open := sample[:strings.Index(sample, "x")]; !strings.Contains(m.View().Content, open+"    id") {
 		t.Errorf("the column headings are not bold secondary:\n%q", m.View().Content)
 	}

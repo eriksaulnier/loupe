@@ -592,3 +592,15 @@ func TestReviewMarkersFollowTheTier(t *testing.T) {
 		t.Errorf("ASCII citation bar: %q", got)
 	}
 }
+
+// A list's column headings are bold secondary in color, and plain without it (release testing).
+func TestColumnHeadIsBoldSecondary(t *testing.T) {
+	color := reviewStyle(t, true, nil)
+	head := color.ColumnHead()
+	if !head.GetBold() || head.GetForeground() != color.Secondary().GetForeground() {
+		t.Errorf("column heading bold %v foreground %v, want bold %v", head.GetBold(), head.GetForeground(), color.Secondary().GetForeground())
+	}
+	if got := reviewStyle(t, false, nil).ColumnHead().Render("id"); got != "id" {
+		t.Errorf("NO_COLOR column heading %q, want it plain", got)
+	}
+}
