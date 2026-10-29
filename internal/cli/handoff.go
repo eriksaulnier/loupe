@@ -80,18 +80,20 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 		return err
 	}
 	fix := "ask the human to run loupe review " + shellQuote(ref.String())
-	host, ok := pane.Detect(deps.Getenv)
-	if !ok {
-		return refusal.New(refusal.NoPaneHost, "no terminal pane can be opened here: HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH, "+
-			"or ORCA_TERMINAL_HANDLE and orca on PATH", fix)
+	hosts := pane.Detect(deps.Getenv, deps.GOOS)
+	if len(hosts) == 0 {
+		return noPaneHost(fix)
 	}
 	command, err := reviewCommand(deps, ref)
 	if err != nil {
 		return err
 	}
-	opened, err := host.Open(cmd.Context(), pane.Request{Command: command, TTYWidth: deps.TTYWidth, Fix: fix})
+	host, opened, err := pane.Open(cmd.Context(), hosts, pane.Request{Command: command, TTYWidth: deps.TTYWidth, Fix: fix})
 	if err != nil {
 		return err
+	}
+	if host == nil {
+		return noPaneHost(fix)
 	}
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), nil, map[string]any{
@@ -109,6 +111,11 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	_, err = fmt.Fprintf(deps.Stdout, "%s Opened loupe review for %s in a new pane %s\n",
 		s.Emphasis(s.Good).Render(s.Glyphs.Accepted), s.Accent.Render(ref.String()), where)
 	return err
+}
+
+func noPaneHost(fix string) error {
+	return refusal.New(refusal.NoPaneHost, "no terminal pane can be opened here: HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH, "+
+		"or ORCA_TERMINAL_HANDLE and orca on PATH", fix)
 }
 
 // refuseOpenReview names the open run in details.run, so an agent can tell its own round from another it must ask the

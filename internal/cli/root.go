@@ -37,6 +37,8 @@ type Deps struct {
 	TermWidth func() int
 	// TTYWidth is the agent's own terminal width, which picks a handoff's split direction; nil means unreadable.
 	TTYWidth func() (int, bool)
+	// GOOS is the operating system a handoff detects hosts on; empty is not macOS, so no test meets iTerm2 by accident.
+	GOOS string
 	// OpenURL opens a published review in the browser; nil means review offers no way to.
 	OpenURL func(string) error
 	// LockBusy, when set, runs each time capture finds its lock held; tests use it to know a second capture is waiting.

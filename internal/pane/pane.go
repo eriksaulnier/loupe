@@ -5,6 +5,7 @@ package pane
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -40,16 +41,37 @@ type Opened struct {
 	Focused bool
 }
 
-// Detect tries Herdr before Orca because a Herdr session started inside an Orca terminal gives its panes both
-// environments, and the agent sits in the Herdr pane. A host whose conditions are met only in part is skipped.
-func Detect(getenv func(string) string) (Host, bool) {
+// Detect returns every host whose conditions are all met, in the order they are tried. Herdr comes before Orca because
+// a Herdr session started inside an Orca terminal gives its panes both environments, and the agent sits in the Herdr
+// pane. A host whose conditions are met only in part is left out.
+func Detect(getenv func(string) string, goos string) []Host {
+	var hosts []Host
 	if h, ok := detectHerdr(getenv); ok {
-		return h, true
+		hosts = append(hosts, h)
 	}
 	if o, ok := detectOrca(getenv); ok {
-		return o, true
+		hosts = append(hosts, o)
 	}
-	return nil, false
+	return hosts
+}
+
+// errPass is a host declining a hand-off it detected, before it opened anything, so the next host is tried.
+var errPass = errors.New("pass to the next host")
+
+// Open opens the pane in the first host that does not pass. A refusal stops the walk, since a later step may already
+// have opened a pane. With every host passed it returns a nil Host and no error.
+func Open(ctx context.Context, hosts []Host, req Request) (Host, Opened, error) {
+	for _, h := range hosts {
+		opened, err := h.Open(ctx, req)
+		if errors.Is(err, errPass) {
+			continue
+		}
+		if err != nil {
+			return nil, Opened{}, err
+		}
+		return h, opened, nil
+	}
+	return nil, Opened{}, nil
 }
 
 // direction prefers the host's own report of the agent pane's width, then the agent's tty. An unknown width opens
