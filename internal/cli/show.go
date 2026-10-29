@@ -52,7 +52,8 @@ round is the review's own round number.
 earlier is every finding still open before this round: the ones the previous round marked open
 with loupe assess, then the ones it filed. Each carries filedIn, the round that first filed it,
 and a ref, e-1 onward, that loupe assess takes. A finding the previous round did not mark open
-is not carried.
+is not carried. Each id there belongs to its own round, and the current round reuses it from
+f-001, so published text names an earlier finding by its subject, never by its id.
 
 Result (--previous --json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@2",
