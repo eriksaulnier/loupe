@@ -81,7 +81,7 @@ Write `{"summary": "Markdown"}` to a file and run `loupe summary --expect-findin
 
 **The summary is not published.** It orients the human while they sort findings: what kind of review this is, what you looked at, what you could not check. The review's own opening prose is written by the human at the publish confirmation, in their words, so write the summary for the one person who reads it before deciding, not for the pull request's author. Say plainly what the round did and did not cover; a caveat you leave out is one nobody sees.
 
-The summary MUST NOT cite a finding id either: an unattended publication posts it as the review's opening. `loupe summary` refuses one with `markdown` and `error.details.rule` `finding-id` on every run. Name a finding by its subject.
+The summary MUST NOT cite a finding id either. `loupe summary` refuses one with `markdown` and `error.details.rule` `finding-id` on every run. Name a finding by its subject.
 
 ## 6. Hand off
 
