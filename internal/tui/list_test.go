@@ -530,16 +530,16 @@ func TestListSeverityColumnIsColoredByRank(t *testing.T) {
 }
 
 // The width tiers of the layout contract: confidence and location go below 80, the location shortens below 100, and
-// the title keeps the rest.
+// the title keeps the rest. Locations this short take their natural width, no narrower than their heading.
 func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 	dir := severityFixture(t)
 	for _, c := range []struct {
 		width, title, location int
 		confidence, short      bool
 	}{
-		{100, 45, 24, true, false},
-		{99, 50, 18, true, true},
-		{80, 31, 18, true, true},
+		{100, 57, 12, true, false},
+		{99, 56, 12, true, true},
+		{80, 37, 12, true, true},
 		{79, 54, 0, false, false},
 		{60, 35, 0, false, false},
 	} {
@@ -548,11 +548,58 @@ func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 			t.Errorf("at %d columns: %+v, want title %d location %d confidence %v short %v", c.width, got, c.title, c.location, c.confidence, c.short)
 		}
 	}
-	// A long id takes its room from the title first, then the location, and the title keeps its floor.
+	// A long id takes its room from the title first.
 	m := modelOf(t, dir, testEnv, 80, 24)
 	m.order[0].ID = strings.Repeat("f", 30)
-	if got := m.listColumns(); got.title != listTitleFloor || got.id != 30 || got.location != 16 || !got.confidence {
+	if got := m.listColumns(); got.title != 12 || got.id != 30 || got.location != 12 || !got.confidence {
 		t.Errorf("a 30-cell id: %+v", got)
+	}
+}
+
+// The location takes its natural width while every title still fits, and gives way only as far as the tier's width
+// when a title would otherwise be cut (release testing).
+func TestListLocationTakesItsNaturalWidth(t *testing.T) {
+	path := "packages/chat/src/agui/" + strings.Repeat("deeply/", 3) + "turn.ts"
+	at := func(title string, width int) listColumns {
+		dir := newFixture(t)
+		if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+			d.Findings[0].Location.Path, d.Findings[1].Title = path, title
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return modelOf(t, dir, testEnv, width, 24).listColumns()
+	}
+	natural := len(path) + len(":3")
+	for _, c := range []struct {
+		name            string
+		title           string
+		width, location int
+	}{
+		{"short titles", "Title two", 100, natural},
+		{"a title that fits beside part of the path", strings.Repeat("t", 30), 100, 96 - 26 - 1 - 30},
+		{"a title that fits nowhere", strings.Repeat("t", 80), 100, 24},
+		{"a title that fits nowhere at 80", strings.Repeat("t", 80), 80, 18},
+		{"a wide window", strings.Repeat("t", 80), 200, natural},
+	} {
+		got := at(c.title, c.width)
+		inner := c.width - 4
+		if got.location != c.location || got.title != inner-26-1-got.location {
+			t.Errorf("%s at %d: %+v, want location %d and the title the rest", c.name, c.width, got, c.location)
+		}
+	}
+	// A long id still takes from the location below its tier's width, so the title keeps its floor.
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].Location.Path, d.Findings[1].Title = path, strings.Repeat("t", 80)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, testEnv, 80, 24)
+	m.order[0].ID = strings.Repeat("f", 30)
+	if got := m.listColumns(); got.title != listTitleFloor || got.location != 16 {
+		t.Errorf("a 30-cell id beside a long title: %+v", got)
 	}
 }
 

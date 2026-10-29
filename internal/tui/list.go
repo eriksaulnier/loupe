@@ -232,8 +232,9 @@ func (m *Model) pickerRow(selected, disabled bool, name, description string, inn
 	return lines
 }
 
-// listColumns is the findings table for the current width. The title takes whatever the fixed columns leave; a long
-// id takes its room from the title first, then the location, then the confidence.
+// listColumns is the findings table for the current width. The location takes its natural width and the title the
+// rest, until a title would be cut: then the location gives way, down to its tier's width. A long id takes its room
+// from the title first, then the location, then the confidence.
 type listColumns struct {
 	id, title, location int
 	confidence          bool
@@ -256,6 +257,7 @@ func (m *Model) listColumns() listColumns {
 	case m.width >= midWidth:
 		c.location, c.confidence, c.shortLocation = 18, true, true
 	}
+	tier := c.location
 	fixed := func() int {
 		n := 1 + 1 + 1 + 1 + c.id + 1 + style.PillWidth + 1
 		if c.confidence {
@@ -265,6 +267,15 @@ func (m *Model) listColumns() listColumns {
 			n += 1 + c.location
 		}
 		return n
+	}
+	if c.location > 0 {
+		natural, titles := m.naturalWidths()
+		// What the title and location share: the title's cell and the location's, less the gap between them.
+		shared := inner - fixed() + tier
+		c.location = natural
+		if titles+natural > shared {
+			c.location = min(natural, max(tier, shared-titles))
+		}
 	}
 	c.title = inner - fixed()
 	if c.title < listTitleFloor && c.location > 0 {
@@ -280,6 +291,28 @@ func (m *Model) listColumns() listColumns {
 	}
 	c.title = max(1, c.title)
 	return c
+}
+
+// naturalWidths are the widest location in the list, no narrower than its heading, and the widest title cell: the
+// title with its blocking and note markers and, for a finding not included, the separator and its reason.
+func (m *Model) naturalWidths() (location, title int) {
+	location = style.Width("location")
+	notes := openNotes(m.draft)
+	for _, f := range m.order {
+		location = max(location, style.Width(locationText(f)))
+		need := style.Width(render.ForDisplay(render.OneLine(f.Title)))
+		if f.Blocking {
+			need += style.Width(m.glyphs.Blocking) + 1
+		}
+		if _, open := notes[f.ID]; open {
+			need += style.Width(m.glyphs.Note) + 1
+		}
+		if reason := draft.CurrentReason(f); reason != nil {
+			need += style.Width(" "+m.glyphs.Sep+" ") + style.Width(render.ForDisplay(render.OneLine(reason.Text)))
+		}
+		title = max(title, need)
+	}
+	return location, title
 }
 
 // listCounts are the findings pane's top-border counts: blocking findings that will publish, every open note record,
