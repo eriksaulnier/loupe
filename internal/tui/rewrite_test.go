@@ -411,7 +411,7 @@ func TestDetailSaysTheAgentChangedTheHumansText(t *testing.T) {
 		t.Fatal("the line shows before the agent changed anything")
 	}
 	outside(t, dir, func(d *draft.Draft) error {
-		_, _, err := draft.Edit(d, "f-003", draft.EditInput{Body: []byte(`"The agent's body."`)}, nil, nil, draft.ByAgent, testNow)
+		_, _, err := draft.Edit(d, "f-003", draft.EditInput{Title: []byte(`"The agent's title"`)}, nil, nil, draft.ByAgent, testNow)
 		return err
 	})
 	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})

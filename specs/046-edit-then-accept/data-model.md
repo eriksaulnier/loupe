@@ -35,4 +35,4 @@ A rewrite is a `draft.Edit` of `title` and `body` with `by: "human"`.
 
 ## Derived: agent changed the human's text (FR-014)
 
-True when, among the finding's history entries whose `changed` holds `title` or `body`, the latest is by `agent` and an earlier one is by `human`.
+True when, for `title` or for `body`, among the finding's history entries whose `changed` holds that field, the latest is by `agent` and an earlier one is by `human`. Each field is checked on its own, so an agent change to the body after a human title rewrite is false.

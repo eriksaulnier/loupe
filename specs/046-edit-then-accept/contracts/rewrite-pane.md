@@ -40,4 +40,4 @@ After a refused save the editor stays open with the typed text. After a stale sa
 
 ## Detail line (FR-014)
 
-When the agent made the latest title or body change and a human made an earlier one, the detail document shows `the agent changed text you wrote` in the note tone, on its own line after the metadata.
+When the agent made the latest change to the title, or to the body, and a human made an earlier change to that same field, the detail document shows `the agent changed text you wrote` in the note tone, on its own line after the metadata.

@@ -117,7 +117,7 @@ The agent later reads the draft to answer a note or prepare a next round. It see
 **Acceptance Scenarios**:
 
 1. **Given** a rewritten finding, **When** the agent runs `loupe show --json`, **Then** the finding's title and body hold the human's text, and its history holds the agent's original under an entry by `human`.
-2. **Given** a rewritten, accepted finding, **When** the agent edits its body with `loupe edit`, **Then** the finding is pending, and its detail view says the agent changed text the human last wrote.
+2. **Given** a rewritten, accepted finding, **When** the agent edits a field the human rewrote with `loupe edit`, **Then** the finding is pending, and its detail view says the agent changed text the human last wrote.
 3. **Given** the agent read the draft before the rewrite, **When** it edits with `--expect-version` from that read, **Then** the edit refuses as stale.
 4. **Given** a rewritten, accepted finding, **When** the human publishes, **Then** the published review is byte-identical to the review for a finding filed with that title and body.
 
@@ -151,7 +151,7 @@ The agent later reads the draft to answer a note or prepare a next round. It see
 - **FR-011**: After a save, the detail view MUST show the finding rendered with its new text. A border notice MUST name the finding and say what its decision now is.
 - **FR-012**: `loupe edit` MUST keep clearing the decision on any publishable change, for every `--by` value. No command MAY make a text edit that keeps a decision.
 - **FR-013**: `loupe show --json` MUST present a rewritten finding with the human's text in its title and body and the agent's original as the previous value in a history entry by `human`. This MUST NOT add a field to any result envelope.
-- **FR-014**: When a finding's latest change to its title or body is by the agent and an earlier one is by the human, the detail view MUST say the agent changed text the human wrote.
+- **FR-014**: When the latest change to a finding's title, or to its body, is by the agent and an earlier change to that same field is by the human, the detail view MUST say the agent changed text the human wrote. An agent change to the other field MUST NOT show it.
 - **FR-015**: The `human-review` skill MUST tell the agent that the human MAY rewrite a finding's title and body, that the current text is then the human's, and that the agent's original is in the history. It MUST tell the agent to leave both fields out of an edit unless a note asks for a change, and to pass `--expect-version` from a fresh read when it does change them.
 - **FR-016**: The published review MUST be byte-identical to the review for a finding filed with the rewritten title and body. It MUST NOT mark a rewrite, and `loupe-meta` MUST NOT change.
 - **FR-017**: The detail footer MUST show `w rewrite` in the decide group wherever it applies, and help MUST list it. The editor and its footer MUST fit every supported width and icon tier from 60 columns up, under `contracts/layout.md` of spec 038.
