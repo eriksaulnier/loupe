@@ -120,7 +120,9 @@ func (m *Model) publishedView() string {
 		n := min(len(text), width)
 		chunks, text = append(chunks, text[:n]), text[n:]
 	}
-	var lines []string
+	// A blank row above the URL keeps it off the border.
+	lines := []string{""}
+	first := len(lines)
 	for _, c := range chunks {
 		lines = append(lines, m.styles.Accent.Render(c))
 	}
@@ -134,7 +136,7 @@ func (m *Model) publishedView() string {
 	// the shell drew that row unchanged. Link refuses a URL that could end the escape early. Each row links the whole
 	// URL.
 	for i, c := range chunks {
-		at := m.bodyTop() + 1 + i
+		at := m.bodyTop() + 1 + first + i
 		if at >= len(out) {
 			break
 		}

@@ -152,7 +152,7 @@ The maintainer's testing of `main` before the next release added these rules. Th
 
 The confidence column's heading MUST read `conf`, not `con`. The column reserves four cells, one more than the width tiers give it, and the title gives up that cell. In color the column headings MUST be bold secondary text, so they read apart from the overlay text that decided rows and path prefixes recede to.
 
-The published screen MUST say `Published` once, in its title tab. Its pane opens on the review's URL.
+The published screen MUST say `Published` once, in its title tab. Its pane shows the review's URL under one blank row.
 
 The terminal cursor MUST be hidden on every screen but one whose editor has the keys: the send-back composer, the rewrite editor, and the review message while typing. There the terminal's own cursor MUST sit at the caret, in place of a drawn cursor cell, and it MUST hide again when the editor closes or blurs. The metadata editor takes no typing, so it shows no cursor.
 
