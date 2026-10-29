@@ -36,6 +36,18 @@ func TestHighlightKnownAndUnknownLanguages(t *testing.T) {
 	if !strings.Contains(roles[TokenNeutral], "ETag") || !strings.Contains(roles[TokenNeutral], "==") {
 		t.Errorf("neutral tokens %q", roles[TokenNeutral])
 	}
+	// Built-in types are types, not keywords, so they share the neutral role too (review finding).
+	typed, err := Highlight("internal/cache/store.go", []string{"var s string"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]TokenRole{}
+	for _, tok := range typed[0] {
+		got[tok.Text] = tok.Role
+	}
+	if got["var"] != TokenKeyword || got["string"] != TokenNeutral {
+		t.Errorf("var has role %v and string %v, want keyword and neutral", got["var"], got["string"])
+	}
 	plain, err := Highlight("notes.unknownext", []string{"if x {"})
 	if err != nil || plain != nil {
 		t.Errorf("unknown language: %v, %v; want plain code with no tokens", plain, err)

@@ -72,6 +72,9 @@ func tokenRole(t chroma.TokenType) TokenRole {
 	switch {
 	case t.InCategory(chroma.Comment):
 		return TokenComment
+	// InCategory(Keyword) also matches KeywordType, and the contract gives types the neutral role.
+	case t == chroma.KeywordType:
+		return TokenNeutral
 	case t.InCategory(chroma.Keyword):
 		return TokenKeyword
 	case t.InSubCategory(chroma.LiteralString):
