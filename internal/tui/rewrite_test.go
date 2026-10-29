@@ -159,6 +159,40 @@ func TestRewriteSavedUnchangedRecordsNothing(t *testing.T) {
 	}
 }
 
+// The editor shows a tab as spaces and a CRLF as two breaks, so text the human leaves alone is the agent's, byte for byte.
+func TestRewriteLeavesUntouchedTabsAndCarriageReturnsAsTheAgentWrote(t *testing.T) {
+	const title, body = "Title\tone", "Body one:\r\n\r\n```go\n\tx := 1\n```\n\nEnd."
+	m, dir := editModel(t, "f-001", func(d *draft.Draft) error {
+		d.Findings[0].Title, d.Findings[0].Body = title, body
+		return nil
+	})
+	version := loadDraft(t, dir).Version
+	m.Update(runeKey("w"))
+	m.Update(ctrlS)
+	if d := loadDraft(t, dir); d.Version != version || m.rewriting {
+		t.Fatalf("an untouched save wrote the draft: version %d, want %d; rewriting %v", d.Version, version, m.rewriting)
+	}
+	m.Update(runeKey("w"))
+	m.Update(escKey)
+	if kept, ok := m.keptRewrites["f-001"]; ok {
+		t.Fatalf("esc kept untouched text %+v", kept)
+	}
+	m.Update(runeKey("w"))
+	m.Update(tabKey)
+	typeText(m, " Mine.")
+	m.Update(shiftTab)
+	m.Update(ctrlS)
+	if f := findingOf(t, dir, "f-001"); m.rewriting || f.Title != title || f.Body == body {
+		t.Fatalf("rewriting %v; a body rewrite changed the title: %+v", m.rewriting, f)
+	}
+	m.Update(runeKey("w"))
+	typeText(m, " fixed")
+	m.Update(ctrlS)
+	if f := findingOf(t, dir, "f-001"); f.Title == title || !strings.HasSuffix(f.Body, " Mine.") {
+		t.Fatalf("a title rewrite changed the body: %+v", f)
+	}
+}
+
 func TestRewriteRefusedKeepsTheEditorAndTheText(t *testing.T) {
 	for _, c := range []struct {
 		name, says string

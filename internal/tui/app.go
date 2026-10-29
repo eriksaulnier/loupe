@@ -110,12 +110,14 @@ type Model struct {
 	editLabels   []string
 	editPick     int
 	editBlocking bool
-	// rewriting is true while the title and body editor is open. rewriteRev is the revision its text started from.
-	rewriting    bool
-	rewriteTitle textarea.Model
-	rewriteBody  textarea.Model
-	rewriteFocus rewriteField
-	rewriteRev   int
+	// rewriting is true while the title and body editor is open. rewriteRev is the revision its text started from, and
+	// rewriteOpened the text it opened on.
+	rewriting     bool
+	rewriteTitle  textarea.Model
+	rewriteBody   textarea.Model
+	rewriteFocus  rewriteField
+	rewriteRev    int
+	rewriteOpened [2]openedText
 	// keptRewrites holds, per finding, text the human left in the editor with esc. It lives only as long as the program.
 	keptRewrites map[string]keptRewrite
 	glamour      *glamour.TermRenderer

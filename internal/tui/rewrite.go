@@ -25,6 +25,10 @@ type keptRewrite struct {
 	Rev         int
 }
 
+// openedText is a field's text as the editor opened on it, and as the input shows it. The input turns a tab into
+// spaces and a CRLF into two line breaks, so while the human leaves a field alone, the opened text is what it holds.
+type openedText struct{ Source, Shown string }
+
 // newRewriteInput is a textarea that grows with its text up to the height sizeRewrite allows, then scrolls to its
 // cursor. MaxContentHeight is set so MaxHeight bounds only the view: left at zero, MaxHeight would also stop input.
 func newRewriteInput(newlines bool) textarea.Model {
@@ -53,8 +57,20 @@ func (m *Model) openRewrite(f draft.Finding) tea.Cmd {
 	m.rewriteRev = rev
 	m.rewriteTitle.SetValue(title)
 	m.rewriteBody.SetValue(body)
+	m.rewriteOpened = [2]openedText{{title, m.rewriteTitle.Value()}, {body, m.rewriteBody.Value()}}
 	m.sizeRewrite()
 	return m.focusRewrite(rewriteFocusTitle)
+}
+
+// rewriteText is the editor's title and body, with each field the human left alone as it was opened.
+func (m *Model) rewriteText() (title, body string) {
+	field := func(input textarea.Model, opened openedText) string {
+		if value := input.Value(); value != opened.Shown {
+			return value
+		}
+		return opened.Source
+	}
+	return field(m.rewriteTitle, m.rewriteOpened[rewriteFocusTitle]), field(m.rewriteBody, m.rewriteOpened[rewriteFocusBody])
 }
 
 func (m *Model) focusRewrite(field rewriteField) tea.Cmd {
@@ -112,7 +128,7 @@ func (m *Model) typeRewrite(msg tea.Msg) tea.Cmd {
 // already reads.
 func (m *Model) keepRewrite() {
 	f, _ := m.openedFinding()
-	title, body := m.rewriteTitle.Value(), m.rewriteBody.Value()
+	title, body := m.rewriteText()
 	if title == f.Title && body == f.Body {
 		delete(m.keptRewrites, f.ID)
 		return
@@ -123,7 +139,8 @@ func (m *Model) keepRewrite() {
 // saveRewrite records the text and keeps the finding's decision. A refusal, including a finding the agent changed
 // since it was displayed, leaves the editor open with the text, so nothing the human typed is lost.
 func (m *Model) saveRewrite() tea.Cmd {
-	id, title, body := m.openID, m.rewriteTitle.Value(), m.rewriteBody.Value()
+	id := m.openID
+	title, body := m.rewriteText()
 	changed, disposition := false, ""
 	recorded, err := m.Decide(id, func(d *draft.Draft) error {
 		_, err := draft.Rewrite(d, id, title, body, m.diff, m.cfg.Now())
