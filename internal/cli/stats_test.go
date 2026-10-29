@@ -2,10 +2,12 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -400,4 +402,65 @@ func TestStatsRefusesBadArgumentsAsUsage(t *testing.T) {
 			t.Errorf("%v: exit %d stdout %s, want a usage refusal and exit 2", args, code, s.stdout.String())
 		}
 	}
+}
+
+// SC-003: 500 runs across 20 repositories, 20 findings each and a receipt on every second run, in under a second.
+// Two runs are seeded the ordinary way and copied with plain writes, since CreateRun's fsyncs would cost the suite
+// far more than the command under test.
+func TestStatsReadsFiveHundredRunsInUnderASecond(t *testing.T) {
+	var findings []draft.Finding
+	for i := 1; i <= 20; i++ {
+		findings = append(findings, statsFinding(fmt.Sprintf("f-%03d", i), "issue", false))
+	}
+	accept := []string{"f-001", "f-002", "f-003"}
+	templates := t.TempDir()
+	seedStats(t, templates,
+		statsSeed{owner: "o", repo: "r", number: 1, round: 1, capturedAt: statsOctober, findings: findings, accept: accept,
+			viewer: "reviewer", posted: 10 * time.Minute},
+		statsSeed{owner: "o", repo: "r", number: 2, round: 1, capturedAt: statsOctober, findings: slices.Clone(findings), accept: accept})
+	read := func(number int, name string) []byte {
+		data, err := os.ReadFile(filepath.Join(run.RunDir(templates, "o", "r", number, 1), name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	files := map[string][]byte{"pr.diff": {}, "draft.json": read(1, "draft.json"), "receipt.json": read(1, "receipt.json")}
+	unpublishedDraft := read(2, "draft.json")
+
+	home := t.TempDir()
+	for i := range 500 {
+		repo, number := fmt.Sprintf("repo-%02d", i%20), i/20+1
+		dir := run.RunDir(home, "example-org", repo, number, 1)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		target, err := json.Marshal(run.Target{Schema: run.TargetSchema, Owner: "example-org", Repo: repo, Number: number, Round: 1,
+			CapturedAt: statsOctober.Add(time.Duration(i) * time.Hour)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		write := map[string][]byte{"target.json": target, "pr.diff": files["pr.diff"], "draft.json": unpublishedDraft}
+		if i%2 == 0 {
+			write["draft.json"], write["receipt.json"] = files["draft.json"], files["receipt.json"]
+		}
+		for name, data := range write {
+			if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	start := time.Now()
+	env, s, code := runStatsJSON(t, home, "--state", "captured", "--state", "ready", "--state", "published", "--group-by", "repo")
+	elapsed := time.Since(start)
+	if code != 0 {
+		t.Fatalf("exit %d stderr %s", code, s.stderr.String())
+	}
+	if got := decodeTotal(t, env); got.Findings.Filed != 500*20 || got.Runs.Published != 250 {
+		t.Fatalf("total %+v, want 10000 findings and 250 published runs", got)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("stats took %s over 500 runs, want under 1s", elapsed)
+	}
+	t.Logf("stats over 500 runs: %s", elapsed)
 }
