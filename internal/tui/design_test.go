@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -987,16 +988,30 @@ func TestConfirmationReadsAsAReview(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	view := m.View().Content
 	text := paneText(view)
-	for _, want := range []string{"Must fix", "⛔ issue MAJOR: Cache entries never expire", "internal/cache/store.go:90-91", "Confidence: high", "Impact: Stale titles.", "Body text with `Get` in it."} {
+	// Without color, bold and the accent are gone, so a heading keeps its # run and bold its markers (review finding).
+	for _, want := range []string{"### Must fix", "⛔ issue MAJOR: Cache entries never expire", "internal/cache/store.go:90-91", "**Confidence:** high", "**Impact:** Stale titles.", "Body text with `Get` in it."} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the review lacks %q:\n%s", want, view)
 		}
 	}
-	for _, raw := range []string{"<details", "<summary>", "**", "](https", "### ", "review body"} {
+	for _, raw := range []string{"<details", "<summary>", "](https", "review body"} {
 		if strings.Contains(view, raw) {
 			t.Errorf("the review shows Markdown %q:\n%s", raw, view)
 		}
 	}
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	colored := ansi.Strip(m.readable(p.Body, 96))
+	for _, want := range []string{"Must fix", "Confidence: high", "Impact: Stale titles."} {
+		if !strings.Contains(colored, want) {
+			t.Errorf("the review in color lacks %q:\n%s", want, colored)
+		}
+	}
+	for _, raw := range []string{"**", "### "} {
+		if strings.Contains(colored, raw) {
+			t.Errorf("the review in color shows Markdown %q:\n%s", raw, colored)
+		}
+	}
+	m.styles.SetColorProfile(colorprofile.NoTTY)
 	if !strings.Contains(view, "v markdown") {
 		t.Errorf("the footer does not offer the Markdown:\n%s", view)
 	}
@@ -1063,6 +1078,28 @@ func TestReadableReviewWrapsEveryLine(t *testing.T) {
 	for _, line := range strings.Split(m.readable(body, 56), "\n") {
 		if style.Width(line) > 56 {
 			t.Errorf("a row is wider than the pane: %q", line)
+		}
+	}
+}
+
+// The earlier rounds a sticky body quotes read like the current round: their headings, details tags and summaries are
+// read through the bar rather than shown as Markdown (review finding).
+func TestReadableReviewReadsQuotedRounds(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "testdata", "golden", "sticky.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	view := ansi.Strip(m.readable(string(body), 96))
+	for _, raw := range []string{"<details", "</details>", "<summary>", "### ", "<b>"} {
+		if strings.Contains(view, raw) {
+			t.Errorf("the quoted round shows Markdown %q:\n%s", raw, view)
+		}
+	}
+	for _, want := range []string{"┃ Must fix", "┃ ⛔ issue: Title f-001", "┃ Body f-001."} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the quoted round lacks %q:\n%s", want, view)
 		}
 	}
 }
