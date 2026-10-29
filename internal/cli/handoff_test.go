@@ -18,6 +18,8 @@ const (
 	orcaHandshake    = "[relay-connect] Handshake OK at version=0.1.0+955da90487c0"
 	orcaStale        = `{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal handle term_agent is stale"}}`
 	orcaNewHandle    = "term_28c2bdd2-5b1e"
+	itermSession     = "8A4C1F2E-5B3D-4E6F-9A7B-1C2D3E4F5A6B"
+	itermNewSession  = "0F1E2D3C-4B5A-4968-8776-655443322110"
 )
 
 // fakeHostBin writes a stand-in for name that appends each call's argv to log, NUL-separated and newline-terminated,
@@ -92,6 +94,39 @@ func tmuxEnv(t *testing.T, home, bin string) map[string]string {
 		t.Fatal(err)
 	}
 	return map[string]string{"LOUPE_HOME": home, "TMUX": socket + ",3347196,0", "TMUX_PANE": "%3", "PATH": bin}
+}
+
+// fakeOsascriptBin answers like osascript running loupe's iTerm2 scripts, telling them apart by their text: the probe
+// prints the agent session's columns, the split a new session id, and the run nothing. It logs argv like fakeHostBin.
+func fakeOsascriptBin(t *testing.T) (bin, log string) {
+	t.Helper()
+	bin = t.TempDir()
+	log = filepath.Join(t.TempDir(), "argv")
+	script := fmt.Sprintf(`#!/bin/sh
+for a in "$@"; do printf '%%s\0' "$a" >> '%[1]s'; done
+printf '\n' >> '%[1]s'
+case "$*" in
+*"write text"*) ;;
+*"split vertically"*) printf '%%s\n' '%[2]s';;
+*) printf '150\n';;
+esac
+`, log, itermNewSession)
+	if err := os.WriteFile(filepath.Join(bin, "osascript"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin, log
+}
+
+func itermEnv(home, bin string) map[string]string {
+	return map[string]string{"LOUPE_HOME": home, "TERM_PROGRAM": "iTerm.app", "ITERM_SESSION_ID": "w0t0p0:" + itermSession, "PATH": bin}
+}
+
+// itermArgs drops the -e script lines from an osascript argv, leaving the values the script reads.
+func itermArgs(call []string) []string {
+	for len(call) >= 2 && call[0] == "-e" {
+		call = call[2:]
+	}
+	return call
 }
 
 func hostCalls(t *testing.T, log string) [][]string {
@@ -428,6 +463,46 @@ func TestHandoffUsesAWatchedTmuxOverOrca(t *testing.T) {
 	}
 }
 
+// iTerm2 gives the agent's session focus back after the split, so the result reports the pane opened without focus.
+func TestHandoffOpensReviewInAnITermSplit(t *testing.T) {
+	home, _ := sendBackRun(t)
+	bin, log := fakeOsascriptBin(t)
+	deps, s := testDeps(t, itermEnv(home, bin))
+	deps.GOOS = "darwin"
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s stderr %s", code, s.stdout.String(), s.stderr.String())
+	}
+	got := decodeOne(t, s.stdout.Bytes())
+	if got["host"] != "iterm2" || got["paneId"] != itermNewSession || got["direction"] != "right" || got["focused"] != false {
+		t.Fatalf("envelope %v", got)
+	}
+	calls := hostCalls(t, log)
+	want := [][]string{{itermSession}, {itermSession, "right"}, {itermSession, itermNewSession, paneCommand(t, home)}}
+	if len(calls) != len(want) {
+		t.Fatalf("osascript calls: %q", calls)
+	}
+	for i, call := range calls {
+		if args := itermArgs(call); !slices.Equal(args, want[i]) {
+			t.Errorf("call %d arguments %q, want %q", i, args, want[i])
+		}
+	}
+}
+
+func TestHandoffIgnoresITermOffMac(t *testing.T) {
+	home, _ := sendBackRun(t)
+	bin, log := fakeOsascriptBin(t)
+	deps, s := testDeps(t, itermEnv(home, bin))
+	deps.GOOS = "linux"
+	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
+	errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	if code != 1 || errObj["code"] != "no-pane-host" {
+		t.Fatalf("exit %d error %v", code, errObj)
+	}
+	if calls := hostCalls(t, log); calls != nil {
+		t.Fatalf("osascript ran off macOS: %q", calls)
+	}
+}
+
 func TestHandoffDirection(t *testing.T) {
 	home, _ := sendBackRun(t)
 	herdr := func(rect string) func(*testing.T) (string, string, map[string]string) {
@@ -495,7 +570,8 @@ func TestHandoffRefusesNoPaneHostNamingEveryHost(t *testing.T) {
 	message, _ := errObj["message"].(string)
 	if code != 1 || errObj["code"] != "no-pane-host" || !strings.Contains(message, "HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH") ||
 		!strings.Contains(message, "TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session") ||
-		!strings.Contains(message, "ORCA_TERMINAL_HANDLE and orca on PATH") {
+		!strings.Contains(message, "ORCA_TERMINAL_HANDLE and orca on PATH") ||
+		!strings.Contains(message, "macOS, ITERM_SESSION_ID and osascript on PATH") {
 		t.Fatalf("exit %d error %v", code, errObj)
 	}
 	if calls := append(hostCalls(t, herdrLog), hostCalls(t, orcaLog)...); calls != nil {

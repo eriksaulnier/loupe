@@ -24,18 +24,19 @@ Otherwise it tries these terminal hosts first to last and opens the pane in the 
   herdr  HERDR_ENV=1, HERDR_PANE_ID, and herdr on PATH
   tmux   TMUX naming a socket that exists, TMUX_PANE, and tmux on PATH
   orca   ORCA_TERMINAL_HANDLE, and orca on PATH
+  iterm2 macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID, and osascript on PATH
 A host whose conditions are met only in part is skipped, and so is a tmux session with no
 client attached, where nobody would see the pane. With no host it refuses no-pane-host.
 
 The pane opens to the right of the agent's pane when that pane is known to be at least 120
 columns wide, and below it otherwise. The width is the host's own report of the agent's pane
-(Herdr and tmux have one, Orca none), else the agent's own terminal. With neither it opens
-below, since review needs 60 columns but only 12 rows. The pane runs this loupe's review for
-the run. In Herdr the pane takes focus. In tmux it never does, so the keys the human types
-still reach the agent. In Orca it never does either: Orca can focus a pane only by moving the
-human's view to its worktree, so the pane shows in the agent's tab and the view stays where
-it is. The pane closes when review exits cleanly and stays open on a refusal so the human can
-read it.
+(Herdr, tmux and iTerm2 have one, Orca none), else the agent's own terminal. With neither it
+opens below, since review needs 60 columns but only 12 rows. The pane runs this loupe's review
+for the run. In Herdr the pane takes focus. In tmux and iTerm2 it never does, so the keys the
+human types still reach the agent; iTerm2 gives focus back to the agent's session after the
+split. In Orca it never does either: Orca can focus a pane only by moving the human's view to
+its worktree, so the pane shows in the agent's tab and the view stays where it is. The pane
+closes when review exits cleanly and stays open on a refusal so the human can read it.
 
 The agent MUST NOT send to, read, resize, close or reuse the pane; a hand-off that opens a pane
 opens a new one. A failed host call refuses pane-failed and is not retried; its details name
@@ -50,8 +51,8 @@ Result (--json):
    "dir": "/path/to/run", "host": "herdr",
    "paneId": "w1:p2", "direction": "right", "focused": true}
 
-host is herdr, tmux or orca. direction is right or down. focused is false when the pane opened
-without taking focus.`
+host is herdr, tmux, orca or iterm2. direction is right or down. focused is false when the pane
+opened without taking focus.`
 
 func newHandoffCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -119,7 +120,7 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 func noPaneHost(fix string) error {
 	return refusal.New(refusal.NoPaneHost, "no terminal pane can be opened here: HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH, "+
 		"or TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session, "+
-		"or ORCA_TERMINAL_HANDLE and orca on PATH", fix)
+		"or ORCA_TERMINAL_HANDLE and orca on PATH, or macOS, ITERM_SESSION_ID and osascript on PATH", fix)
 }
 
 // refuseOpenReview names the open run in details.run, so an agent can tell its own round from another it must ask the

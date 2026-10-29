@@ -1,5 +1,5 @@
-// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr, tmux or Orca. It
-// is the only package that runs any of them.
+// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr, tmux, Orca or
+// iTerm2. It is the only package that runs any of them.
 package pane
 
 import (
@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/term"
 
@@ -55,6 +56,9 @@ func Detect(getenv func(string) string, goos string) []Host {
 	}
 	if o, ok := detectOrca(getenv); ok {
 		hosts = append(hosts, o)
+	}
+	if it, ok := detectITerm(getenv, goos); ok {
+		hosts = append(hosts, it)
 	}
 	return hosts
 }
@@ -126,6 +130,14 @@ func failed(host, step, message, fix string) error {
 	r := refusal.New(refusal.PaneFailed, fmt.Sprintf("%s %s: %s", host, step, message), fix)
 	r.Details = map[string]any{"host": host, "step": step}
 	return r
+}
+
+// stderrMessage is the error text of a host that prints it plainly on stderr.
+func stderrMessage(stderr []byte, err error) string {
+	if message := strings.TrimSpace(string(stderr)); message != "" {
+		return message
+	}
+	return err.Error()
 }
 
 // lookPath walks getenv's PATH, not the process's, so every detection input comes through the same getenv.

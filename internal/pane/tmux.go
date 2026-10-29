@@ -45,7 +45,7 @@ func (t Tmux) Open(ctx context.Context, req Request) (Opened, error) {
 	call := func(step string, args ...string) (string, error) {
 		stdout, stderr, err := t.run(ctx, t.path, append([]string{"-S", t.socket}, args...)...)
 		if err != nil {
-			return "", failed("tmux", step, tmuxMessage(stderr, err), req.Fix)
+			return "", failed("tmux", step, stderrMessage(stderr, err), req.Fix)
 		}
 		return strings.TrimRight(string(stdout), "\n"), nil
 	}
@@ -105,11 +105,4 @@ func (t Tmux) readProbe(reply string) (width, attached int, ok bool) {
 	}
 	width, _ = strconv.Atoi(fields[1])
 	return width, attached, true
-}
-
-func tmuxMessage(stderr []byte, err error) string {
-	if message := strings.TrimSpace(string(stderr)); message != "" {
-		return message
-	}
-	return err.Error()
 }

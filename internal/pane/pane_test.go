@@ -199,23 +199,30 @@ func TestDetectOrder(t *testing.T) {
 	tmux := map[string]string{"TMUX": tmuxSocketEnv(t), "TMUX_PANE": "%3"}
 	staleTmux := map[string]string{"TMUX": filepath.Join(t.TempDir(), "gone") + ",1,0", "TMUX_PANE": "%3"}
 	orca := map[string]string{"ORCA_TERMINAL_HANDLE": "term_agent"}
+	iterm := map[string]string{"TERM_PROGRAM": "iTerm.app", "ITERM_SESSION_ID": "w0t0p0:8A4C1F2E"}
 	for _, c := range []struct {
 		name string
+		goos string
 		envs []map[string]string
 		want []string
 	}{
-		{"herdr and tmux", []map[string]string{herdr, tmux}, []string{"herdr", "tmux"}},
-		{"tmux and orca", []map[string]string{tmux, orca}, []string{"tmux", "orca"}},
-		{"herdr, tmux and orca", []map[string]string{herdr, tmux, orca}, []string{"herdr", "tmux", "orca"}},
-		{"stale tmux and orca", []map[string]string{staleTmux, orca}, []string{"orca"}},
-		{"tmux alone", []map[string]string{tmux}, []string{"tmux"}},
+		{"herdr and tmux", "linux", []map[string]string{herdr, tmux}, []string{"herdr", "tmux"}},
+		{"tmux and orca", "linux", []map[string]string{tmux, orca}, []string{"tmux", "orca"}},
+		{"herdr, tmux and orca", "linux", []map[string]string{herdr, tmux, orca}, []string{"herdr", "tmux", "orca"}},
+		{"stale tmux and orca", "linux", []map[string]string{staleTmux, orca}, []string{"orca"}},
+		{"tmux alone", "linux", []map[string]string{tmux}, []string{"tmux"}},
+		{"iterm2 on linux", "linux", []map[string]string{iterm}, nil},
+		{"iterm2 on macOS", "darwin", []map[string]string{iterm}, []string{"iterm2"}},
+		{"orca and iterm2", "darwin", []map[string]string{orca, iterm}, []string{"orca", "iterm2"}},
+		{"herdr and iterm2", "darwin", []map[string]string{herdr, iterm}, []string{"herdr", "iterm2"}},
+		{"tmux and iterm2", "darwin", []map[string]string{tmux, iterm}, []string{"tmux", "iterm2"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			env := map[string]string{"PATH": bin}
 			for _, e := range c.envs {
 				maps.Copy(env, e)
 			}
-			if got := names(Detect(envWith(env, "", "", ""), "linux")); !slices.Equal(got, c.want) {
+			if got := names(Detect(envWith(env, "", "", ""), c.goos)); !slices.Equal(got, c.want) {
 				t.Fatalf("Detect = %q, want %q", got, c.want)
 			}
 		})
