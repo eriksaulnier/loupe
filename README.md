@@ -41,6 +41,7 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 - [Comment format](docs/comment-format.md): what a published review looks like on GitHub.
 - [The review workflow](docs/review-workflow.md): the attended loop, the pane hand-off, adapting a review skill you already have, and the command and environment reference.
 - [Unattended reviews in CI](docs/ci-action.md): the GitHub Action, the pipeline steps, sticky rounds and the rules an unattended review follows.
+- [Withdrawal reasons](docs/reason-codes.md): how an agent says why it withdrew a finding, and the recommended reason codes.
 - [CLI contract](specs/001-loupe-v1/contracts/cli.md): commands, input, results and errors, for scripting against loupe.
 - [Constitution](.specify/memory/constitution.md): the seven principles every change answers to.
 - [Contributing](CONTRIBUTING.md): setup, local development, tests, commits and releases.

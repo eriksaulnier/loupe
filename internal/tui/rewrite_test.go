@@ -497,6 +497,26 @@ func TestDetailSaysTheAgentChangedTheHumansText(t *testing.T) {
 	}
 }
 
+// A rewrite cannot land on a withdrawn finding, but the agent can edit the human's text and then withdraw the finding.
+// The detail then says both, the notice under the finding's meta and the reason below it.
+func TestDetailSaysTheAgentChangedTheHumansTextAndWhyItWithdrew(t *testing.T) {
+	m, dir := editModel(t, "f-003", unchanged)
+	m.Update(runeKey("w"))
+	typeText(m, " mine")
+	m.Update(ctrlS)
+	outside(t, dir, func(d *draft.Draft) error {
+		withdraw := false
+		_, _, err := draft.Edit(d, "f-003", draft.EditInput{Title: []byte(`"The agent's title"`), WithdrawReason: []byte(`{"text": "Naming only."}`)}, &withdraw, nil, draft.ByAgent, testNow)
+		return err
+	})
+	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	view := screenText(m)
+	notice, reason := strings.Index(view, "the agent changed text you wrote"), strings.Index(view, "Naming only.")
+	if notice < 0 || reason < 0 || notice > reason {
+		t.Fatalf("notice at %d, reason at %d:\n%s", notice, reason, view)
+	}
+}
+
 func TestHelpNamesTheRewriteKey(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 40)
 	if err := m.openFinding("f-001"); err != nil {

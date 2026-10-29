@@ -451,3 +451,63 @@ func TestAgentChangedHumanText(t *testing.T) {
 		}
 	}
 }
+
+func TestCurrentReason(t *testing.T) {
+	a, b := &Reason{Text: "A.", Code: "duplicate"}, &Reason{Text: "B."}
+	withdraw := func(by string, r *Reason) HistoryEntry {
+		return HistoryEntry{By: by, Changed: map[string]any{"included": true}, Reason: r}
+	}
+	reinstate := HistoryEntry{By: ByHuman, Changed: map[string]any{"included": false}}
+	amend := func(r *Reason) HistoryEntry { return HistoryEntry{By: ByAgent, Changed: map[string]any{}, Reason: r} }
+	cases := []struct {
+		name     string
+		included bool
+		history  []HistoryEntry
+		want     *Reason
+	}{
+		{"included", true, nil, nil},
+		{"withdrawn with a reason", false, []HistoryEntry{withdraw(ByAgent, a)}, a},
+		{"withdrawn with none", false, []HistoryEntry{withdraw(ByAgent, nil)}, nil},
+		{"amended after a bare withdrawal", false, []HistoryEntry{withdraw(ByAgent, nil), amend(a)}, a},
+		{"amended twice", false, []HistoryEntry{withdraw(ByAgent, nil), amend(a), amend(b)}, b},
+		{"withdrawn again with a new reason", false, []HistoryEntry{withdraw(ByAgent, a), reinstate, withdraw(ByAgent, b)}, b},
+		{"withdrawn again with none", false, []HistoryEntry{withdraw(ByAgent, a), reinstate, withdraw(ByAgent, nil)}, nil},
+		{"reinstated", true, []HistoryEntry{withdraw(ByAgent, a), reinstate}, nil},
+		{"withdrawn by a human", false, []HistoryEntry{withdraw(ByHuman, a)}, a},
+		{"a field edit after the withdrawal", false, []HistoryEntry{withdraw(ByAgent, a), {By: ByAgent, Changed: map[string]any{"body": "b"}}}, a},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := finding("f-001", 2, c.included, ByAgent)
+			f.History = c.history
+			if got := CurrentReason(f); !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("got %+v, want %+v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestCurrentReasonSurvivesAHumanExclusion(t *testing.T) {
+	d := NewEmpty()
+	f := finding("f-001", 2, false, ByAgent)
+	f.History = []HistoryEntry{{By: ByAgent, Changed: map[string]any{"included": true}, Reason: &Reason{Text: "A."}}}
+	d.Findings = []Finding{f}
+	d.Decisions["f-001"] = Decision{FindingID: "f-001", Decision: DecisionExcluded, FindingRev: 2}
+	if Dispositions(d)["f-001"] != DispositionExcluded || CurrentReason(d.Findings[0]) == nil {
+		t.Fatal("an excluded finding lost its reason")
+	}
+}
+
+func TestAnAmendMovesNoGateCount(t *testing.T) {
+	for _, by := range []string{ByAgent, ByHuman} {
+		d := NewEmpty()
+		f := finding("f-001", 2, false, ByAgent)
+		f.History = []HistoryEntry{{By: by, Changed: map[string]any{"included": true}}}
+		d.Findings = []Finding{f}
+		before := GateCountsOf(d)
+		d.Findings[0].History = append(d.Findings[0].History, HistoryEntry{By: ByAgent, Changed: map[string]any{}, Reason: &Reason{Text: "A."}})
+		if after := GateCountsOf(d); after != before {
+			t.Fatalf("withdrawn by %s: counts %+v, then %+v", by, before, after)
+		}
+	}
+}

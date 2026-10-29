@@ -14,18 +14,23 @@ import (
 const feedbackHelp = `Read what the human sent back: notes with their replies, dispositions and readiness.
 
 A finding the human sent back has an open note and is pending. Revise it with loupe edit or
-withdraw it with loupe edit <id> --exclude, then answer with loupe reply <note-id>. Only the
-human resolves or dismisses a note, in loupe review.
+withdraw it with loupe edit <id> --exclude --reason <text> --reason-code conceded, then answer
+with loupe reply <note-id>. Only the human resolves or dismisses a note, in loupe review.
+
+A finding that is not included carries withdrawReason, the reason it was last withdrawn with,
+when it has one.
 
 Result (--json):
   {"loupe": 1, "ok": true, "command": "feedback", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 6,
    "readiness": {"ready": false, "accepted": ["f-001"], "pending": ["f-002"], "excluded": [],
-                 "withdrawn": [], "openNotes": ["n-001"]},
+                 "withdrawn": ["f-003"], "openNotes": ["n-001"]},
    "notes": [{"id": "n-001", "findingId": "f-002", "status": "open", "body": "Show the evidence.",
               "at": "2026-09-13T12:00:00Z", "replies": [{"id": "r-001", "noteId": "n-001",
               "body": "Added.", "by": "agent", "at": "2026-09-13T12:05:00Z"}]}],
-   "findings": [{"id": "f-001", "title": "Retry loop can double-publish", "disposition": "accepted", "rev": 1}]}`
+   "findings": [{"id": "f-001", "title": "Retry loop can double-publish", "disposition": "accepted", "rev": 1},
+                {"id": "f-003", "title": "Rename the helper", "disposition": "withdrawn", "rev": 2,
+                 "withdrawReason": {"text": "Naming only.", "code": "no-runtime-effect"}}]}`
 
 func newFeedbackCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -66,7 +71,11 @@ func feedbackPayload(d *draft.Draft) map[string]any {
 	dispositions := draft.Dispositions(d)
 	findings := make([]map[string]any, 0, len(d.Findings))
 	for _, f := range d.Findings {
-		findings = append(findings, map[string]any{"id": f.ID, "title": f.Title, "disposition": dispositions[f.ID], "rev": f.Rev})
+		entry := map[string]any{"id": f.ID, "title": f.Title, "disposition": dispositions[f.ID], "rev": f.Rev}
+		if reason := draft.CurrentReason(f); reason != nil {
+			entry["withdrawReason"] = reason
+		}
+		findings = append(findings, entry)
 	}
 	return map[string]any{
 		"readiness": draft.ReadinessOf(d),

@@ -58,3 +58,20 @@ func TestPrintFeedbackEscapesDraftText(t *testing.T) {
 		t.Errorf("open notes are not listed first:\n%s", got)
 	}
 }
+
+func TestFeedbackJSONCarriesTheCurrentReason(t *testing.T) {
+	home, _, _ := reasonRun(t)
+	code, env, _ := execIn(t, home, "", "feedback")
+	findings, _ := env["findings"].([]any)
+	if code != 0 || len(findings) != 2 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	first, _ := findings[0].(map[string]any)
+	second, _ := findings[1].(map[string]any)
+	if reason, _ := first["withdrawReason"].(map[string]any); reason["text"] != "Naming only." || reason["code"] != "no-runtime-effect" {
+		t.Fatalf("f-001 %v", first)
+	}
+	if _, ok := second["withdrawReason"]; ok || len(second) != 4 {
+		t.Fatalf("f-002 %v", second)
+	}
+}

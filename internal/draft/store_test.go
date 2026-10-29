@@ -358,3 +358,19 @@ func storedSchema(t *testing.T, path string) int {
 	}
 	return head.Schema
 }
+
+// A draft written before reasons existed loads, and its withdrawn finding has no reason.
+func TestASchema2DraftLoadsWithNoReason(t *testing.T) {
+	dir := t.TempDir()
+	stored := `{"schema": 2, "version": 2, "summary": "", "decisions": {}, "notes": [], "replies": [], "findings": [
+		{"id": "f-001", "rev": 2, "title": "T", "body": "B", "general": true, "by": "agent", "included": false,
+		 "createdAt": "2026-10-01T00:00:00Z", "updatedAt": "2026-10-01T00:00:00Z",
+		 "history": [{"at": "2026-10-01T00:00:00Z", "by": "agent", "changed": {"included": true}}]}]}`
+	if err := os.WriteFile(filepath.Join(dir, "draft.json"), []byte(stored), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := loadStored(t, dir)
+	if d.Schema != 2 || CurrentReason(d.Findings[0]) != nil {
+		t.Fatalf("schema %d, reason %+v", d.Schema, CurrentReason(d.Findings[0]))
+	}
+}

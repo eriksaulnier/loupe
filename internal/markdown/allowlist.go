@@ -21,6 +21,8 @@ const (
 	Impact
 	SuggestedFix
 	Message
+	// WithdrawReason is a withdrawn finding's reason, which sits at the body's depth.
+	WithdrawReason
 )
 
 const maxBytes = 64 * 1024
@@ -70,6 +72,8 @@ func (k Kind) field() string {
 		return "suggestedFix"
 	case Message:
 		return "message"
+	case WithdrawReason:
+		return "withdrawReason"
 	}
 	return "body"
 }
