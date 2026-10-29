@@ -217,8 +217,9 @@ type PaneTitles struct {
 	TopNoticeTab bool
 }
 
-// Scroll is where a pane's content sits in a longer document. A Total no greater than Visible draws no thumb.
-type Scroll struct{ Offset, Visible, Total int }
+// Scroll is where a pane's content sits in a longer document. A Total no greater than Visible draws no thumb. Top is
+// the pane rows above the document, pinned while it scrolls, which the thumb leaves alone.
+type Scroll struct{ Offset, Visible, Total, Top int }
 
 // Pane is one titled rectangle. Lines are the content rows; fewer are padded, more are cut.
 type Pane struct {
@@ -283,7 +284,8 @@ func (s Style) Pane(p Pane) []string {
 	b := s.border()
 	edge := s.ToneStyle(p.Tone)
 	inner, rows := PaneInner(p.Width, p.Height)
-	thumbTop, thumbLen := thumb(p.Scroll, rows)
+	thumbTop, thumbLen := thumb(p.Scroll, max(0, rows-p.Scroll.Top))
+	thumbTop += p.Scroll.Top
 	out := make([]string, 0, p.Height)
 	title, tab := s.topTitle(p)
 	notice := p.Titles.TopNotice

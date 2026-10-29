@@ -100,8 +100,11 @@ type Model struct {
 
 	openID string
 	body   viewport.Model
-	noting bool
-	note   textarea.Model
+	// detailHead is the open finding's title and metadata rows, pinned above the scrolling document so they stay in
+	// view; empty when the window is too short to spare them, and they scroll with the document instead.
+	detailHead []string
+	noting     bool
+	note       textarea.Model
 	// keptNotes holds, per finding, text the human typed into a note and then left without it being recorded, so the
 	// next send-back on that finding starts from it. It lives only as long as the program.
 	keptNotes map[string]string

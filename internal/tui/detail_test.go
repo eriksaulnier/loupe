@@ -1050,3 +1050,50 @@ func TestDetailKeepsALongHeadingInsideTheWindow(t *testing.T) {
 		t.Errorf("the wrapped heading row does not hang under its text:\n%s", view)
 	}
 }
+
+// The finding's title and metadata are pinned above the scrolling document, so they stay in view however far the
+// human scrolls, and the document does not repeat them. A window too short to spare them scrolls them with the rest
+// (release testing).
+func TestDetailPinsItsTitleAndMetadata(t *testing.T) {
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].Body = strings.Repeat("A paragraph of the body.\n\n", 40)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 100, 30)
+	mustOpenFinding(t, m, "f-001")
+	head := func() []string {
+		rows := strings.Split(ansi.Strip(m.View().Content), "\n")
+		return rows[bodyTop(30)+1 : bodyTop(30)+3]
+	}
+	before := head()
+	if !strings.Contains(before[0], "Title one") || !strings.Contains(before[1], "blocking") || !strings.Contains(before[1], "issue") {
+		t.Fatalf("the detail does not open on its title and metadata: %q", before)
+	}
+	for range 20 {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	if m.body.YOffset() == 0 {
+		t.Fatal("the document did not scroll")
+	}
+	if after := head(); !slices.Equal(after, before) {
+		t.Errorf("the title and metadata moved when the document scrolled:\n%q\n%q", before, after)
+	}
+	if view := ansi.Strip(m.View().Content); strings.Count(view, "Title one") != 1 || strings.Count(view, "issue") != 1 {
+		t.Errorf("the document repeats the pinned rows:\n%s", view)
+	}
+
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].Title = strings.Repeat("A title long enough to wrap ", 6) + "Title one"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m = modelOf(t, dir, utf8Env, 60, 12)
+	mustOpenFinding(t, m, "f-001")
+	if m.detailHead != nil || !strings.Contains(ansi.Strip(m.View().Content), "A title long enough") {
+		t.Errorf("a short window pinned a head taller than a third of the pane, or lost the title:\n%s", ansi.Strip(m.View().Content))
+	}
+}
