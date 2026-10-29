@@ -35,11 +35,15 @@
 - Q: Do unattended runs count toward `precision` and `medianCaptureToPublish`? → A: No. Both use attended published runs only, and each group gains `runs.unattended`. Every other count still includes unattended runs.
 - Q: How does the human name repositories, given that `capture --repo` already takes a clone path? → A: As positional arguments, `loupe stats [owner/repo]...`. There is no `--repo` flag. The result still echoes them as `filter.repos`.
 
+### Session 2026-10-29
+
+- owner, 2026-10-29: vertical list instead of a table. At 80 columns the table moved each repository name to a line of its own above its numbers, and its header lost its first column.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The human sees how their gate went across every published review (Priority: P1)
 
-The human runs `loupe stats` on their machine. They get one table that says, over every review they published, how many findings the skill filed, how many went out, how many they rejected, how many the skill cut itself, and the resulting precision. The numbers agree with what the published reviews' `loupe-meta` markers say.
+The human runs `loupe stats` on their machine. They get one vertical list that says, over every review they published, how many findings the skill filed, how many went out, how many they rejected, how many the skill cut itself, and the resulting precision. The numbers agree with what the published reviews' `loupe-meta` markers say.
 
 **Why this priority**: It answers the owner's question. Every other story refines this one.
 
@@ -78,7 +82,7 @@ The human narrows the roll-up to one repository or a date range, or breaks it do
 
 ### User Story 3 - An agent or script reads the roll-up as one result (Priority: P2)
 
-An agent or a script runs `loupe stats --json` and gets one versioned result object, so it can trend the numbers without parsing tables or reading run files.
+An agent or a script runs `loupe stats --json` and gets one versioned result object, so it can trend the numbers without parsing the human output or reading run files.
 
 **Why this priority**: Principle V. Every agent-facing command carries a machine contract, and a skill author may want to collect the numbers from more than one machine.
 
@@ -151,7 +155,7 @@ Result (`--json`):
 - **FR-013**: `--group-by` MUST default to `none`. With `none`, `groups` MUST be empty and `total` carries the roll-up. With `repo`, keys MUST be `owner/repo` as stored under `runs/`. With `week` and `month`, keys MUST be the UTC ISO week (`2026-W43`) and the UTC month (`2026-10`). Groups MUST come in ascending key order, and a group with no runs MUST NOT appear.
 - **FR-014**: `total` MUST have the shape of a group, with the key `total`. Every count in `total` MUST equal the sum over the runs it covers, not over the groups, so that `pullRequests` and `medianCaptureToPublish` are correct. `drifted` in `total` MUST list every drifted run in the selection.
 - **FR-015**: `filter` MUST echo the filters in force after defaults: `repos` as the positional arguments gave them, `since` and `until` as the resolved RFC 3339 timestamps or `null`, `states` in the order `captured`, `ready`, `published`, and `groupBy`.
-- **FR-016**: With `--json`, stdout MUST hold exactly one result object in the envelope of `contracts/cli.md`, without `run`, `dir` or `version`. Without `--json`, the output MUST be one table with a row per group and a total row, under a header that names every filter in force and both exclusions: the state filter, so a reader comparing it with `list` sees why the run count differs, and the unattended runs that `precision` and the median leave out.
+- **FR-016**: With `--json`, stdout MUST hold exactly one result object in the envelope of `contracts/cli.md`, without `run`, `dir` or `version`. Without `--json`, the output MUST be a vertical list. A header names every filter in force, including the state filter, so a reader comparing it with `list` sees why the run count differs. One block per group and a `total` block follow, each a key line and then one named line per field. A closing note names both exclusions: the withdrawn findings that `precision` leaves out, and the unattended runs that `precision` and the median leave out.
 - **FR-017**: A run file that cannot be read, whether `target.json`, `draft.json` or `receipt.json`, MUST refuse the whole command with `record`, naming the file, as `list` does. `stats` loads `receipt.json` where `list` only checks that it exists, so a damaged receipt that `list` lists MUST still refuse `stats`.
 - **FR-018**: The command MUST NOT write to the data root and MUST NOT take a run lock. It reads each file once, without a lock, as `list` does. loupe writes run files atomically, so a reader sees a whole file.
 - **FR-019**: The command MUST NOT call GitHub or Git, and MUST work with no network and no authentication.
@@ -171,7 +175,7 @@ Result (`--json`):
 - **SC-001**: For a seeded data root with one run in each state and at least one finding of each count (published, excluded by decision, excluded by human withdrawal, withdrawn by the agent, pending, reinstated, regraded), plus one unattended run, `loupe stats --json` matches a hand-computed golden for each `--group-by` value. FR-003 holds for every group, and `precision` and `medianCaptureToPublish` equal the values computed without the unattended run.
 - **SC-002**: For every published run not listed under `drifted`, the run's counts equal the `loupe-meta` marker in its receipt's `envelope.body`: `published` equals `issues + suggestions + questions + other`, `blocking.published` equals `blocking`, and `excluded`, `withdrawn`, `reinstated` and `regraded` equal their keys. A test checks this over the seeded root of SC-001.
 - **SC-003**: For a seeded data root of 500 runs across 20 repositories, with 20 findings in each draft and a receipt in every second run, `loupe stats --json` finishes in under one second on the CI runner.
-- **SC-004**: `mise run check` passes, including the goldens under `testdata/golden/cli` for `loupe stats --help`, the human table and the `--json` result.
+- **SC-004**: `mise run check` passes, including the goldens under `testdata/golden/cli` for `loupe stats --help`, the human list and the `--json` result.
 
 ## Assumptions
 
@@ -181,5 +185,5 @@ Result (`--json`):
 - Severity breakdowns are out of scope. The review screen cannot change severity, so the numbers say little until it can. They can be added later without a format break.
 - The bounds of `--since` and `--until` are inclusive, and a bare `--until` date covers its whole UTC day, because a human who types `--until 2026-10-31` means October included.
 - A repository argument matches ignoring case, because GitHub treats owner and repository names that way. A group key keeps the case stored under `runs/`. Two runs of one repository captured under different cases would form two `repo` groups. That is assumed rare and is not handled.
-- The human table's columns and widths are a plan decision. They MUST show at least the group key, the run count, `filed`, `published`, `excluded`, `withdrawn`, `pending`, `precision` and `medianCaptureToPublish`.
+- The human list's fields and their wording are a plan decision. They MUST show at least the group key, the run count, `filed`, `published`, `excluded`, `withdrawn`, `pending`, `precision` and `medianCaptureToPublish`.
 - `byLabel` uses the singular group names `issue`, `suggestion`, `question` and `other`, where `loupe-meta` uses plurals. The board draft chose them, and the result is a new contract with no reader yet.

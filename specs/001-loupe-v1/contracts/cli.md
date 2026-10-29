@@ -181,7 +181,7 @@ Arguments name repositories as `owner/repo`, matched ignoring case. With none, e
  "total": {"key": "total", "...": "same shape as a group"}}
 ```
 
-Without `--json`, one table with a row per group and a total row, under a header that names every filter in force and both exclusions. A value that does not parse, a `--since` later than `--until`, an unknown `--state` or `--group-by`, or an argument that is not `owner/repo` refuses `usage`, before the data root is read. A `target.json`, `draft.json` or `receipt.json` that cannot be read refuses the whole command with `record`, naming the file, even when the run would not match the filters.
+Without `--json`, a vertical list: a header that names every filter in force, one block per group and a `total` block with one named line per field, and a closing note that names both exclusions. A value that does not parse, a `--since` later than `--until`, an unknown `--state` or `--group-by`, or an argument that is not `owner/repo` refuses `usage`, before the data root is read. A `target.json`, `draft.json` or `receipt.json` that cannot be read refuses the whole command with `record`, naming the file, even when the run would not match the filters.
 
 ### `loupe review [<ref>]` (human only)
 
