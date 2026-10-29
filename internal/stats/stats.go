@@ -68,6 +68,13 @@ type Group struct {
 	Precision              *float64  `json:"precision"`
 	Drifted                []string  `json:"drifted"`
 	MedianCaptureToPublish *Duration `json:"medianCaptureToPublish"`
+	// Gate stays out of the JSON, which carries only the ratio; the human output prints it beside precision.
+	Gate Gate `json:"-"`
+}
+
+// Gate is precision's dividend and divisor: published, and published plus excluded, over attended published runs.
+type Gate struct {
+	Published, Gated int
 }
 
 type Runs struct {
@@ -220,9 +227,7 @@ type accumulator struct {
 	g Group
 	// pullRequests holds owner/repo#n.
 	pullRequests map[string]bool
-	// gated is published plus excluded over attended published runs, the divisor of precision.
-	attendedPublished, gated int
-	durations                []time.Duration
+	durations    []time.Duration
 }
 
 func newAccumulator(key string) *accumulator {
@@ -293,16 +298,16 @@ func (a *accumulator) add(r Run) {
 	a.g.Findings.Published += published
 	a.g.Findings.Excluded += excluded
 	if attended {
-		a.attendedPublished += published
-		a.gated += published + excluded
+		a.g.Gate.Published += published
+		a.g.Gate.Gated += published + excluded
 	}
 }
 
 func (a *accumulator) group() Group {
 	g := a.g
 	g.PullRequests = len(a.pullRequests)
-	if a.gated > 0 {
-		p := math.Round(float64(a.attendedPublished)/float64(a.gated)*1000) / 1000
+	if g.Gate.Gated > 0 {
+		p := math.Round(float64(g.Gate.Published)/float64(g.Gate.Gated)*1000) / 1000
 		g.Precision = &p
 	}
 	if n := len(a.durations); n > 0 {
