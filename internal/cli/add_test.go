@@ -145,3 +145,30 @@ func TestAddAllowlistRefusalNamesTheField(t *testing.T) {
 		t.Fatalf("message %q details %v", message, details)
 	}
 }
+
+func TestWriteCommandsRefuseAFindingID(t *testing.T) {
+	cases := []struct {
+		name, input, field string
+		args               []string
+	}{
+		{"add", `{"title": "Retry loop, so f-002 still reproduces", "body": "Evidence.", "general": true}`, "title", []string{"add", "--from", "-"}},
+		{"edit", `{"body": "As f-002 showed."}`, "body", []string{"edit", "f-001", "--from", "-"}},
+		{"summary", `{"summary": "f-002 is fixed."}`, "summary", []string{"summary", "--from", "-", "--by", "human"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, dir := sendBackRun(t)
+			before := draftVersion(t, dir)
+			code, env, _ := execIn(t, home, c.input, c.args...)
+			if code != 1 || errorCode(env) != "markdown" {
+				t.Fatalf("exit %d envelope %v", code, env)
+			}
+			if _, details := errorDetails(t, env); details["rule"] != "finding-id" || details["field"] != c.field || details["match"] != "f-002" {
+				t.Fatalf("details %v", details)
+			}
+			if after := draftVersion(t, dir); after != before {
+				t.Fatalf("version moved from %d to %d", before, after)
+			}
+		})
+	}
+}
