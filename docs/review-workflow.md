@@ -34,6 +34,7 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 | `x` | Exclude the finding |
 | `s` | Send the finding back to the agent with a note |
 | `e` | Change the finding's label or whether it blocks |
+| `w` | Rewrite the finding's title and body; `ctrl+s` saves and keeps the decision |
 | `u` | Restore an excluded finding to pending, or reinstate and accept a withdrawn one |
 | `r`, `d` | Resolve or dismiss the finding's open note |
 | `f` | Show the whole file's diff |
