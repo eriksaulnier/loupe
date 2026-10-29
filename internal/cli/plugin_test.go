@@ -162,7 +162,7 @@ func TestPluginSkill(t *testing.T) {
 		"loupe edit <finding-id> --exclude --reason", "--reason-code conceded", "loupe reply <note-id>", "`\"reason\": \"published\"`",
 		"change a finding's `label` or `blocking` in review", "pass its `version` as `--expect-version`",
 		"Leave both out of your edit file unless a note asks", "hand off again from section 6",
-		"`loupe handoff` refuses `review-open`, so no second pane opens",
+		"`loupe handoff` refuses `review-open`, so no second pane opens", "`{\"path\", \"heading\"}`",
 	} {
 		if !strings.Contains(body, phrase) {
 			t.Errorf("human-review/SKILL.md body does not contain %q", phrase)

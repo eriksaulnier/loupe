@@ -20,7 +20,7 @@ func TestPrintShowEscapesDraftAndTargetText(t *testing.T) {
 	d := draft.NewEmpty()
 	d.Summary = "sum\x1b[2Jmary"
 	d.Findings = []draft.Finding{
-		{ID: "f-001", Title: "ti\x1b]52;c;x\atle\u202e", Label: "is\u202esue", Location: &draft.Location{Path: "src/\x1bx.go", Line: 3}},
+		{ID: "f-001", Title: "ti\x1b]52;c;x\atle\u202e", Label: "is\u202esue", Location: &draft.FindingLocation{Path: "src/\x1bx.go", Line: 3}},
 	}
 	target := run.Target{Title: "PR\x1b[31m title\u202e"}
 	readiness := draft.ReadinessOf(d)

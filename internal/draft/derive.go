@@ -104,40 +104,52 @@ type GateCounts struct {
 func GateCountsOf(d *Draft) GateCounts {
 	var c GateCounts
 	for _, f := range d.Findings {
-		switch disposition(d, f) {
+		g := GateOf(d, f)
+		switch g.Disposition {
 		case DispositionExcluded:
 			c.Excluded++
 		case DispositionWithdrawn:
-			// A human who withdrew a finding rejected it, so Withdrawn is left with only the agent's own cuts.
-			if lastIncludedChangeBy(f) == ByHuman {
-				c.Excluded++
-			} else {
-				c.Withdrawn++
-			}
+			c.Withdrawn++
 		}
-		reinstated, regraded := false, false
-		for _, h := range f.History {
-			if h.By != ByHuman {
-				continue
-			}
-			// Changed holds the previous value, so false is a withdrawn finding put back, not a withdrawal.
-			if was, ok := h.Changed["included"].(bool); ok && !was {
-				reinstated = true
-			}
-			for _, field := range []string{"label", "blocking", "severity"} {
-				if _, ok := h.Changed[field]; ok {
-					regraded = true
-				}
-			}
-		}
-		if reinstated {
+		if g.Reinstated {
 			c.Reinstated++
 		}
-		if regraded {
+		if g.Regraded {
 			c.Regraded++
 		}
 	}
 	return c
+}
+
+// FindingGate is one finding's part in GateCounts. Disposition is the finding's disposition, except that a finding a
+// human withdrew is excluded rather than withdrawn.
+type FindingGate struct {
+	Disposition string
+	Reinstated  bool
+	Regraded    bool
+}
+
+func GateOf(d *Draft, f Finding) FindingGate {
+	g := FindingGate{Disposition: disposition(d, f)}
+	// A human who withdrew a finding rejected it, so Withdrawn is left with only the agent's own cuts.
+	if g.Disposition == DispositionWithdrawn && lastIncludedChangeBy(f) == ByHuman {
+		g.Disposition = DispositionExcluded
+	}
+	for _, h := range f.History {
+		if h.By != ByHuman {
+			continue
+		}
+		// Changed holds the previous value, so false is a withdrawn finding put back, not a withdrawal.
+		if was, ok := h.Changed["included"].(bool); ok && !was {
+			g.Reinstated = true
+		}
+		for _, field := range []string{"label", "blocking", "severity"} {
+			if _, ok := h.Changed[field]; ok {
+				g.Regraded = true
+			}
+		}
+	}
+	return g
 }
 
 func lastIncludedChangeBy(f Finding) string {

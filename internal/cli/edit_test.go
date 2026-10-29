@@ -20,7 +20,7 @@ func sendBackRun(t *testing.T) (home, dir string) {
 	home = t.TempDir()
 	d := draft.NewEmpty()
 	d.Findings = []draft.Finding{
-		{ID: "f-001", Rev: 1, Title: "One", Body: "Body.", Location: &draft.Location{Path: "multi.txt", Side: draft.SideRight, Line: 3},
+		{ID: "f-001", Rev: 1, Title: "One", Body: "Body.", Location: &draft.FindingLocation{Path: "multi.txt", Side: draft.SideRight, Line: 3},
 			Label: "issue", By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}},
 		{ID: "f-002", Rev: 1, Title: "Two", Body: "Body.", General: true, By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}},
 	}

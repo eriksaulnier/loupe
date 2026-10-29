@@ -21,6 +21,8 @@ type Diff struct {
 	Files []*File
 	// byPath holds every entry for a path in diff order; a type change, such as a symlink becoming a file, has two.
 	byPath map[string][]*File
+	// Outline is set only by add and edit, which load it when an input carries a heading anchor.
+	Outline Outline
 }
 
 type File struct {

@@ -39,7 +39,7 @@ func TestOpenUnder100ms(t *testing.T) {
 		}
 		inputs = append(inputs, draft.FindingInput{
 			Title: fmt.Sprintf("Finding in file %d", i), Body: "The new value shadows the **old** one; see `f()`.\n\n- check callers\n- add a test",
-			Location: &draft.Location{Path: name, Line: 207}, Label: "issue", Blocking: i%2 == 0,
+			Location: &draft.LocationInput{Path: name, Line: 207}, Label: "issue", Blocking: i%2 == 0,
 		})
 	}
 	diffBytes := []byte(b.String())

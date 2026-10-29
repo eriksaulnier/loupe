@@ -105,7 +105,7 @@ func NewRoot(deps Deps) *cobra.Command {
 		commands []*cobra.Command
 	}{
 		{groupAgent, []*cobra.Command{newCaptureCmd(deps), newAddCmd(deps), newSummaryCmd(deps), newAssessCmd(deps), newHandoffCmd(deps), newWaitCmd(deps), newEditCmd(deps), newReplyCmd(deps), newFeedbackCmd(deps)}},
-		{groupAnyone, []*cobra.Command{newShowCmd(deps), newListCmd(deps)}},
+		{groupAnyone, []*cobra.Command{newShowCmd(deps), newListCmd(deps), newStatsCmd(deps)}},
 		{groupHuman, []*cobra.Command{newReviewCmd(deps), newPublishCmd(deps)}},
 	} {
 		for _, c := range g.commands {

@@ -667,6 +667,23 @@ func TestBuildNamesTheNoteOverTheLimit(t *testing.T) {
 	}
 }
 
+// A heading belongs to the draft and the review interface: the envelope, and so the attempt and the receipt, carry the
+// range alone.
+func TestBuildLeavesTheHeadingOut(t *testing.T) {
+	d := readyDraft()
+	d.Findings[1].Location.Heading = "Rollout"
+	env, err := Build(buildInput(fixtureTarget(), d, "comment", "all", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data := mustJSON(t, env); strings.Contains(data, "heading") || strings.Contains(data, "Rollout") {
+		t.Fatalf("envelope carries the heading:\n%s", data)
+	}
+	if loc := env.Findings[1].Location; loc == nil || *loc != (draft.Location{Path: "a.go", Side: draft.SideRight, Line: 12, StartLine: 10}) {
+		t.Fatalf("envelope location %+v", loc)
+	}
+}
+
 // Publish rechecks the allowlist, never finding ids: a stored draft publishes as it would have before the check, and
 // the human's message is their own words.
 func TestBuildDoesNotCheckFindingIDs(t *testing.T) {

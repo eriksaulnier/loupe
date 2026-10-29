@@ -36,6 +36,10 @@ The external review skill (gadfly) already writes a reason for each withdrawal, 
 - Q: What does a call that adds or changes only a reason on a finding already not included do? → A: It appends a history entry with the new reason. Inclusion, `rev` and the decision are unchanged. The current reason is the latest reason recorded since the latest withdrawal (FR-005, FR-010).
 - Q: After the first by-eye check, how does the detail show the reason and its code? → A: As a note thread does. The reason hangs from a left bar in the withdrawn tone, under a bold `Withdrawn` headline that carries the code as a muted chip, and the text follows as a reply body. The dim reason in the row stays (FR-007).
 
+### Session 2026-10-29
+
+- Q: Which draft schema does the reason take, now that #91 (spec 044) took schema 3 for `findings.location.heading`? → A: Schema 4. This spec renumbered its bump from 3 to 4 after #91 merged, and the field sets of 3 and 4 both stay (FR-013, SC-003).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The human reads why a finding was withdrawn (Priority: P1)
@@ -119,7 +123,7 @@ A skill author reads `loupe edit --help` or `docs/reason-codes.md` and picks a c
   - The `loupe edit` section gains `--reason`, `--reason-code` and the `withdrawReason` input key, with FR-002 and FR-003's rules and FR-010's amend. The JSON-input convention gains `withdrawReason` as an `edit` input key that is allowed only with `--exclude`.
   - The `edit` result payload gains an optional `warnings` array of warning codes, present only when nonempty. No result has a `warnings` key today. It is a payload key, not an envelope key, so no other command gains it, and existing `edit` results and goldens stay byte for byte the same. The envelope stays `"loupe": 1`, because the change only adds an optional key, as spec 016 added `dir`. A new `Warning codes` table lists `withdraw-reason-missing`. A warning never changes the exit code.
   - The `show` and `feedback` sections gain `withdrawReason` per FR-008.
-- **FR-013 — Schema**: Adding `reason` to `HistoryEntry` MUST bump the draft schema from 2 to 3 under `docs/versioning.md`. The schema field-set test MUST gain schema 3's field set and keep schema 2's. `docs/versioning.md`'s current-versions table MUST record the bump. The bump only adds a field, so no migration step is needed. An older loupe that reads a schema 3 draft refuses with `record` and the fix `upgrade loupe`. So a skill pinned to an older loupe stops working on any draft a newer loupe has written, and the release notes MUST say so. No other run file changes: the hand-back holds only note ids, and the attempt and receipt hold no history.
+- **FR-013 — Schema**: Adding `reason` to `HistoryEntry` MUST bump the draft schema from 3 to 4 under `docs/versioning.md`. Schema 3 is spec 044's heading anchor. The schema field-set test MUST gain schema 4's field set and keep schemas 1 to 3. `docs/versioning.md`'s current-versions table MUST record the bump. The bump only adds a field, so no migration step is needed. An older loupe that reads a schema 4 draft refuses with `record` and the fix `upgrade loupe`. So a skill pinned to an older loupe stops working on any draft a newer loupe has written, and the release notes MUST say so. No other run file changes: the hand-back holds only note ids, and the attempt and receipt hold no history.
 - **FR-014 — Published output**: The reason MUST NOT appear in any published body, attended or unattended, or in the digest. A withdrawn finding is not in the publishable set, and the digest covers only that set.
 - **FR-015 — loupe's own skill**: `plugin/skills/human-review/SKILL.md` section 8 MUST pass `--reason` with `--reason-code conceded` when it tells an agent to withdraw a finding after a send-back, with a reason that sums up its reply.
 
@@ -135,7 +139,7 @@ A skill author reads `loupe edit --help` or `docs/reason-codes.md` and picks a c
 
 - **SC-001**: For a seeded run with one finding withdrawn with a reason and one without, `show --json` carries `withdrawReason` on the first only, and the second `edit` printed the warning and carried `withdraw-reason-missing`.
 - **SC-002**: Review-interface tests at 80 and 100 columns show the reason in the row and in the detail of a withdrawn finding, as FR-006 and FR-007 say, and show neither for a withdrawn finding with no reason. The interface has no screen goldens, so these are assertion tests like the ones in `internal/tui/design_test.go`.
-- **SC-003**: A schema 2 draft loads, and every command shows no reason and prints no warning for it. A schema 3 draft read by a loupe built at schema 2 refuses with `record` and `upgrade loupe`.
+- **SC-003**: A schema 2 draft loads, and every command shows no reason and prints no warning for it. A schema 4 draft read by a loupe built at schema 3 refuses with `record` and `upgrade loupe`.
 - **SC-004**: Every existing `edit`, `show` and `feedback` golden under `testdata/golden/cli` stays the same, except where a fixture adds a reason on purpose.
 - **SC-005**: After the external skill's follow-up ships, every agent withdrawal in a new run of that skill carries a reason code.
 - **SC-006**: A reason amended on a withdrawn finding the human excluded leaves its `rev`, its exclusion and the gate counts unchanged, and the new reason is the one every surface shows.

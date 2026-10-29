@@ -62,6 +62,12 @@ func SetProcessEnv() error {
 
 func New(t *testing.T, owner, repo string, number int) *Repo {
 	t.Helper()
+	return NewWithBase(t, owner, repo, number, nil)
+}
+
+// NewWithBase is New with base also committed in the base, so the pull request can edit those files.
+func NewWithBase(t *testing.T, owner, repo string, number int, base map[string]string) *Repo {
+	t.Helper()
 	for _, kv := range env {
 		if os.Getenv(kv[0]) != kv[1] {
 			t.Setenv(kv[0], kv[1])
@@ -89,6 +95,7 @@ func New(t *testing.T, owner, repo string, number int) *Repo {
 		"remove-me.txt":    "obsolete\n",
 		"README.md":        "# widgets\n",
 	})
+	r.writeFiles(base)
 	r.commit("base")
 	r.base = r.git(t, r.workDir, "rev-parse", "HEAD")
 
@@ -128,6 +135,17 @@ func (r *Repo) PushHead(files map[string]string) string {
 	r.git(r.t, r.workDir, "checkout", "--quiet", "--detach", r.head)
 	r.writeFiles(files)
 	r.commit("move head")
+	r.head = r.git(r.t, r.workDir, "rev-parse", "HEAD")
+	r.git(r.t, r.workDir, "push", "--quiet", "--force", r.RemoteDir, r.head+":"+r.pullRef())
+	return r.head
+}
+
+// RemoveHead commits the removal of paths on top of the current pull request head and force-moves the head to it.
+func (r *Repo) RemoveHead(paths ...string) string {
+	r.t.Helper()
+	r.git(r.t, r.workDir, "checkout", "--quiet", "--detach", r.head)
+	r.git(r.t, r.workDir, append([]string{"rm", "--quiet"}, paths...)...)
+	r.commit("remove from head")
 	r.head = r.git(r.t, r.workDir, "rev-parse", "HEAD")
 	r.git(r.t, r.workDir, "push", "--quiet", "--force", r.RemoteDir, r.head+":"+r.pullRef())
 	return r.head

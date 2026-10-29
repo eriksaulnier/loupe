@@ -29,7 +29,7 @@ func multiHunk(t *testing.T) *diff.Diff {
 }
 
 func located(title string, line int) FindingInput {
-	return FindingInput{Title: title, Body: "Evidence.", Location: &Location{Path: "multi.txt", Line: line}}
+	return FindingInput{Title: title, Body: "Evidence.", Location: &LocationInput{Path: "multi.txt", Line: line}}
 }
 
 func general(title string) FindingInput {
@@ -64,7 +64,7 @@ func TestAddOne(t *testing.T) {
 	}
 	want := Finding{
 		ID: "f-001", Rev: 1, Title: "First", Body: "Evidence.",
-		Location: &Location{Path: "multi.txt", Side: SideRight, Line: 3},
+		Location: &FindingLocation{Path: "multi.txt", Side: SideRight, Line: 3},
 		By:       ByAgent, Included: true, CreatedAt: addNow, UpdatedAt: addNow, History: []HistoryEntry{},
 	}
 	if len(added) != 1 || !reflect.DeepEqual(added[0], want) || !reflect.DeepEqual(d.Findings, []Finding{want}) {
@@ -75,7 +75,7 @@ func TestAddOne(t *testing.T) {
 func TestAddBatchAssignsSequentialIDs(t *testing.T) {
 	d := NewEmpty()
 	in := FindingInput{
-		Title: "Second", Body: "Body.", Location: &Location{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33},
+		Title: "Second", Body: "Body.", Location: &LocationInput{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33},
 		Label: "perf-nit", Blocking: true, Confidence: "low", Severity: "minor", SuggestedFix: "Do less.",
 	}
 	added, err := Add(d, []FindingInput{general("First"), in}, multiHunk(t), ByHuman, addNow)
@@ -88,7 +88,7 @@ func TestAddBatchAssignsSequentialIDs(t *testing.T) {
 	second := d.Findings[1]
 	if second.Rev != 1 || !second.Included || second.By != ByHuman || second.Label != "perf-nit" || !second.Blocking ||
 		second.Confidence != "low" || second.Severity != "minor" || second.SuggestedFix != "Do less." ||
-		*second.Location != (Location{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33}) {
+		*second.Location != (FindingLocation{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33}) {
 		t.Fatalf("second %+v", second)
 	}
 	if !d.Findings[0].General || d.Findings[0].Location != nil {
@@ -121,7 +121,7 @@ func TestAddRefusesInvalidInput(t *testing.T) {
 		{"missing title", FindingInput{Body: "b", General: true}},
 		{"blank title", FindingInput{Title: "  ", Body: "b", General: true}},
 		{"missing body", FindingInput{Title: "t", General: true}},
-		{"location and general", FindingInput{Title: "t", Body: "b", General: true, Location: &Location{Path: "multi.txt", Line: 3}}},
+		{"location and general", FindingInput{Title: "t", Body: "b", General: true, Location: &LocationInput{Path: "multi.txt", Line: 3}}},
 		{"neither location nor general", FindingInput{Title: "t", Body: "b"}},
 		{"unknown confidence", FindingInput{Title: "t", Body: "b", General: true, Confidence: "certain"}},
 		{"unknown severity", FindingInput{Title: "t", Body: "b", General: true, Severity: "P2"}},
@@ -137,7 +137,7 @@ func TestAddRefusesInvalidInput(t *testing.T) {
 		{"reference without host", FindingInput{Title: "t", Body: "b", General: true, References: []string{"https:" + "///path"}}},
 		{"reference with other scheme", FindingInput{Title: "t", Body: "b", General: true, References: []string{"ftp://a/b"}}},
 		{"reference with userinfo", FindingInput{Title: "t", Body: "b", General: true, References: []string{strings.Replace("http://localhost/o/r", "//", "//user@", 1)}}},
-		{"unknown side", FindingInput{Title: "t", Body: "b", Location: &Location{Path: "multi.txt", Side: "MIDDLE", Line: 3}}},
+		{"unknown side", FindingInput{Title: "t", Body: "b", Location: &LocationInput{Path: "multi.txt", Side: "MIDDLE", Line: 3}}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -313,7 +313,7 @@ func TestAddBatchRefusalNamesEveryInvalidEntry(t *testing.T) {
 
 	_, err := Add(d, inputs, multiHunk(t), "", addNow)
 	r := wantRefusal(t, err, refusal.Location)
-	alone := wantRefusal(t, validateInput(inputs[2], multiHunk(t)), refusal.Location)
+	alone := wantRefusal(t, validationErr(validateInput(inputs[2], multiHunk(t))), refusal.Location)
 	if r.Fix != alone.Fix || r.Details["entry"] != 2 || !reflect.DeepEqual(r.Details["nearest"], alone.Details["nearest"]) {
 		t.Fatalf("top level %+v, want entry 2's own refusal %+v", r, alone)
 	}
@@ -326,7 +326,7 @@ func TestAddBatchRefusalNamesEveryInvalidEntry(t *testing.T) {
 	}
 	for i, want := range []int{2, 5, 8} {
 		e := entries[i]
-		own := wantRefusal(t, validateInput(inputs[want], multiHunk(t)), refusal.Code(e["code"].(string)))
+		own := wantRefusal(t, validationErr(validateInput(inputs[want], multiHunk(t))), refusal.Code(e["code"].(string)))
 		if e["entry"] != want || e["message"] != own.Message || e["fix"] != own.Fix {
 			t.Fatalf("entries[%d] %v, want entry %d with %+v", i, e, want, own)
 		}
@@ -346,7 +346,7 @@ func TestAddBatchRefusalWithOneInvalidEntryIsUnchanged(t *testing.T) {
 	d := NewEmpty()
 	_, err := Add(d, []FindingInput{located("Good", 3), located("Off", 10)}, multiHunk(t), "", addNow)
 	r := wantRefusal(t, err, refusal.Location)
-	alone := wantRefusal(t, validateInput(located("Off", 10), multiHunk(t)), refusal.Location)
+	alone := wantRefusal(t, validationErr(validateInput(located("Off", 10), multiHunk(t))), refusal.Location)
 	if r.Message != "entry 1: "+alone.Message || r.Fix != alone.Fix || r.Details["entry"] != 1 {
 		t.Fatalf("refusal %+v", r)
 	}
@@ -396,3 +396,5 @@ func TestAddRefusesReferenceWithoutAHostname(t *testing.T) {
 		t.Fatalf("message %q", r.Message)
 	}
 }
+
+func validationErr(_ *FindingLocation, err error) error { return err }

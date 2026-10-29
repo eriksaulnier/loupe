@@ -6,7 +6,7 @@
 
 ## Summary
 
-`draft.HistoryEntry` gains an optional `reason` (`{text, code}`), and the draft schema goes from 2 to 3. `draft.EditInput` gains `withdrawReason`, so `--from` input carries it with no new decode path, and `loupe edit --reason/--reason-code` fill the same field. `draft.Edit` validates the reason, puts it on the entry that withdraws, and appends an entry with an empty `changed` when the call only amends the reason of a finding that is already not included. `draft.CurrentReason` derives the reason every surface shows. `loupe edit` warns when an agent withdraws without one. `show --json`, `feedback --json` and `show` text gain the current reason, and the review interface shows it after the title in the findings row and under a `Withdrawn` head in the detail. The contract, `docs/versioning.md`, a new `docs/reason-codes.md` and the skill's section 8 record the change.
+`draft.HistoryEntry` gains an optional `reason` (`{text, code}`), and the draft schema goes from 3 to 4. `draft.EditInput` gains `withdrawReason`, so `--from` input carries it with no new decode path, and `loupe edit --reason/--reason-code` fill the same field. `draft.Edit` validates the reason, puts it on the entry that withdraws, and appends an entry with an empty `changed` when the call only amends the reason of a finding that is already not included. `draft.CurrentReason` derives the reason every surface shows. `loupe edit` warns when an agent withdraws without one. `show --json`, `feedback --json` and `show` text gain the current reason, and the review interface shows it after the title in the findings row and under a `Withdrawn` head in the detail. The contract, `docs/versioning.md`, a new `docs/reason-codes.md` and the skill's section 8 record the change.
 
 ## Technical Context
 
@@ -14,9 +14,9 @@
 
 **Primary Dependencies**: None added.
 
-**Storage**: `draft.json` gains `findings.history.reason` at schema 3. No other run file changes: the hand-back holds note ids, and the attempt and receipt hold no history.
+**Storage**: `draft.json` gains `findings.history.reason` at schema 4. No other run file changes: the hand-back holds note ids, and the attempt and receipt hold no history.
 
-**Testing**: Table tests in `internal/draft/mutate_edit_test.go` and `derive_test.go`, written failing first. CLI tests in `internal/cli/edit_test.go`, `show_test.go` and `feedback_test.go` drive the commands with injected stdin and stderr. Review-interface assertion tests at 80 and 100 columns in `internal/tui/design_test.go`, as SC-002 asks. The schema field-set test in `internal/publish/schema_test.go` gains schema 3. `mise run check` closes every commit.
+**Testing**: Table tests in `internal/draft/mutate_edit_test.go` and `derive_test.go`, written failing first. CLI tests in `internal/cli/edit_test.go`, `show_test.go` and `feedback_test.go` drive the commands with injected stdin and stderr. Review-interface assertion tests at 80 and 100 columns in `internal/tui/design_test.go`, as SC-002 asks. The schema field-set test in `internal/publish/schema_test.go` gains schema 4. `mise run check` closes every commit.
 
 **Target Platform**: Unchanged.
 
@@ -42,11 +42,11 @@
 - **Reinstate.** Decision: nothing to add. `Reinstate` sets `included` through `Edit`, so `CurrentReason` returns nil and the row and detail drop the reason. History keeps it. Rationale: User Story 1, scenario 4.
 - **An amend while review is open.** Decision: nothing to add. `FindingState` marshals the whole finding with its history, so an amend changes it and the open review treats it as any other change (spec 017). `changeNotice` also compares the history length, since an amend moves neither `rev` nor `included`, so the notice names the finding (added after review, 2026-10-29).
 - **Published output.** Decision: nothing to add, and one test. The digest and the bodies read the publishable set, which holds no withdrawn finding and no history. A draft test asserts that an amend leaves `Digest` unchanged. Rationale: FR-014.
-- **Schema.** Decision: `SchemaVersion = 3`. `fieldSets` in `internal/publish/schema_test.go` gains a schema 3 set: schema 2's set plus `findings.history.reason,omitempty`, `findings.history.reason.code,omitempty` and `findings.history.reason.text`. The existing schema test that plays the next loupe covers SC-003's refusal, and a draft test loads a schema 2 file and shows no reason. Rationale: FR-013. The bump only adds a field, so `ReadJSON` needs no migration.
+- **Schema.** Decision: `SchemaVersion = 4`, renumbered from 3 on 2026-10-29 after spec 044 took schema 3. `fieldSets` in `internal/publish/schema_test.go` gains a schema 4 set: schema 3's set plus `findings.history.reason,omitempty`, `findings.history.reason.code,omitempty` and `findings.history.reason.text`. The existing schema test that plays the next loupe covers SC-003's refusal, and a draft test loads a schema 2 file and shows no reason. Rationale: FR-013. The bump only adds a field, so `ReadJSON` needs no migration.
 - **Help and codes.** Decision: `editHelp` gains a paragraph on `--reason`, `--reason-code` and `withdrawReason`, the amend, the warning, and the four recommended codes, each with one line, said to be unenforced. The result shape gains the optional `warnings`. `docs/reason-codes.md` holds the same list with a sentence on why loupe does not enforce it. Rationale: FR-011 and Principle I. No help golden covers `edit`, so none moves.
 - **The demo seed.** Decision: `midReview` withdraws `f-007` with a reason and the code `no-runtime-effect`. Rationale: the spec's assumption, so `mise run demo` shows the row and the detail. `cmd/loupe-demo/main_test.go` still sees `f-007` withdrawn.
 - **The skill.** Decision: section 8's withdraw bullet becomes `loupe edit <finding-id> --exclude --reason "<one line that sums up your reply>" --reason-code conceded --run <ref> --json`. Rationale: FR-015. `plugin_test.go` is checked for any pinned wording.
-- **Release note.** Decision: the commit that bumps the schema says in its body that an older loupe refuses a schema 3 draft with `upgrade loupe`. Rationale: FR-013. release-please builds the notes from the PR title, so the owner carries it into the release PR. The agent edits no release file.
+- **Release note.** Decision: the commit that bumps the schema says in its body that an older loupe refuses a schema 4 draft with `upgrade loupe`. Rationale: FR-013. release-please builds the notes from the PR title, so the owner carries it into the release PR. The agent edits no release file.
 - **No separate design artifacts.** Decision: no `research.md`, `data-model.md`, `contracts/` or `quickstart.md`. Rationale: specs 014 and later hold research in the plan. The contracts are `specs/001-loupe-v1/contracts/cli.md` and `docs/versioning.md`, amended in place under FR-012 and FR-013, and the stored change is one field.
 
 ## Data model
@@ -77,13 +77,13 @@ specs/041-withdraw-reason/
 ├── tasks.md
 └── checklists/requirements.md
 
-internal/draft/model.go              # SchemaVersion 3, Reason, HistoryEntry.Reason
+internal/draft/model.go              # SchemaVersion 4, Reason, HistoryEntry.Reason
 internal/draft/mutate.go             # EditInput.WithdrawReason, ValidateReason, reason on the entry, the amend
 internal/draft/derive.go             # CurrentReason
 internal/draft/mutate_edit_test.go   # withdraw, amend, no-op amend, refusals, digest unchanged
 internal/draft/derive_test.go        # CurrentReason across withdraw, amend, reinstate, re-withdraw, human exclusion
 internal/draft/store_test.go         # a schema 2 draft loads with no reason
-internal/publish/schema_test.go      # schema 3 field set
+internal/publish/schema_test.go      # schema 4 field set
 internal/cli/edit.go                 # --reason, --reason-code, usage refusal, warning, warnings key, help
 internal/cli/edit_test.go            # SC-001, scenarios 1 to 5, refusals, --from
 internal/cli/show.go                 # withdrawReason in JSON, "withdrawn because" in text

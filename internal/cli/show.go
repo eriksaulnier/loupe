@@ -27,7 +27,7 @@ will appear in the published review's hidden marker.
 Result (--json):
   {"loupe": 1, "ok": true, "command": "show", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 5,
-   "schema": 3,
+   "schema": 4,
    "summary": "Markdown",
    "findings": [{"id": "f-001", "rev": 1, "title": "...", "body": "...",
                  "location": {"path": "src/a.go", "side": "RIGHT", "line": 88},
@@ -564,6 +564,15 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 	b.WriteString("\n")
 }
 
+// published drops a finding's heading, which show's human output does not print.
+func published(l *draft.FindingLocation) *draft.Location {
+	if l == nil {
+		return nil
+	}
+	p := l.Published()
+	return &p
+}
+
 func locationOf(l *draft.Location) string {
 	if l == nil {
 		return "general"
@@ -628,7 +637,7 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 		if f.Verified != "" {
 			meta = append(meta, dimCell("verified "+oneLine(f.Verified)))
 		}
-		meta = append(meta, dimCell(locationCell(s, f.Location)))
+		meta = append(meta, dimCell(locationCell(s, published(f.Location))))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
 			title: f.Title, meta: meta, body: f.Body, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,

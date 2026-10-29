@@ -1,0 +1,13 @@
+Published runs in nobody/nothing, at any time.
+
+total
+  runs        0
+  findings    0 filed
+  precision   -
+  median      -
+
+Precision is published out of published plus excluded. It leaves out withdrawn
+findings, which the agent cut itself, and unattended runs. The median also
+leaves out unattended runs.
+
+No runs match these filters.

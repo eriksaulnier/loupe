@@ -92,7 +92,7 @@ var findings = []draft.FindingInput{
 	{
 		Title:      "Store.Put holds the write lock across the network call",
 		Body:       "`Put` takes the write lock and then calls GitHub. Every `Get` waits behind that round trip for as long as it takes, so one slow response stalls every reader.",
-		Location:   &draft.Location{Path: "internal/cache/store.go", Line: 38},
+		Location:   &draft.LocationInput{Path: "internal/cache/store.go", Line: 38},
 		Label:      "issue",
 		Confidence: "medium",
 	},
@@ -100,7 +100,7 @@ var findings = []draft.FindingInput{
 		Title: "Cache entries never expire when the ETag is missing",
 		Body: "When the upstream response carries no ETag, `Get` returns the entry as fresh forever. A pull request whose metadata changes after the first fetch keeps its stale title and head SHA until the process restarts.\n\n" +
 			"The TTL comparison on line 93 is never reached for those entries, so the cache goes stale exactly for the repositories that don't send ETags.",
-		Location:     &draft.Location{Path: "internal/cache/store.go", StartLine: 90, Line: 91},
+		Location:     &draft.LocationInput{Path: "internal/cache/store.go", StartLine: 90, Line: 91},
 		Label:        "issue",
 		Blocking:     true,
 		Confidence:   "high",
@@ -113,7 +113,7 @@ var findings = []draft.FindingInput{
 	{
 		Title:        "Hit ratio counters reset on every scrape",
 		Body:         "`Collect` stores zero into both counters after reading them. A second scraper, or a retried scrape, computes the ratio from a fraction of the traffic.",
-		Location:     &draft.Location{Path: "internal/cache/metrics.go", StartLine: 39, Line: 40},
+		Location:     &draft.LocationInput{Path: "internal/cache/metrics.go", StartLine: 39, Line: 40},
 		Label:        "suggestion",
 		Confidence:   "medium",
 		Severity:     "minor",
@@ -135,13 +135,13 @@ var findings = []draft.FindingInput{
 	{
 		Title:    "The old store dropped insertion order",
 		Body:     "Before this change nothing recorded the order entries arrived in, so eviction could not be oldest-first.",
-		Location: &draft.Location{Path: "internal/cache/store.go", Line: 42, Side: draft.SideLeft},
+		Location: &draft.LocationInput{Path: "internal/cache/store.go", Line: 42, Side: draft.SideLeft},
 		Label:    "issue",
 	},
 	{
 		Title:    "Flag default duplicates the config file value",
 		Body:     "The cache size default is set here and in the config file.",
-		Location: &draft.Location{Path: "cmd/widgets/main.go", Line: 11},
+		Location: &draft.LocationInput{Path: "cmd/widgets/main.go", Line: 11},
 		Label:    "issue",
 	},
 }
