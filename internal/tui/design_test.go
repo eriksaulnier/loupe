@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -172,8 +173,9 @@ func drain(cmd tea.Cmd) []tea.Msg {
 	}
 }
 
-// A recorded decision is a notice in the findings pane's bottom border that moves no row, and it expires after its
-// timer unless a newer notice took its place; a refusal does not expire (FR-010, owner decision 6).
+// A recorded decision is a notice at the right of the findings pane's top border, before its counts, that moves no
+// row, and it expires after its timer unless a newer notice took its place; a refusal does not expire (FR-010, owner
+// decision 6, release testing).
 func TestSuccessNoticeLivesInTheBorderAndExpires(t *testing.T) {
 	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
 	before := strings.Split(m.View().Content, "\n")
@@ -190,7 +192,8 @@ func TestSuccessNoticeLivesInTheBorderAndExpires(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m.say(style.Good, "✓ f-001 accepted")
 	after := strings.Split(m.View().Content, "\n")
-	if len(after) != len(before) || !strings.Contains(after[len(after)-2], "╰─ ✓ f-001 accepted ─") {
+	top := regexp.MustCompile(`(?m)^╭─ Findings ─+ ✓ f-001 accepted ─ 1 blocking · 0 open notes · 2 pending ─╮$`)
+	if len(after) != len(before) || !top.MatchString(m.View().Content) || strings.Contains(after[len(after)-2], "accepted") {
 		t.Fatalf("the notice is not in the findings border:\n%s", strings.Join(after, "\n"))
 	}
 	for i := range before[:len(before)-2] {
@@ -212,6 +215,19 @@ func TestSuccessNoticeLivesInTheBorderAndExpires(t *testing.T) {
 	}
 	if view := m.View().Content; !strings.Contains(paneText(view), "the draft is not ready: pending findings f-002; loupe review") {
 		t.Errorf("the refusal is not readable in the pane:\n%s", view)
+	}
+}
+
+// In detail the notice sits at the right end of the finding's top border, apart from the id it does not name, and the
+// bottom border keeps only the position (release testing).
+func TestDetailNoticeLivesInTheTopBorder(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	mustOpenFinding(t, m, "f-002")
+	m.say(style.Good, "✓ f-001 accepted")
+	view := m.View().Content
+	if !regexp.MustCompile(`(?m)^╭─ · f-002 · pending ─+ ✓ f-001 accepted ─╮$`).MatchString(view) ||
+		!regexp.MustCompile(`(?m)^╰─+ 2 of 3 ─╯$`).MatchString(view) {
+		t.Errorf("the notice is not at the right of the detail's top border:\n%s", view)
 	}
 }
 

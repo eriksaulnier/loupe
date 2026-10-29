@@ -95,7 +95,20 @@ func (m *Model) fileRows() int {
 	footer := m.keys(groupHints(m.fileDiffHints())...)
 	_, rows := style.PaneInner(0, m.bodyRows(len(footer)))
 	width, _ := style.PaneInner(m.width, 0)
-	return max(1, rows-1-len(m.noticeRows(width, noticeRoom(m.width, m.fileActive()))))
+	return max(1, rows-1-len(m.noticeRows(width, m.styles.NoticeRoom(m.filePane()))))
+}
+
+// filePane is the file diff's pane with its titles: the path and the finding the cursor is on.
+func (m *Model) filePane() style.Pane {
+	f, _ := m.openedFinding()
+	path := ""
+	if f.Location != nil {
+		path = render.ForDisplay(f.Location.Path)
+	}
+	width, _ := style.PaneInner(m.width, 0)
+	active := m.fileActive()
+	title := m.styles.LocationTitle(path, max(8, width-style.Width(active)-16), true) + m.styles.Emphasis(m.styles.Accent).Render(" "+m.glyphs.Sep+" file diff")
+	return style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: title, TopRight: active}}
 }
 
 // fileCounts is what the file's diff does: lines added, lines removed, and how many findings sit on it.
@@ -147,23 +160,17 @@ func (m *Model) updateFileDiff(msg tea.KeyPressMsg) tea.Cmd {
 func (m *Model) fileDiffView() string {
 	footer := m.keys(groupHints(m.fileDiffHints())...)
 	m.file.SetHeight(m.fileRows())
-	f, _ := m.openedFinding()
-	path := ""
-	if f.Location != nil {
-		path = render.ForDisplay(f.Location.Path)
-	}
 	width, _ := style.PaneInner(m.width, 0)
-	active := m.fileActive()
-	room := noticeRoom(m.width, active)
+	pane := m.filePane()
+	room := m.withBorderNotice(&pane)
 	added, removed, findings := m.fileCounts()
 	lines := []string{m.styles.Secondary().Render(fmt.Sprintf("+%d %s%d %s %d %s", added, m.sign("\u2212", "-"), removed, m.glyphs.Sep, findings, plural(findings, "finding")))}
 	lines = append(lines, strings.Split(m.file.View(), "\n")...)
 	_, inner := style.PaneInner(0, m.bodyRows(len(footer)))
 	lines = m.withNotice(lines[:min(len(lines), 1+m.file.Height())], m.noticeRows(width, room), inner)
-	title := m.styles.LocationTitle(path, max(8, width-style.Width(active)-16), true) + m.styles.Emphasis(m.styles.Accent).Render(" "+m.glyphs.Sep+" file diff")
-	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)), Lines: lines,
-		Titles: style.PaneTitles{TopLeft: title, TopRight: active, BottomLeft: m.borderNotice(room), BottomLeftTab: m.flashing(room)},
-		Scroll: style.Scroll{Offset: m.file.YOffset(), Visible: m.file.Height(), Total: m.file.TotalLineCount()}})
+	pane.Height, pane.Lines = m.bodyRows(len(footer)), lines
+	pane.Scroll = style.Scroll{Offset: m.file.YOffset(), Visible: m.file.Height(), Total: m.file.TotalLineCount()}
+	body := m.styles.Pane(pane)
 	return m.shell(body, footer)
 }
 

@@ -90,7 +90,9 @@ func (m *Model) detailRows() int {
 	footer := m.detailFooter()
 	_, rows := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
 	inner, _ := style.PaneInner(m.width, 0)
-	return rows - len(m.noticeRows(inner, noticeRoom(m.width, m.detailPosition())))
+	f, _ := m.openedFinding()
+	title, _ := m.detailTitle(f)
+	return rows - len(m.noticeRows(inner, m.styles.NoticeRoom(style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: title}})))
 }
 
 // metaLines are the finding's attributes in reading order, broken only between them so a narrow window never clips
@@ -868,13 +870,29 @@ func (m *Model) detailView() string {
 	footer := m.detailFooter()
 	m.sizeDetail()
 	width, _ := style.PaneInner(m.width, 0)
-	position := m.detailPosition()
-	room := noticeRoom(m.width, position)
+	title, tone := m.detailTitle(f)
+	pane := style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Tone: tone,
+		Titles: style.PaneTitles{TopLeft: title, BottomRight: m.detailPosition()},
+		Scroll: style.Scroll{Offset: m.body.YOffset(), Visible: m.body.Height(), Total: m.body.TotalLineCount()}}
+	room := m.withBorderNotice(&pane)
 	lines := strings.Split(m.body.View(), "\n")
-	_, inner := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
-	lines = m.withNotice(lines[:min(len(lines), m.body.Height())], m.noticeRows(width, room), inner)
-	// The title leads with the list's glyph and says the disposition, and an open note, in their status colors; the
-	// border and the id take the finding's tone.
+	_, inner := style.PaneInner(0, pane.Height)
+	pane.Lines = m.withNotice(lines[:min(len(lines), m.body.Height())], m.noticeRows(width, room), inner)
+	body := m.styles.Pane(pane)
+	switch {
+	case m.noting:
+		body = append(body, m.noteView()...)
+	case m.editing:
+		body = append(body, m.editView()...)
+	case m.rewriting:
+		body = append(body, m.rewriteView()...)
+	}
+	return m.shell(body, footer)
+}
+
+// detailTitle leads with the list's glyph and says the disposition, and an open note, in their status colors; the
+// border and the id take the finding's tone, which it returns.
+func (m *Model) detailTitle(f draft.Finding) (string, style.Tone) {
 	disposition := draft.Dispositions(m.draft)[f.ID]
 	_, open := firstOpenNote(m.draft, f.ID)
 	tone := findingTone(disposition)
@@ -894,18 +912,7 @@ func (m *Model) detailView() string {
 	if open {
 		title += sep + m.styles.Chip("open note", style.ToneNote)
 	}
-	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Lines: lines,
-		Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room), BottomLeftTab: m.flashing(room), BottomRight: position},
-		Scroll: style.Scroll{Offset: m.body.YOffset(), Visible: m.body.Height(), Total: m.body.TotalLineCount()}, Tone: tone})
-	switch {
-	case m.noting:
-		body = append(body, m.noteView()...)
-	case m.editing:
-		body = append(body, m.editView()...)
-	case m.rewriting:
-		body = append(body, m.rewriteView()...)
-	}
-	return m.shell(body, footer)
+	return title, tone
 }
 
 func (m *Model) detailPosition() string {

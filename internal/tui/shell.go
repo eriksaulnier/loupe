@@ -172,14 +172,14 @@ func groupHints(hints []style.Hint) []style.KeyGroup {
 	return []style.KeyGroup{decide, move, app}
 }
 
-// borderNotice is the notice drawn in the bottom-left border of the active pane, when it is short and not a refusal.
+// borderNotice is the notice drawn at the right of the active pane's top border, when it is short and not a refusal.
 // room is the cells that border has for it.
 func (m *Model) borderNotice(room int) string {
 	if m.notice == "" || m.noticeKind == style.Warn || style.Width(m.notice) > room {
 		return ""
 	}
 	text := render.ForDisplay(m.notice)
-	// A decision's notice flashes as a solid tab first; the pane draws it with BottomLeftTab, so it keeps its cells.
+	// A decision's notice flashes as a solid tab first; the pane draws it with TopNoticeTab, so it keeps its cells.
 	if m.flashing(room) {
 		return m.styles.TitleTab(text, m.flashTone)
 	}
@@ -187,10 +187,17 @@ func (m *Model) borderNotice(room int) string {
 }
 
 // flashing is whether the border notice shows as a flashing tab: a decision's notice in its flash, in color, with
-// room in the border for the tab.
+// room in the border for it.
 func (m *Model) flashing(room int) bool {
 	return m.styles.Color && m.notice != "" && m.flashGen != 0 && m.flashGen == m.noticeGen &&
-		style.Width(render.ForDisplay(m.notice))+2 <= room
+		style.Width(render.ForDisplay(m.notice)) <= room
+}
+
+// withBorderNotice puts the notice that fits p's top border into it, and returns the room it had there.
+func (m *Model) withBorderNotice(p *style.Pane) int {
+	room := m.styles.NoticeRoom(*p)
+	p.Titles.TopNotice, p.Titles.TopNoticeTab = m.borderNotice(room), m.flashing(room)
+	return room
 }
 
 // noticeRows are a notice that does not belong in a border, wrapped whole into the pane so its corrective text is
@@ -233,7 +240,8 @@ func (m *Model) shortenNotice(notice []string, rows int) []string {
 	return slices.Concat(notice[:head], []string{mark}, notice[len(notice)-1:])
 }
 
-// noticeRoom is the bottom-left border's room in a pane of width beside a right title.
+// noticeRoom is the bottom-left border's room in a pane of width beside a right title, which the publish popup's
+// notice and the summary's command take.
 func noticeRoom(width int, right string) int {
 	return width - 2 - 4 - style.Width(right) - 3 - 1
 }

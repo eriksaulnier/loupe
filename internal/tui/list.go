@@ -442,7 +442,8 @@ func (m *Model) listView() string {
 	footer := m.keys(groupHints(m.listHints())...)
 	inner, _ := style.PaneInner(m.width, 0)
 	position := m.styles.Text().Render(position(m.cursor, len(m.order)))
-	room := noticeRoom(m.width, position)
+	findings := style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts()}, Focus: true}
+	room := m.withBorderNotice(&findings)
 	notice := m.noticeRows(inner, room)
 	l := m.layoutList(len(footer), len(notice))
 	if len(m.order) <= l.rows {
@@ -493,10 +494,10 @@ func (m *Model) listView() string {
 		// A refusal taller than the findings pane takes the summary's rows too, so none of it is cut.
 		body, findingsHeight = nil, m.bodyRows(len(footer))
 	}
-	lines = m.withNotice(lines, notice, findingsHeight-style.PaneRows)
-	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: findingsHeight, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts(), BottomLeft: m.borderNotice(room), BottomLeftTab: m.flashing(room), BottomRight: position},
-		Scroll: style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}, Focus: true})...)
+	findings.Height, findings.Lines = findingsHeight, m.withNotice(lines, notice, findingsHeight-style.PaneRows)
+	findings.Titles.BottomRight = position
+	findings.Scroll = style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}
+	body = append(body, m.styles.Pane(findings)...)
 	return m.shell(body, footer)
 }
 
