@@ -104,7 +104,7 @@ With 30 or fewer counted findings, the progress bar MUST mark the cell of the op
 
 When `ORCA_TERMINAL_HANDLE` is nonempty, the header MUST leave its last four columns blank, with no band, because Orca draws its pane controls over them. The body and footer keep the full width.
 
-The detail pane's top-left title MUST lead with the list's disposition glyph and carry the disposition word in its status color: accepted in good, excluded and withdrawn in overlay, pending in text. `open note` takes the note color. The glyph and the word carry the status where color is unavailable.
+The detail pane's top-left title MUST lead with the list's disposition glyph and carry the disposition word in its status color: accepted in good, excluded and withdrawn in overlay, pending in the accent. `open note` takes the note color. The glyph and the word carry the status where color is unavailable.
 
 The detail pane's border MUST take the finding's decision color: accepted in good, excluded and withdrawn in overlay, and pending in the accent. An open note colors only its own thread and the title's `open note`, so a pending finding with one keeps the accent border. A note's thread MUST hang from a left bar, not sit in a pane: a headline with the note id and its colored status, then each author and body. The bar and headline MUST use note while the note is open and overlay once it is resolved or dismissed, and a closed note's bodies recede to secondary text. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.
 
@@ -126,7 +126,7 @@ Status words MUST be chips in color: the disposition and `open note` in the deta
 
 The footer MUST be the bare keys on the terminal's own background. A band behind it was tried after the first demo and dropped.
 
-In color, the pane taking the keys MUST show its name as a solid tab: bold base text on a block of the pane's tone, like the badge. The tab's padding replaces the spaces beside the title. That pane is the findings in the list and the finding's id in detail. While a composer is open, it is the composer, and the review message while typing. The choice pane, help, the published screen and the too-small screen also get the tab. Other panes keep plain titles. Without color, titles are unchanged.
+In color, the pane taking the keys MUST show its name as a solid tab: bold base text on a block of the pane's tone, like the badge. The tab's padding replaces the spaces beside the title. That pane is the findings in the list and the finding's id in detail. While a composer is open, it is the composer, and the review message while typing. Help, the published screen and the too-small screen also get the tab. The publish steps' choice pane keeps a plain title, as the publish steps rule below says. Other panes keep plain titles. Without color, titles are unchanged.
 
 A decision that settles a finding MUST flash its success notice as a solid tab in the finding's new tone for 400 ms: good when accepted, overlay when excluded, the accent otherwise. The notice then reads as plain colored text until it expires. Its text MUST stay in the same cells through the flash, so only the background changes. The flash needs room for the tab's padding, and it has no effect without color.
 
