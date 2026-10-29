@@ -142,6 +142,12 @@ func TestPaneScrollThumb(t *testing.T) {
 	if rows := thumbRows(half); len(rows) != 5 {
 		t.Errorf("a half-visible document has a %d-row thumb, want 5", len(rows))
 	}
+	// Pinned rows above the document keep a plain edge: the thumb runs from the first row under them to the last.
+	for offset, want := range map[int]int{0: 2, 45: 6} {
+		if rows := thumbRows(s.Pane(Pane{Width: 20, Height: 9, Scroll: Scroll{Offset: offset, Visible: 5, Total: 50, Top: 2}})); len(rows) != 1 || rows[0] != want {
+			t.Errorf("under two pinned rows the thumb at offset %d is on rows %v, want [%d]", offset, rows, want)
+		}
+	}
 }
 
 func TestPaneASCIITier(t *testing.T) {

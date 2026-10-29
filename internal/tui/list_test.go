@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -556,6 +557,14 @@ func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 	}
 }
 
+// The confidence column is headed conf, over its four cells (release testing).
+func TestListHeadsConfidenceConf(t *testing.T) {
+	view := modelOf(t, newFixture(t), utf8Env, 100, 30).View().Content
+	if !regexp.MustCompile(`│     id    severity   conf finding +location +│`).MatchString(view) {
+		t.Errorf("the column headings do not read conf:\n%s", view)
+	}
+}
+
 // The location takes its natural width while every title still fits, and gives way only as far as the tier's width
 // when a title would otherwise be cut (release testing).
 func TestListLocationTakesItsNaturalWidth(t *testing.T) {
@@ -579,7 +588,7 @@ func TestListLocationTakesItsNaturalWidth(t *testing.T) {
 		{"short titles", "Title two", 100, natural},
 		{"a title that fits beside part of the path", strings.Repeat("t", 30), 100, 96 - 26 - 1 - 30},
 		{"a title that fits nowhere", strings.Repeat("t", 80), 100, 24},
-		{"a title that fits nowhere at 80", strings.Repeat("t", 80), 80, 18},
+		{"a title that fits nowhere at 80, drawn by filename", strings.Repeat("t", 80), 80, len("multi.txt:21")},
 		{"a wide window", strings.Repeat("t", 80), 200, natural},
 	} {
 		got := at(c.title, c.width)
@@ -588,10 +597,16 @@ func TestListLocationTakesItsNaturalWidth(t *testing.T) {
 			t.Errorf("%s at %d: %+v, want location %d and the title the rest", c.name, c.width, got, c.location)
 		}
 	}
-	// A long id still takes from the location below its tier's width, so the title keeps its floor.
+	// At 80–99 a path that does not fit is drawn as its filename, so the column is measured by the filename form.
+	// The widest filename form here is f-002's multi.txt:21.
+	if got := at("Title two", 90); got.location != len("multi.txt:21") || got.title != 86-26-1-len("multi.txt:21") {
+		t.Errorf("at 90 the location is sized for the path it does not draw: %+v", got)
+	}
+	// A long filename falls back to the tier's width, and a long id still takes from the location below it, so the
+	// title keeps its floor.
 	dir := newFixture(t)
 	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
-		d.Findings[0].Location.Path, d.Findings[1].Title = path, strings.Repeat("t", 80)
+		d.Findings[0].Location.Path, d.Findings[1].Title = "src/"+strings.Repeat("a", 40)+".go", strings.Repeat("t", 80)
 		return nil
 	}); err != nil {
 		t.Fatal(err)

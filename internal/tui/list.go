@@ -269,9 +269,13 @@ func (m *Model) listColumns() listColumns {
 		return n
 	}
 	if c.location > 0 {
-		natural, titles := m.naturalWidths()
+		natural, short, titles := m.naturalWidths()
 		// What the title and location share: the title's cell and the location's, less the gap between them.
 		shared := inner - fixed() + tier
+		if c.shortLocation && titles+natural > shared {
+			// A path that does not fit is drawn as its filename, so the column is measured by what it draws.
+			natural = short
+		}
 		c.location = natural
 		if titles+natural > shared {
 			c.location = min(natural, max(tier, shared-titles))
@@ -293,13 +297,16 @@ func (m *Model) listColumns() listColumns {
 	return c
 }
 
-// naturalWidths are the widest location in the list, no narrower than its heading, and the widest title cell: the
-// title with its blocking and note markers and, for a finding not included, the separator and its reason.
-func (m *Model) naturalWidths() (location, title int) {
+// naturalWidths are the widest location in the list and the widest in its filename form, neither narrower than the
+// heading, and the widest title cell: the title with its blocking and note markers and, for a finding not included,
+// the separator and its reason.
+func (m *Model) naturalWidths() (location, short, title int) {
 	location = style.Width("location")
+	short = location
 	notes := openNotes(m.draft)
 	for _, f := range m.order {
 		location = max(location, style.Width(locationText(f)))
+		short = max(short, style.Width(shortLocationText(f)))
 		need := style.Width(render.ForDisplay(render.OneLine(f.Title)))
 		if f.Blocking {
 			need += style.Width(m.glyphs.Blocking) + 1
@@ -312,7 +319,7 @@ func (m *Model) naturalWidths() (location, title int) {
 		}
 		title = max(title, need)
 	}
-	return location, title
+	return location, short, title
 }
 
 // listCounts are the findings pane's top-border counts: blocking findings that will publish, every open note record,
@@ -659,17 +666,22 @@ func openNotes(d *draft.Draft) map[string]bool {
 	return out
 }
 
+// shortLocationText is the location as its filename and line range, which the 80–99 tier prefers to a cut path.
+func shortLocationText(f draft.Finding) string {
+	if f.Location == nil {
+		return locationText(f)
+	}
+	return render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
+}
+
 // locationColumn keeps the end of the path, which is the part that identifies the file.
 func (m *Model) locationColumn(f draft.Finding, cols listColumns) string {
 	if f.Location == nil {
 		return m.styles.Overlay().Render("general")
 	}
 	text := locationText(f)
-	if cols.shortLocation {
-		short := render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
-		if style.Width(text) > cols.location {
-			text = short
-		}
+	if cols.shortLocation && style.Width(text) > cols.location {
+		text = shortLocationText(f)
 	}
 	return m.styles.LocationTitle(text, cols.location, false)
 }
