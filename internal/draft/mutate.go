@@ -719,6 +719,76 @@ func Recalibrate(d *Draft, findingID, label string, blocking bool, dif *diff.Dif
 	return f, nil
 }
 
+// Rewritable refuses what Rewrite would for the finding's state, so the review interface can refuse before opening
+// the editor.
+func Rewritable(f Finding) error {
+	if f.Included {
+		return nil
+	}
+	return refusal.New(refusal.Input, fmt.Sprintf("%s is withdrawn, so its title and body cannot be rewritten", f.ID),
+		fmt.Sprintf("reinstate %s first", f.ID))
+}
+
+// rewriteFix is the fix for a rewrite the review interface refused: the editor stays open with the text, so the human
+// corrects it there rather than through a command. A finding-id refusal's fix already says what to correct, so it ends
+// with rewriteIDRetry.
+const (
+	rewriteFix     = "correct it in the editor, then press ctrl+s"
+	rewriteIDRetry = "press ctrl+s again"
+)
+
+// Rewrite is the human's title and body edit from the review interface. It keeps a current decision and closes no
+// note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding. The
+// command line MUST NOT reach it.
+func Rewrite(d *Draft, findingID, title, body string, dif *diff.Diff, now time.Time) (Finding, error) {
+	stored, err := findFinding(d, findingID)
+	if err != nil {
+		return Finding{}, err
+	}
+	if err := Rewritable(*stored); err != nil {
+		return Finding{}, err
+	}
+	// Checked here, before Edit, whose refusals name loupe edit as the fix.
+	switch {
+	case strings.TrimSpace(title) == "":
+		return Finding{}, refusal.New(refusal.Input, "the title must not be empty", rewriteFix)
+	case strings.TrimSpace(body) == "":
+		return Finding{}, refusal.New(refusal.Input, "the body must not be empty", rewriteFix)
+	}
+	if err := markdown.Check(body, markdown.Body, rewriteFix); err != nil {
+		return Finding{}, err
+	}
+	changedTitle, changedBody := title, body
+	if changedTitle == stored.Title {
+		changedTitle = ""
+	}
+	if changedBody == stored.Body {
+		changedBody = ""
+	}
+	if err := checkFindingIDs(changedTitle, changedBody, "", "", rewriteIDRetry); err != nil {
+		return Finding{}, err
+	}
+	titleJSON, err := json.Marshal(title)
+	if err != nil {
+		return Finding{}, err
+	}
+	bodyJSON, err := json.Marshal(body)
+	if err != nil {
+		return Finding{}, err
+	}
+	decision, decided := d.Decisions[stored.ID]
+	current := decided && decision.FindingRev == stored.Rev
+	f, _, err := Edit(d, findingID, EditInput{Title: titleJSON, Body: bodyJSON}, nil, dif, ByHuman, now)
+	if err != nil {
+		return f, err
+	}
+	if current {
+		decision.FindingRev = f.Rev
+		d.Decisions[f.ID] = decision
+	}
+	return f, nil
+}
+
 // applyEdit returns a heading anchor for Edit to resolve, since resolving it needs the diff.
 func applyEdit(f *Finding, in EditInput) (anchor *LocationInput, err error) {
 	if err := decodeRequired("title", in.Title, &f.Title); err != nil {

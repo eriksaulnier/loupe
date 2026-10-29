@@ -421,6 +421,37 @@ func roundTrip(t *testing.T, d *Draft) *Draft {
 	return &out
 }
 
+func TestAgentChangedHumanText(t *testing.T) {
+	entry := func(by string, fields ...string) HistoryEntry {
+		changed := map[string]any{}
+		for _, f := range fields {
+			changed[f] = "before"
+		}
+		return HistoryEntry{By: by, Changed: changed}
+	}
+	for _, c := range []struct {
+		name    string
+		history []HistoryEntry
+		want    bool
+	}{
+		{"no history", nil, false},
+		{"agent only", []HistoryEntry{entry(ByAgent, "body"), entry(ByAgent, "title")}, false},
+		{"human last", []HistoryEntry{entry(ByAgent, "body"), entry(ByHuman, "title")}, false},
+		{"agent after human", []HistoryEntry{entry(ByHuman, "body"), entry(ByAgent, "body")}, true},
+		{"agent after human, then a label", []HistoryEntry{entry(ByHuman, "title"), entry(ByAgent, "title"), entry(ByHuman, "label")}, true},
+		{"agent on the other field", []HistoryEntry{entry(ByHuman, "title"), entry(ByAgent, "body")}, false},
+		{"agent on both, human on one", []HistoryEntry{entry(ByHuman, "title"), entry(ByAgent, "title", "body")}, true},
+		{"human rewrote again after the agent", []HistoryEntry{entry(ByHuman, "title", "body"), entry(ByAgent, "body"), entry(ByHuman, "body")}, false},
+		{"agent last on one field of two", []HistoryEntry{entry(ByHuman, "title", "body"), entry(ByAgent, "title"), entry(ByHuman, "body")}, true},
+		{"only the label after the human's text", []HistoryEntry{entry(ByHuman, "body"), entry(ByAgent, "label")}, false},
+		{"human label, then agent text", []HistoryEntry{entry(ByHuman, "label"), entry(ByAgent, "body")}, false},
+	} {
+		if got := AgentChangedHumanText(Finding{History: c.history}); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestCurrentReason(t *testing.T) {
 	a, b := &Reason{Text: "A.", Code: "duplicate"}, &Reason{Text: "B."}
 	withdraw := func(by string, r *Reason) HistoryEntry {

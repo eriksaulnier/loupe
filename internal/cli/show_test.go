@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -304,6 +306,53 @@ func TestMetaLineKeepsAPrivateUseRuneInACell(t *testing.T) {
 		if !strings.Contains(got, text) {
 			t.Errorf("cell %q came out as %q", text, strings.TrimSpace(got))
 		}
+	}
+}
+
+// A finding the human rewrote in review shows their text, with the agent's in its history, and an agent edit from a
+// read before the rewrite refuses as stale (specs/046-edit-then-accept).
+func TestShowJSONPresentsARewrittenFinding(t *testing.T) {
+	home := t.TempDir()
+	d := draft.NewEmpty()
+	d.Findings = []draft.Finding{{ID: "f-001", Rev: 1, Title: "Agent title", Body: "Agent body.", General: true, By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}}}
+	draftJSON, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := run.RunDir(home, "o", "r", 1, 1)
+	target := run.Target{Schema: run.TargetSchema, Owner: "o", Repo: "r", Number: 1, Round: 1, DiffSHA256: run.DiffSHA256(nil)}
+	if err := run.CreateRun(dir, target, nil, draftJSON, nil); err != nil {
+		t.Fatal(err)
+	}
+	before, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := draft.Mutate(dir, "review", nil, func(string) string { return "" }, func(d *draft.Draft) error {
+		_, err := draft.Rewrite(d, "f-001", "Human title", "Human body.", nil, time.Now())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+	if code := Execute(deps, []string{"show", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	f := decodeOne(t, s.stdout.Bytes())["findings"].([]any)[0].(map[string]any)
+	history := f["history"].([]any)
+	last := history[len(history)-1].(map[string]any)
+	changed := last["changed"].(map[string]any)
+	if f["title"] != "Human title" || f["body"] != "Human body." || last["by"] != "human" ||
+		changed["title"] != "Agent title" || changed["body"] != "Agent body." {
+		t.Fatalf("finding %v", f)
+	}
+
+	deps, s = testDeps(t, map[string]string{"LOUPE_HOME": home})
+	deps.Stdin = strings.NewReader(`{"body": "Agent body, again."}`)
+	code := Execute(deps, []string{"edit", "f-001", "--run", "o/r#1", "--from", "-", "--expect-version", strconv.Itoa(before.Version), "--json"})
+	if env := decodeOne(t, s.stdout.Bytes()); code != 1 || env["error"].(map[string]any)["code"] != "version" {
+		t.Fatalf("exit %d result %v", code, env)
 	}
 }
 

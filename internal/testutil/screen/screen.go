@@ -23,7 +23,7 @@ const guard = 10 * time.Second
 // keys are the named keys Press sends, as a terminal encodes them. Each is written on its own, which is what keeps
 // esc from joining the key after it into one alt-key sequence.
 var keys = map[string]string{
-	"enter": "\r", "tab": "\t", "esc": "\x1b", "backspace": "\x7f", "space": " ", "ctrl+c": "\x03",
+	"enter": "\r", "tab": "\t", "esc": "\x1b", "backspace": "\x7f", "space": " ", "ctrl+c": "\x03", "ctrl+s": "\x13",
 	"up": "\x1b[A", "down": "\x1b[B", "right": "\x1b[C", "left": "\x1b[D", "pgup": "\x1b[5~", "pgdown": "\x1b[6~",
 }
 

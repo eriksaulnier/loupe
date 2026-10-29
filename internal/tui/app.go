@@ -110,6 +110,16 @@ type Model struct {
 	editLabels   []string
 	editPick     int
 	editBlocking bool
+	// rewriting is true while the title and body editor is open. rewriteRev is the revision its text started from, and
+	// rewriteOpened the finding's text it stands on.
+	rewriting     bool
+	rewriteTitle  textarea.Model
+	rewriteBody   textarea.Model
+	rewriteFocus  rewriteField
+	rewriteRev    int
+	rewriteOpened [2]openedText
+	// keptRewrites holds, per finding, text the human left in the editor with esc. It lives only as long as the program.
+	keptRewrites map[string]keptRewrite
 	glamour      *glamour.TermRenderer
 	wrapWidth    int
 	// tokensKey and tokens are the last highlighted lines, so moving or redrawing never tokenizes them again.
@@ -182,17 +192,20 @@ func New(cfg Config) (*Model, error) {
 	note.SetStyles(textarea.Styles{})
 	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
-		cfg:       cfg,
-		target:    target,
-		diff:      parsed,
-		glyphs:    st.Glyphs,
-		styles:    st,
-		width:     80,
-		height:    24,
-		note:      note,
-		keptNotes: map[string]string{},
-		body:      viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
-		file:      viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		cfg:          cfg,
+		target:       target,
+		diff:         parsed,
+		glyphs:       st.Glyphs,
+		styles:       st,
+		width:        80,
+		height:       24,
+		note:         note,
+		keptNotes:    map[string]string{},
+		keptRewrites: map[string]keptRewrite{},
+		rewriteTitle: newRewriteInput(false),
+		rewriteBody:  newRewriteInput(true),
+		body:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		file:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
 	}
 	if cfg.Screen != nil {
 		m.width, m.height = cfg.Screen.Width, cfg.Screen.Height
@@ -253,7 +266,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // pollHeld is true while redrawing would move something the human is writing or confirming.
 func (m *Model) pollHeld() bool {
-	return m.noting || m.editing || m.sending || (m.view != viewList && m.view != viewDetail)
+	return m.noting || m.editing || m.rewriting || m.sending || (m.view != viewList && m.view != viewDetail)
 }
 
 func (m *Model) schedulePoll() tea.Cmd {
@@ -397,6 +410,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.noting {
 			return m, m.typeNote(msg)
 		}
+		if m.rewriting {
+			return m, m.typeRewrite(msg)
+		}
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -461,6 +477,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.editing {
 			return m, m.updateEdit(msg)
+		}
+		if m.rewriting {
+			return m, m.updateRewrite(msg)
 		}
 		if m.help {
 			m.updateHelp(msg)
@@ -540,6 +559,9 @@ func (m *Model) fail(err error) tea.Cmd {
 func (m *Model) layout() error {
 	if m.noting {
 		m.sizeNote(0)
+	}
+	if m.rewriting {
+		m.sizeRewrite()
 	}
 	switch m.view {
 	case viewDetail:
@@ -692,6 +714,7 @@ func (m *Model) helpSections() map[view]helpSection {
 			{"x", "exclude; dismisses its open notes", ""},
 			{"s", "send back; enter sends, esc cancels", ""},
 			{"e", "edit label and blocking", ""},
+			{"w", "rewrite title and body; ctrl+s saves, esc keeps the text", ""},
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
