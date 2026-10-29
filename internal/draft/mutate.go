@@ -696,6 +696,16 @@ func Rewrite(d *Draft, findingID, title, body string, dif *diff.Diff, now time.T
 	if err := markdown.Check(body, markdown.Body, rewriteFix); err != nil {
 		return Finding{}, err
 	}
+	changedTitle, changedBody := title, body
+	if changedTitle == stored.Title {
+		changedTitle = ""
+	}
+	if changedBody == stored.Body {
+		changedBody = ""
+	}
+	if err := checkFindingIDs(changedTitle, changedBody, "", "", rewriteFix); err != nil {
+		return Finding{}, err
+	}
 	titleJSON, err := json.Marshal(title)
 	if err != nil {
 		return Finding{}, err

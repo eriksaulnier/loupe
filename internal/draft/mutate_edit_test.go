@@ -473,6 +473,8 @@ func TestRewriteRefusals(t *testing.T) {
 		{"empty title", "  ", "Body one.", "title", refusal.Input},
 		{"empty body", "One", "\n\t\n", "body", refusal.Input},
 		{"raw html", "One", "Fine.\n\n<div>no</div>", "line 3", refusal.Markdown},
+		{"finding id in the title", "One, as f-002 says", "Body one.", "finding id f-002", refusal.Markdown},
+		{"finding id in the body", "One", "Body one, as f-002 says.", "finding id f-002", refusal.Markdown},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := Rewrite(d, "f-001", c.title, c.body, multiHunk(t), editNow)
