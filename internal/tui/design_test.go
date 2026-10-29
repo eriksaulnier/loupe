@@ -1115,6 +1115,25 @@ func TestReadableReviewReadsQuotedRounds(t *testing.T) {
 	}
 }
 
+// A tokenizer failure keeps the plain code on screen and says so on the notice line (review finding).
+func TestDetailSaysWhenHighlightingFails(t *testing.T) {
+	t.Cleanup(func() { highlightCode = style.Highlight })
+	highlightCode = func(path string, _ []string) ([][]style.CodeToken, error) {
+		return nil, errors.New("highlight " + path + ": line 1 did not round-trip")
+	}
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	view := paneText(m.View().Content)
+	if !strings.Contains(view, "syntax highlighting is unavailable for") || !strings.Contains(view, "did not round-trip") {
+		t.Errorf("the failure is not on the notice line:\n%s", m.View().Content)
+	}
+	if !strings.Contains(view, "3 + line three") {
+		t.Errorf("the plain code is not on screen:\n%s", m.View().Content)
+	}
+}
+
 // At the minimum size the popup keeps the selected choice in view, dropping its spacing first and then the choices
 // furthest from the selection (review finding).
 func TestPopupKeepsTheSelectedChoice(t *testing.T) {

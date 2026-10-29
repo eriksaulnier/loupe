@@ -28,10 +28,13 @@ type CodeToken struct {
 	Text string
 }
 
+// matchLexer finds the lexer for a path. Tests replace it with a lexer that fails, which no real lexer does on demand.
+var matchLexer = lexers.Match
+
 // Highlight splits lines of code from path into tokens. A path whose language is unknown returns nil, which means
 // plain code. A tokenizer failure returns the error, and the caller keeps the plain lines and says so.
 func Highlight(path string, lines []string) ([][]CodeToken, error) {
-	lexer := lexers.Match(path)
+	lexer := matchLexer(path)
 	if lexer == nil || len(lines) == 0 {
 		return nil, nil
 	}

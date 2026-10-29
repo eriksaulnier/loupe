@@ -181,6 +181,9 @@ func codeText(text string) string {
 	return strings.ReplaceAll(render.ForDisplay(text), "\t", "    ")
 }
 
+// highlightCode tokenizes source. Tests replace it with one that fails, which the real tokenizer does not on demand.
+var highlightCode = style.Highlight
+
 // highlight tokenizes the displayed lines, reusing the last result while they are the same lines: a key or a notice
 // never tokenizes again. A tokenizer failure keeps the plain lines and says so on the notice line.
 func (m *Model) highlight(path string, lines []diff.ViewLine) [][]style.CodeToken {
@@ -195,7 +198,7 @@ func (m *Model) highlight(path string, lines []diff.ViewLine) [][]style.CodeToke
 	}
 	key := path + "\x00" + strings.Join(texts, "\n")
 	if m.tokensKey != key {
-		tokens, err := style.Highlight(path, texts)
+		tokens, err := highlightCode(path, texts)
 		if err != nil {
 			m.say(style.Warn, "syntax highlighting is unavailable for "+render.ForDisplay(path)+": "+err.Error())
 		}

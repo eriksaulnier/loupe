@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -51,6 +53,22 @@ func TestHighlightKnownAndUnknownLanguages(t *testing.T) {
 	plain, err := Highlight("notes.unknownext", []string{"if x {"})
 	if err != nil || plain != nil {
 		t.Errorf("unknown language: %v, %v; want plain code with no tokens", plain, err)
+	}
+}
+
+// A lexer that changes the text fails rather than showing the reader different evidence (review finding).
+func TestHighlightRefusesALexerThatChangesTheText(t *testing.T) {
+	invent := chroma.EmitterFunc(func([]string, *chroma.LexerState) chroma.Iterator {
+		return chroma.Literator(chroma.Token{Type: chroma.Text, Value: "invented"})
+	})
+	lexer := chroma.MustNewLexer(&chroma.Config{Name: "inventing"}, func() chroma.Rules {
+		return chroma.Rules{"root": {{Pattern: `[^\n]+`, Type: invent}, {Pattern: `\n`, Type: chroma.Text}}}
+	})
+	t.Cleanup(func() { matchLexer = lexers.Match })
+	matchLexer = func(string) chroma.Lexer { return lexer }
+	lines, err := Highlight("store.go", []string{"if x {"})
+	if err == nil || !strings.Contains(err.Error(), "line 1 did not round-trip") || lines != nil {
+		t.Errorf("Highlight returned %v, %v; want the round-trip error", lines, err)
 	}
 }
 

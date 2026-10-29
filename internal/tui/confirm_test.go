@@ -120,6 +120,12 @@ func TestConfirmShowsPillsAsWords(t *testing.T) {
 	if strings.Contains(view, "<picture>") || strings.Count(view, "<b>issue</b> MAJOR: T") < 2 {
 		t.Errorf("want the pill shown as MAJOR in the body and the inline comment:\n%s", view)
 	}
+	// The readable view, which the confirmation opens on, shows the pill as its word too (review finding).
+	m.confirm.shows = showReview
+	view = ansi.Strip(m.confirm.content(m.shell))
+	if strings.Contains(view, "<picture>") || strings.Contains(view, "srcset") || strings.Count(view, "issue MAJOR: T") < 2 {
+		t.Errorf("want the pill shown as MAJOR in the readable body and the inline comment:\n%s", view)
+	}
 }
 
 func TestConfirmShowsTheRecordAsANote(t *testing.T) {
@@ -1123,6 +1129,11 @@ func TestConfirmTypesIntoAStickyRound(t *testing.T) {
 	view := ansi.Strip(m.confirm.content(m.shell))
 	if !strings.Contains(view, "<!-- loupe-round 1 -->") || strings.Contains(view, "commit=") {
 		t.Fatalf("the anchor is not shown as its round:\n%s", view)
+	}
+	// The readable view shows it as a dim note naming its round (review finding).
+	m.confirm.shows = showReview
+	if view := ansi.Strip(m.confirm.content(m.shell)); !strings.Contains(view, m.shell.glyphs.Sep+" loupe-round 1") || strings.Contains(view, "commit=") {
+		t.Fatalf("the readable view does not show the anchor as its round:\n%s", view)
 	}
 	if !strings.Contains(m.confirm.shown.Body, " prose=2 ") {
 		t.Fatalf("the body y sends does not count the message:\n%s", m.confirm.shown.Body)
