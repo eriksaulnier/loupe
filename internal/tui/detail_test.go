@@ -917,3 +917,75 @@ func mustOpenFinding(t *testing.T, m *Model, id string) {
 		t.Fatal(err)
 	}
 }
+
+// headingFixture is newFixture with f-002 anchored to a heading, as add stores one.
+func headingFixture(t *testing.T) string {
+	t.Helper()
+	dir := newFixture(t)
+	d := loadDraft(t, dir)
+	d.Findings[1].Location.Heading = "Rollout `plan`"
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestDetailShowsTheHeadingAfterTheRange(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		env     map[string]string
+		profile colorprofile.Profile
+		want    string
+	}{
+		{"no color", map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, colorprofile.NoTTY, `(?m)^ multi\.txt:21 · Rollout ` + "`plan`" + `\s*$`},
+		{"ascii", map[string]string{"NO_COLOR": "1", "LANG": "C"}, colorprofile.NoTTY, `(?m)^ multi\.txt:21 - Rollout ` + "`plan`" + `\s*$`},
+		{"true color", map[string]string{"LANG": "en_US.UTF-8"}, colorprofile.TrueColor, `multi\.txt:21 · Rollout ` + "`plan`"},
+		{"16 colors", map[string]string{"LANG": "en_US.UTF-8"}, colorprofile.ANSI, `multi\.txt:21 · Rollout ` + "`plan`"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := modelOf(t, headingFixture(t), c.env, 100, 30)
+			if c.profile != colorprofile.NoTTY {
+				m.styles.SetColorProfile(c.profile)
+				m.styles.Color = true
+			}
+			if list := ansi.Strip(m.View().Content); strings.Contains(list, "Rollout") {
+				t.Errorf("the list shows the heading:\n%s", list)
+			}
+			if err := m.openFinding("f-002"); err != nil {
+				t.Fatal(err)
+			}
+			view := ansi.Strip(m.View().Content)
+			if !regexp.MustCompile(c.want).MatchString(view) {
+				t.Errorf("detail lacks %s:\n%s", c.want, view)
+			}
+		})
+	}
+}
+
+func TestDetailWithoutAHeadingIsUnchanged(t *testing.T) {
+	m := modelOf(t, headingFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	if view := m.View().Content; !regexp.MustCompile(`(?m)^ multi\.txt:3\s*$`).MatchString(view) {
+		t.Errorf("detail location line changed:\n%s", view)
+	}
+}
+
+func TestDetailKeepsALongHeadingInsideTheWindow(t *testing.T) {
+	dir := newFixture(t)
+	d := loadDraft(t, dir)
+	d.Findings[1].Location.Heading = strings.Repeat("A long heading ", 12)
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 24)
+	if err := m.openFinding("f-002"); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range strings.Split(m.View().Content, "\n") {
+		if w := style.Width(l); w > 60 {
+			t.Errorf("line is %d cells wide: %q", w, l)
+		}
+	}
+}

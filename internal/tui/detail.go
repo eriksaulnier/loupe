@@ -57,7 +57,12 @@ func (m *Model) refreshDetail() error {
 	doc = append(doc, m.chipLines(chips(m.styles, f, draft.Dispositions(m.draft)[f.ID], f.Location == nil))...)
 	doc = append(doc, "")
 	if f.Location != nil {
-		doc = append(doc, " "+m.styles.Dim.Render(strings.TrimSpace(m.glyphs.File+" "+locationText(f))))
+		location := locationText(f)
+		// The published comment shows only the range, so the detail is where the human sees the section the agent meant.
+		if f.Location.Heading != "" {
+			location += " " + m.glyphs.Sep + " " + render.ForDisplay(render.OneLine(f.Location.Heading))
+		}
+		doc = append(doc, " "+m.styles.Dim.Render(strings.TrimSpace(m.glyphs.File+" "+location)))
 		for _, l := range lines {
 			if l.Anchored {
 				doc = append(doc, m.anchoredRow(l))
