@@ -22,10 +22,6 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-// confirmHeaderLines is the header, which carries what will be sent and where in the review the window sits, and the
-// blank line under it.
-const confirmHeaderLines = 2
-
 // messageSlot is the prose Compose is asked to place so the confirmation can find where the review's opening goes.
 // It is ordinary text to the allowlist, and the first place it appears is that slot, which every finding follows.
 const messageSlot = "loupe-message-slot"
@@ -37,10 +33,11 @@ type confirmation struct {
 	// shown is preview recomposed around the typed message: the payload this screen shows and publication sends.
 	shown publish.Preview
 	// title comes from the caller, which knows the run; the preview does not carry it.
-	title    ConfirmHeading
-	showJSON bool
-	yes      bool
-	scroll   viewport.Model
+	title ConfirmHeading
+	// shows is how the review is drawn: readable, its Markdown, or the request payload. v steps through them.
+	shows  confirmShows
+	yes    bool
+	scroll viewport.Model
 	// message is the human's own opening prose. It lives here and nowhere else: a canceled confirmation discards it
 	// and nothing can pre-fill it, because text that arrives already written is text that gets approved unread.
 	message textarea.Model
@@ -129,8 +126,6 @@ func (c *confirmation) value() string { return strings.TrimSpace(c.message.Value
 type ConfirmHeading struct {
 	ref, action, inline string
 	comments            int
-	// inFlow is set by the review program, where two choice steps come first; loupe publish takes them as flags.
-	inFlow bool
 }
 
 func ConfirmTitle(ref, action, inline string, comments int) ConfirmHeading {
@@ -158,15 +153,22 @@ func (c *confirmation) key(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		case "pgdown":
 			c.scroll.PageDown()
 			return false, nil
+		// A line at a time too, for keyboards without page keys; the plain arrows stay with the text.
+		case "shift+up":
+			c.scroll.ScrollUp(1)
+			return false, nil
+		case "shift+down":
+			c.scroll.ScrollDown(1)
+			return false, nil
 		}
 		cmd := c.typeMessage(msg)
 		c.sync(m)
 		return false, cmd
 	}
 	switch msg.String() {
-	case "j", "down":
+	case "j", "down", "shift+down":
 		c.scroll.ScrollDown(1)
-	case "k", "up":
+	case "k", "up", "shift+up":
 		c.scroll.ScrollUp(1)
 	case "pgdown":
 		c.scroll.PageDown()
@@ -184,15 +186,17 @@ func (c *confirmation) key(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 		// The payload is drawn instead of the body the input sits in, so coming back to the message has to bring
 		// the body back with it; otherwise the human types into a field that is not on screen.
-		c.showJSON = false
+		if c.shows == showPayload {
+			c.shows = showReview
+		}
 		c.typing, c.follow = true, true
 		cmd := c.message.Focus()
 		c.sync(m)
 		return false, cmd
 	case "v":
 		// The payload hides the body the input is drawn into, so the keyboard comes back to the confirmation.
-		c.showJSON = !c.showJSON
-		if c.showJSON {
+		c.shows = (c.shows + 1) % showCount
+		if c.shows == showPayload {
 			c.blur()
 		}
 		c.scroll.GotoTop()
@@ -262,13 +266,24 @@ func (c *confirmation) cutAfter(body, message string) error {
 	return nil
 }
 
+// confirmShows is how the confirmation draws the review, in the order v steps through them.
+type confirmShows int
+
+const (
+	showReview confirmShows = iota
+	showMarkdown
+	showPayload
+	showCount
+)
+
 func displayBody(body string) string {
 	return render.AnchorsAsNotes(render.RecordAsNote(render.PillsAsWords(markdown.OpenDetails(body))))
 }
 
-// minMessageRows keeps the box the shape of somewhere to write a paragraph. A frame around one row reads as a
-// field for a word, and the opening this is for is a sentence or two.
-const minMessageRows = 4
+// minMessageRows keeps the box the shape of somewhere to write a sentence or two, which is what the opening is for. A
+// frame around one row reads as a field for a word; past two rows the empty box only pushes the findings down, and it
+// grows as the message does.
+const minMessageRows = 2
 
 // messageHint says what the empty input is for, and messageWay out of it. The box is the only part of the body the
 // human writes, and an empty one is otherwise a blank line between the chips and the findings.
@@ -280,12 +295,12 @@ const (
 	messageWayBlurred  = "tab to write it"
 )
 
-// messageView is the input where the opening prose goes, in a style.Box whose color is what says it holds the
+// messageView is the input where the opening prose goes, in a nested Message pane that says when it holds the
 // keyboard.
 func (c *confirmation) messageView(m *Model, width int) string {
-	kind, hint, way := style.Note, messageHint, messageWay
+	hint, way, state := messageHint, messageWay, "typing"
 	if !c.typing {
-		kind, hint, way = style.Dim, messageHintBlurred, messageWayBlurred
+		hint, way, state = messageHintBlurred, messageWayBlurred, ""
 	}
 	tint := m.styles.NewStyle()
 	if c.typing {
@@ -305,38 +320,37 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	} else {
 		c.message.Blur()
 	}
-	// One column of padding inside each edge, so the text does not sit against the frame. SetWidth counts the
-	// prompt, which is the left one, and the right one is appended per row.
-	const pad = 1
-	boxWidth := width - 1
-	inner := max(2*pad+1, boxWidth-2)
-	prompt := func(textarea.PromptInfo) string { return tint.Render(strings.Repeat(" ", pad)) }
-	c.message.SetPromptFunc(pad, prompt)
-	c.message.SetWidth(inner - pad)
+	inner, _ := style.PaneInner(width, 0)
+	c.message.SetPromptFunc(0, func(textarea.PromptInfo) string { return "" })
+	c.message.SetWidth(max(1, inner))
 	rows := strings.Split(m.styles.Render(c.message.View()), "\n")
 	// The hint is written over the empty row rather than given to the textarea as a placeholder: the placeholder
 	// path fills no row past its own text, and what pads the rest is the textarea's inner viewport, which takes no
 	// style, so a tinted box came out tinted in patches.
 	if c.message.Value() == "" {
-		rows[0] = style.Head(rows[0], pad+1) + tint.Inherit(m.styles.Dim).Render(hint)
+		rows[0] = style.Head(rows[0], 1) + tint.Inherit(m.styles.Dim).Render(hint)
 	}
 	// Every row is filled to the same width here for the same reason: only the rows carrying text fill themselves.
 	for i, r := range rows {
 		rows[i] = r + tint.Render(strings.Repeat(" ", max(0, inner-style.Width(r))))
 	}
-	boxed := m.styles.Box(rows, boxWidth, messageTitle, way, kind)
-	c.inputRows = len(boxed)
-	for i, r := range boxed {
-		boxed[i] = " " + r
+	// The pane takes the input color only while it has the keys, so its border also says where typing goes.
+	tone := style.ToneAccent
+	if c.typing {
+		tone = style.ToneNote
 	}
+	boxed := m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
+		Titles: style.PaneTitles{TopLeft: messageTitle, TopRight: m.styles.Note.Render(state), BottomRight: m.styles.Text().Render(way)}, Tone: tone, Focus: c.typing})
+	c.inputRows = len(boxed)
 	return strings.Join(boxed, "\n")
 }
 
 // sync lays the content out for the current window before a scroll or a render, since both depend on its line count,
 // and keeps the input on screen while it is being typed into.
 func (c *confirmation) sync(m *Model) {
-	c.scroll.SetWidth(m.width)
-	c.scroll.SetHeight(m.bodyHeight(confirmHeaderLines))
+	width, _ := style.PaneInner(m.width, 0)
+	c.scroll.SetWidth(width)
+	c.scroll.SetHeight(max(1, m.confirmRows()))
 	fill(&c.scroll, c.content(m))
 	if !c.follow {
 		return
@@ -348,6 +362,13 @@ func (c *confirmation) sync(m *Model) {
 	if bottom := c.inputTop + c.inputRows; bottom > c.scroll.YOffset()+c.scroll.Height() {
 		c.scroll.SetYOffset(bottom - c.scroll.Height())
 	}
+}
+
+// confirmRows is the rows the preview scrolls in: the pane, less the notice rows kept below it.
+func (m *Model) confirmRows() int {
+	footer, notice := m.confirmFooter()
+	pane := m.bodyRows(len(footer)) - style.PaneRows
+	return pane - len(m.confirm.noticeLines(m, notice, pane))
 }
 
 func (c *confirmation) position(m *Model) string {
@@ -362,36 +383,26 @@ func (c *confirmation) shortPosition(m *Model) string {
 	return fmt.Sprintf("%d%s%d/%d", min(c.scroll.YOffset()+1, total), m.sign("\u2013", "-"), min(c.scroll.YOffset()+c.scroll.Height(), total), total)
 }
 
-// header carries what will be sent in the warn color, the only screen that can publish. The action and a moved head
-// never give way, since the review body does not restate the one and has scrolled past the other; the run context and
-// the step do, and the position at the right edge shortens before either required part would truncate.
-func (c *confirmation) header(m *Model) string {
-	step := ""
-	if c.title.inFlow {
-		step = "Step 3 of 3"
-	}
-	parts := []style.HeaderPart{
-		{Text: "Publish", Kind: style.Warn, Bold: true},
-		{Text: step, Drop: 2, Kind: style.Warn},
-		{Text: render.ForDisplay(c.title.ref), Drop: 4, Kind: style.Dim},
-		{Text: c.title.action},
-		{Text: fmt.Sprintf("inline %s (%d)", c.title.inline, c.title.comments), Drop: 3, Kind: style.Dim},
-	}
-	required := style.Width("Publish") + 3 + style.Width(c.title.action)
+// summary is the pane's top-right title: what will be sent, in the warn color, the only screen that can publish. The
+// action, a moved head and an in-place edit never give way, since the body does not restate the one and has scrolled
+// past the others; the inline choice does.
+func (c *confirmation) summary(m *Model) string {
+	sep := " " + m.glyphs.Sep + " "
+	parts := []string{m.styles.Emphasis(m.styles.Warn).Render(render.ForDisplay(c.title.action))}
+	inner, _ := style.PaneInner(m.width, 0)
+	inline := fmt.Sprintf("inline %s (%d)", c.title.inline, c.title.comments)
+	var required []string
 	if moved := c.preview.HeadMoved; moved != nil {
-		text := fmt.Sprintf("head moved +%d", moved.AheadBy)
-		parts = append(parts, style.HeaderPart{Text: text, Kind: style.Warn})
-		required += 3 + style.Width(text)
+		required = append(required, m.styles.Warn.Render(fmt.Sprintf("head moved +%d", moved.AheadBy)))
 	}
 	if c.preview.Edits != "" {
-		parts = append(parts, style.HeaderPart{Text: editsHeader, Kind: style.Warn})
-		required += 3 + style.Width(editsHeader)
+		required = append(required, m.styles.Warn.Render(editsHeader))
 	}
-	position := c.position(m)
-	if 2+required+2+style.Width(position) > m.width {
-		position = c.shortPosition(m)
+	with := strings.Join(append(append(parts, m.styles.Text().Render(inline)), required...), sep)
+	if style.Width(with)+20 <= inner {
+		return with
 	}
-	return m.styles.Header(parts, m.styles.Dim.Render(position), m.width)
+	return strings.Join(append(parts, required...), sep)
 }
 
 // editsHeader never gives way: an edit overwrites words already published, which y alone must not do unannounced.
@@ -445,97 +456,129 @@ func shortSHA(sha string) string {
 }
 
 func (c *confirmation) content(m *Model) string {
-	width := style.Content(m.width) - 1
-	if c.showJSON {
-		return m.styles.Rule(m.width, "exact request payload", "") + "\n" +
-			m.styles.Wrap(render.ForDisplay(c.shown.EnvelopeJSON), width, " ")
+	width, _ := style.PaneInner(m.width, 0)
+	if c.shows == showPayload {
+		return m.styles.Rule(width, "exact request payload", "") + "\n" +
+			m.styles.Wrap(render.ForDisplay(c.shown.EnvelopeJSON), width, "")
+	}
+	// The review reads as text by default; v shows the Markdown that is sent, byte for byte.
+	body := func(markdown string) string {
+		if c.shows == showReview {
+			return m.readable(markdown, width)
+		}
+		return m.styles.Wrap(render.ForDisplay(markdown), width, "")
 	}
 	var parts []string
 	if moved := c.preview.HeadMoved; moved != nil {
-		parts = append(parts, m.styles.Rule(m.width, "head moved since capture", ""))
+		parts = append(parts, m.styles.Rule(width, "head moved since capture", ""))
 		for _, line := range headMovedLines(moved) {
-			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(line, width, " ")))
+			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(line, width, "")))
 		}
 		parts = append(parts, "")
 	}
 	if c.preview.Edits != "" {
-		parts = append(parts, m.styles.Rule(m.width, "edits a published review", ""),
-			m.styles.Warn.Render(m.styles.Wrap(editLine(c.preview.Edits), width, " ")), "")
+		parts = append(parts, m.styles.Rule(width, "edits a published review", ""),
+			m.styles.Warn.Render(m.styles.Wrap(editLine(c.preview.Edits), width, "")), "")
 		if edited := editedIn(c.preview, c.shown.Body); len(edited) > 0 {
-			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(render.ForDisplay(publish.EditedNotice(edited)), width, " ")), "")
+			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(render.ForDisplay(publish.EditedNotice(edited)), width, "")), "")
 		}
 	}
-	parts = append(parts, m.styles.Rule(m.width, "review body", ""))
 	if c.inline() {
 		// The chips row sits above the box, a no-findings pill when there are none to count. Wrap drops the blank
 		// lines the split left around the box, so its sides are spaced here instead: one row each.
 		if strings.TrimSpace(c.before) != "" {
-			parts = append(parts, m.styles.Wrap(render.ForDisplay(c.before), width, " "))
+			parts = append(parts, body(c.before))
 		}
 		parts = append(parts, "")
 		c.inputTop = strings.Count(strings.Join(parts, "\n"), "\n") + 1
 		after := strings.TrimLeft(c.after, "\n")
-		parts = append(parts, c.messageView(m, width), "", m.styles.Wrap(render.ForDisplay(after), width, " "))
+		parts = append(parts, c.messageView(m, width), "", body(after))
 	} else {
-		parts = append(parts, m.styles.Wrap(render.ForDisplay(displayBody(c.shown.Body)), width, " "))
+		parts = append(parts, body(displayBody(c.shown.Body)))
 	}
-	parts = append(parts, "", m.styles.Rule(m.width, fmt.Sprintf("inline comments (%d)", len(c.shown.Comments)), ""))
+	parts = append(parts, "", m.styles.Rule(width, fmt.Sprintf("inline comments (%d)", len(c.shown.Comments)), ""))
 	for _, comment := range c.shown.Comments {
 		location := m.styles.Accent.Render(strings.TrimSpace(m.glyphs.File + " " + render.ForDisplay(formatLocation(comment.Path, comment.Line, comment.StartLine, comment.Side))))
-		parts = append(parts, " "+location, m.styles.Wrap(render.ForDisplay(render.CommentPillsAsWords(comment.Body)), width, " "), "")
+		parts = append(parts, location, body(render.CommentPillsAsWords(comment.Body)), "")
 	}
 	return strings.Join(parts, "\n")
 }
 
-// confirmCancel is said whole: when the footer has no room for it on one line, it moves to the notice line rather than
+// confirmCancel is said whole: when the footer has no room for it on one row, it moves into the pane rather than
 // shrink.
 const confirmCancel = "any other key cancels, nothing is sent"
 
-// notice is the notice line: what the allowlist made of the typed message, why there is nowhere to type one, or
-// the caller's own notice.
-func (c *confirmation) notice(m *Model, notice string) string {
+// noticeLines are the rows kept under the preview: what the allowlist made of the typed message, why there is
+// nowhere to type one, the caller's notice, and the cancel sentence when the footer had no room for it.
+func (c *confirmation) noticeLines(m *Model, extra string, rows int) []string {
+	width, _ := style.PaneInner(m.width, 0)
 	said := ""
 	switch {
 	case c.composeErr != nil:
 		said = refusalNotice(c.composeErr)
 	case c.slotErr != nil:
 		said = "this review has no room for a message: " + refusalNotice(c.slotErr)
-	default:
-		return notice
 	}
-	return " " + m.styles.Warn.Render(m.styles.TruncRight(said, max(20, m.width-1)))
+	var out, tail []string
+	if said != "" {
+		for _, l := range strings.Split(m.styles.Wrap(render.ForDisplay(said), width, ""), "\n") {
+			out = append(out, m.styles.Warn.Render(l))
+		}
+	}
+	if extra != "" {
+		tail = append(tail, m.styles.Dim.Render(extra))
+	}
+	// Past rows, the refusal's middle gives way, so its fix and the cancel sentence both stay.
+	if len(out)+len(tail) > rows {
+		out = m.shortenNotice(out, max(1, rows-len(tail)))
+	}
+	return append(out, tail...)
 }
 
 func (m *Model) confirmView(c *confirmation) string {
 	c.sync(m)
-	keys, notice := m.confirmKeys()
-	return m.frameWith([]string{c.header(m), ""}, c.scroll.View(), c.notice(m, notice), keys)
+	footer, extra := m.confirmFooter()
+	position := c.position(m)
+	if style.Width(position)+style.Width(c.summary(m))+12 > m.width {
+		position = c.shortPosition(m)
+	}
+	var body []string
+	height := m.bodyRows(len(footer))
+	lines := strings.Split(c.scroll.View(), "\n")
+	_, inner := style.PaneInner(0, height)
+	lines = m.withNotice(lines[:min(len(lines), c.scroll.Height())], c.noticeLines(m, extra, inner), inner)
+	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: height, Lines: lines,
+		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: c.summary(m), BottomRight: m.styles.Text().Render(position)},
+		Scroll: style.Scroll{Offset: c.scroll.YOffset(), Visible: c.scroll.Height(), Total: c.scroll.TotalLineCount()}, Focus: !c.typing})...)
+	return m.shell(body, footer)
 }
 
-// confirmKeys is the confirmation footer, and the notice line the cancel sentence moves to when the footer cannot hold
-// it on one line: the notice line is there anyway, and a second footer line would cost a row of the review.
-func (m *Model) confirmKeys() (keys, notice string) {
+// confirmKeys is the confirmation footer.
+func (m *Model) confirmKeys() []string {
+	keys, _ := m.confirmFooter()
+	return keys
+}
+
+// confirmFooter is the confirmation footer and the cancel sentence when the footer could not hold it on one row: the
+// sentence then goes under the preview rather than cost the review a second footer row.
+func (m *Model) confirmFooter() (keys []string, extra string) {
 	if m.confirmTyping() {
-		keys, _ = m.styles.Footer([]style.Hint{{Key: "esc", Verb: "done"}, {Key: "enter", Verb: "new line"},
-			{Key: "ctrl+u", Verb: "clear"}, {Key: "pgup/pgdn", Verb: "read the findings", Role: style.RoleNav}}, m.width-2)
-		return keys, ""
+		return m.keys(style.KeyGroup{{Key: "esc", Verb: "done"}, {Key: "enter", Verb: "new line"}, {Key: "ctrl+u", Verb: "clear"}},
+			style.KeyGroup{{Key: "shift+" + m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}, {Key: "pgup/pgdn", Verb: "read the findings"}}), ""
 	}
-	hints := []style.Hint{{Key: "y", Verb: "publish this review", KeyKind: style.Good, VerbKind: style.Good}}
+	decide := style.KeyGroup{{Key: "y", Verb: "publish this review"}}
 	// A review with no room for a message has no input to offer the key for.
 	if m.view == viewConfirm && m.confirm.inline() {
-		hints[0].Key = "y/p"
-		hints = append(hints, style.Hint{Key: "tab/esc", Verb: "your message", Role: style.RoleNav})
+		decide[0].Key = "y/p"
+		decide = append(decide, style.Hint{Key: "tab/esc", Verb: "your message"})
 	}
-	hints = append(hints,
-		style.Hint{Key: m.glyphs.Up + "/" + m.glyphs.Down, Verb: "scroll", Role: style.RoleNav},
-		style.Hint{Key: "v", Verb: "payload", Role: style.RoleNav},
-		style.Hint{Verb: confirmCancel})
-	keys, fits := m.styles.Footer(hints, m.width-2)
-	if !fits || strings.Contains(keys, "\n") {
-		keys, _ = m.styles.Footer(hints[:len(hints)-1], m.width-2)
-		notice = " " + m.styles.Dim.Render(confirmCancel)
+	next := [showCount]string{showReview: "markdown", showMarkdown: "payload", showPayload: "review"}[m.confirm.shows]
+	move := style.KeyGroup{{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}, {Key: "v", Verb: next}}
+	keys = m.keys(decide, move, style.KeyGroup{{Verb: confirmCancel}})
+	if len(keys) > 1 {
+		keys, extra = m.keys(decide, move), confirmCancel
 	}
-	return keys, notice
+	return keys, extra
 }
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
@@ -551,7 +594,8 @@ func (m *Model) confirmTyping() bool { return m.view == viewConfirm && m.confirm
 
 func NewConfirmModel(preview publish.Preview, getenv func(string) string, output io.Writer, title ConfirmHeading) *ConfirmModel {
 	st := style.New(output, getenv)
-	shell := &Model{styles: st, glyphs: st.Glyphs, width: 80, height: 24, view: viewConfirm, confirm: newConfirmation(preview, title, "")}
+	st.UseReviewTheme()
+	shell := &Model{cfg: Config{Getenv: getenv}, styles: st, glyphs: st.Glyphs, width: 80, height: 24, view: viewConfirm, confirm: newConfirmation(preview, title, "")}
 	return &ConfirmModel{shell: shell, confirm: &shell.confirm}
 }
 

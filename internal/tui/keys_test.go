@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -114,7 +115,7 @@ func TestDecidingAFindingClosesItsNotes(t *testing.T) {
 			m := newModel(t, dir)
 			footer := func() string {
 				lines := strings.Split(m.View().Content, "\n")
-				return lines[len(lines)-1]
+				return strings.Join(lines[len(lines)-len(m.viewFooter()):], " ")
 			}
 			if f := footer(); !strings.Contains(f, "p publish (not ready)") {
 				t.Fatalf("list footer before deciding: %q", f)
@@ -129,11 +130,11 @@ func TestDecidingAFindingClosesItsNotes(t *testing.T) {
 			if got := strings.Join(noteStatuses(loadDraft(t, dir)), ", "); got != "n-001 "+c.status {
 				t.Errorf("notes %s", got)
 			}
-			if r := m.readiness(); !strings.Contains(r, "ready to publish") {
-				t.Errorf("readiness %q", r)
+			if r := draft.ReadinessOf(m.draft); !r.Ready {
+				t.Errorf("readiness %+v", r)
 			}
 			m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-			if f := footer(); !strings.Contains(f, "p publish   ") || strings.Contains(f, "not ready") {
+			if f := footer(); !strings.Contains(f, "p publish") || strings.Contains(f, "not ready") {
 				t.Errorf("list footer after deciding: %q", f)
 			}
 			press(m, "p")
@@ -257,8 +258,18 @@ func TestHelpScrolls(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
 	m.Update(runes("?"))
 	first := m.View().Content
-	if !strings.Contains(first, "lines 1-") || !strings.Contains(first, "up/down scroll") {
-		t.Fatalf("tall help does not show its position or scroll hint:\n%s", first)
+	// The thumb is a # on help's own right border, which the bottom border's corner marks; the header's
+	// acme/widgets#42 must not pass for it (review finding).
+	thumb := false
+	rows := strings.Split(first, "\n")
+	if at := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "esc closes") }); at > 0 {
+		right := strings.LastIndex(rows[at], "+")
+		for _, r := range rows[1:at] {
+			thumb = thumb || (len(r) > right && r[right] == '#')
+		}
+	}
+	if !strings.Contains(first, "+- Help -") || !thumb || !strings.Contains(first, "up/down scroll") {
+		t.Fatalf("tall help does not show its pane, its scroll thumb or its scroll hint:\n%s", first)
 	}
 	for range 100 {
 		m.Update(arrow(tea.KeyDown))
@@ -268,11 +279,16 @@ func TestHelpScrolls(t *testing.T) {
 		t.Errorf("scrolling help does not reach its end:\n%s", last)
 	}
 	m.Update(arrow(tea.KeyPgUp))
-	for range 20 {
+	for range 100 {
 		m.Update(runes("k"))
 	}
 	if m.View().Content != first {
 		t.Errorf("scrolling back does not return to the top:\n%s", m.View().Content)
+	}
+	// Help lists space as a page down, so it pages (review finding).
+	m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if m.helpTop == 0 {
+		t.Errorf("space did not page help:\n%s", m.View().Content)
 	}
 	m.help = false
 	for _, k := range []tea.KeyPressMsg{runes("?"), arrow(tea.KeyEsc), runes("q")} {
@@ -284,6 +300,26 @@ func TestHelpScrolls(t *testing.T) {
 		if m.help {
 			t.Errorf("%v did not close help", k)
 		}
+	}
+}
+
+// From 20 rows up a blank row sits under the header, and the scroll still stops where the pane does: at the end, the
+// next k moves help (review finding).
+func TestHelpScrollStopsAtItsEnd(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
+	m.Update(runes("?"))
+	first := m.View().Content
+	for range 200 {
+		m.Update(runes("j"))
+	}
+	bottom := m.View().Content
+	if bottom == first {
+		t.Fatalf("help fits at 24 rows, so the test checks nothing:\n%s", bottom)
+	}
+	m.Update(runes("k"))
+	if m.View().Content == bottom {
+		t.Errorf("k at the end of help left it where it was:\n%s", bottom)
 	}
 }
 

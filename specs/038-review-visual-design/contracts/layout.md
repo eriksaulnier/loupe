@@ -93,3 +93,55 @@ Success notices use a two-second timer and a notice generation token. A timer MU
 `o` in list/detail targets the captured PR URL, never a finding URL or the published review URL. A pending opener MUST reject repeat launches without blocking navigation. Completion MUST be associated with its request context, so a delayed result cannot quit another view or overwrite an editor. Success keeps the current view. Failure shows `Could not open the browser: <reason>` and `Open this URL manually: <safe URL>`. No configured opener shows `No browser opener is available.` with the same URL. Invalid URLs show a safe explanation without emitting a hyperlink. Published behavior remains as implemented today.
 
 Tabs are visual step labels. They MUST NOT add Tab navigation to the action or inline picker. The Message pane on earlier steps explains preparation, not a claim that a write already happened. Final confirmation MUST display its existing cancellation instruction and input-focus hints. The status for a published review MUST distinguish it from a browser launch that failed.
+
+## Demo feedback, 2026-10-28
+
+The maintainer's first demo session added these rules. They amend the sections above where the two disagree.
+
+The findings pane's bottom border MUST show the `N of M` position only when the findings overflow the visible rows. The selection marker already shows the place in a list that fits. Detail keeps its position in every case, because there it is the place in the walk.
+
+With 30 or fewer counted findings, the progress bar MUST mark the cell of the open finding in detail. The list MUST NOT mark a cell, because its selection already shows the place. In color the cell keeps its state color on an accent background. Monochrome and ASCII output draw no marker, and the position text carries the place. A withdrawn finding has no cell and gets no marker. Above 30 the cells are grouped by state, so no cell is marked.
+
+When `ORCA_TERMINAL_HANDLE` is nonempty, the header MUST leave its last four columns blank, with no band, because Orca draws its pane controls over them. The body and footer keep the full width.
+
+The detail pane's top-left title MUST lead with the list's disposition glyph and carry the disposition word in its status color: accepted in good, excluded and withdrawn in overlay, pending in the accent. `open note` takes the note color. The glyph and the word carry the status where color is unavailable.
+
+The detail pane's border MUST take the finding's decision color: accepted in good, excluded and withdrawn in overlay, and pending in the accent. An open note colors only its own thread and the title's `open note`, so a pending finding with one keeps the accent border. A note's thread MUST hang from a left bar, not sit in a pane: a headline with the note id and its colored status, then each author and body. The bar and headline MUST use note while the note is open and overlay once it is resolved or dismissed, and a closed note's bodies recede to secondary text. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.
+
+A window of 20 or more rows MUST keep one blank row between the header and the body. Below 20 rows that row goes to the body first, before any other row budget gives way, so the 60x12 budget above is unchanged.
+
+Action and Inline comments MUST NOT draw a Message pane. It repeated the footer, and its title read as the Message tab. Each step is one choice pane under the tabs, whose bottom-left border says `nothing sent yet` until a notice takes that place. A refusal goes into the pane's rows, and the choices give way to it. The Action and Inline comments reference frames predate this rule.
+
+The full-summary command MUST stay copyable at every width. When it does not fit one row under the summary pane, it MUST break into rows that paste back as the same command: each row but the last ends in a backslash. A break inside the run reference starts the next row unindented.
+
+A refusal taller than every row its screen can give it MUST keep its opening rows and its last row, which carries the fix, and MUST replace the rows between with one dim row that says how many were left out. This amends the scrollable-document option in Interaction details. Other rows the pane keeps for itself, such as the confirmation's cancel sentence, stay whole.
+
+A pane the human types or edits in MUST use the note color while it has the keys: the send-back composer, the metadata editor, and the review message while typing. The review message returns to the accent when blurred, so the border also shows where typing goes.
+
+A wrapped footer MUST break between whole key groups when that takes no more rows than breaking between hints. Otherwise it breaks between hints, as before.
+
+The detail's section headings (Impact, Suggested fix, References) MUST use the accent, in bold. A suggested fix MUST hang from a bar in the good color, so a proposed change reads apart from quoted text.
+
+Status words MUST be chips in color: the disposition and `open note` in the detail title, and a note's status in its headline. A chip is the word in its tone's color on a tint of that color. The chip's padding separates it, so the `·` separator is drawn only without color.
+
+The footer MUST be the bare keys on the terminal's own background. A band behind it was tried after the first demo and dropped.
+
+In color, the pane taking the keys MUST show its name as a solid tab: bold base text on a block of the pane's tone, like the badge. The tab's padding replaces the spaces beside the title. That pane is the findings in the list and the finding's id in detail. While a composer is open, it is the composer, and the review message while typing. Help, the published screen and the too-small screen also get the tab. The publish steps' choice pane keeps a plain title, as the publish steps rule below says. Other panes keep plain titles. Without color, titles are unchanged.
+
+A decision that settles a finding MUST flash its success notice as a solid tab in the finding's new tone for 400 ms: good when accepted, overlay when excluded, the accent otherwise. The notice then reads as plain colored text until it expires. Its text MUST stay in the same cells through the flash, so only the background changes. The flash needs room for the tab's padding, and it has no effect without color.
+
+The Action and Inline comments steps MUST be a popup titled `Publish review`, centered over the dimmed list, as help is over its screen. Its first row is the steps, and a blank row sits under them and above its bottom border. The popup is at most 72 columns wide and as tall as its rows, up to the body, and a refusal goes inside it. The Message step, with the whole review and the message input, stays a full screen.
+
+The publish steps MUST read as a sequence joined by the cursor arrow. Done steps carry the accepted glyph in the good color. In color the current step is a solid accent tab, the only block in the row. Later steps are dim. Without color, the current step is bracketed. On the publish screens the pane titles stay plain, because the current step marks the place.
+
+A decision that settles the last finding in the list MUST return to the list, with its notice and flash in the findings border. The cursor lands on the first finding still pending, or stays on the decided finding when none is. Changes that do not settle a finding keep detail open.
+
+The review message box MUST open two rows tall and grow with the message.
+
+The Message step MUST open on the review as it reads. Section headings take the accent and a finding's summary is bold. Quoted lines hang from a bar, links show their text, and code spans are chips. Bold markers, details tags and fences are dropped, and a hidden comment shows as a dim note. Quoted lines are read the same way behind the bar, so the earlier rounds a sticky body quotes lose their tags too. Without color, a heading keeps its `#` run and bold keeps its `**` markers, because the accent and bold that replace them are gone. `v` MUST step from that view to the exact Markdown, then to the request payload, and back. The footer names the view it steps to next. Typing a message from the payload returns to the readable view. The `review body` rule is gone, because the pane's title already names the review.
+
+While the review message is typed, `shift+↑` and `shift+↓` MUST scroll the review one line, and `pgup`/`pgdn` a page. The plain arrows stay with the text. Mouse-wheel scrolling waits for a mouse spec, which decides once what capturing the mouse costs text selection.
+
+Every line of the readable review MUST wrap to the pane, including summaries, headings, fenced code and notes. A popup too short for its choices MUST drop its spacing first, then the choices furthest from the selected one. The selected choice stays in view.
+
+The Message step and the sending screen MUST NOT draw the row of steps. The popup before them carries the steps, and on these screens the row added nothing. Their `Publish review` pane opens right under the header and takes the focus tab when the message is not being typed.

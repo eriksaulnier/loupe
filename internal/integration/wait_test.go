@@ -76,8 +76,9 @@ func TestWaitFollowsTheSendBackLoop(t *testing.T) {
 		s.Press("enter", "a")
 		s.WaitFor("f-001 accepted")
 		s.Press("a")
-		s.WaitFor("f-002 accepted - n-003 resolved")
-		s.Press("r")
+		// The last decision returns to the list, its cursor on f-002 with nothing left pending; reopen it to ask.
+		s.WaitFor("f-002 accepted - n-003 resolved", "Findings")
+		s.Press("enter", "r")
 		s.WaitFor("f-002 has no open note")
 	})
 	if stdout, stderr, exit := h.Publish("", "y", runRef, "--action", "comment"); exit != 0 {
