@@ -31,6 +31,7 @@ var versionedFiles = []struct {
 	{receiptFile, RecordSchema, func(dir string) error { _, _, err := LoadReceipt(dir); return err }},
 	{run.PreviousFile, PreviousSchema, func(dir string) error { _, _, err := LoadPrevious(dir); return err }},
 	{run.CommentsFile, CommentsSchema, func(dir string) error { _, _, err := LoadComments(dir); return err }},
+	{run.OutlineFile, run.OutlineSchema, func(dir string) error { _, err := run.LoadOutline(dir); return err }},
 }
 
 func TestReadersRefuseANewerSchemaWithAnUpgrade(t *testing.T) {
@@ -245,6 +246,9 @@ var fieldSets = []struct {
 			"threads.originalLine,omitempty", "threads.outdated", "threads.path", "threads.resolved",
 			"threads.side,omitempty",
 		},
+	}},
+	{reflect.TypeFor[run.Outline](), run.OutlineSchema, map[int][]string{
+		1: {"files", "files.headings", "files.headings.heading", "files.headings.level", "files.headings.line", "files.path", "schema"},
 	}},
 	// tagProbe is not a record. It pins that a tag's options count, so an omitempty change without a bump fails.
 	{reflect.TypeFor[tagProbe](), 1, map[int][]string{1: {"name,omitempty"}}},
