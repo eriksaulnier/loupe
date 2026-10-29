@@ -212,3 +212,27 @@ func FindingState(d *Draft, findingID string) ([]byte, error) {
 	}
 	return json.Marshal(state)
 }
+
+// AgentChangedHumanText reports whether the agent made the latest change to the finding's title or body after a human
+// had changed either, so the review interface can say why the human's words are gone.
+func AgentChangedHumanText(f Finding) bool {
+	latest := ""
+	for i := len(f.History) - 1; i >= 0; i-- {
+		h := f.History[i]
+		_, title := h.Changed["title"]
+		_, body := h.Changed["body"]
+		if !title && !body {
+			continue
+		}
+		if latest == "" {
+			if latest = h.By; latest != ByAgent {
+				return false
+			}
+			continue
+		}
+		if h.By == ByHuman {
+			return true
+		}
+	}
+	return false
+}
