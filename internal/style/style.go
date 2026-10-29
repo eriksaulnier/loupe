@@ -667,6 +667,26 @@ func (s Style) Wrap(text string, width int, indent string) string {
 	return strings.Join(lines, "\n")
 }
 
+// Field is one line of a vertical list: a dim name in a column nameWidth cells wide after a two-cell indent, then the
+// items joined by sep. It breaks only between items where it can, each further line hangs under the first item, and an
+// item wider than the value column word-wraps.
+func (s Style) Field(name string, nameWidth int, items []string, sep string, width int) []string {
+	indent := strings.Repeat(" ", 2+nameWidth)
+	var segs []string
+	for _, item := range items {
+		segs = append(segs, strings.Split(s.Wrap(item, width, indent), "\n")...)
+	}
+	for i := range segs {
+		segs[i] = strings.TrimPrefix(segs[i], indent)
+	}
+	lines, _ := fillLines(segs, sep, width-len(indent), len(segs))
+	for i := range lines {
+		lines[i] = indent + lines[i]
+	}
+	lines[0] = "  " + Pad(s.Dim.Render(name), nameWidth) + strings.TrimPrefix(lines[0], indent)
+	return lines
+}
+
 // TruncRight keeps the head of a line that is too wide, ending it with the ellipsis glyph.
 func (s Style) TruncRight(text string, width int) string {
 	if width <= 0 {
