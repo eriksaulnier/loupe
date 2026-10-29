@@ -27,7 +27,7 @@
 
 ## R5. The kept rewrite lives in the model
 
-- **Decision**: `Model.keptRewrites map[string]keptRewrite`, where `keptRewrite` holds the title, the body and the revision the editing started from. Esc stores it. A save that records forgets it. A save that changes nothing also forgets it. `w` on a finding with kept text opens on that text. When the finding's revision differs from the kept revision, it also says the finding changed since the rewrite began (edge case).
+- **Decision**: `Model.keptRewrites map[string]keptRewrite`, where `keptRewrite` holds `Typed [2]*string`, the title and the body the human changed with nil for a field left alone, and the revision the editing started from. Esc stores it. A save that records forgets it. A save that changes nothing also forgets it. `w` on a finding with kept text opens on the finding's current text with each kept field in place of its own, so a field the human left alone shows the agent's newer text. When the finding's revision differs from the kept revision, it also says the finding changed since the rewrite began (edge case).
 - **Rationale**: The note already keeps text per finding in `keptNotes`. The spec says the kept rewrite is not stored, so the schema stays at its version.
 
 ## R6. "The agent changed text you wrote" comes from history

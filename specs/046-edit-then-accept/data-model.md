@@ -27,10 +27,10 @@ A rewrite is a `draft.Edit` of `title` and `body` with `by: "human"`.
 
 ## Kept rewrite (memory only)
 
-`Model.keptRewrites[findingID] = keptRewrite{Title, Body string; Rev int}`
+`Model.keptRewrites[findingID] = keptRewrite{Typed [2]*string; Rev int}`
 
-- Written by esc, with the revision the editor opened on.
-- Read by `w` on the same finding. A differing `Rev` adds the changed-since notice.
+- Written by esc, with the revision the editor opened on. `Typed` holds the title and the body the human changed, and nil for a field they left alone.
+- Read by `w` on the same finding. Each kept field replaces the finding's current text in its input, and each nil field shows the finding's current text, so an agent edit to a field the human left alone is not saved back over. A differing `Rev` adds the changed-since notice.
 - Forgotten by a save that records or changes nothing, and by exit.
 
 ## Derived: agent changed the human's text (FR-014)

@@ -48,7 +48,7 @@ func newRewriteInput(newlines bool) textarea.Model {
 	return input
 }
 
-// openRewrite opens the editor on the text kept for f, or else on f as it stands.
+// openRewrite opens the editor on f as it stands, with each field kept for f in place of its own.
 func (m *Model) openRewrite(f draft.Finding) tea.Cmd {
 	if err := draft.Rewritable(f); err != nil {
 		m.say(style.Warn, refusalNotice(err))

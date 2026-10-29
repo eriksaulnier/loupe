@@ -6,7 +6,7 @@ This extends `specs/038-review-visual-design/contracts/layout.md`. The CLI contr
 
 | Where | Key | Effect |
 | :--- | :--- | :--- |
-| Detail, included finding | `w` | Opens the editor on the kept text for this finding, or else on its current title and body |
+| Detail, included finding | `w` | Opens the editor on this finding's current title and body, with each field kept by an earlier esc in place of its own |
 | Detail, withdrawn finding | `w` | Refuses: `f-001 is withdrawn, so its title and body cannot be rewritten; reinstate f-001 first`. No editor opens |
 | Detail, settling after a decision | `w` | Dropped, as `a`, `x`, `s`, `u`, `r`, `d` and `e` are |
 | Editor | `ctrl+s` | Saves both inputs |
