@@ -234,3 +234,16 @@ func TestSendFinishedAfterQuitKeepsTheOutcome(t *testing.T) {
 		}
 	}
 }
+
+// The published screen says Published once, in its title, and opens on the review's URL.
+func TestPublishedSaysPublishedOnce(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	m.view, m.published = viewPublished, reviewURLPrefix+"1"
+	view := ansi.Strip(m.View().Content)
+	if n := strings.Count(view, "Published"); n != 1 {
+		t.Errorf("the published screen says Published %d times:\n%s", n, view)
+	}
+	if body := strings.Split(view, "\n")[m.bodyTop()+1]; !strings.Contains(body, reviewURLPrefix+"1") {
+		t.Errorf("the published pane does not open on the URL: %q", body)
+	}
+}

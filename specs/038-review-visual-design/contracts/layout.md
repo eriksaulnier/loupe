@@ -151,3 +151,5 @@ The Message step and the sending screen MUST NOT draw the row of steps. The popu
 The maintainer's testing of `main` before the next release added these rules. They amend the sections above, the demo feedback included, where the two disagree. The reference frames follow them.
 
 The confidence column's heading MUST read `conf`, not `con`. The column reserves four cells, one more than the width tiers give it, and the title gives up that cell.
+
+The published screen MUST say `Published` once, in its title tab. Its pane opens on the review's URL.
