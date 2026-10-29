@@ -444,6 +444,16 @@ func splitLines(text string) []string {
 
 // walkStructural calls fn for every structural line outside a fence.
 func walkStructural(lines []string, fn func(i int, trimmed string)) {
+	walkLines(lines, func(i int, trimmed string, structural bool) {
+		if structural {
+			fn(i, trimmed)
+		}
+	})
+}
+
+// walkLines calls fn for every non-blank line outside a fence, reading fences and HTML blocks as Check does. A fence's
+// opening line counts as fence, info string included.
+func walkLines(lines []string, fn func(i int, trimmed string, structural bool)) {
 	var fenceChar byte
 	var fenceLen int
 	inHTMLBlock := false
@@ -460,6 +470,7 @@ func walkStructural(lines []string, fn func(i int, trimmed string)) {
 			inHTMLBlock = false
 			continue
 		case !structural:
+			fn(i, trimmed, false)
 			continue
 		}
 		if opensHTMLBlock(trimmed) {
@@ -468,6 +479,6 @@ func walkStructural(lines []string, fn func(i int, trimmed string)) {
 			fenceChar, fenceLen = c, length
 			continue
 		}
-		fn(i, trimmed)
+		fn(i, trimmed, true)
 	}
 }
