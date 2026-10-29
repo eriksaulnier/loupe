@@ -101,7 +101,7 @@ func TestITermOpenSendsProbeSplitAndRun(t *testing.T) {
 				t.Fatalf("made %d calls, want 3: %q", len(f.calls), f.calls)
 			}
 			// Values ride as arguments after the script, never inside it, so a quote in a data root cannot change it.
-			wantArgs := [][]string{{itermSession}, {itermSession, c.direction}, {itermSession, itermNew, command}}
+			wantArgs := [][]string{{itermSession}, {itermSession, c.direction}, {itermNew, command}}
 			for i, call := range f.calls {
 				lines, args := itermCall(t, call)
 				if !slices.Equal(args, wantArgs[i]) {
@@ -115,19 +115,21 @@ func TestITermOpenSendsProbeSplitAndRun(t *testing.T) {
 					t.Errorf("call %d activates iTerm2:\n%s", i, script)
 				}
 				for _, line := range lines {
-					if strings.Contains(line, "select") && (i != 2 || strings.TrimSpace(line) != "tell agent to select") {
+					if strings.Contains(line, "select") && (i != 1 || strings.TrimSpace(line) != "tell agent to select") {
 						t.Errorf("call %d selects something other than the agent's session: %q", i, line)
 					}
 				}
 			}
+			// The split selects the agent's session itself, so keys typed while run starts never reach the new shell.
 			split, _ := itermCall(t, f.calls[1])
 			if s := strings.Join(split, "\n"); !strings.Contains(s, "split vertically with default profile") ||
-				!strings.Contains(s, "split horizontally with default profile") {
-				t.Errorf("split script:\n%s", s)
+				!strings.Contains(s, "split horizontally with default profile") ||
+				strings.LastIndex(s, "split horizontally") > strings.Index(s, "tell agent to select") {
+				t.Errorf("split script does not select the agent's session after splitting:\n%s", s)
 			}
 			run, _ := itermCall(t, f.calls[2])
-			if s := strings.Join(run, "\n"); strings.Index(s, "write text") > strings.Index(s, "tell agent to select") {
-				t.Errorf("run script selects the agent's session before typing:\n%s", s)
+			if s := strings.Join(run, "\n"); !strings.Contains(s, "write text") {
+				t.Errorf("run script:\n%s", s)
 			}
 		})
 	}

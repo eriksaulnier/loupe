@@ -46,7 +46,7 @@ It does not ask the host, and this feature MUST NOT make it. `review-open` is de
 - Q: How does tmux report the width? → A: The `probe` step reads `#{pane_width}` of the agent's pane, which is the host's own report under 036 FR-005. The split takes tmux's default size, half the pane.
 - Q: How does the review command reach the tmux and iTerm2 panes? → A: Each host opens the pane with the user's own shell, then types 019 FR-008's command line into it, as Herdr's `run` step and Orca's `--command` already do. A command passed to `split-window` or to iTerm2's `split ... command` replaces the shell, so the pane would close on a refusal too and break 003 FR-015 (tmux(1), `new-window`: "When the shell command completes, the window closes". iTerm2's scripting page: the command "is run in place of the profile's command"). tmux's `remain-on-exit failed` would keep a failed pane. It needs a second call that races the command, and a tmux recent enough to have the `failed` value.
 - Q: How does loupe treat a stale `TMUX`? → A: By what is gone. When the socket path in `TMUX` does not exist, tmux is skipped as a host met only in part, and detection goes on to the next host. When the socket exists but no server answers, the `probe` fails and loupe refuses `pane-failed` at `probe`, which opens nothing.
-- Q: Does an iTerm2 split keep focus? → A: loupe asks it to. After the split it selects the agent's session again, which iTerm2's scripting page says "makes the session active in its tab". The result's `focused` is `false`. Whether this leaves the view and keyboard focus exactly where they were is unverified (FR-018).
+- Q: Does an iTerm2 split keep focus? → A: loupe asks it to. Right after the split, in the same script, it selects the agent's session again, which iTerm2's scripting page says "makes the session active in its tab". The result's `focused` is `false`. Whether this leaves the view and keyboard focus exactly where they were is unverified (FR-018).
 - Q: Is iTerm2 on the Unverified list? → A: Yes, whole. Tests run on Linux and cannot run AppleScript. They pin the calls loupe makes and how it reads the replies, not what iTerm2 does with them.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -82,7 +82,7 @@ A developer on macOS drives an agent from an iTerm2 session, with no multiplexer
 
 **Acceptance Scenarios**:
 
-1. **Given** the operating system is macOS, `TERM_PROGRAM` is `iTerm.app`, `ITERM_SESSION_ID` holds a session id after its colon, `osascript` is on `PATH`, and no earlier host's conditions are all met, **When** the agent hands off, **Then** loupe finds the agent's session by that id, splits it, types the review command into the new session, selects the agent's session again, and prints one result with `host: iterm2`, `paneId` set to the new session's id, `direction`, and `focused: false`.
+1. **Given** the operating system is macOS, `TERM_PROGRAM` is `iTerm.app`, `ITERM_SESSION_ID` holds a session id after its colon, `osascript` is on `PATH`, and no earlier host's conditions are all met, **When** the agent hands off, **Then** loupe finds the agent's session by that id, splits it, selects the agent's session again, types the review command into the new session, and prints one result with `host: iterm2`, `paneId` set to the new session's id, `direction`, and `focused: false`.
 2. **Given** the probe reports the agent's session is 120 columns or wider, **When** the agent hands off, **Then** the split opens to the right. **Given** it reports fewer, **Then** it opens below.
 3. **Given** no iTerm2 session has the agent's id, **When** the agent hands off, **Then** loupe refuses `pane-failed` with `details.host: iterm2` and `details.step: probe` and opens nothing.
 4. **Given** macOS refuses loupe's Apple events to iTerm2, **When** the agent hands off, **Then** loupe refuses `pane-failed` at `probe`, carrying the message `osascript` printed, and opens nothing.
@@ -143,7 +143,7 @@ An owner inside Herdr or Orca hands off as before. A Herdr pane inside tmux stil
 
 #### iTerm2 steps
 
-- **FR-009**: iTerm2 MUST open review in the steps `probe`, `split` and `run`, each one `osascript` call whose script takes its values as arguments. `probe` MUST find the session whose `unique id` is the id from `ITERM_SESSION_ID` and print its `columns`, and opens nothing. `split` MUST split that session with the default profile and no command, `vertically` for `right` and `horizontally` for `down` (iTerm2's scripting page: "a vertical split has a vertical divider"), and print the new session's `unique id`. `run` MUST `write text` 019 FR-008's command line into the new session, then `select` the agent's session.
+- **FR-009**: iTerm2 MUST open review in the steps `probe`, `split` and `run`, each one `osascript` call whose script takes its values as arguments. `probe` MUST find the session whose `unique id` is the id from `ITERM_SESSION_ID` and print its `columns`, and opens nothing. `split` MUST split that session with the default profile and no command, `vertically` for `right` and `horizontally` for `down` (iTerm2's scripting page: "a vertical split has a vertical divider"), then `select` the agent's session, and print the new session's `unique id`. `run` MUST `write text` 019 FR-008's command line into the new session. Rationale for selecting in `split`: if the split takes keyboard focus, keys the human types before the agent's session is selected again land in the new shell, ahead of the typed command. Selecting in the same script as the split keeps that gap to the one call (review of #89, 2026-10-29).
 - **FR-010**: The direction MUST come from 036 FR-005's rule, with the probe's columns as the host's own report.
 - **FR-011**: loupe MUST NOT call `activate` on iTerm2, and MUST NOT select a window or a tab, so the split moves neither the view nor the frontmost application.
 
@@ -165,7 +165,7 @@ An owner inside Herdr or Orca hands off as before. A Herdr pane inside tmux stil
   - A tmux handoff that opens `right` and `down`, keeps the agent's pane active, closes on a clean exit and stays open on a refusal.
   - The detached-session case of FR-005, and a stale socket with no server behind it.
   - The typed command reaching a freshly started shell under zsh, bash and fish, on tmux and on iTerm2.
-  - On macOS, every iTerm2 behavior FR-009 to FR-011 assume: that the id after the colon in `ITERM_SESSION_ID` is the session's `unique id`, `columns`, the split direction words, `write text`, that `select` keeps the view and keyboard focus where they were, whether macOS asks the human to allow the Apple events, and the pane closing on exit.
+  - On macOS, every iTerm2 behavior FR-009 to FR-011 assume: that the id after the colon in `ITERM_SESSION_ID` is the session's `unique id`, `columns`, the split direction words, `write text`, whether the split takes keyboard focus before `select`, that `select` keeps the view and keyboard focus where they were, whether macOS asks the human to allow the Apple events, and the pane closing on exit.
 
 ### Key Entities
 

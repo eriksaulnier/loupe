@@ -27,7 +27,10 @@ const itermProbe = itermFind + `on run argv
 	tell application "iTerm2" to return columns of agent
 end run`
 
-// iTerm2 names the divider: a vertical split puts the new session to the right.
+// iTerm2 names the divider: a vertical split puts the new session to the right. The split takes focus in its tab, so
+// the script gives it straight back to the agent's session: keys the human types while run starts then reach the agent,
+// not the new shell. It selects no window or tab and never activates iTerm2, so neither the view nor the frontmost
+// application moves.
 const itermSplit = itermFind + `on run argv
 	set agent to findSession(item 1 of argv)
 	tell application "iTerm2"
@@ -38,19 +41,16 @@ const itermSplit = itermFind + `on run argv
 				set opened to (split horizontally with default profile)
 			end if
 		end tell
+		tell agent to select
 		return unique id of opened
 	end tell
 end run`
 
-// The split takes focus in its tab, so the script gives it back to the agent's session. It selects no window or tab and
-// never activates iTerm2, so neither the view nor the frontmost application moves.
 const itermRun = itermFind + `on run argv
-	set agent to findSession(item 1 of argv)
-	set opened to findSession(item 2 of argv)
-	set reviewText to item 3 of argv
+	set opened to findSession(item 1 of argv)
+	set reviewText to item 2 of argv
 	tell application "iTerm2"
 		tell opened to write text reviewText
-		tell agent to select
 	end tell
 end run`
 
@@ -110,7 +110,7 @@ func (it ITerm) Open(ctx context.Context, req Request) (Opened, error) {
 	if sessionID == "" {
 		return Opened{}, failed("iterm2", "split", "the reply has no session id", req.Fix)
 	}
-	if _, err := call("run", itermRun, it.sessionID, sessionID, req.Command); err != nil {
+	if _, err := call("run", itermRun, sessionID, req.Command); err != nil {
 		return Opened{}, err
 	}
 	return Opened{PaneID: sessionID, Direction: dir}, nil

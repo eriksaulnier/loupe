@@ -477,7 +477,7 @@ func TestHandoffOpensReviewInAnITermSplit(t *testing.T) {
 		t.Fatalf("envelope %v", got)
 	}
 	calls := hostCalls(t, log)
-	want := [][]string{{itermSession}, {itermSession, "right"}, {itermSession, itermNewSession, paneCommand(t, home)}}
+	want := [][]string{{itermSession}, {itermSession, "right"}, {itermNewSession, paneCommand(t, home)}}
 	if len(calls) != len(want) {
 		t.Fatalf("osascript calls: %q", calls)
 	}
