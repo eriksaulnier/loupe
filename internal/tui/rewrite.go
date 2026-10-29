@@ -27,9 +27,15 @@ type keptRewrite struct {
 }
 
 // openedText is a field's text in the finding the editor stands on, and as the input shows it. The input turns a
-// tab into spaces and a CRLF into two line breaks, so while the human leaves a field alone, the finding's text is
+// tab into spaces and a CRLF into one line break, so while the human leaves a field alone, the finding's text is
 // what it holds.
 type openedText struct{ Source, Shown string }
+
+// setRewriteValue puts s in input with each CRLF as one line break: the input reads a lone CR as a break of its own,
+// so a CRLF left in would come back as a paragraph break in any field the human types in.
+func setRewriteValue(input *textarea.Model, s string) {
+	input.SetValue(strings.ReplaceAll(s, "\r\n", "\n"))
+}
 
 // newRewriteInput is a textarea that grows with its text up to the height sizeRewrite allows, then scrolls to its
 // cursor. MaxContentHeight is set so MaxHeight bounds only the view: left at zero, MaxHeight would also stop input.
@@ -50,8 +56,8 @@ func (m *Model) openRewrite(f draft.Finding) tea.Cmd {
 	}
 	m.rewriting, m.notice = true, ""
 	m.rewriteRev = f.Rev
-	m.rewriteTitle.SetValue(f.Title)
-	m.rewriteBody.SetValue(f.Body)
+	setRewriteValue(&m.rewriteTitle, f.Title)
+	setRewriteValue(&m.rewriteBody, f.Body)
 	m.rewriteOpened = [2]openedText{{f.Title, m.rewriteTitle.Value()}, {f.Body, m.rewriteBody.Value()}}
 	if kept, ok := m.keptRewrites[f.ID]; ok {
 		m.rewriteRev = kept.Rev
@@ -100,10 +106,10 @@ func (m *Model) rebaseRewrite(f draft.Finding) {
 	source := [2]string{f.Title, f.Body}
 	for i, input := range m.rewriteInputs() {
 		if input.Value() == m.rewriteOpened[i].Shown && source[i] != m.rewriteOpened[i].Source {
-			input.SetValue(source[i])
+			setRewriteValue(input, source[i])
 		}
 		shown := newRewriteInput(i == int(rewriteFocusBody))
-		shown.SetValue(source[i])
+		setRewriteValue(&shown, source[i])
 		m.rewriteOpened[i] = openedText{source[i], shown.Value()}
 	}
 	m.sizeRewrite()

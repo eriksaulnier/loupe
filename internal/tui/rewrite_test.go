@@ -193,6 +193,44 @@ func TestRewriteLeavesUntouchedTabsAndCarriageReturnsAsTheAgentWrote(t *testing.
 	}
 }
 
+// A field the human types in saves what the input holds, so the input MUST hold a CRLF as one break, not two.
+func TestRewriteTypedFieldKeepsACarriageReturnLineFeedAsOneBreak(t *testing.T) {
+	const body, want = "Body one:\r\n```\na\r\nb\r\n```\r\nEnd.", "Body one:\n```\na\nb\n```\nEnd. Mine."
+	t.Run("opened", func(t *testing.T) {
+		m, dir := editModel(t, "f-001", func(d *draft.Draft) error {
+			d.Findings[0].Body = body
+			return nil
+		})
+		m.Update(runeKey("w"))
+		m.Update(tabKey)
+		typeText(m, " Mine.")
+		m.Update(ctrlS)
+		if f := findingOf(t, dir, "f-001"); m.rewriting || f.Body != want {
+			t.Fatalf("rewriting %v body %q, want %q", m.rewriting, f.Body, want)
+		}
+	})
+	t.Run("rebased", func(t *testing.T) {
+		m, dir := editModel(t, "f-001", unchanged)
+		m.Update(runeKey("w"))
+		typeText(m, " fixed")
+		outside(t, dir, func(d *draft.Draft) error {
+			d.Findings[0].Body = body
+			d.Findings[0].Rev++
+			return nil
+		})
+		m.Update(ctrlS)
+		if !m.rewriting {
+			t.Fatal("a stale save closed the editor")
+		}
+		m.Update(tabKey)
+		typeText(m, " Mine.")
+		m.Update(ctrlS)
+		if f := findingOf(t, dir, "f-001"); m.rewriting || f.Body != want {
+			t.Fatalf("rewriting %v body %q, want %q", m.rewriting, f.Body, want)
+		}
+	})
+}
+
 func TestRewriteRefusedKeepsTheEditorAndTheText(t *testing.T) {
 	for _, c := range []struct {
 		name, says string
