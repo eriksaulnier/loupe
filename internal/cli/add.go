@@ -206,7 +206,7 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, []draft.Ent
 	in.References, _ = f.GetStringArray("reference")
 	in.SuggestedFix, _ = f.GetString("suggested-fix")
 	if f.Changed("path") || f.Changed("line") || f.Changed("start-line") || f.Changed("side") {
-		loc := &draft.Location{}
+		loc := &draft.LocationInput{}
 		loc.Path, _ = f.GetString("path")
 		loc.Line, _ = f.GetInt("line")
 		loc.StartLine, _ = f.GetInt("start-line")

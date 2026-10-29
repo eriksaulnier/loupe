@@ -198,7 +198,7 @@ func bigHunkRun(t *testing.T) string {
 		t.Fatal(err)
 	}
 	d := draft.NewEmpty()
-	if _, err := draft.Add(d, []draft.FindingInput{{Title: "Wide", Body: "Spans the hunk.", Location: &draft.Location{Path: "big.go", Line: 30, StartLine: 5}}},
+	if _, err := draft.Add(d, []draft.FindingInput{{Title: "Wide", Body: "Spans the hunk.", Location: &draft.LocationInput{Path: "big.go", Line: 30, StartLine: 5}}},
 		parsed, draft.ByAgent, testNow); err != nil {
 		t.Fatal(err)
 	}

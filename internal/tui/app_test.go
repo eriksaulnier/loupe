@@ -43,8 +43,8 @@ func newFixture(t *testing.T) string {
 	}
 	d := draft.NewEmpty()
 	_, err = draft.Add(d, []draft.FindingInput{
-		{Title: "Title one", Body: "Body one explains the rename.", Location: &draft.Location{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Confidence: "high"},
-		{Title: "Title two", Body: "Body two suggests a helper.", Location: &draft.Location{Path: "multi.txt", Line: 21}, Label: "suggestion", SuggestedFix: "extract insertAfter"},
+		{Title: "Title one", Body: "Body one explains the rename.", Location: &draft.LocationInput{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Confidence: "high"},
+		{Title: "Title two", Body: "Body two suggests a helper.", Location: &draft.LocationInput{Path: "multi.txt", Line: 21}, Label: "suggestion", SuggestedFix: "extract insertAfter"},
 		{Title: "Title three", Body: "Body three asks about tests.", General: true, Label: "question"},
 	}, parsed, draft.ByAgent, testNow)
 	if err != nil {

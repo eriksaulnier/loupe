@@ -415,8 +415,8 @@ func severityFixture(t *testing.T) string {
 	d := draft.NewEmpty()
 	if _, err := draft.Add(d, []draft.FindingInput{
 		{Title: "Cosmetic one", Body: "Body one.", General: true, Label: "suggestion", Severity: "trivial"},
-		{Title: "Unrated two", Body: "Body two.", Location: &draft.Location{Path: "multi.txt", Line: 21}, Label: "question"},
-		{Title: "Data loss three", Body: "Body three.", Location: &draft.Location{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Severity: "critical"},
+		{Title: "Unrated two", Body: "Body two.", Location: &draft.LocationInput{Path: "multi.txt", Line: 21}, Label: "question"},
+		{Title: "Data loss three", Body: "Body three.", Location: &draft.LocationInput{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Severity: "critical"},
 		{Title: "Edge case four", Body: "Body four.", General: true, Label: "issue", Severity: "minor"},
 	}, parsed, draft.ByAgent, testNow); err != nil {
 		t.Fatal(err)
