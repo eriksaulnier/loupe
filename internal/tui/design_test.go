@@ -1060,6 +1060,17 @@ func TestShiftArrowsScrollTheFindingsWhileTyping(t *testing.T) {
 	if !strings.Contains(m.View().Content, "scroll") {
 		t.Errorf("the typing footer does not offer the line scroll:\n%s", m.View().Content)
 	}
+	// Once esc leaves the message, the gesture the footer taught still scrolls and does not cancel (review finding).
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	for _, c := range []struct {
+		code rune
+		want int
+	}{{tea.KeyDown, top + 1}, {tea.KeyUp, top}} {
+		key := tea.KeyPressMsg{Code: c.code, Mod: tea.ModShift}
+		if done, _ := m.confirm.key(m, key); done || m.confirm.scroll.YOffset() != c.want {
+			t.Errorf("blurred, %s answered %v and left the view at %d, want %d", key, done, m.confirm.scroll.YOffset(), c.want)
+		}
+	}
 }
 
 // A summary, a heading or fenced code wider than the pane wraps in the readable review rather than losing its tail
