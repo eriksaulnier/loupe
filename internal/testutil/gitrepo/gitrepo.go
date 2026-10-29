@@ -62,6 +62,12 @@ func SetProcessEnv() error {
 
 func New(t *testing.T, owner, repo string, number int) *Repo {
 	t.Helper()
+	return NewWithBase(t, owner, repo, number, nil)
+}
+
+// NewWithBase is New with base also committed in the base, so the pull request can edit those files.
+func NewWithBase(t *testing.T, owner, repo string, number int, base map[string]string) *Repo {
+	t.Helper()
 	for _, kv := range env {
 		if os.Getenv(kv[0]) != kv[1] {
 			t.Setenv(kv[0], kv[1])
@@ -89,6 +95,7 @@ func New(t *testing.T, owner, repo string, number int) *Repo {
 		"remove-me.txt":    "obsolete\n",
 		"README.md":        "# widgets\n",
 	})
+	r.writeFiles(base)
 	r.commit("base")
 	r.base = r.git(t, r.workDir, "rev-parse", "HEAD")
 
