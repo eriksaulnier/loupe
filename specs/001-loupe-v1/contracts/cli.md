@@ -30,7 +30,7 @@ Refusal or error (exit 1 or 2):
 {"loupe": 1, "ok": false, "command": "add", "run": "owner/repo#123@1", "dir": "/path/to/run", "error": {"code": "location", "message": "src/a.ts:88 is not in the diff on side RIGHT", "fix": "use one of: src/a.ts:80-86, 90-97", "details": {"entry": 1, "nearest": [80, 81, 86, 90, 91, 97]}}}
 ```
 
-`run` is omitted when no run was resolved. `dir` is the absolute path of the directory holding the run `run` names, on a success and on a refusal alike, and is present exactly when `run` is. It is resolved under the data root in force for the invocation, so a data root restored elsewhere names its new location. It is a handle to archive, restore or carry between jobs, not a view into the run: the directory's contents and layout are not part of this contract (specs/016-pipeline-handles). `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `assess`, `reply`, `feedback`, `wait` and `show`. `list`, `handoff`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
+`run` is omitted when no run was resolved. `dir` is the absolute path of the directory holding the run `run` names, on a success and on a refusal alike, and is present exactly when `run` is. It is resolved under the data root in force for the invocation, so a data root restored elsewhere names its new location. It is a handle to archive, restore or carry between jobs, not a view into the run: the directory's contents and layout are not part of this contract (specs/016-pipeline-handles). `version` is the current draft version and appears only on commands that read or write the current draft through an agent-facing result: `capture`, `add`, `edit`, `summary`, `assess`, `reply`, `feedback`, `wait` and `show`. `list`, `stats`, `handoff`, `show --previous` (which reads a published round), the human-only `review` and `publish`, and help results omit it (ruled 2026-09-13). `details` is optional and command-specific.
 
 ## Error codes
 
@@ -158,6 +158,30 @@ Result payload: `reply` (`{id, noteId}`), `version`.
 ### `loupe list [--json]`
 
 All runs, newest capture first, as an array under `runs`: `ref`, `url`, `title`, `round`, `state` (`captured`, `ready`, `published`), `counts` (accepted, pending, excluded, withdrawn, openNotes), `capturedAt`.
+
+### `loupe stats [owner/repo]... [--since <date>] [--until <date>] [--state captured|ready|published]... [--group-by none|repo|week|month] [--json]`
+
+Rolls the human gate up across every run `run.Walk` finds under the data root (specs/042-loupe-stats). It takes no run selection, writes nothing, takes no lock, and reads no Git and no network. A run's state is the one `list` gives it. Each finding of a run's current draft counts in exactly one of `published` (its id is in the receipt's `envelope.findings`, attended or unattended), `excluded` (a current exclusion, or a withdrawal a human made last), `withdrawn` (the agent's own cut) and `pending` (still in the publishable set), so `filed` is their sum. `reinstated` and `regraded` are flags, counted as the `loupe-meta` marker counts them, and a published run's counts equal its marker unless its draft changed after publishing. `byLabel` and `blocking` split `published` by the label and blocking the envelope recorded and `excluded` by the current ones, with every label outside `issue`, `suggestion` and `question` under `other`.
+
+A published run is unattended when its receipt records no viewer. `runs.unattended` counts those runs, a subset of `runs.published`, and every count includes them except `precision` and `medianCaptureToPublish`. `precision` is `published / (published + excluded)` over the attended published runs, rounded to three places, and `null` when that divisor is 0. It leaves out `withdrawn` on purpose, because the agent cut those findings itself, and unattended runs, because no human gated them. `medianCaptureToPublish` is the median of `postedAt` minus `capturedAt` over the attended published runs, as an ISO 8601 duration in whole seconds such as `PT14M`, or `null`. `drifted` lists, as `owner/repo#n@round`, each published run whose draft `version` differs from the receipt's `envelope.draftVersion`. `pullRequests` counts distinct `owner/repo#n`, and each round is its own run.
+
+Arguments name repositories as `owner/repo`, matched ignoring case. With none, every repository counts. A run's time is its receipt's `postedAt` when it is published, else its `capturedAt`. `--since` and `--until` take an RFC 3339 date or timestamp and are inclusive, and a bare `--until` date covers its whole UTC day. `--state` defaults to `published` and repeats. `--group-by` defaults to `none`, which leaves `groups` empty. `repo` keys groups `owner/repo` as stored, `week` by UTC ISO week (`2026-W43`) and `month` by UTC month (`2026-10`), in ascending key order, and a group with no runs does not appear. `total` has a group's shape with the key `total`, computed over its runs, not its groups. `filter` echoes the filters in force: `repos` as given, `since` and `until` as resolved UTC timestamps or `null`, `states` in the order `captured`, `ready`, `published`, and `groupBy`.
+
+```json
+{"loupe": 1, "ok": true, "command": "stats",
+ "filter": {"repos": [], "since": null, "until": null, "states": ["published"], "groupBy": "repo"},
+ "groups": [{"key": "owner/repo",
+   "runs": {"captured": 0, "ready": 0, "published": 12, "unattended": 0},
+   "pullRequests": 9,
+   "findings": {"filed": 41, "published": 20, "excluded": 6, "withdrawn": 15, "pending": 0, "reinstated": 2, "regraded": 3},
+   "byLabel": {"published": {"issue": 11, "suggestion": 7, "question": 2, "other": 0},
+               "excluded": {"issue": 2, "suggestion": 4, "question": 0, "other": 0}},
+   "blocking": {"published": 5, "excluded": 1},
+   "precision": 0.769, "drifted": [], "medianCaptureToPublish": "PT14M"}],
+ "total": {"key": "total", "...": "same shape as a group"}}
+```
+
+Without `--json`, a vertical list: a header that names every filter in force, one block per group and a `total` block with one named line per field, and a closing note that names both exclusions. A value that does not parse, a `--since` later than `--until`, an unknown `--state` or `--group-by`, or an argument that is not `owner/repo` refuses `usage`, before the data root is read. A `target.json`, `draft.json` or `receipt.json` that cannot be read refuses the whole command with `record`, naming the file, even when the run would not match the filters.
 
 ### `loupe review [<ref>]` (human only)
 
