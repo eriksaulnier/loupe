@@ -97,8 +97,8 @@ func TestGhosttyOpenSendsProbeAndSplit(t *testing.T) {
 					t.Errorf("call %d activates Ghostty:\n%s", i, script)
 				}
 			}
-			// The split hands focus back to the agent's terminal itself, so keys typed while review starts never reach
-			// the new shell, and types the command into that shell rather than replacing it.
+			// The split refocuses the agent's terminal only when Ghostty was frontmost, since focus raises the window, and
+			// types the command into the new shell rather than replacing it.
 			split, _ := itermCall(t, f.calls[1])
 			if s := strings.Join(split, "\n"); !strings.Contains(s, "split agent direction right with configuration cfg") ||
 				!strings.Contains(s, "split agent direction down with configuration cfg") ||

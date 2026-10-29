@@ -641,7 +641,7 @@ func TestHandoffRefusesNoPaneHostNamingEveryHost(t *testing.T) {
 		!strings.Contains(message, "TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session") ||
 		!strings.Contains(message, "ORCA_TERMINAL_HANDLE and orca on PATH") ||
 		!strings.Contains(message, "macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID and osascript on PATH") ||
-		!strings.Contains(message, "macOS, TERM_PROGRAM=ghostty, PWD, osascript on PATH and the focused terminal in PWD or a parent of it") {
+		!strings.Contains(message, "macOS, TERM_PROGRAM=ghostty, PWD, osascript on PATH and the focused terminal, by its shell integration, in PWD or a parent of it") {
 		t.Fatalf("exit %d error %v", code, errObj)
 	}
 	if calls := append(hostCalls(t, herdrLog), hostCalls(t, orcaLog)...); calls != nil {
