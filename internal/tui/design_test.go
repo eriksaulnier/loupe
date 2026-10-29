@@ -154,17 +154,38 @@ func TestLargeRoundGroupsTheBar(t *testing.T) {
 	}
 }
 
+// drain runs cmd and every command a batch or sequence holds, and returns the messages they produce.
+func drain(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		var out []tea.Msg
+		for _, c := range msg {
+			out = append(out, drain(c)...)
+		}
+		return out
+	default:
+		return []tea.Msg{msg}
+	}
+}
+
 // A recorded decision is a notice in the findings pane's bottom border that moves no row, and it expires after its
 // timer unless a newer notice took its place; a refusal does not expire (FR-010, owner decision 6).
 func TestSuccessNoticeLivesInTheBorderAndExpires(t *testing.T) {
 	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
 	before := strings.Split(m.View().Content, "\n")
 	mustOpenFinding(t, m, "f-001")
+	// The decision's command also carries the flash and the settle timers, so the expiry is looked for among them.
+	expiry, flash, settle := noticeExpiry, flashFor, settleAfterDecision
+	t.Cleanup(func() { noticeExpiry, flashFor, settleAfterDecision = expiry, flash, settle })
+	noticeExpiry, flashFor, settleAfterDecision = time.Millisecond, time.Millisecond, time.Millisecond
 	_, cmd := m.Update(runes("a"))
-	if cmd == nil {
+	gen := m.noticeGen
+	if !slices.Contains(drain(cmd), tea.Msg(noticeExpired{gen})) {
 		t.Fatal("a success notice scheduled no expiry")
 	}
-	gen := m.noticeGen
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m.say(style.Good, "✓ f-001 accepted")
 	after := strings.Split(m.View().Content, "\n")
@@ -558,14 +579,25 @@ func TestFileDiffTokenizesOnce(t *testing.T) {
 	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
 	mustOpenFinding(t, m, "f-001")
 	f, _ := m.openedFinding()
+	// Counting the tokenizer's calls checks the cache itself, which a content-derived key alone does not (review finding).
+	calls := 0
+	t.Cleanup(func() { highlightCode = style.Highlight })
+	highlightCode = func(path string, lines []string) ([][]style.CodeToken, error) {
+		calls++
+		return style.Highlight(path, lines)
+	}
 	m.openFileDiff(f)
-	key := m.tokensKey
-	start := time.Now()
+	m.View()
+	if calls == 0 {
+		t.Fatal("the file diff was never tokenized, so the test checks nothing")
+	}
+	before := calls
 	for range 20 {
 		m.Update(arrow(tea.KeyDown))
+		m.View()
 	}
-	if m.tokensKey != key || time.Since(start) > 2*time.Second {
-		t.Errorf("moving the cursor tokenized the file again")
+	if calls != before {
+		t.Errorf("moving the cursor tokenized the file %d more times", calls-before)
 	}
 }
 
@@ -834,8 +866,15 @@ func TestOnlyTheFocusedPaneHasATab(t *testing.T) {
 	env := map[string]string{"LANG": "en_US.UTF-8"}
 	m := modelOf(t, newFixture(t), env, 100, 30)
 	m.styles.SetColorProfile(colorprofile.TrueColor)
+	// A tab is a fill, so the title on screen must carry the fill escape, not only match TitleTab (review finding).
+	filled := func(tab string) string {
+		if !strings.Contains(tab, "48;2;") {
+			t.Fatalf("the tab %q has no fill", tab)
+		}
+		return tab
+	}
 	tab := func(text string, tone style.Tone) bool {
-		return strings.Contains(m.View().Content, m.styles.TitleTab(text, tone))
+		return strings.Contains(m.View().Content, filled(m.styles.TitleTab(text, tone)))
 	}
 	if !tab("Findings", style.ToneAccent) || tab("Reviewer's summary", style.ToneAccent) {
 		t.Errorf("the list's tab is not on the findings alone:\n%q", m.View().Content)
@@ -852,11 +891,11 @@ func TestOnlyTheFocusedPaneHasATab(t *testing.T) {
 	c.styles.SetColorProfile(colorprofile.TrueColor)
 	showConfirmation(c)
 	c.confirm.typing = true
-	if v := c.View().Content; !strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) || strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) {
+	if v := c.View().Content; !strings.Contains(v, filled(c.styles.TitleTab("your message", style.ToneNote))) || strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) {
 		t.Errorf("typing does not put the tab on the message:\n%q", v)
 	}
 	c.confirm.typing = false
-	if v := c.View().Content; !strings.Contains(v, c.styles.TitleTab("Publish review", style.ToneAccent)) || strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) {
+	if v := c.View().Content; !strings.Contains(v, filled(c.styles.TitleTab("Publish review", style.ToneAccent))) || strings.Contains(v, c.styles.TitleTab("your message", style.ToneNote)) {
 		t.Errorf("a blurred message does not return the tab to the review:\n%q", v)
 	}
 }

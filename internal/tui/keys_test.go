@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -257,7 +258,17 @@ func TestHelpScrolls(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
 	m.Update(runes("?"))
 	first := m.View().Content
-	if !strings.Contains(first, "+- Help -") || !strings.Contains(first, "#") || !strings.Contains(first, "up/down scroll") {
+	// The thumb is a # on help's own right border, which the bottom border's corner marks; the header's
+	// acme/widgets#42 must not pass for it (review finding).
+	thumb := false
+	rows := strings.Split(first, "\n")
+	if at := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "esc closes") }); at > 0 {
+		right := strings.LastIndex(rows[at], "+")
+		for _, r := range rows[1:at] {
+			thumb = thumb || (len(r) > right && r[right] == '#')
+		}
+	}
+	if !strings.Contains(first, "+- Help -") || !thumb || !strings.Contains(first, "up/down scroll") {
 		t.Fatalf("tall help does not show its pane, its scroll thumb or its scroll hint:\n%s", first)
 	}
 	for range 100 {
