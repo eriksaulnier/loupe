@@ -39,6 +39,10 @@ It does not ask the host, and this feature MUST NOT make it. `review-open` is de
 
 - Q: What does a tmux session with no client attached get? → A: Detection skips tmux and goes on to Orca, then iTerm2, when the tmux probe succeeds and reports zero attached clients. A probe that fails still refuses `pane-failed` at `probe` (owner, 2026-10-28, option B).
 
+### Session 2026-10-29
+
+- Q: Ghostty sets no per-terminal id in a child's environment and its scripting dictionary reports no tty. Which terminal does loupe split? → A: The focused terminal of the front window's selected tab, and only when its working directory is loupe's `PWD` or a parent of it; otherwise Ghostty passes (FR-020). The owner chose this over splitting the focused terminal unchecked and over finding the terminal by writing a title to the agent's tty.
+
 ### Decided by the drafting agent, 2026-10-28
 
 - Q: Which host wins when hosts nest? → A: The inner one, as 019 decided for Herdr inside Orca. The order is Herdr, tmux, Orca, iTerm2. Herdr inside tmux gives Herdr, tmux inside Orca gives tmux, and tmux inside iTerm2 gives tmux. tmux inside Herdr gives Herdr, the outer host: its pane still opens where the human sees it, beside the Herdr pane that holds tmux. sift uses the same order.
@@ -146,6 +150,15 @@ An owner inside Herdr or Orca hands off as before. A Herdr pane inside tmux stil
 - **FR-009**: iTerm2 MUST open review in the steps `probe`, `split` and `run`, each one `osascript` call whose script takes its values as arguments. `probe` MUST find the session whose `unique id` is the id from `ITERM_SESSION_ID` and print its `columns`, and opens nothing. `split` MUST split that session with the default profile and no command, `vertically` for `right` and `horizontally` for `down` (iTerm2's scripting page: "a vertical split has a vertical divider"), then `select` the agent's session, and print the new session's `unique id`. `run` MUST `write text` 019 FR-008's command line into the new session. Rationale for selecting in `split`: if the split takes keyboard focus, keys the human types before the agent's session is selected again land in the new shell, ahead of the typed command. Selecting in the same script as the split keeps that gap to the one call (review of #89, 2026-10-29).
 - **FR-010**: The direction MUST come from 036 FR-005's rule, with the probe's columns as the host's own report.
 - **FR-011**: loupe MUST NOT call `activate` on iTerm2, and MUST NOT select a window or a tab, so the split moves neither the view nor the frontmost application.
+
+#### Ghostty steps
+
+Added 2026-10-29. These amend FR-001, FR-012 to FR-015 and FR-017: Ghostty is detected last, after iTerm2, and every list of hosts there, including FR-012's count of four, gains it.
+
+- **FR-019**: loupe MUST detect Ghostty when the operating system is macOS, `TERM_PROGRAM` is `ghostty`, `PWD` is an absolute path, and an executable `osascript` is found on `PATH`.
+- **FR-020**: Ghostty MUST open review in the steps `probe` and `split`, each one `osascript` call whose script takes its values as arguments. `probe` MUST read the id and working directory of the focused terminal of the selected tab of Ghostty's front window. When that working directory is not absolute, or is neither `PWD` nor a parent of it, Ghostty MUST pass to the next host after the probe alone.
+- **FR-021**: `split` MUST find the agent's terminal by the id the probe read, split it `right` or `down` with 019 FR-008's command line and a line feed as the new terminal's `initial input`, so the user's shell runs it, then print the new terminal's id. When Ghostty was the frontmost application before the split it MUST focus the agent's terminal again, and otherwise MUST NOT, since `focus` brings the window to the front. A reply without one MUST refuse at `split`. loupe MUST NOT call `activate` on Ghostty. The direction MUST come from 036 FR-005's rule with no host report, since Ghostty's scripting dictionary has no terminal size.
+- **FR-022**: On success `host` MUST be `ghostty`, `paneId` the new terminal's id and `focused` `false`. `scripts/check-tests.sh` MUST also fail on a non-test Go file outside `internal/pane` and `internal/cli/handoff.go` that names `ghostty`.
 
 #### Result, help and contract
 

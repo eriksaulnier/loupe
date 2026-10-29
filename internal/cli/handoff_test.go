@@ -14,12 +14,14 @@ import (
 )
 
 const (
-	herdrPaneMissing = `{"error":{"code":"pane_not_found","message":"pane w1:p1 not found"},"id":"cli:pane:split"}`
-	orcaHandshake    = "[relay-connect] Handshake OK at version=0.1.0+955da90487c0"
-	orcaStale        = `{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal handle term_agent is stale"}}`
-	orcaNewHandle    = "term_28c2bdd2-5b1e"
-	itermSession     = "8A4C1F2E-5B3D-4E6F-9A7B-1C2D3E4F5A6B"
-	itermNewSession  = "0F1E2D3C-4B5A-4968-8776-655443322110"
+	herdrPaneMissing   = `{"error":{"code":"pane_not_found","message":"pane w1:p1 not found"},"id":"cli:pane:split"}`
+	orcaHandshake      = "[relay-connect] Handshake OK at version=0.1.0+955da90487c0"
+	orcaStale          = `{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal handle term_agent is stale"}}`
+	orcaNewHandle      = "term_28c2bdd2-5b1e"
+	itermSession       = "8A4C1F2E-5B3D-4E6F-9A7B-1C2D3E4F5A6B"
+	itermNewSession    = "0F1E2D3C-4B5A-4968-8776-655443322110"
+	ghosttyTerminal    = "368465FD-2E56-4B31-BA4A-2CF2FA320C81"
+	ghosttyNewTerminal = "E785B91E-11DA-4904-B62C-13AF6E67F752"
 )
 
 // fakeHostBin writes a stand-in for name that appends each call's argv to log, NUL-separated and newline-terminated,
@@ -115,6 +117,30 @@ esac
 		t.Fatal(err)
 	}
 	return bin, log
+}
+
+// fakeGhosttyBin answers like osascript running loupe's Ghostty scripts: the probe prints the focused terminal's id and
+// workDir, the split a new terminal id. It logs argv like fakeHostBin.
+func fakeGhosttyBin(t *testing.T, workDir string) (bin, log string) {
+	t.Helper()
+	bin = t.TempDir()
+	log = filepath.Join(t.TempDir(), "argv")
+	script := fmt.Sprintf(`#!/bin/sh
+for a in "$@"; do printf '%%s\0' "$a" >> '%[1]s'; done
+printf '\n' >> '%[1]s'
+case "$*" in
+*"split agent direction"*) printf '%%s\n' '%[2]s';;
+*) printf '%%s\n%%s\n' '%[3]s' '%[4]s';;
+esac
+`, log, ghosttyNewTerminal, ghosttyTerminal, workDir)
+	if err := os.WriteFile(filepath.Join(bin, "osascript"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin, log
+}
+
+func ghosttyEnv(home, bin, dir string) map[string]string {
+	return map[string]string{"LOUPE_HOME": home, "TERM_PROGRAM": "ghostty", "PWD": dir, "PATH": bin}
 }
 
 func itermEnv(home, bin string) map[string]string {
@@ -488,6 +514,49 @@ func TestHandoffOpensReviewInAnITermSplit(t *testing.T) {
 	}
 }
 
+// Ghostty gives the agent's terminal focus back after the split, and reports no width, so the direction is the tty's.
+func TestHandoffOpensReviewInAGhosttySplit(t *testing.T) {
+	home, _ := sendBackRun(t)
+	dir := t.TempDir()
+	bin, log := fakeGhosttyBin(t, filepath.Dir(dir))
+	deps, s := testDeps(t, ghosttyEnv(home, bin, dir))
+	deps.GOOS = "darwin"
+	deps.TTYWidth = ttyWidth(150)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s stderr %s", code, s.stdout.String(), s.stderr.String())
+	}
+	got := decodeOne(t, s.stdout.Bytes())
+	if got["host"] != "ghostty" || got["paneId"] != ghosttyNewTerminal || got["direction"] != "right" || got["focused"] != false {
+		t.Fatalf("envelope %v", got)
+	}
+	calls := hostCalls(t, log)
+	want := [][]string{{}, {ghosttyTerminal, "right", paneCommand(t, home)}}
+	if len(calls) != len(want) {
+		t.Fatalf("osascript calls: %q", calls)
+	}
+	for i, call := range calls {
+		if args := itermArgs(call); !slices.Equal(args, want[i]) {
+			t.Errorf("call %d arguments %q, want %q", i, args, want[i])
+		}
+	}
+}
+
+// The focused terminal sits outside loupe's directory, so it belongs to something other than the agent.
+func TestHandoffPassesGhosttyFocusedElsewhere(t *testing.T) {
+	home, _ := sendBackRun(t)
+	bin, log := fakeGhosttyBin(t, t.TempDir())
+	deps, s := testDeps(t, ghosttyEnv(home, bin, t.TempDir()))
+	deps.GOOS = "darwin"
+	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
+	errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	if code != 1 || errObj["code"] != "no-pane-host" {
+		t.Fatalf("exit %d error %v", code, errObj)
+	}
+	if calls := hostCalls(t, log); len(calls) != 1 {
+		t.Fatalf("osascript calls, want the probe alone: %q", calls)
+	}
+}
+
 func TestHandoffIgnoresITermOffMac(t *testing.T) {
 	home, _ := sendBackRun(t)
 	bin, log := fakeOsascriptBin(t)
@@ -571,7 +640,8 @@ func TestHandoffRefusesNoPaneHostNamingEveryHost(t *testing.T) {
 	if code != 1 || errObj["code"] != "no-pane-host" || !strings.Contains(message, "HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH") ||
 		!strings.Contains(message, "TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session") ||
 		!strings.Contains(message, "ORCA_TERMINAL_HANDLE and orca on PATH") ||
-		!strings.Contains(message, "macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID and osascript on PATH") {
+		!strings.Contains(message, "macOS, TERM_PROGRAM=iTerm.app, ITERM_SESSION_ID and osascript on PATH") ||
+		!strings.Contains(message, "macOS, TERM_PROGRAM=ghostty, PWD, osascript on PATH and the focused terminal in PWD or a parent of it") {
 		t.Fatalf("exit %d error %v", code, errObj)
 	}
 	if calls := append(hostCalls(t, herdrLog), hostCalls(t, orcaLog)...); calls != nil {

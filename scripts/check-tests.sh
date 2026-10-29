@@ -140,10 +140,11 @@ for write in CreateReview UpdateReview; do
 	fi
 done
 
-# Pane hosts are run from internal/pane alone; beside it only handoff's help and refusal name one (specs/006-agent-plugins
-# FR-010, specs/019-pane-hosts FR-015, specs/045-tmux-iterm-panes FR-015). Tests are excluded because they fake them.
+# Pane hosts are run from internal/pane alone; beside it only handoff's help and refusal name one
+# (specs/006-agent-plugins FR-010, specs/019-pane-hosts FR-015, specs/045-tmux-iterm-panes FR-015, FR-022). Tests are
+# excluded because they fake them.
 # internal/style reads TMUX to pick colors, and only that line of its environment key list is allowed.
-hosts=$(tracked_grep -niIE 'herdr|orca|tmux|iterm|osascript' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go' \
+hosts=$(tracked_grep -niIE 'herdr|orca|tmux|iterm|ghostty|osascript' -- 'cmd/*.go' 'internal/*.go' go.mod ':(exclude)*_test.go' \
 	':(exclude)internal/pane/*' ':(exclude)internal/cli/handoff.go')
 hosts=$(printf '%s' "$hosts" | grep -vE '^internal/style/style\.go:[0-9]+:.*for _, key := range \[\]string\{.*"TMUX",' || true)
 if [ -n "$hosts" ]; then

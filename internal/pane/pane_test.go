@@ -200,6 +200,7 @@ func TestDetectOrder(t *testing.T) {
 	staleTmux := map[string]string{"TMUX": filepath.Join(t.TempDir(), "gone") + ",1,0", "TMUX_PANE": "%3"}
 	orca := map[string]string{"ORCA_TERMINAL_HANDLE": "term_agent"}
 	iterm := map[string]string{"TERM_PROGRAM": "iTerm.app", "ITERM_SESSION_ID": "w0t0p0:8A4C1F2E"}
+	ghostty := map[string]string{"TERM_PROGRAM": "ghostty", "PWD": "/Users/h/src/loupe"}
 	for _, c := range []struct {
 		name string
 		goos string
@@ -216,6 +217,10 @@ func TestDetectOrder(t *testing.T) {
 		{"orca and iterm2", "darwin", []map[string]string{orca, iterm}, []string{"orca", "iterm2"}},
 		{"herdr and iterm2", "darwin", []map[string]string{herdr, iterm}, []string{"herdr", "iterm2"}},
 		{"tmux and iterm2", "darwin", []map[string]string{tmux, iterm}, []string{"tmux", "iterm2"}},
+		{"ghostty on linux", "linux", []map[string]string{ghostty}, nil},
+		{"ghostty on macOS", "darwin", []map[string]string{ghostty}, []string{"ghostty"}},
+		{"herdr and ghostty", "darwin", []map[string]string{herdr, ghostty}, []string{"herdr", "ghostty"}},
+		{"orca and ghostty", "darwin", []map[string]string{orca, ghostty}, []string{"orca", "ghostty"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			env := map[string]string{"PATH": bin}

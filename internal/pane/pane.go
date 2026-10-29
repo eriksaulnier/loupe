@@ -1,5 +1,5 @@
-// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr, tmux, Orca or
-// iTerm2. It is the only package that runs any of them.
+// Package pane opens loupe review for the human in a new terminal pane beside the agent's, in Herdr, tmux, Orca,
+// iTerm2 or Ghostty. It is the only package that runs any of them.
 package pane
 
 import (
@@ -59,6 +59,9 @@ func Detect(getenv func(string) string, goos string) []Host {
 	}
 	if it, ok := detectITerm(getenv, goos); ok {
 		hosts = append(hosts, it)
+	}
+	if g, ok := detectGhostty(getenv, goos); ok {
+		hosts = append(hosts, g)
 	}
 	return hosts
 }
