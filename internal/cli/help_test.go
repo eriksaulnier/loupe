@@ -113,3 +113,20 @@ func TestSubcommandHelpKeepsTheGlobalJSONFlag(t *testing.T) {
 		t.Fatalf("list --help lost the --json line:\n%s", s.stdout.String())
 	}
 }
+
+// An agent working from --help alone learns the finding-id rule where it writes published text and where it is
+// handed earlier rounds' ids.
+func TestHelpStatesTheFindingIDRule(t *testing.T) {
+	for name, c := range map[string]struct{ help, want string }{
+		"add":     {addHelp, "a code span is not"},
+		"edit":    {editHelp, "a code span is not"},
+		"summary": {summaryHelp, "a code span is not"},
+		"show":    {showHelp, "Each id there belongs to its own round"},
+		"publish": {publishHelp, "refuses a finding id"},
+	} {
+		help := strings.Join(strings.Fields(c.help), " ")
+		if !strings.Contains(help, c.want) || (name != "show" && !strings.Contains(help, "finding-id")) {
+			t.Errorf("%s --help does not state the finding-id rule", name)
+		}
+	}
+}

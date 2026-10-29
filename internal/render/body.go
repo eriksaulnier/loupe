@@ -519,7 +519,7 @@ func disclosure(f Finding, in Input, inBody bool) string {
 	if fix := strings.TrimRight(f.SuggestedFix, "\n"); strings.TrimSpace(fix) != "" {
 		// Input validation holds a fix to the body allowlist, but a draft written before it did may hold anything, so
 		// such a fix keeps the fence that made it inert.
-		if markdown.Check(fix, markdown.Body, "") == nil {
+		if markdown.Check(fix, markdown.SuggestedFix, "") == nil {
 			parts = append(parts, labeled("Suggested fix", fix))
 		} else {
 			fence := Fence(fix)
