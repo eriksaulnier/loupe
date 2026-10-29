@@ -55,7 +55,7 @@ Each task follows failing test, then implementation, then a passing `mise run ch
 
 ## Phase 8: Polish
 
-- [ ] T019 Run `mise run check` after the last edit and confirm `git diff --stat main -- testdata/golden` lists only the two `publish-help` goldens.
+- [X] T019 Run `mise run check` after the last edit and confirm `git diff --stat main -- testdata/golden` lists only the two `publish-help` goldens.
 
 ## Dependencies
 
