@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -98,6 +100,35 @@ func TestAddReadsTheOutlineOnlyForAHeading(t *testing.T) {
 	}
 	if code, env, _ := execIn(t, home, "", "add", "--title", "t", "--body", "b", "--path", "plan.md", "--heading", "Rollout"); code != 1 || errorCode(env) != "record" {
 		t.Fatalf("heading: exit %d envelope %v", code, env)
+	}
+}
+
+// An edit that sets no heading neither reads the outline nor resolves the stored heading again, so a damaged or missing
+// outline never refuses it and the heading stays.
+func TestEditOfAnotherFieldSkipsTheOutline(t *testing.T) {
+	for name, outline := range map[string][]byte{"damaged": []byte(`{"schema": 1, "files": [], "damaged": true}`), "missing": nil} {
+		t.Run(name, func(t *testing.T) {
+			home, dir := headingRun(t, []byte(planOutline))
+			if code, env, _ := execIn(t, home, "", "add", "--title", "t", "--body", "b", "--path", "plan.md", "--heading", "Rollout"); code != 0 {
+				t.Fatalf("add: exit %d envelope %v", code, env)
+			}
+			path := filepath.Join(dir, run.OutlineFile)
+			var err error
+			if outline == nil {
+				err = os.Remove(path)
+			} else {
+				err = os.WriteFile(path, outline, 0o600)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if code, env, _ := execIn(t, home, "", "edit", "f-001", "--title", "x"); code != 0 {
+				t.Fatalf("edit --title: exit %d envelope %v", code, env)
+			}
+			if got := storedLocation(t, dir); got.Heading != "Rollout" || got.StartLine != 11 || got.Line != 17 {
+				t.Fatalf("stored %+v", got)
+			}
+		})
 	}
 }
 
