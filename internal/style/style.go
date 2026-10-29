@@ -679,11 +679,18 @@ func (s Style) Field(name string, nameWidth int, items []string, sep string, wid
 	for i := range segs {
 		segs[i] = strings.TrimPrefix(segs[i], indent)
 	}
-	lines, _ := fillLines(segs, sep, width-len(indent), len(segs))
-	for i := range lines {
-		lines[i] = indent + lines[i]
+	lines := []string{"  " + Pad(s.Dim.Render(name), nameWidth)}
+	for i, seg := range segs {
+		last := &lines[len(lines)-1]
+		switch {
+		case i == 0:
+			*last += seg
+		case Width(*last+sep+seg) <= width:
+			*last += sep + seg
+		default:
+			lines = append(lines, indent+seg)
+		}
 	}
-	lines[0] = "  " + Pad(s.Dim.Render(name), nameWidth) + strings.TrimPrefix(lines[0], indent)
 	return lines
 }
 
