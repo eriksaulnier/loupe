@@ -90,8 +90,8 @@ description: "Task list for loupe stats"
 
 - [X] T015 [P] Add a `loupe stats [owner/repo]... [--since <date>] [--until <date>] [--state captured|ready|published]... [--group-by none|repo|week|month] [--json]` section after `loupe list` in `specs/001-loupe-v1/contracts/cli.md`, with its flags, the result, the dispositions, the precision and median exclusions, the `usage` and `record` refusals, and a pointer to this spec. Add `stats` to the list of results that omit `version`. Commit as `docs(specs): add loupe stats to the cli contract`.
 - [X] T016 [P] Add the `internal/stats` row to the layout table in `AGENTS.md`. Commit as `docs(agents): list internal/stats`.
-- [ ] T017 By-eye check: `mise run demo -- stats`, `mise run demo -- stats --state captured --state ready --state published --group-by repo` and the same at 80 columns, captured through tmux. Read the table for alignment and the stacked layout.
-- [ ] T018 Run `mise run check` after the last edit and keep its tail for the report.
+- [X] T017 By-eye check: `mise run demo -- stats`, `mise run demo -- stats --state captured --state ready --state published --group-by repo` and the same at 80 columns, captured through tmux. Read the table for alignment and the stacked layout.
+- [X] T018 Run `mise run check` after the last edit and keep its tail for the report.
 
 ## Dependencies & Execution Order
 
