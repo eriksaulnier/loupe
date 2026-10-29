@@ -26,6 +26,8 @@ An absent key leaves the field unchanged. null clears location, label, confidenc
 verified, impact, references or suggestedFix, as does an empty references list, and is refused
 for title, body, general and blocking. Setting location clears
 general and "general": true clears location; clearing location makes the finding general.
+location may be a heading anchor, {"path": "docs/plan.md", "heading": "Rollout"}, resolved as
+add resolves it; setting location replaces a stored heading, and a line form removes it.
 New values follow the add rules: location must be in the captured diff, label is issue,
 suggestion, question or any other word of letters, digits, _, . or -, at most 40 characters,
 confidence is high, medium or low, severity is critical, major, minor or trivial, verified is
@@ -86,7 +88,7 @@ func newEditCmd(deps Deps) *cobra.Command {
 	f.Int("line", 0, "line number on --side")
 	f.Int("start-line", 0, "first line of a multi-line range")
 	f.String("side", "", "RIGHT (new file, default) or LEFT (old file)")
-	f.String("heading", "", "a Markdown heading's text, instead of --line: the finding covers the section's changed lines")
+	f.String("heading", "", "a Markdown heading's text, instead of --line: the section's changed lines")
 	f.Bool("general", false, "make the finding general, with no location")
 	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")

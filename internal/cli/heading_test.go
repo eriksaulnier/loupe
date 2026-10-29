@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -106,5 +107,25 @@ func TestAddHeadingOnARunWithoutAnOutline(t *testing.T) {
 	errObj, _ := env["error"].(map[string]any)
 	if code != 1 || errObj["code"] != "location" || errObj["message"] != "entry 0: this run was captured before heading anchors, so it holds no heading outline" {
 		t.Fatalf("exit %d envelope %v", code, env)
+	}
+}
+
+// An agent learns the heading form from --help alone (Principle I), so both commands name it, its rules and its refusals.
+func TestAddAndEditHelpDescribeHeadingAnchors(t *testing.T) {
+	for cmd, wants := range map[string][]string{
+		"add": {`{"path": "docs/plan.md", "heading": "Rollout"}`, ".md, .markdown or .mdx", "without its # marks",
+			"the one hunk that changes the section", "use one of", "file one line-anchored finding per hunk", "--heading"},
+		"edit": {`"heading"`, "a line form removes", "--heading"},
+	} {
+		deps, s := testDeps(t, nil)
+		if code := Execute(deps, []string{cmd, "--help"}); code != 0 {
+			t.Fatalf("%s: exit %d", cmd, code)
+		}
+		help := strings.Join(strings.Fields(s.stdout.String()), " ")
+		for _, want := range wants {
+			if !strings.Contains(help, want) {
+				t.Errorf("%s help lacks %q:\n%s", cmd, want, help)
+			}
+		}
 	}
 }

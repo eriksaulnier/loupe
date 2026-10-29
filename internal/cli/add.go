@@ -35,23 +35,34 @@ Input (--from <file>, or --from - for stdin): one finding object or an array of 
 
 title and body are required. Exactly one of location or "general": true is required.
 location must be in the captured diff: side RIGHT (the default) is the new file, LEFT the old
-file, and startLine and line must be in the same hunk. label is issue, suggestion, question or
-any other word of letters, digits, _, . or -, at most 40 characters, kept verbatim. blocking
-defaults to false. confidence is high, medium or low; severity is how bad the consequence is if
-it ships, highest that fits: critical (data loss, a security hole, an outage), major (a real
-defect on a normal path), minor (an edge case, or a cost paid later) or trivial (cosmetic:
-naming, style, a preference); verified is reproduced (you ran or observed the failure) or
-plausible (you reasoned to it). body, impact and suggestedFix must pass the Markdown allowlist,
-and code in a suggestedFix belongs in a fence, since the fix is published as Markdown. references
-holds at most six http or https URLs with a host and no userinfo, each at most 200 bytes with no
-whitespace, control or format characters, <, > or backticks; an empty list is stored as absent;
-they are never fetched.
+file, and startLine and line must be in the same hunk.
+location may instead name a Markdown heading, {"path": "docs/plan.md", "heading": "Rollout"},
+on a .md, .markdown or .mdx file: the heading's text as the file writes it, without its # marks,
+matched exactly once whitespace is trimmed and collapsed. Only a top-level ATX heading counts,
+and its section runs to the next heading of the same or a higher level. add stores the lines of
+the one hunk that changes the section, with side RIGHT and the heading's text, from the run
+alone. A heading takes no line, startLine or LEFT side. It is refused with location when the
+file is not Markdown, no heading matches or the section holds no change (the fix says use one
+of the headings that hold one), the heading appears twice (the fix gives the line ranges), or
+more than one hunk changes the section (the fix says file one line-anchored finding per hunk,
+with each range).
+label is issue, suggestion, question or any other word of letters, digits, _, . or -, at most 40
+characters, kept verbatim. blocking defaults to false. confidence is high, medium or low;
+severity is how bad the consequence is if it ships, highest that fits: critical (data loss, a
+security hole, an outage), major (a real defect on a normal path), minor (an edge case, or a
+cost paid later) or trivial (cosmetic: naming, style, a preference); verified is reproduced (you
+ran or observed the failure) or plausible (you reasoned to it). body, impact and suggestedFix
+must pass the Markdown allowlist, and code in a suggestedFix belongs in a fence, since the fix
+is published as Markdown. references holds at most six http or https URLs with a host and no
+userinfo, each at most 200 bytes with no whitespace, control or format characters, <, > or
+backticks; an empty list is stored as absent; they are never fetched.
 A batch is stored entirely or not at all. A refused batch checks every entry: code, message, fix
 and details describe the first invalid one, whose zero-based position is details.entry, and
 details.entries lists each invalid entry as {entry, code, message, fix, details?}. Each entry
 reports its first defect only. Input MUST NOT carry included, decision, status or findingRev.
 
-The flags build a single finding instead and cannot be combined with --from.
+The flags build a single finding instead and cannot be combined with --from; --heading with
+--path is the heading form.
 
 Result (--json):
   {"loupe": 1, "ok": true, "command": "add", "run": "owner/repo#123@1",
@@ -79,7 +90,7 @@ func newAddCmd(deps Deps) *cobra.Command {
 	f.Int("line", 0, "line number on --side")
 	f.Int("start-line", 0, "first line of a multi-line range")
 	f.String("side", "", "RIGHT (new file, default) or LEFT (old file)")
-	f.String("heading", "", "a Markdown heading's text, instead of --line: the finding covers the section's changed lines")
+	f.String("heading", "", "a Markdown heading's text, instead of --line: the section's changed lines")
 	f.Bool("general", false, "a general finding with no location")
 	f.String("label", "", "issue, suggestion, question or any other word of letters, digits, _, . or -")
 	f.Bool("blocking", false, "the finding blocks approval")
