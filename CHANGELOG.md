@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/eriksaulnier/loupe/compare/v0.18.0...v0.19.0) (2026-10-30)
+
+
+### Features
+
+* **tui:** brand the header in amber and tidy the list, notes and diff ([#98](https://github.com/eriksaulnier/loupe/issues/98)) ([db38337](https://github.com/eriksaulnier/loupe/commit/db383379ae06ca60046d575e899366bb58d46416))
+
 ## [0.18.0](https://github.com/eriksaulnier/loupe/compare/v0.17.0...v0.18.0) (2026-10-30)
 
 
