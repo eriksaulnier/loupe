@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.18.0](https://github.com/eriksaulnier/loupe/compare/v0.17.0...v0.18.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* record why the agent withdrew a finding ([#92](https://github.com/eriksaulnier/loupe/issues/92))
+* anchor a finding to a Markdown heading ([#91](https://github.com/eriksaulnier/loupe/issues/91))
+
+### Features
+
+* anchor a finding to a Markdown heading ([#91](https://github.com/eriksaulnier/loupe/issues/91)) ([e8c4794](https://github.com/eriksaulnier/loupe/commit/e8c479441c0f38ceb30979f5e6ab5285b6f7fe13))
+* **cli:** add loupe stats ([#90](https://github.com/eriksaulnier/loupe/issues/90)) ([7f2a0d9](https://github.com/eriksaulnier/loupe/commit/7f2a0d9adb7fa55b2ce98403dce96a28514040c5))
+* **cli:** capture a closed pull request with --allow-closed ([#85](https://github.com/eriksaulnier/loupe/issues/85)) ([47921c7](https://github.com/eriksaulnier/loupe/commit/47921c750b1a2c68a636ab26901f44d4182bca85))
+* **pane:** open review in tmux, iTerm2 and Ghostty panes ([#89](https://github.com/eriksaulnier/loupe/issues/89)) ([3063063](https://github.com/eriksaulnier/loupe/commit/306306346d88453ab4b4d78935213fe3f0805926))
+* record why the agent withdrew a finding ([#92](https://github.com/eriksaulnier/loupe/issues/92)) ([60d30df](https://github.com/eriksaulnier/loupe/commit/60d30df420655325a59308eb9057dda5e5510f63))
+* refuse finding ids in published text ([#88](https://github.com/eriksaulnier/loupe/issues/88)) ([6a74dc1](https://github.com/eriksaulnier/loupe/commit/6a74dc1bb2b1a4844367923481a9a48940aa1f91))
+* **tui:** let the human rewrite a finding ([#93](https://github.com/eriksaulnier/loupe/issues/93)) ([551a4a6](https://github.com/eriksaulnier/loupe/commit/551a4a65a4aa028504fea0edd218d79219442dc3))
+* **tui:** polish the review screen from release testing ([#94](https://github.com/eriksaulnier/loupe/issues/94)) ([012821e](https://github.com/eriksaulnier/loupe/commit/012821e56c3bf0e5766d3ffcc836009c8a7dbd31))
+* **tui:** redesign the review interface with titled panes ([#87](https://github.com/eriksaulnier/loupe/issues/87)) ([80b70bb](https://github.com/eriksaulnier/loupe/commit/80b70bb0265f28eb493debbc990c4282c05937cd))
+
 ## [0.17.0](https://github.com/eriksaulnier/loupe/compare/v0.16.1...v0.17.0) (2026-10-23)
 
 
