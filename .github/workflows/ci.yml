@@ -14,10 +14,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
-      # The go command applies a GOFLAGS flag only where it knows it, so only go test writes the profile.
+      # -coverpkg credits every package a test reaches, so the integration tests count toward the packages they drive.
       - run: mise run check
         env:
-          GOFLAGS: -coverprofile=coverage.out
+          LOUPE_TEST_FLAGS: -coverprofile=coverage.out -coverpkg=./...
       - uses: actions/upload-artifact@v7
         with:
           name: coverage
