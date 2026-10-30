@@ -59,7 +59,7 @@ const basicNone = -1
 // reviewPalette is the theme's roles resolved for one output. A nil color means the role paints nothing there.
 type reviewPalette struct {
 	base, text, surface0, surface1, accent, secondary, overlay1 color.Color
-	good, note, blockingDim, bad, muted, mutedBorder            color.Color
+	good, note, brand, blockingDim, bad, muted, mutedBorder     color.Color
 	pills, pillFill                                             [4]color.Color
 	// toneFill is each tone's chip fill, indexed by Tone.
 	toneFill              [toneCount]color.Color
@@ -73,6 +73,7 @@ var (
 	palSurface0  = both("#313244", "#ccd0da")
 	palSurface1  = both("#45475a", "#bcc0cc")
 	palAccent    = both("#b4befe", "#7287fd")
+	palBrand     = both("#edb447", "#b57d26") // the logo's amber, for the program alone: yellow elsewhere is a note
 	palSecondary = both("#a6adc8", "#6c6f85")
 	palOverlay1  = both("#7f849c", "#8c8fa1")
 	palGood      = both("#a6e3a1", "#40a02b")
@@ -119,6 +120,7 @@ func (s *Style) buildReviewPalette() {
 		surface0:    s.role(palSurface0.in(d), basicNone),
 		surface1:    s.role(palSurface1.in(d), 8),
 		accent:      s.role(palAccent.in(d), 12),
+		brand:       s.role(palBrand.in(d), 3),
 		secondary:   s.role(palSecondary.in(d), basicNone),
 		overlay1:    s.role(palOverlay1.in(d), 8),
 		good:        s.role(palGood.in(d), 2),
@@ -129,7 +131,7 @@ func (s *Style) buildReviewPalette() {
 		mutedBorder: s.role(palMutedBorder.in(d), 8),
 		added:       s.role(palGood.in(d).over(base, 0.08), basicNone),
 		deleted:     s.role(palRed.in(d).over(base, 0.08), basicNone),
-		cited:       s.role(palNote.in(d).over(base, 0.14), basicNone),
+		cited:       s.role(palText.in(d).over(base, 0.12), basicNone),
 	}
 	surface := palSurface0.in(d)
 	for t, p := range [toneCount]pair{palAccent, palGood, palNote, palOverlay1} {
@@ -254,6 +256,18 @@ func (s Style) Chip(text string, t Tone) string {
 		return text
 	}
 	return s.bg(s.ToneStyle(t), s.rv.toneFill[t]).Render(" " + text + " ")
+}
+
+// Speaker is a thread author's name as a bold chip: you in the accent on its tint, anyone else in text on the raised
+// surface, so the agent reads as a peer rather than as receded text. Without color it is the bold name alone.
+func (s Style) Speaker(name string, you bool) string {
+	if !s.Color {
+		return name
+	}
+	if you {
+		return s.bg(s.Emphasis(s.fg(s.rv.accent)), s.rv.toneFill[ToneAccent]).Render(" " + name + " ")
+	}
+	return s.bg(s.Emphasis(s.fg(s.rv.text)), s.rv.surface1).Render(" " + name + " ")
 }
 
 // ToneStyle is the foreground a tone draws in, and nothing where color is off.
@@ -628,8 +642,8 @@ func (s Style) ConfidenceScale(word string) string {
 	return s.fg(s.rv.secondary).Render(strings.Repeat(full, n)) + s.fg(s.rv.surface1).Render(strings.Repeat(empty, 3-n))
 }
 
-// PillWidth is the list's severity column: the longest label with its padding or brackets.
-const PillWidth = 10
+// PillWidth is the list's severity column: the longest label with its padding or brackets, after the blocking mark.
+const PillWidth = 12
 
 // SeverityPill is the severity as an uppercase pill in the hue its published SVG uses, padded to width; zero width
 // is the compact pill. An empty word is blank, never a stand-in rating. A word outside the scale keeps the gray.
@@ -645,12 +659,31 @@ func (s Style) SeverityPill(word string, width int) string {
 	if !s.Color {
 		return Pad("["+label+"]", width)
 	}
-	st := s.Emphasis(s.fg(s.rv.pills[i]))
-	text := " " + label + " "
-	if width > 0 {
-		text = Pad(text, width)
+	return Pad(s.bg(s.Emphasis(s.fg(s.rv.pills[i])), s.rv.pillFill[i]).Render(" "+label+" "), width)
+}
+
+// SeverityCell is the list's severity column: the pill, with the blocking mark after the label on the pill's fill, so
+// every label starts in the same column, padded to width. A blocking finding with no rating shows the mark alone, where
+// the pill would start.
+func (s Style) SeverityCell(word string, blocking bool, width int) string {
+	if !blocking {
+		return s.SeverityPill(word, width)
 	}
-	return s.bg(st, s.rv.pillFill[i]).Render(text)
+	mark := s.Glyphs.Blocking
+	if word == "" {
+		return Pad(" "+s.BlockingMark().Render(mark), width)
+	}
+	if !s.Color {
+		return Pad(s.SeverityPill(word, 0)+" "+mark, width)
+	}
+	i := len(palPills) - 1
+	if r := severityRank(word); r >= 0 && r < len(palPills) {
+		i = r
+	}
+	fill := s.rv.pillFill[i]
+	pill := s.bg(s.Emphasis(s.fg(s.rv.pills[i])), fill).Render(" "+strings.ToUpper(word)+" ") +
+		s.bg(s.Emphasis(s.fg(s.rv.bad)), fill).Render(mark+" ")
+	return Pad(pill, width)
 }
 
 // KeyGroup is one semantic group of the footer: decide, move, or app.
@@ -746,14 +779,14 @@ type ReviewHeading struct {
 
 // badge is the program's mark at the head of every review screen.
 func (s Style) badge() string {
-	lens := "⦿ "
+	lens := "⌕ "
 	switch s.Glyphs.Tier {
 	case ASCII:
 		lens = ""
 	case Nerd:
 		lens = " " // nf-fa-search
 	}
-	st := s.Emphasis(s.bg(s.fg(s.rv.base), s.rv.accent))
+	st := s.Emphasis(s.bg(s.fg(s.rv.base), s.rv.brand))
 	return st.Render(" " + lens + "loupe ")
 }
 

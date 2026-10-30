@@ -218,6 +218,7 @@ type Style struct {
 	Bold, Dim, Accent, Good, Warn, Bad, Note, Head, Cursor lipgloss.Style
 	Caution                                                lipgloss.Style
 	Selected                                               lipgloss.Style
+	brand                                                  lipgloss.Style
 
 	// review is set by UseReviewTheme; rv is the interactive palette, resolved for this output either way.
 	review bool
@@ -262,6 +263,8 @@ func (s *Style) SetColorProfile(profile colorprofile.Profile) {
 func (s *Style) SetDarkBackground(dark bool) {
 	s.Dark = dark
 	s.Bold = s.NewStyle().Bold(s.Color)
+	// The logo's amber, for the program's name only.
+	s.brand = s.Bold.Foreground(s.catppuccin(swatch{"#edb447", 11, 215}, swatch{"#b57d26", 3, 136}))
 	// Dim uses a color because Windows Terminal draws the faint attribute unevenly.
 	s.Dim = s.NewStyle().Foreground(s.catppuccin(swatch{"#7f839c", 12, 103}, swatch{"#8c8fa1", 12, 103}))
 	s.Accent = s.NewStyle().Foreground(s.catppuccin(swatch{"#89b3fa", 12, 111}, swatch{"#1e66f5", 12, 27}))
@@ -333,7 +336,7 @@ func Severity(word string) Kind {
 }
 
 // Brand is the program name as it appears at the head of every screen.
-func (s Style) Brand() string { return s.Bold.Render("loupe") }
+func (s Style) Brand() string { return s.brand.Render("loupe") }
 
 // Heading is a section title in sentence case.
 func (s Style) Heading(text string) string {

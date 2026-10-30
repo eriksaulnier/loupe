@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -36,7 +37,7 @@ func TestListAtEightyColumnsDropsTheLabelColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := newTestModel(t, m, 80, 24)
-	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001", "###  ! Title one", "multi.txt:3")
+	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001", "> . f-001  !", "###  Title one", "multi.txt:3")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.Contains(view, "Label") || strings.Contains(view, "suggestion") {
@@ -59,7 +60,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := newTestModel(t, m, 100, 24)
-	waitFor(t, tm, "> . f-001", "###  ! Title one", "0/3 decided")
+	waitFor(t, tm, "> . f-001", "> . f-001  !", "###  Title one", "0/3 decided")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
@@ -71,7 +72,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		}
 	}
 
-	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "> · f-001") || !strings.Contains(got, "■■■  ● Title one") || !strings.Contains(got, "╭─ Findings") {
+	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "> · f-001") || !strings.Contains(got, "f-001  ●") || !strings.Contains(got, "■■■  Title one") || !strings.Contains(got, "╭─ Findings") {
 		t.Errorf("UTF-8 view does not use the Unicode glyphs:\n%s", got)
 	}
 }
@@ -243,7 +244,7 @@ func TestListRowMarksOpenNotes(t *testing.T) {
 		return draft.ResolveNote(d, "n-002", testNow)
 	})
 	m := colored()
-	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.NoteMark(false).Render(m.glyphs.Note+" ")) {
+	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.NoteMark(false).Render(m.glyphs.Note)) {
 		t.Errorf("unanswered note is not a dim mark: %q", row)
 	}
 	if row := ansi.Strip(rowOf(m, "f-003")); strings.Contains(row, m.glyphs.Note) {
@@ -258,10 +259,10 @@ func TestListRowMarksOpenNotes(t *testing.T) {
 		return err
 	})
 	m = colored()
-	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.NoteMark(true).Render(m.glyphs.Note+" ")) {
+	if row := rowOf(m, "f-001"); !strings.Contains(row, m.styles.NoteMark(true).Render(m.glyphs.Note)) {
 		t.Errorf("answered note is not in the note color: %q", row)
 	}
-	if plain := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "C", style.IconsEnv: "ascii"}, 100, 24); !strings.Contains(rowOf(plain, "f-001"), "! ~ Title one") {
+	if plain := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "C", style.IconsEnv: "ascii"}, 100, 24); !strings.Contains(rowOf(plain, "f-001"), "~ Title one") {
 		t.Errorf("ascii row lacks the note mark: %q", rowOf(plain, "f-001"))
 	}
 }
@@ -481,8 +482,28 @@ func listRows(view string) []string {
 
 // severityCell and rowID read a drawn row by column: the pane's border and padding, the selection, the state glyph,
 // then the id and the pill, one cell apart.
+// While any finding has an open note, every title starts after the note marker's slot, so the titles stay aligned.
+func TestListTitlesAlignBesideANoteMark(t *testing.T) {
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "send-back", nil, envOf(nil), func(d *draft.Draft) error {
+		_, err := draft.SendBack(d, "f-001", "Why?", testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 100, 24)
+	one, two := ansi.Strip(listRow(t, m, "f-001")), ansi.Strip(listRow(t, m, "f-002"))
+	if !strings.Contains(one, m.glyphs.Note+" Title one") {
+		t.Fatalf("f-001 lacks its note mark: %q", one)
+	}
+	at := func(row, title string) int { return utf8.RuneCountInString(row[:strings.Index(row, title)]) }
+	if a, b := at(one, "Title one"), at(two, "Title two"); a != b {
+		t.Errorf("titles start at %d and %d:\n%s\n%s", a, b, one, two)
+	}
+}
+
 func severityCell(row string) string {
-	return cell(row, 2+4+5+1, 10)
+	return cell(row, 2+4+5+1, style.PillWidth)
 }
 
 func rowID(row string) string {
@@ -500,7 +521,8 @@ func TestListRowCarriesTheSeverityColumn(t *testing.T) {
 		t.Errorf("list has no severity column head:\n%s", view)
 	}
 	// The unrated finding gets a blank column, never a stand-in word.
-	want := map[string]string{"f-003": "[CRITICAL]", "f-004": "[MINOR]", "f-001": "[TRIVIAL]", "f-002": ""}
+	// f-003 blocks, so its pill carries the blocking mark.
+	want := map[string]string{"f-003": "[CRITICAL] !", "f-004": "[MINOR]", "f-001": "[TRIVIAL]", "f-002": ""}
 	for _, row := range listRows(view) {
 		id := rowID(row)
 		if got := severityCell(row); got != want[id] {
@@ -515,10 +537,11 @@ func TestListSeverityColumnIsColoredByRank(t *testing.T) {
 	m.styles.SetColorProfile(colorprofile.TrueColor)
 	seen := map[string]string{}
 	for _, row := range listRows(m.View().Content) {
-		word := severityCell(row)
-		if word == "" {
+		fields := strings.Fields(severityCell(row))
+		if len(fields) == 0 {
 			continue
 		}
+		word := fields[0]
 		i := strings.Index(row, word)
 		seen[word] = row[strings.LastIndex(row[:i], "\x1b"):i]
 	}
@@ -538,11 +561,11 @@ func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 		width, title, location int
 		confidence, short      bool
 	}{
-		{100, 57, 12, true, false},
-		{99, 56, 12, true, true},
-		{80, 37, 12, true, true},
-		{79, 54, 0, false, false},
-		{60, 35, 0, false, false},
+		{100, 55, 12, true, false},
+		{99, 54, 12, true, true},
+		{80, 35, 12, true, true},
+		{79, 52, 0, false, false},
+		{60, 33, 0, false, false},
 	} {
 		got := modelOf(t, dir, testEnv, c.width, 24).listColumns()
 		if got.title != c.title || got.location != c.location || got.confidence != c.confidence || got.shortLocation != c.short {
@@ -552,7 +575,7 @@ func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 	// A long id takes its room from the title first.
 	m := modelOf(t, dir, testEnv, 80, 24)
 	m.order[0].ID = strings.Repeat("f", 30)
-	if got := m.listColumns(); got.title != 12 || got.id != 30 || got.location != 12 || !got.confidence {
+	if got := m.listColumns(); got.title != 10 || got.id != 30 || got.location != 12 || !got.confidence {
 		t.Errorf("a 30-cell id: %+v", got)
 	}
 }
@@ -560,7 +583,7 @@ func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 // The confidence column is headed conf, over its four cells (release testing).
 func TestListHeadsConfidenceConf(t *testing.T) {
 	view := modelOf(t, newFixture(t), utf8Env, 100, 30).View().Content
-	if !regexp.MustCompile(`│     id    severity   conf finding +location +│`).MatchString(view) {
+	if !regexp.MustCompile(`│     id    severity     conf finding +location +│`).MatchString(view) {
 		t.Errorf("the column headings do not read conf:\n%s", view)
 	}
 	// In color the headings are bold secondary, apart from the overlay text of decided rows and path prefixes.
@@ -593,14 +616,14 @@ func TestListLocationTakesItsNaturalWidth(t *testing.T) {
 		width, location int
 	}{
 		{"short titles", "Title two", 100, natural},
-		{"a title that fits beside part of the path", strings.Repeat("t", 30), 100, 96 - 26 - 1 - 30},
+		{"a title that fits beside part of the path", strings.Repeat("t", 30), 100, 96 - 28 - 1 - 30},
 		{"a title that fits nowhere", strings.Repeat("t", 80), 100, 24},
 		{"a title that fits nowhere at 80, drawn by filename", strings.Repeat("t", 80), 80, len("multi.txt:21")},
 		{"a wide window", strings.Repeat("t", 80), 200, natural},
 	} {
 		got := at(c.title, c.width)
 		inner := c.width - 4
-		if got.location != c.location || got.title != inner-26-1-got.location {
+		if got.location != c.location || got.title != inner-28-1-got.location {
 			t.Errorf("%s at %d: %+v, want location %d and the title the rest", c.name, c.width, got, c.location)
 		}
 	}
@@ -615,7 +638,7 @@ func TestListLocationTakesItsNaturalWidth(t *testing.T) {
 	}
 	m90 := modelOf(t, mid, testEnv, 90, 24)
 	_, _, titles := m90.naturalWidths()
-	if got := m90.listColumns(); got.title != titles || got.location != 86-26-1-titles || got.location >= natural {
+	if got := m90.listColumns(); got.title != titles || got.location != 86-28-1-titles || got.location >= natural {
 		t.Errorf("at 90 the location is not the room the widest title leaves: %+v, widest title %d", got, titles)
 	}
 	if view := m90.View().Content; !strings.Contains(view, " turn.ts:3") || !strings.Contains(view, " lib/widgets/multi.txt:21") {
@@ -636,7 +659,7 @@ func TestListLocationTakesItsNaturalWidth(t *testing.T) {
 	}
 	m := modelOf(t, dir, testEnv, 80, 24)
 	m.order[0].ID = strings.Repeat("f", 30)
-	if got := m.listColumns(); got.title != listTitleFloor || got.location != 16 {
+	if got := m.listColumns(); got.title != listTitleFloor || got.location != 14 {
 		t.Errorf("a 30-cell id beside a long title: %+v", got)
 	}
 }

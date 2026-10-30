@@ -107,17 +107,19 @@ type CodeRow struct {
 	Tokens []CodeToken
 }
 
-// CodeLine draws one diff line: the citation bar, the line number right-aligned in numWidth cells, the diff sign and
-// the code, on the winning background and padded to width. A cited line's yellow wins over the add and delete tints.
+// CodeLine draws one diff line: the citation bar, the line number right-aligned in numWidth cells, the diff sign in
+// green or red and the code, on the winning background and padded to width. A cited line's neutral band wins over the
+// add and delete tints, so the sign is what still tells an added cited line from a removed one.
 // Under NO_COLOR the citation is a > and nothing is padded.
 func (s Style) CodeLine(r CodeRow, numWidth, width int) string {
 	sign := " "
 	sf := SurfaceNone
+	signColor := s.rv.secondary
 	switch r.Kind {
 	case CodeAdded:
-		sign, sf = "+", SurfaceAdded
+		sign, sf, signColor = "+", SurfaceAdded, s.rv.good
 	case CodeDeleted:
-		sign, sf = "-", SurfaceDeleted
+		sign, sf, signColor = "-", SurfaceDeleted, s.rv.bad
 	}
 	if r.Cited {
 		sf = SurfaceCited
@@ -126,13 +128,12 @@ func (s Style) CodeLine(r CodeRow, numWidth, width int) string {
 	if r.Num > 0 {
 		number = fmt.Sprint(r.Num)
 	}
-	gutter := fmt.Sprintf("%*s %s ", numWidth, number, sign)
 	if !s.Color {
 		bar := " "
 		if r.Cited {
 			bar = ">"
 		}
-		return strings.TrimRight(bar+gutter+r.Text, " ")
+		return strings.TrimRight(bar+fmt.Sprintf("%*s %s ", numWidth, number, sign)+r.Text, " ")
 	}
 	bar := Span{Text: " "}
 	if r.Cited {
@@ -141,9 +142,10 @@ func (s Style) CodeLine(r CodeRow, numWidth, width int) string {
 		if s.Glyphs.Tier == ASCII {
 			mark = ">"
 		}
-		bar = Span{Text: mark, Style: s.fg(s.rv.note)}
+		bar = Span{Text: mark, Style: s.fg(s.rv.text)}
 	}
-	spans := []Span{bar, {Text: gutter, Style: s.fg(s.rv.secondary)}}
+	spans := []Span{bar, {Text: fmt.Sprintf("%*s ", numWidth, number), Style: s.fg(s.rv.secondary)},
+		{Text: sign, Style: s.Emphasis(s.fg(signColor))}, {Text: " "}}
 	if r.Tokens == nil {
 		spans = append(spans, Span{Text: r.Text, Style: s.fg(s.rv.code[TokenNeutral])})
 	}

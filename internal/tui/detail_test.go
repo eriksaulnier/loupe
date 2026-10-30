@@ -112,12 +112,13 @@ func threadRows(view, title string) []string {
 			rest, barred = strings.CutPrefix(inner, "|")
 		}
 		rest = strings.TrimPrefix(rest, " ")
+		// The headline sits above the bar, and the thread hangs from the bar under it.
 		switch {
-		case barred && !inside && strings.HasPrefix(rest, title):
+		case !barred && strings.HasPrefix(inner, title):
 			if out != nil {
 				out = append(out, "")
 			}
-			out, inside = append(out, rest), true
+			out, inside = append(out, inner), true
 		case barred && inside:
 			out = append(out, rest)
 		default:
@@ -137,13 +138,11 @@ func TestDetailViewShowsRepliesUnderNotes(t *testing.T) {
 	want := []string{
 		"Note n-001 · open",
 		"You",
-		"Show the evidence.",
-		"",
+		"  Show the evidence.",
 		"Agent · r-001",
-		`Added\u202E it.`,
-		"",
+		`  Added\u202E it.`,
 		"You · r-002",
-		"And a test.",
+		"  And a test.",
 	}
 	rows := threadRows(view, "Note n-001")
 	if strings.Join(rows, "\n") != strings.Join(want, "\n") || strings.ContainsRune(view, '\u202e') || strings.Contains(view, "╭─ Note") {
@@ -176,7 +175,7 @@ func TestDetailThreadKeepsABodyAsWritten(t *testing.T) {
 	if i < 0 || len(rows) < i+5 {
 		t.Fatalf("the reply's header is missing:\n%s", view)
 	}
-	if rows[i+1] != "First line." || rows[i+2] != "" || !strings.HasPrefix(rows[i+3], " Second line, long") {
+	if rows[i+1] != "  First line." || rows[i+2] != "" || !strings.HasPrefix(rows[i+3], "   Second line, long") {
 		t.Fatalf("the reply's lines, blank one included, are not drawn as written:\n%s", strings.Join(rows[i:], "\n"))
 	}
 	if !strings.Contains(strings.Join(rows[i+3:], " "), "end.") || len(rows) < i+5 {
@@ -195,7 +194,7 @@ func TestDetailThreadTrimsOnlyBlankEndsAndEscapesControlLines(t *testing.T) {
 		[]draft.Reply{{ID: "r-001", NoteID: "n-001", Body: "  \nTop\n\f\n\u0085\nend\n   \n", By: draft.ByAgent, At: testNow}})
 	rows := threadRows(view, "Note n-001")
 	i := slices.Index(rows, "Agent · r-001")
-	want := []string{"Agent · r-001", "Top", `\u000C`, `\u0085`, "end"}
+	want := []string{"Agent · r-001", "  Top", `  \u000C`, `  \u0085`, "  end"}
 	if i < 0 || strings.Join(rows[i:], "\n") != strings.Join(want, "\n") {
 		t.Fatalf("blank ends are not trimmed or a control-only line is not shown escaped:\n%s\n%q", view, rows)
 	}
@@ -208,12 +207,12 @@ func TestDetailThreadsAreSeparatedAndFollowTheTier(t *testing.T) {
 	}
 	view := threadView(t, utf8Env, 100, notes, []draft.Reply{})
 	rows := threadRows(view, "Note n-00")
-	want := []string{"Note n-001 · open", "You", "One.", "", "Note n-002 · ✓ resolved", "You", "Rename the flag?"}
+	want := []string{"Note n-001 · open", "You", "  One.", "", "Note n-002 · ✓ resolved", "You", "  Rename the flag?"}
 	if strings.Join(rows, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("two threads are not separate:\n%s\n%q", view, rows)
 	}
 	ascii := threadView(t, map[string]string{"NO_COLOR": "1", "LANG": "C"}, 100, notes, []draft.Reply{})
-	if !strings.Contains(ascii, "| | Note n-002 - + resolved") || !strings.Contains(ascii, "| | You") || strings.ContainsAny(ascii, "╭│┃·✓") {
+	if !strings.Contains(ascii, "| Note n-002 - + resolved") || strings.Contains(ascii, "| | Note") || !strings.Contains(ascii, "| | You") || strings.ContainsAny(ascii, "╭│┃·✓") {
 		t.Fatalf("the ASCII thread does not use the ASCII tier:\n%s", ascii)
 	}
 }

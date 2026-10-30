@@ -29,7 +29,7 @@ Below 60 columns or 12 rows, the existing too-small guard MUST replace all these
 | 60–79 | Selection, state, id, severity, title | Confidence and location disappear from the list only. Detail retains both. Metadata wraps between pills. The nested location remains, with a middle-truncated path. |
 | Below 60 | Too-small screen | No review action may operate behind it. |
 
-Selection and state consume one cell each plus their separators. The id column is at least five cells and grows for larger ids. A severity pill reserves ten cells, including padding or monochrome brackets. Confidence reserves three cells. Columns have one-cell gaps. At 100 columns with a five-cell id, the title has 46 cells before any blocking/note marker. At 80 it has 32 cells. Each marker consumes two cells within that title allocation. Long ids MUST take space from title first, then location, then confidence. The full id MUST remain visible in detail, where it MAY wrap. A narrow title MUST still leave at least eight cells before optional columns disappear.
+Selection and state consume one cell each plus their separators. The id column is at least five cells and grows for larger ids. A severity pill reserves twelve cells, including the blocking mark and the padding or monochrome brackets. Its fill covers the label and its own padding, not the column's slack (amended 2026-10-30). Confidence reserves three cells. Columns have one-cell gaps. At 100 columns with a five-cell id, the title has 44 cells. At 80 it has 30 cells. While any finding has an open note, the note marker's slot takes two cells from every title, so the titles stay aligned (amended 2026-10-30; a blocking mark and a note mark each took two cells from their own row's title before). Long ids MUST take space from title first, then location, then confidence. The full id MUST remain visible in detail, where it MAY wrap. A narrow title MUST still leave at least eight cells before optional columns disappear.
 
 Header priority is exact decided count, badge, PR reference, round, then title. Truncate the title to zero first. At 80–99 use `rN` for the round. Below 80 omit the title and bar, and retain `rN` if it fits. At widths of at least 80, omit the bar if it prevents the PR reference and count from fitting after the title is gone. Then omit the round, then middle-truncate the reference. Keep the complete URL behind the hyperlink and in the opener failure message. The header MUST remain one row. A bar that is shown MUST be complete, never a misleading prefix.
 
@@ -44,7 +44,7 @@ Top-border titles MUST retain their left title and essential counts. At 60–79,
 | Accent | `#b4befe` | `#7287fd` | Bright blue |
 | Secondary / overlay1 | `#a6adc8` / `#7f849c` | `#6c6f85` / `#8c8fa1` | Foreground / bright black |
 | Accepted | `#a6e3a1` | `#40a02b` | Green |
-| Open note / citation | `#f9e2af` | `#df8e1d` | Yellow |
+| Open note | `#f9e2af` | `#df8e1d` | Yellow |
 | Pending blocking | Red `#f38ba8` blended 45% over base | Red `#d20f39` blended 45% over base | Red |
 | Critical pill | `#ff7b72` | `#cf222e` | Red |
 | Major pill | `#ffa657` | `#bc4c00` | Yellow |
@@ -62,11 +62,11 @@ Pill fill MUST blend its foreground at 12% over the underlying surface in true c
 | Excluded | `×` | `×` (ASCII `x`) |
 | Withdrawn | `↩` | `↩` (ASCII `-`) |
 | Pending | `·` | `·` (ASCII `.`) |
-| Blocking | `●` before title, `● blocking` in detail | Same (ASCII `!` / `! blocking`) |
-| Open note | `✎` before title | Same (ASCII `?`) |
+| Blocking | `●` inside the severity pill after its label, so labels align, or alone where the pill starts when unrated; `● blocking` in detail | `[MAJOR] ●`, `●` alone when unrated (ASCII `!`), `! blocking` in detail |
+| Open note | `✎` before title, in a slot every title keeps while any note is open | Same (ASCII `~`) |
 | High / medium / low confidence | `▰▰▰` / `▰▰▱` / `▰▱▱` | `■■■` / `■■□` / `■□□` |
 | Severity | Tinted uppercase pill | `[CRITICAL]`, `[MAJOR]`, `[MINOR]`, `[TRIVIAL]` |
-| Cited line | Yellow tint and left bar | `>` plus unchanged line number and diff sign |
+| Cited line | Neutral tint and left bar, the diff sign in green or red | `>` plus unchanged line number and diff sign |
 
 In monochrome, per-finding progress uses `=`, `x`, `~`, `!`, and `-` for accepted, excluded, pending with open note, pending blocking, and other pending. Above 30 it uses those characters in the same 20-cell grouped runs. Help MUST explain this legend and the confidence scale. It MUST distinguish an open note from a reply that still needs human action. A note marker MUST NOT replace the disposition marker.
 
@@ -84,7 +84,7 @@ Chroma supplies token boundaries, not the complete colored terminal string. The 
 | Number / literal | `#b7ada1` | `#716252` |
 | Comment | `#888c99` | `#737684` |
 
-These muted roles replace Catppuccin's saturated mauve, green, and peach tokens. Added-line background blends green at 8% over base. Deleted-line background MAY blend red at 8%. Citation background blends yellow at 14% and wins over either tint. The citation bar uses the full yellow. All token spans and trailing padding MUST carry the winning line background, so token resets cannot cut holes in it. In 16-color mode, syntax MUST use neutral text with keyword emphasis, and citation/diff markers MUST carry meaning even if tints disappear. Monochrome MUST use plain token text.
+These muted roles replace Catppuccin's saturated mauve, green, and peach tokens. Added-line background blends green at 8% over base. Deleted-line background MAY blend red at 8%. Citation background blends text at 12% and wins over either tint. The citation bar uses text. The diff sign is bold green for an added line and bold red for a deleted one, so a cited line still shows which it is (amended 2026-10-30: the citation was yellow at 14% with a yellow bar, which read as an open note). All token spans and trailing padding MUST carry the winning line background, so token resets cannot cut holes in it. In 16-color mode, syntax MUST use neutral text with keyword emphasis, and citation/diff markers MUST carry meaning even if tints disappear. Monochrome MUST use plain token text.
 
 ## Interaction details
 
@@ -106,7 +106,7 @@ When `ORCA_TERMINAL_HANDLE` is nonempty, the header MUST leave its last four col
 
 The detail pane's top-left title MUST lead with the list's disposition glyph and carry the disposition word in its status color: accepted in good, excluded and withdrawn in overlay, pending in the accent. `open note` takes the note color. The glyph and the word carry the status where color is unavailable.
 
-The detail pane's border MUST take the finding's decision color: accepted in good, excluded and withdrawn in overlay, and pending in the accent. An open note colors only its own thread and the title's `open note`, so a pending finding with one keeps the accent border. A note's thread MUST hang from a left bar, not sit in a pane: a headline with the note id and its colored status, then each author and body. The bar and headline MUST use note while the note is open and overlay once it is resolved or dismissed, and a closed note's bodies recede to secondary text. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.
+The detail pane's border MUST take the finding's decision color: accepted in good, excluded and withdrawn in overlay, and pending in the accent. An open note colors only its own thread and the title's `open note`, so a pending finding with one keeps the accent border. A note's thread MUST hang from a left bar, not sit in a pane. A headline with the note id and its colored status sits above the bar. Under it each author is a bold chip, you in the accent and anyone else in text on `surface1`, and each body is indented two cells beneath its author, with no blank bar row between messages (amended 2026-10-30: the headline and plain author names hung from the bar, with a bar row between messages). A withdrawal reason's headline also sits above its bar. The bar and headline MUST use note while the note is open and overlay once it is resolved or dismissed, and a closed note's bodies recede to secondary text. Nested location panes, editors and every other pane keep the accent. `NO_COLOR` draws every border without color.
 
 A window of 20 or more rows MUST keep one blank row between the header and the body. Below 20 rows that row goes to the body first, before any other row budget gives way, so the 60x12 budget above is unchanged.
 
