@@ -248,7 +248,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 	dir := newFixture(t)
 	tm := startApp(t, dir)
 	waitFor(t, tm, "acme/widgets#42", "round 1", "Two issues to look at.", "tab collapses", "0/3 decided",
-		"1 blocking - 0 open notes - 3 pending", "> . f-001", "###  ! Title one", "multi.txt:3", ". f-002", "Title two",
+		"1 blocking - 0 open notes - 3 pending", "> . f-001", "> . f-001  !", "###  Title one", "multi.txt:3", ". f-002", "Title two",
 		"multi.txt:21", ". f-003", "Title three", "general")
 
 	key(tm, tea.KeyEnter)

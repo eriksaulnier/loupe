@@ -438,14 +438,15 @@ func TestConfidenceScaleAndPills(t *testing.T) {
 			t.Errorf("ASCII confidence %q = %q, want %q", word, got, want[2])
 		}
 	}
-	if got := plain.SeverityPill("major", PillWidth); got != "[MAJOR]   " {
+	if got := plain.SeverityPill("major", PillWidth); got != "[MAJOR]     " {
 		t.Errorf("NO_COLOR pill %q", got)
 	}
 	if got := plain.SeverityPill("", PillWidth); got != strings.Repeat(" ", PillWidth) {
 		t.Errorf("an unrated finding has a pill %q", got)
 	}
+	// The fill covers the label and its own padding, and the column's slack stays outside it.
 	pill := color.SeverityPill("critical", PillWidth)
-	if ansi.Strip(pill) != " CRITICAL " || !strings.Contains(pill, "48;2;") {
+	if ansi.Strip(pill) != " CRITICAL   " || !strings.Contains(pill, "48;2;") || !strings.HasSuffix(pill, "m  ") {
 		t.Errorf("colored pill %q", pill)
 	}
 	if color.SeverityPill("minor", 0) == color.SeverityPill("trivial", 0) {
@@ -539,6 +540,33 @@ func TestBrandIsAmber(t *testing.T) {
 		if got := s.Brand(); !strings.Contains(got, "38;2;"+c.rgb) || ansi.Strip(got) != "loupe" {
 			t.Errorf("%s brand %q, want loupe in %s", c.name, got, c.rgb)
 		}
+	}
+}
+
+// The blocking mark sits inside the pill on its fill, in red, and a blocking finding with no rating shows the mark
+// alone.
+func TestSeverityCellCarriesTheBlockingMark(t *testing.T) {
+	color := reviewStyle(t, true, nil)
+	cell := color.SeverityCell("major", true, PillWidth)
+	if ansi.Strip(cell) != " ● MAJOR    " || !strings.Contains(cell, "38;2;243;139;168") {
+		t.Errorf("colored blocking cell %q", cell)
+	}
+	if got := color.SeverityCell("major", false, PillWidth); got != color.SeverityPill("major", PillWidth) {
+		t.Errorf("a non-blocking cell %q is not the pill", got)
+	}
+	plain := reviewStyle(t, false, nil)
+	for _, c := range []struct{ word, want string }{
+		{"major", "● [MAJOR]   "},
+		{"critical", "● [CRITICAL]"},
+		{"", " ●          "},
+	} {
+		if got := plain.SeverityCell(c.word, true, PillWidth); got != c.want {
+			t.Errorf("NO_COLOR blocking cell for %q = %q, want %q", c.word, got, c.want)
+		}
+	}
+	ascii := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"})
+	if got := ascii.SeverityCell("minor", true, PillWidth); got != "! [MINOR]   " {
+		t.Errorf("ASCII blocking cell %q", got)
 	}
 }
 

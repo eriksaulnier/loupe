@@ -240,6 +240,9 @@ type listColumns struct {
 	confidence          bool
 	// shortLocation prefers the filename and line range to the path.
 	shortLocation bool
+	// noteSlot reserves the note marker's cell before every title while any finding has an open note, so the titles
+	// stay aligned.
+	noteSlot bool
 }
 
 // listTitleFloor is the narrowest a title gets before an optional column gives way.
@@ -247,7 +250,7 @@ const listTitleFloor = 8
 
 func (m *Model) listColumns() listColumns {
 	inner, _ := style.PaneInner(m.width, 0)
-	c := listColumns{id: 5}
+	c := listColumns{id: 5, noteSlot: len(openNotes(m.draft)) > 0}
 	for _, f := range m.order {
 		c.id = max(c.id, style.Width(f.ID))
 	}
@@ -299,8 +302,8 @@ func (m *Model) listColumns() listColumns {
 }
 
 // naturalWidths are the widest location in the list and the widest in its filename form, neither narrower than the
-// heading, and the widest title cell: the title with its blocking and note markers and, for a finding not included,
-// the separator and its reason.
+// heading, and the widest title cell: the title with the note marker's slot and, for a finding not included, the
+// separator and its reason.
 func (m *Model) naturalWidths() (location, short, title int) {
 	location = style.Width("location")
 	short = location
@@ -309,10 +312,7 @@ func (m *Model) naturalWidths() (location, short, title int) {
 		location = max(location, style.Width(locationText(f)))
 		short = max(short, style.Width(shortLocationText(f)))
 		need := style.Width(render.ForDisplay(render.OneLine(f.Title)))
-		if f.Blocking {
-			need += style.Width(m.glyphs.Blocking) + 1
-		}
-		if _, open := notes[f.ID]; open {
+		if len(notes) > 0 {
 			need += style.Width(m.glyphs.Note) + 1
 		}
 		if reason := draft.CurrentReason(f); reason != nil {
@@ -572,15 +572,21 @@ func (m *Model) columnHeads(cols listColumns) string {
 	if cols.confidence {
 		head += "conf "
 	}
-	head += style.Pad("finding", cols.title+1)
+	title := cols.title
+	if cols.noteSlot {
+		slot := style.Width(m.glyphs.Note) + 1
+		head += strings.Repeat(" ", slot)
+		title -= slot
+	}
+	head += style.Pad("finding", title+1)
 	if cols.location > 0 {
 		head += "location"
 	}
 	return m.styles.ColumnHead().Render(strings.TrimRight(head, " "))
 }
 
-// row is one finding: the selection bar, the state glyph, the quiet id, the severity pill and confidence scale, the
-// blocking and note markers before the title, and the location. Decided rows recede; the selected row is a band.
+// row is one finding: the selection bar, the state glyph, the quiet id, the severity pill with the blocking mark inside
+// it, the confidence scale, the note marker before the title, and the location. Decided rows recede; the selected row is a band.
 func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, selected bool, cols listColumns) string {
 	s := m.styles
 	glyph, mark, text := s.ReviewDisposition(disposition)
@@ -596,17 +602,17 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 	if severity.Rated(f.Severity) {
 		word = f.Severity
 	}
-	b.WriteString(s.SeverityPill(word, style.PillWidth) + " ")
+	b.WriteString(s.SeverityCell(word, f.Blocking, style.PillWidth) + " ")
 	if cols.confidence {
 		b.WriteString(style.Pad(s.ConfidenceScale(f.Confidence), 4) + " ")
 	}
 	titleWidth := cols.title
-	if f.Blocking {
-		b.WriteString(s.BlockingMark().Render(m.glyphs.Blocking + " "))
-		titleWidth -= style.Width(m.glyphs.Blocking) + 1
-	}
-	if replied, open := notes[f.ID]; open {
-		b.WriteString(s.NoteMark(replied).Render(m.glyphs.Note + " "))
+	if cols.noteSlot {
+		mark := strings.Repeat(" ", style.Width(m.glyphs.Note))
+		if replied, open := notes[f.ID]; open {
+			mark = s.NoteMark(replied).Render(m.glyphs.Note)
+		}
+		b.WriteString(mark + " ")
 		titleWidth -= style.Width(m.glyphs.Note) + 1
 	}
 	b.WriteString(m.titleCell(f, text.Render, max(0, titleWidth)))

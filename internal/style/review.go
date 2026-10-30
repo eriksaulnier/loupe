@@ -630,8 +630,8 @@ func (s Style) ConfidenceScale(word string) string {
 	return s.fg(s.rv.secondary).Render(strings.Repeat(full, n)) + s.fg(s.rv.surface1).Render(strings.Repeat(empty, 3-n))
 }
 
-// PillWidth is the list's severity column: the longest label with its padding or brackets.
-const PillWidth = 10
+// PillWidth is the list's severity column: the longest label with its padding or brackets, after the blocking mark.
+const PillWidth = 12
 
 // SeverityPill is the severity as an uppercase pill in the hue its published SVG uses, padded to width; zero width
 // is the compact pill. An empty word is blank, never a stand-in rating. A word outside the scale keeps the gray.
@@ -647,12 +647,30 @@ func (s Style) SeverityPill(word string, width int) string {
 	if !s.Color {
 		return Pad("["+label+"]", width)
 	}
-	st := s.Emphasis(s.fg(s.rv.pills[i]))
-	text := " " + label + " "
-	if width > 0 {
-		text = Pad(text, width)
+	return Pad(s.bg(s.Emphasis(s.fg(s.rv.pills[i])), s.rv.pillFill[i]).Render(" "+label+" "), width)
+}
+
+// SeverityCell is the list's severity column: the pill, with the blocking mark inside it on the pill's fill, padded to
+// width. A blocking finding with no rating shows the mark alone, where the pill would start.
+func (s Style) SeverityCell(word string, blocking bool, width int) string {
+	if !blocking {
+		return s.SeverityPill(word, width)
 	}
-	return s.bg(st, s.rv.pillFill[i]).Render(text)
+	mark := s.Glyphs.Blocking
+	if word == "" {
+		return Pad(" "+s.BlockingMark().Render(mark), width)
+	}
+	if !s.Color {
+		return Pad(mark+" "+s.SeverityPill(word, 0), width)
+	}
+	i := len(palPills) - 1
+	if r := severityRank(word); r >= 0 && r < len(palPills) {
+		i = r
+	}
+	fill := s.rv.pillFill[i]
+	pill := s.bg(s.Emphasis(s.fg(s.rv.bad)), fill).Render(" "+mark) +
+		s.bg(s.Emphasis(s.fg(s.rv.pills[i])), fill).Render(" "+strings.ToUpper(word)+" ")
+	return Pad(pill, width)
 }
 
 // KeyGroup is one semantic group of the footer: decide, move, or app.

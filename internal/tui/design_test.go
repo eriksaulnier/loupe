@@ -1284,8 +1284,8 @@ func TestTheRowGivesTheSlackToTheLongerPart(t *testing.T) {
 	}
 }
 
-// A blocking marker takes its two cells before the split.
-func TestTheRowSplitsWhatTheBlockingMarkerLeaves(t *testing.T) {
+// The blocking mark sits in the severity pill, so a blocking row splits the whole title cell.
+func TestABlockingRowSplitsTheWholeTitleCell(t *testing.T) {
 	long := "Test name only, the assertion is unchanged and nothing runs differently"
 	dir := reasonFixture(t, long, draft.Reason{Text: long})
 	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
@@ -1295,8 +1295,8 @@ func TestTheRowSplitsWhatTheBlockingMarkerLeaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := modelOf(t, dir, utf8Env, 80, 24)
-	rest := m.listColumns().title - 2 - 3
-	want := m.glyphs.Blocking + " " + m.styles.TruncRight(long, rest-rest/2) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, rest/2)
+	rest := m.listColumns().title - 3
+	want := m.styles.TruncRight(long, rest-rest/2) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, rest/2)
 	if row := listRow(t, m, "f-003"); !strings.Contains(row, want) {
 		t.Errorf("row %q lacks %q", row, want)
 	}

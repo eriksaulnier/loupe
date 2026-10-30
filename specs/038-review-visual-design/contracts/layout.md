@@ -29,7 +29,7 @@ Below 60 columns or 12 rows, the existing too-small guard MUST replace all these
 | 60–79 | Selection, state, id, severity, title | Confidence and location disappear from the list only. Detail retains both. Metadata wraps between pills. The nested location remains, with a middle-truncated path. |
 | Below 60 | Too-small screen | No review action may operate behind it. |
 
-Selection and state consume one cell each plus their separators. The id column is at least five cells and grows for larger ids. A severity pill reserves ten cells, including padding or monochrome brackets. Confidence reserves three cells. Columns have one-cell gaps. At 100 columns with a five-cell id, the title has 46 cells before any blocking/note marker. At 80 it has 32 cells. Each marker consumes two cells within that title allocation. Long ids MUST take space from title first, then location, then confidence. The full id MUST remain visible in detail, where it MAY wrap. A narrow title MUST still leave at least eight cells before optional columns disappear.
+Selection and state consume one cell each plus their separators. The id column is at least five cells and grows for larger ids. A severity pill reserves twelve cells, including the blocking mark and the padding or monochrome brackets. Its fill covers the label and its own padding, not the column's slack (amended 2026-10-30). Confidence reserves three cells. Columns have one-cell gaps. At 100 columns with a five-cell id, the title has 44 cells. At 80 it has 30 cells. While any finding has an open note, the note marker's slot takes two cells from every title, so the titles stay aligned (amended 2026-10-30; a blocking mark and a note mark each took two cells from their own row's title before). Long ids MUST take space from title first, then location, then confidence. The full id MUST remain visible in detail, where it MAY wrap. A narrow title MUST still leave at least eight cells before optional columns disappear.
 
 Header priority is exact decided count, badge, PR reference, round, then title. Truncate the title to zero first. At 80–99 use `rN` for the round. Below 80 omit the title and bar, and retain `rN` if it fits. At widths of at least 80, omit the bar if it prevents the PR reference and count from fitting after the title is gone. Then omit the round, then middle-truncate the reference. Keep the complete URL behind the hyperlink and in the opener failure message. The header MUST remain one row. A bar that is shown MUST be complete, never a misleading prefix.
 
@@ -62,8 +62,8 @@ Pill fill MUST blend its foreground at 12% over the underlying surface in true c
 | Excluded | `×` | `×` (ASCII `x`) |
 | Withdrawn | `↩` | `↩` (ASCII `-`) |
 | Pending | `·` | `·` (ASCII `.`) |
-| Blocking | `●` before title, `● blocking` in detail | Same (ASCII `!` / `! blocking`) |
-| Open note | `✎` before title | Same (ASCII `?`) |
+| Blocking | `●` inside the severity pill, or alone where the pill starts when unrated; `● blocking` in detail | `● [MAJOR]`, `●` alone when unrated (ASCII `!`), `! blocking` in detail |
+| Open note | `✎` before title, in a slot every title keeps while any note is open | Same (ASCII `~`) |
 | High / medium / low confidence | `▰▰▰` / `▰▰▱` / `▰▱▱` | `■■■` / `■■□` / `■□□` |
 | Severity | Tinted uppercase pill | `[CRITICAL]`, `[MAJOR]`, `[MINOR]`, `[TRIVIAL]` |
 | Cited line | Yellow tint and left bar | `>` plus unchanged line number and diff sign |
