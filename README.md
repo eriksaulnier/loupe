@@ -1,6 +1,6 @@
 # loupe
 
-[![ci](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml/badge.svg)](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml) [![release](https://github.com/eriksaulnier/loupe/actions/workflows/release.yml/badge.svg)](https://github.com/eriksaulnier/loupe/actions/workflows/release.yml) [![codecov](https://codecov.io/gh/eriksaulnier/loupe/graph/badge.svg)](https://codecov.io/gh/eriksaulnier/loupe)
+[![ci](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml/badge.svg)](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml) [![release](https://github.com/eriksaulnier/loupe/actions/workflows/release.yml/badge.svg)](https://github.com/eriksaulnier/loupe/actions/workflows/release.yml) [![codecov](https://codecov.io/gh/eriksaulnier/loupe/graph/badge.svg)](https://codecov.io/gh/eriksaulnier/loupe) [![latest release](https://img.shields.io/github/v/release/eriksaulnier/loupe)](https://github.com/eriksaulnier/loupe/releases/latest)
 
 loupe collects a review agent's findings into a local draft so you decide each one and publish a single GitHub review.
 
