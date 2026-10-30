@@ -827,16 +827,17 @@ func TestInputPanesAreAmber(t *testing.T) {
 	}
 }
 
-// An open note's thread hangs from an amber bar under a colored headline; a closed one from an overlay bar
-// (demo feedback: notes as a left bar, not a pane).
+// An open note's thread hangs from an amber bar under a colored headline above it, each author a chip; a closed one
+// from an overlay bar (demo feedback: notes as a left bar, not a pane; owner, 2026-10-30: the headline above the bar).
 func TestNoteThreadsHangFromATonedBar(t *testing.T) {
 	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
 	m.styles.SetColorProfile(colorprofile.TrueColor)
 	mustOpen(m, "f-002")
 	view := m.View().Content
 	bar := m.styles.ToneStyle(style.ToneNote).Render(m.glyphs.Quote)
-	if !strings.Contains(view, bar+" "+m.styles.Emphasis(m.styles.ToneStyle(style.ToneNote)).Render("Note n-001")) {
-		t.Errorf("the open note's headline does not hang from an amber bar:\n%q", view)
+	head := m.styles.Emphasis(m.styles.ToneStyle(style.ToneNote)).Render("Note n-001")
+	if !strings.Contains(view, head) || strings.Contains(view, bar+" "+head) || !strings.Contains(view, bar+" "+m.styles.Speaker("You", true)) {
+		t.Errorf("the open note's headline is not above an amber bar its author hangs from:\n%q", view)
 	}
 	if strings.Contains(ansi.Strip(view), "╭─ Note") {
 		t.Errorf("a note is still drawn as a pane:\n%s", ansi.Strip(view))
@@ -1339,7 +1340,7 @@ func TestTheRowEscapesAReason(t *testing.T) {
 }
 
 // The detail shows the whole reason under its own head, before the location, hanging from a bar as a note thread
-// does, with the code as a chip in the headline (FR-007; owner, 2026-10-28).
+// does, with the code as a chip in the headline above the bar (FR-007; owner, 2026-10-28 and 2026-10-30).
 func TestTheDetailSaysWhyAFindingWasWithdrawn(t *testing.T) {
 	long := "Test name only, the assertion is unchanged and nothing runs differently at all."
 	for _, c := range []struct{ width, height int }{{80, 24}, {100, 30}} {
@@ -1354,14 +1355,20 @@ func TestTheDetailSaysWhyAFindingWasWithdrawn(t *testing.T) {
 		var hung int
 		for _, row := range strings.Split(ansi.Strip(m.View().Content), "\n") {
 			inner := strings.TrimPrefix(strings.TrimSpace(row), "│ ")
-			if strings.Contains(inner, "Withdrawn") || strings.Contains(inner, "Test name") || strings.Contains(inner, "differently") {
+			if strings.Contains(inner, "Withdrawn") {
+				if strings.HasPrefix(inner, m.glyphs.Quote) {
+					t.Errorf("%d: headline %q hangs from the bar", c.width, row)
+				}
+				continue
+			}
+			if strings.Contains(inner, "Test name") || strings.Contains(inner, "differently") {
 				if !strings.HasPrefix(inner, m.glyphs.Quote+" ") {
 					t.Errorf("%d: row %q does not hang from the bar", c.width, row)
 				}
 				hung++
 			}
 		}
-		if hung < 2 {
+		if hung < 1 {
 			t.Errorf("%d: %d rows hang from the bar", c.width, hung)
 		}
 		mustOpen(m, "f-002")
@@ -1384,8 +1391,9 @@ func TestTheWithdrawnReasonHangsFromAMutedBar(t *testing.T) {
 	view := m.View().Content
 	edge := m.styles.ToneStyle(style.ToneMuted)
 	bar := edge.Render(m.glyphs.Quote)
-	if !strings.Contains(view, bar+" "+m.styles.Emphasis(edge).Render("Withdrawn")+" "+m.styles.Chip("no-runtime-effect", style.ToneMuted)) {
-		t.Errorf("the headline does not hang from a muted bar:\n%q", view)
+	head := m.styles.Emphasis(edge).Render("Withdrawn") + " " + m.styles.Chip("no-runtime-effect", style.ToneMuted)
+	if !strings.Contains(view, head) || strings.Contains(view, bar+" "+head) {
+		t.Errorf("the headline is not above the muted bar:\n%q", view)
 	}
 	if !strings.Contains(view, bar+" "+m.styles.Text().Render("Naming only.")) {
 		t.Errorf("the reason does not hang from the bar:\n%q", view)

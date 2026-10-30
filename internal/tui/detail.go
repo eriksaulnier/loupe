@@ -286,11 +286,11 @@ func (m *Model) withdrawReason(f draft.Finding, width int) []string {
 	if reason.Code != "" {
 		chip = m.styles.Chip(render.ForDisplay(render.OneLine(reason.Code)), style.ToneMuted)
 	}
-	lines := []string{m.threadHead("Withdrawn", style.ToneMuted, chip)}
+	var lines []string
 	for _, l := range m.threadBlock(reason.Text, max(1, width-2)) {
 		lines = append(lines, m.styles.Text().Render(l))
 	}
-	return append([]string{""}, m.hangFromBar(lines, style.ToneMuted)...)
+	return append([]string{"", m.threadHead("Withdrawn", style.ToneMuted, chip)}, m.hangFromBar(lines, style.ToneMuted)...)
 }
 
 // sectionHead is a heading inside the detail document, in the accent as pane titles are, so the document reads as
@@ -329,12 +329,12 @@ func (m *Model) references(f draft.Finding) []string {
 	return out
 }
 
-// noteThread draws each of the finding's notes as a conversation hanging from a left bar: a headline with the note's
-// id and status, then the note and each reply under its author, as written. The bar and headline are amber while the
-// note is open; a closed note recedes to overlay.
+// noteThread draws each of the finding's notes as a conversation: a headline with the note's id and status, then,
+// hanging from a left bar, the note and each reply under its author's chip, indented, as written. The bar and headline
+// are amber while the note is open; a closed note recedes to overlay.
 func (m *Model) noteThread(f draft.Finding) []string {
 	width, _ := style.PaneInner(m.width, 0)
-	inner := max(1, width-2)
+	inner := max(1, width-4)
 	var out []string
 	sep := m.styles.Dim.Render(" " + m.glyphs.Sep + " ")
 	for _, n := range m.draft.Notes {
@@ -346,23 +346,24 @@ func (m *Model) noteThread(f draft.Finding) []string {
 		if open {
 			tone, body = style.ToneNote, m.styles.Text()
 		}
-		lines := []string{m.threadHead("Note "+render.ForDisplay(n.ID), tone, m.noteStatusChip(n.Status))}
-		author := func(who, id string) string {
-			name := m.styles.Emphasis(m.styles.Text()).Render(who)
-			if who == "You" {
-				name = m.styles.Emphasis(m.styles.Accent).Render(who)
+		var lines []string
+		author := func(who, id string) {
+			name := m.styles.Speaker(who, who == "You")
+			if id != "" {
+				name += sep + m.styles.Dim.Render(render.ForDisplay(id))
 			}
-			if id == "" {
-				return name
-			}
-			return name + sep + m.styles.Dim.Render(render.ForDisplay(id))
+			lines = append(lines, name)
 		}
 		block := func(text string) {
 			for _, l := range m.threadBlock(text, inner) {
-				lines = append(lines, body.Render(l))
+				if l == "" {
+					lines = append(lines, "")
+					continue
+				}
+				lines = append(lines, "  "+body.Render(l))
 			}
 		}
-		lines = append(lines, author("You", ""))
+		author("You", "")
 		block(n.Body)
 		for _, r := range m.draft.Replies {
 			if r.NoteID != n.ID {
@@ -376,10 +377,10 @@ func (m *Model) noteThread(f draft.Finding) []string {
 			if size > 0 {
 				who = string(unicode.ToUpper(first)) + who[size:]
 			}
-			lines = append(lines, "", author(who, r.ID))
+			author(who, r.ID)
 			block(r.Body)
 		}
-		out = append(out, "")
+		out = append(out, "", m.threadHead("Note "+render.ForDisplay(n.ID), tone, m.noteStatusChip(n.Status)))
 		out = append(out, m.hangFromBar(lines, tone)...)
 	}
 	return out

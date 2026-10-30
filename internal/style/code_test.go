@@ -1,6 +1,7 @@
 package style
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -78,6 +79,27 @@ func row(kind CodeKind, cited bool, text string) CodeRow {
 
 // The winning background runs through every token and the padding; a cited line keeps its bar over the add tint,
 // and signs and numbers stay visible in every profile (FR-009).
+// The diff sign is green or red, so an added cited line still reads as added, and the citation bar is neutral, since
+// yellow means an open note (owner, 2026-10-30).
+func TestCodeLineSignColorsAndNeutralCitation(t *testing.T) {
+	s := reviewStyle(t, true, nil)
+	// Dark mode's good, bad and note.
+	painted := func(l, rgb, text string) bool {
+		return regexp.MustCompile(`38;2;` + rgb + `[;0-9]*m` + regexp.QuoteMeta(text)).MatchString(l)
+	}
+	added := s.CodeLine(row(CodeAdded, true, "if x {"), 4, 40)
+	deleted := s.CodeLine(row(CodeDeleted, false, "if x {"), 4, 40)
+	if !painted(added, "166;227;161", "+") {
+		t.Errorf("the added sign is not green: %q", added)
+	}
+	if !painted(deleted, "243;139;168", "-") {
+		t.Errorf("the deleted sign is not red: %q", deleted)
+	}
+	if painted(added, "249;226;175", "┃") {
+		t.Errorf("the citation is in the note color: %q", added)
+	}
+}
+
 func TestCodeLineBackgroundsAndMarkers(t *testing.T) {
 	s := reviewStyle(t, true, nil)
 	added := s.CodeLine(row(CodeAdded, false, "if x {"), 4, 40)

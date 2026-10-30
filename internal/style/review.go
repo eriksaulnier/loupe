@@ -131,7 +131,7 @@ func (s *Style) buildReviewPalette() {
 		mutedBorder: s.role(palMutedBorder.in(d), 8),
 		added:       s.role(palGood.in(d).over(base, 0.08), basicNone),
 		deleted:     s.role(palRed.in(d).over(base, 0.08), basicNone),
-		cited:       s.role(palNote.in(d).over(base, 0.14), basicNone),
+		cited:       s.role(palText.in(d).over(base, 0.12), basicNone),
 	}
 	surface := palSurface0.in(d)
 	for t, p := range [toneCount]pair{palAccent, palGood, palNote, palOverlay1} {
@@ -256,6 +256,18 @@ func (s Style) Chip(text string, t Tone) string {
 		return text
 	}
 	return s.bg(s.ToneStyle(t), s.rv.toneFill[t]).Render(" " + text + " ")
+}
+
+// Speaker is a thread author's name as a bold chip: you in the accent on its tint, anyone else in text on the raised
+// surface, so the agent reads as a peer rather than as receded text. Without color it is the bold name alone.
+func (s Style) Speaker(name string, you bool) string {
+	if !s.Color {
+		return name
+	}
+	if you {
+		return s.bg(s.Emphasis(s.fg(s.rv.accent)), s.rv.toneFill[ToneAccent]).Render(" " + name + " ")
+	}
+	return s.bg(s.Emphasis(s.fg(s.rv.text)), s.rv.surface1).Render(" " + name + " ")
 }
 
 // ToneStyle is the foreground a tone draws in, and nothing where color is off.
