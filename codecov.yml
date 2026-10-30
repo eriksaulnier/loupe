@@ -1,0 +1,4 @@
+# Test helpers and the unreleased demo binary are not what loupe ships, so they stay out of the totals.
+ignore:
+  - "internal/testutil/**"
+  - "cmd/loupe-demo/**"

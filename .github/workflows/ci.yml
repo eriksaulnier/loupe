@@ -14,7 +14,32 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
+      # The go command applies a GOFLAGS flag only where it knows it, so only go test writes the profile.
       - run: mise run check
+        env:
+          GOFLAGS: -coverprofile=coverage.out
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage.out
+
+  # A job of its own, so the id-token that the OIDC upload needs never reaches the job that runs the build tooling.
+  # Codecov authenticates the upload by OIDC, so the repository holds no Codecov token.
+  coverage:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: coverage
+      - uses: codecov/codecov-action@v7
+        with:
+          files: coverage.out
+          use_oidc: true
 
   # Pull requests only, and each install job checks out the pull request's head rather than its merge with main. A
   # release stamps main's default before goreleaser uploads its archives, so the release pull request, the push that
