@@ -140,7 +140,7 @@ func TestEnvironmentTableMatchesHelp(t *testing.T) {
 var (
 	fencedBlock  = regexp.MustCompile("(?s)```.*?```")
 	inlineCode   = regexp.MustCompile("`[^`\n]*`")
-	markdownLink = regexp.MustCompile(`\]\(([^)\s]+)\)`)
+	markdownLink = regexp.MustCompile(`\]\(([^)\s]+)\)|(?:src|srcset)="([^"]+)"`)
 )
 
 func TestMarkdownRelativeLinksResolve(t *testing.T) {
@@ -164,7 +164,7 @@ func TestMarkdownRelativeLinksResolve(t *testing.T) {
 		checked++
 		text := inlineCode.ReplaceAllString(fencedBlock.ReplaceAllString(string(data), ""), "")
 		for _, m := range markdownLink.FindAllStringSubmatch(text, -1) {
-			target := m[1]
+			target := m[1] + m[2]
 			if strings.Contains(target, "://") || strings.HasPrefix(target, "#") || strings.HasPrefix(target, "mailto:") {
 				continue
 			}
