@@ -36,8 +36,9 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `testdata/` | Diff fixtures and goldens |
 | `assets/review/v1/` | The severity pill SVGs every published review hotlinks from `main`. A file here MUST NOT change once on `main`; a redesign adds `v2`. A test pins their hashes |
 | `scripts/` | `check-tests.sh`, the test-hygiene grep that `mise run check` runs, and `review-screenshot.sh`, which `mise run review-screenshot` runs |
-| `.github/workflows/` | `ci.yml` runs `mise run check`, and on pull requests runs `action.yml` on each target; `release.yml` runs release-please, then goreleaser, then `action.yml` on each target against the new release |
+| `.github/workflows/` | `ci.yml` runs `mise run check` with a coverage profile, which a separate job uploads to Codecov by OIDC, and on pull requests runs `action.yml` on each target; `release.yml` runs release-please, then goreleaser, then `action.yml` on each target against the new release |
 | `.github/workflows/review.yml` | The caller for `eriksaulnier/loupe-workflows`, the shared reusable workflow that captures a pull request, runs an agent over the captured head and diff, and publishes unattended. This file holds only what is loupe's own: the triggers, the `REVIEW_ENABLED` kill switch, the permissions the called jobs are capped by, the model, and `sticky`, which edits one review per pull request in place. A round runs unasked when a pull request is opened ready or marked ready for review, and by the `ai-review` label for every round after that |
+| `codecov.yml` | What Codecov leaves out of the totals: the test helpers and the demo binary |
 | `.github/review-instructions.md` | loupe's half of that workflow's prompt: what the linters already cover, the constitution, the contracts `contracts/cli.md` and `comment-format.md` pin, and how to read the goldens. Read from the default branch, never from the pull request |
 | `.specify/memory/constitution.md` | The seven principles. Read first |
 | `.specify/`, `.claude/skills/speckit-*` | spec-kit's templates, scripts and the skills that drive the spec, plan and tasks flow |

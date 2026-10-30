@@ -38,6 +38,7 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 | `u` | Restore an excluded finding to pending, or reinstate and accept a withdrawn one |
 | `r`, `d` | Resolve or dismiss the finding's open note |
 | `f` | Show the whole file's diff |
+| `o` | Open the pull request in the browser |
 | `?` | List the keys for the current view |
 
 Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
@@ -122,6 +123,7 @@ In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-me
 | agent | `capture` | Capture a pull request into a new review round |
 | agent | `add` | File findings into the draft |
 | agent | `summary` | Set the summary that orients you while you sort findings |
+| agent | `assess` | Mark earlier findings as still open or addressed |
 | agent | `handoff` | Open review for the human in a new terminal pane |
 | agent | `wait` | Block until the human sends a finding back or publishes |
 | agent | `edit` | Change, withdraw or restore a finding |
@@ -129,6 +131,7 @@ In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-me
 | agent | `feedback` | Read the human's notes, dispositions and readiness |
 | anyone | `show` | Show the draft, dispositions and readiness |
 | anyone | `list` | List every run with its state and counts |
+| anyone | `stats` | Roll up what your decisions did across runs |
 | human | `review` | Decide each finding in the review interface |
 | human | `publish` | Confirm and post the review to GitHub |
 

@@ -12,7 +12,7 @@ mise exec -- lefthook install
 mise run check
 ```
 
-`mise run check` runs `go vet`, `golangci-lint`, `actionlint`, `scripts/check-tests.sh` and `go test ./...`. It MUST pass before every commit; the pre-commit hook runs it.
+`mise run check` runs `go vet`, `golangci-lint`, `actionlint`, `scripts/check-tests.sh` and `go test ./...`. It MUST pass before every commit; the pre-commit hook runs it. `LOUPE_TEST_FLAGS` passes extra flags to that `go test` alone. CI sets it to `-coverprofile=coverage.out -coverpkg=./...` for Codecov, and the same setting shows coverage locally through `go tool cover -func=coverage.out`.
 
 ## Principles first
 
@@ -67,7 +67,7 @@ The body, when there is one, explains what changed and why. A squash merge disca
 
 The title MUST be a Conventional Commit in the same shape the commit-msg hook enforces on a commit subject: `type(scope): summary`, a lowercase summary, at most 72 characters and no trailing period. The types and scopes are the ones listed under Commits above. The repository merges by squash and takes the title as the commit subject, so the title is the permanent subject on `main` and release-please's only input: pick its type for what a user of loupe would notice. Nothing checks it: a title with no recognized type merges cleanly and then produces no changelog entry and no version bump, which shows up at the next release and not before. Dependabot is the standing exception, since it prefixes `build` but capitalizes its summary.
 
-CI runs `mise run check` on every pull request. The description MUST show the checks that ran, with their output, and MUST name what was not verified (Principle VII). A change to a contract names the spec amendment that allows it.
+CI runs `mise run check` on every pull request and reports coverage to Codecov. The description MUST show the checks that ran, with their output, and MUST name what was not verified (Principle VII). A change to a contract names the spec amendment that allows it.
 
 ## Releases
 

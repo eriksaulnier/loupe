@@ -30,6 +30,10 @@ A change that alters behavior any of these documents promises, without a matchin
 
 A run's on-disk layout under `LOUPE_HOME` is documented but is **not** a contract; reaching into it from outside loupe is the finding, not depending on it from inside `internal/run`.
 
+## User-facing docs
+
+A change that adds or alters behavior a user sees, without a matching change where `review/head/README.md` or `review/head/docs/` describes that behavior, is a finding. Name the file and the sentence that is now stale. Tests already pin the command, environment and key tables in `docs/review-workflow.md` and every relative Markdown link, so a finding about those is noise.
+
 ## When the change carries a spec
 
 When the diff adds or edits a spec under `specs/NNN-topic/` and also changes code, the spec text the diff adds or changes is the claim that code is checked against. For a new spec, that is the whole spec. For an amendment to an older spec, such as `specs/001-loupe-v1/`, it is only the amended lines. You MUST compare the changed code with that text: its requirements, acceptance scenarios and edge cases. A requirement, scenario or edge case that the code under review does not handle is a finding. A scenario or edge case it handles with no test in the diff is a `question`, unless you traced that no existing test covers it, which makes it a finding. A departure from research that the diff makes is a finding when the plan has no Complexity Tracking line for it. The plan is the one the diff adds or edits, or else the plan of the spec it edits. A Complexity Tracking line does not by itself excuse a contract change. The contracts section above still applies. A diff that changes only specs has no code to compare, and this section does not apply to it.
