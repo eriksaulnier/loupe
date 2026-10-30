@@ -524,15 +524,33 @@ func heading() ReviewHeading {
 }
 
 // The header is one row whose title gives way first; the exact count is never lost (FR-002, layout contract).
+// The badge and the program's name take the logo's amber, not the accent, in both backgrounds.
+func TestBrandIsAmber(t *testing.T) {
+	for _, c := range []struct {
+		name, colorfgbg, rgb string
+	}{
+		{"dark", "15;0", "237;180;71"},
+		{"light", "0;15", "181;125;38"},
+	} {
+		s := reviewStyle(t, true, map[string]string{"COLORFGBG": c.colorfgbg})
+		if got := s.badge(); !strings.Contains(got, "48;2;"+c.rgb) || ansi.Strip(got) != " ⌕ loupe " {
+			t.Errorf("%s badge %q, want ⌕ loupe on %s", c.name, got, c.rgb)
+		}
+		if got := s.Brand(); !strings.Contains(got, "38;2;"+c.rgb) || ansi.Strip(got) != "loupe" {
+			t.Errorf("%s brand %q, want loupe in %s", c.name, got, c.rgb)
+		}
+	}
+}
+
 func TestReviewHeaderPriority(t *testing.T) {
 	s := reviewStyle(t, false, nil)
 	for _, c := range []struct {
 		width     int
 		want, not []string
 	}{
-		{100, []string{"⦿ loupe", "acme/widgets#42", "round 1", "feat(cache)", "!~==x-", "3/6 decided"}, nil},
-		{80, []string{"⦿ loupe", "acme/widgets#42", "r1", "feat(cache)", "!~==x-", "3/6 decided"}, []string{"round 1"}},
-		{60, []string{"⦿ loupe", "acme/widgets#42", "r1", "3/6 decided"}, []string{"feat", "!~==x-"}},
+		{100, []string{"⌕ loupe", "acme/widgets#42", "round 1", "feat(cache)", "!~==x-", "3/6 decided"}, nil},
+		{80, []string{"⌕ loupe", "acme/widgets#42", "r1", "feat(cache)", "!~==x-", "3/6 decided"}, []string{"round 1"}},
+		{60, []string{"⌕ loupe", "acme/widgets#42", "r1", "3/6 decided"}, []string{"feat", "!~==x-"}},
 	} {
 		got := s.ReviewHeader(heading(), c.width)
 		if Width(got) != c.width || strings.Contains(got, "\n") {
@@ -560,7 +578,7 @@ func TestReviewHeaderPriority(t *testing.T) {
 	if got := s.ReviewHeader(empty, 100); !strings.Contains(got, "0/0 decided") {
 		t.Errorf("empty round header %q", got)
 	}
-	if got := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"}).ReviewHeader(heading(), 100); strings.Contains(got, "⦿") || !strings.Contains(got, " loupe ") {
+	if got := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"}).ReviewHeader(heading(), 100); strings.Contains(got, "⌕") || !strings.Contains(got, " loupe ") {
 		t.Errorf("ASCII header badge %q", got)
 	}
 	colored := reviewStyle(t, true, nil).ReviewHeader(heading(), 100)

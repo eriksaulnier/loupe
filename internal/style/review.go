@@ -59,7 +59,7 @@ const basicNone = -1
 // reviewPalette is the theme's roles resolved for one output. A nil color means the role paints nothing there.
 type reviewPalette struct {
 	base, text, surface0, surface1, accent, secondary, overlay1 color.Color
-	good, note, blockingDim, bad, muted, mutedBorder            color.Color
+	good, note, brand, blockingDim, bad, muted, mutedBorder     color.Color
 	pills, pillFill                                             [4]color.Color
 	// toneFill is each tone's chip fill, indexed by Tone.
 	toneFill              [toneCount]color.Color
@@ -73,6 +73,7 @@ var (
 	palSurface0  = both("#313244", "#ccd0da")
 	palSurface1  = both("#45475a", "#bcc0cc")
 	palAccent    = both("#b4befe", "#7287fd")
+	palBrand     = both("#edb447", "#b57d26") // the logo's amber, for the program alone: yellow elsewhere is a note
 	palSecondary = both("#a6adc8", "#6c6f85")
 	palOverlay1  = both("#7f849c", "#8c8fa1")
 	palGood      = both("#a6e3a1", "#40a02b")
@@ -119,6 +120,7 @@ func (s *Style) buildReviewPalette() {
 		surface0:    s.role(palSurface0.in(d), basicNone),
 		surface1:    s.role(palSurface1.in(d), 8),
 		accent:      s.role(palAccent.in(d), 12),
+		brand:       s.role(palBrand.in(d), 3),
 		secondary:   s.role(palSecondary.in(d), basicNone),
 		overlay1:    s.role(palOverlay1.in(d), 8),
 		good:        s.role(palGood.in(d), 2),
@@ -746,14 +748,14 @@ type ReviewHeading struct {
 
 // badge is the program's mark at the head of every review screen.
 func (s Style) badge() string {
-	lens := "⦿ "
+	lens := "⌕ "
 	switch s.Glyphs.Tier {
 	case ASCII:
 		lens = ""
 	case Nerd:
 		lens = " " // nf-fa-search
 	}
-	st := s.Emphasis(s.bg(s.fg(s.rv.base), s.rv.accent))
+	st := s.Emphasis(s.bg(s.fg(s.rv.base), s.rv.brand))
 	return st.Render(" " + lens + "loupe ")
 }
 
