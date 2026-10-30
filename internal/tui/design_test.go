@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -172,8 +173,9 @@ func drain(cmd tea.Cmd) []tea.Msg {
 	}
 }
 
-// A recorded decision is a notice in the findings pane's bottom border that moves no row, and it expires after its
-// timer unless a newer notice took its place; a refusal does not expire (FR-010, owner decision 6).
+// A recorded decision is a notice at the right of the findings pane's top border, before its counts, that moves no
+// row, and it expires after its timer unless a newer notice took its place; a refusal does not expire (FR-010, owner
+// decision 6, release testing).
 func TestSuccessNoticeLivesInTheBorderAndExpires(t *testing.T) {
 	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
 	before := strings.Split(m.View().Content, "\n")
@@ -190,7 +192,8 @@ func TestSuccessNoticeLivesInTheBorderAndExpires(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m.say(style.Good, "✓ f-001 accepted")
 	after := strings.Split(m.View().Content, "\n")
-	if len(after) != len(before) || !strings.Contains(after[len(after)-2], "╰─ ✓ f-001 accepted ─") {
+	top := regexp.MustCompile(`(?m)^╭─ Findings ─+ ✓ f-001 accepted ─ 1 blocking · 0 open notes · 2 pending ─╮$`)
+	if len(after) != len(before) || !top.MatchString(m.View().Content) || strings.Contains(after[len(after)-2], "accepted") {
 		t.Fatalf("the notice is not in the findings border:\n%s", strings.Join(after, "\n"))
 	}
 	for i := range before[:len(before)-2] {
@@ -212,6 +215,19 @@ func TestSuccessNoticeLivesInTheBorderAndExpires(t *testing.T) {
 	}
 	if view := m.View().Content; !strings.Contains(paneText(view), "the draft is not ready: pending findings f-002; loupe review") {
 		t.Errorf("the refusal is not readable in the pane:\n%s", view)
+	}
+}
+
+// In detail the notice sits at the right end of the finding's top border, apart from the id it does not name, and the
+// bottom border keeps only the position (release testing).
+func TestDetailNoticeLivesInTheTopBorder(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	mustOpenFinding(t, m, "f-002")
+	m.say(style.Good, "✓ f-001 accepted")
+	view := m.View().Content
+	if !regexp.MustCompile(`(?m)^╭─ · f-002 · pending ─+ ✓ f-001 accepted ─╮$`).MatchString(view) ||
+		!regexp.MustCompile(`(?m)^╰─+ 2 of 3 ─╯$`).MatchString(view) {
+		t.Errorf("the notice is not at the right of the detail's top border:\n%s", view)
 	}
 }
 
@@ -1235,14 +1251,14 @@ func listRow(t *testing.T, m *Model, id string) string {
 func TestTheRowSaysWhyAFindingWasWithdrawn(t *testing.T) {
 	longTitle := "The retry loop resets its counter on every scrape attempt"
 	longReason := "Test name only, the assertion is unchanged and nothing runs differently"
-	for _, c := range []struct {
-		width, height, title, reason int
-	}{{80, 24, 15, 14}, {100, 30, 22, 21}} {
+	for _, c := range []struct{ width, height int }{{80, 24}, {100, 30}} {
 		t.Run(fmt.Sprint(c.width), func(t *testing.T) {
 			m := modelOf(t, reasonFixture(t, longTitle, draft.Reason{Text: longReason, Code: "no-runtime-effect"}), utf8Env, c.width, c.height)
 			row := listRow(t, m, "f-003")
-			want := m.styles.TruncRight(longTitle, c.title) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(longReason, c.reason)
-			if !strings.Contains(row, want) || !strings.HasSuffix(m.styles.TruncRight(longReason, c.reason), m.styles.Glyphs.Ellipsis) {
+			rest := m.listColumns().title - 3
+			title, reason := rest-rest/2, rest/2
+			want := m.styles.TruncRight(longTitle, title) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(longReason, reason)
+			if !strings.Contains(row, want) || !strings.HasSuffix(m.styles.TruncRight(longReason, reason), m.styles.Glyphs.Ellipsis) {
 				t.Errorf("row %q lacks %q", row, want)
 			}
 			if style.Width(row) > c.width || strings.Contains(row, "no-runtime-effect") {
@@ -1259,11 +1275,11 @@ func TestTheRowSaysWhyAFindingWasWithdrawn(t *testing.T) {
 func TestTheRowGivesTheSlackToTheLongerPart(t *testing.T) {
 	long := "Test name only, the assertion is unchanged and nothing runs differently"
 	m := modelOf(t, reasonFixture(t, "Short", draft.Reason{Text: long}), utf8Env, 80, 24)
-	if want := "Short " + m.glyphs.Sep + " " + m.styles.TruncRight(long, 32-3-5); !strings.Contains(listRow(t, m, "f-003"), want) {
+	if want := "Short " + m.glyphs.Sep + " " + m.styles.TruncRight(long, m.listColumns().title-3-5); !strings.Contains(listRow(t, m, "f-003"), want) {
 		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
 	}
 	m = modelOf(t, reasonFixture(t, long, draft.Reason{Text: "Naming."}), utf8Env, 80, 24)
-	if want := m.styles.TruncRight(long, 32-3-7) + " " + m.glyphs.Sep + " Naming."; !strings.Contains(listRow(t, m, "f-003"), want) {
+	if want := m.styles.TruncRight(long, m.listColumns().title-3-7) + " " + m.glyphs.Sep + " Naming."; !strings.Contains(listRow(t, m, "f-003"), want) {
 		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
 	}
 }
@@ -1279,7 +1295,8 @@ func TestTheRowSplitsWhatTheBlockingMarkerLeaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := modelOf(t, dir, utf8Env, 80, 24)
-	want := m.glyphs.Blocking + " " + m.styles.TruncRight(long, 14) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, 13)
+	rest := m.listColumns().title - 2 - 3
+	want := m.glyphs.Blocking + " " + m.styles.TruncRight(long, rest-rest/2) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, rest/2)
 	if row := listRow(t, m, "f-003"); !strings.Contains(row, want) {
 		t.Errorf("row %q lacks %q", row, want)
 	}

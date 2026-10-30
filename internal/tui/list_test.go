@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -35,7 +36,7 @@ func TestListAtEightyColumnsDropsTheLabelColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := newTestModel(t, m, 80, 24)
-	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001", "### ! Title one", "multi.txt:3")
+	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001", "###  ! Title one", "multi.txt:3")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.Contains(view, "Label") || strings.Contains(view, "suggestion") {
@@ -58,7 +59,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		t.Fatal(err)
 	}
 	tm := newTestModel(t, m, 100, 24)
-	waitFor(t, tm, "> . f-001", "### ! Title one", "0/3 decided")
+	waitFor(t, tm, "> . f-001", "###  ! Title one", "0/3 decided")
 	tm.Type("q")
 	view := finalView(t, tm)
 	if strings.ContainsAny(view, "✓·✗↩●›▎│…─┃╭╮╰╯") {
@@ -70,7 +71,7 @@ func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 		}
 	}
 
-	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "> · f-001") || !strings.Contains(got, "■■■ ● Title one") || !strings.Contains(got, "╭─ Findings") {
+	if got := modelOf(t, dir, utf8, 100, 24).View().Content; !strings.Contains(got, "> · f-001") || !strings.Contains(got, "■■■  ● Title one") || !strings.Contains(got, "╭─ Findings") {
 		t.Errorf("UTF-8 view does not use the Unicode glyphs:\n%s", got)
 	}
 }
@@ -530,16 +531,16 @@ func TestListSeverityColumnIsColoredByRank(t *testing.T) {
 }
 
 // The width tiers of the layout contract: confidence and location go below 80, the location shortens below 100, and
-// the title keeps the rest.
+// the title keeps the rest. Locations this short take their natural width, no narrower than their heading.
 func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 	dir := severityFixture(t)
 	for _, c := range []struct {
 		width, title, location int
 		confidence, short      bool
 	}{
-		{100, 46, 24, true, false},
-		{99, 51, 18, true, true},
-		{80, 32, 18, true, true},
+		{100, 57, 12, true, false},
+		{99, 56, 12, true, true},
+		{80, 37, 12, true, true},
 		{79, 54, 0, false, false},
 		{60, 35, 0, false, false},
 	} {
@@ -548,11 +549,95 @@ func TestListColumnsFollowTheWidthTiers(t *testing.T) {
 			t.Errorf("at %d columns: %+v, want title %d location %d confidence %v short %v", c.width, got, c.title, c.location, c.confidence, c.short)
 		}
 	}
-	// A long id takes its room from the title first, then the location, and the title keeps its floor.
+	// A long id takes its room from the title first.
 	m := modelOf(t, dir, testEnv, 80, 24)
 	m.order[0].ID = strings.Repeat("f", 30)
-	if got := m.listColumns(); got.title != listTitleFloor || got.id != 30 || got.location != 17 || !got.confidence {
+	if got := m.listColumns(); got.title != 12 || got.id != 30 || got.location != 12 || !got.confidence {
 		t.Errorf("a 30-cell id: %+v", got)
+	}
+}
+
+// The confidence column is headed conf, over its four cells (release testing).
+func TestListHeadsConfidenceConf(t *testing.T) {
+	view := modelOf(t, newFixture(t), utf8Env, 100, 30).View().Content
+	if !regexp.MustCompile(`│     id    severity   conf finding +location +│`).MatchString(view) {
+		t.Errorf("the column headings do not read conf:\n%s", view)
+	}
+	// In color the headings are bold secondary, apart from the overlay text of decided rows and path prefixes.
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	sample := m.styles.ColumnHead().Render("x")
+	if open := sample[:strings.Index(sample, "x")]; !strings.Contains(m.View().Content, open+"    id") {
+		t.Errorf("the column headings are not bold secondary:\n%q", m.View().Content)
+	}
+}
+
+// The location takes its natural width while every title still fits, and gives way only as far as the tier's width
+// when a title would otherwise be cut (release testing).
+func TestListLocationTakesItsNaturalWidth(t *testing.T) {
+	path := "packages/chat/src/agui/" + strings.Repeat("deeply/", 3) + "turn.ts"
+	at := func(title string, width int) listColumns {
+		dir := newFixture(t)
+		if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+			d.Findings[0].Location.Path, d.Findings[1].Title = path, title
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return modelOf(t, dir, testEnv, width, 24).listColumns()
+	}
+	natural := len(path) + len(":3")
+	for _, c := range []struct {
+		name            string
+		title           string
+		width, location int
+	}{
+		{"short titles", "Title two", 100, natural},
+		{"a title that fits beside part of the path", strings.Repeat("t", 30), 100, 96 - 26 - 1 - 30},
+		{"a title that fits nowhere", strings.Repeat("t", 80), 100, 24},
+		{"a title that fits nowhere at 80, drawn by filename", strings.Repeat("t", 80), 80, len("multi.txt:21")},
+		{"a wide window", strings.Repeat("t", 80), 200, natural},
+	} {
+		got := at(c.title, c.width)
+		inner := c.width - 4
+		if got.location != c.location || got.title != inner-26-1-got.location {
+			t.Errorf("%s at %d: %+v, want location %d and the title the rest", c.name, c.width, got, c.location)
+		}
+	}
+	// At 80–99 a path that does not fit is drawn as its filename, so the column takes the room the widest title leaves,
+	// and the paths that fit it keep their directories.
+	mid := newFixture(t)
+	if _, err := draft.Mutate(mid, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].Location.Path, d.Findings[1].Location.Path = path, "lib/widgets/multi.txt"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m90 := modelOf(t, mid, testEnv, 90, 24)
+	_, _, titles := m90.naturalWidths()
+	if got := m90.listColumns(); got.title != titles || got.location != 86-26-1-titles || got.location >= natural {
+		t.Errorf("at 90 the location is not the room the widest title leaves: %+v, widest title %d", got, titles)
+	}
+	if view := m90.View().Content; !strings.Contains(view, " turn.ts:3") || !strings.Contains(view, " lib/widgets/multi.txt:21") {
+		t.Errorf("at 90 a path that fits is not drawn whole beside one drawn by its filename:\n%s", view)
+	}
+	// When the titles leave less than the widest filename form, f-002's multi.txt:21, the column is that form.
+	if got := at(strings.Repeat("t", 60), 90); got.location != len("multi.txt:21") {
+		t.Errorf("at 90 beside a long title: %+v", got)
+	}
+	// A long filename falls back to the tier's width, and a long id still takes from the location below it, so the
+	// title keeps its floor.
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].Location.Path, d.Findings[1].Title = "src/"+strings.Repeat("a", 40)+".go", strings.Repeat("t", 80)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, testEnv, 80, 24)
+	m.order[0].ID = strings.Repeat("f", 30)
+	if got := m.listColumns(); got.title != listTitleFloor || got.location != 16 {
+		t.Errorf("a 30-cell id beside a long title: %+v", got)
 	}
 }
 

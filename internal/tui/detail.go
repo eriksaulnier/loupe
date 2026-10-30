@@ -35,7 +35,8 @@ func (m *Model) openedFinding() (draft.Finding, int) {
 }
 
 // refreshDetail rebuilds the finding's document from the current draft, so a reload shows the finding as it now is.
-// The document is one viewport: title and metadata, the nested location pane, the body, the fix, the notes.
+// The title and metadata are pinned above one viewport holding the rest: the nested location pane, the body, the fix,
+// the notes. A window too short to spare them puts them back at the top of the viewport.
 func (m *Model) refreshDetail() error {
 	f, i := m.openedFinding()
 	if i < 0 {
@@ -50,11 +51,15 @@ func (m *Model) refreshDetail() error {
 		return err
 	}
 	width, _ := style.PaneInner(m.width, 0)
-	var doc []string
+	var head, doc []string
 	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), width, ""), "\n") {
-		doc = append(doc, m.styles.Emphasis(m.styles.Text()).Render(line))
+		head = append(head, m.styles.Emphasis(m.styles.Text()).Render(line))
 	}
-	doc = append(doc, m.metaLines(f, width)...)
+	head = append(head, m.metaLines(f, width)...)
+	m.detailHead = head
+	if _, rows := style.PaneInner(0, m.bodyRows(len(m.detailFooter()))); len(head) > rows/3 {
+		doc, m.detailHead = head, nil
+	}
 	if draft.AgentChangedHumanText(f) {
 		doc = append(doc, m.styles.Note.Render(m.glyphs.Note+" the agent changed text you wrote"))
 	}
@@ -85,12 +90,23 @@ func (m *Model) sizeDetail() {
 	m.body.SetHeight(max(1, m.detailRows()))
 }
 
-// detailRows is the rows the document shows in.
+// detailRows is the rows the document shows in, under the pinned head.
 func (m *Model) detailRows() int {
 	footer := m.detailFooter()
 	_, rows := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
 	inner, _ := style.PaneInner(m.width, 0)
-	return rows - len(m.noticeRows(inner, noticeRoom(m.width, m.detailPosition())))
+	f, _ := m.openedFinding()
+	title, _ := m.detailTitle(f)
+	notice := len(m.noticeRows(inner, m.styles.NoticeRoom(style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: title}})))
+	return rows - len(m.pinnedHead(rows, notice)) - notice
+}
+
+// pinnedHead is the head shown above the document in rows of pane, unless a notice of that many rows needs them.
+func (m *Model) pinnedHead(rows, notice int) []string {
+	if notice > rows-len(m.detailHead) {
+		return nil
+	}
+	return m.detailHead
 }
 
 // metaLines are the finding's attributes in reading order, broken only between them so a narrow window never clips
@@ -757,6 +773,7 @@ func (m *Model) sizeNote(extra int) {
 // ending at the cursor's.
 func (m *Model) noteRowsShown() []string {
 	rows := strings.Split(m.styles.Render(m.note.View()), "\n")
+	markCaret(rows, m.note.Cursor())
 	if limit := max(1, m.height/3); len(rows) > limit {
 		start := min(max(0, m.note.LineInfo().RowOffset-limit+1), len(rows)-limit)
 		rows = rows[start : start+limit]
@@ -867,13 +884,31 @@ func (m *Model) detailView() string {
 	footer := m.detailFooter()
 	m.sizeDetail()
 	width, _ := style.PaneInner(m.width, 0)
-	position := m.detailPosition()
-	room := noticeRoom(m.width, position)
+	title, tone := m.detailTitle(f)
+	pane := style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Tone: tone,
+		Titles: style.PaneTitles{TopLeft: title, BottomRight: m.detailPosition()}}
+	room := m.withBorderNotice(&pane)
+	notice := m.noticeRows(width, room)
 	lines := strings.Split(m.body.View(), "\n")
-	_, inner := style.PaneInner(0, m.bodyRows(len(footer))-m.editorRows())
-	lines = m.withNotice(lines[:min(len(lines), m.body.Height())], m.noticeRows(width, room), inner)
-	// The title leads with the list's glyph and says the disposition, and an open note, in their status colors; the
-	// border and the id take the finding's tone.
+	_, inner := style.PaneInner(0, pane.Height)
+	head := m.pinnedHead(inner, len(notice))
+	pane.Lines = append(slices.Clip(head), m.withNotice(lines[:min(len(lines), m.body.Height())], notice, inner-len(head))...)
+	pane.Scroll = style.Scroll{Offset: m.body.YOffset(), Visible: m.body.Height(), Total: m.body.TotalLineCount(), Top: len(head)}
+	body := m.styles.Pane(pane)
+	switch {
+	case m.noting:
+		body = append(body, m.noteView()...)
+	case m.editing:
+		body = append(body, m.editView()...)
+	case m.rewriting:
+		body = append(body, m.rewriteView()...)
+	}
+	return m.shell(body, footer)
+}
+
+// detailTitle leads with the list's glyph and says the disposition, and an open note, in their status colors; the
+// border and the id take the finding's tone, which it returns.
+func (m *Model) detailTitle(f draft.Finding) (string, style.Tone) {
 	disposition := draft.Dispositions(m.draft)[f.ID]
 	_, open := firstOpenNote(m.draft, f.ID)
 	tone := findingTone(disposition)
@@ -893,18 +928,7 @@ func (m *Model) detailView() string {
 	if open {
 		title += sep + m.styles.Chip("open note", style.ToneNote)
 	}
-	body := m.styles.Pane(style.Pane{Width: m.width, Height: m.bodyRows(len(footer)) - m.editorRows(), Lines: lines,
-		Titles: style.PaneTitles{TopLeft: title, BottomLeft: m.borderNotice(room), BottomLeftTab: m.flashing(room), BottomRight: position},
-		Scroll: style.Scroll{Offset: m.body.YOffset(), Visible: m.body.Height(), Total: m.body.TotalLineCount()}, Tone: tone})
-	switch {
-	case m.noting:
-		body = append(body, m.noteView()...)
-	case m.editing:
-		body = append(body, m.editView()...)
-	case m.rewriting:
-		body = append(body, m.rewriteView()...)
-	}
-	return m.shell(body, footer)
+	return title, tone
 }
 
 func (m *Model) detailPosition() string {

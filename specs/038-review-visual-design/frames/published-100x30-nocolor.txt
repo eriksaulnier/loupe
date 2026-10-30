@@ -1,8 +1,8 @@
  loupe  acme/widgets#42  round 1  feat(cache): add a read-through cache for p…  ====x=  6/6 decided
 ╭─ Published ───────────────────────────────────────────────────────────────────────────────────  ─╮
-│ ✓ Published                                                                                      │
 │                                                                                                  │
 │ https://github.com/acme/widgets/pull/42#pullrequestreview-1234                                   │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

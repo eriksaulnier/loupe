@@ -234,3 +234,17 @@ func TestSendFinishedAfterQuitKeepsTheOutcome(t *testing.T) {
 		}
 	}
 }
+
+// The published screen says Published once, in its title, and shows the review's URL under one blank row.
+func TestPublishedSaysPublishedOnce(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	m.view, m.published = viewPublished, reviewURLPrefix+"1"
+	view := ansi.Strip(m.View().Content)
+	if n := strings.Count(view, "Published"); n != 1 {
+		t.Errorf("the published screen says Published %d times:\n%s", n, view)
+	}
+	rows := strings.Split(view, "\n")
+	if blank, url := rows[m.bodyTop()+1], rows[m.bodyTop()+2]; strings.Trim(blank, "│ ") != "" || !strings.Contains(url, reviewURLPrefix+"1") {
+		t.Errorf("the published pane does not show the URL under one blank row:\n%q\n%q", blank, url)
+	}
+}

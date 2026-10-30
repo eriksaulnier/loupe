@@ -232,8 +232,9 @@ func (m *Model) pickerRow(selected, disabled bool, name, description string, inn
 	return lines
 }
 
-// listColumns is the findings table for the current width. The title takes whatever the fixed columns leave; a long
-// id takes its room from the title first, then the location, then the confidence.
+// listColumns is the findings table for the current width. The location takes its natural width and the title the
+// rest, until a title would be cut: then the location gives way, down to its tier's width. A long id takes its room
+// from the title first, then the location, then the confidence.
 type listColumns struct {
 	id, title, location int
 	confidence          bool
@@ -256,15 +257,30 @@ func (m *Model) listColumns() listColumns {
 	case m.width >= midWidth:
 		c.location, c.confidence, c.shortLocation = 18, true, true
 	}
+	tier := c.location
 	fixed := func() int {
 		n := 1 + 1 + 1 + 1 + c.id + 1 + style.PillWidth + 1
 		if c.confidence {
-			n += 4
+			n += 5
 		}
 		if c.location > 0 {
 			n += 1 + c.location
 		}
 		return n
+	}
+	if c.location > 0 {
+		natural, short, titles := m.naturalWidths()
+		// What the title and location share: the title's cell and the location's, less the gap between them.
+		shared := inner - fixed() + tier
+		if c.shortLocation && titles+natural > shared {
+			// A path that does not fit is drawn as its filename, so the column takes the room the titles leave, down to
+			// the widest filename it draws.
+			natural = max(short, shared-titles)
+		}
+		c.location = natural
+		if titles+natural > shared {
+			c.location = min(natural, max(tier, shared-titles))
+		}
 	}
 	c.title = inner - fixed()
 	if c.title < listTitleFloor && c.location > 0 {
@@ -280,6 +296,31 @@ func (m *Model) listColumns() listColumns {
 	}
 	c.title = max(1, c.title)
 	return c
+}
+
+// naturalWidths are the widest location in the list and the widest in its filename form, neither narrower than the
+// heading, and the widest title cell: the title with its blocking and note markers and, for a finding not included,
+// the separator and its reason.
+func (m *Model) naturalWidths() (location, short, title int) {
+	location = style.Width("location")
+	short = location
+	notes := openNotes(m.draft)
+	for _, f := range m.order {
+		location = max(location, style.Width(locationText(f)))
+		short = max(short, style.Width(shortLocationText(f)))
+		need := style.Width(render.ForDisplay(render.OneLine(f.Title)))
+		if f.Blocking {
+			need += style.Width(m.glyphs.Blocking) + 1
+		}
+		if _, open := notes[f.ID]; open {
+			need += style.Width(m.glyphs.Note) + 1
+		}
+		if reason := draft.CurrentReason(f); reason != nil {
+			need += style.Width(" "+m.glyphs.Sep+" ") + style.Width(render.ForDisplay(render.OneLine(reason.Text)))
+		}
+		title = max(title, need)
+	}
+	return location, short, title
 }
 
 // listCounts are the findings pane's top-border counts: blocking findings that will publish, every open note record,
@@ -442,7 +483,8 @@ func (m *Model) listView() string {
 	footer := m.keys(groupHints(m.listHints())...)
 	inner, _ := style.PaneInner(m.width, 0)
 	position := m.styles.Text().Render(position(m.cursor, len(m.order)))
-	room := noticeRoom(m.width, position)
+	findings := style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts()}, Focus: true}
+	room := m.withBorderNotice(&findings)
 	notice := m.noticeRows(inner, room)
 	l := m.layoutList(len(footer), len(notice))
 	if len(m.order) <= l.rows {
@@ -493,10 +535,10 @@ func (m *Model) listView() string {
 		// A refusal taller than the findings pane takes the summary's rows too, so none of it is cut.
 		body, findingsHeight = nil, m.bodyRows(len(footer))
 	}
-	lines = m.withNotice(lines, notice, findingsHeight-style.PaneRows)
-	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: findingsHeight, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts(), BottomLeft: m.borderNotice(room), BottomLeftTab: m.flashing(room), BottomRight: position},
-		Scroll: style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}, Focus: true})...)
+	findings.Height, findings.Lines = findingsHeight, m.withNotice(lines, notice, findingsHeight-style.PaneRows)
+	findings.Titles.BottomRight = position
+	findings.Scroll = style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}
+	body = append(body, m.styles.Pane(findings)...)
 	return m.shell(body, footer)
 }
 
@@ -528,13 +570,13 @@ func (m *Model) publishHint() style.Hint {
 func (m *Model) columnHeads(cols listColumns) string {
 	head := "    " + style.Pad("id", cols.id+1) + style.Pad("severity", style.PillWidth+1)
 	if cols.confidence {
-		head += "con "
+		head += "conf "
 	}
 	head += style.Pad("finding", cols.title+1)
 	if cols.location > 0 {
 		head += "location"
 	}
-	return m.styles.Overlay().Render(strings.TrimRight(head, " "))
+	return m.styles.ColumnHead().Render(strings.TrimRight(head, " "))
 }
 
 // row is one finding: the selection bar, the state glyph, the quiet id, the severity pill and confidence scale, the
@@ -556,7 +598,7 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 	}
 	b.WriteString(s.SeverityPill(word, style.PillWidth) + " ")
 	if cols.confidence {
-		b.WriteString(style.Pad(s.ConfidenceScale(f.Confidence), 3) + " ")
+		b.WriteString(style.Pad(s.ConfidenceScale(f.Confidence), 4) + " ")
 	}
 	titleWidth := cols.title
 	if f.Blocking {
@@ -625,17 +667,22 @@ func openNotes(d *draft.Draft) map[string]bool {
 	return out
 }
 
+// shortLocationText is the location as its filename and line range, which the 80–99 tier prefers to a cut path.
+func shortLocationText(f draft.Finding) string {
+	if f.Location == nil {
+		return locationText(f)
+	}
+	return render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
+}
+
 // locationColumn keeps the end of the path, which is the part that identifies the file.
 func (m *Model) locationColumn(f draft.Finding, cols listColumns) string {
 	if f.Location == nil {
 		return m.styles.Overlay().Render("general")
 	}
 	text := locationText(f)
-	if cols.shortLocation {
-		short := render.ForDisplay(formatLocation(path.Base(f.Location.Path), f.Location.Line, f.Location.StartLine, f.Location.Side))
-		if style.Width(text) > cols.location {
-			text = short
-		}
+	if cols.shortLocation && style.Width(text) > cols.location {
+		text = shortLocationText(f)
 	}
 	return m.styles.LocationTitle(text, cols.location, false)
 }

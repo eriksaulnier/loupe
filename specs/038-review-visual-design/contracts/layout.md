@@ -145,3 +145,21 @@ While the review message is typed, `shift+↑` and `shift+↓` MUST scroll the r
 Every line of the readable review MUST wrap to the pane, including summaries, headings, fenced code and notes. A popup too short for its choices MUST drop its spacing first, then the choices furthest from the selected one. The selected choice stays in view.
 
 The Message step and the sending screen MUST NOT draw the row of steps. The popup before them carries the steps, and on these screens the row added nothing. Their `Publish review` pane opens right under the header and takes the focus tab when the message is not being typed.
+
+## Release testing feedback, 2026-10-29
+
+The maintainer's testing of `main` before the next release added these rules. They amend the sections above, the demo feedback included, where the two disagree. The reference frames follow them.
+
+The confidence column's heading MUST read `conf`, not `con`. The column reserves four cells, one more than the width tiers give it, and the title gives up that cell. In color the column headings MUST be bold secondary text, so they read apart from the overlay text that decided rows and path prefixes recede to.
+
+The published screen MUST say `Published` once, in its title tab. Its pane shows the review's URL under one blank row.
+
+The terminal cursor MUST be hidden on every screen but one whose editor has the keys: the send-back composer, the rewrite editor, and the review message while typing. There the terminal's own cursor MUST sit at the caret, in place of a drawn cursor cell, and it MUST hide again when the editor closes or blurs. The metadata editor takes no typing, so it shows no cursor.
+
+A short success notice, a decision's included, MUST sit at the right end of the active pane's top border: just left of a top-right title with one rule cell between them, or against the corner when there is none. A decision's flash happens there. The notice is drawn whole or not at all, and it never takes cells from the left title or the counts. One that does not fit goes into wrapped pane rows, as a long notice already does. The bottom border keeps its position or hint at the right, and the list, detail and file diff no longer put a notice at its left. The publish popup keeps its notice at the bottom left, in place of `nothing sent yet`.
+
+Detail MUST pin the finding's title rows and its metadata row (severity, blocking, label, confidence, verification) at the top of its pane, above the scrolling document, so they stay in view while the human scrolls. The document starts after them and MUST NOT repeat them. The scroll thumb covers only the document's rows. When the pinned rows would take more than a third of the pane's rows, they scroll at the top of the document as before. A notice that needs their rows takes them, so a refusal is never cut. The pills stay out of the top border.
+
+At 80 columns and wider, the location column MUST take its natural width: the widest location in the list, and no narrower than its `location` heading. The title takes the rest. When the widest title cell, with its markers and any withdrawal reason, would then be cut, the location gives way to it, but no further than the tier's 24 or 18 cells. A location narrower than its tier's width keeps its natural width. At 80–99, where a path that does not fit is drawn as its filename and line range, a column whose full paths would cut a title takes the room the widest title leaves, and no less than the widest filename form, so the paths that fit it keep their directories. The tier widths above become that floor, and the title widths they derive hold only for a list whose locations reach it. The 60–79 tier, where location disappears, is unchanged, and a long id still takes from the location below the floor as before.
+
+When `ORCA_TERMINAL_HANDLE` is nonempty, the header's last four columns MUST stay empty but keep the band behind them, so Orca's pane controls sit on the band rather than in a gap. This replaces the demo feedback's "with no band".

@@ -142,6 +142,12 @@ func TestPaneScrollThumb(t *testing.T) {
 	if rows := thumbRows(half); len(rows) != 5 {
 		t.Errorf("a half-visible document has a %d-row thumb, want 5", len(rows))
 	}
+	// Pinned rows above the document keep a plain edge: the thumb runs from the first row under them to the last.
+	for offset, want := range map[int]int{0: 2, 45: 6} {
+		if rows := thumbRows(s.Pane(Pane{Width: 20, Height: 9, Scroll: Scroll{Offset: offset, Visible: 5, Total: 50, Top: 2}})); len(rows) != 1 || rows[0] != want {
+			t.Errorf("under two pinned rows the thumb at offset %d is on rows %v, want [%d]", offset, rows, want)
+		}
+	}
 }
 
 func TestPaneASCIITier(t *testing.T) {
@@ -331,7 +337,8 @@ func TestProgressMarksTheCurrentCell(t *testing.T) {
 	}
 }
 
-// Reserve leaves the header's last columns blank and off the band, while the width tier still follows the terminal.
+// Reserve leaves the header's last columns empty but on the band, while the width tier still follows the terminal
+// (release testing).
 func TestHeaderReserveLeavesTheRightEdgeBlank(t *testing.T) {
 	s := reviewStyle(t, true, nil)
 	h := heading()
@@ -341,8 +348,8 @@ func TestHeaderReserveLeavesTheRightEdgeBlank(t *testing.T) {
 		t.Fatalf("the header is %d cells, want 100", w)
 	}
 	plain := ansi.Strip(got)
-	if !strings.HasSuffix(plain, "decided     ") || !strings.HasSuffix(got, "    ") {
-		t.Errorf("the last four columns are not blank and plain: %q", got)
+	if !strings.HasSuffix(plain, "decided     ") || !strings.HasSuffix(got, s.SurfaceSpan(SurfaceHeader, 0, Span{Text: "    "})) {
+		t.Errorf("the last four columns are not empty and on the band: %q", got)
 	}
 	if !strings.Contains(plain, "round ") {
 		t.Errorf("reserving columns dropped the header below its width tier: %q", plain)
@@ -583,5 +590,17 @@ func TestReviewMarkersFollowTheTier(t *testing.T) {
 	// With color on in the ASCII tier the citation bar is the contract's >, not the scroll thumb.
 	if got := ansi.Strip(ascii.CodeLine(CodeRow{Num: 3, Cited: true, Text: "x"}, 2, 20)); !strings.HasPrefix(got, "> 3") {
 		t.Errorf("ASCII citation bar: %q", got)
+	}
+}
+
+// A list's column headings are bold secondary in color, and plain without it (release testing).
+func TestColumnHeadIsBoldSecondary(t *testing.T) {
+	color := reviewStyle(t, true, nil)
+	head := color.ColumnHead()
+	if !head.GetBold() || head.GetForeground() != color.Secondary().GetForeground() {
+		t.Errorf("column heading bold %v foreground %v, want bold %v", head.GetBold(), head.GetForeground(), color.Secondary().GetForeground())
+	}
+	if got := reviewStyle(t, false, nil).ColumnHead().Render("id"); got != "id" {
+		t.Errorf("NO_COLOR column heading %q, want it plain", got)
 	}
 }

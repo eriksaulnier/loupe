@@ -72,6 +72,7 @@ func newConfirmation(preview publish.Preview, title ConfirmHeading, message stri
 	input.ShowLineNumbers, input.MaxHeight = false, 0
 	input.DynamicHeight, input.MinHeight = true, minMessageRows
 	input.SetStyles(textarea.Styles{})
+	input.SetVirtualCursor(false)
 
 	c := confirmation{preview: preview, shown: preview, title: title, scroll: viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)), message: input}
 	// Only publish.Run builds a preview and it always carries a closure; a fixture without one gets no input.
@@ -334,6 +335,7 @@ func (c *confirmation) messageView(m *Model, width int) string {
 	for i, r := range rows {
 		rows[i] = r + tint.Render(strings.Repeat(" ", max(0, inner-style.Width(r))))
 	}
+	markCaret(rows, c.message.Cursor())
 	// The pane takes the input color only while it has the keys, so its border also says where typing goes.
 	tone := style.ToneAccent
 	if c.typing {

@@ -120,7 +120,8 @@ func (m *Model) publishedView() string {
 		n := min(len(text), width)
 		chunks, text = append(chunks, text[:n]), text[n:]
 	}
-	lines := []string{m.styles.Emphasis(m.styles.Good).Render(strings.TrimSpace(m.glyphs.Published + " Published")), ""}
+	// A blank row above the URL keeps it off the border.
+	lines := []string{""}
 	first := len(lines)
 	for _, c := range chunks {
 		lines = append(lines, m.styles.Accent.Render(c))

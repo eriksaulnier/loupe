@@ -195,6 +195,10 @@ func (s Style) Text() lipgloss.Style      { return s.fg(s.rv.text) }
 func (s Style) Secondary() lipgloss.Style { return s.fg(s.rv.secondary) }
 func (s Style) Overlay() lipgloss.Style   { return s.fg(s.rv.overlay1) }
 
+// ColumnHead is a list's column headings: bold secondary, so they read apart from the overlay text that decided rows
+// and path prefixes recede to.
+func (s Style) ColumnHead() lipgloss.Style { return s.Emphasis(s.Secondary()) }
+
 // borderGlyphs are the pane's edges in the current tier.
 type borderGlyphs struct{ tl, tr, bl, br, h, v, thumb string }
 
@@ -205,17 +209,21 @@ func (s Style) border() borderGlyphs {
 	return borderGlyphs{"╭", "╮", "╰", "╯", "─", "│", "┃"}
 }
 
-// PaneTitles are the four places a pane's border carries text. TopLeft is the pane's name; the others are inserted
-// as given, so a caller styles a notice or a count with the roles here.
+// PaneTitles are the places a pane's border carries text. TopLeft is the pane's name; the others are inserted as
+// given, so a caller styles a notice or a count with the roles here.
 type PaneTitles struct {
 	TopLeft, TopRight, BottomLeft, BottomRight string
-	// BottomLeftTab says BottomLeft is a tab, padded inside its own block, so the row adds no spaces of its own and
-	// the text stays in the cells it has without the block.
-	BottomLeftTab bool
+	// TopNotice sits at the right of the top border, before TopRight, and is drawn whole or not at all; NoticeRoom
+	// says whether it fits.
+	TopNotice string
+	// TopNoticeTab says TopNotice is a tab, padded inside its own block, so the row adds no spaces of its own and the
+	// text stays in the cells it has without the block.
+	TopNoticeTab bool
 }
 
-// Scroll is where a pane's content sits in a longer document. A Total no greater than Visible draws no thumb.
-type Scroll struct{ Offset, Visible, Total int }
+// Scroll is where a pane's content sits in a longer document. A Total no greater than Visible draws no thumb. Top is
+// the pane rows above the document, pinned while it scrolls, which the thumb leaves alone.
+type Scroll struct{ Offset, Visible, Total, Top int }
 
 // Pane is one titled rectangle. Lines are the content rows; fewer are padded, more are cut.
 type Pane struct {
@@ -280,18 +288,15 @@ func (s Style) Pane(p Pane) []string {
 	b := s.border()
 	edge := s.ToneStyle(p.Tone)
 	inner, rows := PaneInner(p.Width, p.Height)
-	thumbTop, thumbLen := thumb(p.Scroll, rows)
+	thumbTop, thumbLen := thumb(p.Scroll, max(0, rows-p.Scroll.Top))
+	thumbTop += p.Scroll.Top
 	out := make([]string, 0, p.Height)
-	// A plain name takes the accent; one the caller already styled, a location with its bright filename, is kept.
-	title, tab := p.Titles.TopLeft, false
-	if title != "" && !strings.Contains(title, "\x1b") {
-		title = s.Emphasis(edge).Render(title)
-		if p.Focus && s.Color {
-			// The tab's own padding spaces it from the rule, so the row adds none of its own.
-			title, tab = s.TitleTab(p.Titles.TopLeft, p.Tone), true
-		}
+	title, tab := s.topTitle(p)
+	notice := p.Titles.TopNotice
+	if notice != "" && !p.Titles.TopNoticeTab {
+		notice = " " + notice + " "
 	}
-	out = append(out, s.borderRow(edge, b.tl, b.tr, title, p.Titles.TopRight, p.Width-2, tab))
+	out = append(out, s.borderRow(edge, b.tl, b.tr, title, notice, p.Titles.TopRight, p.Width-2, tab))
 	for i := range rows {
 		line := ""
 		if i < len(p.Lines) {
@@ -303,7 +308,47 @@ func (s Style) Pane(p Pane) []string {
 		}
 		out = append(out, edge.Render(b.v)+" "+fit(line, inner)+" "+right)
 	}
-	return append(out, s.borderRow(edge, b.bl, b.br, p.Titles.BottomLeft, p.Titles.BottomRight, p.Width-2, p.Titles.BottomLeftTab))
+	return append(out, s.borderRow(edge, b.bl, b.br, p.Titles.BottomLeft, "", p.Titles.BottomRight, p.Width-2, false))
+}
+
+// topTitle is the pane's name as its top border draws it, and whether it is a tab. A plain name takes the accent; one
+// the caller already styled, a location with its bright filename, is kept.
+func (s Style) topTitle(p Pane) (string, bool) {
+	title := p.Titles.TopLeft
+	if title == "" || strings.Contains(title, "\x1b") {
+		return title, false
+	}
+	if p.Focus && s.Color {
+		// The tab's own padding spaces it from the rule, so the row adds none of its own.
+		return s.TitleTab(title, p.Tone), true
+	}
+	return s.Emphasis(s.ToneStyle(p.Tone)).Render(title), false
+}
+
+// NoticeRoom is the widest notice text p's top border holds whole between its titles, beside the space on each side
+// of it and the rule cell after it.
+func (s Style) NoticeRoom(p Pane) int {
+	title, tab := s.topTitle(p)
+	return p.Width - 2 - titleCost(title, tab) - rightCost(p.Titles.TopRight) - 1 - 3
+}
+
+// titleCost is the cells a left title takes: a rule cell before it and, unless it is a tab, a space on each side.
+func titleCost(text string, tab bool) int {
+	if text == "" {
+		return 0
+	}
+	if tab {
+		return Width(text) + 1
+	}
+	return Width(text) + 3
+}
+
+// rightCost is the cells a right title takes: a space on each side and the rule cell after it.
+func rightCost(text string) int {
+	if text == "" {
+		return 0
+	}
+	return Width(text) + 3
 }
 
 // fit cuts or pads a line to exactly width cells, keeping its escapes and never splitting a grapheme.
@@ -326,27 +371,24 @@ func thumb(sc Scroll, rows int) (int, int) {
 	return top, length
 }
 
-// borderRow is a top or bottom edge with its two titles. The right title is essential (counts, a position) and
-// survives whole; the left gives way first, truncated by display cells. An empty title is plain border.
-func (s Style) borderRow(edge lipgloss.Style, left, right, l, r string, inner int, tab bool) string {
+// borderRow is a top or bottom edge with its titles. The right title is essential (counts, a position) and survives
+// whole. The notice, already padded, sits before it with a rule cell between and is dropped whole when it does not
+// fit. The left gives way next, truncated by display cells. An empty title is plain border.
+func (s Style) borderRow(edge lipgloss.Style, left, right, l, notice, r string, inner int, tab bool) string {
 	b := s.border()
 	pad := " "
 	if tab {
 		pad = ""
 	}
-	// Each title costs its text plus a rule cell and a space on its outer side and a space on its inner side; one
-	// rule cell always separates them.
-	cost := func(text string) int {
-		if text == "" {
-			return 0
-		}
-		return Width(text) + 3
+	leftCost := func(text string) int { return titleCost(text, tab) }
+	cost := rightCost
+	noticeCost := 0
+	if notice != "" {
+		noticeCost = Width(notice) + 1
 	}
-	leftCost := func(text string) int {
-		if text == "" {
-			return 0
-		}
-		return Width(text) + 1 + 2*len(pad)
+	// One rule cell always separates the titles.
+	if leftCost(l)+noticeCost+cost(r)+1 > inner {
+		notice, noticeCost = "", 0
 	}
 	if over := leftCost(l) + cost(r) + 1 - inner; over > 0 && l != "" {
 		if room := Width(l) - over; room >= 1 {
@@ -367,7 +409,10 @@ func (s Style) borderRow(edge lipgloss.Style, left, right, l, r string, inner in
 	if l != "" {
 		out.WriteString(edge.Render(b.h) + pad + l + pad)
 	}
-	out.WriteString(edge.Render(strings.Repeat(b.h, max(0, inner-leftCost(l)-cost(r)))))
+	out.WriteString(edge.Render(strings.Repeat(b.h, max(0, inner-leftCost(l)-noticeCost-cost(r)))))
+	if notice != "" {
+		out.WriteString(notice + edge.Render(b.h))
+	}
 	if r != "" {
 		out.WriteString(" " + r + " " + edge.Render(b.h))
 	}
@@ -694,7 +739,8 @@ type ReviewHeading struct {
 	Decided, Total int
 	// NoCount leaves out the progress and the count, for the standalone confirmation, which has no draft.
 	NoCount bool
-	// Reserve is the columns at the right end left blank and off the band, for a host that draws over them.
+	// Reserve is the columns at the right end left empty for a host that draws over them. The band still runs under
+	// them, so the host's controls sit on it rather than in a gap.
 	Reserve int
 }
 
@@ -806,7 +852,7 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	if Width(line) > avail {
 		line = ansi.Truncate(line, avail, "")
 	}
-	return line + strings.Repeat(" ", width-avail)
+	return line + band(Span{Text: strings.Repeat(" ", width-avail)})
 }
 
 // OnSurface puts a surface behind an already-rendered string, putting it back after every reset inside, so pieces
