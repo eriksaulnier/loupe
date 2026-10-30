@@ -522,7 +522,7 @@ func TestListRowCarriesTheSeverityColumn(t *testing.T) {
 	}
 	// The unrated finding gets a blank column, never a stand-in word.
 	// f-003 blocks, so its pill carries the blocking mark.
-	want := map[string]string{"f-003": "! [CRITICAL]", "f-004": "[MINOR]", "f-001": "[TRIVIAL]", "f-002": ""}
+	want := map[string]string{"f-003": "[CRITICAL] !", "f-004": "[MINOR]", "f-001": "[TRIVIAL]", "f-002": ""}
 	for _, row := range listRows(view) {
 		id := rowID(row)
 		if got := severityCell(row); got != want[id] {
@@ -541,7 +541,7 @@ func TestListSeverityColumnIsColoredByRank(t *testing.T) {
 		if len(fields) == 0 {
 			continue
 		}
-		word := fields[len(fields)-1]
+		word := fields[0]
 		i := strings.Index(row, word)
 		seen[word] = row[strings.LastIndex(row[:i], "\x1b"):i]
 	}

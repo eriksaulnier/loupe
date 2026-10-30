@@ -662,8 +662,9 @@ func (s Style) SeverityPill(word string, width int) string {
 	return Pad(s.bg(s.Emphasis(s.fg(s.rv.pills[i])), s.rv.pillFill[i]).Render(" "+label+" "), width)
 }
 
-// SeverityCell is the list's severity column: the pill, with the blocking mark inside it on the pill's fill, padded to
-// width. A blocking finding with no rating shows the mark alone, where the pill would start.
+// SeverityCell is the list's severity column: the pill, with the blocking mark after the label on the pill's fill, so
+// every label starts in the same column, padded to width. A blocking finding with no rating shows the mark alone, where
+// the pill would start.
 func (s Style) SeverityCell(word string, blocking bool, width int) string {
 	if !blocking {
 		return s.SeverityPill(word, width)
@@ -673,15 +674,15 @@ func (s Style) SeverityCell(word string, blocking bool, width int) string {
 		return Pad(" "+s.BlockingMark().Render(mark), width)
 	}
 	if !s.Color {
-		return Pad(mark+" "+s.SeverityPill(word, 0), width)
+		return Pad(s.SeverityPill(word, 0)+" "+mark, width)
 	}
 	i := len(palPills) - 1
 	if r := severityRank(word); r >= 0 && r < len(palPills) {
 		i = r
 	}
 	fill := s.rv.pillFill[i]
-	pill := s.bg(s.Emphasis(s.fg(s.rv.bad)), fill).Render(" "+mark) +
-		s.bg(s.Emphasis(s.fg(s.rv.pills[i])), fill).Render(" "+strings.ToUpper(word)+" ")
+	pill := s.bg(s.Emphasis(s.fg(s.rv.pills[i])), fill).Render(" "+strings.ToUpper(word)+" ") +
+		s.bg(s.Emphasis(s.fg(s.rv.bad)), fill).Render(mark+" ")
 	return Pad(pill, width)
 }
 

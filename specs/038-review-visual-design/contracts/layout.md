@@ -62,7 +62,7 @@ Pill fill MUST blend its foreground at 12% over the underlying surface in true c
 | Excluded | `×` | `×` (ASCII `x`) |
 | Withdrawn | `↩` | `↩` (ASCII `-`) |
 | Pending | `·` | `·` (ASCII `.`) |
-| Blocking | `●` inside the severity pill, or alone where the pill starts when unrated; `● blocking` in detail | `● [MAJOR]`, `●` alone when unrated (ASCII `!`), `! blocking` in detail |
+| Blocking | `●` inside the severity pill after its label, so labels align, or alone where the pill starts when unrated; `● blocking` in detail | `[MAJOR] ●`, `●` alone when unrated (ASCII `!`), `! blocking` in detail |
 | Open note | `✎` before title, in a slot every title keeps while any note is open | Same (ASCII `~`) |
 | High / medium / low confidence | `▰▰▰` / `▰▰▱` / `▰▱▱` | `■■■` / `■■□` / `■□□` |
 | Severity | Tinted uppercase pill | `[CRITICAL]`, `[MAJOR]`, `[MINOR]`, `[TRIVIAL]` |

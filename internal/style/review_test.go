@@ -543,12 +543,12 @@ func TestBrandIsAmber(t *testing.T) {
 	}
 }
 
-// The blocking mark sits inside the pill on its fill, in red, and a blocking finding with no rating shows the mark
-// alone.
+// The blocking mark sits inside the pill after the label, on its fill, in red, so labels align; a blocking finding with
+// no rating shows the mark alone.
 func TestSeverityCellCarriesTheBlockingMark(t *testing.T) {
 	color := reviewStyle(t, true, nil)
 	cell := color.SeverityCell("major", true, PillWidth)
-	if ansi.Strip(cell) != " ● MAJOR    " || !strings.Contains(cell, "38;2;243;139;168") {
+	if ansi.Strip(cell) != " MAJOR ●    " || !strings.Contains(cell, "38;2;243;139;168") {
 		t.Errorf("colored blocking cell %q", cell)
 	}
 	if got := color.SeverityCell("major", false, PillWidth); got != color.SeverityPill("major", PillWidth) {
@@ -556,8 +556,8 @@ func TestSeverityCellCarriesTheBlockingMark(t *testing.T) {
 	}
 	plain := reviewStyle(t, false, nil)
 	for _, c := range []struct{ word, want string }{
-		{"major", "● [MAJOR]   "},
-		{"critical", "● [CRITICAL]"},
+		{"major", "[MAJOR] ●   "},
+		{"critical", "[CRITICAL] ●"},
 		{"", " ●          "},
 	} {
 		if got := plain.SeverityCell(c.word, true, PillWidth); got != c.want {
@@ -565,7 +565,7 @@ func TestSeverityCellCarriesTheBlockingMark(t *testing.T) {
 		}
 	}
 	ascii := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"})
-	if got := ascii.SeverityCell("minor", true, PillWidth); got != "! [MINOR]   " {
+	if got := ascii.SeverityCell("minor", true, PillWidth); got != "[MINOR] !   " {
 		t.Errorf("ASCII blocking cell %q", got)
 	}
 }
