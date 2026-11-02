@@ -290,3 +290,10 @@ func TestURLOpenerFallsBackToWslview(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateNoticeIsEmptyWithoutADataRoot(t *testing.T) {
+	deps := Deps{Version: "0.19.0", Getenv: func(string) string { return "" }}
+	if got := updateNotice(deps); got != "" {
+		t.Errorf("updateNotice = %q, want nothing", got)
+	}
+}
