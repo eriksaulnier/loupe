@@ -6,6 +6,36 @@ Builds exist for Linux and macOS, on amd64 and arm64.
 
 ## The binary
 
+### With the install script
+
+```sh
+curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
+```
+
+The script downloads the latest release for your platform, checks it against the release's `checksums.txt` and puts `loupe` in `~/.local/bin`. It uses no sudo and edits no shell profile. It warns if that directory is not on your `PATH`, or if another `loupe`, such as a mise shim, comes first. A failed install leaves any existing binary in place.
+
+| Variable | What it does |
+| :--- | :--- |
+| `LOUPE_VERSION` | Installs this release instead of the latest, with or without the leading `v`. |
+| `LOUPE_INSTALL_DIR` | Installs into this directory instead of `~/.local/bin`. |
+
+```sh
+curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.19.0 LOUPE_INSTALL_DIR="$HOME/bin" sh # x-release-please-version
+```
+
+To read the script first, download it, then run the copy you read:
+
+```sh
+curl -fsSLo install.sh https://eriksaulnier.github.io/loupe/install.sh
+less install.sh
+sh install.sh
+```
+
+To update, run the same command again.
+
+> [!NOTE]
+> The checksum comes from the same release as the archive, so it detects a corrupt download, not a compromised release.
+
 ### With mise
 
 ```sh
@@ -35,6 +65,9 @@ install loupe ~/.local/bin/ # any directory on your PATH
 ```
 
 Where `shasum` is missing, pipe the same line to `sha256sum -c`.
+
+> [!NOTE]
+> macOS builds are unsigned. `curl` and mise set no quarantine flag, but a browser does. If you download the archive in a browser, run `xattr -d com.apple.quarantine loupe` before you start the binary.
 
 ### In GitHub Actions
 

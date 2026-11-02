@@ -188,6 +188,27 @@ jobs:
           [ "$BAD" = failure ] || { echo "::error::a wrong digest gave $BAD, want failure"; exit 1; }
           [ "$PATH" = "$(cat "$RUNNER_TEMP/path-before-refusals")" ] || { echo "::error::a refused install still added to PATH"; exit 1; }
 
+  # The fake-curl paths live in TestInstallScript*, so this job only proves a real release on each target. It pins the
+  # manifest version because latest would prove nothing about the version the pull request names.
+  install-script:
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: |
+          set -euo pipefail
+          version="$(jq -r '."."' .release-please-manifest.json)"
+          LOUPE_VERSION="$version" LOUPE_INSTALL_DIR="$RUNNER_TEMP/loupe-bin" sh install.sh
+          want="loupe version $version"
+          got="$("$RUNNER_TEMP/loupe-bin/loupe" --version)"
+          [ "$got" = "$want" ] || { echo "::error::loupe --version printed '$got', want '$want'"; exit 1; }
+
   install-action-unsupported:
     if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--')
     runs-on: windows-latest

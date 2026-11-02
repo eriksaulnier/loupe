@@ -26,7 +26,7 @@ run = "go test ./..."
 # CI sets LOUPE_TEST_FLAGS to write a coverage profile. It is left unquoted so that it splits into flags, and it reaches
 # go test alone: in GOFLAGS, -coverpkg would also reach the go list that golangci-lint runs and break its type check.
 [tasks.check]
-run = "go vet ./... && golangci-lint run && actionlint && ./scripts/check-tests.sh && go test $LOUPE_TEST_FLAGS ./..."
+run = "go vet ./... && golangci-lint run && actionlint && shellcheck install.sh && ./scripts/check-tests.sh && go test $LOUPE_TEST_FLAGS ./..."
 
 # Not part of check: a new advisory would fail ci.yml on every pull request and stop a release, which also runs check.
 # go run, not a tool above, because every job installs those and only vulncheck.yml needs this one.
