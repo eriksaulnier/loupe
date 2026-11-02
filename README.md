@@ -27,7 +27,7 @@ loupe collects a review agent's findings into a local draft so you decide each o
   <img alt="The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title." src="docs/assets/review.png">
 </picture>
 
-This is what a published review looks like. A CI review uses the same format. See [Comment format](docs/comment-format.md).
+This is what a published review looks like. A CI review uses the same format.
 
 `loupe stats` totals your decisions across runs: how many findings the agent filed, how many you published and how many you rejected.
 
@@ -55,7 +55,7 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 ## Documentation
 
 - [Install](docs/install.md): the binary, the agent plugin for each host, and updating the two together.
-- [Comment format](docs/comment-format.md): what a published review looks like on GitHub.
+- [Comment format](docs/comment-format.md): the full reference for a published review, for anyone building on it.
 - [The review workflow](docs/review-workflow.md): the attended loop, the pane hand-off, adapting a review skill you already have, and the command and environment reference.
 - [Unattended reviews in CI](docs/ci-action.md): the GitHub Action, the pipeline steps, sticky rounds and the rules an unattended review follows.
 - [Withdrawal reasons](docs/reason-codes.md): how an agent says why it withdrew a finding, and the recommended reason codes.

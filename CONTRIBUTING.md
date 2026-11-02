@@ -24,13 +24,29 @@ Two documents are contracts with people outside the codebase: [`specs/001-loupe-
 
 Bug fixes and small changes that keep to the existing specs go straight to a pull request.
 
-New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory holding `spec.md` (what and why), then `plan.md` (how, checked against the constitution) and `tasks.md` (ordered, test-first steps). The files follow [spec-kit](https://github.com/github/spec-kit): in Claude Code the `.claude/skills/speckit-*` skills drive the flow, but the files are plain Markdown built from `.specify/templates/`, and any contributor MAY write them by hand. The create script picks the next `NNN` from the local `specs/`, from `NNN-*` branches on `origin`, and from `specs/` on `origin/main` and those branches, so parallel branches do not share a number.
+New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory with three files, written in this order:
+
+1. `spec.md`: what and why.
+2. `plan.md`: how, checked against the constitution.
+3. `tasks.md`: ordered, test-first steps.
+
+The files follow [spec-kit](https://github.com/github/spec-kit). In Claude Code the `.claude/skills/speckit-*` skills drive the flow. The files are plain Markdown built from `.specify/templates/`, and any contributor MAY write them by hand.
+
+The create script picks the next `NNN` from the local `specs/`, from `NNN-*` branches on `origin`, and from `specs/` on `origin/main` and those branches. So parallel branches do not share a number.
 
 A plan that departs from the constitution, research or contracts MUST record the departure and its reason in its Complexity Tracking table. A new runtime dependency MUST carry a one-line reason in the plan (Principle VI).
 
 A change to the fields of a run file, such as `draft.json` or `receipt.json`, or of the findings record MUST follow the [schema versioning rule](docs/versioning.md): bump the version, and keep reading every older one.
 
-A spec that is drafted but not scheduled belongs on the [loupe project board](https://github.com/users/eriksaulnier/projects/6) as a draft item titled `Draft spec: <topic>`, not in `specs/`. A directory there takes the next number, which says the work is starting, and a branch holding one nobody is working on is a number reserved against a feature that may never arrive. When the work is picked up, move the card to In Progress, run the flow and paste the draft in as the spec's **Input**. A draft item is not an issue, so no pull request can close it: once the pull request merges, move the card to Done by hand. Finished specs stay in the repository: `docs/comment-format.md`, `specs/001-loupe-v1/validation.md`, the README, `AGENTS.md` and two code comments cite them by path, and a spec is reviewed as a diff like anything else.
+A spec that is drafted but not scheduled belongs on the [loupe project board](https://github.com/users/eriksaulnier/projects/6) as a draft item titled `Draft spec: <topic>`, not in `specs/`. A directory there takes the next number, which says the work is starting. A branch holding one that nobody is working on reserves a number for a feature that may never arrive.
+
+When the work is picked up:
+
+1. Move the card to In Progress.
+2. Run the flow and paste the draft in as the spec's **Input**.
+3. Once the pull request merges, move the card to Done by hand. A draft item is not an issue, so no pull request can close it.
+
+Finished specs stay in the repository. `docs/comment-format.md`, `specs/001-loupe-v1/validation.md`, the README, `AGENTS.md` and two code comments cite them by path, and a spec is reviewed as a diff like anything else.
 
 ## Tests
 
@@ -53,19 +69,40 @@ Inside the repository, mise puts `dist/` first on `PATH`, so `loupe` is the buil
 
 Codex has no per-session plugin flag. To check the Codex plugin, install it from the working tree into a scratch `CODEX_HOME` with `codex plugin marketplace add <path>` and `codex plugin add loupe@loupe`.
 
-`LOUPE_DEMO_HOME=<dir>` keeps the demo's data root: the first command seeds it, later ones reuse it with whatever was decided, and `rm -rf <dir>` starts over. It refuses a non-empty directory without the demo's marker, including one a failed seed left behind. It is also how to try the hand-off inside Herdr, tmux, Orca, iTerm2 or Ghostty without a pull request: `LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42'` opens a split running `loupe-demo review`, which reuses that root and its own fake GitHub, so publishing there still sends nothing.
+`LOUPE_DEMO_HOME=<dir>` keeps the demo's data root. The first command seeds it, later ones reuse it with whatever was decided, and `rm -rf <dir>` starts over. It refuses a non-empty directory without the demo's marker, including one a failed seed left behind.
+
+It is also how to try the hand-off inside Herdr, tmux, Orca, iTerm2 or Ghostty without a pull request:
+
+```sh
+LOUPE_DEMO_HOME=.demo mise run demo -- handoff 'acme/widgets#42'
+```
+
+That opens a split running `loupe-demo review`, which reuses that root and its own fake GitHub, so publishing there still sends nothing.
 
 ## Commits
 
-Commits MUST follow [Conventional Commits](https://www.conventionalcommits.org). The commit-msg hook checks the subject: `type(scope): summary` with a lowercase summary, at most 72 characters and no trailing period. The hook cannot check the rest, so the summary MUST be imperative ("add", not "added") and a body MUST be separated from the subject by a blank line. The type is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore` or `revert`. The scope is the package or area touched: `cli`, `tui`, `publish`, `plugin`, `specs`, `readme` and so on.
+Commits MUST follow [Conventional Commits](https://www.conventionalcommits.org). The commit-msg hook checks the subject: `type(scope): summary` with a lowercase summary, at most 72 characters and no trailing period. The hook cannot check the rest:
 
-Each commit MUST be one logical change, and the work SHOULD be committed as it lands rather than in one commit at the end. A rename, a behavior change and a documentation update are three commits even when one sitting produced them, and a subject that needs "and" to describe it is two commits wearing one hat. The gain is at review time: a reviewer can follow a rename without reading it as a rewrite, and a bisect lands on the change that broke something rather than on the afternoon that contained it.
+- The summary MUST be imperative ("add", not "added").
+- A body MUST be separated from the subject by a blank line.
+
+The type is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore` or `revert`. The scope is the package or area touched: `cli`, `tui`, `publish`, `plugin`, `specs`, `readme` and so on.
+
+Each commit MUST be one logical change, and the work SHOULD be committed as it lands, not in one commit at the end. A rename, a behavior change and a documentation update are three commits, even when one sitting produced them. A subject that needs "and" to describe it is two commits.
+
+This pays off at review time. A reviewer can follow a rename without reading it as a rewrite, and a bisect lands on the change that broke something, not on the afternoon that contained it.
 
 The body, when there is one, explains what changed and why. A squash merge discards those subjects: the pull request title becomes the single commit on `main`, so the changelog entry follows the title's type and not any commit's. The per-commit types still earn their keep before that, in local history, at review and under `git bisect`.
 
 ## Pull requests
 
-The title MUST be a Conventional Commit in the same shape the commit-msg hook enforces on a commit subject: `type(scope): summary`, a lowercase summary, at most 72 characters and no trailing period. The types and scopes are the ones listed under Commits above. The repository merges by squash and takes the title as the commit subject, so the title is the permanent subject on `main` and release-please's only input: pick its type for what a user of loupe would notice. Nothing checks it: a title with no recognized type merges cleanly and then produces no changelog entry and no version bump, which shows up at the next release and not before. Dependabot is the standing exception, since it prefixes `build` but capitalizes its summary.
+The title MUST be a Conventional Commit in the same shape the commit-msg hook enforces on a commit subject: `type(scope): summary`, a lowercase summary, at most 72 characters and no trailing period. The types and scopes are the ones listed under Commits above.
+
+The repository merges by squash and takes the title as the commit subject. So the title is the permanent subject on `main` and release-please's only input. Pick its type for what a user of loupe would notice.
+
+Nothing checks the title. One with no recognized type merges cleanly, then produces no changelog entry and no version bump. That shows up at the next release and not before.
+
+Dependabot is the standing exception, since it prefixes `build` but capitalizes its summary.
 
 CI runs `mise run check` on every pull request and reports coverage to Codecov. The description MUST show the checks that ran, with their output, and MUST name what was not verified (Principle VII). A change to a contract names the spec amendment that allows it.
 
