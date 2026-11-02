@@ -38,6 +38,8 @@ type Client interface {
 	// no order. GitHub stops at 250.
 	PullRequestCommits(ctx context.Context, owner, repo string, number int) ([]Commit, error)
 	Compare(ctx context.Context, owner, repo, base, head string) (Comparison, error)
+	// LatestRelease returns the tag of the newest release that is neither a draft nor a prerelease.
+	LatestRelease(ctx context.Context, owner, repo string) (string, error)
 	TokenKind() TokenKind
 }
 
@@ -556,6 +558,16 @@ type wireComparison struct {
 		Filename         string `json:"filename"`
 		PreviousFilename string `json:"previous_filename"`
 	} `json:"files"`
+}
+
+func (c *REST) LatestRelease(ctx context.Context, owner, repo string) (string, error) {
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("repos/%s/%s/releases/latest", url.PathEscape(owner), url.PathEscape(repo)), nil, &release); err != nil {
+		return "", err
+	}
+	return release.TagName, nil
 }
 
 func (c *REST) Compare(ctx context.Context, owner, repo, base, head string) (Comparison, error) {

@@ -133,6 +133,16 @@ func TestViewer(t *testing.T) {
 	}
 }
 
+func TestLatestRelease(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, `{"tag_name": "v0.20.0"}`)
+	})
+	tag, err := c.LatestRelease(context.Background(), "o", "r")
+	if err != nil || tag != "v0.20.0" || (*reqs)[0].Path != "/repos/o/r/releases/latest" {
+		t.Fatalf("got %q, %v, %+v", tag, err, *reqs)
+	}
+}
+
 func TestCompare(t *testing.T) {
 	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, `{"status": "ahead", "ahead_by": 2, "behind_by": 0, "total_commits": 2,

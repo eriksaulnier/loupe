@@ -43,6 +43,8 @@ type Deps struct {
 	OpenURL func(string) error
 	// LockBusy, when set, runs each time capture finds its lock held; tests use it to know a second capture is waiting.
 	LockBusy func()
+	// Version, when set, replaces the version stamped into the build, so that a test can act as a release.
+	Version string
 	// Screen, when set, is a test's stand-in for the terminal review and publish draw on; see tui.Screen.
 	Screen *tui.Screen
 	// palettes is built once per invocation so color is detected once; a Deps built by a test has none and each
@@ -59,6 +61,13 @@ func (d Deps) outStyle() style.Style {
 		return d.palettes.out
 	}
 	return style.New(d.Stdout, d.Getenv)
+}
+
+func (d Deps) loupeVersion() string {
+	if d.Version != "" {
+		return d.Version
+	}
+	return version
 }
 
 func (d Deps) errStyle() style.Style {

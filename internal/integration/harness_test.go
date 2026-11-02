@@ -65,6 +65,8 @@ type harness struct {
 	// GitHubErr, when set, is what building the GitHub client fails with.
 	GitHubErr error
 	LockBusy  func()
+	// Version is the release the commands act as. Empty leaves them a dev build.
+	Version string
 	// Screen is the terminal Start's commands draw on.
 	Screen *tui.Screen
 	client github.Client
@@ -157,6 +159,7 @@ func (h *harness) execute(stdin io.Reader, stdout, stderr io.Writer, now func() 
 		StderrIsTerminal: func() bool { return stderrTerminal },
 		TermWidth:        func() int { return 100 },
 		LockBusy:         h.LockBusy,
+		Version:          h.Version,
 		Screen:           h.Screen,
 	}
 	return cli.Execute(deps, args)

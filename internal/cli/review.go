@@ -19,6 +19,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/tui"
+	"github.com/eriksaulnier/loupe/internal/updatecheck"
 )
 
 const reviewHelp = `Open the review interface for a run: the human decides each finding with its diff in view.
@@ -97,11 +98,28 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	return reviewDone(cmd, deps, dir, jsonMode, interactiveOutput(deps, jsonMode), published)
 }
 
+// updateNotice reads only what capture cached, so that opening review never needs the network.
+func updateNotice(deps Deps) string {
+	current := deps.loupeVersion()
+	if !updatecheck.Enabled(current, deps.Getenv) {
+		return ""
+	}
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		return ""
+	}
+	available := updatecheck.Available(current, updatecheck.Cached(updatecheck.CachePath(root)))
+	if available == "" {
+		return ""
+	}
+	return available + ": see " + updatecheck.InstallDocs
+}
+
 // reviewSession runs the review interface and returns when the human leaves it, with the URL of the review they sent,
 // if any.
 func reviewSession(deps Deps, dir string, jsonMode bool) (string, error) {
 	ui := interactiveOutput(deps, jsonMode)
-	m, err := tui.New(tui.Config{Dir: dir, Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, OpenURL: deps.OpenURL, Screen: deps.Screen})
+	m, err := tui.New(tui.Config{Dir: dir, UpdateNotice: updateNotice(deps), Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, OpenURL: deps.OpenURL, Screen: deps.Screen})
 	if err != nil {
 		return "", err
 	}

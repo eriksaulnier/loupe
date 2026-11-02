@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,7 +22,11 @@ import (
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/updatecheck"
 )
+
+// WarnUpdateAvailable is the warning code a capture result carries when a newer loupe release exists.
+const WarnUpdateAvailable = "update-available"
 
 const captureHelp = `Capture a GitHub pull request into a new review round.
 
@@ -49,6 +54,10 @@ reported, open or closed, so a reader can tell a closed pull request's run apart
 
 The clone is --repo, or the working directory.
 
+At most once a day, a capture also looks up loupe's latest release. If it is newer than this
+build, capture warns on stderr and lists update-available in the result's warnings. A lookup
+that fails never refuses the capture. LOUPE_NO_UPDATE_CHECK=1 turns this off.
+
 Result (--json):
   {"loupe": 1, "ok": true, "command": "capture", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 0,
@@ -72,7 +81,8 @@ Result (--json):
   when --model was. previous.from is receipt (with round), github (with round, reviewUrl and findingCount) or none
   (with reason, and unreadable: true when a loupe review exists but cannot be read back, or the reviews could not be
   listed). Run loupe show --previous when it is receipt or github. comments is {read: true} with the three
-  counts, or {read: false, reason}. Run loupe show --comments when read is true.`
+  counts, or {read: false, reason}. Run loupe show --comments when read is true. warnings, an array of
+  warning codes, appears only when nonempty.`
 
 const prURLFix = "loupe capture https://github.com/<owner>/<repo>/pull/<number>"
 
@@ -306,6 +316,12 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if err := recordRun(cmd, ref, dir); err != nil {
 		return err
 	}
+	var warnings []string
+	if available := checkForUpdate(ctx, deps, client, root); available != "" {
+		warnings = append(warnings, WarnUpdateAvailable)
+		es := deps.errStyle()
+		_, _ = fmt.Fprintf(deps.Stderr, "%s %s. To update, see %s\n", es.Emphasis(es.Warn).Render("warning:"), available, updatecheck.InstallDocs)
+	}
 
 	next := []string{
 		fmt.Sprintf("loupe add --run %s --from <file> --json", ref),
@@ -313,16 +329,36 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 		fmt.Sprintf("then the human runs: loupe review %s", ref),
 	}
 	if wantJSON(cmd) {
-		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &empty.Version, map[string]any{
+		payload := map[string]any{
 			"target":   target,
 			"refs":     map[string]string{"base": baseRef, "head": headRef},
 			"cleanup":  cleanup,
 			"next":     next,
 			"previous": previous,
 			"comments": comments,
-		})
+		}
+		if len(warnings) > 0 {
+			payload["warnings"] = warnings
+		}
+		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &empty.Version, payload)
 	}
 	return printCapture(deps, ref, target, cleanup, next, previous, comments)
+}
+
+// checkForUpdate runs after the round exists, so that a slow or failed lookup cannot cost a capture its run. An
+// installation token marks a pipeline, which pins its version on purpose.
+func checkForUpdate(ctx context.Context, deps Deps, client github.Client, root string) string {
+	current := deps.loupeVersion()
+	if !updatecheck.Enabled(current, deps.Getenv) {
+		return ""
+	}
+	path := updatecheck.CachePath(root)
+	if client.TokenKind() != github.Installation {
+		updatecheck.Refresh(ctx, path, deps.Now(), func(ctx context.Context) (string, error) {
+			return client.LatestRelease(ctx, updatecheck.Owner, updatecheck.Repo)
+		})
+	}
+	return updatecheck.Available(current, updatecheck.Cached(path))
 }
 
 // captureOutline reads the headings of each changed Markdown file at the head. A deleted or binary file has no head

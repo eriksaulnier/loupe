@@ -34,6 +34,8 @@ Run `loupe capture <pr-url> --json` from a clone of the pull request's repositor
 
 To name what filed the findings in the published footer, add `--source <name>[@<version>]`, such as `--source my-reviewer@1.0.0`. To name which model produced them in the published footer, add `--model <id>` with your own model identifier, such as `--model claude-opus-4-1`, when you know it. loupe checks it against `^[a-z0-9][a-z0-9._/:-]*$`, at most 64 characters and no `--`, so lowercase it and drop any `@` qualifier before passing it. Both are optional. If you do not know your model, omit the flag rather than guess.
 
+A `warnings` entry of `update-available` means a newer loupe release exists. Continue the review. If a later command then refuses a flag that this skill names, the binary is probably too old, so tell the user to update it. The steps are at https://github.com/eriksaulnier/loupe/blob/main/docs/install.md.
+
 If capture refuses with `same-head`, an unpublished round already exists at this head. Follow `error.fix` and continue with that run instead of capturing again.
 
 If capture refuses with `pr` because the pull request is closed or merged, add `--allow-closed` only when the user asked to review a closed or merged pull request. Otherwise tell the user it is closed and stop.

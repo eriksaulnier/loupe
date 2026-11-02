@@ -50,6 +50,8 @@ type Config struct {
 	GitHub func() (github.Client, error)
 	// OpenURL opens the published review in a browser; nil offers no o on the published screen.
 	OpenURL func(string) error
+	// UpdateNotice, when set, shows when review opens.
+	UpdateNotice string
 	// Screen is set only by a test, to stand in for a terminal.
 	Screen *Screen
 }
@@ -216,6 +218,9 @@ func New(cfg Config) (*Model, error) {
 	}
 	m.setDraft(d)
 	m.cursor = initialCursor(d, m.order)
+	if cfg.UpdateNotice != "" {
+		m.say(style.Note, strings.TrimSpace(m.glyphs.Update+" "+cfg.UpdateNotice))
+	}
 
 	return m, nil
 }
