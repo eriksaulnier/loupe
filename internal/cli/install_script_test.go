@@ -12,12 +12,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // Serves release files from $FAKE_RELEASE by the URL path after /releases/, and records each request. A missing file
-// fails as curl -f does on a 404.
+// fails as curl -f does on a 404. With FAKE_HOLD set, it signals that it started and waits, so that a test can
+// interrupt the script partway through.
 const fakeCurl = `#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_RELEASE/arguments"
+if [ -n "${FAKE_HOLD:-}" ]; then
+	: > "$FAKE_RELEASE/started"
+	while [ ! -e "$FAKE_RELEASE/proceed" ]; do sleep 0.05; done
+	exit 22
+fi
 out=
 while [ $# -gt 1 ]; do
 	if [ "$1" = -o ]; then out=$2; fi
@@ -42,6 +51,7 @@ type installFixture struct {
 	bin     string
 	home    string
 	target  string
+	tmp     string
 	env     []string
 }
 
@@ -52,9 +62,10 @@ func newInstallFixture(t *testing.T) *installFixture {
 		release: filepath.Join(root, "release"),
 		bin:     filepath.Join(root, "bin"),
 		home:    filepath.Join(root, "home"),
+		tmp:     filepath.Join(root, "tmp"),
 	}
 	f.target = filepath.Join(f.home, ".local", "bin")
-	for _, dir := range []string{f.release, f.bin, f.home} {
+	for _, dir := range []string{f.release, f.bin, f.home, f.tmp} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -67,7 +78,7 @@ func newInstallFixture(t *testing.T) *installFixture {
 		"FAKE_RELEASE=" + f.release,
 		"FAKE_OS=Linux",
 		"FAKE_ARCH=x86_64",
-		"TMPDIR=" + root,
+		"TMPDIR=" + f.tmp,
 	}
 	return f
 }
@@ -175,19 +186,33 @@ func (f *installFixture) run(t *testing.T, env ...string) (stdout, stderr string
 
 func (f *installFixture) runScript(t *testing.T, script string, env ...string) (stdout, stderr string, err error) {
 	t.Helper()
-	sh, lookErr := exec.LookPath("sh")
-	if lookErr != nil {
-		t.Fatal(lookErr)
+	var out, errOut bytes.Buffer
+	cmd := f.command(t, script, env...)
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+	err = cmd.Run()
+	f.assertNoTemporaryFiles(t)
+	return out.String(), errOut.String(), err
+}
+
+func (f *installFixture) command(t *testing.T, script string, env ...string) *exec.Cmd {
+	t.Helper()
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Fatal(err)
 	}
 	cmd := exec.Command(sh, script)
 	cmd.Dir = f.home
 	// Later entries win, so a case MAY replace any variable of the fixture's.
 	cmd.Env = append(append([]string{}, f.env...), env...)
-	var out, errOut bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errOut
-	err = cmd.Run()
-	return out.String(), errOut.String(), err
+	return cmd
+}
+
+func (f *installFixture) assertNoTemporaryFiles(t *testing.T) {
+	t.Helper()
+	if got := listDir(t, f.tmp); got != "" {
+		t.Errorf("the script left temporary files: %s", got)
+	}
 }
 
 // mustRefuse asserts the loupe stderr shape, and that the attempt changed nothing in the target directory.
@@ -296,6 +321,53 @@ func TestInstallScriptLatest(t *testing.T) {
 	if !strings.HasSuffix(requests[1], "/download/v1.2.3/"+archive) {
 		t.Errorf("second request = %s", requests[1])
 	}
+}
+
+// FR-002: a person pipes this into sh, so every download MUST refuse plain HTTP and old TLS.
+func TestInstallScriptDownloadFlags(t *testing.T) {
+	f := newInstallFixture(t)
+	f.publish(t, "1.2.3", standInBinary("1.2.3"))
+	f.markLatest(t, "1.2.3")
+	if _, stderr, err := f.run(t); err != nil {
+		t.Fatalf("install failed: %v\n%s", err, stderr)
+	}
+	lines := strings.Split(strings.TrimSpace(mustRead(t, filepath.Join(f.release, "arguments"))), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("curl ran %d times, want 2", len(lines))
+	}
+	for _, line := range lines {
+		if !strings.Contains(line, "--proto =https --tlsv1.2 --retry 3 ") {
+			t.Errorf("curl arguments = %q", line)
+		}
+	}
+}
+
+func TestInstallScriptCleansUpOnSignal(t *testing.T) {
+	f := newInstallFixture(t)
+	cmd := f.command(t, filepath.Join(repoRoot(t), "install.sh"), "FAKE_HOLD=1")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	started := filepath.Join(f.release, "started")
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			t.Fatal("the fake curl did not start")
+		}
+	}
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.release, "proceed"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Wait(); err == nil {
+		t.Error("the script exited 0 after SIGTERM")
+	}
+	f.assertNoTemporaryFiles(t)
 }
 
 func TestInstallScriptPinnedVersion(t *testing.T) {
@@ -682,6 +754,32 @@ func TestInstallScriptPathWarnings(t *testing.T) {
 		}
 		if strings.Contains(stderr, "is not on your PATH") {
 			t.Errorf("the target is on PATH:\n%s", stderr)
+		}
+	})
+
+	t.Run("PATH entry with a trailing slash", func(t *testing.T) {
+		f := publish(t)
+		_, stderr, err := f.run(t, "PATH="+f.bin+":"+f.target+"/:/usr/bin:/bin")
+		if err != nil {
+			t.Fatalf("install failed: %v\n%s", err, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("stderr = %q, want nothing", stderr)
+		}
+	})
+
+	t.Run("relative install directory", func(t *testing.T) {
+		f := publish(t)
+		_, stderr, err := f.run(t, "LOUPE_INSTALL_DIR=custom/bin/")
+		if err != nil {
+			t.Fatalf("install failed: %v\n%s", err, stderr)
+		}
+		home, err := filepath.EvalSymlinks(f.home)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := `export PATH="` + home + `/custom/bin:$PATH"`; !strings.Contains(stderr, want) {
+			t.Errorf("stderr does not suggest %q:\n%s", want, stderr)
 		}
 	})
 

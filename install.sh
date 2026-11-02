@@ -58,7 +58,6 @@ choose_dir() {
 		[ -n "${HOME:-}" ] || fail "HOME is not set" "Set LOUPE_INSTALL_DIR to the directory to install into."
 		dir=$HOME/.local/bin
 	fi
-	dir=${dir%/}
 	# mv would put the binary inside the directory and report success.
 	if [ -d "$dir/loupe" ]; then
 		fail "$dir/loupe is a directory" "Remove it, or set LOUPE_INSTALL_DIR to another directory."
@@ -95,6 +94,8 @@ verify() {
 # the staged copy, because mv is atomic only inside one file system, and a noexec mount fails here too.
 install_binary() {
 	mkdir -p "$dir" || fail "could not create $dir" "Set LOUPE_INSTALL_DIR to a directory you can write to."
+	# A relative or slash-ended setting would make the PATH checks and the suggested PATH line wrong.
+	dir=$(CDPATH='' cd -- "$dir" && pwd) || fail "could not enter $dir" "Set LOUPE_INSTALL_DIR to a directory you can write to."
 	staged=$(mktemp "$dir/.loupe.XXXXXX") ||
 		fail "could not write to $dir" "Set LOUPE_INSTALL_DIR to a directory you can write to."
 	cp "$tmp/loupe" "$staged" || fail "could not write to $dir" "Check the free space in $dir."
@@ -107,14 +108,16 @@ install_binary() {
 
 warn_about_path() {
 	case ":$PATH:" in
-	*":$dir:"*) ;;
+	*":$dir:"* | *":$dir/:"*) ;;
 	*) warn "$dir is not on your PATH. Add this line to your shell profile: export PATH=\"$dir:\$PATH\"" ;;
 	esac
 
 	found=$(command -v loupe || true)
-	if [ -n "$found" ] && [ "$found" != "$dir/loupe" ]; then
-		warn "loupe resolves to $found, not $dir/loupe. Remove that copy, or put $dir first on your PATH."
-	fi
+	# command -v in dash and zsh prints a double slash for a PATH entry with a trailing slash.
+	case "$found" in
+	"" | "$dir/loupe" | "$dir//loupe") ;;
+	*) warn "loupe resolves to $found, not $dir/loupe. Remove that copy, or put $dir first on your PATH." ;;
+	esac
 }
 
 main() {
@@ -124,7 +127,9 @@ main() {
 	# EXIT does not run on death by signal in every sh, so a signal exits through it.
 	trap cleanup EXIT
 	trap 'exit 1' HUP INT TERM
-	tmp=$(mktemp -d) || fail "could not create a temporary directory" "Set TMPDIR to a directory you can write to."
+	# macOS mktemp ignores TMPDIR unless the template names the directory.
+	tmp=$(mktemp -d "${TMPDIR:-/tmp}/loupe.XXXXXX") ||
+		fail "could not create a temporary directory" "Set TMPDIR to a directory you can write to."
 
 	version=${LOUPE_VERSION:-}
 	version=${version#v}
