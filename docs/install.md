@@ -20,7 +20,7 @@ The script downloads the latest release for your platform, checks it against the
 | `LOUPE_INSTALL_DIR` | Installs into this directory instead of `~/.local/bin`. |
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.19.0 LOUPE_INSTALL_DIR="$HOME/bin" sh # x-release-please-version
+curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.19.0 LOUPE_INSTALL_DIR="$HOME/bin" sh
 ```
 
 To read the script first, download it, then run the copy you read:
@@ -50,19 +50,21 @@ To update, run the same `mise use` command again.
 
 ### From a release archive
 
-Each [release](https://github.com/eriksaulnier/loupe/releases) attaches one archive per platform and a `checksums.txt`. Download the archive for your platform, verify it and put `loupe` on your `PATH`:
+Each [release](https://github.com/eriksaulnier/loupe/releases) attaches one archive per platform and a `checksums.txt`. Download the archive for your platform, verify it and put `loupe` on your `PATH`. Set `os` to `darwin` or `linux` and `arch` to `arm64` or `amd64`. The last line MAY name any directory on your `PATH`.
 
+<!-- x-release-please-start-version -->
 ```sh
-version=0.19.0 # x-release-please-version
-os=darwin arch=arm64 # or linux, and amd64
+version=0.19.0
+os=darwin arch=arm64
 archive="loupe_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/eriksaulnier/loupe/releases/download/v$version"
 curl -fsSLO "$base/$archive"
 curl -fsSLO "$base/checksums.txt"
 grep -F "  $archive" checksums.txt | shasum -a 256 -c
 tar -xzf "$archive" loupe
-install loupe ~/.local/bin/ # any directory on your PATH
+install loupe ~/.local/bin/
 ```
+<!-- x-release-please-end -->
 
 Where `shasum` is missing, pipe the same line to `sha256sum -c`.
 
@@ -79,21 +81,32 @@ One plugin serves Claude Code, Codex and Pi. Its `human-review` skill is the wor
 
 To connect a review skill you already have, see [the review workflow](review-workflow.md#adapting-a-review-skill-you-already-have).
 
-```sh
-# Claude Code
-claude plugin marketplace add eriksaulnier/loupe
-claude plugin install loupe@loupe
-
-# Codex
-codex plugin marketplace add eriksaulnier/loupe
-codex plugin add loupe@loupe
-
-# Pi, pinned to the release. Use the version loupe --version prints.
-pi install git:github.com/eriksaulnier/loupe@v0.19.0 # x-release-please-version
-```
-
 > [!IMPORTANT]
 > Update the binary whenever you update the plugin. Claude Code and Codex install the plugin from `main`, so a skill can name a flag that an older binary lacks.
 
+### Claude Code
+
+```sh
+claude plugin marketplace add eriksaulnier/loupe
+claude plugin install loupe@loupe
+```
+
+### Codex
+
+```sh
+codex plugin marketplace add eriksaulnier/loupe
+codex plugin add loupe@loupe
+```
+
 > [!IMPORTANT]
-> Inside the Codex sandbox, loupe cannot reach GitHub, the clone's `.git`, its data directory or the terminal host's socket. Approve the skill's requests to run `loupe` outside the sandbox. Pi has no sandbox.
+> Inside the Codex sandbox, loupe cannot reach GitHub, the clone's `.git`, its data directory or the terminal host's socket. Approve the skill's requests to run `loupe` outside the sandbox.
+
+### Pi
+
+Pi pins the plugin to a release, so use the version that `loupe --version` prints. Pi has no sandbox.
+
+<!-- x-release-please-start-version -->
+```sh
+pi install git:github.com/eriksaulnier/loupe@v0.19.0
+```
+<!-- x-release-please-end -->

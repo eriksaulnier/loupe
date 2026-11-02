@@ -13,7 +13,7 @@
 This feature adds a distribution file, a Pages deployment and CI jobs. It changes no command, no flag, no `--json` envelope, no refusal code and no byte of the published review.
 
 - `specs/001-loupe-v1/contracts/cli.md` and `docs/comment-format.md` do not change.
-- Constitution 2.0.2 is unchanged. Principle III holds because the script runs before loupe, not inside it, and it downloads only from the loupe release on GitHub.
+- Constitution 3.1.0 is unchanged. Principle III holds because the script runs before loupe, not inside it, and it downloads only from the loupe release on GitHub.
 - `.goreleaser.yaml` does not change. The script consumes the archives and `checksums.txt` that `specs/024-install-action` already consumes.
 
 ## Clarifications

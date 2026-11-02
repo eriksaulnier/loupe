@@ -27,19 +27,26 @@ loupe collects a review agent's findings into a local draft so you decide each o
   <img alt="The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title." src="docs/assets/review.png">
 </picture>
 
-This is what a published review looks like. A CI review uses the same format. See [Comment format](docs/comment-format.md).
+This is what a published review looks like. A CI review uses the same format.
 
 `loupe stats` totals your decisions across runs: how many findings the agent filed, how many you published and how many you rejected.
 
 ## Install
 
+Install the binary into `~/.local/bin`. The script checks the download against the release's checksum.
+
 ```sh
 curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
+```
+
+Then add the agent plugin. For Claude Code:
+
+```sh
 claude plugin marketplace add eriksaulnier/loupe
 claude plugin install loupe@loupe
 ```
 
-The first line installs the binary into `~/.local/bin`. The other two add the agent plugin to Claude Code. [Install](docs/install.md) covers mise, Codex, Pi, release archives and GitHub Actions.
+[Install](docs/install.md) covers Codex, Pi, mise, release archives and GitHub Actions.
 
 loupe runs on Linux and macOS, on amd64 and arm64, and needs `git`. It reaches GitHub with the token in `GH_TOKEN` or `GITHUB_TOKEN`, or else the one `gh auth login` stored, so a signed-in `gh` needs no setup.
 
@@ -48,7 +55,7 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 ## Documentation
 
 - [Install](docs/install.md): the binary, the agent plugin for each host, and updating the two together.
-- [Comment format](docs/comment-format.md): what a published review looks like on GitHub.
+- [Comment format](docs/comment-format.md): the full reference for a published review, for anyone building on it.
 - [The review workflow](docs/review-workflow.md): the attended loop, the pane hand-off, adapting a review skill you already have, and the command and environment reference.
 - [Unattended reviews in CI](docs/ci-action.md): the GitHub Action, the pipeline steps, sticky rounds and the rules an unattended review follows.
 - [Withdrawal reasons](docs/reason-codes.md): how an agent says why it withdrew a finding, and the recommended reason codes.
