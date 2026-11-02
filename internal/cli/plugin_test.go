@@ -141,8 +141,8 @@ func TestPluginShipsNoReviewCommand(t *testing.T) {
 	}
 }
 
-// Every harness reads the same skill; a pane host's command in it would be one an agent composes instead of loupe
-// handoff. The skill names no host's command anywhere.
+// Every harness reads the same skill, so a pane host's command in it would be one an agent composes instead of
+// loupe handoff.
 func TestPluginSkillNamesNoHostCommand(t *testing.T) {
 	body := skillBody(t, "human-review")
 	for _, host := range []string{"herdr", "orca", "tmux", "osascript"} {
@@ -281,7 +281,7 @@ func TestPiPackage(t *testing.T) {
 	if pkg.Name != "loupe" || !pkg.Private || !slices.Contains(pkg.Keywords, "pi-package") {
 		t.Errorf("package.json = %+v, want private loupe with the pi-package keyword", pkg)
 	}
-	// Pi loads every resource kind a package lists; the Claude Code command is not a Pi prompt.
+	// Pi loads every resource kind a package lists.
 	if !slices.Equal(pkg.Pi.Skills, []string{"./plugin/skills"}) || pkg.Pi.Extensions != nil || pkg.Pi.Prompts != nil || pkg.Pi.Themes != nil {
 		t.Errorf("package.json pi = %+v, want skills ./plugin/skills and nothing else", pkg.Pi)
 	}
@@ -315,12 +315,13 @@ func TestReleasePleaseBumpsEveryPluginVersion(t *testing.T) {
 		}
 	}
 
-	// The install page's Pi install pins a tag, so release-please rewrites the line that carries its marker.
+	// The install page's Pi install pins a tag, so release-please rewrites the block inside its markers. A trailing
+	// marker comment would break the command when pasted into zsh, which does not treat # as a comment by default.
 	generic := false
 	for _, f := range config.Packages["."].ExtraFiles {
 		generic = generic || (f.Type == "generic" && f.Path == "docs/install.md")
 	}
-	pin := "pi install git:github.com/eriksaulnier/loupe@v" + releaseVersion(t) + " # x-release-please-version"
+	pin := "<!-- x-release-please-start-version -->\n```sh\npi install git:github.com/eriksaulnier/loupe@v" + releaseVersion(t) + "\n```\n<!-- x-release-please-end -->"
 	if !generic || !strings.Contains(readRepoFile(t, "docs/install.md"), pin) {
 		t.Errorf("docs/install.md MUST be a generic release-please extra-file and carry %q", pin)
 	}
