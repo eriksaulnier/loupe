@@ -223,10 +223,11 @@ func TestReviewShowsTheCachedUpdate(t *testing.T) {
 	h.capture()
 	h.Version = "0.19.0"
 	h.seedUpdateCache("0.20.0")
+	h.Env["LANG"] = "en_US.UTF-8"
 	before := len(h.GH.Requests())
 
 	s := h.Start("review", runRef)
-	s.WaitFor("loupe 0.20.0 is available, you have 0.19.0: see docs/install.md")
+	s.WaitFor("↑ loupe 0.20.0 is available, you have 0.19.0: see", "docs/install.md")
 	s.Press("q")
 	if _, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("exit %d: %s", exit, stderr)

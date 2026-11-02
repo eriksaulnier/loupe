@@ -112,7 +112,7 @@ func updateNotice(deps Deps) string {
 	if available == "" {
 		return ""
 	}
-	return available + ": see docs/install.md"
+	return available + ": see " + updatecheck.InstallDocs
 }
 
 // reviewSession runs the review interface and returns when the human leaves it, with the URL of the review they sent,

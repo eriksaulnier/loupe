@@ -219,7 +219,7 @@ func New(cfg Config) (*Model, error) {
 	m.setDraft(d)
 	m.cursor = initialCursor(d, m.order)
 	if cfg.UpdateNotice != "" {
-		m.say(style.Note, m.noteText(cfg.UpdateNotice))
+		m.say(style.Note, strings.TrimSpace(m.glyphs.Update+" "+cfg.UpdateNotice))
 	}
 
 	return m, nil
@@ -295,15 +295,15 @@ func (m *Model) checkDraft(asked bool) tea.Cmd {
 	}
 	switch {
 	case changed != "":
-		m.say(style.Note, m.noteText(changed))
+		m.say(style.Note, m.changedNotice(changed))
 	case asked:
 		m.say(style.Dim, "draft is current")
 	}
 	return nil
 }
 
-func (m *Model) noteText(text string) string {
-	return strings.TrimSpace(m.glyphs.Note + " " + text)
+func (m *Model) changedNotice(changed string) string {
+	return strings.TrimSpace(m.glyphs.Note + " " + changed)
 }
 
 // reload shows the draft as it is on disk, keeping the cursor on its finding and the open finding where the human

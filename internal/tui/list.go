@@ -41,7 +41,7 @@ func (m *Model) updateList(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		// The human sees what changed before they are asked to publish it.
 		if changed != "" {
-			m.say(style.Note, m.noteText(changed))
+			m.say(style.Note, m.changedNotice(changed))
 			return nil
 		}
 		if err := publish.ReadinessRefusal(m.draft); err != nil {

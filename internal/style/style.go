@@ -68,6 +68,7 @@ type GlyphSet struct {
 	Withdrawn string
 	Blocking  string
 	Note      string
+	Update    string
 	Reply     string
 	Cursor    string
 	Ellipsis  string
@@ -101,6 +102,7 @@ var (
 		Withdrawn: "\uf0e2", // nf-fa-undo
 		Blocking:  "\uf46e", // nf-oct-stop
 		Note:      "\uf27a", // nf-fa-commenting
+		Update:    "\uf0aa", // nf-fa-arrow_circle_up
 		Reply:     "\uf112", // nf-fa-reply
 		Cursor:    "\uf054", // nf-fa-chevron_right
 		Ellipsis:  "…", HRule: "─", Quote: "┃",
@@ -120,14 +122,14 @@ var (
 	}
 	unicodeGlyphs = GlyphSet{
 		Tier:     Unicode,
-		Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●", Note: "✎", Reply: "↳",
+		Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●", Note: "✎", Update: "↑", Reply: "↳",
 		Cursor: "›", Ellipsis: "…", HRule: "─", Quote: "┃",
 		Sep: "·", Up: "↑", Down: "↓", Left: "←", Right: "→",
 		Published: "✓", Canceled: "–",
 	}
 	asciiGlyphs = GlyphSet{
 		Tier:     ASCII,
-		Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!", Note: "~", Reply: "->",
+		Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!", Note: "~", Update: "^", Reply: "->",
 		Cursor: ">", Ellipsis: "...", HRule: "-", Quote: "|",
 		Sep: "-", Up: "up", Down: "down", Left: "left", Right: "right",
 		Published: "+", Canceled: "-",

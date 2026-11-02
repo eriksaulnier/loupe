@@ -90,7 +90,7 @@ func TestNerdGlyphsAreOneCell(t *testing.T) {
 	g := nerdGlyphs
 	icons := map[string]string{
 		"Accepted": g.Accepted, "Pending": g.Pending, "Excluded": g.Excluded, "Withdrawn": g.Withdrawn,
-		"Blocking": g.Blocking, "Note": g.Note, "Reply": g.Reply, "Cursor": g.Cursor,
+		"Blocking": g.Blocking, "Note": g.Note, "Update": g.Update, "Reply": g.Reply, "Cursor": g.Cursor,
 		"File": g.File, "General": g.General, "PR": g.PR, "Fix": g.Fix,
 		"Error": g.Error, "Published": g.Published, "Canceled": g.Canceled, "Help": g.Help,
 		"issue": g.Label("issue"), "suggestion": g.Label("suggestion"),
