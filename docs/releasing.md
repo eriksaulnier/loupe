@@ -12,6 +12,14 @@ release-please and goreleaser cut every release from `main`, in `.github/workflo
 
 The release is public only after step 4. Until then its download URLs return 404, and only accounts with push access can see it, so the install action and mise do not find it.
 
+The `install-script` job then runs `install.sh` with no pin on each target, and checks that it installs the new tag.
+
+## The install script
+
+`.github/workflows/pages.yml` publishes `install.sh` to GitHub Pages on each push to `main` that changes it. This is independent of a release, so a merge reaches users at once, and review on the pull request is the only gate. Pages MAY cache the old file for a few minutes.
+
+`install.sh` MUST keep working against the latest release. It depends on the archive naming and on `checksums.txt` in `.goreleaser.yaml`, and `TestInstallScriptMatchesReleaseArchives` pins both. A rename of the archives MUST land with a script that reads both the old and the new names, because the script goes live before the next release exists.
+
 ## Why the release starts as a draft
 
 With immutable releases on, a published release takes no new assets and its tag cannot move. A release that release-please published before goreleaser uploaded would stay without archives for good. The draft keeps the release open until every asset is attached.
