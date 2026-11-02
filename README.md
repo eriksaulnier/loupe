@@ -52,6 +52,7 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 - [CLI contract](specs/001-loupe-v1/contracts/cli.md): commands, input, results and errors, for scripting against loupe.
 - [Constitution](.specify/memory/constitution.md): the seven principles every change answers to.
 - [Contributing](CONTRIBUTING.md): setup, local development, tests, commits and releases.
+- [Security](SECURITY.md): how to report a vulnerability.
 
 ## License
 

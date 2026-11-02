@@ -28,6 +28,11 @@ run = "go test ./..."
 [tasks.check]
 run = "go vet ./... && golangci-lint run && actionlint && ./scripts/check-tests.sh && go test $LOUPE_TEST_FLAGS ./..."
 
+# Not part of check: a new advisory would fail ci.yml on every pull request and stop a release, which also runs check.
+# go run, not a tool above, because every job installs those and only vulncheck.yml needs this one.
+[tasks.vulncheck]
+run = "go run golang.org/x/vuln/cmd/govulncheck@latest ./..."
+
 # The version is stamped in so a build reports what it came from rather than "dev".
 [tasks.build]
 run = 'CGO_ENABLED=0 go build -ldflags "-X github.com/eriksaulnier/loupe/internal/cli.version=$(git describe --tags --always --dirty)" -o dist/loupe ./cmd/loupe'
