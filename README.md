@@ -31,12 +31,12 @@ This is what a published review looks like. A CI review uses the same format. Se
 ## Install
 
 ```sh
-mise use -g github:eriksaulnier/loupe@latest
+curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
 claude plugin marketplace add eriksaulnier/loupe
 claude plugin install loupe@loupe
 ```
 
-The first line installs the binary. The other two add the agent plugin to Claude Code. [Install](docs/install.md) covers Codex, Pi, release archives and GitHub Actions.
+The first line installs the binary into `~/.local/bin`. The other two add the agent plugin to Claude Code. [Install](docs/install.md) covers mise, Codex, Pi, release archives and GitHub Actions.
 
 loupe runs on Linux and macOS, on amd64 and arm64, and needs `git`. It reaches GitHub with the token in `GH_TOKEN` or `GITHUB_TOKEN`, or else the one `gh auth login` stored, so a signed-in `gh` needs no setup.
 
