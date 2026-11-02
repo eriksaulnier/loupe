@@ -66,6 +66,7 @@ Inside the repository, mise puts `dist/` first on `PATH`, so `loupe` is the buil
 | `mise run claude` | Builds, then starts Claude Code with the plugin loaded from `plugin/`. An installed `loupe@loupe` plugin can shadow it; `claude plugin disable loupe@loupe` for the session. |
 | `mise run pi` | Builds, then starts Pi with the workflow skill loaded from `plugin/skills/human-review`. |
 | `mise run demo [-- <args>]` | Runs loupe against seeded runs and the fake GitHub in a temporary data root. |
+| `mise run vulncheck` | Runs govulncheck over the module. CI runs it in its own workflow, so a new advisory does not stop `mise run check` or a release. |
 
 Codex has no per-session plugin flag. To check the Codex plugin, install it from the working tree into a scratch `CODEX_HOME` with `codex plugin marketplace add <path>` and `codex plugin add loupe@loupe`.
 
@@ -102,7 +103,7 @@ The repository merges by squash and takes the title as the commit subject. So th
 
 Nothing checks the title. One with no recognized type merges cleanly, then produces no changelog entry and no version bump. That shows up at the next release and not before.
 
-Dependabot is the standing exception, since it prefixes `build` but capitalizes its summary.
+Dependabot is the standing exception, since it prefixes `build` but capitalizes its summary. A `build` title cuts no release, so a Dependabot pull request that fixes an advisory MUST be retitled `fix(deps): ...` before it merges.
 
 CI runs `mise run check` on every pull request and reports coverage to Codecov. The description MUST show the checks that ran, with their output, and MUST name what was not verified (Principle VII). A change to a contract names the spec amendment that allows it.
 

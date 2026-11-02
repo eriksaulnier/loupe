@@ -1,0 +1,20 @@
+name: vulncheck
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # An advisory can arrive while nothing in the repository changes.
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - run: mise run vulncheck
