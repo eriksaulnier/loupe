@@ -22,7 +22,10 @@ loupe collects a review agent's findings into a local draft so you decide each o
 2. You decide each finding in `loupe review`, which opens in a pane beside the agent in Herdr, tmux, Orca, iTerm2 or Ghostty. You accept, rewrite or drop each one, or send it back with a note for the agent to answer.
 3. `loupe publish` shows the review as it will read, with its exact Markdown one key away. You write its opening, and one key posts it.
 
-![The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title.](docs/assets/review-dark.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/review-dark.png">
+  <img alt="The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title." src="docs/assets/review.png">
+</picture>
 
 This is what a published review looks like. A CI review uses the same format. See [Comment format](docs/comment-format.md).
 
