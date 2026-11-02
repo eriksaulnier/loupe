@@ -43,7 +43,7 @@
 - **Signals.** Decision: an `EXIT` trap removes the temporary directory and the staged file, and a `HUP`, `INT` and `TERM` trap exits through it. Rationale: `dash` does not run an `EXIT` trap on death by signal.
 - **A directory named `loupe`.** Decision: refuse. Rationale: `mv` would move the binary into the directory and report success.
 - **Pages content.** Decision: copy `install.sh` into an otherwise empty `_site/`. Rationale: FR-013. Nothing else in the repository becomes public at that host.
-- **Action majors.** Decision: `configure-pages@v6`, `upload-pages-artifact@v5` and `deploy-pages@v5`, the highest major tags on 2026-11-02.
+- **Action pins.** Decision: `pages.yml` pins `checkout`, `configure-pages`, `upload-pages-artifact` and `deploy-pages` by commit sha, at the highest major tags on 2026-11-02, with the job guarded to `refs/heads/main`. Rationale: this job publishes what people pipe into `sh`, so neither a moved tag nor a dispatch on another ref may reach it. Dependabot keeps the pins current.
 - **The URL pin carries no scheme.** Decision: the test searches for `eriksaulnier.github.io/loupe/install.sh`. Rationale: `scripts/check-tests.sh` refuses a URL literal that names another host, and the test fetches nothing.
 
 ## Verification

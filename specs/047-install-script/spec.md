@@ -97,7 +97,7 @@ The install succeeds, but the directory is not on `PATH`, or a mise shim comes f
 - **FR-010**: The script MUST warn if the target is not on `PATH`, and if `command -v loupe` resolves elsewhere.
 - **FR-011**: The script MUST point at `docs/install.md` for the agent plugin.
 - **FR-012**: A refusal MUST write `error: <message>` and `fix: <fix>` to stderr, and exit non-zero.
-- **FR-013**: A workflow MUST publish `install.sh`, and nothing else, to GitHub Pages on a push to `main` that changes it.
+- **FR-013**: A workflow MUST publish `install.sh`, and nothing else, to GitHub Pages on a push to `main` that changes it. It MUST NOT deploy from any other ref, and it MUST pin its actions by commit sha.
 - **FR-014**: CI MUST run the script against the manifest's release on each goreleaser target. `release.yml` MUST run it unpinned after goreleaser, and check that it installs the new tag.
 - **FR-015**: Tests MUST pin the archive name against `.goreleaser.yaml`, and the Pages URL across `install.sh`, `README.md` and `docs/install.md`. `mise run check` MUST run shellcheck over the script.
 
