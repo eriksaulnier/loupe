@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.0](https://github.com/eriksaulnier/loupe/compare/v0.19.0...v0.20.0) (2026-11-02)
+
+
+### Features
+
+* **capture:** warn when a newer loupe release exists ([#105](https://github.com/eriksaulnier/loupe/issues/105)) ([10b8090](https://github.com/eriksaulnier/loupe/commit/10b8090a2092274f0159f32c527456479e46fdf0))
+* **install:** add a curl install script ([#100](https://github.com/eriksaulnier/loupe/issues/100)) ([99fe624](https://github.com/eriksaulnier/loupe/commit/99fe6247de9f3163a057f3831095ff7405361566))
+
 ## [0.19.0](https://github.com/eriksaulnier/loupe/compare/v0.18.0...v0.19.0) (2026-10-30)
 
 
