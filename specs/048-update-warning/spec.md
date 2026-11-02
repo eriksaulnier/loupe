@@ -98,7 +98,7 @@ The network is down, GitHub returns an error, or the check is slow. Capture beha
 
 - **SC-001**: A person on an old release sees the notice at the next review after a capture has looked up the new release.
 - **SC-002**: A failing or stalled lookup adds at most 2 seconds to a capture, at most once a day.
-- **SC-003**: With no newer release, every existing golden passes unchanged.
+- **SC-003**: With no newer release, capture's output is byte-identical to today's. The only golden that changes is the environment list in `--help`.
 
 ## Assumptions
 

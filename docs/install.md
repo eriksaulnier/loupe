@@ -75,6 +75,12 @@ Where `shasum` is missing, pipe the same line to `sha256sum -c`.
 
 The repository is also an action that installs a release. [Unattended reviews in CI](ci-action.md#install-loupe-in-a-job) shows how to use it.
 
+### Update warnings
+
+At most once a day, `loupe capture` asks GitHub for the latest release. If yours is older, capture warns on stderr, and `loupe review` shows a notice when it opens. A failed lookup never affects capture, and review makes no network call.
+
+To turn this off, set `LOUPE_NO_UPDATE_CHECK=1`. It is also off in CI, and for a build that is not a release.
+
 ## The agent plugin
 
 One plugin serves Claude Code, Codex and Pi. Its `human-review` skill is the workflow that a review skill or agent follows. The agent captures the pull request, files findings, hands the run to you and answers your send-back notes. The plugin brings no review method of its own.

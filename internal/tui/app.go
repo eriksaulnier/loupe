@@ -50,6 +50,8 @@ type Config struct {
 	GitHub func() (github.Client, error)
 	// OpenURL opens the published review in a browser; nil offers no o on the published screen.
 	OpenURL func(string) error
+	// UpdateNotice, when set, shows when review opens.
+	UpdateNotice string
 	// Screen is set only by a test, to stand in for a terminal.
 	Screen *Screen
 }
@@ -216,6 +218,9 @@ func New(cfg Config) (*Model, error) {
 	}
 	m.setDraft(d)
 	m.cursor = initialCursor(d, m.order)
+	if cfg.UpdateNotice != "" {
+		m.say(style.Note, m.noteText(cfg.UpdateNotice))
+	}
 
 	return m, nil
 }
@@ -290,15 +295,15 @@ func (m *Model) checkDraft(asked bool) tea.Cmd {
 	}
 	switch {
 	case changed != "":
-		m.say(style.Note, m.changedNotice(changed))
+		m.say(style.Note, m.noteText(changed))
 	case asked:
 		m.say(style.Dim, "draft is current")
 	}
 	return nil
 }
 
-func (m *Model) changedNotice(changed string) string {
-	return strings.TrimSpace(m.glyphs.Note + " " + changed)
+func (m *Model) noteText(text string) string {
+	return strings.TrimSpace(m.glyphs.Note + " " + text)
 }
 
 // reload shows the draft as it is on disk, keeping the cursor on its finding and the open finding where the human

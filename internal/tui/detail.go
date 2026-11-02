@@ -605,7 +605,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		m.view, m.notice = viewList, ""
 		changed, err := m.reload()
 		if changed != "" {
-			m.say(style.Note, m.changedNotice(changed))
+			m.say(style.Note, m.noteText(changed))
 		}
 		cmd := m.fail(err)
 		// The cursor is found again after the reload, not before it: a finding the agent filed meanwhile can sort

@@ -148,6 +148,7 @@ In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-me
 | `LOUPE_RUN` | The run a command acts on when it names none |
 | `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for a run's lock. Default 3000, maximum 60000 |
 | `LOUPE_ICONS` | `ascii`, `unicode` (default) or `nerd` (needs a Nerd Font). A non-UTF-8 locale always gets ASCII |
+| `LOUPE_NO_UPDATE_CHECK` | Any value stops `loupe capture` looking up new releases, and turns off the warnings that follow |
 | `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Control color and glyph selection; `TERM=dumb` refuses review and publish, not `publish --unattended` |
 | `GH_TOKEN`, `GITHUB_TOKEN` | The github.com token, checked in that order. Without either, loupe uses the one `gh auth login` stored |
 

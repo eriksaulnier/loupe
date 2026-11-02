@@ -97,6 +97,8 @@ type Server struct {
 	comparisons   map[compareKey]github.Comparison
 	commits       map[prKey][]github.Commit
 	viewer        string
+	latestRelease string
+	stallRelease  bool
 	userForbidden bool
 	outcomes      []Outcome
 	updates       []Outcome
@@ -134,6 +136,7 @@ func Start() (s *Server, stop func()) {
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}", s.getPullRequest)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls", s.listPullRequests)
 	mux.HandleFunc("GET /user", s.getUser)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/releases/latest", s.getLatestRelease)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{number}/reviews", s.listReviews)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{number}/reviews", s.createReview)
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{number}/reviews/{id}", s.updateReview)
@@ -301,6 +304,20 @@ func (s *Server) SetViewer(login string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.viewer = login
+}
+
+// SetLatestRelease sets the tag GET /repos/{owner}/{repo}/releases/latest answers with, for every repository.
+func (s *Server) SetLatestRelease(tag string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.latestRelease = tag
+}
+
+// StallLatestRelease makes the latest-release request hang until the caller cancels it.
+func (s *Server) StallLatestRelease() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stallRelease = true
 }
 
 // DenyUser makes GET /user answer 403, as GitHub does for an App installation token. The created review's author
@@ -482,6 +499,21 @@ func (s *Server) getUser(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"login": s.viewer})
+}
+
+func (s *Server) getLatestRelease(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	tag, stall := s.latestRelease, s.stallRelease
+	s.mu.Unlock()
+	if stall {
+		<-r.Context().Done()
+		return
+	}
+	if tag == "" {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tag_name": tag})
 }
 
 func (s *Server) getComparison(w http.ResponseWriter, r *http.Request) {
