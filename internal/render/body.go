@@ -666,7 +666,8 @@ func commitLink(in Input) string {
 
 // sinceLink compares the newest earlier round's commit with this one, so a reader of a sticky review sees in one
 // click what the author changed between rounds. An edit sends no notification and keeps the review's first
-// timestamp, so the footer is where a reader learns the review moved on. It is empty without an earlier round.
+// timestamp, so the footer is where a reader learns the review moved on. It is empty without an earlier round, or when
+// that round reviewed this commit. A round read from a v0.11.0 body carries a short commit, so the match is a prefix.
 func sinceLink(in Input) string {
 	if in.Sticky == nil || in.Owner == "" || in.Repo == "" {
 		return ""
@@ -675,7 +676,7 @@ func sinceLink(in Input) string {
 	if round == 0 && len(in.Sticky.Earlier) > 0 {
 		round, sha = in.Sticky.Earlier[0].N, in.Sticky.Earlier[0].Commit
 	}
-	if round == 0 {
+	if round == 0 || sha != "" && strings.HasPrefix(in.HeadSHA, sha) {
 		return ""
 	}
 	return fmt.Sprintf("[changes since round %d](https://github.com/%s/%s/compare/%s...%s)", round, in.Owner, in.Repo, sha, in.HeadSHA)
