@@ -224,7 +224,7 @@ func TestReviewShowsTheCachedUpdate(t *testing.T) {
 	h.Version = "0.19.0"
 	h.seedUpdateCache("0.20.0")
 	h.Env["LANG"] = "en_US.UTF-8"
-	before := len(h.GH.Requests())
+	before := h.releaseLookups()
 
 	s := h.Start("review", runRef)
 	s.WaitFor("↑ loupe 0.20.0 is available, you have 0.19.0: see", "docs/install.md")
@@ -232,8 +232,9 @@ func TestReviewShowsTheCachedUpdate(t *testing.T) {
 	if _, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("exit %d: %s", exit, stderr)
 	}
-	if got := len(h.GH.Requests()); got != before {
-		t.Errorf("review made %d GitHub requests, want none", got-before)
+	// Review reads the pull request for its state (specs/050-pr-state-awareness), but the notice comes from the cache.
+	if got := h.releaseLookups(); got != before {
+		t.Errorf("review made %d release lookups, want none", got-before)
 	}
 }
 

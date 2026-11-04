@@ -83,6 +83,16 @@ func TestPullRequest(t *testing.T) {
 	}
 }
 
+func TestPullRequestMerged(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, `{"number": 7, "state": "closed", "merged": true, "user": {"login": "alice"}, "base": {"ref": "main", "sha": "b1"}, "head": {"ref": "feat", "sha": "h1"}}`)
+	})
+	pr, err := c.PullRequest(context.Background(), "o", "r", 7)
+	if err != nil || pr.State != "closed" || !pr.Merged {
+		t.Fatalf("got %+v, %v", pr, err)
+	}
+}
+
 // GitHub sends head.repo as null once the fork is deleted.
 func TestPullRequestWithDeletedFork(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {

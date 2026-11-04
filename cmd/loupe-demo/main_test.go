@@ -25,7 +25,7 @@ func TestSeedWritesRunsInTheirStates(t *testing.T) {
 	home := t.TempDir()
 	gh := fakegh.New(t)
 	client := gh.Client(t)
-	if err := seed(home, gh, time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC), true); err != nil {
+	if err := seed(home, gh, time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC), true, ""); err != nil {
 		t.Fatal(err)
 	}
 	show := func(ref string) map[string]any {
@@ -146,14 +146,14 @@ func TestDemoHomeKeepsOnlyADemoDataRoot(t *testing.T) {
 func TestPrepareSeedsAKeptRootOnce(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "demo")
 	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
-	if err := prepare(home, fakegh.New(t), now, true); err != nil {
+	if err := prepare(home, fakegh.New(t), now, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	draftPath := filepath.Join(run.RunDir(home, "acme", "widgets", 42, 1), "draft.json")
 	if err := os.WriteFile(draftPath, []byte(`{"changed":true}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := prepare(home, fakegh.New(t), now, true); err != nil {
+	if err := prepare(home, fakegh.New(t), now, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	if data, err := os.ReadFile(draftPath); err != nil || string(data) != `{"changed":true}` {
@@ -213,5 +213,19 @@ func TestDemoStickyBodyHoldsThreeRounds(t *testing.T) {
 	}
 	if !strings.Contains(first, stickyNote) || !strings.Contains(first, "### Earlier rounds") || !strings.Contains(first, "unattended") {
 		t.Errorf("unexpected body:\n%s", first)
+	}
+}
+
+func TestDemoPRState(t *testing.T) {
+	for value, want := range map[string]struct {
+		state  string
+		merged bool
+	}{"": {"open", false}, "merged": {"closed", true}, "closed": {"closed", false}} {
+		if state, merged, err := demoPRState(value); err != nil || state != want.state || merged != want.merged {
+			t.Errorf("%q: %q %v %v", value, state, merged, err)
+		}
+	}
+	if _, _, err := demoPRState("draft"); err == nil {
+		t.Error("an unknown state was accepted")
 	}
 }

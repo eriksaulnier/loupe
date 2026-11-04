@@ -14,6 +14,7 @@ Evidence gathered while building v0, recorded so the rebuild does not rediscover
 - A pull request author cannot approve or request changes on their own pull request; the API rejects it with 422. loupe refuses before sending.
 - `GET /repos/{owner}/{repo}/pulls/{number}/reviews` lists submitted reviews with `user.login`, `commit_id`, `state` and `body`. Pending reviews of the viewer appear with state `PENDING`; they MUST NOT count as submitted during reconciliation.
 - Reported, not observed by loupe: the API accepts a review on a merged pull request. On `cli/cli#5038`, `gh pr review --approve` on a merged pull request recorded an approval, and a GitHub CLI maintainer wrote on 2022-01-21 that reviewing merged pull requests is "explicitly allowed by the API". Nothing shows the same for a pull request closed without a merge, or for a sticky edit on either. `loupe capture --allow-closed` relies on it, and publish does not check the state (`specs/039-capture-allow-closed`).
+- Documented, not observed by loupe: `GET /repos/{owner}/{repo}/pulls/{number}` sends `merged`, a boolean, beside `state`, and a merged pull request has `state` `closed`. The list endpoint `GET /repos/{owner}/{repo}/pulls` does not send `merged`. `loupe review` and the publish confirmation read `merged` from the single pull request only (`specs/050-pr-state-awareness`).
 
 ## Review edits
 

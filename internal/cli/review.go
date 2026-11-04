@@ -38,6 +38,12 @@ Every decision is saved immediately and is refused if the finding changed since 
 shown. After a review is sent, review shows its link: o opens it in the browser and any
 other key quits. The link is printed again once the interface closes.
 
+Review reads the pull request from GitHub as it opens and 60 seconds after each check. The
+header tags a pull request that merged, closed or gained commits since capture (PR merged,
+PR closed, head moved), and the first time each shows, one notice says so. A failed check
+tags it state unknown and changes nothing else, so review works offline and without
+credentials. A run captured with --allow-closed is not tagged for being closed.
+
 The interface draws full screen, so TERM=dumb or a terminal that cannot enter raw mode refuses
 with tty. A window smaller than 60x12 shows its size and the size it needs until it grows; q
 and ctrl+c quit there, or decline at the confirmation. For its first half second review drops
@@ -119,7 +125,7 @@ func updateNotice(deps Deps) string {
 // if any.
 func reviewSession(deps Deps, dir string, jsonMode bool) (string, error) {
 	ui := interactiveOutput(deps, jsonMode)
-	m, err := tui.New(tui.Config{Dir: dir, UpdateNotice: updateNotice(deps), Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, OpenURL: deps.OpenURL, Screen: deps.Screen})
+	m, err := tui.New(tui.Config{Dir: dir, UpdateNotice: updateNotice(deps), Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, WatchPR: true, OpenURL: deps.OpenURL, Screen: deps.Screen})
 	if err != nil {
 		return "", err
 	}
@@ -128,6 +134,7 @@ func reviewSession(deps Deps, dir string, jsonMode bool) (string, error) {
 		opts = append(opts, tea.WithWindowSize(deps.Screen.Width, deps.Screen.Height), tea.WithColorProfile(colorprofile.ASCII), tea.WithEnvironment([]string{"TERM=xterm-256color"}))
 	}
 	final, err := tea.NewProgram(m, opts...).Run()
+	m.StopWatching()
 	// A signal ends the program even while a confirmed review is being sent; the send still finishes and is recorded.
 	m.WaitForSend()
 	if err != nil {

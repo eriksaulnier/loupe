@@ -43,6 +43,8 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 
 Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
 
+While review is open, it reads the pull request from GitHub as it opens and 60 seconds after each check. The header tags a pull request that merged, closed or gained commits since capture with `PR merged`, `PR closed` or `head moved`, and the first time each shows, one notice says so. With no network or credentials the tag reads `state unknown`, and review works as before. A run captured with `--allow-closed` is not tagged for being closed.
+
 ### 5. The agent answers what you send back
 
 A note asks the agent about one finding. The agent revises the finding or withdraws it, then replies to your note. A withdrawn finding shows the agent's reason beside it, so you can judge the withdrawal before you reinstate it with `u`. You resolve or dismiss the note, and only then does the finding count as decided. A revised finding comes back pending, so you decide it again.
@@ -70,7 +72,7 @@ Publish refuses rather than send something wrong. Each refusal names the command
 - when the captured commit has left the pull request's history.
 - to approve or request changes on your own pull request.
 
-A head that only gained commits since capture is not refused for a comment or a request for changes. The confirmation lists the new commits and the findings on files they changed. An approval is still refused, because it would cover the new commits unreviewed.
+A head that only gained commits since capture is not refused for a comment or a request for changes. The confirmation lists the new commits and the findings on files they changed. An approval is still refused, because it would cover the new commits unreviewed. A pull request that merged or closed after capture is named in the confirmation, and `y` still sends the review.
 
 Once the review is posted, the run keeps a receipt. Running `loupe publish` again prints the review's URL without contacting GitHub.
 

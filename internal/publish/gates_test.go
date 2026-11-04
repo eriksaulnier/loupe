@@ -8,6 +8,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
@@ -221,5 +222,68 @@ func TestActionRefusal(t *testing.T) {
 	wantRefusal(t, ActionRefusal("approve", "reviewer", "author", d), refusal.Blocking)
 	if err := ActionRefusal("request-changes", "reviewer", "author", d); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestClosedSince(t *testing.T) {
+	cases := []struct {
+		name     string
+		captured string
+		pr       github.PullRequest
+		want     string
+	}{
+		{"open", "open", github.PullRequest{State: "open"}, ""},
+		{"closed", "open", github.PullRequest{State: "closed"}, "closed"},
+		{"merged", "open", github.PullRequest{State: "closed", Merged: true}, "merged"},
+		{"empty state", "open", github.PullRequest{}, ""},
+		{"unexpected state", "open", github.PullRequest{State: "draft"}, ""},
+		{"captured closed, still closed", "closed", github.PullRequest{State: "closed"}, ""},
+		{"captured closed, merged", "closed", github.PullRequest{State: "closed", Merged: true}, ""},
+		{"schema 1, closed", "", github.PullRequest{State: "closed"}, "closed"},
+		{"schema 1, open", "", github.PullRequest{State: "open"}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClosedSince(run.Target{PRState: tc.captured}, tc.pr); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// FR-010: the confirmation's state comes from the pull request the gates already read, with no request of its own.
+func TestGatesReportTheLiveState(t *testing.T) {
+	gh, client := newFake(t)
+	in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
+	open, err := Gates(context.Background(), in)
+	if err != nil || open.Closed != "" {
+		t.Fatalf("open: %+v, %v", open, err)
+	}
+	before := len(gh.Requests())
+	if _, err := Gates(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	perCall := len(gh.Requests()) - before
+
+	gh.SetPR("acme", "widgets", github.PullRequest{Number: 42, URL: prLink, Title: "Add widgets", State: "closed", Merged: true, Author: "author",
+		BaseRef: "main", BaseSHA: "2222222222222222222222222222222222222222", HeadSHA: headSHA})
+	before = len(gh.Requests())
+	merged, err := Gates(context.Background(), in)
+	if err != nil || merged.Closed != "merged" || merged.HeadMoved != nil {
+		t.Fatalf("merged: %+v, %v", merged, err)
+	}
+	if n := len(gh.Requests()) - before; n != perCall {
+		t.Fatalf("a merged pull request cost %d requests, an open one %d", n, perCall)
+	}
+}
+
+func TestGatesPassOnGitHubFailures(t *testing.T) {
+	for _, path := range []string{"/repos/acme/widgets/pulls/42", "/user"} {
+		gh, client := newFake(t)
+		gh.Fail("GET", path, 500)
+		in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
+		if gated, err := Gates(context.Background(), in); err == nil || gated != (Gated{}) {
+			t.Errorf("%s failing: %+v, %v", path, gated, err)
+		}
 	}
 }

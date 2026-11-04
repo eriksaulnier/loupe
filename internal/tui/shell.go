@@ -80,7 +80,7 @@ func (m *Model) reviewHeader() string {
 	order, decided, total := progressOf(m.draft, m.order)
 	return m.styles.ReviewHeader(style.ReviewHeading{
 		Ref: render.ForDisplay(m.ref()), URL: m.target.URL, Round: m.target.Round, Title: m.titleText(),
-		Progress: order, Current: m.currentCell(), Decided: decided, Total: total, Reserve: m.hostReserve(),
+		Progress: order, Current: m.currentCell(), Decided: decided, Total: total, Reserve: m.hostReserve(), Tag: m.prTag(),
 	}, m.width)
 }
 

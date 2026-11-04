@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"slices"
@@ -46,8 +47,12 @@ type Config struct {
 	Now    func() time.Time
 	// Output is where the program draws; it decides which colors the terminal supports.
 	Output io.Writer
-	// GitHub is called only when the human publishes, so reviewing never needs credentials.
+	// GitHub is called when the human publishes and, with WatchPR, for each check of the live pull request. A failed
+	// check only tags the header, so reviewing never needs credentials.
 	GitHub func() (github.Client, error)
+	// WatchPR re-reads the pull request while review is open (specs/050-pr-state-awareness). Only loupe review sets
+	// it; the standalone confirmation and tests that publish do not.
+	WatchPR bool
 	// OpenURL opens the published review in a browser; nil offers no o on the published screen.
 	OpenURL func(string) error
 	// UpdateNotice, when set, shows when review opens.
@@ -167,6 +172,15 @@ type Model struct {
 	// browseID ties the opener's answer to the request that started it, so a late answer from list or detail cannot
 	// quit the program or reach a view the human has since left.
 	browseID int
+
+	// The pull request watch: whether a check or its wait is armed, what the checks found, the tag whose notice waits
+	// for the human, and the tags that already raised one. watchCtx ends every check when StopWatching runs.
+	prArmed     bool
+	live        liveState
+	prPending   string
+	prNoticed   map[string]bool
+	watchCtx    context.Context
+	watchCancel context.CancelFunc
 }
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -208,6 +222,7 @@ func New(cfg Config) (*Model, error) {
 		note:         note,
 		keptNotes:    map[string]string{},
 		keptRewrites: map[string]keptRewrite{},
+		prNoticed:    map[string]bool{},
 		rewriteTitle: newRewriteInput(false),
 		rewriteBody:  newRewriteInput(true),
 		body:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
@@ -216,6 +231,7 @@ func New(cfg Config) (*Model, error) {
 	if cfg.Screen != nil {
 		m.width, m.height = cfg.Screen.Width, cfg.Screen.Height
 	}
+	m.watchCtx, m.watchCancel = context.WithCancel(context.Background())
 	m.setDraft(d)
 	m.cursor = initialCursor(d, m.order)
 	if cfg.UpdateNotice != "" {
@@ -236,6 +252,11 @@ var settleOnOpen = 500 * time.Millisecond
 type openedMsg struct{}
 
 func (m *Model) Init() tea.Cmd {
+	return tea.Batch(m.initScreen(), m.startPRCheck())
+}
+
+// initScreen asks for the background color, starts the draft poll and, outside tests, the settle tick.
+func (m *Model) initScreen() tea.Cmd {
 	if settleOnOpen <= 0 || m.cfg.Screen != nil {
 		return tea.Batch(tea.RequestBackgroundColor, m.schedulePoll())
 	}
@@ -251,14 +272,20 @@ type pollMsg struct{}
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	gen := m.noticeGen
-	if _, ok := msg.(pollMsg); ok {
+	switch msg := msg.(type) {
+	case pollMsg:
 		m.polling = false
 		if m.pollHeld() {
 			m.pollSkipped = true
 		} else {
 			cmd = m.checkDraft(false)
 		}
-	} else {
+	case prTickMsg:
+		m.prArmed = false
+		cmd = m.startPRCheck()
+	case prResultMsg:
+		cmd = m.applyPR(msg)
+	default:
 		_, cmd = m.update(msg)
 	}
 	if m.pollSkipped && !m.pollHeld() && m.err == nil {
@@ -269,6 +296,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.view == viewDetail && !tooSmall(m.width, m.height) && m.err == nil {
 		m.sizeDetail()
 	}
+	m.flushPRNotice(gen)
 	cmd = tea.Batch(cmd, m.schedulePoll(), m.expireNotice(gen))
 	return m, cmd
 }

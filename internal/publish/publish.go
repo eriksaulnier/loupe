@@ -74,6 +74,9 @@ type Preview struct {
 	Dispositions map[string]string
 	// HeadMoved is set when the pull request gained commits since capture; the review is still sent at the captured head.
 	HeadMoved *HeadMoved
+	// Closed is "merged" or "closed" when the pull request is no longer open and was open at capture, which the
+	// confirmation names; publish still sends.
+	Closed string
 	// Edits is the URL of the review whose body this publication replaces, empty when it creates one.
 	Edits string
 	// EditedIn numbers the rounds of that review edited on GitHub since loupe wrote them that body carries as found,
@@ -145,7 +148,7 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 			return Receipt{}, false, err
 		}
 	}
-	moved, err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d, Unattended: opts.Unattended})
+	gated, err := Gates(ctx, GateInput{IsTerminal: opts.IsTerminal, GitHub: client, Target: opts.Target, Action: opts.Action, Draft: d, Unattended: opts.Unattended})
 	if err != nil {
 		return Receipt{}, false, err
 	}
@@ -210,7 +213,7 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 		return Receipt{}, false, err
 	}
 	preview := Preview{Body: env.Body, Comments: env.Comments, EnvelopeJSON: envJSON, Version: d.Version, Digest: env.Digest,
-		Dispositions: draft.Dispositions(d), HeadMoved: moved, Compose: compose}
+		Dispositions: draft.Dispositions(d), HeadMoved: gated.HeadMoved, Closed: gated.Closed, Compose: compose}
 	if sticky != nil {
 		preview.Edits = sticky.Review.HTMLURL
 		preview.EditedIn = func(body string) []int { return editedRounds(body, sticky.Earlier) }
@@ -247,8 +250,8 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 			"write a message at the confirmation, or accept a finding in loupe review")
 	}
 	shownHead := opts.Target.HeadSHA
-	if moved != nil {
-		shownHead = moved.Live
+	if gated.HeadMoved != nil {
+		shownHead = gated.HeadMoved.Live
 	}
 	if err := recheckLive(ctx, opts, client, viewer, shownHead); err != nil {
 		return Receipt{}, false, err

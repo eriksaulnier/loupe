@@ -592,6 +592,33 @@ func TestConfirmViewShowsMovedHead(t *testing.T) {
 	}
 }
 
+// FR-010: a pull request no longer open is named in the summary and in a rule above the head-moved block.
+func TestConfirmViewNamesAClosedPullRequest(t *testing.T) {
+	for _, tc := range []struct{ closed, summary, rule, line string }{
+		{"merged", "PR merged", "pull request merged", closedLine("merged")},
+		{"closed", "PR closed", "pull request closed", closedLine("closed")},
+	} {
+		preview := movedPreview()
+		preview.Closed = tc.closed
+		m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+		m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
+		view := m.View().Content
+		for _, want := range []string{tc.summary, tc.rule, tc.line} {
+			if !strings.Contains(view, want) {
+				t.Errorf("%s: view lacks %q:\n%s", tc.closed, want, view)
+			}
+		}
+		if strings.Index(view, tc.line) > strings.Index(view, "Head moved") {
+			t.Errorf("%s: the state comes after the moved head:\n%s", tc.closed, view)
+		}
+	}
+	open := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	open.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
+	if view := open.View().Content; strings.Contains(view, "PR merged") || strings.Contains(view, "PR closed") || strings.Contains(view, "pull request merged") {
+		t.Errorf("an open pull request names a state:\n%s", view)
+	}
+}
+
 func TestConfirmScrollsLongReview(t *testing.T) {
 	rows := make([]string, 200)
 	for i := range rows {
@@ -650,6 +677,24 @@ func TestConfirmHeaderKeepsActionAndMovedHead(t *testing.T) {
 		header := strings.Split(m.View().Content, "\n")[bodyTop(24)]
 		if !strings.Contains(header, "request-changes") || !strings.Contains(header, "head moved +") || style.Width(header) != width {
 			t.Errorf("width %d: header lost the action or the moved head: %q", width, header)
+		}
+	}
+}
+
+// The state, like the action and the moved head, never gives way in the confirmation header.
+func TestConfirmHeaderKeepsTheClosedState(t *testing.T) {
+	preview := movedPreview()
+	preview.Closed = "merged"
+	preview.Body = strings.Repeat("A line of the review body.\n\n", 80)
+	for _, width := range []int{60, 80, 99} {
+		m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("my-organization/my-repository#1234", "request-changes", "blocking", 1))
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		for range 150 {
+			m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		}
+		header := strings.Split(m.View().Content, "\n")[bodyTop(24)]
+		if !strings.Contains(header, "request-changes") || !strings.Contains(header, "PR merged") || style.Width(header) != width {
+			t.Errorf("width %d: header lost the action or the state: %q", width, header)
 		}
 	}
 }
@@ -970,6 +1015,29 @@ func TestPublishFlowSendsAndShowsURL(t *testing.T) {
 		if r.Method != "GET" && r.Method != "POST" {
 			t.Errorf("unexpected write %s %s", r.Method, r.Path)
 		}
+	}
+}
+
+// US2: a merged pull request is named before y, and y still sends exactly one review.
+func TestPublishFlowNamesAMergedPullRequestAndSends(t *testing.T) {
+	gh := newPublishFake(t)
+	gh.SetPR("acme", "widgets", github.PullRequest{Number: 42, URL: "https://github.com/acme/widgets/pull/42", State: "closed", Merged: true, Author: "author",
+		HeadSHA: "1111111111111111111111111111111111111111"})
+	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
+	waitFor(t, tm, "3/3 decided")
+	tm.Type("p")
+	waitFor(t, tm, "> comment")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitFor(t, tm, "> none")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitFor(t, tm, messageTitle, "PR merged", closedLine("merged"))
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
+	tm.Type("y")
+	waitFor(t, tm, "Published")
+	tm.Type("q")
+	finalView(t, tm)
+	if gh.CreateCount() != 1 {
+		t.Fatalf("CreateCount %d", gh.CreateCount())
 	}
 }
 

@@ -83,6 +83,9 @@ type PullRequest struct {
 	// empty once that fork is deleted.
 	HeadOwner string
 	HeadRepo  string
+	// Merged is read only by PullRequest: the list endpoint behind PullRequestsForBranch does not send it, so there it
+	// is always false.
+	Merged bool
 }
 
 type Review struct {
@@ -216,6 +219,7 @@ type wirePullRequest struct {
 	HTMLURL string   `json:"html_url"`
 	Title   string   `json:"title"`
 	State   string   `json:"state"`
+	Merged  bool     `json:"merged"`
 	User    wireUser `json:"user"`
 	Base    struct {
 		Ref string `json:"ref"`
@@ -246,6 +250,7 @@ func (w wirePullRequest) pullRequest() PullRequest {
 		HeadSHA:   w.Head.SHA,
 		HeadOwner: headOwner,
 		HeadRepo:  headRepo,
+		Merged:    w.Merged,
 	}
 }
 

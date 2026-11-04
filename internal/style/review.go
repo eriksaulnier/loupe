@@ -775,6 +775,9 @@ type ReviewHeading struct {
 	// Reserve is the columns at the right end left empty for a host that draws over them. The band still runs under
 	// them, so the host's controls sit on it rather than in a gap.
 	Reserve int
+	// Tag is the pull request's live state when it needs the human's eye, such as "PR merged"; empty for none
+	// (specs/050-pr-state-awareness).
+	Tag string
 }
 
 // badge is the program's mark at the head of every review screen.
@@ -791,8 +794,8 @@ func (s Style) badge() string {
 }
 
 // ReviewHeader is the one-row header: the badge, the linked pull request, the round and its title at the left, and
-// the progress and the bold exact count at the right, on the surface band. The title gives way first, then the bar,
-// then the round, and then the reference shortens in its middle. The count never gives way.
+// the state tag, the progress and the bold exact count at the right, on the surface band. The title gives way first,
+// then the bar, then the round, and then the reference shortens in its middle. The tag and the count never give way.
 func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	badge := s.badge()
 	round := fmt.Sprintf("round %d", h.Round)
@@ -824,6 +827,9 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	}
 	right := func() int {
 		n := 1
+		if h.Tag != "" {
+			n += 2 + Width(h.Tag)
+		}
 		if count != "" {
 			n += 2 + Width(count)
 		}
@@ -872,8 +878,16 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 		right2.WriteString(band(Span{Text: "  " + count, Style: s.Emphasis(text)}))
 	}
 	right2.WriteString(band(Span{Text: " "}))
-	fill := avail - Width(out.String()) - Width(tail) - Width(right2.String())
+	tag := ""
+	if h.Tag != "" {
+		tag = band(Span{Text: h.Tag, Style: s.Emphasis(s.Warn)}, Span{Text: "  "})
+		if tail == "" {
+			tag = band(Span{Text: h.Tag, Style: s.Emphasis(s.Warn)})
+		}
+	}
+	fill := avail - Width(out.String()) - Width(tag) - Width(tail) - Width(right2.String())
 	out.WriteString(band(Span{Text: strings.Repeat(" ", max(0, fill))}))
+	out.WriteString(tag)
 	if tail != "" {
 		// The bar's cells carry their own colors; each gets the band behind it.
 		for _, cell := range splitCells(tail) {
