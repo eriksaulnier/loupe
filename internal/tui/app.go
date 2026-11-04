@@ -252,11 +252,16 @@ var settleOnOpen = 500 * time.Millisecond
 type openedMsg struct{}
 
 func (m *Model) Init() tea.Cmd {
+	return tea.Batch(m.initScreen(), m.startPRCheck())
+}
+
+// initScreen asks for the background color, starts the draft poll and, outside tests, the settle tick.
+func (m *Model) initScreen() tea.Cmd {
 	if settleOnOpen <= 0 || m.cfg.Screen != nil {
-		return tea.Batch(tea.RequestBackgroundColor, m.schedulePoll(), m.startPRCheck())
+		return tea.Batch(tea.RequestBackgroundColor, m.schedulePoll())
 	}
 	m.opening = true
-	return tea.Batch(tea.RequestBackgroundColor, tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} }), m.schedulePoll(), m.startPRCheck())
+	return tea.Batch(tea.RequestBackgroundColor, tea.Tick(settleOnOpen, func(time.Time) tea.Msg { return openedMsg{} }), m.schedulePoll())
 }
 
 // pollInterval is how often the draft is re-read.
