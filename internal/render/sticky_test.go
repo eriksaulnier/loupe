@@ -146,6 +146,46 @@ func TestStickyBodyKeepsEachFooterUnderItsRound(t *testing.T) {
 	}
 }
 
+// A round that re-reviews the commit the round before it reviewed has no changes to link to, and GitHub would show an
+// empty comparison.
+func TestStickyBodyLeavesOutTheCompareLinkForTheSameCommit(t *testing.T) {
+	earlier, _, err := ReadSticky(firstRound())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, sticky := range map[string]*StickyInput{
+		"earlier round": {Rounds: 2, Earlier: earlier},
+		"short commit":  {Rounds: 2, Earlier: earlier, PrevRound: 1, PrevSHA: "aaaaaaa"},
+	} {
+		in := stickyInput(2, "aaaaaaa111", general("f-001", "question", false))
+		in.Sticky = sticky
+		body := Body(in)
+		indexes(t, body, "</details>\n\n---\n\nreviewed [`aaaaaaa`](https://github.com/o/r/commit/aaaaaaa111)\n\n---\n\n<!-- loupe-earlier -->")
+		if strings.Contains(body, "changes since") {
+			t.Fatalf("%s: a compare link for the same commit:\n%s", name, body)
+		}
+	}
+}
+
+// A footer without the compare link still demotes, and the next round on a new commit links from it.
+func TestStickyLinksFromARoundThatReReviewedTheSameCommit(t *testing.T) {
+	earlier, _, err := ReadSticky(firstRound())
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := stickyInput(2, "aaaaaaa111", general("f-001", "question", false))
+	in.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
+	earlier, rounds, err := ReadSticky(Body(in))
+	if err != nil || rounds != 2 || len(earlier) != 2 {
+		t.Fatalf("ReadSticky: %d blocks, rounds %d, err %v", len(earlier), rounds, err)
+	}
+	next := stickyInput(3, "ccccccc333")
+	next.Sticky = &StickyInput{Rounds: 3, Earlier: earlier}
+	body := Body(next)
+	indexes(t, body, "reviewed [`ccccccc`](https://github.com/o/r/commit/ccccccc333) · [changes since round 2](https://github.com/o/r/compare/aaaaaaa111...ccccccc333)\n\n---\n\n<!-- loupe-earlier -->",
+		"> reviewed [`aaaaaaa`](https://github.com/o/r/commit/aaaaaaa111)\n\n<!-- loupe digest=2")
+}
+
 func TestStickyBodyCountsDroppedRounds(t *testing.T) {
 	for _, c := range []struct {
 		rounds, kept int
