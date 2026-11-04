@@ -42,9 +42,6 @@ func (m *Model) startPRCheck() tea.Cmd {
 	}
 	m.prArmed = true
 	ctx, client, target := m.watchCtx, m.cfg.GitHub, m.target
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return func() tea.Msg {
 		if client == nil {
 			return prResultMsg{err: errors.New("no GitHub client")}

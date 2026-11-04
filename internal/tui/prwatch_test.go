@@ -141,6 +141,13 @@ func TestWatchKeepsOneCheckInFlight(t *testing.T) {
 	if m.startPRCheck() != nil {
 		t.Fatal("the tick did not start the next check itself")
 	}
+
+	interval := prInterval
+	prInterval = time.Millisecond
+	t.Cleanup(func() { prInterval = interval })
+	if msg := m.applyPR(failed)(); msg != (prTickMsg{}) {
+		t.Fatalf("the wait after a result ended with %#v", msg)
+	}
 }
 
 // FR-009 and US4: a check that cannot run shows state unknown, quietly, and never blocks or ends review.
@@ -158,6 +165,7 @@ func TestWatchFailuresShowStateUnknown(t *testing.T) {
 	prTimeout = 50 * time.Millisecond
 	t.Cleanup(func() { prTimeout = timeout })
 	cases := map[string]func() func() (github.Client, error){
+		"no client": func() func() (github.Client, error) { return nil },
 		"no credentials": func() func() (github.Client, error) {
 			return func() (github.Client, error) { return nil, errors.New("no token") }
 		},

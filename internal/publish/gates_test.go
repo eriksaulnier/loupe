@@ -276,3 +276,14 @@ func TestGatesReportTheLiveState(t *testing.T) {
 		t.Fatalf("a merged pull request cost %d requests, an open one %d", n, perCall)
 	}
 }
+
+func TestGatesPassOnGitHubFailures(t *testing.T) {
+	for _, path := range []string{"/repos/acme/widgets/pulls/42", "/user"} {
+		gh, client := newFake(t)
+		gh.Fail("GET", path, 500)
+		in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
+		if gated, err := Gates(context.Background(), in); err == nil || gated != (Gated{}) {
+			t.Errorf("%s failing: %+v, %v", path, gated, err)
+		}
+	}
+}
