@@ -394,6 +394,9 @@ func (c *confirmation) summary(m *Model) string {
 	inner, _ := style.PaneInner(m.width, 0)
 	inline := fmt.Sprintf("inline %s (%d)", c.title.inline, c.title.comments)
 	var required []string
+	if c.preview.Closed != "" {
+		required = append(required, m.styles.Warn.Render("PR "+c.preview.Closed))
+	}
 	if moved := c.preview.HeadMoved; moved != nil {
 		required = append(required, m.styles.Warn.Render(fmt.Sprintf("head moved +%d", moved.AheadBy)))
 	}
@@ -405,6 +408,12 @@ func (c *confirmation) summary(m *Model) string {
 		return with
 	}
 	return strings.Join(append(parts, required...), sep)
+}
+
+// closedLine is what the confirmation says of a pull request that merged or closed after capture. Publishing still
+// sends, since a review on a merged pull request is a use loupe supports (specs/039-capture-allow-closed).
+func closedLine(state string) string {
+	return "This pull request was " + state + " after capture. y still sends the review to it."
 }
 
 // editsHeader never gives way: an edit overwrites words already published, which y alone must not do unannounced.
@@ -471,6 +480,10 @@ func (c *confirmation) content(m *Model) string {
 		return m.styles.Wrap(render.ForDisplay(markdown), width, "")
 	}
 	var parts []string
+	if c.preview.Closed != "" {
+		parts = append(parts, m.styles.Rule(width, "pull request "+c.preview.Closed, ""),
+			m.styles.Warn.Render(m.styles.Wrap(closedLine(c.preview.Closed), width, "")), "")
+	}
 	if moved := c.preview.HeadMoved; moved != nil {
 		parts = append(parts, m.styles.Rule(width, "head moved since capture", ""))
 		for _, line := range headMovedLines(moved) {

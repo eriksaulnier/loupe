@@ -13,6 +13,9 @@
 // LOUPE_DEMO_HOME=<dir> keeps the data root instead: the first command seeds it and later ones reuse it with whatever
 // was decided.
 //
+// LOUPE_DEMO_PR_STATE=merged or closed makes every pull request report that state, so review's header tag and the
+// confirmation show it.
+//
 // loupe-demo body prints the review body #43 publishes with the walkthrough tape's message, the input
 // scripts/review-screenshot.sh posts to render the README's picture of a published review. loupe-demo body --sticky
 // prints the body an unattended sticky review holds after its third round, for the CI page's picture.
@@ -73,7 +76,7 @@ func demo(args []string) int {
 	}
 	gh, stop := fakegh.Start()
 	defer stop()
-	if err := prepare(home, gh, time.Now(), keep); err != nil {
+	if err := prepare(home, gh, time.Now(), keep, os.Getenv("LOUPE_DEMO_PR_STATE")); err != nil {
 		return fail(err)
 	}
 	if len(args) == 0 {
@@ -147,9 +150,9 @@ func isDemoHome(dir string) bool {
 
 // prepare configures the fake GitHub, which lives only as long as this process, and writes the runs unless a kept
 // root already holds them.
-func prepare(home string, gh *fakegh.Server, now time.Time, keep bool) error {
+func prepare(home string, gh *fakegh.Server, now time.Time, keep bool, prState string) error {
 	writeRuns := !keep || !isDemoHome(home)
-	if err := seed(home, gh, now, writeRuns); err != nil {
+	if err := seed(home, gh, now, writeRuns, prState); err != nil {
 		return err
 	}
 	if keep && writeRuns {

@@ -95,6 +95,44 @@ func TestPullRequestLookups(t *testing.T) {
 	}
 }
 
+// GitHub's list endpoint sends no merged field, so only the single pull request reports a merge.
+func TestMergedOnlyFromTheSinglePullRequest(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	merged := samplePR()
+	merged.State, merged.Merged = "closed", true
+	s.SetPR("o", "r", merged)
+	s.SetBranch("o", "r", 3, "feat")
+
+	if pr, err := c.PullRequest(ctx, "o", "r", 3); err != nil || !pr.Merged {
+		t.Fatalf("single: %+v, %v", pr, err)
+	}
+	if body := s.Requests(); len(body) != 1 {
+		t.Fatalf("requests %+v", body)
+	}
+	w := wirePR(merged, "feat", false)
+	if _, ok := w["merged"]; ok {
+		t.Fatalf("list wire carries merged: %v", w)
+	}
+}
+
+func TestStallPullRequestHangsUntilCanceled(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	s.SetPR("o", "r", samplePR())
+	s.StallPullRequest()
+
+	short, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := c.PullRequest(short, "o", "r", 3); err == nil {
+		t.Fatal("a stalled pull request must fail at the deadline")
+	}
+	if waited := time.Since(start); waited > 5*time.Second {
+		t.Fatalf("waited %v", waited)
+	}
+}
+
 func TestDenyUserForbids(t *testing.T) {
 	s := New(t)
 	c := s.Client(t)

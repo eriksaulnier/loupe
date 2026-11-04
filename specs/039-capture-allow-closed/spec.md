@@ -16,6 +16,7 @@ This specification amends `specs/001-loupe-v1/contracts/cli.md`, which is a cont
 - It bumps the target's `schema` from 1 to 2 under `docs/versioning.md`, because it adds a field.
 - `docs/comment-format.md` and the published review do not change.
 - Publish does not change. It never checked the pull request's state, so a run whose pull request closed after capture already publishes today.
+- Amended by `specs/050-pr-state-awareness`: FR-008 no longer holds for what the human sees. The review header and the publish confirmation read `prState`, so a run captured `closed` is not tagged for its state. `prState` still changes nothing that a command accepts, refuses or publishes.
 
 ## Clarifications
 

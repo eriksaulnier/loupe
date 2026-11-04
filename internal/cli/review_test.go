@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/testutil/screen"
 	"github.com/eriksaulnier/loupe/internal/tui"
@@ -83,7 +85,7 @@ func TestReviewHelpSaysHumanOnly(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	help := s.stdout.String()
-	for _, want := range []string{"human-only", "An agent MUST NOT operate it, pipe confirmation into it, drive it", "through a pseudo-terminal, or start loupe publish", "loupe handoff to start it in", "send to, read, resize, close or reuse that", "draws full screen"} {
+	for _, want := range []string{"human-only", "An agent MUST NOT operate it, pipe confirmation into it, drive it", "through a pseudo-terminal, or start loupe publish", "loupe handoff to start it in", "send to, read, resize, close or reuse that", "draws full screen", "60 seconds after each check", "state unknown"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("review help lacks %q:\n%s", want, help)
 		}
@@ -123,6 +125,10 @@ func screenReview(t *testing.T, home string, jsonMode bool, end string, steps fu
 		deps.IsTerminal = func() bool { return true }
 		deps.StderrIsTerminal = func() bool { return true }
 		deps.Screen = &tui.Screen{Width: 100, Height: 30}
+		// As on a machine with no credentials: the pull request watch fails, and review still works.
+		deps.GitHub = func() (github.Client, error) {
+			return nil, refusal.New(refusal.Auth, "no GitHub token", "gh auth login")
+		}
 		return Execute(deps, args)
 	})
 	sc.WaitFor("q quit")
@@ -237,6 +243,25 @@ func TestReviewWithoutSendBackRecordsNothing(t *testing.T) {
 	}
 	if strings.Contains(s.stdout.String(), "sent back") {
 		t.Fatalf("stdout:\n%s", s.stdout.String())
+	}
+}
+
+// US4: with no credentials the pull request watch tags the header state unknown, and review works as before.
+func TestReviewWorksWithoutCredentials(t *testing.T) {
+	home, dir := pendingRun(t)
+	code, s := screenReview(t, home, false, "q", func(s *screen.Screen) {
+		s.Press("enter", "a")
+		s.WaitFor("f-001 accepted", "state unknown")
+	})
+	if code != 0 {
+		t.Fatalf("exit %d stderr %s", code, s.stderr.String())
+	}
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Decisions["f-001"].Decision; got != draft.DecisionAccepted {
+		t.Fatalf("f-001 decision %q", got)
 	}
 }
 

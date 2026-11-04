@@ -12,6 +12,7 @@
 
 - `specs/001-loupe-v1/contracts/cli.md` gains one warning code, one environment variable and an optional `warnings` array in the `capture` result. Each is additive. No existing field, refusal or exit code changes.
 - `docs/comment-format.md` does not change.
+- Amended by `specs/050-pr-state-awareness`: `loupe review` now reads the pull request from the GitHub API for its live state. The update notice still reads only the cache, and no other command gains a network call.
 - Constitution 3.1.0 is unchanged. Principle III holds because the check is a GitHub API call and the cache is a plain file. Principle V holds because the warning goes to stderr and follows the existing warning contract.
 
 ## Clarifications

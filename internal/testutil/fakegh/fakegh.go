@@ -99,6 +99,7 @@ type Server struct {
 	viewer        string
 	latestRelease string
 	stallRelease  bool
+	stallPR       bool
 	userForbidden bool
 	outcomes      []Outcome
 	updates       []Outcome
@@ -320,6 +321,13 @@ func (s *Server) StallLatestRelease() {
 	s.stallRelease = true
 }
 
+// StallPullRequest makes the single pull request request hang until the caller cancels it.
+func (s *Server) StallPullRequest() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stallPR = true
+}
+
 // DenyUser makes GET /user answer 403, as GitHub does for an App installation token. The created review's author
 // still follows SetViewer.
 func (s *Server) DenyUser() {
@@ -460,12 +468,17 @@ func (s *Server) getPullRequest(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	pr, found := s.prs[key]
 	branch := s.branches[key]
+	stall := s.stallPR
 	s.mu.Unlock()
+	if stall {
+		<-r.Context().Done()
+		return
+	}
 	if !ok || !found {
 		notFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, wirePR(pr, branch))
+	writeJSON(w, http.StatusOK, wirePR(pr, branch, true))
 }
 
 func (s *Server) listPullRequests(w http.ResponseWriter, r *http.Request) {
@@ -486,7 +499,7 @@ func (s *Server) listPullRequests(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(matches, func(i, j int) bool { return matches[i].number < matches[j].number })
 	out := make([]any, 0, len(matches))
 	for _, key := range matches {
-		out = append(out, wirePR(s.prs[key], s.branches[key]))
+		out = append(out, wirePR(s.prs[key], s.branches[key], false))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -819,12 +832,14 @@ func reviewState(event string) string {
 	}
 }
 
-func wirePR(pr github.PullRequest, branch string) map[string]any {
+// wirePR is the pull request as GitHub sends it. single is true for GET pulls/{number}, the only endpoint that sends
+// merged.
+func wirePR(pr github.PullRequest, branch string, single bool) map[string]any {
 	var headRepo any
 	if pr.HeadOwner != "" {
 		headRepo = map[string]any{"name": pr.HeadRepo, "owner": map[string]any{"login": pr.HeadOwner}}
 	}
-	return map[string]any{
+	out := map[string]any{
 		"number":   pr.Number,
 		"html_url": pr.URL,
 		"title":    pr.Title,
@@ -833,6 +848,10 @@ func wirePR(pr github.PullRequest, branch string) map[string]any {
 		"base":     map[string]any{"ref": pr.BaseRef, "sha": pr.BaseSHA},
 		"head":     map[string]any{"ref": branch, "sha": pr.HeadSHA, "repo": headRepo},
 	}
+	if single {
+		out["merged"] = pr.Merged
+	}
+	return out
 }
 
 func wireReview(rv github.Review) map[string]any {

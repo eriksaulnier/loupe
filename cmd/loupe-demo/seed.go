@@ -147,7 +147,25 @@ var findings = []draft.FindingInput{
 }
 
 // seed tells the fake GitHub about the three demo pull requests and, when writeRuns is set, writes their runs.
-func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool) error {
+// demoPRState is the live state LOUPE_DEMO_PR_STATE asks every demo pull request to report, so the review header's
+// tag and the confirmation's state can be seen by hand (specs/050-pr-state-awareness).
+func demoPRState(value string) (state string, merged bool, err error) {
+	switch value {
+	case "":
+		return "open", false, nil
+	case "merged":
+		return "closed", true, nil
+	case "closed":
+		return "closed", false, nil
+	}
+	return "", false, fmt.Errorf("LOUPE_DEMO_PR_STATE is %q; use merged or closed, or leave it unset", value)
+}
+
+func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool, prState string) error {
+	state, merged, err := demoPRState(prState)
+	if err != nil {
+		return err
+	}
 	parsed, err := diff.Parse([]byte(demoDiff))
 	if err != nil {
 		return fmt.Errorf("parse the demo diff: %w", err)
@@ -178,7 +196,7 @@ func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool) error {
 			}
 		}
 		gh.SetPR(owner, repo, github.PullRequest{
-			Number: r.number, URL: url, Title: prTitle, State: "open", Author: author, BaseRef: "main", BaseSHA: baseSHA, HeadSHA: r.live,
+			Number: r.number, URL: url, Title: prTitle, State: state, Merged: merged, Author: author, BaseRef: "main", BaseSHA: baseSHA, HeadSHA: r.live,
 		})
 	}
 	gained := []github.Commit{

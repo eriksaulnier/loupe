@@ -24,44 +24,73 @@ type GateInput struct {
 	Unattended bool
 }
 
+// Gated is what the gates learned that the confirmation shows: a head that only moved forward, and the live state when
+// the pull request is no longer open.
+type Gated struct {
+	HeadMoved *HeadMoved
+	// Closed is ClosedSince for the pull request the gates read.
+	Closed string
+}
+
 // Gates refuses in a fixed order so the human always fixes the most fundamental problem first. The token gate comes
 // before any GitHub call, since it needs none. A head that only moved forward is not refused; what it gained is
-// returned for the confirmation to show.
-func Gates(ctx context.Context, in GateInput) (*HeadMoved, error) {
+// returned for the confirmation to show, with the live state, which never refuses (specs/050-pr-state-awareness).
+func Gates(ctx context.Context, in GateInput) (Gated, error) {
 	if err := tokenRefusal(in.GitHub.TokenKind(), in.Unattended); err != nil {
-		return nil, err
+		return Gated{}, err
 	}
 	if err := tokenKindMismatch(in.Target.Viewer, in.GitHub.TokenKind()); err != nil {
-		return nil, err
+		return Gated{}, err
 	}
 	if !in.Unattended && !in.IsTerminal {
-		return nil, ttyRefusal()
+		return Gated{}, ttyRefusal()
 	}
 	pr, err := in.GitHub.PullRequest(ctx, in.Target.Owner, in.Target.Repo, in.Target.Number)
 	if err != nil {
-		return nil, err
+		return Gated{}, err
 	}
 	moved, err := checkHead(ctx, in.GitHub, in.Target, pr, in.Action, in.Draft, in.Unattended)
 	if err != nil {
-		return nil, err
+		return Gated{}, err
 	}
 	if !in.Unattended {
 		viewer, err := in.GitHub.Viewer(ctx)
 		if err != nil {
-			return nil, err
+			return Gated{}, err
 		}
 		if err := ActionRefusal(in.Action, viewer, pr.Author, in.Draft); err != nil {
-			return nil, err
+			return Gated{}, err
 		}
 	}
 	if strings.TrimSpace(in.Draft.Summary) == "" && len(draft.PublishableSet(in.Draft)) == 0 {
-		return nil, refusal.New(refusal.Empty, "the draft has no summary and no publishable findings; there is nothing to publish",
+		return Gated{}, refusal.New(refusal.Empty, "the draft has no summary and no publishable findings; there is nothing to publish",
 			"file findings with loupe add or write a summary with loupe summary")
 	}
+	gated := Gated{HeadMoved: moved, Closed: ClosedSince(in.Target, pr)}
 	if in.Unattended {
-		return moved, nil
+		return gated, nil
 	}
-	return moved, ReadinessRefusal(in.Draft)
+	if err := ReadinessRefusal(in.Draft); err != nil {
+		return Gated{}, err
+	}
+	return gated, nil
+}
+
+// ClosedSince is how the live pull request differs from an open one at capture: "merged", "closed" or "". The review
+// header and the confirmation both ask it, so they cannot disagree. A run captured closed, which only --allow-closed
+// allows, never warns about the state the human chose to review in; a schema 1 target has no prState, which counts as
+// unknown, not open.
+func ClosedSince(target run.Target, pr github.PullRequest) string {
+	if target.PRState == "closed" {
+		return ""
+	}
+	switch {
+	case pr.Merged:
+		return "merged"
+	case pr.State == "closed":
+		return "closed"
+	}
+	return ""
 }
 
 // tokenRefusal is FR-009 and FR-010: --unattended needs an App installation token, and an installation token can only

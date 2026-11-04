@@ -620,6 +620,52 @@ func TestReviewHeaderPriority(t *testing.T) {
 	}
 }
 
+// specs/050: the pull request's state tag sits before the bar and the count, and like the count it never gives way.
+func TestReviewHeaderKeepsTheStateTag(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	tagged := heading()
+	tagged.Tag = "PR merged"
+	for _, c := range []struct {
+		width int
+		not   []string
+	}{
+		{100, nil},
+		{80, []string{"round 1"}},
+		{60, []string{"feat", "!~==x-"}},
+		{40, []string{"feat", "!~==x-", "r1"}},
+	} {
+		got := s.ReviewHeader(tagged, c.width)
+		if Width(got) != c.width {
+			t.Errorf("%d: header is %d cells: %q", c.width, Width(got), got)
+		}
+		if !strings.Contains(got, "PR merged") || !strings.Contains(got, "3/6 decided") {
+			t.Errorf("%d: header lost the tag or the count: %q", c.width, got)
+		}
+		if strings.Index(got, "PR merged") > strings.Index(got, "3/6 decided") {
+			t.Errorf("%d: the tag follows the count: %q", c.width, got)
+		}
+		for _, w := range c.not {
+			if strings.Contains(got, w) {
+				t.Errorf("%d: header has %q: %q", c.width, w, got)
+			}
+		}
+	}
+	if got := s.ReviewHeader(tagged, 100); strings.Index(got, "PR merged") > strings.Index(got, "!~==x-") {
+		t.Errorf("the tag follows the bar: %q", got)
+	}
+	colored := reviewStyle(t, true, nil)
+	w := colored.Warn.Render("x")
+	fg := w[strings.Index(w, "38;"):strings.Index(w, "m")]
+	got := colored.ReviewHeader(tagged, 100)
+	at := strings.Index(got, "PR merged")
+	if at < 0 || !strings.Contains(got[max(0, at-60):at], fg) {
+		t.Errorf("the tag is not in the warn color %q: %q", fg, got)
+	}
+	if got := s.ReviewHeader(heading(), 100); strings.Contains(got, "PR ") {
+		t.Errorf("an untagged header carries a tag: %q", got)
+	}
+}
+
 // The review's markers are decided here, by tier and color, not in the interface (FR-016).
 func TestReviewMarkersFollowTheTier(t *testing.T) {
 	unicode, ascii := reviewStyle(t, true, nil), reviewStyle(t, true, map[string]string{IconsEnv: "ascii"})
