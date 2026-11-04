@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.21.0](https://github.com/eriksaulnier/loupe/compare/v0.20.0...v0.21.0) (2026-11-04)
+
+
+### Features
+
+* **review:** warn when the pull request merges, closes or moves ([#118](https://github.com/eriksaulnier/loupe/issues/118)) ([5def4d9](https://github.com/eriksaulnier/loupe/commit/5def4d9decb6098c84eb8ff2cc1708158f879286))
+
+
+### Bug Fixes
+
+* **render:** drop the compare link when a round re-reviews its commit ([#108](https://github.com/eriksaulnier/loupe/issues/108)) ([159830d](https://github.com/eriksaulnier/loupe/commit/159830d391fd151b07bb2745d62026fce48c24c8))
+
 ## [0.20.0](https://github.com/eriksaulnier/loupe/compare/v0.19.0...v0.20.0) (2026-11-02)
 
 
