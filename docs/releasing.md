@@ -34,6 +34,7 @@ The `install-script` job then runs `install.sh` with no pin on each target, and 
 
 release-please is not affected. It finds the last release by the exact version in the manifest, so a `v0.22.0-rc.1` tag off `main` changes neither its base nor its next version.
 
+- A release SHOULD be tested this way before its release pull request is merged. Dispatch with `ref` set to that pull request's branch, `release-please--branches--main`, and `version` set to its version with `-rc.N`, such as `0.22.0-rc.1`. Install the candidate, then merge.
 - The base SHOULD be the version the next release is expected to have. If release-please later cuts a lower version, for example `0.21.1` after `0.22.0-rc.1`, nothing breaks, but the candidate then sorts above the release.
 - A pre-release is immutable once published, like a release, and its tag cannot be reused. A failed or wrong candidate is replaced by the next rc number.
 - A failed run SHOULD be recovered by re-running its failed jobs. The `release` job reuses the draft an earlier attempt created when that draft targets the same commit, and refuses a draft on another commit. Delete such a draft by hand before the next dispatch, since `validate` cannot see drafts. Once goreleaser has published, `release` refuses to run again, so a failure in a later job is re-run there.

@@ -111,7 +111,7 @@ pi install git:github.com/eriksaulnier/loupe@v0.22.0-rc.1
 
 A pre-release differs from a release in two ways:
 
-- The plugin shows the version of the release its branch started from, not the pre-release version. The pre-release does not change the plugin manifests.
+- The plugin shows the version in its branch's manifests, not the pre-release version. The pre-release does not change them.
 - The binary shows no update notice, because the update check reads only `X.Y.Z` versions.
 - The install action at the pre-release's tag still installs the last release unless you pass `version`, such as `version: v0.22.0-rc.1`.
 
