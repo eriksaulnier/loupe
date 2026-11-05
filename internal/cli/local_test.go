@@ -211,7 +211,9 @@ func TestLocalShowOmitsPRFields(t *testing.T) {
 	}
 }
 
-func TestInputKeyChecksIgnoreCase(t *testing.T) {
+// The key checks match names as encoding/json does: without regard to case, and folding ſ (U+017F) to s and K (U+212A)
+// to k.
+func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
 	home, _ := localRun(t, "changed")
 	for _, c := range []struct {
 		input, field string
@@ -221,6 +223,8 @@ func TestInputKeyChecksIgnoreCase(t *testing.T) {
 		{`{"title": "T", "body": "B", "general": true, "SUGGESTEDFIX": "x"}`, "suggestedFix", refusal.Input},
 		{`{"title": "T", "body": "B", "Location": {"path": "a.go", "line": 2, "Side": "RIGHT"}}`, "location.side", refusal.Location},
 		{`{"title": "T", "body": "B", "general": true, "Included": false}`, "included", refusal.Input},
+		{`{"title": "T", "body": "B", "general": true, "ſuggestedFix": "x"}`, "suggestedFix", refusal.Input},
+		{`{"title": "T", "body": "B", "general": true, "blocKing": true}`, "blocking", refusal.Input},
 	} {
 		code, s := runWithStdin(t, home, c.input, "add", "--run", "local#1", "--from", "-", "--json")
 		if details, _ := wantCode(t, code, s, c.code)["details"].(map[string]any); details["field"] != c.field {
@@ -341,20 +345,6 @@ func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
 	}
 	code, s := runWithStdin(t, home, `{"title": "T", "body": "B", "general": true}`, "add", "--run", "local#1", "--from", "-", "--json")
 	wantCode(t, code, s, refusal.Returned)
-}
-
-func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
-	home, _ := localRun(t, "changed")
-	// encoding/json folds ſ (U+017F) to s and K (U+212A) to k when it matches field names.
-	for _, c := range []struct{ input, field string }{
-		{`{"title": "T", "body": "B", "general": true, "ſuggestedFix": "x"}`, "suggestedFix"},
-		{`{"title": "T", "body": "B", "general": true, "blocKing": true}`, "blocking"},
-	} {
-		code, s := runWithStdin(t, home, c.input, "add", "--run", "local#1", "--from", "-", "--json")
-		if details, _ := wantCode(t, code, s, refusal.Input)["details"].(map[string]any); details["field"] != c.field {
-			t.Errorf("%s: details %v, want field %s", c.input, details, c.field)
-		}
-	}
 }
 
 // A malformed entry passes the key checks untouched and is refused as malformed input, never as a mode refusal.
