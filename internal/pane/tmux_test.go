@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 const (
@@ -33,10 +31,7 @@ func TestDetectTmuxNeedsSocketPaneAndBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	bin := hostBins(t, "tmux")
-	notExec := t.TempDir()
-	if err := os.WriteFile(filepath.Join(notExec, "tmux"), []byte("#!/bin/sh\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	notExec := notExecBins(t, "tmux")
 	full := map[string]string{"TMUX": socket + ",3347196,0", "TMUX_PANE": tmuxPane, "PATH": bin}
 	var read []string
 	recording := func(k string) string {
@@ -136,18 +131,9 @@ func TestTmuxRefusesWhenUnsynchronizingFails(t *testing.T) {
 		"set-option":      {stderr: "invalid option: synchronize-panes\n", err: errExit1},
 	}}
 	_, err := tmuxFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertTmuxRefusal(t, err, "run", "tmux run: invalid option: synchronize-panes; a pane may already be open")
+	assertPaneRefusal(t, err, "tmux", "run", "tmux run: invalid option: synchronize-panes; a pane may already be open")
 	if len(f.calls) != 3 {
 		t.Fatalf("made %d calls, want 3: %q", len(f.calls), f.calls)
-	}
-}
-
-func assertTmuxRefusal(t *testing.T, err error, step, message string) {
-	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok || r.Code != refusal.PaneFailed || r.Fix != fix || r.Message != message ||
-		r.Details["host"] != "tmux" || r.Details["step"] != step {
-		t.Fatalf("err = %#v, want pane-failed at %s with message %q and the fix", err, step, message)
 	}
 }
 
@@ -169,7 +155,7 @@ func TestTmuxProbeRefuses(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			f := &fakeRunner{replies: map[string]reply{"display-message": c.reply}}
 			_, err := tmuxFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-			assertTmuxRefusal(t, err, "probe", c.message)
+			assertPaneRefusal(t, err, "tmux", "probe", c.message)
 			if len(f.calls) != 1 {
 				t.Fatalf("made %d calls, want 1: %q", len(f.calls), f.calls)
 			}
@@ -195,7 +181,7 @@ func TestTmuxRefusesASplitWithoutAnID(t *testing.T) {
 		"split-window":    {stdout: "\n"},
 	}}
 	_, err := tmuxFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertTmuxRefusal(t, err, "split", "tmux split: the reply has no pane id; a pane may already be open")
+	assertPaneRefusal(t, err, "tmux", "split", "tmux split: the reply has no pane id; a pane may already be open")
 	if len(f.calls) != 2 {
 		t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
 	}
@@ -209,7 +195,7 @@ func TestTmuxRunFailureLeavesThePane(t *testing.T) {
 		"send-keys":       {stderr: "can't find pane: %7\n", err: errExit1},
 	}}
 	_, err := tmuxFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertTmuxRefusal(t, err, "run", "tmux run: can't find pane: %7; a pane may already be open")
+	assertPaneRefusal(t, err, "tmux", "run", "tmux run: can't find pane: %7; a pane may already be open")
 	if len(f.calls) != 3 {
 		t.Fatalf("made %d calls, want 3: %q", len(f.calls), f.calls)
 	}

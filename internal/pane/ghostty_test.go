@@ -6,8 +6,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 const (
@@ -140,15 +138,6 @@ func TestGhosttyPassesWhenTheFocusedTerminalIsElsewhere(t *testing.T) {
 	}
 }
 
-func assertGhosttyRefusal(t *testing.T, err error, step, message string) {
-	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok || r.Code != refusal.PaneFailed || r.Fix != fix || r.Message != message ||
-		r.Details["host"] != "ghostty" || r.Details["step"] != step {
-		t.Fatalf("err = %#v, want pane-failed at %s with message %q and the fix", err, step, message)
-	}
-}
-
 func TestGhosttyProbeRefuses(t *testing.T) {
 	for _, c := range []struct {
 		name   string
@@ -164,7 +153,7 @@ func TestGhosttyProbeRefuses(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			f := &fakeRunner{replies: map[string]reply{"probe": c.reply}}
 			_, err := ghosttyFor(f, ghosttyDir).Open(context.Background(), Request{Command: command, Fix: fix})
-			assertGhosttyRefusal(t, err, "probe", "ghostty probe: "+c.detail)
+			assertPaneRefusal(t, err, "ghostty", "probe", "ghostty probe: "+c.detail)
 			if len(f.calls) != 1 {
 				t.Fatalf("made %d calls, want 1: %q", len(f.calls), f.calls)
 			}
@@ -188,7 +177,7 @@ func TestGhosttySplitRefuses(t *testing.T) {
 				"split": c.reply,
 			}}
 			_, err := ghosttyFor(f, ghosttyDir).Open(context.Background(), Request{Command: command, Fix: fix})
-			assertGhosttyRefusal(t, err, "split", "ghostty split: "+c.detail+"; a pane may already be open")
+			assertPaneRefusal(t, err, "ghostty", "split", "ghostty split: "+c.detail+"; a pane may already be open")
 			if len(f.calls) != 2 {
 				t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
 			}
