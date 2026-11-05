@@ -120,16 +120,20 @@ func TestSubcommandHelpKeepsTheGlobalJSONFlag(t *testing.T) {
 // An agent working from --help alone learns the finding-id rule where it writes published text and where it is
 // handed earlier rounds' ids.
 func TestHelpStatesTheFindingIDRule(t *testing.T) {
-	for name, c := range map[string]struct{ help, want string }{
-		"add":     {addHelp, "a code span is not"},
-		"edit":    {editHelp, "a code span is not"},
-		"summary": {summaryHelp, "a code span is not"},
-		"show":    {showHelp, "Each id there belongs to its own round"},
-		"publish": {publishHelp, "refuses a finding id"},
+	for name, want := range map[string]string{
+		"add":     "a code span is not",
+		"edit":    "a code span is not",
+		"summary": "a code span is not",
+		"show":    "Each id there belongs to its own round",
+		"publish": "refuses a finding id",
 	} {
-		help := strings.Join(strings.Fields(c.help), " ")
-		if !strings.Contains(help, c.want) || (name != "show" && !strings.Contains(help, "finding-id")) {
-			t.Errorf("%s --help does not state the finding-id rule", name)
+		deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+		if code := Execute(deps, []string{name, "--help"}); code != 0 {
+			t.Fatalf("%s --help: exit %d stderr %q", name, code, s.stderr.String())
+		}
+		help := strings.Join(strings.Fields(s.stdout.String()), " ")
+		if !strings.Contains(help, want) || (name != "show" && !strings.Contains(help, "finding-id")) {
+			t.Errorf("%s --help does not state the finding-id rule:\n%s", name, help)
 		}
 	}
 }

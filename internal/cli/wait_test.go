@@ -153,12 +153,26 @@ func TestWaitHumanOutputNamesTheReason(t *testing.T) {
 }
 
 func TestWaitHelpNamesTheSendBackNotTheQuit(t *testing.T) {
-	for _, text := range []string{waitHelp, newWaitCmd(Deps{}).Short} {
+	for _, args := range [][]string{{"wait", "--help"}, {"--help"}} {
+		deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+		if code := Execute(deps, args); code != 0 {
+			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
+		}
+		text := strings.Join(strings.Fields(s.stdout.String()), " ")
+		if args[0] == "--help" {
+			// The root help lists each command on its own line with its one-line summary.
+			text = ""
+			for line := range strings.Lines(s.stdout.String()) {
+				if f := strings.Fields(line); len(f) > 0 && f[0] == "wait" {
+					text = strings.Join(f, " ")
+				}
+			}
+		}
 		if strings.Contains(text, "quit") || strings.Contains(text, "hands notes back") {
-			t.Errorf("wait help still says a hand-back needs the human to quit:\n%s", text)
+			t.Errorf("%v still says a hand-back needs the human to quit:\n%s", args, text)
 		}
 		if !strings.Contains(text, "sends a finding back") {
-			t.Errorf("wait help does not name the send-back:\n%s", text)
+			t.Errorf("%v does not name the send-back:\n%s", args, text)
 		}
 	}
 }
