@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,10 +31,18 @@ func TestGitFunctionsReturnTheGitFailure(t *testing.T) {
 	}
 	for name, call := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := call(); err == nil {
-				t.Fatal("no error from a clone that does not exist")
+			if err := call(); err == nil || !strings.Contains(err.Error(), "cannot change to") {
+				t.Fatalf("err = %v, want git's missing-clone failure", err)
 			}
 		})
+	}
+}
+
+// wantInjected fails the test unless err carries the stderr of a gitfail shim.
+func wantInjected(t *testing.T, err error) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), "injected failure") {
+		t.Fatalf("err = %v, want the injected git failure", err)
 	}
 }
 
@@ -55,8 +64,8 @@ func TestHashPathsHashesOnlyPathsWithANewline(t *testing.T) {
 func TestHashPathsRefusesAnUnreadablePathWithANewline(t *testing.T) {
 	w := newWorkTree(t)
 	ix := WithIndex(w.repo.Dir, filepath.Join(t.TempDir(), "index"))
-	if _, err := ix.hashPaths([]string{"no\nsuch.txt"}); err == nil {
-		t.Fatal("hashPaths accepted a path that is not there")
+	if _, err := ix.hashPaths([]string{"no\nsuch.txt"}); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("err = %v, want a not-exist read error", err)
 	}
 }
 
@@ -66,25 +75,25 @@ func TestHashPathsRefusesAFailedHashOfANewlinePath(t *testing.T) {
 	name := "line\nbreak.txt"
 	writeFile(t, filepath.Join(w.repo.Dir, name), "x\n", 0o644)
 	gitfail.WhenArg(t, "hash-object", 1)
-	if _, err := ix.hashPaths([]string{name}); err == nil {
-		t.Fatal("hashPaths ignored a failed git hash-object")
-	}
+	_, err := ix.hashPaths([]string{name})
+	wantInjected(t, err)
 }
 
 func TestHashPathsRefusesAnObjectCountThatDiffers(t *testing.T) {
 	w := newWorkTree(t)
 	ix := WithIndex(w.repo.Dir, filepath.Join(t.TempDir(), "index"))
 	gitfail.SilentWhenArg(t, "hash-object")
-	if _, err := ix.hashPaths([]string{"run.sh"}); err == nil {
-		t.Fatal("hashPaths accepted no object id for one path")
+	if _, err := ix.hashPaths([]string{"run.sh"}); err == nil || !strings.Contains(err.Error(), "0 object ids for 1 paths") {
+		t.Fatalf("err = %v, want the object id count refusal", err)
 	}
 }
 
 func TestBatchCheckSizesRefusesALineCountThatDiffers(t *testing.T) {
 	w := newWorkTree(t)
 	gitfail.SilentWhenArg(t, "cat-file")
-	if _, err := BatchCheckSizes(w.repo.Dir, []string{w.head}); err == nil {
-		t.Fatal("BatchCheckSizes accepted no output for one object")
+	tree := w.repo.Git("rev-parse", "HEAD^{tree}")
+	if _, err := BatchCheckSizes(w.repo.Dir, []string{w.head, tree}); err == nil || !strings.Contains(err.Error(), "1 lines for 2 objects") {
+		t.Fatalf("err = %v, want the line count refusal", err)
 	}
 }
 
@@ -93,7 +102,7 @@ func TestStageWorktreeReturnsEachGitFailure(t *testing.T) {
 		name, fail string
 		prepare    func(t *testing.T, dir string)
 	}{
-		{"list the files", "ls-files", nil},
+		{"list the files", "--others", nil},
 		{"hash a file", "hash-object", nil},
 		{"hash a link", "hash-object", func(t *testing.T, dir string) {
 			if err := os.Remove(filepath.Join(dir, "src/app.go")); err != nil {
@@ -119,9 +128,7 @@ func TestStageWorktreeReturnsEachGitFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			gitfail.WhenArg(t, tc.fail, 1)
-			if err := ix.StageWorktree(); err == nil {
-				t.Fatal("StageWorktree ignored a failed git call")
-			}
+			wantInjected(t, ix.StageWorktree())
 		})
 	}
 }
@@ -173,9 +180,7 @@ func TestStageWorktreeReturnsTheCheckFailures(t *testing.T) {
 		t.Run(failArg, func(t *testing.T) {
 			dir, _ := filteredRepo(t)
 			gitfail.WhenArg(t, failArg, 1)
-			if err := stageErr(t, dir); err == nil {
-				t.Fatalf("no error when git %s fails", failArg)
-			}
+			wantInjected(t, stageErr(t, dir))
 		})
 	}
 	t.Run("missing index", func(t *testing.T) {
@@ -207,8 +212,8 @@ func TestStageWorktreeReturnsTheCheckFailures(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = os.Chmod(filepath.Join(repo.Dir, "f.c"), 0o644) })
-		if _, _, err := ix.converted([]string{"f.c"}); err == nil {
-			t.Fatalf("no error reading an unreadable ident file (head %v)", head)
+		if _, _, err := ix.converted([]string{"f.c"}); !errors.Is(err, os.ErrPermission) {
+			t.Fatalf("err = %v, want a permission error reading the ident file (head %v)", err, head)
 		}
 	})
 }
@@ -231,18 +236,14 @@ func TestConvertedReturnsConfigAndReadFailures(t *testing.T) {
 		t.Run(arg, func(t *testing.T) {
 			dir, _ := filteredRepo(t)
 			gitfail.WhenArg(t, arg, 2)
-			if err := stageErr(t, dir); err == nil {
-				t.Fatalf("no error when the %s lookup fails", arg)
-			}
+			wantInjected(t, stageErr(t, dir))
 		})
 	}
 	t.Run("autocrlf bool", func(t *testing.T) {
 		dir, _ := filteredRepo(t)
 		runGit(t, dir, "config", "core.autocrlf", "yes")
 		gitfail.WhenArg(t, "--type=bool", 2)
-		if err := stageErr(t, dir); err == nil {
-			t.Fatal("no error when the core.autocrlf bool lookup fails")
-		}
+		wantInjected(t, stageErr(t, dir))
 	})
 	t.Run("unreadable text=auto file", func(t *testing.T) {
 		repo := gitrepo.New(t, "o", "r", 1)
@@ -260,8 +261,8 @@ func TestConvertedReturnsConfigAndReadFailures(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = os.Chmod(filepath.Join(repo.Dir, "f.t"), 0o644) })
-		if _, _, err := ix.converted([]string{"f.t"}); err == nil {
-			t.Fatal("no error reading an unreadable text=auto file")
+		if _, _, err := ix.converted([]string{"f.t"}); !errors.Is(err, os.ErrPermission) {
+			t.Fatalf("err = %v, want a permission error reading the text=auto file", err)
 		}
 	})
 }
