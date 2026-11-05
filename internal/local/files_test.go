@@ -214,3 +214,27 @@ func TestReadFilesWithoutARoot(t *testing.T) {
 		t.Fatalf("files %+v", files)
 	}
 }
+
+// A ".." from a cwd under a symlink names the file it reads, never a same-named file the resolved cwd climbs to.
+func TestReadFilesNamesTheFileItReads(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "repo")
+	write(t, filepath.Join(root, "sub", "x.md"), []byte("x\n"))
+	write(t, filepath.Join(root, "README.md"), []byte("repo\n"))
+	home := filepath.Join(base, "home")
+	write(t, filepath.Join(home, "README.md"), []byte("home\n"))
+	if err := os.Symlink(filepath.Join(root, "sub"), filepath.Join(home, "work")); err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, _, err := ReadFiles([]string{"../README.md"}, filepath.Join(home, "work"), root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files[0].Path != "~/README.md" || string(files[0].Content) != "home\n" {
+		t.Errorf("file %s holds %q, want ~/README.md holding home", files[0].Path, files[0].Content)
+	}
+}

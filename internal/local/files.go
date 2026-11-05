@@ -83,8 +83,12 @@ func ReadFiles(args []string, cwd, root, home string) ([]File, []run.LocalSkippe
 		display, ok := under(root, abs, "")
 		if !ok && !filepath.IsAbs(arg) {
 			// A cwd under a symlink still names the file through the repository, so the argument joined onto the
-			// resolved cwd keeps the name of a linked directory inside root.
-			display, ok = under(root, filepath.Join(resolved(cwd), arg), "")
+			// resolved cwd keeps the name of a linked directory inside root. A ".." can climb somewhere else from
+			// there, so the name counts only when it reaches the file read.
+			candidate := filepath.Join(resolved(cwd), arg)
+			if r, err := filepath.EvalSymlinks(candidate); err == nil && r == real {
+				display, ok = under(root, candidate, "")
+			}
 		}
 		if !ok {
 			display, ok = under(realRoot, named, "")
