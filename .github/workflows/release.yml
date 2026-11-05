@@ -30,6 +30,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    # Only the newest push matters, and an older run finishing late would upload a snapshot that looks newest.
+    concurrency:
+      group: snapshot
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     steps:
       - id: next
@@ -44,6 +48,10 @@ jobs:
             exit 0
           fi
           version="$(gh api -H 'Accept: application/vnd.github.raw' "repos/$GITHUB_REPOSITORY/contents/.release-please-manifest.json?ref=$BRANCH" | jq -r '."."')"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::.release-please-manifest.json on $BRANCH holds '$version', not X.Y.Z."
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - if: steps.next.outputs.version
         uses: actions/checkout@v7
@@ -70,6 +78,8 @@ jobs:
             dist/*.tar.gz
             dist/checksums.txt
           if-no-files-found: error
+          # A re-run of all jobs builds the same commit again.
+          overwrite: true
 
   # release-please cuts the tag and a draft release with GITHUB_TOKEN, and a tag made with that token triggers no other
   # workflow, so goreleaser runs here, gated on it.
