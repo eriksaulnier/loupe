@@ -520,7 +520,7 @@ func (m *Model) listView() string {
 		clipped, _ = m.summaryCommand()
 	}
 	body := m.styles.Pane(style.Pane{Width: m.width, Height: len(l.summary) + style.PaneRows, Lines: l.summary,
-		Titles: style.PaneTitles{TopLeft: "Reviewer's summary", BottomLeft: clipped, BottomRight: m.styles.Text().Render(hint)}})
+		Titles: style.PaneTitles{TopLeft: "Reviewer's summary", BottomLeft: clipped, BottomRight: m.styles.HintTitle(hint)}})
 	if l.command != nil {
 		body = append(body, l.command...)
 	} else {

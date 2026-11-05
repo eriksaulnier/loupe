@@ -274,6 +274,38 @@ func (s Style) Speaker(name string, you bool) string {
 	return s.bg(s.Emphasis(s.fg(s.rv.text)), s.rv.surface1).Render(" " + name + " ")
 }
 
+// Section is one block of a finding: a bold heading in its tone, then its chip, if any, then each body line behind a
+// bar in the same tone. A blank body line keeps the bar, so the section reads as one block. Without color the chip is a
+// bare word, so a separator stands between it and the heading. docs/tui-design.md owns these rules.
+func (s Style) Section(t Tone, heading, chip string, body []string) []string {
+	head := s.Emphasis(s.ToneStyle(t)).Render(heading)
+	switch {
+	case chip == "":
+	case s.Color:
+		head += " " + chip
+	default:
+		head += s.Dim.Render(" "+s.Glyphs.Sep+" ") + chip
+	}
+	bar := s.ToneStyle(t).Render(s.Glyphs.Quote)
+	out := make([]string, 0, 1+len(body))
+	out = append(out, head)
+	for _, l := range body {
+		if l == "" {
+			out = append(out, bar)
+			continue
+		}
+		out = append(out, bar+" "+l)
+	}
+	return out
+}
+
+// InputTitle is a pane title that names the input taking the keys, in the note color, so focus reads without the
+// border.
+func (s Style) InputTitle(text string) string { return s.Note.Render(text) }
+
+// HintTitle is a pane title that tells the human what a key does or where they are, in plain text.
+func (s Style) HintTitle(text string) string { return s.Text().Render(text) }
+
 // ToneStyle is the foreground a tone draws in, and nothing where color is off.
 func (s Style) ToneStyle(t Tone) lipgloss.Style { return s.fg(s.toneColor(t)) }
 

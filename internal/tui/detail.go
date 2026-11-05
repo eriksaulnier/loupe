@@ -161,7 +161,7 @@ func (m *Model) codePane(location, heading string, lines []diff.ViewLine, width 
 	// A --files run adds each file whole only because nothing was there before, so a line count says nothing.
 	stat := ""
 	if !m.ui.plainCode(m.target) {
-		stat = m.styles.Text().Render(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
+		stat = m.styles.HintTitle(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
 	}
 	title := m.styles.LocationTitle(location, max(8, inner-style.Width(stat)-6), true)
 	return m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
@@ -889,7 +889,7 @@ func (m *Model) noteView() []string {
 	case noteReturn:
 		title, enter = "Return to "+m.applier()+", with a closing note if you like", "enter returns"
 	}
-	way := m.styles.Text().Render(enter + " " + m.glyphs.Sep + " esc cancels")
+	way := m.styles.HintTitle(enter + " " + m.glyphs.Sep + " esc cancels")
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
 		Titles: style.PaneTitles{TopLeft: title, BottomRight: way}, Tone: style.ToneNote, Focus: true})
 }

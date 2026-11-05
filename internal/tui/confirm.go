@@ -342,7 +342,7 @@ func (c *confirmation) messageView(m *Model, width int) string {
 		tone = style.ToneNote
 	}
 	boxed := m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
-		Titles: style.PaneTitles{TopLeft: messageTitle, TopRight: m.styles.Note.Render(state), BottomRight: m.styles.Text().Render(way)}, Tone: tone, Focus: c.typing})
+		Titles: style.PaneTitles{TopLeft: messageTitle, TopRight: m.styles.InputTitle(state), BottomRight: m.styles.HintTitle(way)}, Tone: tone, Focus: c.typing})
 	c.inputRows = len(boxed)
 	return strings.Join(boxed, "\n")
 }
@@ -563,7 +563,7 @@ func (m *Model) confirmView(c *confirmation) string {
 	_, inner := style.PaneInner(0, height)
 	lines = m.withNotice(lines[:min(len(lines), c.scroll.Height())], c.noticeLines(m, extra, inner), inner)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: height, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: c.summary(m), BottomRight: m.styles.Text().Render(position)},
+		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: c.summary(m), BottomRight: m.styles.HintTitle(position)},
 		Scroll: style.Scroll{Offset: c.scroll.YOffset(), Visible: c.scroll.Height(), Total: c.scroll.TotalLineCount()}, Focus: !c.typing})...)
 	return m.shell(body, footer)
 }

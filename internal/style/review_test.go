@@ -696,3 +696,48 @@ func TestColumnHeadIsBoldSecondary(t *testing.T) {
 		t.Errorf("NO_COLOR column heading %q, want it plain", got)
 	}
 }
+
+// A section is a bold heading in its tone over a bar in the same tone, and a blank body line keeps the bar
+// (docs/tui-design.md, Sections).
+func TestSection(t *testing.T) {
+	plain := reviewStyle(t, false, nil)
+	got := plain.Section(ToneNote, "Note n-001", "open", []string{"You", "", "  Is the reset intentional?"})
+	want := []string{"Note n-001 · open", "┃ You", "┃", "┃   Is the reset intentional?"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("NO_COLOR section:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if got := plain.Section(ToneGood, "Suggested fix", "", nil); len(got) != 1 || got[0] != "Suggested fix" {
+		t.Errorf("a section with no body is its heading alone: %q", got)
+	}
+	ascii := reviewStyle(t, false, map[string]string{IconsEnv: "ascii"}).Section(ToneMuted, "Withdrawn", "no-runtime-effect", []string{"Both values agree."})
+	if ascii[0] != "Withdrawn - no-runtime-effect" || ascii[1] != "| Both values agree." {
+		t.Errorf("ASCII section %q", ascii)
+	}
+	color := reviewStyle(t, true, nil)
+	for _, tone := range []Tone{ToneAccent, ToneGood, ToneNote, ToneMuted} {
+		got := color.Section(tone, "Why", "", []string{"text"})
+		head, bar := color.Emphasis(color.ToneStyle(tone)).Render("Why"), color.ToneStyle(tone).Render("┃")
+		if got[0] != head || !strings.HasPrefix(got[1], bar+" ") {
+			t.Errorf("tone %d: heading %q and bar %q are not in the tone", tone, got[0], got[1])
+		}
+	}
+	if got := color.Section(ToneNote, "Note", color.Chip("open", ToneNote), nil)[0]; ansi.Strip(got) != "Note  open " {
+		t.Errorf("colored chip is set off by a space: %q", ansi.Strip(got))
+	}
+}
+
+// A pane title that names where typing goes is in the note color, and a hint title is plain text; without color both
+// are the bare words (docs/tui-design.md, Boxes).
+func TestPaneTitleHelpers(t *testing.T) {
+	plain := reviewStyle(t, false, nil)
+	if plain.InputTitle("body") != "body" || plain.HintTitle("esc closes") != "esc closes" {
+		t.Error("NO_COLOR pane titles are not the bare words")
+	}
+	color := reviewStyle(t, true, nil)
+	if got := color.InputTitle("body"); got != color.Note.Render("body") {
+		t.Errorf("input title %q is not in the note color", got)
+	}
+	if got := color.HintTitle("esc closes"); got != color.Text().Render("esc closes") {
+		t.Errorf("hint title %q is not plain text", got)
+	}
+}
