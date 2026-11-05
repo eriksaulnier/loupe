@@ -20,7 +20,7 @@ var contractResultKeys = map[string][]string{
 	"handoff":  {"host", "paneId", "direction"},
 	"wait":     {"reason", "awaiting", "readiness", "notes", "findings"},
 	"show":     {"summary", "findings", "decisions", "notes", "replies", "target", "dispositions", "readiness", "digest"},
-	"feedback": {"readiness", "notes", "findings"},
+	"feedback": {"readiness", "notes", "findings", "returned", "groups"},
 	"reply":    {"reply", "version"},
 	"list":     {"ref", "kind", "repository", "url", "title", "round", "state", "counts", "capturedAt"},
 	"stats": {"filter", "repos", "since", "until", "states", "groupBy", "groups", "key", "runs", "unattended", "pullRequests",

@@ -511,3 +511,26 @@ func TestAnAmendMovesNoGateCount(t *testing.T) {
 		}
 	}
 }
+
+func TestHumanEdited(t *testing.T) {
+	agent := HistoryEntry{By: ByAgent, Changed: map[string]any{"body": "old"}}
+	human := func(field string) HistoryEntry {
+		return HistoryEntry{By: ByHuman, Changed: map[string]any{field: "old"}}
+	}
+	for _, c := range []struct {
+		name    string
+		history []HistoryEntry
+		want    bool
+	}{
+		{"none", nil, false},
+		{"human title", []HistoryEntry{human("title")}, true},
+		{"human proposal after agent", []HistoryEntry{agent, human("proposal")}, true},
+		{"agent after human", []HistoryEntry{human("body"), agent}, false},
+		{"human label only", []HistoryEntry{human("label")}, false},
+		{"human inclusion only", []HistoryEntry{human("included")}, false},
+	} {
+		if got := HumanEdited(Finding{History: c.history}); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}

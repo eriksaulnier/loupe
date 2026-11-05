@@ -342,6 +342,43 @@ func TestStatsIgnoresLocalRuns(t *testing.T) {
 	}
 }
 
+func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
+	f := localFinding("f-001")
+	home, dir := localRun(t, "changed", f)
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Decisions["f-001"] = draft.Decision{FindingID: "f-001", Decision: draft.DecisionAccepted, FindingRev: 1, Note: "Shorter."}
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	if err := draft.Seal(dir, 0, func(string) string { return "" }, time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+	if code := Execute(deps, []string{"wait", "--run", "local#1", "--json"}); code != 0 {
+		t.Fatalf("wait: exit %d stdout %q", code, s.stdout.String())
+	}
+	env := decodeOne(t, s.stdout.Bytes())
+	if env["reason"] != "returned" || len(env["awaiting"].([]any)) != 0 || env["reviewUrl"] != nil || env["returned"] != true {
+		t.Fatalf("wait %v", env)
+	}
+	groups := env["groups"].(map[string]any)
+	if entry := groups["applyWithChanges"].([]any)[0].(map[string]any); entry["suggestion"] != "Shorter." {
+		t.Fatalf("groups %v", groups)
+	}
+	deps, s = testDeps(t, map[string]string{"LOUPE_HOME": home})
+	if code := Execute(deps, []string{"feedback", "--run", "local#1", "--json"}); code != 0 {
+		t.Fatalf("feedback: exit %d", code)
+	}
+	if env := decodeOne(t, s.stdout.Bytes()); env["returned"] != true || env["groups"] == nil {
+		t.Fatalf("feedback %v", env)
+	}
+	code, s := runWithStdin(t, home, `{"title": "T", "body": "B", "general": true}`, "add", "--run", "local#1", "--from", "-", "--json")
+	wantCode(t, code, s, refusal.Returned)
+}
+
 func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
 	home, _ := localRun(t, "changed")
 	// encoding/json folds ſ (U+017F) to s and K (U+212A) to k when it matches field names.
@@ -355,8 +392,6 @@ func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
 		}
 	}
 }
-
-// review opens a local run in apply mode: the human decides, returns with p and y, and the run is sealed.
 
 // A malformed entry passes the key checks untouched and is refused as malformed input, never as a mode refusal.
 func TestLocalAddRefusesMalformedInput(t *testing.T) {
@@ -374,5 +409,20 @@ func TestLocalEditRefusesAProposalOfTheWrongType(t *testing.T) {
 	errObj := wantCode(t, code, s, refusal.Input)
 	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "proposal") {
 		t.Errorf("message %q does not name the proposal", msg)
+	}
+}
+
+// wait without --json says a returned run is returned and how to read its decisions.
+func TestWaitSaysAReturnedRunIsReturned(t *testing.T) {
+	home, dir := localRun(t, "changed", localFinding("f-001"))
+	if err := os.WriteFile(filepath.Join(dir, draft.ReturnFile), []byte(`{"schema":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"wait", "--run", "local#1"}); code != 0 {
+		t.Fatalf("wait: exit %d stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
+	}
+	if out := s.stdout.String(); !strings.Contains(out, "returned; read the decisions with loupe feedback --run acme/widgets:local#1 --json") {
+		t.Errorf("wait output:\n%s", out)
 	}
 }

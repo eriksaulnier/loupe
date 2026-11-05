@@ -17,6 +17,10 @@ type Mode interface {
 	InputRules() InputRules
 	// Refuses returns a wrong-mode refusal when command, with the named flags set, does not apply to this run.
 	Refuses(command string, flags []string) error
+	// Ended returns why the run is over for the agent, EndedPublished or EndedReturned, or "" while it is not.
+	Ended(dir string) (string, error)
+	// Feedback is the payload loupe feedback and loupe wait return for the draft d of the run in dir.
+	Feedback(d *draft.Draft, dir string) (map[string]any, error)
 }
 
 // InputRules refuse finding fields a run kind does not have. Stored local findings keep side RIGHT and blocking

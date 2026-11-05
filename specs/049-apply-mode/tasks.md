@@ -186,28 +186,28 @@ Every implementation task follows a failing test, then the change, then a passin
 
 **Independent test**: a test seals a run with `draft.Seal` and checks `wait --json`, `feedback --json`, and the `returned` refusals.
 
-- [ ] T045 [P] [US1] Add failing tests in a new `internal/draft/seal_test.go`:
+- [x] T045 [P] [US1] Add failing tests in a new `internal/draft/seal_test.go`:
   - `Seal` refuses with `changed` on a moved version, `not-ready` on a pending finding or an open note, and `empty` on no finding.
   - Withdrawn findings do not block.
   - An all-excluded draft seals.
   - It writes `{schema: 1, returnedAt, draftVersion}`.
   - After it, `Mutate` refuses with `returned` for an add, an edit, a reply, a summary and a decision.
   - `RecordHandBack` still succeeds.
-- [ ] T046 [US1] Implement `Seal` in a new `internal/draft/seal.go`, holding `underLock(dir, "review", getenv, …)`. Add the seal check at the start of `Mutate` in `internal/draft/store.go`. Move the text of `ReadinessRefusal` into `internal/draft/derive.go`, and re-export it from `internal/publish/gates.go`. Pin `return.json` schema 1 in `internal/publish/schema_test.go`, and add its row to `docs/versioning.md`.
-- [ ] T047 [P] [US2] Add failing tests in `internal/draft/derive_test.go` for `HumanEdited`: true after a human edit of title, body or proposal that follows the latest agent edit, false after an agent edit that follows it, and false with no edits.
-- [ ] T048 [US2] Implement `HumanEdited` in `internal/draft/derive.go`.
-- [ ] T049 [P] [US1] [US2] [US4] Add failing tests in a new `internal/mode/feedback_test.go` for the apply feedback groups:
+- [x] T046 [US1] Implement `Seal` in a new `internal/draft/seal.go`, holding `underLock(dir, "review", getenv, …)`. Add the seal check at the start of `Mutate` in `internal/draft/store.go`. Move the text of `ReadinessRefusal` into `internal/draft/derive.go`, and re-export it from `internal/publish/gates.go`. Pin `return.json` schema 1 in `internal/publish/schema_test.go`, and add its row to `docs/versioning.md`.
+- [x] T047 [P] [US2] Add failing tests in `internal/draft/derive_test.go` for `HumanEdited`: true after a human edit of title, body or proposal that follows the latest agent edit, false after an agent edit that follows it, and false with no edits.
+- [x] T048 [US2] Implement `HumanEdited` in `internal/draft/derive.go`.
+- [x] T049 [P] [US1] [US2] [US4] Add failing tests in a new `internal/mode/feedback_test.go` for the apply feedback groups:
   - Classification comes from `GateOf`, so a human withdrawal lands in `excluded` and an agent withdrawal in `withdrawn`.
   - `applyWithChanges` holds a finding accepted with a note (`suggestion`), or one with `HumanEdited`.
   - `excluded` carries `reason` when one was given.
   - Every entry has an absolute `path` from `local.files[].abs` or the joined root, a `location` with no `side`, no `blocking`, and a `thread` shaped `{id, body, at, status, replies}`.
   - `returned` reflects `return.json`.
   - The PR payload is unchanged.
-- [ ] T050 [US1] Move `feedbackPayload` and `repliesTo` from `internal/cli/feedback.go` into a new `internal/mode/feedback.go`. Implement `Feedback`, `Ended` and `WaitReason` for both modes, and call them from `internal/cli/feedback.go` and `internal/cli/wait.go`.
-- [ ] T051 [P] [US1] Add failing tests in `internal/cli/wait_test.go`, `internal/cli/review_test.go` and `internal/cli/handoff_test.go`:
+- [x] T050 [US1] Move `feedbackPayload` and `repliesTo` from `internal/cli/feedback.go` into a new `internal/mode/feedback.go`. Implement `Feedback`, `Ended` and `WaitReason` for both modes, and call them from `internal/cli/feedback.go` and `internal/cli/wait.go`.
+- [x] T051 [P] [US1] Add failing tests in `internal/cli/wait_test.go`, `internal/cli/review_test.go` and `internal/cli/handoff_test.go`:
   - `wait --json` on a sealed local run returns `reason: "returned"`, `awaiting: []`, the payload and no `reviewUrl`.
   - `review` and `handoff` on a sealed run refuse with `returned` and a fix that names `loupe feedback --run <ref>`, and not with `wrong-mode`.
-- [ ] T052 [US1] Make the tests pass. `resolveRun` already refuses `review` and `handoff` with `returned` first (T019). Add `returned` and `groups` to `contractResultKeys` in `internal/cli/help_test.go`. Amend `specs/001-loupe-v1/contracts/cli.md` for `wait`, `feedback` and the `returned` refusal. Run `mise run check`.
+- [x] T052 [US1] Make the tests pass. `resolveRun` already refuses `review` and `handoff` with `returned` first (T019). Add `returned` and `groups` to `contractResultKeys` in `internal/cli/help_test.go`. Amend `specs/001-loupe-v1/contracts/cli.md` for `wait`, `feedback` and the `returned` refusal. Run `mise run check`.
 
 **Checkpoint**: PR 3 is green. A sealed run reports correctly through the CLI.
 
