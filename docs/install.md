@@ -54,7 +54,7 @@ Each [release](https://github.com/eriksaulnier/loupe/releases) attaches one arch
 
 <!-- x-release-please-start-version -->
 ```sh
-version=0.21.0
+version=0.22.0
 os=darwin arch=arm64
 archive="loupe_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/eriksaulnier/loupe/releases/download/v$version"
@@ -149,6 +149,6 @@ Pi pins the plugin to a release, so use the version that `loupe --version` print
 
 <!-- x-release-please-start-version -->
 ```sh
-pi install git:github.com/eriksaulnier/loupe@v0.21.0
+pi install git:github.com/eriksaulnier/loupe@v0.22.0
 ```
 <!-- x-release-please-end -->
