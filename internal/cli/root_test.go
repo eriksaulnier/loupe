@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -284,5 +285,70 @@ func TestNoCompletionCommand(t *testing.T) {
 	}
 	if e := errorOf(decodeOne(t, s.stdout.Bytes())); e["code"] != "usage" {
 		t.Fatalf("got %v", e)
+	}
+}
+
+// argsWantJSON routes help and parse errors before cobra parses anything; once the flags parse, the parsed --json wins.
+func TestJSONScanAndParsedFlag(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		args []string
+		json bool
+		exit int
+	}{
+		{"--json=true", []string{"--json=true", "--help"}, true, 0},
+		{"--json=false", []string{"--json=false", "--help"}, false, 0},
+		{"a bad --json value", []string{"list", "--json=maybe"}, false, 2},
+		{"--json after --", []string{"list", "--", "--json"}, false, 2},
+		{"--json taken as a flag value", []string{"add", "--title", "--json", "--help"}, false, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+			if code := Execute(deps, c.args); code != c.exit {
+				t.Fatalf("exit %d, want %d; stdout %q stderr %q", code, c.exit, s.stdout.String(), s.stderr.String())
+			}
+			switch {
+			case c.exit != 0:
+				if s.stdout.Len() != 0 || !strings.HasPrefix(s.stderr.String(), "error: ") {
+					t.Fatalf("stdout %q stderr %q, want the usage refusal as text", s.stdout.String(), s.stderr.String())
+				}
+			case c.json:
+				if help, _ := decodeOne(t, s.stdout.Bytes())["help"].(string); !strings.Contains(help, "Collect pull request review findings") {
+					t.Fatalf("help %q", help)
+				}
+			default:
+				if out := s.stdout.String(); strings.HasPrefix(out, "{") || !strings.Contains(out, "loupe ") {
+					t.Fatalf("stdout %q, want the help as text", out)
+				}
+			}
+		})
+	}
+}
+
+func TestWidthFallsBackWhenTheTerminalReportsNone(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		term func() int
+		want int
+	}{
+		{"no source", nil, defaultWidth},
+		{"zero columns", func() int { return 0 }, defaultWidth},
+		{"a terminal", func() int { return 60 }, style.Content(60)},
+	} {
+		if got := (Deps{TermWidth: c.term}).width(); got != c.want {
+			t.Errorf("%s: width %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
+func TestInvocationOfACommandRunOutsideExecuteIsEmpty(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	if inv := invocationOf(cmd); *inv != (invocation{}) {
+		t.Fatalf("invocation %+v", *inv)
+	}
+	wrapped := &commandError{err: errors.New("boom")}
+	if wrapped.Error() != "boom" || !errors.Is(wrapped, wrapped.err) {
+		t.Fatalf("commandError %q does not pass its error through", wrapped.Error())
 	}
 }
