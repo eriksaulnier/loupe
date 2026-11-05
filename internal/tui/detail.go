@@ -363,10 +363,10 @@ type proposal struct {
 	body    []string
 }
 
-// proposedChange is what the agent will do if the human accepts, read after the case for it. On a local run it is the
-// proposal, rendered as the body is, or, with none, a question in the conversation's tone. On a pull request run the
-// suggested fix takes the slot, shown as written so a fix that is not code cannot close a fence. One renderer draws
-// both, so the two modes read alike.
+// proposedChange is what the agent will do if the human accepts. On a local run it is the proposal, rendered as the
+// body is, or, with none, a question in the conversation's tone. On a pull request run the suggested fix takes the
+// slot, shown as written so a fix that is not code cannot close a fence. One renderer draws both, so the two modes
+// read alike.
 func (m *Model) proposedChange(f draft.Finding, width int) (proposal, error) {
 	who := m.applier()
 	switch {

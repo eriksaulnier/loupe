@@ -29,7 +29,8 @@ type modeUI interface {
 	// listKey and detailKey act on a key only this mode binds, and report whether they did.
 	listKey(m *Model, key string) (tea.Cmd, bool)
 	detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool)
-	// heading is the header's reference, link and round; runRef is the run as loupe's commands name it.
+	// heading is what the header names: a pull request's reference, link and round, or a local run's place. runRef is
+	// the run as loupe's commands name it.
 	heading(m *Model) style.ReviewHeading
 	runRef(m *Model) string
 	// question reports whether the list marks f as a question.
