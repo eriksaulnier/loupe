@@ -65,3 +65,10 @@ func TestOneDisclosure(t *testing.T) {
 		}
 	}
 }
+
+func TestOneDisclosureNamesASecondDisclosure(t *testing.T) {
+	err := OneDisclosure("<details>\n<summary>x</summary>\n\n</details>\n\n<details>\n<summary>y</summary>\n\n</details>")
+	if err == nil || err.Error() != "a second disclosure follows the first one's close" {
+		t.Fatalf("got %v", err)
+	}
+}

@@ -93,6 +93,14 @@ func TestCheckRefuses(t *testing.T) {
 		{"fence indented with a tab", "para\n\t```\n<br>\n\t```\n", Body, "html", 3},
 		{"details indented four spaces", "    <details>\n    <summary>x</summary>\n\n</details>\n", Body, "html", 1},
 		{"summary closed by an indented line", "<details>\n<summary>x\n\n    </summary>\n</details>\n", Body, "html", 4},
+		{"fence while details awaits its summary", "<details>\n\n```\nx\n```\n", Body, "html", 3},
+		{"fence inside an open summary", "<details>\n<summary>\n\n```\nx\n```\n", Body, "html", 4},
+		{"details left without a summary", "<details>\n", Body, "html", 1},
+		{"backtick run with a backtick after it opens no fence", "```js`x\n<br>\n", Body, "html", 2},
+		{"summary never closed", "<details>\n<summary>A\n", Body, "html", 2},
+		{"autolink inside an HTML block", "<details>\n<summary>x</summary>\n<x@y.z>\n", Body, "html", 3},
+		{"short unclosed tag inside an HTML block", "<details>\n<summary>x</summary>\nsee <ab\n", Body, "html", 3},
+		{"long unclosed tag", "<details>\n<summary>x</summary>\n\n<" + strings.Repeat("a", 50) + "\n", Body, "html", 4},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
