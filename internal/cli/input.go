@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -119,7 +120,7 @@ func forbiddenIn(object []byte, entry int, fix string) error {
 		return malformed(err, len(object), fix)
 	}
 	for _, key := range forbiddenInputKeys {
-		if _, ok := keys[strings.ToLower(key)]; !ok {
+		if _, ok := keys[foldKey(key)]; !ok {
 			continue
 		}
 		r := refusal.New(refusal.Input, fmt.Sprintf("input field %q is not allowed; only the human sets it in loupe review", key), fix)
@@ -185,7 +186,7 @@ func modeKeysIn(object []byte, entry int, m mode.Mode) error {
 		}
 		return r
 	}
-	has := func(key string) bool { _, ok := keys[strings.ToLower(key)]; return ok }
+	has := func(key string) bool { _, ok := keys[foldKey(key)]; return ok }
 	ir := m.InputRules()
 	switch {
 	case has("proposal") && !m.Rules().AllowProposal:
@@ -196,8 +197,8 @@ func modeKeysIn(object []byte, entry int, m mode.Mode) error {
 		return refuse(refusal.Input, "suggestedFix", "does not apply to local runs", `use "proposal" instead`)
 	}
 	if ir.RefuseSide {
-		if loc, err := foldedKeys(keys["location"]); err == nil {
-			if _, ok := loc["side"]; ok {
+		if loc, err := foldedKeys(keys[foldKey("location")]); err == nil {
+			if _, ok := loc[foldKey("side")]; ok {
 				return refuse(refusal.Location, "location.side", "does not apply to local runs", `drop "side" from the location`)
 			}
 		}
@@ -243,8 +244,8 @@ func runMode(dir string) (mode.Mode, error) {
 	return mode.Of(target), nil
 }
 
-// foldedKeys returns an object's keys in lower case, because encoding/json matches field names without regard to
-// case, so "Blocking" sets the same field as "blocking".
+// foldedKeys returns an object's keys by foldKey, because encoding/json matches field names by Unicode case folding,
+// so "Blocking" and "ſuggestedFix" set the same fields as "blocking" and "suggestedFix".
 func foldedKeys(object []byte) (map[string]json.RawMessage, error) {
 	var keys map[string]json.RawMessage
 	if err := json.Unmarshal(object, &keys); err != nil {
@@ -252,7 +253,19 @@ func foldedKeys(object []byte) (map[string]json.RawMessage, error) {
 	}
 	folded := make(map[string]json.RawMessage, len(keys))
 	for k, v := range keys {
-		folded[strings.ToLower(k)] = v
+		folded[foldKey(k)] = v
 	}
 	return folded, nil
+}
+
+// foldKey maps every rune to the least rune of its case-folding orbit, so two keys fold equal exactly when
+// strings.EqualFold says they match.
+func foldKey(key string) string {
+	return strings.Map(func(r rune) rune {
+		least := r
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			least = min(least, f)
+		}
+		return least
+	}, key)
 }

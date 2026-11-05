@@ -233,3 +233,34 @@ func TestLocalShowOmitsPRFields(t *testing.T) {
 		t.Errorf("target %v", target)
 	}
 }
+
+func TestInputKeyChecksIgnoreCase(t *testing.T) {
+	home, _ := localRun(t, "changed")
+	for _, input := range []string{
+		`{"title": "T", "body": "B", "general": true, "Blocking": true}`,
+		`{"title": "T", "body": "B", "general": true, "SUGGESTEDFIX": "x"}`,
+		`{"title": "T", "body": "B", "Location": {"path": "a.go", "line": 2, "Side": "RIGHT"}}`,
+		`{"title": "T", "body": "B", "general": true, "Included": false}`,
+	} {
+		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
+		if code != 1 {
+			t.Errorf("%s: exit %d stdout %q", input, code, s.stdout.String())
+		}
+	}
+}
+
+func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
+	home, _ := localRun(t, "changed")
+	// encoding/json folds ſ (U+017F) to s and K (U+212A) to k when it matches field names.
+	for _, input := range []string{
+		`{"title": "T", "body": "B", "general": true, "ſuggestedFix": "x"}`,
+		`{"title": "T", "body": "B", "general": true, "blocKing": true}`,
+	} {
+		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
+		if code != 1 {
+			t.Errorf("%s: exit %d stdout %q", input, code, s.stdout.String())
+		}
+	}
+}
+
+// review opens a local run in apply mode: the human decides, returns with p and y, and the run is sealed.
