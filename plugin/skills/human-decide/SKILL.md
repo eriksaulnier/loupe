@@ -85,7 +85,7 @@ Block on `loupe wait --run <ref> --json`. It returns as soon as the human sends 
 When the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`; after `loupe wait` returns, read its result instead. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
 
 - To revise a finding, write the changed fields to a file and run `loupe edit <finding-id> --from <file> --run <ref> --json`. An absent key leaves a field unchanged, and `null` clears `proposal`, `location`, `label` and the other optional fields. Any change clears the human's decision, so they decide the finding again.
-- The human MAY rewrite a finding's `title`, `body` and `proposal` in review without sending it back. Leave those fields out of your edit file unless a note asks you to change them, so you do not undo their words. When you do set one, pass the `version` of your last `loupe feedback` result as `--expect-version`, so a change they make meanwhile refuses your edit instead of being overwritten.
+- When you edit a finding, pass the `version` of your last `loupe feedback` result as `--expect-version`, so a decision the human makes meanwhile refuses your edit instead of being overwritten.
 - To withdraw a finding, run `loupe edit <finding-id> --exclude --reason "<one line that sums up your reply>" --reason-code conceded --run <ref> --json`. The human reads the reason beside the withdrawn finding and decides from it whether to reinstate it.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.
 
@@ -96,9 +96,11 @@ Only the human resolves or dismisses a note. When every note you were asked to a
 Act only once `loupe wait` returned `"reason": "returned"`, or `loupe feedback --run <ref> --json` shows `"returned": true`. `groups` sorts every decided finding by what you do with it. Each entry with a `location` carries `path`, the absolute file to edit. A general finding has no `path`. Every entry carries `thread`, the notes the human and you exchanged on it.
 
 - `apply`: make the change in `proposal`, or address `body` when there is no proposal.
-- `applyWithChanges`: the human accepted the finding with a note, carried as `suggestion`, or rewrote its text in review. Make the change as the human shaped it. Where `suggestion` and `proposal` conflict, follow `suggestion`.
+- `applyWithChanges`: the human accepted the finding with a note, carried as `suggestion`. This group means a note and nothing else. Make the change as the note shapes it. Where `suggestion` and `proposal` conflict, follow `suggestion`.
 - `excluded`: change nothing. When `reason` is given, you SHOULD NOT bring the idea back elsewhere.
 - `withdrawn`: you withdrew it; nothing to do.
+
+When the result carries `note`, it is the human's closing note on the work as a whole, such as "run the tests before you commit". Act on it as an instruction after the groups. You MUST NOT skip it.
 
 What the human and you settled in a finding's `thread` counts alongside its proposal. Locations are line numbers in the captured snapshot, and they shift as your edits land, so locate each change by its content or its heading, not by the line number alone.
 

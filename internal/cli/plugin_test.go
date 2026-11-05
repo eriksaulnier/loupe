@@ -395,6 +395,10 @@ func TestHumanDecideNamesOnlyApplyCommands(t *testing.T) {
 		"loupe capture --changed", "--files <path>", "loupe capture --no-files --title", "--applier",
 		"loupe add --from <file> --run <ref> --json", "loupe handoff --run <ref> --json", "loupe wait --run <ref> --json",
 		"`\"reason\": \"returned\"`", "`applyWithChanges`", "`excluded`: change nothing",
+		// Spec 050: applyWithChanges is a note only, and the closing note is acted on after the groups.
+		"This group means a note and nothing else.",
+		"When the result carries `note`, it is the human's closing note on the work as a whole",
+		"Act on it as an instruction after the groups",
 	} {
 		if !strings.Contains(body, phrase) {
 			t.Errorf("human-decide/SKILL.md body does not contain %q", phrase)
