@@ -28,6 +28,7 @@ The release SHOULD be tried this way before its pull request is merged. Take the
 
 ```sh
 run=$(gh api 'repos/eriksaulnier/loupe/actions/artifacts?name=loupe-snapshot&per_page=100' --jq '[.artifacts[] | select(.expired | not)] | sort_by(.created_at) | last | .workflow_run.id')
+rm -rf snapshot
 gh run download "$run" -R eriksaulnier/loupe -n loupe-snapshot -D snapshot
 tar -xzf snapshot/loupe_*_darwin_arm64.tar.gz -C snapshot loupe
 ./snapshot/loupe --version
