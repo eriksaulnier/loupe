@@ -297,3 +297,16 @@ func TestCheckNamesTheField(t *testing.T) {
 		})
 	}
 }
+
+// A refusal names the field it checked, including the kinds local runs add.
+func TestCheckRefusalNamesTheLocalRunFields(t *testing.T) {
+	for kind, want := range map[Kind]string{Proposal: "proposal", AcceptNote: "acceptNote", ExcludeReason: "excludeReason", RunTitle: "runTitle", Applier: "applier"} {
+		r, ok := refusal.As(Check("one<br>two\n", kind, fix))
+		if !ok {
+			t.Fatalf("%s: no refusal", want)
+		}
+		if r.Details["field"] != want && !strings.Contains(r.Message, want) {
+			t.Errorf("kind %d: refusal %q details %v do not name %s", kind, r.Message, r.Details, want)
+		}
+	}
+}

@@ -369,3 +369,28 @@ func TestLoadTargetReadsSchemaOneWithoutPRState(t *testing.T) {
 		t.Fatalf("got schema %d prState %q, want 1 and empty", target.Schema, target.PRState)
 	}
 }
+
+// A local target with no file list, or none at all, still writes files and skipped as empty arrays, never null.
+func TestLocalTargetWritesEmptyListsForMissingFiles(t *testing.T) {
+	bare := sampleLocalTargetForTest()
+	bare.Local = nil
+	nilLists := sampleLocalTargetForTest()
+	nilLists.Local.Files, nilLists.Local.Skipped = nil, nil
+	for name, target := range map[string]Target{"no local block": bare, "nil lists": nilLists} {
+		data, err := json.Marshal(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m struct {
+			Local map[string]json.RawMessage `json:"local"`
+		}
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"files", "skipped"} {
+			if got := string(m.Local[key]); got != "[]" {
+				t.Errorf("%s: local.%s is %s, want []", name, key, got)
+			}
+		}
+	}
+}

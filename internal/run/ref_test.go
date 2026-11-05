@@ -34,6 +34,7 @@ func TestParseRefRefuses(t *testing.T) {
 		"", "owner/repo", "owner/repo#", "owner/repo#abc", "owner/repo#0", "owner/repo#-1",
 		"owner/repo#1@", "owner/repo#1@0", "owner/repo#1@x", "owner#1", "a/b/c#1", "/repo#1", "owner/#1",
 		"owner/repo#1@2@3", "https://github.com/owner/repo/pull/1", " owner/repo#1",
+		"owner/repo#99999999999999999999", "owner/repo#1@99999999999999999999",
 	} {
 		_, err := ParseRef(in)
 		r, ok := refusal.As(err)
@@ -83,7 +84,7 @@ func TestLocalRefString(t *testing.T) {
 }
 
 func TestParseLocalRefRefuses(t *testing.T) {
-	for _, in := range []string{"local#0", ":local#1", "a/b/c:local#1", "local#1@2"} {
+	for _, in := range []string{"local#0", ":local#1", "a/b/c:local#1", "local#1@2", "local#99999999999999999999"} {
 		_, err := ParseRef(in)
 		r, ok := refusal.As(err)
 		if !ok {

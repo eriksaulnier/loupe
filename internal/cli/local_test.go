@@ -264,3 +264,22 @@ func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
 }
 
 // review opens a local run in apply mode: the human decides, returns with p and y, and the run is sealed.
+
+// A malformed entry passes the key checks untouched and is refused as malformed input, never as a mode refusal.
+func TestLocalAddRefusesMalformedInput(t *testing.T) {
+	home, _ := localRun(t, "changed")
+	for _, input := range []string{`[{"title": }]`, `"a string"`, `[{"title": "T", "body": "B", "general": true}, {"blocking": }]`} {
+		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
+		wantCode(t, code, s, refusal.Input)
+	}
+}
+
+// A proposal of the wrong JSON type is refused on edit, as on add.
+func TestLocalEditRefusesAProposalOfTheWrongType(t *testing.T) {
+	home, _ := localRun(t, "changed", localFinding("f-001"))
+	code, s := runWithStdin(t, home, `{"proposal": 5}`, "edit", "f-001", "--run", "local#1", "--from", "-", "--json")
+	errObj := wantCode(t, code, s, refusal.Input)
+	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "proposal") {
+		t.Errorf("message %q does not name the proposal", msg)
+	}
+}
