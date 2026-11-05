@@ -371,22 +371,29 @@ func TestInstallScriptCleansUpOnSignal(t *testing.T) {
 }
 
 func TestInstallScriptPinnedVersion(t *testing.T) {
-	for _, pin := range []string{"v1.2.3", "1.2.3"} {
-		t.Run(pin, func(t *testing.T) {
+	// prerelease.yml publishes X.Y.Z-rc.N, which GitHub never resolves as latest, so a pin is the only way to it.
+	for _, tc := range []struct{ pin, version string }{
+		{"v1.2.3", "1.2.3"},
+		{"1.2.3", "1.2.3"},
+		{"v1.3.0-rc.1", "1.3.0-rc.1"},
+		{"1.3.0-rc.1", "1.3.0-rc.1"},
+	} {
+		t.Run(tc.pin, func(t *testing.T) {
 			f := newInstallFixture(t)
 			f.publish(t, "1.2.3", standInBinary("1.2.3"))
+			f.publish(t, "1.3.0-rc.1", standInBinary("1.3.0-rc.1"))
 			f.publish(t, "9.9.9", standInBinary("9.9.9"))
 			f.markLatest(t, "9.9.9")
 
-			stdout, stderr, err := f.run(t, "LOUPE_VERSION="+pin)
+			stdout, stderr, err := f.run(t, "LOUPE_VERSION="+tc.pin)
 			if err != nil {
 				t.Fatalf("install failed: %v\n%s", err, stderr)
 			}
-			if want := "loupe version 1.2.3"; !strings.Contains(stdout, want) {
+			if want := "loupe version " + tc.version; !strings.Contains(stdout, want) {
 				t.Errorf("stdout does not print %q:\n%s", want, stdout)
 			}
 			for _, request := range f.requests(t) {
-				if !strings.Contains(request, "/download/v1.2.3/") {
+				if !strings.Contains(request, "/download/v"+tc.version+"/") {
 					t.Errorf("request outside the pinned release: %s", request)
 				}
 			}
