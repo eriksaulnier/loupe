@@ -91,8 +91,6 @@ func mustOpen(m *Model, id string) {
 // Every screen, in every tier, with and without color, keeps every line inside the window, its header exactly as wide
 // and unclipped, and the actions it cannot do without in its footer.
 func TestEveryTierFitsTheWindow(t *testing.T) {
-	clipToWindow = false
-	t.Cleanup(func() { clipToWindow = true })
 	dir := newFixture(t)
 	withOpenNote(t, dir)
 	tiers := []struct {

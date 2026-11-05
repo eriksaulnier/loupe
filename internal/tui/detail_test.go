@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -661,14 +660,6 @@ func TestDecisionOpensTheNextFinding(t *testing.T) {
 }
 
 // Keys settle instantly in tests; the tests of the settle windows raise the delays on purpose.
-func TestMain(m *testing.M) {
-	settleAfterDecision = 0
-	settleOnOpen = 0
-	// Poll tests deliver the tick themselves; a real one would race them.
-	pollInterval = time.Hour
-	os.Exit(m.Run())
-}
-
 func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
 	settleAfterDecision = time.Second
 	defer func() { settleAfterDecision = 0 }()
