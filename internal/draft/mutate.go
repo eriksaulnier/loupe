@@ -431,6 +431,54 @@ func Exclude(d *Draft, findingID string, now time.Time) ([]string, error) {
 	return closeOpenNotes(d, f.ID, NoteDismissed, now), nil
 }
 
+// AcceptWithNote accepts the finding with the human's note on how to apply it. A blank note is a plain accept.
+func AcceptWithNote(d *Draft, findingID, note string, now time.Time) ([]string, error) {
+	if strings.TrimSpace(note) == "" {
+		return Accept(d, findingID, now)
+	}
+	if err := markdown.Check(note, markdown.AcceptNote, "rewrite the note within the Markdown allowlist, or leave it empty to accept without one"); err != nil {
+		return nil, err
+	}
+	closed, err := Accept(d, findingID, now)
+	if err != nil {
+		return nil, err
+	}
+	decision := d.Decisions[findingID]
+	decision.Note = note
+	d.Decisions[findingID] = decision
+	return closed, nil
+}
+
+// ExcludeWithReason excludes the finding with the human's reason. An empty reason is a plain exclude.
+func ExcludeWithReason(d *Draft, findingID, reason string, now time.Time) ([]string, error) {
+	if err := ValidateExcludeReason(reason); err != nil {
+		return nil, err
+	}
+	closed, err := Exclude(d, findingID, now)
+	if err != nil {
+		return nil, err
+	}
+	decision := d.Decisions[findingID]
+	decision.Note = reason
+	d.Decisions[findingID] = decision
+	return closed, nil
+}
+
+// ValidateExcludeReason holds an exclude reason to the limits of a withdrawal reason: one line of at most 200
+// characters. The human types it in review, so the refusal speaks to review, not to a command's flags.
+func ValidateExcludeReason(reason string) error {
+	const fix = "shorten the reason to one line of at most 200 characters, or leave it empty to exclude without one"
+	switch {
+	case reason == "":
+		return nil
+	case strings.ContainsAny(reason, "\r\n\u0085  "):
+		return refusal.New(refusal.Input, "the exclude reason holds a line break", fix)
+	case utf8.RuneCountInString(reason) > maxReasonRunes:
+		return refusal.New(refusal.Input, fmt.Sprintf("the exclude reason is %d characters", utf8.RuneCountInString(reason)), fix)
+	}
+	return markdown.Check(reason, markdown.ExcludeReason, "rewrite the reason within the Markdown allowlist, or leave it empty to exclude without one")
+}
+
 // SendBack deletes the finding's decision so it stays pending until the human decides it again.
 func SendBack(d *Draft, findingID, body string, now time.Time) (Note, error) {
 	f, err := findFinding(d, findingID)
@@ -759,9 +807,10 @@ const (
 	rewriteIDRetry = "press ctrl+s again"
 )
 
-// Rewrite is the human's title and body edit from the review interface. It keeps a current decision and closes no
-// note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding. The
-// command line MUST NOT reach it.
+// Rewrite is the human's title, body and proposal edit from the review interface. It keeps a current decision and
+// closes no note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding.
+// The command line MUST NOT reach it. A nil proposal is left as it is, and so is a blank one on a question, since only
+// the agent turns a finding into a question.
 func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Rules, dif *diff.Diff, now time.Time) (Finding, error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
@@ -770,14 +819,18 @@ func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Ru
 	if err := Rewritable(*stored); err != nil {
 		return Finding{}, err
 	}
+	blankProposal := proposal != nil && strings.TrimSpace(*proposal) == ""
+	if blankProposal && stored.Proposal == "" {
+		proposal = nil
+	}
 	// Checked here, before Edit, whose refusals name loupe edit as the fix.
 	switch {
 	case strings.TrimSpace(title) == "":
 		return Finding{}, refusal.New(refusal.Input, "the title must not be empty", rewriteFix)
 	case strings.TrimSpace(body) == "":
 		return Finding{}, refusal.New(refusal.Input, "the body must not be empty", rewriteFix)
-	case proposal != nil && stored.Proposal != "" && strings.TrimSpace(*proposal) == "":
-		return Finding{}, refusal.New(refusal.Input, "the proposal must not be empty", rewriteFix)
+	case blankProposal && stored.Proposal != "":
+		return Finding{}, refusal.New(refusal.Input, "a proposal can't be empty", "the agent turns a finding into a question with loupe edit")
 	}
 	if err := markdown.Check(body, markdown.Body, rewriteFix); err != nil {
 		return Finding{}, err

@@ -733,3 +733,55 @@ func TestInitialCursorIndexesTheOrderedView(t *testing.T) {
 		t.Errorf("cursor = %d, want 3, f-002's place in the order rather than its place in arrival order", m.cursor)
 	}
 }
+
+// On an apply run a finding with no proposal is a question, marked before its title at every icon tier.
+func TestApplyListMarksAQuestion(t *testing.T) {
+	dir := applyFixture(t, "Claude", applyInputs...)
+	for _, env := range []map[string]string{
+		{"NO_COLOR": "1", "LANG": "en_US.UTF-8", style.IconsEnv: "nerd"},
+		utf8Env,
+		{"NO_COLOR": "1", "LANG": "C"},
+	} {
+		m := modelOf(t, dir, env, 100, 30)
+		if m.glyphs.Question == "" {
+			t.Fatalf("tier %v has no question glyph", m.glyphs.Tier)
+		}
+		rows := map[string]string{}
+		for _, row := range listRows(ansi.Strip(m.View().Content)) {
+			rows[rowID(row)] = row
+		}
+		if row := rows["f-002"]; !strings.Contains(row, m.glyphs.Question+" Which store wins") {
+			t.Errorf("tier %v: the question is not marked: %q", m.glyphs.Tier, row)
+		}
+		for _, id := range []string{"f-001", "f-003"} {
+			if strings.Contains(rows[id], m.glyphs.Question) {
+				t.Errorf("tier %v: %s has a proposal but is marked: %q", m.glyphs.Tier, id, rows[id])
+			}
+		}
+	}
+	pr := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	if view := ansi.Strip(pr.View().Content); strings.Contains(view, pr.glyphs.Question+" Title") {
+		t.Errorf("a pull request run marks questions:\n%s", view)
+	}
+}
+
+// The header of an apply run names the local run and its title, with no link and no round.
+func TestApplyHeaderNamesTheLocalRun(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	header := ansi.Strip(m.reviewHeader())
+	for _, want := range []string{"acme/widgets:local#1", "Cache rework"} {
+		if !strings.Contains(header, want) {
+			t.Errorf("header lacks %q: %q", want, header)
+		}
+	}
+	for _, unwanted := range []string{"round", " r0", "#0", "https"} {
+		if strings.Contains(header, unwanted) {
+			t.Errorf("header has %q: %q", unwanted, header)
+		}
+	}
+	colored, _ := applyModel(t, "Claude")
+	colored.styles.SetColorProfile(colorprofile.TrueColor)
+	if strings.Contains(colored.reviewHeader(), "\x1b]8;") {
+		t.Errorf("header links somewhere: %q", colored.reviewHeader())
+	}
+}

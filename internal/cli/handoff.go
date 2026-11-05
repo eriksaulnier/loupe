@@ -50,8 +50,9 @@ opens a new one. A failed host call refuses pane-failed and is not retried; its 
 the host and the step, and step probe is the one that opens nothing. On no-pane-host or
 pane-failed the agent tells the human to run loupe review.
 
-The run is <ref> or --run <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the
-pull request of the current branch in the working directory at its newest round.
+The run is <ref> or --run <ref> (owner/repo#123, owner/repo#123@2 or local#7), else LOUPE_RUN,
+else the pull request of the current branch in the working directory at its newest round. A
+local run opens in apply mode, and the agent's loupe wait returns when the human returns it.
 
 Result (--json):
   {"loupe": 1, "ok": true, "command": "handoff", "run": "owner/repo#123@1",

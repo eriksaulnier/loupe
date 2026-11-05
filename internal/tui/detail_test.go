@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -1094,5 +1095,328 @@ func TestDetailPinsItsTitleAndMetadata(t *testing.T) {
 	mustOpenFinding(t, m, "f-001")
 	if m.detailHead != nil || !strings.Contains(ansi.Strip(m.View().Content), "A title long enough") {
 		t.Errorf("a short window pinned a head taller than a third of the pane, or lost the title:\n%s", ansi.Strip(m.View().Content))
+	}
+}
+
+// On an apply run the proposal comes directly under the title, before the evidence, headed by who will apply it.
+func TestApplyDetailShowsTheProposalUnderTheTitle(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	screen := screenText(m)
+	order := []string{"Rename the helper", "If you accept, Claude will", "Rename helper to insertAfter in a.go.", "a.go:3", "The helper name hides what it does."}
+	at := -1
+	for _, want := range order {
+		i := strings.Index(screen, want)
+		if i <= at {
+			t.Fatalf("%q is missing or out of order (want %q):\n%s", want, order, screen)
+		}
+		at = i
+	}
+	mustOpenFinding(t, m, "f-002")
+	if screen := screenText(m); strings.Contains(screen, "If you accept") {
+		t.Errorf("a question shows a proposal heading:\n%s", screen)
+	}
+
+	nobody, _ := applyModel(t, "")
+	mustOpenFinding(t, nobody, "f-003")
+	if screen := screenText(nobody); !strings.Contains(screen, "If you accept, the agent will") || !strings.Contains(screen, "Remove the flag.") {
+		t.Errorf("with no applier the heading does not name the agent:\n%s", screen)
+	}
+
+	colored, _ := applyModel(t, "Claude")
+	colored.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpenFinding(t, colored, "f-001")
+	if view := colored.View().Content; !strings.Contains(view, colored.styles.Emphasis(colored.styles.Good).Render("If you accept, Claude will")) {
+		t.Errorf("the proposal heading is not in the good tone:\n%q", view)
+	}
+}
+
+// e and o belong to pull request runs: on an apply run they do nothing, and no hint or help names them.
+func TestApplyRunHasNoEditOrOpenKey(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	press(m, "o")
+	if m.notice != "" {
+		t.Errorf("o in the list: notice %q", m.notice)
+	}
+	if hints := hintText(m.listHints()); strings.Contains(hints, "o:") {
+		t.Errorf("list hints offer o: %s", hints)
+	}
+	mustOpenFinding(t, m, "f-001")
+	press(m, "e", "o")
+	if m.editing || m.notice != "" {
+		t.Errorf("e or o acted on an apply run: editing %v notice %q", m.editing, m.notice)
+	}
+	if hints := hintText(m.detailHints()); strings.Contains(hints, "e:") || strings.Contains(hints, "o:") {
+		t.Errorf("detail hints offer e or o: %s", hints)
+	}
+	for v, section := range m.helpSections() {
+		for _, k := range section.keys {
+			if k.Keys == "e" || k.Keys == "o" {
+				t.Errorf("help for view %d names %s (%s)", v, k.Keys, k.Verb)
+			}
+		}
+	}
+	if _, ok := m.helpSections()[viewAction]; ok {
+		t.Error("help has publish steps on an apply run")
+	}
+}
+
+// footerText is the detail footer as plain text.
+func footerText(m *Model) string { return ansi.Strip(strings.Join(m.detailFooter(), " ")) }
+
+// t opens an empty one-line input whose enter accepts with what was typed, and with nothing typed accepts plainly.
+func TestApplyTAcceptsWithANote(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	m.keptNotes["f-001"] = "kept send-back text"
+	mustOpenFinding(t, m, "f-001")
+	press(m, "t")
+	if !m.noting || m.note.Value() != "" {
+		t.Fatalf("t did not open an empty input: noting %v value %q", m.noting, m.note.Value())
+	}
+	if footer := footerText(m); !strings.Contains(footer, "enter accept") {
+		t.Errorf("footer %q does not say accept", footer)
+	}
+	m.Update(runes("Use the second store."))
+	m.Update(enterKey)
+	d := loadDraft(t, dir)
+	if got := d.Decisions["f-001"]; got.Decision != draft.DecisionAccepted || got.Note != "Use the second store." {
+		t.Fatalf("f-001 decision %+v", got)
+	}
+	if m.keptNotes["f-001"] != "kept send-back text" {
+		t.Errorf("t touched the kept send-back text: %q", m.keptNotes["f-001"])
+	}
+
+	mustOpenFinding(t, m, "f-003")
+	press(m, "t")
+	m.Update(enterKey)
+	if got := loadDraft(t, dir).Decisions["f-003"]; got.Decision != draft.DecisionAccepted || got.Note != "" {
+		t.Fatalf("an empty note did not accept plainly: %+v", got)
+	}
+}
+
+// Reopening t or x on a finding already decided that way starts from the stored note, so enter keeps it rather than
+// saving a plain decision over it.
+func TestApplyNoteKeysStartFromTheStoredNote(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	for _, c := range []struct{ id, key, note, decision string }{
+		{"f-001", "t", "Use the second store.", draft.DecisionAccepted},
+		{"f-003", "x", "Out of scope.", draft.DecisionExcluded},
+	} {
+		mustOpenFinding(t, m, c.id)
+		press(m, c.key)
+		m.Update(runes(c.note))
+		m.Update(enterKey)
+		mustOpenFinding(t, m, c.id)
+		press(m, c.key)
+		if got := m.note.Value(); got != c.note {
+			t.Fatalf("%s %s reopened with %q, want %q", c.id, c.key, got, c.note)
+		}
+		m.Update(enterKey)
+		if got := loadDraft(t, dir).Decisions[c.id]; got.Decision != c.decision || got.Note != c.note {
+			t.Fatalf("%s after a second enter: %+v", c.id, got)
+		}
+	}
+	mustOpenFinding(t, m, "f-001")
+	press(m, "x")
+	if got := m.note.Value(); got != "" {
+		t.Errorf("x on an accepted finding opened with %q, want an empty reason", got)
+	}
+}
+
+func TestApplyTEscDiscardsTheNote(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	press(m, "t")
+	m.Update(runes("half a thought"))
+	m.Update(escKey)
+	if m.noting || len(m.keptNotes) != 0 {
+		t.Fatalf("esc left the input open or kept its text: noting %v kept %v", m.noting, m.keptNotes)
+	}
+	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
+		t.Fatalf("esc decided f-001: %s", got)
+	}
+	press(m, "t")
+	if got := m.note.Value(); got != "" {
+		t.Fatalf("t reopened with %q", got)
+	}
+	m.Update(escKey)
+	press(m, "s")
+	if got := m.note.Value(); got != "" {
+		t.Fatalf("send back opened with the accept note %q", got)
+	}
+}
+
+// x opens the same input; an empty reason excludes plainly, and one too long refuses in review's own words.
+func TestApplyXExcludesWithAnOptionalReason(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	press(m, "x")
+	if !m.noting || m.note.Value() != "" {
+		t.Fatalf("x did not open an empty input: noting %v value %q", m.noting, m.note.Value())
+	}
+	if footer := footerText(m); !strings.Contains(footer, "enter exclude") {
+		t.Errorf("footer %q does not say exclude", footer)
+	}
+	long := strings.Repeat("a", 201)
+	m.Update(runes(long))
+	m.Update(enterKey)
+	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
+		t.Fatalf("a reason of 201 characters excluded f-001")
+	}
+	if !strings.Contains(m.notice, "201 characters") || strings.Contains(m.notice, "loupe edit") || strings.Contains(m.notice, "--") {
+		t.Errorf("refusal notice %q", m.notice)
+	}
+	if !m.noting || m.note.Value() != long {
+		t.Errorf("the refused reason was not handed back: noting %v value %q", m.noting, m.note.Value())
+	}
+	m.Update(escKey)
+
+	press(m, "x")
+	m.Update(runes("Out of scope."))
+	m.Update(enterKey)
+	if got := loadDraft(t, dir).Decisions["f-001"]; got.Decision != draft.DecisionExcluded || got.Note != "Out of scope." {
+		t.Fatalf("f-001 decision %+v", got)
+	}
+	mustOpenFinding(t, m, "f-002")
+	press(m, "x")
+	m.Update(enterKey)
+	if got := loadDraft(t, dir).Decisions["f-002"]; got.Decision != draft.DecisionExcluded || got.Note != "" {
+		t.Fatalf("an empty reason did not exclude plainly: %+v", got)
+	}
+}
+
+func TestApplySendBackStillRestoresKeptText(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	noteBox(t, m, "f-001", "why this name")
+	m.Update(escKey)
+	press(m, "s")
+	if got := m.note.Value(); got != "why this name" {
+		t.Fatalf("send back reopened with %q", got)
+	}
+	if footer := footerText(m); !strings.Contains(footer, "enter send") {
+		t.Errorf("footer %q", footer)
+	}
+}
+
+func TestApplySettleDropsTAndX(t *testing.T) {
+	for _, k := range strings.Split("axsurdwt", "") {
+		m, dir := applyModel(t, "Claude")
+		mustOpenFinding(t, m, "f-001")
+		before := loadDraft(t, dir).Version
+		m.settling = true
+		press(m, k)
+		if m.noting || m.rewriting || loadDraft(t, dir).Version != before {
+			t.Errorf("%s was acted on while settling", k)
+		}
+	}
+}
+
+// The human's own changes on an apply run are checked against the run's rules, so a stored proposal never refuses them.
+func TestApplyReinstateAndRewriteKeepTheProposal(t *testing.T) {
+	dir := applyFixture(t, "Claude", applyInputs...)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		withdraw := false
+		_, _, err := draft.Edit(d, "f-001", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 100, 40)
+	mustOpenFinding(t, m, "f-001")
+	press(m, "u")
+	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionAccepted {
+		t.Fatalf("u did not reinstate f-001: %s; notice %q", got, m.notice)
+	}
+
+	mustOpenFinding(t, m, "f-003")
+	press(m, "w")
+	m.Update(runes("!"))
+	m.Update(ctrlS)
+	if f := findingOf(t, dir, "f-003"); f.Title != "Drop the flag!" || f.Proposal != "Remove the flag." {
+		t.Fatalf("the rewrite was not saved: %+v; notice %q", f, m.notice)
+	}
+}
+
+// The code pane of a --files run draws the file as plain text; a --changed run and a pull request keep the gutter.
+func TestCodePaneOfAFilesRunIsPlain(t *testing.T) {
+	for name, c := range codeRuns(t) {
+		t.Run(name, func(t *testing.T) {
+			m := modelOf(t, c.dir, utf8Env, 100, 40)
+			mustOpenFinding(t, m, "f-001")
+			checkCodeDrawing(t, screenText(m), c.plain)
+
+			colored := colorOf(t, c.dir)
+			mustOpenFinding(t, colored, "f-001")
+			if tinted := strings.Contains(colored.View().Content, addedTint(colored)); tinted == c.plain {
+				t.Errorf("plain %v, added tint %v", c.plain, tinted)
+			}
+		})
+	}
+}
+
+// US4 on an apply run: the human sends an accepted finding back, the agent revises the proposal and replies, review
+// shows the revision on its next poll, and the human accepts it and returns the run.
+func TestApplySendBackRoundTrip(t *testing.T) {
+	dir := applyFixture(t, "Claude", applyInputs...)
+	outside(t, dir, func(d *draft.Draft) error {
+		for _, f := range d.Findings {
+			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	m := newPollModel(t, dir, 40)
+	mustOpenFinding(t, m, "f-001")
+	pressKeys(t, m, "s")
+	m.Update(runes("Which call sites does the rename touch?"))
+	pressKeys(t, m, "enter")
+	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
+		t.Fatalf("send back left f-001 %s", got)
+	}
+
+	parsed, err := diff.Parse(newFileDiff())
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside(t, dir, func(d *draft.Draft) error {
+		proposal := json.RawMessage(`"Rename helper to insertAfter in a.go and its two callers."`)
+		if _, _, err := draft.Edit(d, "f-001", draft.EditInput{Proposal: proposal}, nil, parsed, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow); err != nil {
+			return err
+		}
+		_, err := draft.AddReply(d, "n-001", "Two callers, both in a.go.", draft.ByAgent, testNow)
+		return err
+	})
+	d := loadDraft(t, dir)
+	if _, decided := d.Decisions["f-001"]; decided || draft.Dispositions(d)["f-001"] != draft.DispositionPending {
+		t.Fatalf("the agent's edit left a decision: %+v", d.Decisions["f-001"])
+	}
+	// Send back moved the view on to the next finding; the poll names the change, and N goes back to it.
+	update(t, m, pollMsg{})
+	if !strings.Contains(m.notice, "n-001 answered on f-001, f-001 changed") {
+		t.Errorf("the poll notice %q does not name the reply and the edit", m.notice)
+	}
+	pressKeys(t, m, "N")
+	if m.openID != "f-001" {
+		t.Fatalf("N opened %s", m.openID)
+	}
+	screen := screenText(m)
+	for _, want := range []string{"and its two callers.", "Two callers, both in a.go."} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("the detail lacks %q after the poll:\n%s", want, screen)
+		}
+	}
+
+	pressKeys(t, m, "a")
+	d = loadDraft(t, dir)
+	if got := d.Decisions["f-001"]; got.Decision != draft.DecisionAccepted || got.FindingRev != findingOf(t, dir, "f-001").Rev {
+		t.Fatalf("a did not accept the revised f-001: %+v; notice %q", got, m.notice)
+	}
+	if _, open := firstOpenNote(d, "f-001"); open {
+		t.Error("accepting left the note open")
+	}
+	pressKeys(t, m, "esc", "p", "y")
+	if !returned(t, dir) {
+		t.Fatalf("p then y did not return the run; view %d notice %q", m.view, m.notice)
 	}
 }

@@ -750,7 +750,10 @@ func TestRewriteRefusesEmptyingTheProposal(t *testing.T) {
 	d.Findings[0].Proposal = "Change X to Y."
 	empty := "  "
 	_, err := Rewrite(d, "f-001", "One", "Body one.", &empty, Rules{AllowProposal: true}, multiHunk(t), editNow)
-	_ = wantRefusal(t, err, refusal.Input)
+	r := wantRefusal(t, err, refusal.Input)
+	if r.Message != "a proposal can't be empty" || r.Fix != "the agent turns a finding into a question with loupe edit" {
+		t.Fatalf("refusal %q; fix %q", r.Message, r.Fix)
+	}
 	if d.Findings[0].Proposal != "Change X to Y." {
 		t.Fatalf("proposal %q", d.Findings[0].Proposal)
 	}
@@ -761,4 +764,17 @@ func TestRewriteRefusesAProposalOutsideTheMarkdownAllowlist(t *testing.T) {
 	proposal := "<script>x</script>"
 	_, err := Rewrite(d, "f-001", "One", "Body one.", &proposal, Rules{AllowProposal: true}, multiHunk(t), editNow)
 	wantField(t, wantRefusal(t, err, refusal.Markdown), "proposal")
+}
+
+// A question has no proposal, and an empty or blank field leaves it a question.
+func TestRewriteLeavesAQuestionWithABlankProposal(t *testing.T) {
+	d := editable()
+	blank := " \n"
+	f, err := Rewrite(d, "f-002", "Two", "Body two.", &blank, Rules{AllowProposal: true}, multiHunk(t), editNow)
+	if !errors.Is(err, ErrNoChange) {
+		t.Fatalf("finding %+v, err %v; want no change", f, err)
+	}
+	if d.Findings[1].Proposal != "" || d.Findings[1].Rev != 1 {
+		t.Fatalf("finding %+v", d.Findings[1])
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -335,6 +336,106 @@ func TestReinstateRefusesAnExcludedWithdrawnFindingWithAReachableFix(t *testing.
 		t.Fatalf("the fix does not work: %v", err)
 	}
 	if Dispositions(d)["f-002"] != DispositionAccepted {
+		t.Fatalf("decisions %v", d.Decisions)
+	}
+}
+
+func TestAcceptWithNoteStoresTheNote(t *testing.T) {
+	d := threeFindings()
+	if _, err := AcceptWithNote(d, "f-003", "Use the second option instead.", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	want := Decision{FindingID: "f-003", Decision: DecisionAccepted, FindingRev: 2, At: decideNow, Note: "Use the second option instead."}
+	if !reflect.DeepEqual(d.Decisions["f-003"], want) {
+		t.Fatalf("decision %+v", d.Decisions["f-003"])
+	}
+}
+
+func TestAcceptWithAnEmptyNoteIsAPlainAccept(t *testing.T) {
+	d := threeFindings()
+	if _, err := AcceptWithNote(d, "f-001", "  ", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Decisions["f-001"]; got.Decision != DecisionAccepted || got.Note != "" {
+		t.Fatalf("decision %+v", got)
+	}
+}
+
+func TestAcceptWithNoteChecksTheMarkdown(t *testing.T) {
+	d := threeFindings()
+	r := wantRefusal(t, errOf(AcceptWithNote(d, "f-001", "<script>x</script>", decideNow)), refusal.Markdown)
+	if len(d.Decisions) != 0 || strings.Contains(r.Fix, "loupe edit") {
+		t.Fatalf("decisions %v, fix %q", d.Decisions, r.Fix)
+	}
+}
+
+func TestAcceptWithNoteRefusesAWithdrawnFinding(t *testing.T) {
+	d := threeFindings()
+	_ = wantRefusal(t, errOf(AcceptWithNote(d, "f-002", "fine", decideNow)), refusal.Input)
+}
+
+func TestAcceptAndExcludeLeaveTheNoteEmpty(t *testing.T) {
+	d := threeFindings()
+	if _, err := AcceptWithNote(d, "f-001", "a note", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Accept(d, "f-001", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Decisions["f-001"].Note; got != "" {
+		t.Fatalf("Accept kept note %q", got)
+	}
+	if _, err := ExcludeWithReason(d, "f-001", "out of scope", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Exclude(d, "f-001", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Decisions["f-001"].Note; got != "" {
+		t.Fatalf("Exclude kept reason %q", got)
+	}
+}
+
+func TestExcludeWithReasonStoresTheReason(t *testing.T) {
+	d := threeFindings()
+	if _, err := ExcludeWithReason(d, "f-002", "Out of scope for this change.", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	want := Decision{FindingID: "f-002", Decision: DecisionExcluded, FindingRev: 1, At: decideNow, Note: "Out of scope for this change."}
+	if !reflect.DeepEqual(d.Decisions["f-002"], want) {
+		t.Fatalf("decision %+v", d.Decisions["f-002"])
+	}
+	if _, err := ExcludeWithReason(d, "f-001", "", decideNow); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Decisions["f-001"]; got.Decision != DecisionExcluded || got.Note != "" {
+		t.Fatalf("empty reason: decision %+v", got)
+	}
+}
+
+func TestValidateExcludeReason(t *testing.T) {
+	for _, ok := range []string{"", "Out of scope.", strings.Repeat("é", 200)} {
+		if err := ValidateExcludeReason(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, c := range []struct {
+		reason string
+		code   refusal.Code
+	}{
+		{strings.Repeat("a", 201), refusal.Input},
+		{"one\ntwo", refusal.Input},
+		{"one two", refusal.Input},
+		{"<b>x</b>", refusal.Markdown},
+	} {
+		r := wantRefusal(t, ValidateExcludeReason(c.reason), c.code)
+		if strings.Contains(r.Message+r.Fix, "loupe edit") || strings.Contains(r.Message+r.Fix, "--") {
+			t.Errorf("%q: the refusal names a loupe edit flag: %s; %s", c.reason, r.Message, r.Fix)
+		}
+	}
+	d := threeFindings()
+	_ = wantRefusal(t, errOf(ExcludeWithReason(d, "f-001", strings.Repeat("a", 201), decideNow)), refusal.Input)
+	if len(d.Decisions) != 0 {
 		t.Fatalf("decisions %v", d.Decisions)
 	}
 }

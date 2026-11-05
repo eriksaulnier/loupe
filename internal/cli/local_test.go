@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/screen"
+	"github.com/eriksaulnier/loupe/internal/tui"
 )
 
 // localRun writes local run 1 with the given capture form and findings under a new home, and returns the home and
@@ -72,7 +75,6 @@ func TestLocalRunRefusesPROnlyCommands(t *testing.T) {
 		{"show", "--run", "local#1", "--comments", "--json"},
 		{"publish", "local#1", "--action", "comment", "--json"},
 		{"assess", "--run", "local#1", "x/y#1@1/f-001", "--status", "open", "--json"},
-		{"handoff", "--run", "local#1", "--json"},
 	} {
 		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
 		wantCode(t, Execute(deps, args), s, refusal.WrongMode)
@@ -424,5 +426,74 @@ func TestWaitSaysAReturnedRunIsReturned(t *testing.T) {
 	}
 	if out := s.stdout.String(); !strings.Contains(out, "returned; read the decisions with loupe feedback --run acme/widgets:local#1 --json") {
 		t.Errorf("wait output:\n%s", out)
+	}
+}
+
+// review opens a local run in apply mode: the human decides, returns with p and y, and the run is sealed.
+func TestReviewReturnsALocalRun(t *testing.T) {
+	home, dir := localRun(t, "changed", localFinding("f-001"))
+	sc := screen.Start(t, 100, 30, func(stdin io.Reader, stdout, stderr io.Writer) int {
+		deps, _ := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+		deps.Stdin, deps.Stdout, deps.Stderr = stdin, stdout, stderr
+		deps.IsTerminal = func() bool { return true }
+		deps.StderrIsTerminal = func() bool { return true }
+		deps.Screen = &tui.Screen{Width: 100, Height: 30}
+		return Execute(deps, []string{"review", "local#1"})
+	})
+	sc.WaitFor("acme/widgets:local#1", "p return")
+	sc.Press("enter", "a")
+	sc.WaitFor("1/1 decided")
+	sc.Press("p")
+	sc.WaitFor("y return to Claude")
+	sc.Press("y")
+	sc.WaitFor("Returned to Claude")
+	sc.Press("q")
+	stdout, stderr, code := sc.Wait()
+	if code != 0 {
+		t.Fatalf("exit %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	if strings.Contains(stdout, "Publish review") {
+		t.Errorf("review showed a publish step:\n%s", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(dir, draft.ReturnFile)); err != nil {
+		t.Fatalf("the run was not returned: %v", err)
+	}
+}
+
+// Plain show on a local run prints each proposal and names the step that applies to a local run: review to decide and
+// return, then feedback once returned. It never names publish, which refuses a local run.
+func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
+	f := localFinding("f-001")
+	f.Proposal = "Rename the helper.\n\n```go\nresult := computeSomethingVeryLongIndeed(index, anotherArgument, yetAnotherArgument, andOneMoreArgumentToPassTheWidth, andAnother)\n```"
+	home, dir := localRun(t, "changed", f)
+	show := func() string {
+		t.Helper()
+		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+		if code := Execute(deps, []string{"show", "--run", "local#1"}); code != 0 {
+			t.Fatalf("exit %d stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
+		}
+		return s.stdout.String()
+	}
+	out := show()
+	if !strings.Contains(out, "Proposal") || !strings.Contains(out, "Rename the helper.") || !strings.Contains(out, "loupe review acme/widgets:local#1") {
+		t.Fatalf("pending local show:\n%s", out)
+	}
+	if !strings.Contains(out, "result := computeSomethingVeryLongIndeed(index, anotherArgument, yetAnotherArgument, andOneMoreArgumentToPassTheWidth, andAnother)") {
+		t.Fatalf("the fenced proposal line was wrapped:\n%s", out)
+	}
+	if _, err := draft.Mutate(dir, "test", nil, func(string) string { return "" }, func(d *draft.Draft) error {
+		_, err := draft.Accept(d, "f-001", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if out := show(); !strings.Contains(out, "Return them in") || strings.Contains(out, "loupe publish") {
+		t.Fatalf("decided local show:\n%s", out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "return.json"), []byte(`{"schema":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out := show(); !strings.Contains(out, "loupe feedback --run acme/widgets:local#1 --json") {
+		t.Fatalf("returned local show:\n%s", out)
 	}
 }

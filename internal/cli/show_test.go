@@ -27,7 +27,7 @@ func TestPrintShowEscapesDraftAndTargetText(t *testing.T) {
 	target := run.Target{Title: "PR\x1b[31m title\u202e"}
 	readiness := draft.ReadinessOf(d)
 	deps, out := printDeps(t)
-	if err := printShow(deps, run.Ref{Owner: "o", Repo: "r", Number: 1, Round: 1}, target, d, draft.Dispositions(d), readiness); err != nil {
+	if err := printShow(deps, run.Ref{Owner: "o", Repo: "r", Number: 1, Round: 1}, target, d, draft.Dispositions(d), readiness, false); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
@@ -217,7 +217,7 @@ func TestPrintShowPaintsTheSeverityCellByRank(t *testing.T) {
 	s := colorStyle(t, out)
 	deps.palettes = &palettes{out: s, err: s}
 	if err := printShow(deps, run.Ref{Owner: "o", Repo: "r", Number: 1, Round: 1}, run.Target{}, d,
-		draft.Dispositions(d), draft.ReadinessOf(d)); err != nil {
+		draft.Dispositions(d), draft.ReadinessOf(d), false); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()

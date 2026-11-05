@@ -190,7 +190,11 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 		}
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}
-	return printShow(deps, ref, target, d, dispositions, readiness)
+	returned, err := run.HasReturn(dir)
+	if err != nil {
+		return err
+	}
+	return printShow(deps, ref, target, d, dispositions, readiness, returned)
 }
 
 // shownFinding adds the current withdrawal reason, which is derived from history and never stored on the finding.
@@ -473,6 +477,7 @@ type findingBlock struct {
 	title    string
 	meta     []metaCell
 	body     string
+	proposal string
 	impact   string
 	fix      string
 	refs     []string
@@ -529,6 +534,24 @@ func metaLine(s style.Style, cells []metaCell, width int) []string {
 
 const findingIndent = "         "
 
+// writeProse wraps text's prose lines under the finding and prints its fenced lines as written, since a proposal is
+// often code that a word wrap would split mid-identifier.
+func writeProse(b *strings.Builder, s style.Style, width int, text string) {
+	fenced := false
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		fence := strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
+		if fenced || fence || line == "" {
+			fmt.Fprintf(b, "%s\n", strings.TrimRight(findingIndent+line, " "))
+		} else {
+			fmt.Fprintf(b, "%s\n", s.Wrap(line, width, findingIndent))
+		}
+		if fence {
+			fenced = !fenced
+		}
+	}
+}
+
 func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) {
 	title := s.Bold.Render(oneLine(f.title))
 	if f.blocking {
@@ -549,6 +572,10 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 	}
 	if body := text(f.body); body != "" {
 		fmt.Fprintf(b, "%s\n", s.Wrap(body, width, findingIndent))
+	}
+	if proposal := text(f.proposal); proposal != "" {
+		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render("Proposal"))
+		writeProse(b, s, width, proposal)
 	}
 	if impact := text(f.impact); impact != "" {
 		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render("Impact"))
@@ -597,7 +624,7 @@ func labelCell(s style.Style, label string) string {
 	return strings.TrimSpace(s.Glyphs.Label(label) + " " + oneLine(label))
 }
 
-func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispositions map[string]string, readiness draft.Readiness) error {
+func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispositions map[string]string, readiness draft.Readiness, returned bool) error {
 	s, width := deps.outStyle(), deps.width()
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", header(s, width, ref.String(), target.Title))
@@ -645,25 +672,32 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 		meta = append(meta, dimCell(locationCell(s, published(f.Location))))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
-			title: f.Title, meta: meta, body: f.Body, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,
+			title: f.Title, meta: meta, body: f.Body, proposal: f.Proposal, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,
 			reason: draft.CurrentReason(f),
 		})
 	}
-	fmt.Fprintf(&b, "%s\n", showFooter(s, width, ref, d, readiness))
+	fmt.Fprintf(&b, "%s\n", showFooter(s, width, ref, d, readiness, returned))
 	_, err := io.WriteString(deps.Stdout, b.String())
 	return err
 }
 
-// showFooter says what is left to do with this run, in the words of the command that does it.
-func showFooter(s style.Style, width int, ref run.Ref, d *draft.Draft, readiness draft.Readiness) string {
+// showFooter says what is left to do with this run, in the words of the command that does it. A local run ends in
+// review's return step, never in publish, and once returned its decisions are read with feedback.
+func showFooter(s style.Style, width int, ref run.Ref, d *draft.Draft, readiness draft.Readiness, returned bool) string {
 	count := fmt.Sprintf("%d %s", len(d.Findings), plural(len(d.Findings), "finding"))
+	local := ref.Local > 0
 	switch {
+	case local && returned:
+		return next(s, width, count+", returned.  Read the decisions with", "loupe feedback --run "+ref.String()+" --json")
 	case len(d.Findings) == 0:
 		return next(s, width, "No findings yet. File them with", "loupe add --run "+ref.String()+" --from <file> --json")
 	case len(readiness.Pending) > 0:
 		return next(s, width, fmt.Sprintf("%s, %d pending.  Decide them with", count, len(readiness.Pending)), "loupe review "+ref.String())
 	case len(readiness.OpenNotes) > 0:
 		return next(s, width, fmt.Sprintf("%s, %d open %s.  Answer with", count, len(readiness.OpenNotes), plural(len(readiness.OpenNotes), "note")), "loupe reply <note-id> --run "+ref.String())
+	}
+	if local {
+		return next(s, width, count+", all decided.  Return them in", "loupe review "+ref.String())
 	}
 	return next(s, width, count+", all decided.  Publish with", "loupe publish "+ref.String()+" --action comment")
 }

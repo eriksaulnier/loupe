@@ -68,12 +68,14 @@ type GlyphSet struct {
 	Withdrawn string
 	Blocking  string
 	Note      string
-	Update    string
-	Reply     string
-	Cursor    string
-	Ellipsis  string
-	HRule     string
-	Quote     string
+	// Question marks an apply run's finding that proposes no change and only asks.
+	Question string
+	Update   string
+	Reply    string
+	Cursor   string
+	Ellipsis string
+	HRule    string
+	Quote    string
 	// Sep joins the parts of a header.
 	Sep string
 	// Up, Down, Left and Right name the arrow keys in footers and help; the ASCII tier spells them out.
@@ -102,6 +104,7 @@ var (
 		Withdrawn: "\uf0e2", // nf-fa-undo
 		Blocking:  "\uf46e", // nf-oct-stop
 		Note:      "\uf27a", // nf-fa-commenting
+		Question:  "\uf059", // nf-fa-question_circle
 		Update:    "\uf0aa", // nf-fa-arrow_circle_up
 		Reply:     "\uf112", // nf-fa-reply
 		Cursor:    "\uf054", // nf-fa-chevron_right
@@ -122,14 +125,14 @@ var (
 	}
 	unicodeGlyphs = GlyphSet{
 		Tier:     Unicode,
-		Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●", Note: "✎", Update: "↑", Reply: "↳",
+		Accepted: "✓", Pending: "·", Excluded: "✗", Withdrawn: "↩", Blocking: "●", Note: "✎", Question: "?", Update: "↑", Reply: "↳",
 		Cursor: "›", Ellipsis: "…", HRule: "─", Quote: "┃",
 		Sep: "·", Up: "↑", Down: "↓", Left: "←", Right: "→",
 		Published: "✓", Canceled: "–",
 	}
 	asciiGlyphs = GlyphSet{
 		Tier:     ASCII,
-		Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!", Note: "~", Update: "^", Reply: "->",
+		Accepted: "+", Pending: ".", Excluded: "x", Withdrawn: "-", Blocking: "!", Note: "~", Question: "?", Update: "^", Reply: "->",
 		Cursor: ">", Ellipsis: "...", HRule: "-", Quote: "|",
 		Sep: "-", Up: "up", Down: "down", Left: "left", Right: "right",
 		Published: "+", Canceled: "-",

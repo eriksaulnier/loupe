@@ -1,6 +1,10 @@
 package mode
 
 import (
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -57,8 +61,6 @@ func TestApplyRefusesPRCommands(t *testing.T) {
 		{"assess", nil},
 		{"show", []string{"previous"}},
 		{"show", []string{"json", "comments"}},
-		{"review", nil},
-		{"handoff", nil},
 	} {
 		err := m.Refuses(c.command, c.flags)
 		r, ok := refusal.As(err)
@@ -70,7 +72,7 @@ func TestApplyRefusesPRCommands(t *testing.T) {
 			t.Errorf("%s: empty message or fix %+v", c.command, r)
 		}
 	}
-	for _, c := range []string{"show", "add", "edit", "wait", "feedback", "list", "reply", "summary"} {
+	for _, c := range []string{"show", "add", "edit", "wait", "feedback", "list", "reply", "summary", "review", "handoff"} {
 		if err := m.Refuses(c, []string{"json"}); err != nil {
 			t.Errorf("%s: %v", c, err)
 		}
@@ -115,5 +117,40 @@ func TestShownStripsOnlyLocalFindings(t *testing.T) {
 	}
 	if loc := f["location"].(map[string]any); loc["side"] != nil || loc["path"] != "a.go" {
 		t.Errorf("location %v", loc)
+	}
+}
+
+// TestOnlyTheModeSeamsNameTheLocalKind is FR-030: outside capture, the run layer and the review interface's one
+// selector, the command layer and the review interface reach local-run behavior through the mode, never by asking the
+// run's kind. Test files are skipped, since their fixtures set the kind.
+func TestOnlyTheModeSeamsNameTheLocalKind(t *testing.T) {
+	root := filepath.Join("..", "..")
+	allowed := map[string]bool{"internal/cli/capture_local.go": true, "internal/cli/run.go": true, "internal/tui/modeui.go": true}
+	scanned := 0
+	for _, dir := range []string{"internal/cli", "internal/tui"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, e fs.DirEntry, err error) error {
+			if err != nil || e.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return err
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			scanned++
+			if rel = filepath.ToSlash(rel); strings.Contains(string(data), "KindLocal") && !allowed[rel] {
+				t.Errorf("%s names KindLocal; reach local-run behavior through internal/mode or the review interface's modeUI", rel)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("no Go files found under internal/cli and internal/tui")
 	}
 }

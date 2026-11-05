@@ -60,6 +60,11 @@ func (m *Model) refreshDetail() error {
 	if _, rows := style.PaneInner(0, m.bodyRows(len(m.detailFooter()))); len(head) > rows/3 {
 		doc, m.detailHead = head, nil
 	}
+	proposal, err := m.proposal(f)
+	if err != nil {
+		return err
+	}
+	doc = append(doc, proposal...)
 	if draft.AgentChangedHumanText(f) {
 		doc = append(doc, m.styles.Note.Render(m.glyphs.Note+" the agent changed text you wrote"))
 	}
@@ -153,7 +158,11 @@ func (m *Model) codePane(location, heading string, lines []diff.ViewLine, width 
 		}
 		rows = append(head, rows...)
 	}
-	stat := m.styles.Text().Render(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
+	// A --files run adds each file whole only because nothing was there before, so a line count says nothing.
+	stat := ""
+	if !m.ui.plainCode(m.target) {
+		stat = m.styles.Text().Render(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
+	}
 	title := m.styles.LocationTitle(location, max(8, inner-style.Width(stat)-6), true)
 	return m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
 		Titles: style.PaneTitles{TopLeft: title, TopRight: stat}})
@@ -176,7 +185,7 @@ func (m *Model) codeRows(location string, lines []diff.ViewLine, width int) (row
 			rows = append(rows, m.styles.Overlay().Render(render.ForDisplay(l.Text)))
 			continue
 		}
-		row := codeRow(l)
+		row := m.modeRow(l)
 		row.Tokens = tokens[i]
 		switch l.Kind {
 		case diff.Add:
@@ -187,6 +196,15 @@ func (m *Model) codeRows(location string, lines []diff.ViewLine, width int) (row
 		rows = append(rows, m.styles.CodeLine(row, numWidth, width))
 	}
 	return rows, added, removed
+}
+
+// modeRow is l as the mode draws it: on a run with no diff to show, an added line is plain text.
+func (m *Model) modeRow(l diff.ViewLine) style.CodeRow {
+	row := codeRow(l)
+	if row.Kind == style.CodeAdded && m.ui.plainCode(m.target) {
+		row.Kind = style.CodeContext
+	}
+	return row
 }
 
 // codeRow is a parsed diff line as the code primitive takes it. A deleted line has no new-side number, so it keeps the
@@ -260,6 +278,24 @@ func (m *Model) partLines(parts []string, gap, width int) []string {
 		}
 	}
 	return append(lines, line)
+}
+
+// proposal is what the agent will do if the human accepts, read before the evidence it rests on. It is Markdown, so it
+// is rendered as the body is, under a heading in the good tone that names who will apply it.
+func (m *Model) proposal(f draft.Finding) ([]string, error) {
+	if f.Proposal == "" {
+		return nil, nil
+	}
+	rendered, err := m.renderMarkdown(render.ForDisplay(f.Proposal))
+	if err != nil {
+		return nil, err
+	}
+	who := "the agent"
+	if applier := render.ForDisplay(render.OneLine(m.target.Applier)); applier != "" {
+		who = applier
+	}
+	out := []string{"", m.styles.Emphasis(m.styles.Good).Render("If you accept, " + who + " will")}
+	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
 }
 
 // impact is Markdown by contract, so it is rendered the way the body is, under its own heading.
@@ -505,10 +541,13 @@ var hyperlink = regexp.MustCompile("\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
 
 func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	f, i := m.openedFinding()
-	if m.settling && strings.Contains("axsurdew", msg.String()) && len(msg.String()) == 1 {
+	if m.settling && strings.Contains(m.ui.settleKeys(), msg.String()) && len(msg.String()) == 1 {
 		// The finding under this key was never on screen: it arrived through typeahead or key repeat right after a
 		// decision moved the view. Per-finding sign-off is the product, so the key is dropped, not applied.
 		return nil
+	}
+	if cmd, ok := m.ui.detailKey(m, f, msg.String()); ok {
+		return cmd
 	}
 	switch msg.String() {
 	case "a":
@@ -533,7 +572,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
 			var closed []string
 			decide := func(d *draft.Draft) (err error) {
-				closed, err = draft.Reinstate(d, f.ID, draft.Rules{}, m.cfg.Now())
+				closed, err = draft.Reinstate(d, f.ID, m.rules, m.cfg.Now())
 				return err
 			}
 			return m.decideAndShow(decide, func() string {
@@ -552,23 +591,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return m.decideAndStay(func(d *draft.Draft) error { return draft.DismissNote(d, n.ID, m.cfg.Now()) }, func() string { return fmt.Sprintf("%s %s dismissed", m.glyphs.Excluded, n.ID) })
 	case "s":
-		m.noting, m.notice = true, ""
-		m.note.SetPromptFunc(0, func(textarea.PromptInfo) string { return "" })
-		m.note.Reset()
-		m.note.SetValue(m.keptNotes[f.ID])
-
-		cmd := m.note.Focus()
-		m.sizeNote(0)
-		return cmd
-	case "e":
-		if err := draft.Recalibratable(f); err != nil {
-			m.say(style.Warn, refusalNotice(err))
-			return nil
-		}
-		m.editing, m.notice = true, ""
-		m.editLabels, m.editBlocking = editLabels(f.Label), f.Blocking
-		m.editPick = slices.Index(m.editLabels, f.Label)
-		return nil
+		return m.openNote(noteSend, m.keptNotes[f.ID])
 	case "w":
 		return m.openRewrite(f)
 	case "f":
@@ -599,8 +622,6 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		m.body.PageUp()
 	case "ctrl+r":
 		return m.checkDraft(true)
-	case "o":
-		return m.openPR()
 	case "esc":
 		m.view, m.notice = viewList, ""
 		changed, err := m.reload()
@@ -618,16 +639,44 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// openEdit opens the label and blocking editor on f.
+func (m *Model) openEdit(f draft.Finding) {
+	if err := draft.Recalibratable(f); err != nil {
+		m.say(style.Warn, refusalNotice(err))
+		return
+	}
+	m.editing, m.notice = true, ""
+	m.editLabels, m.editBlocking = editLabels(f.Label), f.Blocking
+	m.editPick = slices.Index(m.editLabels, f.Label)
+}
+
+// openNote opens the note input for kind, holding text.
+func (m *Model) openNote(kind noteKind, text string) tea.Cmd {
+	m.noting, m.noteKind, m.notice = true, kind, ""
+	m.note.SetPromptFunc(0, func(textarea.PromptInfo) string { return "" })
+	m.note.Reset()
+	m.note.SetValue(text)
+
+	cmd := m.note.Focus()
+	m.sizeNote(0)
+	return cmd
+}
+
 func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.Code {
 	case tea.KeyEsc:
 		m.noting = false
 		m.note.Blur()
-		m.keepNote(m.openID, m.note.Value())
+		if m.noteKind == noteSend {
+			m.keepNote(m.openID, m.note.Value())
+		}
 		return nil
 	case tea.KeyEnter:
 		m.noting = false
 		m.note.Blur()
+		if m.noteKind != noteSend {
+			return m.decideWithNote(m.noteKind, m.note.Value())
+		}
 		id, body := m.openID, m.note.Value()
 		// Kept until the note is recorded, so a refusal hands the text back for correction rather than losing it.
 		m.keepNote(id, body)
@@ -642,6 +691,37 @@ func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
 		})
 	}
 	return m.typeNote(msg)
+}
+
+// decideWithNote accepts or excludes the open finding with text as its note or reason. A refusal hands the text back
+// in the input, since nothing else keeps it.
+func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
+	id := m.openID
+	var closed []string
+	decide := func(d *draft.Draft) (err error) {
+		closed, err = draft.AcceptWithNote(d, id, text, m.cfg.Now())
+		return err
+	}
+	notice := func() string {
+		return decidedNotice(m.glyphs.Sep, m.glyphs.Accepted, id, "accepted", closed, draft.NoteResolved)
+	}
+	if kind == noteExclude {
+		decide = func(d *draft.Draft) (err error) {
+			closed, err = draft.ExcludeWithReason(d, id, text, m.cfg.Now())
+			return err
+		}
+		notice = func() string {
+			return decidedNotice(m.glyphs.Sep, m.glyphs.Excluded, id, "excluded", closed, draft.NoteDismissed)
+		}
+	}
+	cmd, recorded := m.decideAndMove(decide, notice)
+	if recorded || m.err != nil || m.openID != id {
+		return cmd
+	}
+	refused, refusedKind := m.notice, m.noticeKind
+	open := m.openNote(kind, text)
+	m.notice, m.noticeKind = refused, refusedKind
+	return tea.Batch(cmd, open)
 }
 
 func (m *Model) typeNote(msg tea.Msg) tea.Cmd {
@@ -693,7 +773,7 @@ func (m *Model) updateEdit(msg tea.KeyPressMsg) tea.Cmd {
 		id, label, blocking := m.openID, m.editLabels[m.editPick], m.editBlocking
 		changed, disposition := false, ""
 		return m.decideAndStay(func(d *draft.Draft) error {
-			_, err := draft.Recalibrate(d, id, label, blocking, m.diff, draft.Rules{}, m.cfg.Now())
+			_, err := draft.Recalibrate(d, id, label, blocking, m.diff, m.rules, m.cfg.Now())
 			if err == nil {
 				changed, disposition = true, draft.Dispositions(d)[id]
 			}
@@ -782,12 +862,30 @@ func (m *Model) noteRowsShown() []string {
 	return rows
 }
 
-// noteView is the send-back composer, a pane under the finding.
+// noteView is the note composer, a pane under the finding: a send-back note, an accept note or an exclude reason.
 func (m *Model) noteView() []string {
 	rows := m.noteRowsShown()
-	way := m.styles.Text().Render("enter sends " + m.glyphs.Sep + " esc cancels")
+	title, enter := "Send back "+m.openID, "enter sends"
+	switch m.noteKind {
+	case noteAccept:
+		title, enter = "Accept "+m.openID+" with a note", "enter accepts"
+	case noteExclude:
+		title, enter = "Exclude "+m.openID+", with a reason if you like", "enter excludes"
+	}
+	way := m.styles.Text().Render(enter + " " + m.glyphs.Sep + " esc cancels")
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
-		Titles: style.PaneTitles{TopLeft: "Send back " + m.openID, BottomRight: way}, Tone: style.ToneNote, Focus: true})
+		Titles: style.PaneTitles{TopLeft: title, BottomRight: way}, Tone: style.ToneNote, Focus: true})
+}
+
+// noteVerb is what enter does in the note input.
+func (m *Model) noteVerb() string {
+	switch m.noteKind {
+	case noteAccept:
+		return "accept"
+	case noteExclude:
+		return "exclude"
+	}
+	return "send"
 }
 
 // editorRows is the height of the editor pane open under the finding, if any.
@@ -827,29 +925,35 @@ type settledMsg struct{}
 // decisions needs no key between them; after the last finding it returns to the list. success builds the notice after fn has
 // run, so it can name what fn created.
 func (m *Model) decideAndShow(fn func(*draft.Draft) error, success func() string) tea.Cmd {
+	cmd, _ := m.decideAndMove(fn, success)
+	return cmd
+}
+
+// decideAndMove is decideAndShow, and reports whether the decision was recorded.
+func (m *Model) decideAndMove(fn func(*draft.Draft) error, success func() string) (tea.Cmd, bool) {
 	recorded, err := m.Decide(m.openID, fn)
 	if err != nil {
-		return m.fail(err)
+		return m.fail(err), false
 	}
 	if !recorded {
-		return m.fail(m.refreshDetail())
+		return m.fail(m.refreshDetail()), false
 	}
 	m.sayDecided(success())
 	flash := m.flash(findingTone(draft.Dispositions(m.draft)[m.openID]))
 	i := orderedIndex(m.order, m.openID)
 	if i < 0 || i+1 >= len(m.order) {
 		m.listAfterLast(i)
-		return flash
+		return flash, true
 	}
 	notice, kind := m.notice, m.noticeKind
 	cmd := m.fail(m.openFinding(m.order[i+1].ID))
 	// The notice names what was just recorded, so it survives the move to the finding after it.
 	m.notice, m.noticeKind = notice, kind
 	if m.cfg.Screen != nil {
-		return tea.Batch(cmd, flash)
+		return tea.Batch(cmd, flash), true
 	}
 	m.settling = true
-	return tea.Batch(cmd, flash, tea.Tick(settleAfterDecision, func(time.Time) tea.Msg { return settledMsg{} }))
+	return tea.Batch(cmd, flash, tea.Tick(settleAfterDecision, func(time.Time) tea.Msg { return settledMsg{} })), true
 }
 
 // listAfterLast returns to the list once the last finding is decided, since publishing and anything skipped both
@@ -941,58 +1045,17 @@ func (m *Model) detailPosition() string {
 func (m *Model) detailFooter() []string {
 	switch {
 	case m.noting:
-		return m.keys(style.KeyGroup{{Key: "enter", Verb: "send"}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
+		return m.keys(style.KeyGroup{{Key: "enter", Verb: m.noteVerb()}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
 	case m.editing:
 		return m.keys(style.KeyGroup{{Key: "enter", Verb: "save"}, {Key: m.arrows(m.glyphs.Left, m.glyphs.Right), Verb: "label"},
 			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
 	case m.rewriting:
-		return m.keys(style.KeyGroup{{Key: "ctrl+s", Verb: "save"}, {Key: "tab", Verb: "title/body"}, {Key: "esc", Verb: "cancel"}})
+		return m.keys(style.KeyGroup{{Key: "ctrl+s", Verb: "save"}, {Key: "tab", Verb: strings.Join(m.ui.rewriteFields(), "/")}, {Key: "esc", Verb: "cancel"}})
 	}
 	return m.keys(groupHints(m.detailHints())...)
 }
 
 func (m *Model) detailHints() []style.Hint {
 	f, _ := m.openedFinding()
-	_, hasOpenNote := firstOpenNote(m.draft, f.ID)
-	hints := detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote)
-	help := hints[len(hints)-1]
-	return append(hints[:len(hints)-1], style.Hint{Key: "esc", Verb: "list", Role: style.RoleNav}, m.openHint(), help)
-}
-
-// detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An
-// action the finding cannot take is not advertised, though its key still answers with a notice.
-func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote bool) []style.Hint {
-	pair := func(a, b string) string {
-		if g.Tier == style.ASCII {
-			return a + "/" + b
-		}
-		return a + b
-	}
-	hints := []style.Hint{
-		{Key: pair(g.Left, g.Right), Verb: "finding", Role: style.RoleNav},
-		{Key: pair(g.Up, g.Down), Verb: "scroll", Role: style.RoleNav},
-	}
-	decide := func(key, verb string) style.Hint {
-		return style.Hint{Key: key, Verb: verb, Role: style.RoleDecision}
-	}
-	switch disposition {
-	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept"), decide("x", "exclude"), decide("s", "send back"))
-	case draft.DispositionAccepted:
-		hints = append(hints, decide("x", "exclude"), decide("s", "send back"))
-	case draft.DispositionExcluded:
-		hints = append(hints, decide("u", "restore"))
-	case draft.DispositionWithdrawn:
-		hints = append(hints, decide("u", "reinstate"))
-	}
-	if f.Included {
-		hints = append(hints, decide("e", "edit"), decide("w", "rewrite"))
-	}
-	if hasOpenNote {
-		hints = append(hints, decide("r", "resolve"), decide("d", "dismiss"))
-	}
-	if f.Location != nil {
-		hints = append(hints, style.Hint{Key: "f", Verb: "file", Role: style.RoleFile})
-	}
-	return append(hints, style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp})
+	return m.ui.detailHints(m, f)
 }

@@ -217,44 +217,44 @@ Every implementation task follows a failing test, then the change, then a passin
 
 **Independent test**: quickstart sections 1.6, 2.3 and 4.2, run as integration tests with injected keys.
 
-- [ ] T053 Add a characterization test in a new `internal/tui/modeui_test.go` against today's code. It pins, for a PR run, the list and detail footer hints of each disposition, `helpSections()`, the settle string `axsurdew`, and the effect of `o`, `p`, `e` and `x`. It passes before any change.
-- [ ] T054 Refactor with no behavior change:
+- [x] T053 Add a characterization test in a new `internal/tui/modeui_test.go` against today's code. It pins, for a PR run, the list and detail footer hints of each disposition, `helpSections()`, the settle string `axsurdew`, and the effect of `o`, `p`, `e` and `x`. It passes before any change.
+- [x] T054 Refactor with no behavior change:
   - Create `internal/tui/modeui.go` with a `modeUI` interface and `publishUI`, which moves today's tables there word for word: hints, help, settle string, list keys, detail keys, the open-PR action, the end step and the rewrite fields.
   - `New` in `internal/tui/app.go` picks `publishUI` through `mode.Of(t).Kind()`.
   - Make `docs_test.go` check the key table against `publishUI`.
 
   T053 and every existing TUI test pass unchanged. Commit this on its own as `refactor(tui): move PR review tables behind a mode UI`.
-- [ ] T055 [P] [US1] Add failing tests in `internal/tui/detail_test.go` and `internal/tui/list_test.go` for an apply run:
+- [x] T055 [P] [US1] Add failing tests in `internal/tui/detail_test.go` and `internal/tui/list_test.go` for an apply run:
   - The proposal shows directly under the title, headed "If you accept, Claude will", or "If you accept, the agent will" with no applier, in the `Good` tone.
   - The list marks a finding with no proposal using `GlyphSet.Question` at every icon tier.
   - The header shows the local ref and the title, with no URL and no round.
   - `e` and `o` do nothing and appear in no hint or help.
-- [ ] T056 [US1] Create `applyUI` in `internal/tui/modeui.go`. Add `GlyphSet.Question` in `internal/style/style.go`, the header in `internal/tui/shell.go`, and the proposal heading in `refreshDetail` (`internal/tui/detail.go`). `openHint` and `openPR` in `internal/tui/published.go` are reached only through `publishUI`.
-- [ ] T057 [P] [US2] Add failing tests in `internal/tui/detail_test.go`:
+- [x] T056 [US1] Create `applyUI` in `internal/tui/modeui.go`. Add `GlyphSet.Question` in `internal/style/style.go`, the header in `internal/tui/shell.go`, and the proposal heading in `refreshDetail` (`internal/tui/detail.go`). `openHint` and `openPR` in `internal/tui/published.go` are reached only through `publishUI`.
+- [x] T057 [P] [US2] Add failing tests in `internal/tui/detail_test.go`:
   - `t` opens an empty one-line input with the footer "accept". Enter with text accepts with that note. Enter on an empty input accepts with no note. Esc discards the text and does not touch `keptNotes`.
   - `x` opens the same input with the footer "exclude". Text over 200 characters refuses with a review message that names no `loupe edit` flag. Enter on an empty input excludes with no reason.
   - `s` still restores kept send-back text.
   - While settling, `t` and `x` are dropped (`axsurdwt`).
-- [ ] T058 [US2] Implement `noteKind` beside `m.noting` in `internal/tui/app.go`, the `t` and `x` handling in `internal/tui/detail.go`, `AcceptWithNote`, `ExcludeWithReason` and `ValidateExcludeReason` in `internal/draft/mutate.go`, with unit tests in `internal/draft/mutate_decide_test.go`, and the footers.
-- [ ] T059 [P] [US1] Add failing tests in `internal/tui/list_test.go` and a new `internal/tui/returned_test.go`:
+- [x] T058 [US2] Implement `noteKind` beside `m.noting` in `internal/tui/app.go`, the `t` and `x` handling in `internal/tui/detail.go`, `AcceptWithNote`, `ExcludeWithReason` and `ValidateExcludeReason` in `internal/draft/mutate.go`, with unit tests in `internal/draft/mutate_decide_test.go`, and the footers.
+- [x] T059 [P] [US1] Add failing tests in `internal/tui/list_test.go` and a new `internal/tui/returned_test.go`:
   - `p` on an apply run shows "return" in hints. On a ready run it asks one `y`. `y` calls `draft.Seal` and shows "Returned to Claude", where `q` quits.
   - Any other key cancels.
   - `p` on a run that is not ready shows the `not-ready` notice.
   - A draft changed after the prompt refuses with `changed` and returns to the list.
   - No Action, Inline comments or Message step appears.
   - SC-006: on a run of ten findings, the human uses one key per accept, `x` plus Enter per exclude, and `p` plus `y` to return.
-- [ ] T060 [US1] Implement return on `p` in `internal/tui/list.go` through `applyUI`, and the screen in a new `internal/tui/returned.go`.
-- [ ] T061 [P] [US2] Add failing tests in `internal/tui/rewrite_test.go`:
+- [x] T060 [US1] Implement return on `p` in `internal/tui/list.go` through `applyUI`, and the screen in a new `internal/tui/returned.go`.
+- [x] T061 [P] [US2] Add failing tests in `internal/tui/rewrite_test.go`:
   - On an apply run, `w` shows the title, body and proposal fields, and `tab` cycles all three.
   - A changed proposal saves, and is checked with `markdown.Proposal` and the finding-id rule.
   - Emptying the proposal of a finding that had one refuses with the review message from research R12. An empty field on a question changes nothing.
   - On a PR run, the pane keeps two fields.
-- [ ] T062 [US2] Turn the two-element arrays in `internal/tui/rewrite.go` into a slice sized by the mode UI. Give `draft.Rewrite` the signature `Rewrite(d *Draft, id, title, body string, proposal *string, rules Rules, dif *diff.Diff, now time.Time)` in `internal/draft/mutate.go`, with tests in `internal/draft/mutate_edit_test.go`.
-- [ ] T063 [P] [US2] Add failing tests in `internal/tui/detail_test.go` and `internal/tui/filediff_test.go`: on a `--files` run, the code pane and the file-diff view draw plain text, with no `+` gutter and no added tint. On a `--changed` run and on a PR run with a new file, the gutter stays.
-- [ ] T064 [US2] Implement the plain view in `internal/tui/detail.go` (`codeRows`) and `internal/tui/filediff.go`, behind a `modeUI` method.
-- [ ] T065 [P] [US4] Add a failing test in `internal/tui/detail_test.go`. On an apply run, send back with `s`. An agent `edit` of the proposal clears the decision, and the detail view shows the new proposal. Accept, then return.
-- [ ] T066 Remove `review` and `handoff` from `apply.Refuses` in `internal/mode/apply.go`, and update `internal/mode/mode_test.go` and the PR 2 stopgap tests in `internal/cli/`.
-- [ ] T067 Update `docs/review-workflow.md` with the apply-run key table, and make `internal/tui/docs_test.go` check it against `applyUI`. Add a test in `internal/mode/mode_test.go` that greps `internal/cli` and `internal/tui` for `KindLocal`. The test fails on any use outside `capture_local.go`, `run.go` and the single selector in `modeui.go` (FR-030). Run `mise run check`.
+- [x] T062 [US2] Turn the two-element arrays in `internal/tui/rewrite.go` into a slice sized by the mode UI. Give `draft.Rewrite` the signature `Rewrite(d *Draft, id, title, body string, proposal *string, rules Rules, dif *diff.Diff, now time.Time)` in `internal/draft/mutate.go`, with tests in `internal/draft/mutate_edit_test.go`.
+- [x] T063 [P] [US2] Add failing tests in `internal/tui/detail_test.go` and `internal/tui/filediff_test.go`: on a `--files` run, the code pane and the file-diff view draw plain text, with no `+` gutter and no added tint. On a `--changed` run and on a PR run with a new file, the gutter stays.
+- [x] T064 [US2] Implement the plain view in `internal/tui/detail.go` (`codeRows`) and `internal/tui/filediff.go`, behind a `modeUI` method.
+- [x] T065 [P] [US4] Add a failing test in `internal/tui/detail_test.go`. On an apply run, send back with `s`. An agent `edit` of the proposal clears the decision, and the detail view shows the new proposal. Accept, then return.
+- [x] T066 Remove `review` and `handoff` from `apply.Refuses` in `internal/mode/apply.go`, and update `internal/mode/mode_test.go` and the PR 2 stopgap tests in `internal/cli/`.
+- [x] T067 Update `docs/review-workflow.md` with the apply-run key table, and make `internal/tui/docs_test.go` check it against `applyUI`. Add a test in `internal/mode/mode_test.go` that greps `internal/cli` and `internal/tui` for `KindLocal`. The test fails on any use outside `capture_local.go`, `run.go` and the single selector in `modeui.go` (FR-030). Run `mise run check`.
 
 **Checkpoint**: PR 4 is green. The human can decide and return a local run, and T053 still passes.
 

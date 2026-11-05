@@ -17,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
@@ -39,6 +40,7 @@ const (
 	viewConfirm
 	viewPublishing
 	viewPublished
+	viewReturned
 )
 
 type Config struct {
@@ -74,8 +76,11 @@ const (
 
 // Model is the review program. It holds no lock: every decision goes through draft.Mutate at the displayed version.
 type Model struct {
-	cfg     Config
-	target  run.Target
+	cfg    Config
+	target run.Target
+	ui     modeUI
+	// rules are the mode's finding rules, which every change the human makes to a finding is checked against.
+	rules   draft.Rules
 	draft   *draft.Draft
 	diff    *diff.Diff
 	version int
@@ -111,6 +116,7 @@ type Model struct {
 	// view; empty when the window is too short to spare them, and they scroll with the document instead.
 	detailHead []string
 	noting     bool
+	noteKind   noteKind
 	note       textarea.Model
 	// keptNotes holds, per finding, text the human typed into a note and then left without it being recorded, so the
 	// next send-back on that finding starts from it. It lives only as long as the program.
@@ -120,14 +126,15 @@ type Model struct {
 	editLabels   []string
 	editPick     int
 	editBlocking bool
-	// rewriting is true while the title and body editor is open. rewriteRev is the revision its text started from, and
+	// rewriting is true while the rewrite editor is open. rewriteRev is the revision its text started from, and
 	// rewriteOpened the finding's text it stands on.
-	rewriting     bool
-	rewriteTitle  textarea.Model
-	rewriteBody   textarea.Model
-	rewriteFocus  rewriteField
-	rewriteRev    int
-	rewriteOpened [2]openedText
+	rewriting       bool
+	rewriteTitle    textarea.Model
+	rewriteBody     textarea.Model
+	rewriteProposal textarea.Model
+	rewriteFocus    rewriteField
+	rewriteRev      int
+	rewriteOpened   []openedText
 	// keptRewrites holds, per finding, text the human left in the editor with esc. It lives only as long as the program.
 	keptRewrites map[string]keptRewrite
 	glamour      *glamour.TermRenderer
@@ -152,6 +159,10 @@ type Model struct {
 	// message is the review's opening as the human last left it, kept for the life of this program so a cancel or
 	// a refusal does not make them write it again. It reaches no file, and nothing but the confirmation sets it.
 	message string
+	// returning is true while the list asks for the y that returns an apply run; returnVersion is the draft version
+	// the human saw when they asked, which is the one sealed.
+	returning     bool
+	returnVersion int
 	// settling is true right after a decision moved the view; decision keys are dropped until the new finding has
 	// had time to be seen.
 	settling bool
@@ -183,6 +194,15 @@ type Model struct {
 	watchCancel context.CancelFunc
 }
 
+// noteKind is what the note input records on enter: a send-back note, an accept note or an exclude reason.
+type noteKind int
+
+const (
+	noteSend noteKind = iota
+	noteAccept
+	noteExclude
+)
+
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
 	target, err := run.LoadTarget(dir)
 	if err != nil {
@@ -212,21 +232,24 @@ func New(cfg Config) (*Model, error) {
 	note.SetVirtualCursor(false)
 	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
-		cfg:          cfg,
-		target:       target,
-		diff:         parsed,
-		glyphs:       st.Glyphs,
-		styles:       st,
-		width:        80,
-		height:       24,
-		note:         note,
-		keptNotes:    map[string]string{},
-		keptRewrites: map[string]keptRewrite{},
-		prNoticed:    map[string]bool{},
-		rewriteTitle: newRewriteInput(false),
-		rewriteBody:  newRewriteInput(true),
-		body:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
-		file:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		cfg:             cfg,
+		target:          target,
+		ui:              uiFor(target),
+		rules:           mode.Of(target).Rules(),
+		diff:            parsed,
+		glyphs:          st.Glyphs,
+		styles:          st,
+		width:           80,
+		height:          24,
+		note:            note,
+		keptNotes:       map[string]string{},
+		keptRewrites:    map[string]keptRewrite{},
+		prNoticed:       map[string]bool{},
+		rewriteTitle:    newRewriteInput(false),
+		rewriteBody:     newRewriteInput(true),
+		rewriteProposal: newRewriteInput(true),
+		body:            viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		file:            viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
 	}
 	if cfg.Screen != nil {
 		m.width, m.height = cfg.Screen.Width, cfg.Screen.Height
@@ -303,7 +326,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // pollHeld is true while redrawing would move something the human is writing or confirming.
 func (m *Model) pollHeld() bool {
-	return m.noting || m.editing || m.rewriting || m.sending || (m.view != viewList && m.view != viewDetail)
+	return m.noting || m.editing || m.rewriting || m.sending || m.returning || (m.view != viewList && m.view != viewDetail)
 }
 
 func (m *Model) schedulePoll() tea.Cmd {
@@ -509,6 +532,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewPublished {
 			return m, m.updatePublished(msg)
 		}
+		if m.view == viewReturned {
+			return m, m.updateReturned(msg)
+		}
+		if m.returning {
+			return m, m.confirmReturn(msg)
+		}
 		if m.noting {
 			return m, m.updateNote(msg)
 		}
@@ -581,6 +610,8 @@ func (m *Model) viewContent() string {
 		return m.publishingView()
 	case viewPublished:
 		return m.publishedView()
+	case viewReturned:
+		return m.returnedView()
 	}
 	return m.listView()
 }
@@ -716,8 +747,10 @@ func (m *Model) viewFooter() []string {
 		return m.keys(style.KeyGroup{{Key: "ctrl+c", Verb: "quit"}})
 	case viewPublished:
 		return m.publishedKeys()
+	case viewReturned:
+		return m.returnedKeys()
 	}
-	return m.keys(groupHints(m.listHints())...)
+	return m.listFooter()
 }
 
 // helpKey is one row of help: the primary key, what it does, and the compatibility alias when there is one.
@@ -731,48 +764,7 @@ type helpSection struct {
 	keys         []helpKey
 }
 
-func (m *Model) helpSections() map[view]helpSection {
-	g := m.glyphs
-	upDown, leftRight := g.Up+"/"+g.Down, g.Left+"/"+g.Right
-	return map[view]helpSection{
-		viewList: {"Finding list", "list", []helpKey{
-			{upDown, "move", "k/j"},
-			{"enter", "open the finding", ""},
-			{"tab", "expand or collapse the summary", ""},
-			{"o", "open the pull request in the browser", ""},
-			{"p", "publish once the review is ready", ""},
-			{"ctrl+r", "reload the draft from disk", ""},
-		}},
-		viewDetail: {"Finding detail", "detail", []helpKey{
-			{leftRight, "previous / next finding", "N/n"},
-			{upDown, "scroll the finding", "k/j"},
-			{"PgUp/PgDn", "scroll one page", ""},
-			{"space", "scroll one page down", ""},
-			{"a", "accept; resolves its open notes", ""},
-			{"x", "exclude; dismisses its open notes", ""},
-			{"s", "send back; enter sends, esc cancels", ""},
-			{"e", "edit label and blocking", ""},
-			{"w", "rewrite title and body; ctrl+s saves, esc keeps the text", ""},
-			{"u", "restore or reinstate the finding", ""},
-			{"r / d", "resolve / dismiss its open note", ""},
-			{"f", "whole-file diff", ""},
-			{"o", "open the pull request in the browser", ""},
-			{"ctrl+r", "reload the draft from disk", ""},
-			{"esc", "back to the list", ""},
-		}},
-		viewAction: {"Publish steps", "publish", []helpKey{
-			{upDown, "move", "k/j"},
-			{"enter", "choose and go on", ""},
-			{"esc", "back one step", ""},
-		}},
-		viewFileDiff: {"File diff", "file diff", []helpKey{
-			{upDown, "move one line", "k/j"},
-			{leftRight, "previous / next marker", "[/]"},
-			{"enter", "open the finding on this line", ""},
-			{"esc", "back to the finding", ""},
-		}},
-	}
-}
+func (m *Model) helpSections() map[view]helpSection { return m.ui.helpSections(m.glyphs) }
 
 var everywhere = helpSection{"Everywhere", "", []helpKey{
 	{"?", "toggle this help", ""},
