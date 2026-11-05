@@ -346,7 +346,7 @@ func (m *Model) listCounts() string {
 		notes = fmt.Sprintf("%d %s", len(r.OpenNotes), plural(len(r.OpenNotes), "note"))
 	}
 	sep := " " + m.glyphs.Sep + " "
-	return m.styles.Text().Render(fmt.Sprintf("%d blocking", blocking) + sep + notes + sep + fmt.Sprintf("%d pending", len(r.Pending)))
+	return m.styles.HintTitle(fmt.Sprintf("%d blocking", blocking) + sep + notes + sep + fmt.Sprintf("%d pending", len(r.Pending)))
 }
 
 // listLayout is the list's row budget, in the order the layout contract gives way: the gap between the panes, then
@@ -497,7 +497,7 @@ func (m *Model) listFooter() []string {
 func (m *Model) listView() string {
 	footer := m.listFooter()
 	inner, _ := style.PaneInner(m.width, 0)
-	position := m.styles.Text().Render(position(m.cursor, len(m.order)))
+	position := m.styles.HintTitle(position(m.cursor, len(m.order)))
 	findings := style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts()}, Focus: true}
 	room := m.withBorderNotice(&findings)
 	notice := m.noticeRows(inner, room)
@@ -520,7 +520,7 @@ func (m *Model) listView() string {
 		clipped, _ = m.summaryCommand()
 	}
 	body := m.styles.Pane(style.Pane{Width: m.width, Height: len(l.summary) + style.PaneRows, Lines: l.summary,
-		Titles: style.PaneTitles{TopLeft: "Reviewer's summary", BottomLeft: clipped, BottomRight: m.styles.Text().Render(hint)}})
+		Titles: style.PaneTitles{TopLeft: "Reviewer's summary", BottomLeft: clipped, BottomRight: m.styles.HintTitle(hint)}})
 	if l.command != nil {
 		body = append(body, l.command...)
 	} else {

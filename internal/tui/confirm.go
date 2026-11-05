@@ -342,7 +342,7 @@ func (c *confirmation) messageView(m *Model, width int) string {
 		tone = style.ToneNote
 	}
 	boxed := m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
-		Titles: style.PaneTitles{TopLeft: messageTitle, TopRight: m.styles.Note.Render(state), BottomRight: m.styles.Text().Render(way)}, Tone: tone, Focus: c.typing})
+		Titles: style.PaneTitles{TopLeft: messageTitle, TopRight: m.styles.InputTitle(state), BottomRight: m.styles.HintTitle(way)}, Tone: tone, Focus: c.typing})
 	c.inputRows = len(boxed)
 	return strings.Join(boxed, "\n")
 }
@@ -390,20 +390,20 @@ func (c *confirmation) shortPosition(m *Model) string {
 // past the others; the inline choice does.
 func (c *confirmation) summary(m *Model) string {
 	sep := " " + m.glyphs.Sep + " "
-	parts := []string{m.styles.Emphasis(m.styles.Warn).Render(render.ForDisplay(c.title.action))}
+	parts := []string{m.styles.WarnTitle(render.ForDisplay(c.title.action), true)}
 	inner, _ := style.PaneInner(m.width, 0)
 	inline := fmt.Sprintf("inline %s (%d)", c.title.inline, c.title.comments)
 	var required []string
 	if c.preview.Closed != "" {
-		required = append(required, m.styles.Warn.Render("PR "+c.preview.Closed))
+		required = append(required, m.styles.WarnTitle("PR "+c.preview.Closed, false))
 	}
 	if moved := c.preview.HeadMoved; moved != nil {
-		required = append(required, m.styles.Warn.Render(fmt.Sprintf("head moved +%d", moved.AheadBy)))
+		required = append(required, m.styles.WarnTitle(fmt.Sprintf("head moved +%d", moved.AheadBy), false))
 	}
 	if c.preview.Edits != "" {
-		required = append(required, m.styles.Warn.Render(editsHeader))
+		required = append(required, m.styles.WarnTitle(editsHeader, false))
 	}
-	with := strings.Join(append(append(parts, m.styles.Text().Render(inline)), required...), sep)
+	with := strings.Join(append(append(parts, m.styles.HintTitle(inline)), required...), sep)
 	if style.Width(with)+20 <= inner {
 		return with
 	}
@@ -563,7 +563,7 @@ func (m *Model) confirmView(c *confirmation) string {
 	_, inner := style.PaneInner(0, height)
 	lines = m.withNotice(lines[:min(len(lines), c.scroll.Height())], c.noticeLines(m, extra, inner), inner)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: height, Lines: lines,
-		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: c.summary(m), BottomRight: m.styles.Text().Render(position)},
+		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: c.summary(m), BottomRight: m.styles.HintTitle(position)},
 		Scroll: style.Scroll{Offset: c.scroll.YOffset(), Visible: c.scroll.Height(), Total: c.scroll.TotalLineCount()}, Focus: !c.typing})...)
 	return m.shell(body, footer)
 }

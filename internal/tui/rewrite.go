@@ -264,5 +264,5 @@ func (m *Model) rewriteView() []string {
 	}
 	field := rewriteFields[m.rewriteFocus]
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
-		Titles: style.PaneTitles{TopLeft: "Rewrite " + m.openID, TopRight: m.styles.Note.Render(field)}, Tone: style.ToneNote, Focus: true})
+		Titles: style.PaneTitles{TopLeft: "Rewrite " + m.openID, TopRight: m.styles.InputTitle(field)}, Tone: style.ToneNote, Focus: true})
 }

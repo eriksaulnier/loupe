@@ -247,7 +247,7 @@ func localFixture(t *testing.T, capture, applier string, inputs ...draft.Finding
 	}
 	target := run.Target{
 		Kind: run.KindLocal, Title: "Cache rework", Applier: applier, CapturedAt: testNow, DiffSHA256: run.DiffSHA256(diffBytes),
-		Local: &run.LocalTarget{Prefix: "acme/widgets", Repository: "acme/widgets", Capture: capture, Root: "/src",
+		Local: &run.LocalTarget{Prefix: "acme/widgets", Repository: "acme/widgets", Capture: capture, Root: "/src", Branch: "feat/cache",
 			Files: []run.LocalFile{{Path: "a.go", Abs: "/src/a.go", New: true}}, Skipped: []run.LocalSkipped{}},
 	}
 	dir, _, err := run.NextLocal(t.TempDir(), "test", envOf(nil), target, diffBytes, draftJSON, nil)
@@ -300,7 +300,7 @@ func TestApplyHeaderShowsTheBadge(t *testing.T) {
 		{utf8Env, "[local · returns to Claude]"},
 		{map[string]string{"NO_COLOR": "1", "LANG": "C"}, "[local -> Claude]"},
 	} {
-		m := modelOf(t, dir, c.env, 100, 30)
+		m := modelOf(t, dir, c.env, 124, 30)
 		for _, show := range []func(){func() {}, func() { press(m, "l") }, func() { mustOpenFinding(t, m, "f-001") }} {
 			show()
 			if header := ansi.Strip(m.reviewHeader()); !strings.Contains(header, c.want) {
@@ -308,16 +308,17 @@ func TestApplyHeaderShowsTheBadge(t *testing.T) {
 			}
 		}
 	}
-	nobody := modelOf(t, applyFixture(t, "", applyInputs...), utf8Env, 100, 30)
+	nobody := modelOf(t, applyFixture(t, "", applyInputs...), utf8Env, 124, 30)
 	if header := ansi.Strip(nobody.reviewHeader()); !strings.Contains(header, "[local · returns to the agent]") {
 		t.Errorf("with no applier: header %q", header)
 	}
 	narrow := modelOf(t, dir, utf8Env, 60, 20)
 	header := ansi.Strip(narrow.reviewHeader())
-	if !strings.Contains(header, "acme/widgets:local#1") || !strings.Contains(header, "[local") || strings.Contains(header, "returns to") {
+	if !strings.Contains(header, "feat/cache") || !strings.Contains(header, "[local") || strings.Contains(header, "returns to") {
 		t.Errorf("at 60 columns the badge did not shorten first: %q", header)
 	}
 	colored := colorOf(t, dir)
+	colored.Update(tea.WindowSizeMsg{Width: 124, Height: 40})
 	if view := colored.reviewHeader(); !strings.Contains(view, colored.styles.ApplyBadge("local · returns to Claude")) || strings.Contains(ansi.Strip(view), "[local") {
 		t.Errorf("the colored badge is not drawn in the apply token: %q", view)
 	}
@@ -360,12 +361,13 @@ l / esc | back to the list |`
 	}
 }
 
-// The detail of a local finding leads with what the applier will do; a question shows its marker and no will block.
+// A local finding reads in the fixed order: location, Why, then what the applier will do. A question takes that slot
+// with no glyph and no will section (docs/tui-design.md, Order).
 func TestApplyDetailLeadsWithWhatTheApplierWillDo(t *testing.T) {
 	m, _ := applyModel(t, "Claude")
 	mustOpenFinding(t, m, "f-001")
 	screen := screenText(m)
-	order := []string{"Rename the helper", "Claude will:", "Rename helper to insertAfter in a.go.", "a.go:3", "The helper name hides what it does."}
+	order := []string{"Rename the helper", "a.go:3", "Why", "The helper name hides what it does.", "Claude will", "Rename helper to insertAfter in a.go."}
 	at := -1
 	for _, want := range order {
 		i := strings.Index(screen, want)
@@ -376,12 +378,12 @@ func TestApplyDetailLeadsWithWhatTheApplierWillDo(t *testing.T) {
 	}
 	mustOpenFinding(t, m, "f-002")
 	screen = screenText(m)
-	if strings.Contains(screen, "will:") || !strings.Contains(screen, m.glyphs.Question+" A question for Claude") {
-		t.Errorf("a question shows a will block or no marker:\n%s", screen)
+	if strings.Contains(screen, "will") || !strings.Contains(screen, "│ A question for Claude") || strings.Contains(screen, m.glyphs.Question+" A question") {
+		t.Errorf("a question shows a will section, no question section, or a glyph:\n%s", screen)
 	}
 	nobody, _ := applyModel(t, "")
 	mustOpenFinding(t, nobody, "f-003")
-	if screen := screenText(nobody); !strings.Contains(screen, "The agent will:") {
+	if screen := screenText(nobody); !strings.Contains(screen, "│ The agent will ") {
 		t.Errorf("with no applier the lead does not name the agent:\n%s", screen)
 	}
 	pr := modelOf(t, newFixture(t), utf8Env, 100, 40)
@@ -414,5 +416,24 @@ func TestLocalRunNoticesUseTheAgentVerbs(t *testing.T) {
 	press(m, "enter")
 	if !strings.Contains(m.notice, "f-002 asked as n-") || !strings.Contains(m.notice, "Claude has it") {
 		t.Errorf("s notice %q", m.notice)
+	}
+}
+
+// A local header's place takes the repository from the prefix, or the root without one, and names each capture form
+// (docs/tui-design.md, The header).
+func TestLocalPlace(t *testing.T) {
+	two := []run.LocalFile{{Path: "a.go"}, {Path: "b.go"}}
+	for _, c := range []struct {
+		local run.LocalTarget
+		want  style.LocalPlace
+	}{
+		{run.LocalTarget{Prefix: "acme/widgets", Branch: "feat/cache", Capture: "files", Files: two}, style.LocalPlace{Repo: "widgets", Branch: "feat/cache", Capture: "2 files"}},
+		{run.LocalTarget{Root: "/src/widgets", Capture: "changed", BaseRef: "main"}, style.LocalPlace{Repo: "widgets", Capture: "changes since main"}},
+		{run.LocalTarget{Prefix: "acme/widgets", Capture: "changed"}, style.LocalPlace{Repo: "widgets", Capture: "uncommitted changes"}},
+		{run.LocalTarget{Prefix: "acme/widgets", Capture: "no-files"}, style.LocalPlace{Repo: "widgets", Capture: "no files"}},
+	} {
+		if got := *localPlace(run.Target{Local: &c.local}); got != c.want {
+			t.Errorf("%+v: place %+v, want %+v", c.local, got, c.want)
+		}
 	}
 }

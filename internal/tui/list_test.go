@@ -766,16 +766,17 @@ func TestApplyListMarksAQuestion(t *testing.T) {
 	}
 }
 
-// The header of an apply run names the local run and its title, with no link and no round.
+// The header of an apply run names the repository, branch and capture and its title, with no ref, no link, no
+// underline and no round (docs/tui-design.md, The header).
 func TestApplyHeaderNamesTheLocalRun(t *testing.T) {
 	m, _ := applyModel(t, "Claude")
 	header := ansi.Strip(m.reviewHeader())
-	for _, want := range []string{"acme/widgets:local#1", "Cache rework"} {
+	for _, want := range []string{"widgets @ feat/cache", "Cache rework"} {
 		if !strings.Contains(header, want) {
 			t.Errorf("header lacks %q: %q", want, header)
 		}
 	}
-	for _, unwanted := range []string{"round", " r0", "#0", "https"} {
+	for _, unwanted := range []string{"round", " r0", "#0", "https", "local#1", "acme/"} {
 		if strings.Contains(header, unwanted) {
 			t.Errorf("header has %q: %q", unwanted, header)
 		}
@@ -785,4 +786,33 @@ func TestApplyHeaderNamesTheLocalRun(t *testing.T) {
 	if strings.Contains(colored.reviewHeader(), "\x1b]8;") {
 		t.Errorf("header links somewhere: %q", colored.reviewHeader())
 	}
+	if underlined(colored.reviewHeader()) {
+		t.Errorf("header underlines something: %q", colored.reviewHeader())
+	}
+	for capture, want := range map[string]string{"files": "widgets @ feat/cache · 1 file", "changed": "widgets @ feat/cache · uncommitted changes"} {
+		wide := modelOf(t, localFixture(t, capture, "Claude", applyInputs...), utf8Env, 160, 40)
+		if header := ansi.Strip(wide.reviewHeader()); !strings.Contains(header, want) {
+			t.Errorf("a --%s header lacks %q: %q", capture, want, header)
+		}
+	}
+}
+
+// underlined reports whether any SGR sequence in s turns on underline, skipping the operands of 38 and 48 colors.
+func underlined(s string) bool {
+	for _, m := range regexp.MustCompile(`\x1b\[([0-9;:]*)m`).FindAllStringSubmatch(s, -1) {
+		params := strings.Split(m[1], ";")
+		for i := 0; i < len(params); i++ {
+			switch p := params[i]; {
+			case p == "38" || p == "48" || p == "58":
+				if i+1 < len(params) && params[i+1] == "5" {
+					i += 2
+				} else {
+					i += 4
+				}
+			case p == "4" || strings.HasPrefix(p, "4:"):
+				return true
+			}
+		}
+	}
+	return false
 }

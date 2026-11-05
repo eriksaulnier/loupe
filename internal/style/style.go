@@ -1,5 +1,8 @@
 // Package style is the one place terminal appearance is decided: colors, glyphs and the small layout helpers every
 // human-facing surface shares, so the review interface and the one-shot commands look like one program.
+//
+// docs/tui-design.md is the contract for how the review window draws a finding and its header. A change here that
+// departs from it changes that document in the same commit.
 package style
 
 import (

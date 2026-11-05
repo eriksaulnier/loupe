@@ -2,11 +2,15 @@ package tui
 
 import (
 	"fmt"
+	"path"
+	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/local"
 	"github.com/eriksaulnier/loupe/internal/mode"
+	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -25,7 +29,8 @@ type modeUI interface {
 	// listKey and detailKey act on a key only this mode binds, and report whether they did.
 	listKey(m *Model, key string) (tea.Cmd, bool)
 	detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool)
-	// heading is the header's reference, link and round; runRef is the run as loupe's commands name it.
+	// heading is what the header names: a pull request's reference, link and round, or a local run's place. runRef is
+	// the run as loupe's commands name it.
 	heading(m *Model) style.ReviewHeading
 	runRef(m *Model) string
 	// question reports whether the list marks f as a question.
@@ -334,7 +339,7 @@ func (applyUI) heading(m *Model) style.ReviewHeading {
 		full = "local -> " + m.applier()
 		mid = full
 	}
-	return style.ReviewHeading{Ref: localRef(m.target), Badges: []string{full, mid, "local"}}
+	return style.ReviewHeading{Local: localPlace(m.target), Badges: []string{full, mid, "local"}}
 }
 
 func (applyUI) runRef(m *Model) string { return localRef(m.target) }
@@ -373,6 +378,36 @@ func (applyUI) atList(m *Model) tea.Cmd {
 
 // plainCode is true on a --files run, whose diff adds each file whole only because it was captured from nothing.
 func (applyUI) plainCode(t run.Target) bool { return t.Local != nil && t.Local.Capture == "files" }
+
+// localPlace is where a local run's work lives, for its header: the repository's name, the branch and what capture
+// took.
+func localPlace(t run.Target) *style.LocalPlace {
+	p := &style.LocalPlace{}
+	l := t.Local
+	if l == nil {
+		return p
+	}
+	p.Repo = path.Base(l.Prefix)
+	if l.Prefix == "" {
+		p.Repo = filepath.Base(l.Root)
+	}
+	p.Repo, p.Branch = render.ForDisplay(p.Repo), render.ForDisplay(l.Branch)
+	switch l.Capture {
+	case local.FormFiles:
+		p.Capture = fmt.Sprintf("%d files", len(l.Files))
+		if len(l.Files) == 1 {
+			p.Capture = "1 file"
+		}
+	case local.FormChanged:
+		p.Capture = "uncommitted changes"
+		if l.BaseRef != "" {
+			p.Capture = "changes since " + render.ForDisplay(l.BaseRef)
+		}
+	case local.FormNoFiles:
+		p.Capture = "no files"
+	}
+	return p
+}
 
 func localRef(t run.Target) string {
 	ref := run.Ref{Local: 1}

@@ -441,7 +441,7 @@ func TestReviewReturnsALocalRun(t *testing.T) {
 		deps.Screen = &tui.Screen{Width: 100, Height: 30}
 		return Execute(deps, []string{"review", "local#1"})
 	})
-	sc.WaitFor("acme/widgets:local#1", "1 finding to decide")
+	sc.WaitFor("[local", "widgets", "1 finding to decide")
 	sc.Press("enter", "a")
 	sc.WaitFor("1/1 decided", "enter return to Claude")
 	sc.Press("enter")

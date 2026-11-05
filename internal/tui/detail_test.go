@@ -250,8 +250,9 @@ func bigHunkRun(t *testing.T) string {
 	return dir
 }
 
-// A long body and a long anchored range scroll as one document, so the last anchored line, the fix and
-// the last reply are all reached with the ordinary scroll keys.
+// A long body and a long anchored range scroll as one document, so the fix and the last reply are reached with the
+// ordinary scroll keys. The location pane is capped, so the last anchored line is one key away in the whole-file view
+// instead (spec 052 amends spec 038 here).
 func TestDetailScrollsAsOneDocument(t *testing.T) {
 	dir := bigHunkRun(t)
 	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
@@ -294,13 +295,16 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 		for range 200 {
 			m.Update(keys)
 			view := m.View().Content
-			seen["last anchored line"] = seen["last anchored line"] || anchored(view, 30)
+			seen["cap hint"] = seen["cap hint"] || strings.Contains(view, "f shows all")
+			if anchored(view, 30) {
+				t.Fatalf("the capped location shows its last anchored line:\n%s", view)
+			}
 			seen["impact"] = seen["impact"] || strings.Contains(view, "Every wide hunk.")
 			seen["fix"] = seen["fix"] || strings.Contains(view, "| Split the range.")
 			seen["references"] = seen["references"] || strings.Contains(view, "https://github.com/o/r/issues/1")
 			seen["reply"] = seen["reply"] || strings.Contains(view, "about, so it stays.")
 		}
-		for _, part := range []string{"last anchored line", "impact", "fix", "references", "reply"} {
+		for _, part := range []string{"cap hint", "impact", "fix", "references", "reply"} {
 			if !seen[part] {
 				t.Errorf("%v never reaches the %s:\n%s", keys, part, m.View().Content)
 			}
@@ -318,6 +322,14 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 		}
 		clear(seen)
 	}
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	press(m, "f")
+	if !regexp.MustCompile(`big line 30\b`).MatchString(m.View().Content) {
+		t.Errorf("f does not reach the last anchored line:\n%s", m.View().Content)
+	}
+	press(m, "esc")
 	for _, k := range []string{"J", "K"} {
 		before := m.View().Content
 		m.Update(runes(k))
@@ -1098,13 +1110,15 @@ func TestDetailPinsItsTitleAndMetadata(t *testing.T) {
 	}
 }
 
-// On an apply run the lead is in the good tone.
+// On an apply run the proposal is a section in the good tone, drawn as a suggested fix is.
 func TestApplyDetailLeadIsInTheGoodTone(t *testing.T) {
 	colored, _ := applyModel(t, "Claude")
 	colored.styles.SetColorProfile(colorprofile.TrueColor)
 	mustOpenFinding(t, colored, "f-001")
-	if view := colored.View().Content; !strings.Contains(view, colored.styles.Emphasis(colored.styles.Good).Render("Claude will:")) {
-		t.Errorf("the lead is not in the good tone:\n%q", view)
+	good := colored.styles.ToneStyle(style.ToneGood)
+	view := colored.View().Content
+	if !strings.Contains(view, colored.styles.Emphasis(good).Render("Claude will")) || strings.Contains(ansi.Strip(view), "will:") || !strings.Contains(view, good.Render(colored.glyphs.Quote)+" ") {
+		t.Errorf("the proposal is not a section in the good tone:\n%q", view)
 	}
 }
 
@@ -1449,5 +1463,47 @@ func TestApplySendBackRoundTrip(t *testing.T) {
 	pressKeys(t, m, "enter")
 	if !returned(t, dir) {
 		t.Fatalf("enter did not return the run; view %d notice %q", m.view, m.notice)
+	}
+}
+
+// A location taller than the cap shows a window of it opened on the finding's first line, says how to see the rest,
+// and leaves the proposed change on screen (docs/tui-design.md, The location pane).
+func TestLongLocationPaneIsCapped(t *testing.T) {
+	long := []draft.FindingInput{{Title: "Whole file", Body: "Every line is new.", Location: &draft.LocationInput{Path: "a.go", StartLine: 3, Line: 10},
+		Label: "issue", Proposal: "Split the file."}}
+	m := modelOf(t, applyFixture(t, "Claude", long...), utf8Env, 100, 30)
+	mustOpenFinding(t, m, "f-001")
+	screen := screenText(m)
+	for _, want := range []string{"line 3", "f shows all", "Why", "Claude will", "Split the file."} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("capped pane screen lacks %q:\n%s", want, screen)
+		}
+	}
+	if strings.Contains(screen, "line 10") {
+		t.Errorf("the pane is not capped:\n%s", screen)
+	}
+	short := modelOf(t, applyFixture(t, "Claude", applyInputs...), utf8Env, 100, 30)
+	mustOpenFinding(t, short, "f-001")
+	if screen := screenText(short); strings.Contains(screen, "f shows all") || !strings.Contains(screen, "line 1") || !strings.Contains(screen, "line 6") {
+		t.Errorf("a short location is capped:\n%s", screen)
+	}
+}
+
+// The capped window keeps its size while a composer is open, since the composer closes without a refresh.
+func TestCappedLocationKeepsItsSizeUnderAComposer(t *testing.T) {
+	for height := 40; height <= 70; height++ {
+		m := modelOf(t, bigHunkRun(t), testEnv, 80, height)
+		if err := m.openFinding("f-001"); err != nil {
+			t.Fatal(err)
+		}
+		count := func() int { return strings.Count(m.body.GetContent(), "big line ") }
+		before := count()
+		press(m, "s")
+		if err := m.refreshDetail(); err != nil {
+			t.Fatal(err)
+		}
+		if after := count(); after != before {
+			t.Errorf("at 80x%d the window shows %d code rows with the composer open, %d without", height, after, before)
+		}
 	}
 }
