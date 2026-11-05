@@ -306,6 +306,9 @@ func (s Style) InputTitle(text string) string { return s.Note.Render(text) }
 // HintTitle is a pane title that tells the human what a key does or where they are, in plain text.
 func (s Style) HintTitle(text string) string { return s.Text().Render(text) }
 
+// TitleTag is a word a pane title adds after its subject to name the view, bold in the accent.
+func (s Style) TitleTag(text string) string { return s.Emphasis(s.Accent).Render(text) }
+
 // ToneStyle is the foreground a tone draws in, and nothing where color is off.
 func (s Style) ToneStyle(t Tone) lipgloss.Style { return s.fg(s.toneColor(t)) }
 
@@ -940,7 +943,8 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 		// way with the repository.
 		titleRoom := 0
 		if title != "" {
-			titleRoom = 2 + min(Width(title), localTitleRoom)
+			// The draw below drops a title given fewer than eight cells, so at least that much is kept.
+			titleRoom = 2 + max(8, min(Width(title), localTitleRoom))
 		}
 		for tier := range 3 {
 			setPlace(tier)

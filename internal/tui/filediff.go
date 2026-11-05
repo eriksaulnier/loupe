@@ -107,7 +107,7 @@ func (m *Model) filePane() style.Pane {
 	}
 	width, _ := style.PaneInner(m.width, 0)
 	active := m.fileActive()
-	title := m.styles.LocationTitle(path, max(8, width-style.Width(active)-16), true) + m.styles.Emphasis(m.styles.Accent).Render(" "+m.glyphs.Sep+" file diff")
+	title := m.styles.LocationTitle(path, max(8, width-style.Width(active)-16), true) + m.styles.TitleTag(" "+m.glyphs.Sep+" file diff")
 	return style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: title, TopRight: active}}
 }
 
@@ -202,7 +202,7 @@ func (m *Model) fileActive() string {
 			}
 		}
 	}
-	return m.styles.Text().Render(render.ForDisplay(active))
+	return m.styles.HintTitle(render.ForDisplay(active))
 }
 
 func plural(n int, word string) string {

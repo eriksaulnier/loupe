@@ -1450,18 +1450,68 @@ func TestPRFindingSectionsKeepTheFixedOrder(t *testing.T) {
 			t.Fatalf("%q is missing or out of order:\n%s", want, screen)
 		}
 		at = i
+		// Each heading sits over the first row of its bar.
+		if want != "multi.txt:21" && !regexp.MustCompile(regexp.QuoteMeta(want)+` .*\n│ ┃ `).MatchString(screen[i:]) {
+			t.Errorf("%q is not over a bar:\n%s", want, screen)
+		}
 	}
 }
 
-// Every section of a withdrawn finding recedes to muted, so the human reads it as content the agent took back
-// (docs/tui-design.md, Tone says whose words they are).
+// Every section of a withdrawn finding recedes to muted, so the human reads it as content the agent took back, and
+// it stays muted once the human excludes it, since its Withdrawn section still shows (docs/tui-design.md, Tone says
+// whose words they are).
 func TestWithdrawnFindingSectionsAreMuted(t *testing.T) {
-	m := modelOf(t, reasonFixture(t, "Title three", draft.Reason{Text: "Naming only."}), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
-	m.styles.SetColorProfile(colorprofile.TrueColor)
-	mustOpen(m, "f-003")
-	view := m.View().Content
-	muted := m.styles.ToneStyle(style.ToneMuted)
-	if !strings.Contains(view, m.styles.Emphasis(muted).Render("Why")) || strings.Contains(view, m.styles.Emphasis(m.styles.ToneStyle(style.ToneAccent)).Render("Why")) {
-		t.Errorf("a withdrawn finding's Why is not muted:\n%q", view)
+	for _, exclude := range []bool{false, true} {
+		dir := reasonFixture(t, "Title three", draft.Reason{Text: "Naming only."})
+		if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+			d.Findings[2].Impact = "Nothing runs differently."
+			if _, err := draft.SendBack(d, "f-003", "Sure?", testNow); err != nil {
+				return err
+			}
+			if exclude {
+				_, err := draft.Exclude(d, "f-003", testNow)
+				return err
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 60)
+		m.styles.SetColorProfile(colorprofile.TrueColor)
+		mustOpen(m, "f-003")
+		view := m.View().Content
+		muted := m.styles.Emphasis(m.styles.ToneStyle(style.ToneMuted))
+		for _, head := range []string{"Withdrawn", "Why", "Impact", "Note n-001"} {
+			if !strings.Contains(view, muted.Render(head)) {
+				t.Errorf("exclude %v: %s is not muted:\n%q", exclude, head, view)
+			}
+		}
+	}
+}
+
+// A finding that carries a suggested fix beside a proposal, or a local question beside a fix, shows the fix too, so no
+// text the agent filed is lost.
+func TestSuggestedFixShowsBesideAProposal(t *testing.T) {
+	dir := applyFixture(t, "Claude", applyInputs...)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].SuggestedFix = "Rename it in place."
+		d.Findings[1].SuggestedFix = "Use memory."
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 100, 60)
+	for id, want := range map[string][]string{"f-001": {"Claude will", "Suggested fix", "Rename it in place."}, "f-002": {"A question for Claude", "Suggested fix", "Use memory."}} {
+		mustOpenFinding(t, m, id)
+		screen := screenText(m)
+		at := -1
+		for _, w := range want {
+			i := strings.Index(screen, w)
+			if i <= at {
+				t.Errorf("%s: %q is missing or out of order:\n%s", id, w, screen)
+				break
+			}
+			at = i
+		}
 	}
 }

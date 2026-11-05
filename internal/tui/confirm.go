@@ -403,7 +403,7 @@ func (c *confirmation) summary(m *Model) string {
 	if c.preview.Edits != "" {
 		required = append(required, m.styles.Warn.Render(editsHeader))
 	}
-	with := strings.Join(append(append(parts, m.styles.Text().Render(inline)), required...), sep)
+	with := strings.Join(append(append(parts, m.styles.HintTitle(inline)), required...), sep)
 	if style.Width(with)+20 <= inner {
 		return with
 	}

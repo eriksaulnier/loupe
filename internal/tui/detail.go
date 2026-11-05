@@ -74,7 +74,7 @@ func (m *Model) refreshDetail() error {
 	if f.Location != nil {
 		block(m.codePane(locationText(f), f.Location.Heading, lines, width))
 	}
-	for _, s := range [][]string{sections.why, sections.change, sections.impact, sections.references} {
+	for _, s := range [][]string{sections.why, sections.change, sections.fix, sections.impact, sections.references} {
 		block(s)
 	}
 	for _, note := range sections.notes {
@@ -280,14 +280,16 @@ func (m *Model) partLines(parts []string, gap, width int) []string {
 // detailSections are a finding's blocks, each one drawn as a section (docs/tui-design.md). A nil field is a block the
 // finding does not have.
 type detailSections struct {
-	withdrawn, why, change, impact, references []string
-	notes                                      [][]string
+	withdrawn, why, change, fix, impact, references []string
+	notes                                           [][]string
 }
 
 // findingSections draws each of f's blocks in its tone. A withdrawn finding's blocks all recede to muted, so the human
 // reads them as content the agent took back.
 func (m *Model) findingSections(f draft.Finding, width int) (detailSections, error) {
-	withdrawn := draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn
+	// The same test that draws the Withdrawn section, so a withdrawn finding the human then excludes stays muted.
+	reason := draft.CurrentReason(f)
+	withdrawn := reason != nil
 	tone := func(t style.Tone) style.Tone {
 		if withdrawn {
 			return style.ToneMuted
@@ -298,7 +300,7 @@ func (m *Model) findingSections(f draft.Finding, width int) (detailSections, err
 		return m.styles.Section(tone(t), heading, "", body)
 	}
 	var out detailSections
-	if reason := draft.CurrentReason(f); reason != nil {
+	if withdrawn {
 		var chip string
 		if reason.Code != "" {
 			chip = m.styles.Chip(render.ForDisplay(render.OneLine(reason.Code)), style.ToneMuted)
@@ -322,6 +324,10 @@ func (m *Model) findingSections(f draft.Finding, width int) (detailSections, err
 	}
 	if change.heading != "" {
 		out.change = section(change.tone, change.heading, change.body)
+	}
+	// A fix beside a proposal or a question cannot take the slot, and is still the agent's to show.
+	if f.SuggestedFix != "" && (f.Proposal != "" || m.ui.question(f)) {
+		out.fix = section(style.ToneGood, "Suggested fix", m.fixLines(f, width))
 	}
 	impact, err := m.markdownLines(f.Impact)
 	if err != nil {
@@ -382,9 +388,14 @@ func (m *Model) proposedChange(f draft.Finding, width int) (proposal, error) {
 	case m.ui.question(f):
 		return proposal{style.ToneNote, "A question for " + who, []string{m.styles.Text().Render("No change is proposed. Your note tells " + who + " what to do.")}}, nil
 	case f.SuggestedFix != "":
-		return proposal{style.ToneGood, "Suggested fix", strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), max(1, width-2), ""), "\n")}, nil
+		return proposal{style.ToneGood, "Suggested fix", m.fixLines(f, width)}, nil
 	}
 	return proposal{}, nil
+}
+
+// fixLines is the suggested fix as written, wrapped inside a section's bar.
+func (m *Model) fixLines(f draft.Finding, width int) []string {
+	return strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), max(1, width-2), ""), "\n")
 }
 
 // noteThreads draws each of the finding's notes as a conversation: the note's id and status, then the note and each
@@ -1049,7 +1060,7 @@ func (m *Model) detailTitle(f draft.Finding) (string, style.Tone) {
 
 func (m *Model) detailPosition() string {
 	_, i := m.openedFinding()
-	return m.styles.Text().Render(position(i, len(m.order)))
+	return m.styles.HintTitle(position(i, len(m.order)))
 }
 
 // detailFooter is the footer on screen: the note or edit row's keys while one is open, the finding's otherwise.

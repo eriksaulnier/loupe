@@ -38,16 +38,17 @@ A finding's document has one order in both modes:
 
 1. Title and meta.
 2. `Withdrawn`, when the agent withdrew the finding.
-3. The location pane.
-4. `Why`.
-5. The proposed change: `Suggested fix`, `<applier> will`, or `A question for <applier>`.
-6. `Impact`.
-7. `References`.
-8. Notes.
+3. The notice that the agent changed text the human wrote, when it did. It is one line in the note color with the note glyph, not a section, because it reports an event rather than holding anyone's words.
+4. The location pane.
+5. `Why`.
+6. The proposed change: `Suggested fix`, `<applier> will`, or `A question for <applier>`. A suggested fix that sits beside a proposal or a question follows it as its own `Suggested fix` section.
+7. `Impact`.
+8. `References`.
+9. Notes.
 
 - A missing section collapses. The rest keep their order.
 - Importance MUST NOT move a section. Severity, the blocking mark and the list order already carry importance.
-- `Withdrawn` is a state, not content. It sits above the evidence so the human judges the withdrawal before reinstating the finding.
+- `Withdrawn` is a state, not content. It sits above the evidence so the human judges the withdrawal before reinstating the finding. A finding that shows `Withdrawn` is muted throughout, including after the human excludes it.
 
 ## The location pane
 

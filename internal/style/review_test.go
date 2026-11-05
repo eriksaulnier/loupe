@@ -740,6 +740,9 @@ func TestPaneTitleHelpers(t *testing.T) {
 	if got := color.HintTitle("esc closes"); got != color.Text().Render("esc closes") {
 		t.Errorf("hint title %q is not plain text", got)
 	}
+	if got := color.TitleTag("file diff"); got != color.Emphasis(color.Accent).Render("file diff") || plain.TitleTag("file diff") != "file diff" {
+		t.Errorf("title tag %q is not bold accent", got)
+	}
 }
 
 func localHeading() ReviewHeading {
@@ -832,5 +835,21 @@ func TestLocalHeaderKeepsThePlaceBesideALongTitle(t *testing.T) {
 	got := reviewStyle(t, false, nil).ReviewHeader(h, 124)
 	if !strings.Contains(got, "widgets @ feat/cache · 2 files") || !strings.Contains(got, "A plan with") || strings.Contains(got, "show whole") {
 		t.Errorf("header %q", got)
+	}
+}
+
+// A title shorter than the header's minimum title room still shows: the form is chosen with that minimum reserved, so
+// the richest form never leaves too little room to draw the title at all.
+func TestLocalHeaderKeepsAShortTitle(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	for _, title := range []string{"Plan", "Fix"} {
+		h := localHeading()
+		h.Title = title
+		for width := 80; width <= 140; width++ {
+			if got := s.ReviewHeader(h, width); !strings.Contains(got, "  "+title+" ") {
+				t.Errorf("%q at %d: header drops the title: %q", title, width, got)
+				break
+			}
+		}
 	}
 }
