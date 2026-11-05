@@ -118,7 +118,7 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
   6. Unlock.
 
   A deleted run's n is never reused. If `local/next` cannot be parsed, capture refuses with `record`. `run.Walk` reads only `runs/`, and a new `run.WalkLocal` lists `local/<n>` in numeric order.
-- **Reference**: `run.Ref` gains `Local bool` and `Prefix string`, and `Number` carries n. `ParseRef` tries the PR pattern first, then `^(?:([A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?):)?local#([1-9][0-9]*)$`. The local branch of `ResolveRef` stats `local/<n>` and loads its target. It returns the ref with the recorded prefix, whatever prefix the caller typed. `String()` prints `<prefix>:local#<n>`, or `local#<n>` when the prefix is empty.
+- **Reference**: `run.Ref` gains `Local int`, the run number n (zero on a pull request ref), and `Prefix string`. `ParseRef` tries the PR pattern first, then `^(?:([A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?):)?local#([1-9][0-9]*)$`. The local branch of `ResolveRef` stats `local/<n>` and loads its target. It returns the ref with the recorded prefix, whatever prefix the caller typed. `String()` prints `<prefix>:local#<n>`, or `local#<n>` when the prefix is empty.
 - **Fixes**: `noRun` for a local ref names `loupe list`. The fix of `invalidRef` adds the local form.
 - **Prefix**: `<owner>/<repo>` comes from `gitx.OriginURLs` and `gitx.ParseGitHubURL`, as `run.ResolveBranch` does. Otherwise loupe takes the directory name:
   - Run `git rev-parse --git-common-dir`, and make the result absolute against the clone in Go. This needs no Git 2.31 flag.
@@ -150,7 +150,7 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
 | PR | Methods added |
 | :--- | :--- |
 | 1 | `Kind()`, `Rules()`, `Refuses(command string, flags []string) error` |
-| 2 | `ListEntry(...)` |
+| 2 | None: `list` builds local rows itself from `run.WalkLocal`, since no other command needs them |
 | 3 | `Ended(dir)`, `WaitReason()`, `Feedback(...)` |
 
 `mode.Of(t run.Target) Mode` returns `publish{}` or `apply{}`.
@@ -221,6 +221,8 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
 - `refuseOpenReview` compares local refs by `Number`, not by struct.
 - `handoff` refuses a returned run (R7).
 
+**As built**: the pane runs `review <ref>`, with the ref as the positional argument, because `review` has no `--run` flag. The ref is still named in full, so the pane never resolves a run from the branch.
+
 ## R11. `list`
 
 **Decision**: `list` merges local runs from `WalkLocal` with PR runs and sorts every row newest first by `capturedAt`, as it does today (`internal/cli/list.go:104`).
@@ -252,7 +254,7 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
   - the input opens empty and never reads or writes `keptNotes`;
   - Esc discards the text;
   - the footer says "accept" or "exclude".
-- **Input checks**: the accept note goes through `markdown.Check(…, markdown.Body, …)`. The exclude reason goes through a new `draft.ValidateExcludeReason`, which uses spec 041's limits (one line, at most 200 characters, the reply allowlist) with messages for review, not for `loupe edit`.
+- **Input checks**: the accept note goes through `markdown.Check(…, markdown.AcceptNote, …)`, the Markdown kind made for it. The exclude reason goes through a new `draft.ValidateExcludeReason`, which uses spec 041's limits (one line, at most 200 characters, the reply allowlist) with messages for review, not for `loupe edit`.
 - **`w`**: on an apply run, `w` gains a third field, `proposal`. The two-element arrays in `internal/tui/rewrite.go` become a slice that the mode UI sizes.
   - **Signature**: `draft.Rewrite(d *Draft, id, title, body string, proposal *string, rules Rules, dif *diff.Diff, now time.Time)`. A nil `proposal` leaves it unchanged, and a PR run always passes nil.
   - **Checks**: a changed proposal goes through `markdown.Check(…, markdown.Proposal, …)` and `markdown.FindingIDs`, as the body does.
@@ -260,3 +262,11 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
   - **History**: a saved proposal change records a human edit, which `HumanEdited` reads.
 - **Plain pane**: the code pane draws plain text only on a `--files` run (`local.capture == "files"`). A whole-file addition on a PR run or a `--changed` run keeps the `+` gutter. The file diff view (`filediff.go`) follows the same rule.
 - **Glyphs**: the question marker in list rows is a new `GlyphSet.Question` in `internal/style/style.go`, one per icon tier.
+
+**As built** (owner, build round 2026-11-03):
+
+- The proposal shows after the metadata row under the title, because the title and metadata rows are pinned above the scrolling document and a proposal can run to 64 KiB.
+- `t` is offered on an accepted finding as well as a pending one, so the human can add a note after a plain accept.
+- The `review` stopgap of PRs 2 and 3 had no CLI test, because `review` checks for a terminal before it resolves the run. The mode tests covered `Refuses`, and PR 4 removed the stopgap.
+- `--files` where every named file is skipped refuses with `usage`, as `--changed` does when every change is skipped.
+- On a `--files` run, the code pane and the file diff also drop the `+N -0` line counts.
