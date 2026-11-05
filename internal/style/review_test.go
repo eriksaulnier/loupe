@@ -9,6 +9,8 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/eriksaulnier/loupe/internal/testutil/sgrtest"
 )
 
 // reviewStyle is the interactive theme on a true-color output, or with no color at all.
@@ -796,7 +798,7 @@ func TestLocalReviewHeader(t *testing.T) {
 		t.Errorf("narrow detached header falls back to the repository: %q", got)
 	}
 	colored := reviewStyle(t, true, nil).ReviewHeader(localHeading(), 160)
-	if strings.Contains(colored, "\x1b]8") || underlined(colored) {
+	if strings.Contains(colored, "\x1b]8") || sgrtest.Underlined(colored) {
 		t.Errorf("a local header is linked or underlined: %q", colored)
 	}
 	if Width(colored) != 160 {
@@ -804,29 +806,9 @@ func TestLocalReviewHeader(t *testing.T) {
 	}
 }
 
-// underlined reports whether any SGR sequence in s turns on underline, skipping the operands of 38 and 48 colors.
-func underlined(s string) bool {
-	for _, m := range regexp.MustCompile(`\x1b\[([0-9;:]*)m`).FindAllStringSubmatch(s, -1) {
-		params := strings.Split(m[1], ";")
-		for i := 0; i < len(params); i++ {
-			switch p := params[i]; {
-			case p == "38" || p == "48" || p == "58":
-				if i+1 < len(params) && params[i+1] == "5" {
-					i += 2
-				} else {
-					i += 4
-				}
-			case p == "4" || strings.HasPrefix(p, "4:"):
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // The PR header underlines its ref, so underlined must see it, or the local test proves nothing.
 func TestUnderlinedSeesThePRRef(t *testing.T) {
-	if !underlined(reviewStyle(t, true, nil).ReviewHeader(heading(), 100)) {
+	if !sgrtest.Underlined(reviewStyle(t, true, nil).ReviewHeader(heading(), 100)) {
 		t.Error("underlined misses the PR ref's underline")
 	}
 }
