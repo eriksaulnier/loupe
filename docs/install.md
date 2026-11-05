@@ -83,7 +83,7 @@ To turn this off, set `LOUPE_NO_UPDATE_CHECK=1`. It is also off in CI, and for a
 
 ## The agent plugin
 
-One plugin serves Claude Code, Codex and Pi. Its `human-review` skill is the workflow that a review skill or agent follows. The agent captures the pull request, files findings, hands the run to you and answers your send-back notes. The plugin brings no review method of its own.
+One plugin serves Claude Code, Codex and Pi. Its `human-review` skill is the workflow that a review skill or agent follows. The agent captures the pull request, files findings, hands the run to you and answers your send-back notes. Its `human-decide` skill is the same workflow for local work: the agent captures uncommitted changes, a plan or a spec, files findings with the change it proposes, hands the run to you, and applies what you return. The plugin brings no review method of its own.
 
 To connect a review skill you already have, see [the review workflow](review-workflow.md#adapting-a-review-skill-you-already-have).
 

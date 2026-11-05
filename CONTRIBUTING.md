@@ -64,7 +64,7 @@ Inside the repository, mise puts `dist/` first on `PATH`, so `loupe` is the buil
 | :--- | :--- |
 | `mise run link` | Builds, links the build as `github:eriksaulnier/loupe@dev` and pins it globally, so every shell and agent session runs it, such as a skill in another repository that calls `loupe handoff`. `mise run unlink` returns to the latest release and removes the link. Unlink before removing the worktree you linked from. |
 | `mise run claude` | Builds, then starts Claude Code with the plugin loaded from `plugin/`. An installed `loupe@loupe` plugin can shadow it; `claude plugin disable loupe@loupe` for the session. |
-| `mise run pi` | Builds, then starts Pi with the workflow skill loaded from `plugin/skills/human-review`. |
+| `mise run pi` | Builds, then starts Pi with the workflow skills loaded from `plugin/skills/human-review` and `plugin/skills/human-decide`. |
 | `mise run demo [-- <args>]` | Runs loupe against seeded runs and the fake GitHub in a temporary data root. |
 | `mise run vulncheck` | Runs govulncheck over the module. CI runs it in its own workflow, so a new advisory does not stop `mise run check` or a release. |
 

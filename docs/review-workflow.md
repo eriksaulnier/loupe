@@ -102,6 +102,16 @@ After the author pushes, ask the agent for another round. Capture makes a new ru
 
 The `p` key in `loupe review` always posts a new review, so a sticky round goes through `loupe publish`. A plain review posted after a sticky one ends the series, and the next sticky round starts a new review.
 
+## Local work
+
+The same loop works on local work: uncommitted changes, a plan or a spec, with no pull request and no GitHub. The agent follows the plugin's `human-decide` skill instead of `human-review`.
+
+1. The agent captures the work with `loupe capture --changed`, `--files <path>` or `--no-files --title <title>`. That makes a local run, such as `owner/repo:local#7`, and no network call. `--changed` reads your staged, unstaged and untracked changes through a temporary index, so your own index, branch and files stay as they were.
+2. It files each finding with a `proposal`, the change it will make if you accept. A finding with no proposal is a question.
+3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`t`), exclude with a reason (`x`) or send it back.
+4. You press `p`, then `y`, to return the run. Nothing posts anywhere.
+5. The agent reads your decisions with `loupe feedback` and applies the accepted ones, following your notes where they differ from its proposals.
+
 ## Handing off in a terminal pane
 
 Inside [Herdr](https://herdr.dev), [tmux](https://github.com/tmux/tmux), [Orca](https://www.onorca.dev/) or, on macOS, [iTerm2](https://iterm2.com) or [Ghostty](https://ghostty.org), `loupe handoff` opens `loupe review` in a split beside the agent's pane. The pane closes when review exits cleanly. Focus differs by terminal:
