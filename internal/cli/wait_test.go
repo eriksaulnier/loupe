@@ -21,6 +21,26 @@ func fastWait(t *testing.T) {
 	t.Cleanup(func() { waitInterval = was })
 }
 
+// onFirstIdle runs change once, after wait's first read of the run found nothing, and fails the test if wait never
+// read the run empty.
+func onFirstIdle(t *testing.T, change func()) {
+	t.Helper()
+	was := waitIdle
+	ran := false
+	waitIdle = func() {
+		if !ran {
+			ran = true
+			change()
+		}
+	}
+	t.Cleanup(func() {
+		waitIdle = was
+		if !ran {
+			t.Error("wait never read the run before the change")
+		}
+	})
+}
+
 func awaitingOf(env map[string]any) []string {
 	raw, _ := env["awaiting"].([]any)
 	out := make([]string, 0, len(raw))
@@ -56,12 +76,11 @@ func TestWaitReturnsAtOnceOnHandedBackRun(t *testing.T) {
 func TestWaitSeesHandBackThatAppearsLater(t *testing.T) {
 	fastWait(t)
 	home, dir := sendBackRun(t)
-	go func() {
-		time.Sleep(60 * time.Millisecond)
+	onFirstIdle(t, func() {
 		if _, err := draft.RecordHandBack(dir, func(string) string { return "" }); err != nil {
 			t.Error(err)
 		}
-	}()
+	})
 	code, env, s := execIn(t, home, "", "wait", "--timeout", "5s")
 	if code != 0 || env["reason"] != "notes" || strings.Join(awaitingOf(env), ",") != "n-001" {
 		t.Fatalf("exit %d envelope %v stderr %s", code, env, s.stderr.String())
@@ -71,12 +90,11 @@ func TestWaitSeesHandBackThatAppearsLater(t *testing.T) {
 func TestWaitReturnsPublishedOnceReceiptAppears(t *testing.T) {
 	fastWait(t)
 	home, dir := sendBackRun(t)
-	go func() {
-		time.Sleep(60 * time.Millisecond)
+	onFirstIdle(t, func() {
 		if err := publish.SaveReceipt(dir, &publish.Receipt{ReviewID: 7, ReviewURL: testReviewURL}); err != nil {
 			t.Error(err)
 		}
-	}()
+	})
 	code, env, s := execIn(t, home, "", "wait", "--timeout", "5s")
 	if code != 0 || env["reason"] != "published" || env["reviewUrl"] != testReviewURL {
 		t.Fatalf("exit %d envelope %v stderr %s", code, env, s.stderr.String())
@@ -115,10 +133,7 @@ func TestWaitEndsWhenContextIsCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
 	deps.Context = ctx
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
+	onFirstIdle(t, cancel)
 	started := time.Now()
 	code := Execute(deps, []string{"wait", "--run", "o/r#1", "--json"})
 	if code != 1 {
