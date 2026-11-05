@@ -219,3 +219,14 @@ func TestHelpHeadingNeedsACapitalizedLabel(t *testing.T) {
 		}
 	}
 }
+
+// help with an unknown topic prints loupe's short usage, not cobra's command listing.
+func TestHelpOfAnUnknownTopicPrintsTheShortUsage(t *testing.T) {
+	deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+	if code := Execute(deps, []string{"help", "bogus"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if want := "Unknown help topic [`bogus`]\nUsage\n  loupe [flags]\n"; s.stdout.String() != want {
+		t.Fatalf("stdout %q, want %q", s.stdout.String(), want)
+	}
+}
