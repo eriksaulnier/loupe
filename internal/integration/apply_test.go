@@ -162,7 +162,7 @@ func exclude(s *screen.Screen, id, reason string) {
 		s.Type(reason)
 		s.Press("enter")
 	}
-	s.WaitFor(id + " excluded")
+	s.WaitFor(id + " rejected")
 }
 
 // group returns the entries of one feedback group by id.
@@ -466,7 +466,7 @@ func TestApplySendBackWhileReviewStaysOpen(t *testing.T) {
 	s.Press("s")
 	s.Type("What is the LRU store?")
 	s.Press("enter")
-	s.WaitFor("f-001 sent back as n-001")
+	s.WaitFor("f-001 asked as n-001")
 
 	w := h.mustOK("wait", "--run", applyRef, "--timeout", "10s")
 	if w["reason"] != "notes" || awaitingOf(w) != "n-001" {
@@ -558,7 +558,7 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 	s.Press("s")
 	s.Type("Which two things?")
 	s.Press("enter")
-	s.WaitFor("f-004 sent back as n-001")
+	s.WaitFor("f-004 asked as n-001")
 	s.Press("q")
 	if _, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("review exit %d stderr %q", exit, stderr)

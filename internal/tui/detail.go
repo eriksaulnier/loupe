@@ -570,7 +570,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 			return err
 		}
 		return m.decideAndShow(decide, func() string {
-			return decidedNotice(m.glyphs.Sep, m.glyphs.Excluded, f.ID, "excluded", closed, draft.NoteDismissed)
+			return decidedNotice(m.glyphs.Sep, m.glyphs.Excluded, f.ID, m.ui.word(m, "excluded"), closed, draft.NoteDismissed)
 		})
 	case "u":
 		if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
@@ -702,7 +702,7 @@ func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
 			return err
 		}, func() string {
 			delete(m.keptNotes, id)
-			return fmt.Sprintf("%s %s sent back as %s; the agent has it", m.glyphs.Note, id, noteID)
+			return fmt.Sprintf("%s %s %s as %s; %s has it", m.glyphs.Note, id, m.ui.word(m, "sent back"), noteID, m.ui.word(m, "the agent"))
 		})
 	}
 	return m.typeNote(msg)
@@ -726,7 +726,7 @@ func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
 			return err
 		}
 		notice = func() string {
-			return decidedNotice(m.glyphs.Sep, m.glyphs.Excluded, id, "excluded", closed, draft.NoteDismissed)
+			return decidedNotice(m.glyphs.Sep, m.glyphs.Excluded, id, m.ui.word(m, "excluded"), closed, draft.NoteDismissed)
 		}
 	}
 	cmd, recorded := m.decideAndMove(decide, notice)
@@ -880,10 +880,10 @@ func (m *Model) noteRowsShown() []string {
 // noteView is the note composer, a pane under the finding: a send-back note, an accept note or an exclude reason.
 func (m *Model) noteView() []string {
 	rows := m.noteRowsShown()
-	title, enter := "Send back "+m.openID, "enter sends"
+	title, enter := m.ui.word(m, "Send back")+" "+m.openID, "enter sends"
 	switch m.noteKind {
 	case noteAccept:
-		title, enter = "Accept "+m.openID+" with a note", "enter accepts"
+		title, enter = "Tweak "+m.openID+": accept with a note", "enter accepts"
 	case noteExclude:
 		title, enter = "Reject "+m.openID+", with a reason if you like", "enter rejects"
 	case noteReturn:

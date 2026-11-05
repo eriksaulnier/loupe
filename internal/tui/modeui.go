@@ -14,6 +14,9 @@ import (
 // modeUI is what review offers on a run of one mode: its hints, its help, the keys only it binds and how the run
 // ends. New picks it once, so no other code in this package asks a run's kind.
 type modeUI interface {
+	// word is the on-screen word for an action or a party in notices and note panes. PR runs keep their words;
+	// a local run speaks of rejecting and asking, and names the applier.
+	word(m *Model, w string) string
 	// settleKeys are the decision keys a settling detail drops.
 	settleKeys() string
 	helpSections(g GlyphSet) map[view]helpSection
@@ -48,6 +51,8 @@ func uiFor(t run.Target) modeUI {
 
 // publishUI is a pull request run, which ends in one GitHub review.
 type publishUI struct{}
+
+func (publishUI) word(_ *Model, w string) string { return w }
 
 func (publishUI) settleKeys() string { return "axsurdew" }
 
@@ -204,6 +209,20 @@ func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote 
 
 // applyUI is a local run, which ends when the human returns the decisions to the agent that applies them.
 type applyUI struct{}
+
+func (applyUI) word(m *Model, w string) string {
+	switch w {
+	case "excluded":
+		return "rejected"
+	case "Send back":
+		return "Ask about"
+	case "sent back":
+		return "asked"
+	case "the agent":
+		return m.applier()
+	}
+	return w
+}
 
 func (applyUI) settleKeys() string { return "aAxXsurd" }
 

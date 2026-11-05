@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
@@ -387,5 +388,31 @@ func TestApplyDetailLeadsWithWhatTheApplierWillDo(t *testing.T) {
 	mustOpenFinding(t, pr, "f-003")
 	if screen := screenText(pr); strings.Contains(screen, "A question for") {
 		t.Errorf("a pull request run marks a question:\n%s", screen)
+	}
+}
+
+// On a local run the notices and note panes use the agent-facing verbs of the footer: reject, ask and tweak.
+func TestLocalRunNoticesUseTheAgentVerbs(t *testing.T) {
+	dir := localFixture(t, "changed", "Claude", applyInputs...)
+	m := modelOf(t, dir, utf8Env, 100, 40)
+	mustOpenFinding(t, m, "f-001")
+	press(m, "x")
+	if !strings.Contains(m.notice, "f-001 rejected") || strings.Contains(m.notice, "excluded") {
+		t.Errorf("x notice %q", m.notice)
+	}
+	mustOpenFinding(t, m, "f-002")
+	press(m, "A")
+	if view := screenText(m); !strings.Contains(view, "Tweak f-002") {
+		t.Errorf("A pane title:\n%s", view)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	press(m, "s")
+	if view := screenText(m); !strings.Contains(view, "Ask about f-002") || strings.Contains(view, "Send back f-002") {
+		t.Errorf("s pane title:\n%s", view)
+	}
+	typeText(m, "Which cache?")
+	press(m, "enter")
+	if !strings.Contains(m.notice, "f-002 asked as n-") || !strings.Contains(m.notice, "Claude has it") {
+		t.Errorf("s notice %q", m.notice)
 	}
 }
