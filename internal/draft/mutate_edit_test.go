@@ -755,3 +755,10 @@ func TestRewriteRefusesEmptyingTheProposal(t *testing.T) {
 		t.Fatalf("proposal %q", d.Findings[0].Proposal)
 	}
 }
+
+func TestRewriteRefusesAProposalOutsideTheMarkdownAllowlist(t *testing.T) {
+	d := editable()
+	proposal := "<script>x</script>"
+	_, err := Rewrite(d, "f-001", "One", "Body one.", &proposal, Rules{AllowProposal: true}, multiHunk(t), editNow)
+	wantField(t, wantRefusal(t, err, refusal.Markdown), "proposal")
+}

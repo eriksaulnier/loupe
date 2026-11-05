@@ -86,6 +86,16 @@ func TestPublishRefusesNothing(t *testing.T) {
 	}
 }
 
+func TestShownFailsOnFindingsThatDoNotRoundTrip(t *testing.T) {
+	local := Of(localTarget("changed"))
+	if _, err := Shown(local, []any{make(chan int)}); err == nil {
+		t.Error("want an encode error for an unencodable finding")
+	}
+	if _, err := Shown(local, []int{1}); err == nil {
+		t.Error("want a decode error for findings that are not objects")
+	}
+}
+
 func TestShownStripsOnlyLocalFindings(t *testing.T) {
 	findings := []draft.Finding{{ID: "f-001", Blocking: true, Location: &draft.FindingLocation{Path: "a.go", Line: 2, Side: "RIGHT"}}}
 	pr, err := Shown(Of(run.Target{}), findings)
