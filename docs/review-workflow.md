@@ -108,7 +108,7 @@ The `p` key in `loupe review` always posts a new review, so a sticky round goes 
 
 The same loop works on local work: uncommitted changes, a plan or a spec, with no pull request and no GitHub. The agent follows the plugin's `human-decide` skill instead of `human-review`.
 
-1. The agent captures the work with `loupe capture --changed`, `--files <path>` or `--no-files --title <title>`. That makes a local run, such as `owner/repo:local#7`, and no network call. `--changed` reads your staged, unstaged and untracked changes through a temporary index, so your own index, branch and files stay as they were.
+1. The agent captures the work with `loupe capture --changed`, `--files <path>` or `--no-files --title <title>`. That makes a local run, such as `owner/repo:local#7`, and no network call. `--changed` reads your staged, unstaged and untracked changes through a temporary index, so your own index, branch and files stay as they were. It runs none of your Git filters. So when Git converts a changed file on checkout, through CRLF line endings, git-lfs or `ident`, `--changed` cannot tell your edit from the conversion. It refuses, and `--files` captures those files instead.
 2. It files each finding with a `proposal`, the change it will make if you accept. A finding with no proposal is a question.
 3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`A`), reject (`x`, or `X` with a reason) or ask.
 4. Once the last finding is decided, the return step opens on its own. You type an optional closing note for the agent and press `enter`, or press `p` in the list, then `enter`. Review quits and prints one line, such as `Returned to Claude: 6 accepted, 2 rejected.` Nothing posts anywhere.
