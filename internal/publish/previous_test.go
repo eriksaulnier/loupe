@@ -17,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/render"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 // publishedBody is a loupe body as a round from source publishes it, holding one finding titled title.
@@ -402,5 +403,67 @@ func TestPreviousReceiptPicksTheNewestReview(t *testing.T) {
 	round, _, err = PreviousReceipt(root, ref, "reviewer", "")
 	if err != nil || round != 3 {
 		t.Fatalf("got round %d, %v, want 3 on a full tie", round, err)
+	}
+}
+
+func TestPreviousReceiptNamesWhoPublishedTheRoundItSkipped(t *testing.T) {
+	for _, tc := range []struct {
+		name, viewer, source string
+		skipped              Receipt
+		want                 string
+	}{
+		{"a pipeline's round, for a person", "reviewer", "", unattendedReceipt("ci-review@1.0.0"),
+			"no earlier round of o/r#5 was published here by reviewer: round 1's receipt was published by ci[bot] with source ci-review"},
+		{"a pipeline with no source, for a person", "reviewer", "", unattendedReceipt(""),
+			"no earlier round of o/r#5 was published here by reviewer: round 1's receipt was published by ci[bot] with no source"},
+		{"a person's round, for a pipeline with no source", "", "", attendedReceipt("reviewer", "reviewer"),
+			"no earlier round of o/r#5 was published here by a [bot] with no source: round 1's receipt was published by reviewer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			saveReceiptAt(t, root, 1, tc.skipped)
+			_, _, err := PreviousReceipt(root, run.Ref{Owner: "o", Repo: "r", Number: 5, Round: 2}, tc.viewer, tc.source)
+			r, ok := refusal.As(err)
+			if !ok || r.Code != refusal.NotFound || r.Message != tc.want {
+				t.Fatalf("got %v, want not-found %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestPreviousReceiptRefusesAnUnreadableReceipt(t *testing.T) {
+	root := t.TempDir()
+	saveReceiptAt(t, root, 1, attendedReceipt("reviewer", "reviewer"))
+	path := filepath.Join(run.RunDir(root, "o", "r", 5, 2), "receipt.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := PreviousReceipt(root, run.Ref{Owner: "o", Repo: "r", Number: 5, Round: 3}, "reviewer", "")
+	r := refusaltest.Want(t, err, refusal.Record)
+	if !strings.Contains(r.Message, path) {
+		t.Fatalf("message %q does not name %s", r.Message, path)
+	}
+}
+
+// A sticky body whose earlier rounds cannot be read still yields the round on top, with no commit of its own.
+func TestReadPreviousLeavesTheCommitEmptyWhenAStickyBodyCannotBeReadBack(t *testing.T) {
+	body := publishedBody("ci-review", "Second", &render.StickyInput{Rounds: 2, Earlier: []render.Round{{N: 1, Commit: "abc1234",
+		Anchor: "<!-- loupe-round v=9 n=1 commit=abc1234 sum=00 -->", Block: "<details>\n<summary>Round 1</summary>\n\nold\n\n</details>"}}})
+	if _, _, err := render.ReadSticky(body); err == nil {
+		t.Fatal("the fixture's sticky body reads back, so it proves nothing")
+	}
+	got := ReadPrevious([]github.Review{review(5, "ci[bot]", body)}, nil, "acme", "widgets", 42, "", "ci-review")
+	if !got.Found || got.Commit != "" || len(got.Findings) != 1 || got.Findings[0].Title != "Second" {
+		t.Fatalf("got %+v, want the round found with no commit", got)
+	}
+}
+
+func TestReadPreviousNamesAPipelineWithNoSource(t *testing.T) {
+	got := ReadPrevious(nil, nil, "acme", "widgets", 42, "", "")
+	if want := "no earlier loupe review from a [bot] with no source is on https://github.com/acme/widgets/pull/42"; got.Reason != want {
+		t.Fatalf("reason %q, want %q", got.Reason, want)
 	}
 }

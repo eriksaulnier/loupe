@@ -2,6 +2,7 @@ package publish
 
 import (
 	"context"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -126,6 +127,13 @@ func TestReconcileListFailureRefusesGitHub(t *testing.T) {
 	gh.Fail("GET", "/repos/acme/widgets/pulls/42/reviews", 502)
 	_, err := Reconcile(context.Background(), client, unknownAttempt())
 	wantRefusal(t, err, refusal.GitHub, prLink)
+}
+
+func TestReconcileKeepsARefusalFromTheClient(t *testing.T) {
+	gh, client := newFake(t)
+	gh.Fail("GET", reviewsPath, http.StatusUnauthorized)
+	_, err := Reconcile(context.Background(), client, unknownAttempt())
+	wantRefusal(t, err, refusal.Auth, "gh auth login")
 }
 
 func TestRunPendingReviewRejection(t *testing.T) {

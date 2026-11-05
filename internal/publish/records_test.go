@@ -2,6 +2,8 @@ package publish
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -136,5 +138,13 @@ func TestEnvelopeIsUnattendedExactlyWhenItNamesNoViewer(t *testing.T) {
 	env.Viewer = ""
 	if !env.Unattended() {
 		t.Fatal("an envelope with no viewer is unattended")
+	}
+}
+
+func TestDeleteAttemptNamesTheFileItCouldNotRemove(t *testing.T) {
+	dir := t.TempDir()
+	err := DeleteAttempt(dir)
+	if path := filepath.Join(dir, "attempt.json"); !errors.Is(err, fs.ErrNotExist) || !strings.HasPrefix(err.Error(), "delete "+path+": ") {
+		t.Fatalf("got %v, want a failed delete of %s", err, path)
 	}
 }

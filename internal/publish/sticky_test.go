@@ -552,3 +552,14 @@ func TestRunStickyRefusesANoteCitingAFindingID(t *testing.T) {
 		t.Fatalf("a whitespace-only note was checked: %v", err)
 	}
 }
+
+func TestRunStickyRefusesWhenTheReviewsCannotBeListedAfterConfirming(t *testing.T) {
+	fx := newAttendedStickyRun(t, nil)
+	fx.opts.Confirm = fx.confirmWith(true, func() { fx.gh.Fail("GET", reviewsPath, http.StatusBadGateway) })
+	_, err := fx.run()
+	if msg := wantRefusal(t, err, refusal.GitHub, prLink); !strings.Contains(msg, "to check the sticky review again") {
+		t.Fatalf("message %q", msg)
+	}
+	fx.noRecords()
+	fx.checkWrites(0, 0)
+}
