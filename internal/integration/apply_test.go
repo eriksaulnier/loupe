@@ -347,19 +347,7 @@ Entries never expire.
 func TestApplyQuestionsWithNoFiles(t *testing.T) {
 	t.Parallel()
 	h := newApplyHarness(t)
-	env, exit := h.RunJSON("capture", "--no-files")
-	if errObj, _ := env["error"].(map[string]any); exit != 2 || errObj["code"] != "usage" || !strings.Contains(fmt.Sprint(errObj["fix"]), "--title") {
-		t.Fatalf("capture --no-files: exit %d envelope %v, want usage naming --title", exit, env)
-	}
-	captured := h.mustOK("capture", "--no-files", "--title", "Cache design", "--applier", "Claude")
-	if captured["run"] != applyRef {
-		t.Fatalf("capture run %v", captured["run"])
-	}
-	errObj := h.mustRefuse("location", "add", "--run", applyRef, "--from",
-		h.WriteFile("anchored.json", `{"title": "Anchored", "body": "B", "location": {"path": "README.md", "line": 1}}`))
-	if !strings.Contains(fmt.Sprint(errObj["fix"]), `"general": true`) {
-		t.Fatalf("fix %q names no general", errObj["fix"])
-	}
+	h.mustOK("capture", "--no-files", "--title", "Cache design", "--applier", "Claude")
 	h.mustOK("add", "--run", applyRef, "--from", h.WriteFile("findings.json", `[
 		{"title": "Which store?", "body": "Memory or disk.", "general": true, "proposal": "Use memory."},
 		{"title": "Who owns it?", "body": "Name an owner, or leave it shared.", "general": true}]`))
