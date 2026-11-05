@@ -262,12 +262,12 @@ Every implementation task follows a failing test, then the change, then a passin
 
 **Goal**: an agent can run the whole loop from `human-decide` alone.
 
-- [ ] T068 [P] [US5] Add failing tests in `internal/cli/plugin_test.go`:
+- [x] T068 [P] [US5] Add failing tests in `internal/cli/plugin_test.go`:
   - `plugin/skills` lists exactly `human-decide` and `human-review`, and `human-review`'s description is unchanged.
   - `human-decide` names only `capture`, `add`, `summary`, `handoff`, `wait`, `reply`, `edit` and `feedback`, and none of `previous`, `assess`, `blocking`, `side`, `sticky` or `publish`.
   - Each line in a `sharedRules` list appears verbatim in both skills.
   - `human-decide` states the four FR-032 rules and the FR-010 proposal rule, and names no review skill from another repository.
-- [ ] T069 [US5] Write `plugin/skills/human-decide/SKILL.md`. The frontmatter has the name `human-decide` and a description under 1,024 characters. The sections are:
+- [x] T069 [US5] Write `plugin/skills/human-decide/SKILL.md`. The frontmatter has the name `human-decide` and a description under 1,024 characters. The sections are:
   1. Rules, shared lines copied from `human-review`.
   2. Capture: `--changed`, `--files`, `--no-files`, with `--applier`.
   3. File findings: a proposal on every finding, and the other choices in the body.
@@ -275,18 +275,18 @@ Every implementation task follows a failing test, then the change, then a passin
   5. Wait.
   6. Send-back notes.
   7. Apply: the groups, `suggestion` wins, the thread counts, locate by content or heading, and read the new-file list before handoff.
-- [ ] T070 [P] [US1] [US2] [US3] Add integration tests in a new `internal/integration/apply_test.go`, one per user story, US1 to US6. Each drives capture, add, handoff (a stub pane), review through `screen`, wait and feedback. Each asserts that `fakegh.Requests()` is empty, which includes the release endpoint. US1 runs the SC-005 helper. SC-001 compares `feedback --json` with a new golden at `testdata/golden/apply/feedback.json`.
-- [ ] T071 Add one seeded local run to `cmd/loupe-demo/seed.go`, with a code file and a plan, findings with proposals, and one question. Extend `cmd/loupe-demo/main_test.go`.
-- [ ] T072 [P] Update the opening line in `README.md` and `AGENTS.md`, the skill line in `docs/install.md`, the `pi` task in `mise.toml`, and the `plugin/` row in `AGENTS.md`'s layout table.
-- [ ] T073 Run `mise run check`. Run quickstart sections 1 to 4 by eye through `mise run demo` and tmux, and record what was seen.
+- [x] T070 [P] [US1] [US2] [US3] Add integration tests in a new `internal/integration/apply_test.go`, one per user story, US1 to US6. Each drives capture, add, handoff (a stub pane), review through `screen`, wait and feedback. Each asserts that `fakegh.Requests()` is empty, which includes the release endpoint. US1 runs the SC-005 helper. SC-001 compares `feedback --json` with a new golden at `testdata/golden/apply/feedback.json`.
+- [x] T071 Add one seeded local run to `cmd/loupe-demo/seed.go`, with a code file and a plan, findings with proposals, and one question. Extend `cmd/loupe-demo/main_test.go`.
+- [x] T072 [P] Update the opening line in `README.md` and `AGENTS.md`, the skill line in `docs/install.md`, the `pi` task in `mise.toml`, and the `plugin/` row in `AGENTS.md`'s layout table.
+- [x] T073 Run `mise run check`. Run quickstart sections 1 to 4 by eye through `mise run demo` and tmux, and record what was seen.
 
 **Checkpoint**: PR 5 is green, and the feature is complete.
 
 ## Final: Verification and handover
 
-- [ ] T074 Run quickstart section 5 on a large repository, and record the `--changed` time in `quickstart.md`.
-- [ ] T075 Run a cross-vendor review (`type40 review change`) of each PR before it is marked ready, and send the findings to the owner through sift, at about ten cards or fewer.
-- [ ] T076 Report as unverified: a live agent loading `human-decide`, the `ctrl+s` and `t` delivery in each pane host, and the Unverified list in `specs/001-loupe-v1/validation.md`.
+- [x] T074 Run quickstart section 5 on a large repository, and record the `--changed` time in `quickstart.md`.
+- [x] T075 Run a cross-vendor review (`type40 review change`) of each PR before it is marked ready, and send the findings to the owner through sift, at about ten cards or fewer.
+- [x] T076 Report as unverified: a live agent loading `human-decide`, the `ctrl+s` and `t` delivery in each pane host, and the Unverified list in `specs/001-loupe-v1/validation.md`.
 
 ## Dependencies
 

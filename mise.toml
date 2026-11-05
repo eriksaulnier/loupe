@@ -82,10 +82,10 @@ MISE_OFFLINE=1 mise use --global github:eriksaulnier/loupe@dev
 [tasks.unlink]
 run = "mise use --global github:eriksaulnier/loupe@latest && mise uninstall github:eriksaulnier/loupe@dev"
 
-# --skill loads the workflow skill from the working tree for one Pi session. Codex has no per-session equivalent.
+# --skill loads each workflow skill from the working tree for one Pi session. Codex has no per-session equivalent.
 [tasks.pi]
 depends = ["build"]
-run = 'pi --skill "{{config_root}}/plugin/skills/human-review"'
+run = 'pi --skill "{{config_root}}/plugin/skills/human-review" --skill "{{config_root}}/plugin/skills/human-decide"'
 
 # --plugin-dir loads the skill from the working tree for one session, so edits need no reinstall.
 [tasks.claude]

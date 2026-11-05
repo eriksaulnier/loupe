@@ -1,6 +1,6 @@
 # loupe
 
-loupe collects a review agent's findings into a local draft so a human decides each one and publishes a single GitHub review. `README.md` is the human entry. `CONTRIBUTING.md` covers setup, how changes are made, tests, commits and pull requests, and applies to agents as much as to people. This file adds only what an agent working in the repository needs beyond that.
+loupe collects a review agent's findings into a local draft so a human decides each one and publishes a single GitHub review, or, on a local run, returns the decisions to the agent that applies them. `README.md` is the human entry. `CONTRIBUTING.md` covers setup, how changes are made, tests, commits and pull requests, and applies to agents as much as to people. This file adds only what an agent working in the repository needs beyond that.
 
 ## Layout
 
@@ -27,7 +27,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `internal/tui` | The human review interface: a full-screen Bubble Tea program |
 | `internal/updatecheck` | Decides whether a newer release exists, from a daily lookup that `capture` runs and a cache file that `review` reads |
 | `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, `fakegh`, an in-memory GitHub REST server, and `screen`, which types keys into the review program through a pipe and waits for what it draws |
-| `plugin/` | The agent plugin: the `human-review` workflow skill and the Claude Code and Codex manifests. It ships no review skill and no command |
+| `plugin/` | The agent plugin: the `human-review` workflow skill for pull requests, the `human-decide` workflow skill for local runs, and the Claude Code and Codex manifests. It ships no review skill and no command |
 | `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add eriksaulnier/loupe` find the plugin |
 | `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add eriksaulnier/loupe` |
 | `package.json` | Makes the repository a Pi package whose skills are `plugin/skills`; it holds no JavaScript |

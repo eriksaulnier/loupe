@@ -53,7 +53,7 @@ Result (`--json`) for a local capture:
                       "files": [{"path": "docs/plan.md", "abs": "/home/u/src/loupe/docs/plan.md"},
                                 {"path": "notes.txt", "abs": "/home/u/src/loupe/notes.txt", "new": true}],
                       "skipped": [{"path": "logo.png", "reason": "binary"}]}},
- "headings": {"docs/plan.md": [{"level": 2, "line": 3, "text": "Goals"}]},
+ "headings": {"docs/plan.md": [{"heading": "Goals", "level": 2, "line": 3}]},
  "next": ["loupe add --run eriksaulnier/loupe:local#7 --from <file> --json",
           "loupe handoff --run eriksaulnier/loupe:local#7 --json"]}
 ```
