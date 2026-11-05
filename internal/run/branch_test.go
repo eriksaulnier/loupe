@@ -2,16 +2,20 @@ package run
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
+	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
 	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
@@ -319,4 +323,141 @@ func TestWalk(t *testing.T) {
 	} else if r, ok := refusal.As(err); !ok || r.Code != refusal.Record {
 		t.Fatalf("got %v, want record", err)
 	}
+}
+
+// Each git config lookup ResolveBranch makes returns its failure instead of guessing a pull request.
+func TestResolveBranchReturnsEachGitFailure(t *testing.T) {
+	for _, c := range []struct {
+		name, pattern string
+		remote, merge string
+	}{
+		{"read the origin", "remote.origin.url", "", ""},
+		{"read the upstream", "branch.feature.remote", "", ""},
+		{"read the remote of a pull ref", "remote.fork.url", "fork", "refs/pull/9/head"},
+		{"read the remote of a tracked branch", "remote.fork.url", "fork", "refs/heads/feature"},
+		{"read the upstream remote", "remote.upstream.url", "origin", "refs/heads/feature"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, gh, client := branchSetup(t)
+			r.Git("checkout", "--quiet", "-b", "feature")
+			if c.remote != "" {
+				r.Git("config", "branch.feature.remote", c.remote)
+				r.Git("config", "branch.feature.merge", c.merge)
+			}
+			gitfail.WhenContains(t, c.pattern)
+			_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, client)
+			if err == nil || !strings.Contains(err.Error(), "injected failure") {
+				t.Fatalf("got %v, want the git failure", err)
+			}
+			if n := len(gh.Requests()); n != 0 {
+				t.Fatalf("%d GitHub requests after a git failure", n)
+			}
+		})
+	}
+}
+
+func TestResolveBranchRefusesAnOriginOffGitHub(t *testing.T) {
+	r, gh, client := branchSetup(t)
+	r.Git("checkout", "--quiet", "-b", "feature")
+	r.Git("config", "remote.origin.url", "git@gitlab.com:o/r.git")
+
+	_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, client)
+	wantRefusal(t, err, refusal.NoRun, "no run selected, and the origin of "+r.Dir+" is not a github.com repository",
+		"loupe capture <url> or --run <ref>")
+	if n := len(gh.Requests()); n != 0 {
+		t.Fatalf("%d GitHub requests", n)
+	}
+}
+
+func TestResolveBranchReturnsTheClientFailure(t *testing.T) {
+	r, _, _ := branchSetup(t)
+	r.Git("checkout", "--quiet", "-b", "feature")
+	noToken := refusal.New(refusal.Token, "no token", "gh auth login")
+	_, err := ResolveBranch(context.Background(), t.TempDir(), r.Dir, func() (github.Client, error) { return nil, noToken })
+	if err != noToken {
+		t.Fatalf("got %v, want the client constructor's refusal", err)
+	}
+}
+
+func TestResolveBranchReturnsAnUnreadableRunDirectory(t *testing.T) {
+	r, gh, client := branchSetup(t)
+	gh.SetPR("o", "r", openPR(5, "main"))
+	gh.SetBranch("o", "r", 5, "feature")
+	r.Git("checkout", "--quiet", "-b", "feature")
+	root := t.TempDir()
+	prDir := filepath.Dir(RunDir(root, "o", "r", 5, 1))
+	mkdirs(t, filepath.Dir(prDir))
+	if err := os.WriteFile(prDir, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ResolveBranch(context.Background(), root, r.Dir, client)
+	if !errors.Is(err, syscall.ENOTDIR) || !strings.HasPrefix(err.Error(), "list "+prDir) {
+		t.Fatalf("got %v, want ENOTDIR listing the pull request's rounds", err)
+	}
+}
+
+// A merge ref with no remote, and a refs/pull/<n>/merge ref that gh does not write, both fall back to the branch's
+// own name on origin.
+func TestResolveBranchFallsBackToTheBranchName(t *testing.T) {
+	for _, c := range []struct{ name, remote, merge string }{
+		{"merge without a remote", "", "refs/heads/elsewhere"},
+		{"pull merge ref", "origin", "refs/pull/9/merge"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, gh, client := branchSetup(t)
+			gh.SetPR("o", "r", openPR(5, "main"))
+			gh.SetBranch("o", "r", 5, "feature")
+			r.Git("checkout", "--quiet", "-b", "feature")
+			if c.remote != "" {
+				r.Git("config", "branch.feature.remote", c.remote)
+			}
+			r.Git("config", "branch.feature.merge", c.merge)
+			root := t.TempDir()
+			mkdirs(t, RunDir(root, "o", "r", 5, 1))
+
+			ref, err := ResolveBranch(context.Background(), root, r.Dir, client)
+			if err != nil || ref != (Ref{Owner: "o", Repo: "r", Number: 5, Round: 1}) {
+				t.Fatalf("got %+v, %v", ref, err)
+			}
+			if reqs := gh.Requests(); len(reqs) != 1 || reqs[0].RawQuery != "head=o%3Afeature&state=open" {
+				t.Fatalf("requests %+v", reqs)
+			}
+		})
+	}
+}
+
+// A level of the runs tree that cannot be listed fails the walk rather than hiding its runs.
+func TestWalkReturnsAnUnlistableLevel(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	for _, level := range []string{"owner", "repo", "number"} {
+		t.Run(level, func(t *testing.T) {
+			root := t.TempDir()
+			writeTarget(t, root, "o", "r", 5, 1)
+			dir := map[string]string{
+				"owner":  filepath.Join(RunsDir(root), "o"),
+				"repo":   filepath.Join(RunsDir(root), "o", "r"),
+				"number": filepath.Join(RunsDir(root), "o", "r", "5"),
+			}[level]
+			if err := os.Chmod(dir, 0); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+			if _, err := Walk(root); !errors.Is(err, os.ErrPermission) || !strings.HasPrefix(err.Error(), "list "+dir) {
+				t.Fatalf("got %v, want a permission error listing %s", err, dir)
+			}
+		})
+	}
+	t.Run("runs", func(t *testing.T) {
+		root := t.TempDir()
+		mkdirs(t, root)
+		if err := os.WriteFile(RunsDir(root), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Walk(root); !errors.Is(err, syscall.ENOTDIR) {
+			t.Fatalf("got %v, want ENOTDIR listing runs/", err)
+		}
+	})
 }
