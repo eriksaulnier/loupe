@@ -247,7 +247,7 @@ func localFixture(t *testing.T, capture, applier string, inputs ...draft.Finding
 	}
 	target := run.Target{
 		Kind: run.KindLocal, Title: "Cache rework", Applier: applier, CapturedAt: testNow, DiffSHA256: run.DiffSHA256(diffBytes),
-		Local: &run.LocalTarget{Prefix: "acme/widgets", Repository: "acme/widgets", Capture: capture, Root: "/src",
+		Local: &run.LocalTarget{Prefix: "acme/widgets", Repository: "acme/widgets", Capture: capture, Root: "/src", Branch: "feat/cache",
 			Files: []run.LocalFile{{Path: "a.go", Abs: "/src/a.go", New: true}}, Skipped: []run.LocalSkipped{}},
 	}
 	dir, _, err := run.NextLocal(t.TempDir(), "test", envOf(nil), target, diffBytes, draftJSON, nil)
@@ -314,7 +314,7 @@ func TestApplyHeaderShowsTheBadge(t *testing.T) {
 	}
 	narrow := modelOf(t, dir, utf8Env, 60, 20)
 	header := ansi.Strip(narrow.reviewHeader())
-	if !strings.Contains(header, "acme/widgets:local#1") || !strings.Contains(header, "[local") || strings.Contains(header, "returns to") {
+	if !strings.Contains(header, "feat/cache") || !strings.Contains(header, "[local") || strings.Contains(header, "returns to") {
 		t.Errorf("at 60 columns the badge did not shorten first: %q", header)
 	}
 	colored := colorOf(t, dir)
@@ -414,5 +414,24 @@ func TestLocalRunNoticesUseTheAgentVerbs(t *testing.T) {
 	press(m, "enter")
 	if !strings.Contains(m.notice, "f-002 asked as n-") || !strings.Contains(m.notice, "Claude has it") {
 		t.Errorf("s notice %q", m.notice)
+	}
+}
+
+// A local header's place takes the repository from the prefix, or the root without one, and names each capture form
+// (docs/tui-design.md, The header).
+func TestLocalPlace(t *testing.T) {
+	two := []run.LocalFile{{Path: "a.go"}, {Path: "b.go"}}
+	for _, c := range []struct {
+		local run.LocalTarget
+		want  style.LocalPlace
+	}{
+		{run.LocalTarget{Prefix: "acme/widgets", Branch: "feat/cache", Capture: "files", Files: two}, style.LocalPlace{Repo: "widgets", Branch: "feat/cache", Capture: "2 files"}},
+		{run.LocalTarget{Root: "/src/widgets", Capture: "changed", BaseRef: "main"}, style.LocalPlace{Repo: "widgets", Capture: "changes since main"}},
+		{run.LocalTarget{Prefix: "acme/widgets", Capture: "changed"}, style.LocalPlace{Repo: "widgets", Capture: "uncommitted changes"}},
+		{run.LocalTarget{Prefix: "acme/widgets", Capture: "no-files"}, style.LocalPlace{Repo: "widgets", Capture: "no files"}},
+	} {
+		if got := *localPlace(run.Target{Local: &c.local}); got != c.want {
+			t.Errorf("%+v: place %+v, want %+v", c.local, got, c.want)
+		}
 	}
 }

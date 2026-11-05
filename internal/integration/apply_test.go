@@ -108,7 +108,7 @@ func (h *harness) handoffToStub(ref string) {
 func (h *harness) openReview(ref string, want ...string) *screen.Screen {
 	h.t.Helper()
 	s := h.Start("review", ref)
-	s.WaitFor(append([]string{ref, "to decide", "enter start", "q quit"}, want...)...)
+	s.WaitFor(append([]string{"[local", repo + " @ ", "to decide", "enter start", "q quit"}, want...)...)
 	return s
 }
 

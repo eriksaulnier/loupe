@@ -741,3 +741,96 @@ func TestPaneTitleHelpers(t *testing.T) {
 		t.Errorf("hint title %q is not plain text", got)
 	}
 }
+
+func localHeading() ReviewHeading {
+	return ReviewHeading{
+		Local:    &LocalPlace{Repo: "widgets", Branch: "feat/cache", Capture: "2 files"},
+		Title:    "Cache plan",
+		Progress: []ProgressState{ProgressPending, ProgressPending, ProgressPending, ProgressPending},
+		Total:    4,
+		Badges:   []string{"local · returns to Claude", "local · Claude", "local"},
+	}
+}
+
+// A local header names the repository, branch and capture in place of a ref, and gives them up by width
+// (docs/tui-design.md, The header).
+func TestLocalReviewHeader(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	for _, c := range []struct {
+		width     int
+		want, not []string
+	}{
+		{160, []string{"[local · returns to Claude]", "widgets @ feat/cache · 2 files", "Cache plan", "----", "0/4 decided"}, nil},
+		{100, []string{"[local · returns to Claude]", "widgets @ feat/cache · 2 files", "Cache", "0/4 decided"}, nil},
+		{99, []string{"[local · Claude]", "widgets @ feat/cache", "Cache plan", "----", "0/4 decided"}, []string{"2 files", "returns to"}},
+		{79, []string{"[local]", "feat/cache", "0/4 decided"}, []string{"widgets", "----", "Claude"}},
+		{60, []string{"[local]", "feat/cache", "0/4 decided"}, []string{"widgets", "----"}},
+	} {
+		got := s.ReviewHeader(localHeading(), c.width)
+		if Width(got) != c.width || strings.Contains(got, "\n") {
+			t.Errorf("%d: header is %d cells: %q", c.width, Width(got), got)
+		}
+		for _, w := range c.want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%d: header lacks %q: %q", c.width, w, got)
+			}
+		}
+		for _, w := range c.not {
+			if strings.Contains(got, w) {
+				t.Errorf("%d: header has %q: %q", c.width, w, got)
+			}
+		}
+	}
+	detached := localHeading()
+	detached.Local.Branch = ""
+	if got := s.ReviewHeader(detached, 160); !strings.Contains(got, "widgets · 2 files") || strings.Contains(got, "@") {
+		t.Errorf("detached head header %q", got)
+	}
+	if got := s.ReviewHeader(detached, 60); !strings.Contains(got, "widgets") {
+		t.Errorf("narrow detached header falls back to the repository: %q", got)
+	}
+	colored := reviewStyle(t, true, nil).ReviewHeader(localHeading(), 160)
+	if strings.Contains(colored, "\x1b]8") || underlined(colored) {
+		t.Errorf("a local header is linked or underlined: %q", colored)
+	}
+	if Width(colored) != 160 {
+		t.Errorf("colored local header is %d cells", Width(colored))
+	}
+}
+
+// underlined reports whether any SGR sequence in s turns on underline, skipping the operands of 38 and 48 colors.
+func underlined(s string) bool {
+	for _, m := range regexp.MustCompile(`\x1b\[([0-9;:]*)m`).FindAllStringSubmatch(s, -1) {
+		params := strings.Split(m[1], ";")
+		for i := 0; i < len(params); i++ {
+			switch p := params[i]; {
+			case p == "38" || p == "48" || p == "58":
+				if i+1 < len(params) && params[i+1] == "5" {
+					i += 2
+				} else {
+					i += 4
+				}
+			case p == "4" || strings.HasPrefix(p, "4:"):
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// The PR header underlines its ref, so underlined must see it, or the local test proves nothing.
+func TestUnderlinedSeesThePRRef(t *testing.T) {
+	if !underlined(reviewStyle(t, true, nil).ReviewHeader(heading(), 100)) {
+		t.Error("underlined misses the PR ref's underline")
+	}
+}
+
+// A capture summary too long for the row gives way before the badge shortens.
+func TestLocalCaptureGivesWayBeforeTheBadge(t *testing.T) {
+	h := localHeading()
+	h.Local.Capture = "changes since origin/main-with-a-long-name"
+	got := reviewStyle(t, false, nil).ReviewHeader(h, 100)
+	if !strings.Contains(got, "[local · returns to Claude]") || strings.Contains(got, "changes since") || !strings.Contains(got, "widgets @ feat/cache") {
+		t.Errorf("header %q", got)
+	}
+}

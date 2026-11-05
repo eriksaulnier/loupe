@@ -814,9 +814,56 @@ type ReviewHeading struct {
 	// Tag is the pull request's live state when it needs the human's eye, such as "PR merged"; empty for none
 	// (specs/050-pr-state-awareness).
 	Tag string
-	// Badges are a local run's mode badge, longest form first. The header draws the longest that fits, and gives
-	// it up only after the title, the bar and the round.
+	// Badges are a local run's mode badge, longest form first. The header draws the longest its width tier allows
+	// and that fits, and gives it up only after the title, the bar and the round.
 	Badges []string
+	// Local is where a local run's work lives. It replaces the ref, which a local header does not show.
+	Local *LocalPlace
+}
+
+// LocalPlace is the repository, branch and capture summary a local header names. Branch is empty on a detached head.
+type LocalPlace struct {
+	Repo, Branch, Capture string
+}
+
+// localTier is the local header's width tier: 0 at 100 columns and above, 1 from 80, and 2 below that.
+func localTier(width int) int {
+	switch {
+	case width >= 100:
+		return 0
+	case width >= 80:
+		return 1
+	}
+	return 2
+}
+
+// localSpans is the place a local header names at a tier: the repository, branch and capture, then without the
+// capture, then the branch alone. Each joint is a span in the overlay.
+func (s Style) localSpans(p LocalPlace, tier int) []Span {
+	text, dim := s.Text(), s.Overlay()
+	if tier == 2 {
+		if p.Branch != "" {
+			return []Span{{Text: p.Branch, Style: text}}
+		}
+		return []Span{{Text: p.Repo, Style: text}}
+	}
+	var out []Span
+	if p.Repo != "" {
+		out = append(out, Span{Text: p.Repo, Style: text})
+	}
+	if p.Branch != "" {
+		if len(out) > 0 {
+			out = append(out, Span{Text: " @ ", Style: dim})
+		}
+		out = append(out, Span{Text: p.Branch, Style: text})
+	}
+	if tier == 0 && p.Capture != "" {
+		if len(out) > 0 {
+			out = append(out, Span{Text: " " + s.Glyphs.Sep + " ", Style: dim})
+		}
+		out = append(out, Span{Text: p.Capture, Style: dim})
+	}
+	return out
 }
 
 // ApplyBadge is a local run's mode badge: a tab in the apply color, or the text in brackets without color.
@@ -885,11 +932,31 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 		}
 		return n
 	}
+	badges := h.Badges
+	var place []Span
+	setPlace := func(tier int) {
+		place, ref = s.localSpans(*h.Local, tier), ""
+		for _, sp := range place {
+			ref += sp.Text
+		}
+	}
 	mode := ""
 	used := func() int { return Width(badge) + gap(ref) + gap(mode) + gap(round) + right() }
-	for i, form := range h.Badges {
+	if h.Local != nil {
+		tier := localTier(width)
+		setPlace(tier)
+		if len(badges) > 0 {
+			badges = badges[min(tier, len(badges)-1):]
+			mode = s.ApplyBadge(badges[0])
+		}
+		// The capture summary gives way before the badge shortens.
+		if tier == 0 && used() > avail {
+			setPlace(1)
+		}
+	}
+	for i, form := range badges {
 		mode = s.ApplyBadge(form)
-		if i == len(h.Badges)-1 || used() <= avail {
+		if i == len(badges)-1 || used() <= avail {
 			break
 		}
 	}
@@ -906,6 +973,7 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	}
 	if over := used() - avail; over > 0 {
 		ref = midTrunc(ref, max(1, Width(ref)-over), s.Glyphs.Ellipsis)
+		place = []Span{{Text: ref, Style: s.Text()}}
 	}
 
 	text := s.Text()
@@ -913,12 +981,16 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	band := func(spans ...Span) string { return s.SurfaceSpan(SurfaceHeader, 0, spans...) }
 	var out strings.Builder
 	out.WriteString(badge)
-	if ref != "" {
+	if ref != "" && h.Local == nil {
 		out.WriteString(band(Span{Text: "  "}))
 		out.WriteString(s.Link(h.URL, band(Span{Text: ref, Style: refStyle})))
 	}
 	if mode != "" {
 		out.WriteString(band(Span{Text: "  "}) + s.OnSurface(SurfaceHeader, mode))
+	}
+	if ref != "" && h.Local != nil {
+		// A local run has no page to open, so its place is plain text and never reads as a link.
+		out.WriteString(band(append([]Span{{Text: "  "}}, place...)...))
 	}
 	if round != "" {
 		out.WriteString(band(Span{Text: "  " + round, Style: s.Overlay()}))
