@@ -134,8 +134,10 @@ func TestEmptyRoundShowsZeroDecided(t *testing.T) {
 			t.Errorf("empty round lacks %q:\n%s", want, view)
 		}
 	}
-	if strings.ContainsAny(strings.Split(view, "\n")[0], "=x~!-▮") && strings.Contains(strings.Split(view, "\n")[0], "  -") {
-		t.Errorf("an empty round draws a bar:\n%s", view)
+	header := ansi.Strip(strings.Split(view, "\n")[0])
+	before, _, _ := strings.Cut(header, "0/0 decided")
+	if !strings.HasSuffix(strings.TrimRight(before, " "), "Add widgets") {
+		t.Errorf("an empty round draws something between the title and the count: %q", header)
 	}
 }
 
