@@ -33,7 +33,7 @@ The goals:
 
 ### Session 2026-11-04 (owner, sift round `spec-050-3-navigation-calls-20261104-010455`)
 
-- Q: Where does a local run open? → A: On the first pending finding, sift-style, with the list one key away (FR-012).
+- Q: Where does a local run open? → A: On the first pending finding, sift-style, with the list one key away (FR-012). Superseded by FR-018 later in the same session: a start screen comes first, and Enter opens that finding.
 - Q: Should `u` undo any decision on a local run? → A: No. "Unify the two flows; don't make it do something else in a different flow." `u` behaves the same in both modes, as it does today (FR-013). A key MUST NOT change meaning between modes unless the mode lacks the action (FR-016).
 - Q: Should a plain reject take one key? → A: Yes: `x` rejects at once and `X` rejects with a reason (FR-014). This also matches PR runs, where `x` excludes at once today. The owner asked whether the shift-for-more pattern fits elsewhere.
 - Q: Should accept with a note move to `A`, so shift always adds the human's words? → A: Yes (FR-017). `t` is absent on local runs.
@@ -146,7 +146,7 @@ The human wants to work through the findings of a local run one at a time, decid
 
 **Navigation decisions**
 
-- **FR-012**: On a local run, review MUST open on the first pending finding's detail. After a decision, the view MUST move to the next pending finding. Left and right MUST move between findings, and `l` MUST open the list. With nothing pending, review MUST open on the list. PR runs keep opening on the list.
+- **FR-012**: On a local run, after Enter on the start screen (FR-018), review MUST show the first pending finding's detail. After a decision, the view MUST move to the next pending finding. Left and right MUST move between findings, and `l` MUST open the list. With nothing pending, review MUST open on the list. PR runs keep opening on the list.
 - **FR-013**: `u` MUST behave the same on both run kinds: it restores an excluded or withdrawn finding, as today, and an accept is changed by pressing another decision key.
 - **FR-014**: On a local run, `x` MUST reject at once with no reason, as `x` excludes on a PR run, and `X` MUST open the reason input. Rejecting with no reason takes one key.
 - **FR-018**: On a local run with pending findings, review MUST open on a start screen that shows the run's title, the summary, and how many findings wait, with Enter to start the cards (FR-012), `l` for the list and `q` to quit. With nothing pending, it opens on the list.
