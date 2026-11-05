@@ -68,6 +68,42 @@ func TestSeedWritesRunsInTheirStates(t *testing.T) {
 		}
 	}
 
+	// The local run is a --files capture of a plan and a code file, every finding pending, one a question.
+	local := show(localRef)
+	target, _ := local["target"].(map[string]any)
+	block, _ := target["local"].(map[string]any)
+	if target["kind"] != "local" || target["applier"] == nil || block["capture"] != "files" {
+		t.Fatalf("%s target %v", localRef, target)
+	}
+	var paths []string
+	for _, f := range block["files"].([]any) {
+		file := f.(map[string]any)
+		paths = append(paths, file["path"].(string))
+		// review draws the plain code from the file itself, so it MUST exist where the run says.
+		if _, err := os.Stat(file["abs"].(string)); err != nil {
+			t.Errorf("%s file %v: %v", localRef, file, err)
+		}
+	}
+	if strings.Join(paths, ",") != "docs/cache-plan.md,internal/cache/store.go" {
+		t.Errorf("%s files %v", localRef, paths)
+	}
+	var questions, headings int
+	findings, _ := local["findings"].([]any)
+	for _, f := range findings {
+		finding := f.(map[string]any)
+		if finding["proposal"] == nil {
+			questions++
+		}
+		if loc, _ := finding["location"].(map[string]any); loc["heading"] != nil {
+			headings++
+		}
+	}
+	readiness, _ := local["readiness"].(map[string]any)
+	if len(findings) < 3 || questions != 1 || headings == 0 || len(readiness["pending"].([]any)) != len(findings) {
+		t.Errorf("%s: %d findings, %d questions, %d heading anchors, readiness %v; want every finding pending, one question and a heading anchor",
+			localRef, len(findings), questions, headings, readiness)
+	}
+
 	// Publish through the real gates, declining at the confirmation: #43 refuses approve for its blocking finding, and
 	// #44 reaches the confirmation with the head three commits ahead.
 	attempt := func(number int, action string) (*publish.Preview, error) {

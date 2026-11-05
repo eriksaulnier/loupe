@@ -6,6 +6,8 @@
 //   - acme/widgets#42: mid-review, with every disposition and an open note with a reply
 //   - acme/widgets#43: ready to publish; approve is unavailable because a blocking finding is included
 //   - acme/widgets#44: ready to publish, and the pull request head moved three commits since capture
+//   - acme/widgets:local#1: a local run in apply mode, a plan and a code file captured with --files, every finding
+//     pending and one a question with no proposal
 //
 // Every run starts from a fresh temporary LOUPE_HOME, deleted when the command returns; a demo killed by a signal
 // leaves its loupe-demo-* directory in the system temp directory.
