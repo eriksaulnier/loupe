@@ -24,27 +24,6 @@ func sampleTarget() Target {
 		DiffSHA256: "abc", PRState: "open",
 	}
 }
-
-func sampleLocalTargetForTest() Target {
-	return Target{
-		Kind:       KindLocal,
-		Title:      "my run",
-		Applier:    "claude",
-		Source:     "tool@1.0",
-		Model:      "anthropic/claude",
-		CapturedAt: time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC),
-		DiffSHA256: "abc",
-		Local: &LocalTarget{
-			N:       1,
-			Prefix:  "myrepo",
-			Capture: "files",
-			Root:    "/root",
-			Files:   []LocalFile{{Path: "foo.go", Abs: "/root/foo.go"}},
-			Skipped: []LocalSkipped{},
-		},
-	}
-}
-
 func TestPRTargetHasNoLocalFields(t *testing.T) {
 	data, err := json.Marshal(sampleTarget())
 	if err != nil {
@@ -66,7 +45,7 @@ func TestPRTargetHasNoLocalFields(t *testing.T) {
 }
 
 func TestLocalTargetMarshalsThroughLocalTargetFile(t *testing.T) {
-	target := sampleLocalTargetForTest()
+	target := sampleLocalTarget()
 	data, err := json.Marshal(target)
 	if err != nil {
 		t.Fatal(err)
@@ -371,9 +350,9 @@ func TestLoadTargetReadsSchemaOneWithoutPRState(t *testing.T) {
 
 // A local target with no file list, or none at all, still writes files and skipped as empty arrays, never null.
 func TestLocalTargetWritesEmptyListsForMissingFiles(t *testing.T) {
-	bare := sampleLocalTargetForTest()
+	bare := sampleLocalTarget()
 	bare.Local = nil
-	nilLists := sampleLocalTargetForTest()
+	nilLists := sampleLocalTarget()
 	nilLists.Local.Files, nilLists.Local.Skipped = nil, nil
 	for name, target := range map[string]Target{"no local block": bare, "nil lists": nilLists} {
 		data, err := json.Marshal(target)
