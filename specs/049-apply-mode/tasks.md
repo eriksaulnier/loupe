@@ -103,7 +103,7 @@ Every implementation task follows a failing test, then the change, then a passin
 
 ### Git plumbing
 
-- [ ] T025 [P] [US1] Add failing tests in a new `internal/gitx/index_test.go`, against a `gitrepo` with committed, staged, unstaged, untracked and ignored files and a submodule:
+- [x] T025 [P] [US1] Add failing tests in a new `internal/gitx/index_test.go`, against a `gitrepo` with committed, staged, unstaged, untracked and ignored files and a submodule:
   - `WithIndex` sets `GIT_INDEX_FILE` to the temporary file even when the parent environment sets another.
   - `ReadTree`, `AddAll` and `WriteTree` produce a tree that holds the staged, unstaged and untracked content but no ignored file.
   - The user's `.git/index` bytes are unchanged.
@@ -112,40 +112,40 @@ Every implementation task follows a failing test, then the change, then a passin
   - `LsTreeNames(HEAD)` lists the root's paths from a subdirectory.
   - `BatchCheckSizes` returns sizes.
   - `Toplevel` and `CommonDir` return absolute paths.
-- [ ] T026 [US1] Implement `WithIndex` (built on `cleanEnv()`), `ReadTree`, `AddAll` (with `-c core.fsmonitor=false -c core.untrackedCache=false -c core.splitIndex=false`), `WriteTree`, `DiffRawZ`, `NumstatZ`, `DiffLiteral` (`--no-renames`, `:(literal)` arguments, 1,000 per call), `LsTreeNames` and `BatchCheckSizes` in a new `internal/gitx/index.go`. Move `gitx.Diff`'s flags into a shared variable, and add `Toplevel` and `CommonDir` in `internal/gitx/gitx.go`. Assert that the PR `Diff` argument list is unchanged.
+- [x] T026 [US1] Implement `WithIndex` (built on `cleanEnv()`), `ReadTree`, `AddAll` (with `-c core.fsmonitor=false -c core.untrackedCache=false -c core.splitIndex=false`), `WriteTree`, `DiffRawZ`, `NumstatZ`, `DiffLiteral` (`--no-renames`, `:(literal)` arguments, 1,000 per call), `LsTreeNames` and `BatchCheckSizes` in a new `internal/gitx/index.go`. Move `gitx.Diff`'s flags into a shared variable, and add `Toplevel` and `CommonDir` in `internal/gitx/gitx.go`. Assert that the PR `Diff` argument list is unchanged.
 
 ### Whole files and display paths
 
-- [ ] T027 [P] [US2] Add failing tests in a new `internal/diff/wholefile_test.go`:
+- [x] T027 [P] [US2] Add failing tests in a new `internal/diff/wholefile_test.go`:
   - `WholeFile` output for 0, 1 and 3 lines, with and without a final newline, parses through `diff.Parse` with `IsNew` and one fragment.
   - `NewName` equals the display path for the forms `docs/p.md`, `~/plans/p.md` and `ext/1/p.md`.
   - Hunks match `git -c core.quotePath=false diff --no-index /dev/null <file>`, with the `index` line dropped.
-- [ ] T028 [US2] Implement `WholeFile` in a new `internal/diff/wholefile.go`.
-- [ ] T029 [P] [US2] Add failing tests in a new `internal/local/files_test.go`:
+- [x] T028 [US2] Implement `WholeFile` in a new `internal/diff/wholefile.go`.
+- [x] T029 [P] [US2] Add failing tests in a new `internal/local/files_test.go`:
   - A file inside the root gets a relative path, one under the home directory gets `~/<rel>`, and any other gets `ext/<i>/<basename>`. `abs` is always absolute.
   - A symlink keeps its argument's display path and reads its target.
   - These refuse with `usage` and name the path: a missing file, an unreadable file, a directory, a non-regular target, a duplicate after resolution, and a display path with a byte below 0x20, 0x7f, `"` or `\`.
   - These skip: a NUL in the first 8,000 bytes as `binary`, an empty file as `empty`, and a file over 1,048,576 bytes as `too-large`.
-- [ ] T030 [US2] Implement the `--files` reader in a new `internal/local/files.go`.
-- [ ] T031 [P] Add failing tests in a new `internal/local/prefix_test.go`:
+- [x] T030 [US2] Implement the `--files` reader in a new `internal/local/files.go`.
+- [x] T031 [P] Add failing tests in a new `internal/local/prefix_test.go`:
   - The prefix is `owner/repo` for a GitHub origin.
   - Otherwise it is the sanitized base name of the parent of the common directory: a normal repository, a linked worktree (which shares its main worktree's name), a bare repository without `.git`, and a submodule (`modules/<name>` gives `<name>`).
   - It is `""` outside Git.
   - The branch is empty on a detached `HEAD`.
-- [ ] T032 Implement the prefix, repository, root and branch logic in a new `internal/local/prefix.go`, reusing `gitx.OriginURLs`, `gitx.ParseGitHubURL` and `gitx.CurrentBranch`.
+- [x] T032 Implement the prefix, repository, root and branch logic in a new `internal/local/prefix.go`, reusing `gitx.OriginURLs`, `gitx.ParseGitHubURL` and `gitx.CurrentBranch`.
 
 ### Capture forms
 
-- [ ] T033 [P] [US1] Add failing tests in a new `internal/local/changed_test.go`:
+- [x] T033 [P] [US1] Add failing tests in a new `internal/local/changed_test.go`:
   - The file set from R2 is right: the skip reasons `submodule`, `binary`, `deleted`, `empty` and `too-large`, plus `new: true` exactly for files missing from `HEAD`.
   - Running from a subdirectory gives root-relative paths.
   - With no `--base`, the diff is against `HEAD`.
   - These refuse with `usage`: a `--base` that does not resolve, an unborn `HEAD`, `core.sparseCheckout=true`, nothing changed, and every change skipped (the message counts the skipped files).
   - The outline comes from the written tree.
   - SC-005: index bytes, `--no-optional-locks status`, working-file hashes, `for-each-ref` and `HEAD` are identical before and after.
-- [ ] T034 [US1] Implement `--changed` in a new `internal/local/changed.go`, following R1 steps 1 to 9 at `gitx.Toplevel`.
-- [ ] T035 Move `captureOutline` from `internal/cli/capture.go` into a new `internal/local/outline.go`, and point PR capture at it with no change in behavior.
-- [ ] T036 [P] [US1] Add failing tests in a new `internal/cli/capture_local_test.go`:
+- [x] T034 [US1] Implement `--changed` in a new `internal/local/changed.go`, following R1 steps 1 to 9 at `gitx.Toplevel`.
+- [x] T035 Move `captureOutline` from `internal/cli/capture.go` into a new `internal/local/outline.go`, and point PR capture at it with no change in behavior.
+- [x] T036 [P] [US1] Add failing tests in a new `internal/cli/capture_local_test.go`:
   - The form rules from the contract: a URL with a local form, two local forms, no form, `--base` with `--files` or `--no-files`, and `--no-files` without `--title`. Each refuses with `usage`.
   - `--title` over 120 characters or with a control character, and `--applier` over 64 characters, refuse with `usage`.
   - The result shape matches the contract example, with `headings` keyed by captured Markdown files and `next` passing `--run`.
@@ -153,30 +153,30 @@ Every implementation task follows a failing test, then the change, then a passin
   - A `Deps.GitHub` constructor that calls `t.Fatal` is never reached.
   - A cached newer release adds `warnings: ["update-available"]` with no lookup.
   - FR-007: in a repository with a local run and no `LOUPE_RUN`, a bare `loupe feedback` takes today's PR resolution and never the local run.
-- [ ] T037 [US1] Implement the following:
+- [x] T037 [US1] Implement the following:
   - `MaximumNArgs(1)`, `--changed`, `--base`, `--files` (`StringArray`), `--no-files`, `--title` and `--applier` in `internal/cli/capture.go`.
   - `runLocalCapture` and `printLocalCapture` in a new `internal/cli/capture_local.go`, which call `internal/local` and `run.NextLocal`.
   - The orchestration in a new `internal/local/capture.go`.
-- [ ] T038 [P] [US3] Add failing tests in `internal/cli/capture_local_test.go` and `internal/cli/add_test.go`:
+- [x] T038 [P] [US3] Add failing tests in `internal/cli/capture_local_test.go` and `internal/cli/add_test.go`:
   - `--no-files --title X` creates a run with an empty diff and a valid `diffSha256`, and adding a finding with a `location` there refuses, with a fix that names `"general": true`.
   - FR-015: on a `--files` run every line and heading of the file anchors. On a `--changed` run, a heading whose section has exactly one changed hunk anchors, and context lines anchor.
 
 ### Listing and the stopgap
 
-- [ ] T039 [P] [US1] Add failing tests in `internal/cli/list_test.go`:
+- [x] T039 [P] [US1] Add failing tests in `internal/cli/list_test.go`:
   - Local rows sort with PR rows by `capturedAt`.
   - The JSON entry is `{ref, kind, repository?, title, state, counts, capturedAt}`.
   - The text row fills RUN, STATE, FINDINGS, CAPTURED and TITLE, with `(no title)` when empty.
   - `ready` needs at least one finding.
   - The existing `list` golden is unchanged.
   - FR-026: `stats` ignores local runs, and every `stats-*` golden is unchanged with a local run present in the data root.
-- [ ] T040 [US1] Implement `mode.ListEntry` in `internal/mode/apply.go` and `internal/mode/publish.go`, and the merge in `internal/cli/list.go`. Add a `returned` case in `listStateKind`, colored as `published`.
-- [ ] T041 [P] Add failing tests in `internal/cli/handoff_test.go` and `internal/cli/review_test.go`:
+- [x] T040 [US1] Implement `mode.ListEntry` in `internal/mode/apply.go` and `internal/mode/publish.go`, and the merge in `internal/cli/list.go`. Add a `returned` case in `listStateKind`, colored as `published`.
+- [x] T041 [P] Add failing tests in `internal/cli/handoff_test.go` and `internal/cli/review_test.go`:
   - `handoff local#1` and `review local#1` refuse with `wrong-mode` (the stopgap).
   - `refuseOpenReview` compares local refs by `Number`.
-- [ ] T042 Implement the comparison in `internal/cli/handoff.go`. The stopgap is already in `apply.Refuses` (T017).
-- [ ] T043 Update the root help in `internal/cli/help.go`. Regenerate only `help.*` and `handoff-help.*` with `go test ./internal/cli/ -update`, read the diff, and restore every other golden. Add `kind` for `list` to `contractResultKeys` in `internal/cli/help_test.go`.
-- [ ] T044 Amend `specs/001-loupe-v1/contracts/cli.md` with the capture forms, the result shape and the `list` entry. Run `mise run check`.
+- [x] T042 Implement the comparison in `internal/cli/handoff.go`. The stopgap is already in `apply.Refuses` (T017).
+- [x] T043 Update the root help in `internal/cli/help.go`. Regenerate only `help.*` and `handoff-help.*` with `go test ./internal/cli/ -update`, read the diff, and restore every other golden. Add `kind` for `list` to `contractResultKeys` in `internal/cli/help_test.go`.
+- [x] T044 Amend `specs/001-loupe-v1/contracts/cli.md` with the capture forms, the result shape and the `list` entry. Run `mise run check`.
 
 **Checkpoint**: PR 2 is green. Local runs can be captured and listed, and they cannot be reviewed yet.
 
