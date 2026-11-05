@@ -266,3 +266,22 @@ func AgentChangedHumanText(f Finding) bool {
 	}
 	return false
 }
+
+// HumanEdited reports whether the human rewrote the finding's title, body or proposal after the agent last changed
+// it, so the agent applies the human's words rather than its own.
+func HumanEdited(f Finding) bool {
+	edited := false
+	for _, h := range f.History {
+		switch h.By {
+		case ByAgent:
+			edited = false
+		case ByHuman:
+			for _, field := range []string{"title", "body", "proposal"} {
+				if _, ok := h.Changed[field]; ok {
+					edited = true
+				}
+			}
+		}
+	}
+	return edited
+}

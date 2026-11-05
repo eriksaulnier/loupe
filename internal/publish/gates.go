@@ -304,17 +304,4 @@ func ActionRefusal(action, viewer, author string, d *draft.Draft) error {
 		"use --action comment or --action request-changes, or exclude or unblock the finding in loupe review")
 }
 
-func ReadinessRefusal(d *draft.Draft) error {
-	r := draft.ReadinessOf(d)
-	if r.Ready {
-		return nil
-	}
-	var parts []string
-	if len(r.Pending) > 0 {
-		parts = append(parts, "pending findings "+strings.Join(r.Pending, ", "))
-	}
-	if len(r.OpenNotes) > 0 {
-		parts = append(parts, "open notes "+strings.Join(r.OpenNotes, ", "))
-	}
-	return refusal.New(refusal.NotReady, "the draft is not ready: "+strings.Join(parts, "; "), "loupe review")
-}
+func ReadinessRefusal(d *draft.Draft) error { return draft.ReadinessRefusal(d) }

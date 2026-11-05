@@ -47,6 +47,9 @@ func Load(dir string) (*Draft, error) {
 func Mutate(dir, command string, expectVersion *int, getenv func(string) string, fn func(*Draft) error) (*Draft, error) {
 	var d *Draft
 	err := underLock(dir, command, getenv, func(loaded *Draft) error {
+		if err := refuseReturned(dir); err != nil {
+			return err
+		}
 		if expectVersion != nil && *expectVersion != loaded.Version {
 			return refusal.New(refusal.Version,
 				fmt.Sprintf("draft is at version %d, expected %d", loaded.Version, *expectVersion),

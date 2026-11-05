@@ -210,6 +210,9 @@ var fieldSets = []struct {
 			"title,omitempty",
 		},
 	}},
+	{reflect.TypeFor[draft.Return](), draft.ReturnSchema, map[int][]string{
+		1: {"draftVersion", "returnedAt", "schema"},
+	}},
 	{reflect.TypeFor[Attempt](), RecordSchema, map[int][]string{
 		1: {
 			"confirmed", "confirmed.digest", "confirmed.dispositions", "confirmed.version", "envelope",
