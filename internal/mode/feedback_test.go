@@ -126,3 +126,20 @@ func TestPublishFeedbackHasNoGroups(t *testing.T) {
 		t.Fatalf("payload keys %v", keys)
 	}
 }
+
+func TestApplyFeedbackIgnoresASealOfANewerDraft(t *testing.T) {
+	d := draft.NewEmpty()
+	d.Version = 2
+	dir := t.TempDir()
+	// The draft was read at version 2, then the human changed it and returned version 3.
+	if err := os.WriteFile(filepath.Join(dir, draft.ReturnFile), []byte(`{"schema":1,"returnedAt":"2026-11-03T00:00:00Z","draftVersion":3}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := Of(run.Target{Kind: run.KindLocal, Local: &run.LocalTarget{}}).Feedback(d, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload["returned"] != false {
+		t.Fatalf("returned %v for a draft older than the seal", payload["returned"])
+	}
+}

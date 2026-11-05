@@ -70,3 +70,15 @@ func ReadinessRefusal(d *Draft) error {
 	}
 	return refusal.New(refusal.NotReady, "the draft is not ready: "+strings.Join(parts, "; "), "loupe review")
 }
+
+// LoadReturn reads return.json; ok is false while the run has not been returned.
+func LoadReturn(dir string) (r Return, ok bool, err error) {
+	returned, err := run.HasReturn(dir)
+	if err != nil || !returned {
+		return Return{}, false, err
+	}
+	if err := run.ReadJSON(filepath.Join(dir, ReturnFile), &r, ReturnSchema); err != nil {
+		return Return{}, false, err
+	}
+	return r, true, nil
+}

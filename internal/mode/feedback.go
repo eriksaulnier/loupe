@@ -70,11 +70,12 @@ func (apply) Ended(dir string) (string, error) {
 // agent acts on: apply as proposed, apply as the human changed it, leave out, or nothing to do.
 func (a apply) Feedback(d *draft.Draft, dir string) (map[string]any, error) {
 	payload := prFeedback(d)
-	returned, err := run.HasReturn(dir)
+	// The draft was read before return.json, so a seal of a newer draft does not make d the returned decisions.
+	sealed, returned, err := draft.LoadReturn(dir)
 	if err != nil {
 		return nil, err
 	}
-	payload["returned"] = returned
+	payload["returned"] = returned && sealed.DraftVersion == d.Version
 	groups := map[string][]map[string]any{"apply": {}, "applyWithChanges": {}, "excluded": {}, "withdrawn": {}}
 	for _, f := range d.Findings {
 		entry := a.entry(d, f)
