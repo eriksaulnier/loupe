@@ -59,6 +59,9 @@ func TestHunkView(t *testing.T) {
 	} else if r, ok := refusal.As(err); !ok || r.Code != refusal.Location {
 		t.Fatalf("got %v, want a location refusal", err)
 	}
+	// A start after the line anchors nothing, so the range is not in the diff.
+	_, err := d.HunkView("multi.txt", "RIGHT", 3, 5, 3)
+	_ = refusaltest.Want(t, err, refusal.Location)
 }
 
 func TestFileView(t *testing.T) {

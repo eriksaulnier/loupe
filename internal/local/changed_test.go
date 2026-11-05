@@ -245,3 +245,14 @@ func TestChangedRefusesWithoutAWorktreeOrSharedHistory(t *testing.T) {
 	_, err = Capture(Request{Form: FormChanged, WorkDir: repo, Base: "other"})
 	wantRefusal(t, err, "--base other shares no history with HEAD")
 }
+
+// A conversion refusal over a whole repository names five paths and counts the rest.
+func TestFirstPathsCountsThePathsItLeavesOut(t *testing.T) {
+	paths := []string{"a", "b", "c", "d", "e", "f", "g"}
+	if got := firstPaths(paths, 5); got != "a, b, c, d, e and 2 more" {
+		t.Fatalf("firstPaths = %q", got)
+	}
+	if got := firstPaths(paths[:5], 5); got != "a, b, c, d, e" {
+		t.Fatalf("firstPaths of five = %q", got)
+	}
+}

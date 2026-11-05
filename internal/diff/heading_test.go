@@ -89,6 +89,12 @@ func TestResolveHeadingDeletionsAttribution(t *testing.T) {
 	if !strings.Contains(r.Message, "has no changes in the diff") {
 		t.Fatalf("message %q", r.Message)
 	}
+	// A -U0 deletion shows no line of its section, so its hunk is skipped rather than trusted.
+	d = planDiff(t, hunk{5, 4, "-"})
+	r = refusaltest.Want(t, errOf(d.ResolveHeading("plan.md", "Goals")), refusal.Location)
+	if !strings.Contains(r.Message, "has no changes in the diff") {
+		t.Fatalf("message %q", r.Message)
+	}
 	// A deletion before the file's first line belongs to no section.
 	d = planDiff(t, hunk{1, 1, "-   "})
 	r = refusaltest.Want(t, errOf(d.ResolveHeading("plan.md", "Plan")), refusal.Location)
@@ -166,6 +172,13 @@ func TestResolveHeadingRefusals(t *testing.T) {
 			message: `the section "Plan" of plan.md is changed in 2 hunks`,
 			fix:     "file one line-anchored finding per hunk: plan.md:4-10, 15-21",
 			details: map[string]any{"ranges": []map[string]int{{"startLine": 4, "line": 10}, {"startLine": 15, "line": 21}}},
+		},
+		{
+			name: "two hunks, one showing a single line", d: func(t *testing.T) *Diff { return planDiff(t, hunk{4, 4, "   +   "}, hunk{30, 30, "+"}) },
+			path: "plan.md", heading: "Plan",
+			message: `the section "Plan" of plan.md is changed in 2 hunks`,
+			fix:     "file one line-anchored finding per hunk: plan.md:4-10, 30",
+			details: map[string]any{"ranges": []map[string]int{{"startLine": 4, "line": 10}, {"startLine": 30, "line": 30}}},
 		},
 		{
 			name: "duplicate", d: func(t *testing.T) *Diff {

@@ -15,6 +15,8 @@ func TestCompare(t *testing.T) {
 		{"f-007", "f-007", 0},
 		{"e-900", "f-001", -1},
 		{"f-x", "f-001", 1},
+		{"f-001", "f-x", -1},
+		{"f-002", "f-007", -1},
 	}
 	for _, c := range cases {
 		if got := Compare(c.a, c.b); got != c.want {
