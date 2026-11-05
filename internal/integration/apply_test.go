@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/testutil/golden"
+	"github.com/eriksaulnier/loupe/internal/testutil/herdrstub"
 	"github.com/eriksaulnier/loupe/internal/testutil/screen"
 )
 
@@ -53,20 +54,9 @@ func (h *harness) writeRepoFile(name, content string) {
 // the stub logs each call's argv beside the name it was run by, NUL-separated and newline-terminated.
 var herdrStub string
 
-const herdrScript = `#!/bin/sh
-log="$(dirname "$0")/argv"
-for a in "$@"; do printf '%s\0' "$a" >> "$log"; done
-printf '\n' >> "$log"
-case "$2" in
-layout) printf '%s\n' '{"id":"cli:pane:layout","result":{"layout":{"panes":[{"pane_id":"w1:p1","rect":{"height":40,"width":150}}]},"type":"pane_layout"}}';;
-split) printf '%s\n' '{"id":"cli:pane:split","result":{"pane":{"pane_id":"w1:p2"},"type":"pane_info"}}';;
-run) printf '%s\n' '{"id":"cli:pane:run","result":{"type":"ok"}}';;
-esac
-`
-
 func writeHerdrStub(dir string) (string, error) {
 	path := filepath.Join(dir, "herdr-stub")
-	return path, os.WriteFile(path, []byte(herdrScript), 0o755)
+	return path, os.WriteFile(path, []byte(herdrstub.Script(herdrstub.Rect, "", "")), 0o755)
 }
 
 // handoffToStub runs loupe handoff with the stand-in Herdr on PATH, which records the pane command and runs nothing,

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/herdrstub"
 )
 
 const (
@@ -55,16 +56,16 @@ func fakeHostBin(t *testing.T, name, key string, replies map[string]string, fail
 // stderr and exits 1.
 func fakeHerdrBin(t *testing.T, failAt string) (bin, log string) {
 	t.Helper()
-	return fakeHerdrBinWithRect(t, failAt, `{"height":40,"width":150}`)
+	return fakeHerdrBinWithRect(t, failAt, herdrstub.Rect)
 }
 
 func fakeHerdrBinWithRect(t *testing.T, failAt, rect string) (bin, log string) {
 	t.Helper()
-	return fakeHostBin(t, "herdr", "$2", map[string]string{
-		"layout": `{"id":"cli:pane:layout","result":{"layout":{"panes":[{"pane_id":"w1:p1","rect":` + rect + `}]},"type":"pane_layout"}}`,
-		"split":  `{"id":"cli:pane:split","result":{"pane":{"pane_id":"w1:p2"},"type":"pane_info"}}`,
-		"run":    `{"id":"cli:pane:run","result":{"type":"ok"}}`,
-	}, failAt, herdrPaneMissing, ">&2", "")
+	bin = t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "herdr"), []byte(herdrstub.Script(rect, failAt, herdrPaneMissing)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin, filepath.Join(bin, "argv")
 }
 
 // fakeOrcaBin answers like Orca, with the handshake on stderr on every call; at failAt it prints Orca's error shape on
