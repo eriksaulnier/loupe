@@ -74,12 +74,24 @@ run = "./scripts/review-screenshot.sh"
 depends = ["build"]
 run = '''
 set -eu
+# Checked before the install is touched, so a missing CLI leaves the release in place.
+if ! command -v claude >/dev/null; then
+	echo "error: claude is not on PATH, so link cannot install the plugin" >&2
+	echo "fix: install Claude Code, or put claude on PATH, then rerun mise run link" >&2
+	exit 1
+fi
 dir=${LOUPE_INSTALL_DIR:-$HOME/.local/bin}
 mkdir -p "$dir"
 ln -sfn "{{config_root}}/dist/loupe" "$dir/loupe"
 # Resolved without this repository's dist/ on PATH, which is what a shell elsewhere sees.
 found=$(PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "{{config_root}}/dist" | paste -sd: -) command -v loupe || true)
-if [ "$found" != "$dir/loupe" ]; then
+# Compared by directory, resolved, so a trailing slash or a symlinked directory names the same file.
+want="$(cd -P "$dir" && pwd)/loupe"
+got=""
+if [ -n "$found" ]; then
+	got="$(cd -P "$(dirname "$found")" && pwd)/$(basename "$found")"
+fi
+if [ "$got" != "$want" ]; then
 	echo "error: outside the repository, loupe resolves to ${found:-nothing}, not $dir/loupe" >&2
 	echo "fix: remove that copy (a mise pin: mise unuse --global github:eriksaulnier/loupe), or put $dir first on PATH" >&2
 	exit 1
