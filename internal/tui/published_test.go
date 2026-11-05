@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
@@ -246,5 +247,20 @@ func TestPublishedSaysPublishedOnce(t *testing.T) {
 	rows := strings.Split(view, "\n")
 	if blank, url := rows[m.bodyTop()+1], rows[m.bodyTop()+2]; strings.Trim(blank, "│ ") != "" || !strings.Contains(url, reviewURLPrefix+"1") {
 		t.Errorf("the published pane does not show the URL under one blank row:\n%q\n%q", blank, url)
+	}
+}
+
+// A review URL taller than the published pane links only the rows the pane shows.
+func TestAURLTallerThanThePaneLinksTheRowsShown(t *testing.T) {
+	m := modelOf(t, newFixture(t), testEnv, 60, 12)
+	m.view, m.published = viewPublished, reviewURLPrefix+strings.Repeat("9", 1500)
+	rows := strings.Split(m.View().Content, "\n")
+	if len(rows) != 12 {
+		t.Fatalf("the published view is %d rows:\n%s", len(rows), strings.Join(rows, "\n"))
+	}
+	for _, r := range rows {
+		if style.Width(r) > 60 {
+			t.Errorf("row is %d cells: %q", style.Width(r), r)
+		}
 	}
 }

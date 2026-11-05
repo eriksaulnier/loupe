@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"image/color"
 	"io"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -332,4 +334,247 @@ func TestAppRefusesStaleDecision(t *testing.T) {
 	key(tm, tea.KeyEsc)
 	tm.Type("q")
 	finalView(t, tm)
+}
+
+// A run whose target or draft does not decode opens no review: New returns the refusal that names the file.
+func TestNewRefusesACorruptRun(t *testing.T) {
+	for _, name := range []string{"target.json", "draft.json"} {
+		t.Run(name, func(t *testing.T) {
+			dir := newFixture(t)
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("{"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := New(Config{Dir: dir, Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})
+			if r, ok := refusal.As(err); !ok || r.Code != refusal.Record || !strings.Contains(r.Message, name) {
+				t.Fatalf("New on a corrupt %s: %v", name, err)
+			}
+		})
+	}
+}
+
+// Outside tests the program drops keys until the settle tick, which ends the opening window.
+func TestInitDropsKeysUntilTheSettleTick(t *testing.T) {
+	settleOnOpen = time.Nanosecond
+	t.Cleanup(func() { settleOnOpen = 0 })
+	m, err := New(Config{Dir: newFixture(t), Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	// With the poll already scheduled the batch is the color request and the tick, and neither blocks for long.
+	m.polling = true
+	batch, ok := m.initScreen()().(tea.BatchMsg)
+	if !ok || len(batch) != 2 || !m.opening {
+		t.Fatalf("initScreen gave %#v, opening %v", batch, m.opening)
+	}
+	press(m, "enter")
+	if m.view != viewList {
+		t.Fatalf("a key while opening moved the view to %v", m.view)
+	}
+	msg := batch[1]()
+	if _, ok := msg.(openedMsg); !ok {
+		t.Fatalf("the settle tick sent %#v", msg)
+	}
+	m.Update(msg)
+	press(m, "enter")
+	if m.opening || m.view != viewDetail {
+		t.Fatalf("after the tick: opening %v view %v", m.opening, m.view)
+	}
+}
+
+// corruptDraft writes a draft.json that no longer decodes.
+func corruptDraft(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "draft.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A draft that stops decoding while the review is open ends the program with its refusal, on ctrl+r and on a poll.
+func TestADraftThatStopsDecodingEndsTheReview(t *testing.T) {
+	for _, msg := range []tea.Msg{tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}, pollMsg{}} {
+		dir := newFixture(t)
+		m := newModel(t, dir)
+		corruptDraft(t, dir)
+		_, cmd := m.Update(msg)
+		if r, ok := refusal.As(m.err); !ok || r.Code != refusal.Record || !isQuit(cmd) {
+			t.Errorf("%T: err %v, quit %v", msg, m.err, isQuit(cmd))
+		}
+	}
+}
+
+// An outside writer that drops the open finding from draft.json ends the review rather than drawing a finding that
+// is gone.
+func TestAFindingGoneFromTheDraftEndsTheReview(t *testing.T) {
+	dir := newFixture(t)
+	m := newModel(t, dir)
+	mustOpenFinding(t, m, "f-001")
+	d := loadDraft(t, dir)
+	d.Findings, d.Version = d.Findings[1:], d.Version+1
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	_, cmd := m.Update(pollMsg{})
+	if m.err == nil || m.err.Error() != "finding f-001 is no longer in the draft" || !isQuit(cmd) {
+		t.Fatalf("err %v, quit %v", m.err, isQuit(cmd))
+	}
+}
+
+// Another process sending a finding back shows in the notice the next poll sets.
+func TestAPollNamesASendBackFromElsewhere(t *testing.T) {
+	dir := newFixture(t)
+	m := newModel(t, dir)
+	outside(t, dir, func(d *draft.Draft) error {
+		_, err := draft.SendBack(d, "f-002", "Why this helper?", testNow)
+		return err
+	})
+	m.Update(pollMsg{})
+	if !strings.Contains(m.notice, "n-001 sent back on f-002") {
+		t.Fatalf("notice %q", m.notice)
+	}
+}
+
+// Decide on a finding the human never saw is an error, not a refusal, since no key can name one.
+func TestDecideOnAFindingNotDisplayedIsAnError(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	recorded, err := m.Decide("f-999", accepted("f-999"))
+	if r, ok := refusal.As(err); recorded || !ok || r.Code != refusal.NotFound {
+		t.Fatalf("recorded %v err %v", recorded, err)
+	}
+}
+
+// A decision that fails for a reason other than a refusal comes back as that error, and a refusal whose reload then
+// fails comes back as the reload's error.
+func TestDecideReturnsErrorsThatAreNotRefusals(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	broken := errors.New("disk on fire")
+	if recorded, err := m.Decide("f-001", func(*draft.Draft) error { return broken }); recorded || !errors.Is(err, broken) {
+		t.Fatalf("recorded %v err %v", recorded, err)
+	}
+	dir := newFixture(t)
+	m = newModel(t, dir)
+	recorded, err := m.Decide("f-001", func(*draft.Draft) error {
+		corruptDraft(t, dir)
+		return refusal.New(refusal.Input, "no", "fix")
+	})
+	if r, ok := refusal.As(err); recorded || !ok || r.Code != refusal.Record {
+		t.Fatalf("recorded %v err %v", recorded, err)
+	}
+}
+
+// A finding filed on the old side names it after the location.
+func TestALeftSideLocationIsMarkedOld(t *testing.T) {
+	if got := formatLocation("multi.txt", 3, 0, draft.SideLeft); got != "multi.txt:3 (old)" {
+		t.Fatalf("location %q", got)
+	}
+}
+
+// breakLock puts a directory where the run's lock file goes, so every write to the draft fails with an error that is
+// not a refusal.
+func breakLock(t *testing.T, dir string) {
+	t.Helper()
+	path := filepath.Join(dir, ".lock")
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// wantLockFailure checks that the review ended on the lock error breakLock causes.
+func wantLockFailure(t *testing.T, m *Model, cmd tea.Cmd) {
+	t.Helper()
+	if _, isRefusal := refusal.As(m.err); m.err == nil || isRefusal || !strings.Contains(m.err.Error(), "open lock") || !isQuit(cmd) {
+		t.Fatalf("err %v, quit %v", m.err, isQuit(cmd))
+	}
+}
+
+// A decision that cannot be written ends the review, whether it moves to the next finding or stays.
+func TestADecisionThatCannotBeWrittenEndsTheReview(t *testing.T) {
+	for _, c := range []struct{ id, key string }{{"f-001", "a"}, {"f-003", "u"}} {
+		t.Run(c.key, func(t *testing.T) {
+			dir := decidedFixture(t)
+			m := newModel(t, dir)
+			mustOpenFinding(t, m, c.id)
+			breakLock(t, dir)
+			_, cmd := m.Update(runes(c.key))
+			wantLockFailure(t, m, cmd)
+		})
+	}
+}
+
+// A paste is dropped while review opens, in a window too small to draw, and while a review is being sent.
+func TestPasteIsDroppedWhileTheScreenCannotTakeIt(t *testing.T) {
+	for name, set := range map[string]func(*Model){
+		"opening":   func(m *Model) { m.opening = true },
+		"too small": func(m *Model) { m.Update(tea.WindowSizeMsg{Width: 40, Height: 10}) },
+		"sending":   func(m *Model) { m.sending = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newModel(t, newFixture(t))
+			mustOpenFinding(t, m, "f-001")
+			press(m, "s")
+			set(m)
+			m.Update(tea.PasteMsg{Content: "pasted"})
+			if m.note.Value() != "" {
+				t.Fatalf("the note took %q", m.note.Value())
+			}
+		})
+	}
+}
+
+// While the review is being published every key but ctrl+c is ignored; it neither quits nor moves.
+func TestKeysWhilePublishingDoNothing(t *testing.T) {
+	m := newModel(t, readyFixture(t, "", ""))
+	m.view = viewPublishing
+	for _, k := range []string{"q", "?", "enter", "esc"} {
+		if _, cmd := m.Update(keyOf(k)); cmd != nil || m.view != viewPublishing || m.help {
+			t.Fatalf("%s while publishing: view %v help %v cmd %v", k, m.view, m.help, cmd)
+		}
+	}
+}
+
+// Help opens over every view that takes keys, leads with that view's keys, and leaves the view's own footer to the
+// overlay's. A view with no keys of its own, the start screen, leads with the list's.
+func TestHelpOpensOverEveryView(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		show  func(t *testing.T) *Model
+		title string
+	}{
+		{"file diff", func(t *testing.T) *Model {
+			m := newModel(t, newFixture(t))
+			mustOpenFinding(t, m, "f-001")
+			press(m, "f")
+			return m
+		}, "File diff"},
+		{"action", func(t *testing.T) *Model {
+			m := newModel(t, readyFixture(t, "", ""))
+			m.view = viewAction
+			return m
+		}, "Publish steps"},
+		{"inline", func(t *testing.T) *Model {
+			m := newModel(t, readyFixture(t, "", ""))
+			m.view, m.action = viewInline, "comment"
+			return m
+		}, "Publish steps"},
+		{"start", func(t *testing.T) *Model {
+			m, _ := applyModel(t, "Claude")
+			return m
+		}, "Finding list"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := c.show(t)
+			before := m.view
+			press(m, "?")
+			screen := screenText(m)
+			if !m.help || m.view != before || !strings.Contains(screen, "Help") {
+				t.Fatalf("help %v view %v:\n%s", m.help, m.view, screen)
+			}
+			if got := m.helpCurrent().title; got != c.title {
+				t.Errorf("help leads with %q, want %q", got, c.title)
+			}
+		})
+	}
 }

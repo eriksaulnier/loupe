@@ -18,6 +18,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -1470,5 +1471,60 @@ func TestCappedLocationKeepsItsSizeUnderAComposer(t *testing.T) {
 		if after := count(); after != before {
 			t.Errorf("at 80x%d the window shows %d code rows with the composer open, %d without", height, after, before)
 		}
+	}
+}
+
+// f on a general finding has no file to show, so the detail stays and says why.
+func TestFileKeyOnAGeneralFindingSaysThereIsNoFile(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	mustOpenFinding(t, m, "f-003")
+	press(m, "f")
+	if m.view != viewDetail || m.notice != "a general finding has no file diff" {
+		t.Fatalf("view %v notice %q", m.view, m.notice)
+	}
+}
+
+// The edit row's left and h step the label back, wrapping past the first, and space then enter records blocking.
+func TestEditRowStepsTheLabelBackAndRecordsBlocking(t *testing.T) {
+	m, dir := editModel(t, "f-002", unchanged)
+	press(m, "e")
+	if m.editLabels[m.editPick] != "suggestion" {
+		t.Fatalf("the row opened on %q", m.editLabels[m.editPick])
+	}
+	m.Update(keyOf("left"))
+	m.Update(keyOf("h"))
+	if got := m.editLabels[m.editPick]; got != "question" {
+		t.Fatalf("left then h from suggestion is %q, want question", got)
+	}
+	m.Update(keyOf("space"))
+	press(m, "enter")
+	if f := findingOf(t, dir, "f-002"); f.Label != "question" || !f.Blocking {
+		t.Fatalf("recorded label %q blocking %v", f.Label, f.Blocking)
+	}
+	if !strings.Contains(m.notice, "f-002 is now question, blocking") {
+		t.Errorf("notice %q", m.notice)
+	}
+}
+
+// A confidence word off the scale, as an older draft may hold, is shown as written rather than as a rating.
+func TestConfidenceOffTheScaleIsShownAsWritten(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	m.draft.Findings[0].Confidence = "fairly sure"
+	m.setDraft(m.draft)
+	mustOpenFinding(t, m, "f-001")
+	if screen := screenText(m); !strings.Contains(screen, "confidence fairly sure") {
+		t.Fatalf("the detail lacks the confidence word:\n%s", screen)
+	}
+}
+
+// A finding whose line an outside writer moved out of the diff cannot be drawn, so opening it ends the review with the
+// diff's refusal.
+func TestAFindingOutsideTheDiffEndsTheReview(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	m.draft.Findings[0].Location.Line = 30
+	m.setDraft(m.draft)
+	_, cmd := m.Update(keyOf("enter"))
+	if r, ok := refusal.As(m.err); !ok || r.Code != refusal.Location || !isQuit(cmd) {
+		t.Fatalf("err %v quit %v", m.err, isQuit(cmd))
 	}
 }

@@ -17,6 +17,8 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/testutil/sgrtest"
@@ -770,5 +772,108 @@ func TestApplyHeaderNamesTheLocalRun(t *testing.T) {
 		if header := ansi.Strip(wide.reviewHeader()); !strings.Contains(header, want) {
 			t.Errorf("a --%s header lacks %q: %q", capture, want, header)
 		}
+	}
+}
+
+// j and down move the list cursor one finding, k and up move it back, and neither moves past an end.
+func TestListKeysMoveTheCursorWithinTheFindings(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	for _, step := range []struct {
+		key  string
+		want int
+	}{{"j", 1}, {"down", 2}, {"j", 2}, {"k", 1}, {"up", 0}, {"up", 0}} {
+		m.Update(keyOf(step.key))
+		if m.cursor != step.want {
+			t.Fatalf("after %s the cursor is %d, want %d", step.key, m.cursor, step.want)
+		}
+	}
+}
+
+// Enter on a round with no findings has nothing to open.
+func TestEnterOnAnEmptyRoundOpensNothing(t *testing.T) {
+	m := newModel(t, emptyFixture(t))
+	if _, cmd := m.Update(keyOf("enter")); cmd != nil || m.view != viewList {
+		t.Fatalf("enter on an empty round: view %v cmd %v", m.view, cmd)
+	}
+}
+
+// Each publish step's picker moves within its own choices.
+func TestPublishPickersMoveWithinTheirChoices(t *testing.T) {
+	for _, c := range []struct {
+		view    view
+		choices int
+	}{{viewAction, len(publish.Actions)}, {viewInline, len(publish.InlineModes)}} {
+		m := newModel(t, readyFixture(t, "", ""))
+		m.view, m.pick, m.action = c.view, 0, "comment"
+		last := c.choices - 1
+		for _, step := range []struct {
+			key  string
+			want int
+		}{{"j", 1}, {"down", min(2, last)}, {"j", last}, {"j", last}, {"k", last - 1}, {"up", max(0, last-2)}, {"k", 0}, {"up", 0}} {
+			m.Update(keyOf(step.key))
+			if m.pick != step.want || m.view != c.view {
+				t.Fatalf("view %v after %s: pick %d view %v, want %d", c.view, step.key, m.pick, m.view, step.want)
+			}
+		}
+	}
+}
+
+// p reloads the draft before it publishes or returns, so a draft that no longer decodes ends the review there.
+func TestEndingOnADraftThatStopsDecodingEndsTheReview(t *testing.T) {
+	for name, open := range map[string]func(t *testing.T) (*Model, string){
+		"pull request": func(t *testing.T) (*Model, string) {
+			dir := readyFixture(t, "", "")
+			return newModel(t, dir), dir
+		},
+		"local": func(t *testing.T) (*Model, string) {
+			m, dir := readyApplyModel(t, "Claude")
+			return m, dir
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, dir := open(t)
+			corruptDraft(t, dir)
+			_, cmd := m.Update(keyOf("p"))
+			if r, ok := refusal.As(m.err); !ok || r.Code != refusal.Record || !isQuit(cmd) {
+				t.Fatalf("err %v quit %v", m.err, isQuit(cmd))
+			}
+		})
+	}
+}
+
+// An id too long for the row takes the title's room: the location column gives way first and then the confidence,
+// so the title keeps its floor and the row fits.
+func TestALongIDTakesTheLocationAndConfidenceColumns(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 80, 24)
+	before := m.listColumns()
+	if before.location == 0 || !before.confidence {
+		t.Fatalf("at 80 columns the list has no location or confidence to give up: %+v", before)
+	}
+	m.draft.Findings[0].ID = "f-" + strings.Repeat("9", 48)
+	m.setDraft(m.draft)
+	c := m.listColumns()
+	if c.location != 0 || c.confidence || c.title < listTitleFloor {
+		t.Errorf("columns with a long id: %+v", c)
+	}
+	for _, l := range strings.Split(m.View().Content, "\n") {
+		if style.Width(l) > 80 {
+			t.Errorf("row is %d cells: %q", style.Width(l), l)
+		}
+	}
+}
+
+// A full-summary command too wide for one row beside its label, but not alone, moves to the row under the label whole,
+// with no backslash.
+func TestSummaryCommandTakesItsOwnRowWhenTheLabelCrowdsIt(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 60, 14)
+	m.target.Owner = "acme-" + strings.Repeat("o", 13)
+	m.draft.Summary = "- one\n- two\n- three\n- four\n- five\n- six"
+	command := "loupe show --run " + m.runRef()
+	if alone, labeled := 2+len(command), 2+len("full summary: ")+len(command); alone > 60 || labeled <= 60 {
+		t.Fatalf("the ref does not fall between the two widths: alone %d, with the label %d", alone, labeled)
+	}
+	_, below := m.summaryCommand()
+	if len(below) != 2 || ansi.Strip(below[1]) != "  "+command {
+		t.Fatalf("rows under the summary: %q", below)
 	}
 }

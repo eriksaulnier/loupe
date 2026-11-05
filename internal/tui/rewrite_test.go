@@ -525,3 +525,13 @@ func TestRewriteOnAPullRequestRunKeepsTwoFields(t *testing.T) {
 		t.Errorf("the pane names a proposal:\n%s", pane)
 	}
 }
+
+// A rewrite that cannot be written ends the review.
+func TestARewriteThatCannotBeWrittenEndsTheReview(t *testing.T) {
+	m, dir := editModel(t, "f-001", unchanged)
+	m.Update(runeKey("w"))
+	typeText(m, " typed")
+	breakLock(t, dir)
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	wantLockFailure(t, m, cmd)
+}

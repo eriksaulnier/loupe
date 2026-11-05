@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 // newAwaitingModel opens review on the fixture after the human sent f-001 back as n-001, which is handed to the agent
@@ -439,5 +441,47 @@ func TestDecisionNamesAnAmendedWithdrawalReason(t *testing.T) {
 	pressKeys(t, m, "a")
 	if !strings.Contains(m.notice, "f-003 changed") {
 		t.Errorf("notice %q does not name the amended reason", m.notice)
+	}
+}
+
+// writeDraftAsIs writes d straight to draft.json, as an outside writer that bypasses loupe would, so a test can drop a
+// finding no loupe command removes.
+func writeDraftAsIs(t *testing.T, dir string, d *draft.Draft) {
+	t.Helper()
+	d.Version++
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A decision on a finding an outside writer has dropped from the draft records nothing and says it is gone.
+func TestDecisionOnAFindingGoneFromTheDraftIsRefused(t *testing.T) {
+	dir := newFixture(t)
+	m := newModel(t, dir)
+	mustOpenFinding(t, m, "f-001")
+	d := loadDraft(t, dir)
+	d.Findings = d.Findings[1:]
+	writeDraftAsIs(t, dir, d)
+	recorded, err := m.Decide("f-001", accepted("f-001"))
+	if err != nil || recorded || !strings.Contains(m.notice, "f-001") {
+		t.Fatalf("recorded %v err %v notice %q", recorded, err, m.notice)
+	}
+	if got := loadDraft(t, dir); len(got.Decisions) != 0 {
+		t.Fatalf("decisions %v", got.Decisions)
+	}
+}
+
+// Enter on a start screen whose findings an outside writer emptied opens the list, with nothing to start on.
+func TestApplyStartWithNoFindingsLeftOpensTheList(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	d := loadDraft(t, dir)
+	d.Findings, d.Decisions = []draft.Finding{}, map[string]draft.Decision{}
+	writeDraftAsIs(t, dir, d)
+	m.Update(keyOf("ctrl+r"))
+	if m.view != viewStart || m.err != nil {
+		t.Fatalf("after the reload: view %v err %v", m.view, m.err)
+	}
+	if _, cmd := m.Update(keyOf("enter")); cmd != nil || m.view != viewList {
+		t.Fatalf("enter: view %v cmd %v", m.view, cmd)
 	}
 }

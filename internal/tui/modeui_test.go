@@ -430,4 +430,17 @@ func TestLocalPlace(t *testing.T) {
 			t.Errorf("%+v: place %+v, want %+v", c.local, got, c.want)
 		}
 	}
+	if got := *localPlace(run.Target{}); got != (style.LocalPlace{}) {
+		t.Errorf("a target with no local block: place %+v", got)
+	}
+}
+
+// A word a local run has no form of reads as on a pull request run.
+func TestApplyKeepsAWordItHasNoFormOf(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	for word, want := range map[string]string{"excluded": "rejected", "the agent": "Claude", "accepted": "accepted"} {
+		if got := m.ui.word(m, word); got != want {
+			t.Errorf("%q reads %q, want %q", word, got, want)
+		}
+	}
 }

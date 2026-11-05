@@ -88,3 +88,21 @@ func TestTheCursorShowsOnlyInAnEditor(t *testing.T) {
 		})
 	}
 }
+
+// A caret past the last cell of a row goes at the row's end, after any trailing escape.
+func TestInsertAtCellPastTheEndAppends(t *testing.T) {
+	for _, c := range []struct {
+		row  string
+		col  int
+		want string
+	}{
+		{"ab", 2, "ab|"},
+		{"ab", 9, "ab|"},
+		{"a\x1b[1mb\x1b[m", 5, "a\x1b[1mb\x1b[m|"},
+		{"ab", 1, "a|b"},
+	} {
+		if got := insertAtCell(c.row, c.col, "|"); got != c.want {
+			t.Errorf("insertAtCell(%q, %d) = %q, want %q", c.row, c.col, got, c.want)
+		}
+	}
+}

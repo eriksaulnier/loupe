@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 )
@@ -112,4 +115,29 @@ func TestApplyStartPaneFitsItsLines(t *testing.T) {
 		return
 	}
 	t.Fatal("no count on the start screen")
+}
+
+// ctrl+r on the start screen reloads the draft, so a change made since it opened shows in the count.
+func TestApplyStartCtrlRReloads(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	outside(t, dir, accepted("f-001"))
+	m.Update(keyOf("ctrl+r"))
+	if screen := screenText(m); m.view != viewStart || !strings.Contains(screen, "2 findings to decide") {
+		t.Fatalf("view %v after ctrl+r:\n%s", m.view, screen)
+	}
+}
+
+// A summary longer than the start pane ends in how many lines it left out, and a title taller than the pane still
+// leaves the count on screen.
+func TestApplyStartPaneShortensWhatDoesNotFit(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	m.draft.Summary = strings.Repeat("A line of the summary.\n", 30)
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
+	if screen := screenText(m); !regexp.MustCompile(`\d+ more lines`).MatchString(screen) || !strings.Contains(screen, "3 findings to decide") {
+		t.Errorf("a long summary:\n%s", screen)
+	}
+	m.target.Title = strings.Repeat("A very long title ", 40)
+	if screen := screenText(m); !strings.Contains(screen, "3 findings to decide") {
+		t.Errorf("a tall title hides the count:\n%s", screen)
+	}
 }

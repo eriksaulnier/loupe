@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 // readyApplyModel is the apply fixture with every finding accepted.
@@ -303,5 +304,22 @@ func TestApplyReturnTakesOneKeyPerDecision(t *testing.T) {
 	}
 	if r, ok := m.Returned(); !ok || r.Accepted != 7 || r.Rejected != 3 {
 		t.Errorf("Returned() = %+v, %v", r, ok)
+	}
+}
+
+// A return that cannot be written ends the review, and so does a refused return whose draft then fails to reload.
+func TestApplyReturnThatCannotBeSealedEndsTheReview(t *testing.T) {
+	m, dir := readyApplyModel(t, "Claude")
+	press(m, "p")
+	breakLock(t, dir)
+	_, cmd := m.Update(enterKey)
+	wantLockFailure(t, m, cmd)
+
+	m, dir = readyApplyModel(t, "Claude")
+	press(m, "p")
+	corruptDraft(t, dir)
+	_, cmd = m.Update(enterKey)
+	if r, ok := refusal.As(m.err); !ok || r.Code != refusal.Record || !isQuit(cmd) || returned(t, dir) {
+		t.Fatalf("err %v quit %v returned %v", m.err, isQuit(cmd), returned(t, dir))
 	}
 }

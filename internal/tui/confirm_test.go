@@ -1,14 +1,18 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
+	"image/color"
 	"io"
 	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 	"unicode/utf8"
 
@@ -1256,5 +1260,171 @@ func TestConfirmNamesAnEditedRound(t *testing.T) {
 	typeInto(m, "A message long enough to drop a round.")
 	if view := ansi.Strip(m.confirm.content(m.shell)); strings.Contains(view, notice) || !strings.Contains(view, "The oldest round was dropped") {
 		t.Fatalf("the notice names a round the body no longer carries:\n%s", view)
+	}
+}
+
+// A composer that drops the message slot leaves no place to type: the confirmation says so and offers no input.
+func TestConfirmWithNoSlotForTheMessageOffersNoInput(t *testing.T) {
+	preview := confirmPreview()
+	plain := composeOpening(preview, nil)
+	preview.Compose = func(string) (publish.Envelope, string, error) { return plain("") }
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if m.confirm.typing || m.confirm.inline() {
+		t.Fatal("an input was offered with no slot for it")
+	}
+	if view := paneConcat(m.View().Content); !strings.Contains(view, "this review has no room for a message: the composed review has nowhere to put your message") {
+		t.Errorf("the confirmation does not say why there is no input:\n%s", view)
+	}
+}
+
+// A body that, once a message is typed, no longer opens the way the slot probe found draws whole and says why, so the
+// screen never shows a tail the body does not carry.
+func TestConfirmDrawsWholeWhenTheBodyMovesUnderTheMessage(t *testing.T) {
+	preview := confirmPreview()
+	opening := composeOpening(preview, nil)
+	preview.Compose = func(message string) (publish.Envelope, string, error) {
+		env, payload, err := opening(message)
+		if message != "" && message != messageSlot {
+			env.Body = "Moved.\n\n" + env.Body
+		}
+		return env, payload, err
+	}
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "Hi")
+	if m.confirm.inline() || m.confirm.slotErr == nil {
+		t.Fatalf("inline %v slotErr %v", m.confirm.inline(), m.confirm.slotErr)
+	}
+	if view := paneConcat(m.View().Content); !strings.Contains(view, "the composed review does not open where your message goes") || !strings.Contains(view, "Moved.") {
+		t.Errorf("the confirmation does not draw the moved body whole:\n%s", view)
+	}
+}
+
+// While the message is typed, page up scrolls the findings back, as page down scrolled them.
+func TestConfirmPageKeysScrollWhileTyping(t *testing.T) {
+	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 14})
+	if !m.confirm.typing {
+		t.Fatal("the confirmation opened without the input")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
+	down := m.confirm.scroll.YOffset()
+	m.Update(keyOf("pgup"))
+	if down == 0 || m.confirm.scroll.YOffset() >= down || !m.confirm.typing || m.confirm.value() != "" {
+		t.Fatalf("pgdown to %d, pgup to %d, typing %v value %q", down, m.confirm.scroll.YOffset(), m.confirm.typing, m.confirm.value())
+	}
+}
+
+// A refusal taller than the rows left under the preview keeps its first and last rows and says how many it left out.
+func TestConfirmShortensATallRefusal(t *testing.T) {
+	preview := confirmPreview()
+	long := refusal.New(refusal.Markdown, strings.Repeat("the message breaks a rule of the allowlist ", 6), "remove the raw tag")
+	preview.Compose = composeOpening(preview, long)
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
+	typeInto(m, "<b>")
+	whole := m.confirm.noticeLines(m.shell, "", 100)
+	if len(whole) < 3 {
+		t.Fatalf("the refusal is %d rows, too short to shorten: %q", len(whole), whole)
+	}
+	if lines := m.confirm.noticeLines(m.shell, "", 2); !slices.Equal(lines, []string{whole[0], whole[len(whole)-1]}) {
+		t.Fatalf("notice in 2 rows: %q, whole %q", lines, whole)
+	}
+}
+
+// The standalone confirmation follows the terminal's answer to the background query.
+func TestConfirmTakesTheTerminalBackground(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.Update(tea.BackgroundColorMsg{Color: color.White})
+	if !m.shell.backgroundReceived || m.shell.styles.Dark {
+		t.Fatalf("received %v dark %v", m.shell.backgroundReceived, m.shell.styles.Dark)
+	}
+}
+
+// A paste into the review's own confirmation lands in the message.
+func TestReviewConfirmationTakesAPaste(t *testing.T) {
+	m := newModel(t, readyFixture(t, "", ""))
+	showConfirmation(m)
+	m.Update(tea.PasteMsg{Content: "Pasted words."})
+	if got := m.confirm.value(); got != "Pasted words." {
+		t.Fatalf("message %q", got)
+	}
+}
+
+// A publish that fails with an error that is not a refusal ends the review on it. A refusal returns to the list and
+// names what changed in the draft meanwhile.
+func TestPublishOutcomeThatIsNotARefusalEndsTheReview(t *testing.T) {
+	m := newModel(t, readyFixture(t, "", ""))
+	m.view = viewPublishing
+	broken := errors.New("connection reset")
+	if _, cmd := m.Update(publishDone{err: broken}); !errors.Is(m.err, broken) || !isQuit(cmd) {
+		t.Fatalf("err %v quit %v", m.err, isQuit(cmd))
+	}
+
+	dir := readyFixture(t, "", "")
+	m = newModel(t, dir)
+	m.view = viewPublishing
+	agentRetitles(t, dir, "f-002", "Agent title two")
+	m.Update(publishDone{err: refusal.New(refusal.Auth, "GitHub refused the token", "run gh auth login")})
+	if m.view != viewList || m.err != nil || !strings.Contains(m.notice, "GitHub refused the token; run gh auth login; ") || !strings.Contains(m.notice, "f-002") {
+		t.Fatalf("view %v err %v notice %q", m.view, m.err, m.notice)
+	}
+}
+
+// Piped input reaches the confirmation as the terminal would send it: a bracketed paste types into the message, and
+// the answer to the background query types nothing.
+func TestConfirmReadsPastesAndColorReportsFromPipedInput(t *testing.T) {
+	for _, c := range []struct {
+		name, input, message string
+	}{
+		{"bracketed paste", "\x1b[200~Pasted words.\x1b[201~\ty", "Pasted words."},
+		{"OSC 11 reply", "\x1b]11;rgb:ffff/ffff/ffff\x07\ty", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			answer, err := runConfirm(t, strings.NewReader(c.input))
+			if err != nil || !answer.Publish || answer.Message != c.message {
+				t.Fatalf("answer %+v err %v, want publish with %q", answer, err, c.message)
+			}
+		})
+	}
+}
+
+// Input that fails, rather than ending, cancels the confirmation with the read error.
+func TestConfirmInputThatFailsIsAnError(t *testing.T) {
+	answer, err := runConfirm(t, iotest.ErrReader(errors.New("tty gone")))
+	if answer.Publish || err == nil || err.Error() != "read confirmation input: tty gone" {
+		t.Fatalf("answer %+v err %v", answer, err)
+	}
+	file, err := os.CreateTemp(t.TempDir(), "answers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = file.Close() })
+	// A regular file is no terminal, so it is read as piped input, and epoll refuses a regular file.
+	if answer, err = runConfirm(t, file); answer.Publish || err == nil || !strings.HasPrefix(err.Error(), "read confirmation input: ") {
+		t.Fatalf("answer %+v err %v", answer, err)
+	}
+}
+
+// runConfirm runs the standalone confirmation over in and fails the test if it is still running after five seconds.
+func runConfirm(t *testing.T, in io.Reader) (publish.Confirmation, error) {
+	t.Helper()
+	type result struct {
+		answer publish.Confirmation
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		answer, err := Confirm(in, io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), nil)(confirmPreview())
+		done <- result{answer, err}
+	}()
+	select {
+	case r := <-done:
+		return r.answer, r.err
+	case <-time.After(5 * time.Second):
+		t.Fatal("confirmation still running after its input ended")
+		return publish.Confirmation{}, nil
 	}
 }

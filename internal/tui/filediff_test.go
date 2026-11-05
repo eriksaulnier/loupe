@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -117,5 +119,76 @@ func TestFileDiffOfAFilesRunIsPlain(t *testing.T) {
 				t.Errorf("plain %v, added tint %v", c.plain, tinted)
 			}
 		})
+	}
+}
+
+// j and down move the file diff's cursor one line, k and up move it back, neither moves past an end, and moving
+// above the top of the pane scrolls it.
+func TestFileDiffKeysMoveTheCursorAndScroll(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 16)
+	mustOpenFinding(t, m, "f-002")
+	press(m, "f")
+	if m.view != viewFileDiff {
+		t.Fatalf("f did not open the file diff; notice %q", m.notice)
+	}
+	last := len(m.fileLines) - 1
+	for m.fileCursor < last {
+		m.Update(keyOf("j"))
+	}
+	m.Update(keyOf("down"))
+	if m.fileCursor != last || m.file.YOffset() == 0 {
+		t.Fatalf("at the end: cursor %d of %d, offset %d", m.fileCursor, last, m.file.YOffset())
+	}
+	for m.fileCursor > 0 {
+		before := m.fileCursor
+		m.Update(keyOf("k"))
+		if m.fileCursor != before-1 || m.fileCursor < m.file.YOffset() {
+			t.Fatalf("k from %d: cursor %d, offset %d", before, m.fileCursor, m.file.YOffset())
+		}
+	}
+	m.Update(keyOf("up"))
+	if m.fileCursor != 0 || m.file.YOffset() != 0 {
+		t.Fatalf("at the top: cursor %d, offset %d", m.fileCursor, m.file.YOffset())
+	}
+}
+
+// Enter on a line no finding is filed against stays in the file diff and says so.
+func TestFileDiffEnterOnAnUnmarkedLine(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	mustOpenFinding(t, m, "f-001")
+	press(m, "f")
+	m.Update(keyOf("k"))
+	if len(m.fileLines[m.fileCursor].Markers) != 0 {
+		t.Fatalf("the line above f-001 carries %v", m.fileLines[m.fileCursor].Markers)
+	}
+	press(m, "enter")
+	if m.view != viewFileDiff || m.notice != "no finding on this line" {
+		t.Fatalf("view %v notice %q", m.view, m.notice)
+	}
+}
+
+// A finding on the old side is marked on its removed line, and the border names how many more share the cursor's
+// line.
+func TestFileDiffMarksTheOldSideAndSharedLines(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	m.draft.Findings[1].Location = &draft.FindingLocation{Path: "multi.txt", Line: 3, Side: draft.SideLeft}
+	m.draft.Findings[2].Location = &draft.FindingLocation{Path: "multi.txt", Line: 3}
+	m.setDraft(m.draft)
+	mustOpenFinding(t, m, "f-001")
+	press(m, "f")
+	var removed, added diff.ViewLine
+	for _, l := range m.fileLines {
+		switch {
+		case l.Kind == diff.Delete && l.OldNum == 3:
+			removed = l
+		case l.Kind == diff.Add && l.NewNum == 3:
+			added = l
+		}
+	}
+	if !slices.Equal(removed.Markers, []string{"f-002"}) || !slices.Equal(added.Markers, []string{"f-001", "f-003"}) {
+		t.Fatalf("removed line 3 carries %v, added line 3 carries %v", removed.Markers, added.Markers)
+	}
+	if active := ansi.Strip(m.fileActive()); active != "f-001 +1" {
+		t.Errorf("the border names %q", active)
 	}
 }
