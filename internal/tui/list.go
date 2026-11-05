@@ -486,8 +486,16 @@ func (m *Model) collapsedSummary(full []string, width int) []string {
 	return []string{first}
 }
 
+// listFooter is the list's keys, or the return prompt's while it asks.
+func (m *Model) listFooter() []string {
+	if m.returning {
+		return m.returnKeys()
+	}
+	return m.keys(groupHints(m.listHints())...)
+}
+
 func (m *Model) listView() string {
-	footer := m.keys(groupHints(m.listHints())...)
+	footer := m.listFooter()
 	inner, _ := style.PaneInner(m.width, 0)
 	position := m.styles.Text().Render(position(m.cursor, len(m.order)))
 	findings := style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts()}, Focus: true}

@@ -39,6 +39,7 @@ const (
 	viewConfirm
 	viewPublishing
 	viewPublished
+	viewReturned
 )
 
 type Config struct {
@@ -154,6 +155,10 @@ type Model struct {
 	// message is the review's opening as the human last left it, kept for the life of this program so a cancel or
 	// a refusal does not make them write it again. It reaches no file, and nothing but the confirmation sets it.
 	message string
+	// returning is true while the list asks for the y that returns an apply run; returnVersion is the draft version
+	// the human saw when they asked, which is the one sealed.
+	returning     bool
+	returnVersion int
 	// settling is true right after a decision moved the view; decision keys are dropped until the new finding has
 	// had time to be seen.
 	settling bool
@@ -315,7 +320,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // pollHeld is true while redrawing would move something the human is writing or confirming.
 func (m *Model) pollHeld() bool {
-	return m.noting || m.editing || m.rewriting || m.sending || (m.view != viewList && m.view != viewDetail)
+	return m.noting || m.editing || m.rewriting || m.sending || m.returning || (m.view != viewList && m.view != viewDetail)
 }
 
 func (m *Model) schedulePoll() tea.Cmd {
@@ -521,6 +526,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewPublished {
 			return m, m.updatePublished(msg)
 		}
+		if m.view == viewReturned {
+			return m, m.updateReturned(msg)
+		}
+		if m.returning {
+			return m, m.confirmReturn(msg)
+		}
 		if m.noting {
 			return m, m.updateNote(msg)
 		}
@@ -593,6 +604,8 @@ func (m *Model) viewContent() string {
 		return m.publishingView()
 	case viewPublished:
 		return m.publishedView()
+	case viewReturned:
+		return m.returnedView()
 	}
 	return m.listView()
 }
@@ -728,8 +741,10 @@ func (m *Model) viewFooter() []string {
 		return m.keys(style.KeyGroup{{Key: "ctrl+c", Verb: "quit"}})
 	case viewPublished:
 		return m.publishedKeys()
+	case viewReturned:
+		return m.returnedKeys()
 	}
-	return m.keys(groupHints(m.listHints())...)
+	return m.listFooter()
 }
 
 // helpKey is one row of help: the primary key, what it does, and the compatibility alias when there is one.

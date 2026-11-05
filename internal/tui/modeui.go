@@ -255,7 +255,12 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	return append(hints, style.Hint{Key: "esc", Verb: "list", Role: style.RoleNav}, style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp})
 }
 
-func (applyUI) listKey(*Model, string) (tea.Cmd, bool) { return nil, false }
+func (applyUI) listKey(m *Model, key string) (tea.Cmd, bool) {
+	if key == "p" {
+		return m.askReturn(), true
+	}
+	return nil, false
+}
 
 func (applyUI) detailKey(m *Model, _ draft.Finding, key string) (tea.Cmd, bool) {
 	switch key {
