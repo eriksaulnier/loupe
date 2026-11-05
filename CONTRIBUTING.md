@@ -109,4 +109,4 @@ CI runs `mise run check` on every pull request and reports coverage to Codecov. 
 
 ## Releases
 
-release-please opens the release pull request from `main`, and merging it tags a draft release. goreleaser attaches the archives and then publishes the draft. Nothing is tagged, released or written into the release manifest by hand. [`docs/releasing.md`](docs/releasing.md) describes the flow, its rules and how to enable immutable releases.
+release-please opens the release pull request from `main`, and merging it tags a draft release. goreleaser attaches the archives and then publishes the draft. The owner MAY cut an `X.Y.Z-rc.N` pre-release of a branch with `.github/workflows/prerelease.yml`. Nothing is tagged, released or written into the release manifest by hand. [`docs/releasing.md`](docs/releasing.md) describes the flow, its rules and how to enable immutable releases.
