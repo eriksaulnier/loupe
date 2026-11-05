@@ -183,7 +183,7 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
 
 `mode.apply.Return` calls `draft.Seal`. A withdrawn finding counts as decided, so it does not block return.
 
-**Refusal order**: for `review`, `handoff` and every command that changes the draft, the `return.json` check comes first. A returned run refuses those with `returned`, and only then does `Refuses` run. `feedback`, `wait`, `show` and `list` read a returned run, because the agent applies the decisions from them. So PR 3's stopgap `wrong-mode` never masks `returned`.
+**Refusal order**: for `review` and `handoff`, the `return.json` check comes first, so a returned run refuses them with `returned` before `Refuses` runs, and PR 3's stopgap `wrong-mode` never masks it. `add`, `edit`, `reply` and `summary` refuse a returned run with `returned` from `draft.Mutate`, under its lock. `publish`, `assess` and `show --previous` or `--comments` refuse a local run with `wrong-mode` whether it is returned or not. `feedback`, `wait`, `show` and `list` read a returned run, because the agent applies the decisions from them.
 
 **After return** (owner, plan card 3): review shows a returned screen, "Returned to `<applier>`" or "Returned to the agent", where `q` quits. `loupe review` and `loupe handoff` on a returned run refuse with `returned`, and the fix names `loupe feedback --run <ref>`.
 

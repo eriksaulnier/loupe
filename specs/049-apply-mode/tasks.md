@@ -75,7 +75,7 @@ Every implementation task follows a failing test, then the change, then a passin
   - `publish.Refuses` gives nil for every command.
 - [ ] T017 Create `internal/mode/mode.go`, `internal/mode/publish.go` and `internal/mode/apply.go` with `Mode{Kind, Rules, InputRules, Refuses}` and `Of`. Add `returned` and `wrong-mode` after `review-open` and before `internal` in `internal/refusal/refusal.go`, and update `refusal_test.go`'s contract order.
 - [ ] T018 [P] Add failing tests in `internal/cli/run_test.go`:
-  - On a returned local run, `review`, `handoff` and every command that changes the draft refuse with `returned`, checked before `Refuses` runs. `feedback`, `wait`, `show` and `list` MUST still read a returned run, since the agent applies the decisions from them.
+  - On a returned local run, `review` and `handoff` refuse with `returned`, checked before `Refuses` runs. `add`, `edit`, `reply` and `summary` refuse with `returned` from `draft.Mutate`. `publish`, `assess` and `show --previous` or `--comments` keep refusing with `wrong-mode`. `feedback`, `wait`, `show` and `list` MUST still read a returned run, since the agent applies the decisions from them.
   - It passes `commandName(cmd)` and the names of the flags set on the command.
   - `show --previous local#1` refuses with `wrong-mode`.
   - Plain `show local#1` succeeds.
@@ -207,7 +207,7 @@ Every implementation task follows a failing test, then the change, then a passin
 - [ ] T051 [P] [US1] Add failing tests in `internal/cli/wait_test.go`, `internal/cli/review_test.go` and `internal/cli/handoff_test.go`:
   - `wait --json` on a sealed local run returns `reason: "returned"`, `awaiting: []`, the payload and no `reviewUrl`.
   - `review` and `handoff` on a sealed run refuse with `returned` and a fix that names `loupe feedback --run <ref>`, and not with `wrong-mode`.
-- [ ] T052 [US1] Make the tests pass. `resolveRun` already orders `returned` first (T019). Add `returned` and `groups` to `contractResultKeys` in `internal/cli/help_test.go`. Amend `specs/001-loupe-v1/contracts/cli.md` for `wait`, `feedback` and the `returned` refusal. Run `mise run check`.
+- [ ] T052 [US1] Make the tests pass. `resolveRun` already refuses `review` and `handoff` with `returned` first (T019). Add `returned` and `groups` to `contractResultKeys` in `internal/cli/help_test.go`. Amend `specs/001-loupe-v1/contracts/cli.md` for `wait`, `feedback` and the `returned` refusal. Run `mise run check`.
 
 **Checkpoint**: PR 3 is green. A sealed run reports correctly through the CLI.
 
