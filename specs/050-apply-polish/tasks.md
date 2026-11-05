@@ -28,8 +28,8 @@ Every task follows a failing test, then the change, then a passing check. PR run
 
 ## Phase 5: Look (US2, FR-009 to FR-011)
 
-- [ ] T011 [US2] Add failing tests in `internal/tui/modeui_test.go` and `internal/tui/tiers_test.go`: on a local run, every tier and NO_COLOR show the badge as words ("local · returns to Claude", `[local -> Claude]` in ASCII), "returns to the agent" with no applier, the short form at 60 columns; the detail leads with "Claude will:" above the body; a question shows its marker and no "will:" block; the verbs read accept, tweak, reject, ask and "return to Claude". Every PR screen test passes unchanged.
-- [ ] T012 [US2] Add the `style.Apply` token (light and dark) in `internal/style/style.go`, the badge in `style.ReviewHeading` and `applyUI.heading`, the lead line in `internal/tui/detail.go`, and the verbs in `internal/tui/modeui.go`.
+- [x] T011 [US2] Add failing tests in `internal/tui/modeui_test.go` and `internal/tui/tiers_test.go`: on a local run, every tier and NO_COLOR show the badge as words ("local · returns to Claude", `[local -> Claude]` in ASCII), "returns to the agent" with no applier, the short form at 60 columns; the detail leads with "Claude will:" above the body; a question shows its marker and no "will:" block; the verbs read accept, tweak, reject, ask and "return to Claude". Every PR screen test passes unchanged.
+- [x] T012 [US2] Add the `style.Apply` token (light and dark) in `internal/style/style.go`, the badge in `style.ReviewHeading` and `applyUI.heading`, the lead line in `internal/tui/detail.go`, and the verbs in `internal/tui/modeui.go`.
 
 ## Phase 6: Skill, docs and end to end
 

@@ -214,7 +214,7 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{upDown, "move", "k/j"},
 			{"enter", "open the finding", ""},
 			{"tab", "expand or collapse the summary", ""},
-			{"p", "return the decisions, with a closing note if you like", ""},
+			{"p", "return the decisions to the agent, with a closing note if you like", ""},
 			{"ctrl+r", "reload the draft from disk", ""},
 		}},
 		viewDetail: {"Finding detail", "detail", []helpKey{
@@ -223,10 +223,10 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{"PgUp/PgDn", "scroll one page", ""},
 			{"space", "scroll one page down", ""},
 			{"a", "accept; resolves its open notes", ""},
-			{"A", "accept with a note; enter accepts, esc cancels", ""},
-			{"x", "exclude; dismisses its open notes", ""},
-			{"X", "exclude with a reason; enter excludes, esc cancels", ""},
-			{"s", "send back; enter sends, esc cancels", ""},
+			{"A", "tweak: accept with a note; enter accepts, esc cancels", ""},
+			{"x", "reject; dismisses its open notes", ""},
+			{"X", "reject with a reason; enter rejects, esc cancels", ""},
+			{"s", "ask: send back with a question; enter sends, esc cancels", ""},
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
@@ -260,10 +260,9 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	}
 	switch draft.Dispositions(m.draft)[f.ID] {
 	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept"), decide("A", "accept with note"), decide("x", "exclude"), decide("X", "exclude with reason"),
-			decide("s", "send back"))
+		hints = append(hints, decide("a", "accept"), decide("A", "tweak"), decide("x", "reject"), decide("X", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionAccepted:
-		hints = append(hints, decide("A", "accept with note"), decide("x", "exclude"), decide("X", "exclude with reason"), decide("s", "send back"))
+		hints = append(hints, decide("A", "tweak"), decide("x", "reject"), decide("X", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionExcluded:
 		hints = append(hints, decide("u", "restore"))
 	case draft.DispositionWithdrawn:
@@ -275,7 +274,7 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	if f.Location != nil {
 		hints = append(hints, style.Hint{Key: "f", Verb: "file", Role: style.RoleFile})
 	}
-	return append(hints, style.Hint{Key: "esc", Verb: "list", Role: style.RoleNav}, style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp})
+	return append(hints, style.Hint{Key: "l", Verb: "list", Role: style.RoleNav}, style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp})
 }
 
 func (applyUI) listKey(m *Model, key string) (tea.Cmd, bool) {
@@ -309,8 +308,14 @@ func heldNote(d *draft.Draft, f draft.Finding, want string) string {
 	return d.Decisions[f.ID].Note
 }
 
+// heading carries the badge that says the decisions go to the human's own agent and nowhere else.
 func (applyUI) heading(m *Model) style.ReviewHeading {
-	return style.ReviewHeading{Ref: localRef(m.target)}
+	full, mid := "local "+m.glyphs.Sep+" returns to "+m.applier(), "local "+m.glyphs.Sep+" "+m.applier()
+	if m.glyphs.Tier == style.ASCII {
+		full = "local -> " + m.applier()
+		mid = full
+	}
+	return style.ReviewHeading{Ref: localRef(m.target), Badges: []string{full, mid, "local"}}
 }
 
 func (applyUI) runRef(m *Model) string { return localRef(m.target) }

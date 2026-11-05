@@ -281,8 +281,13 @@ func (m *Model) partLines(parts []string, gap, width int) []string {
 }
 
 // proposal is what the agent will do if the human accepts, read before the evidence it rests on. It is Markdown, so it
-// is rendered as the body is, under a heading in the good tone that names who will apply it.
+// is rendered as the body is, under a lead in the good tone that names who will apply it. A finding the mode reads as
+// a question shows that instead.
 func (m *Model) proposal(f draft.Finding) ([]string, error) {
+	who := m.applier()
+	if m.ui.question(f) {
+		return []string{"", m.styles.Note.Render(m.glyphs.Question + " A question for " + who)}, nil
+	}
 	if f.Proposal == "" {
 		return nil, nil
 	}
@@ -290,11 +295,10 @@ func (m *Model) proposal(f draft.Finding) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	who := "the agent"
-	if applier := render.ForDisplay(render.OneLine(m.target.Applier)); applier != "" {
-		who = applier
+	if who == "the agent" {
+		who = "The agent"
 	}
-	out := []string{"", m.styles.Emphasis(m.styles.Good).Render("If you accept, " + who + " will")}
+	out := []string{"", m.styles.Emphasis(m.styles.Good).Render(who + " will:")}
 	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
 }
 

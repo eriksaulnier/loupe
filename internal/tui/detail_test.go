@@ -1098,36 +1098,13 @@ func TestDetailPinsItsTitleAndMetadata(t *testing.T) {
 	}
 }
 
-// On an apply run the proposal comes directly under the title, before the evidence, headed by who will apply it.
-func TestApplyDetailShowsTheProposalUnderTheTitle(t *testing.T) {
-	m, _ := applyModel(t, "Claude")
-	mustOpenFinding(t, m, "f-001")
-	screen := screenText(m)
-	order := []string{"Rename the helper", "If you accept, Claude will", "Rename helper to insertAfter in a.go.", "a.go:3", "The helper name hides what it does."}
-	at := -1
-	for _, want := range order {
-		i := strings.Index(screen, want)
-		if i <= at {
-			t.Fatalf("%q is missing or out of order (want %q):\n%s", want, order, screen)
-		}
-		at = i
-	}
-	mustOpenFinding(t, m, "f-002")
-	if screen := screenText(m); strings.Contains(screen, "If you accept") {
-		t.Errorf("a question shows a proposal heading:\n%s", screen)
-	}
-
-	nobody, _ := applyModel(t, "")
-	mustOpenFinding(t, nobody, "f-003")
-	if screen := screenText(nobody); !strings.Contains(screen, "If you accept, the agent will") || !strings.Contains(screen, "Remove the flag.") {
-		t.Errorf("with no applier the heading does not name the agent:\n%s", screen)
-	}
-
+// On an apply run the lead is in the good tone.
+func TestApplyDetailLeadIsInTheGoodTone(t *testing.T) {
 	colored, _ := applyModel(t, "Claude")
 	colored.styles.SetColorProfile(colorprofile.TrueColor)
 	mustOpenFinding(t, colored, "f-001")
-	if view := colored.View().Content; !strings.Contains(view, colored.styles.Emphasis(colored.styles.Good).Render("If you accept, Claude will")) {
-		t.Errorf("the proposal heading is not in the good tone:\n%q", view)
+	if view := colored.View().Content; !strings.Contains(view, colored.styles.Emphasis(colored.styles.Good).Render("Claude will:")) {
+		t.Errorf("the lead is not in the good tone:\n%q", view)
 	}
 }
 
