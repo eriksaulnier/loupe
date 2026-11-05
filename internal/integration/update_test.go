@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/updatecheck"
 )
 
@@ -100,13 +102,23 @@ func TestCaptureSurvivesAFailedLookup(t *testing.T) {
 	}
 }
 
+// shortLookup gives the latest-release request a short deadline of its own, so a stalled lookup ends at once. The 2s
+// limit itself is pinned by updatecheck's TestLookupTimeoutIsTwoSeconds and TestRefreshBoundsTheLookup.
+type shortLookup struct{ github.Client }
+
+func (c shortLookup) LatestRelease(ctx context.Context, owner, repo string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer cancel()
+	return c.Client.LatestRelease(ctx, owner, repo)
+}
+
 func TestCaptureSurvivesAStalledLookup(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	h.Version = "0.19.0"
 	h.GH.StallLatestRelease()
+	h.client = shortLookup{h.client}
 
-	start := time.Now()
 	_, stderr, exit := h.Run("capture", prURL(), "--json")
 	if exit != 0 || stderr != "" {
 		t.Errorf("exit %d, stderr %q", exit, stderr)
@@ -114,9 +126,8 @@ func TestCaptureSurvivesAStalledLookup(t *testing.T) {
 	if got := h.releaseLookups(); got != 1 {
 		t.Errorf("lookups = %d, want 1", got)
 	}
-	// TestRefreshGivesUpOnAStalledLookup pins the limit, so this checks only the lower bound.
-	if elapsed := time.Since(start); elapsed < updatecheck.LookupTimeout {
-		t.Errorf("capture took %v, so it did not wait for the stalled lookup", elapsed)
+	if got := updatecheck.Cached(updatecheck.CachePath(h.Home)); got != "" {
+		t.Errorf("Cached = %q, want nothing from a lookup that never answered", got)
 	}
 }
 
