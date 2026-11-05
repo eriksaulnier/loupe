@@ -452,12 +452,17 @@ func stageErr(t *testing.T, clone string) error {
 // A tracked file Git converts on checkout differs from HEAD's blob on disk even when nobody edited it, and capture
 // runs no conversion to tell the two apart, so it refuses rather than report every such file as changed.
 func TestStageWorktreeRefusesACheckoutConversion(t *testing.T) {
-	for _, c := range []struct{ name, attrs, file, content string }{
-		{"eol=crlf", "*.txt text eol=crlf\n", "f.txt", "a\nb\n"},
-		{"ident", "*.c ident\n", "f.c", "/* $Id$ */\n"},
+	for _, c := range []struct{ name, attrs, file, content, autocrlf string }{
+		{"eol=crlf", "*.txt text eol=crlf\n", "f.txt", "a\nb\n", ""},
+		{"ident", "*.c ident\n", "f.c", "/* $Id$ */\n", ""},
+		{"autocrlf=yes", "", "f.txt", "a\nb\n", "yes"},
+		{"legacy crlf", "*.txt crlf\n", "f.txt", "a\nb\n", "true"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			repo := gitrepo.New(t, "o", "r", 1)
+			if c.autocrlf != "" {
+				repo.Git("config", "core.autocrlf", c.autocrlf)
+			}
 			writeFile(t, filepath.Join(repo.Dir, ".gitattributes"), c.attrs, 0o644)
 			writeFile(t, filepath.Join(repo.Dir, c.file), c.content, 0o644)
 			repo.Git("add", ".gitattributes", c.file)
@@ -507,5 +512,46 @@ func TestStageWorktreeKeepsAnUninitializedSubmodule(t *testing.T) {
 	tree, _ := captureTree(t, repo.Dir)
 	if want := runGit(t, repo.Dir, "rev-parse", "HEAD^{tree}"); tree != want {
 		t.Fatalf("StageWorktree wrote %s, want HEAD's tree %s:\n%s", tree, want, runGit(t, repo.Dir, "ls-tree", tree))
+	}
+}
+
+// Where Git converts nothing on checkout, an edited file is an edit: eol=lf wins over autocrlf, -crlf turns text off,
+// ident needs a $Id to expand, UTF-8 is no encoding, and a NUL makes a text=auto file binary.
+func TestStageWorktreeStagesAnEditGitDoesNotConvert(t *testing.T) {
+	for _, c := range []struct{ name, attrs, content, autocrlf string }{
+		{"eol=lf under autocrlf", "* text=auto eol=lf\n", "a\nb\n", "true"},
+		{"-crlf under autocrlf", "* -crlf\n", "a\nb\n", "true"},
+		{"ident without $Id", "* ident\n", "a\nb\n", ""},
+		{"utf-8 encoding", "* working-tree-encoding=UTF-8\n", "a\nb\n", ""},
+		{"binary under text=auto", "* text=auto\n", "a\x00b\n", "true"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo := gitrepo.New(t, "o", "r", 1)
+			writeFile(t, filepath.Join(repo.Dir, ".gitattributes"), c.attrs, 0o644)
+			writeFile(t, filepath.Join(repo.Dir, "f.txt"), c.content, 0o644)
+			repo.Git("add", ".gitattributes", "f.txt")
+			repo.Git("commit", "-q", "-m", "plain")
+			if c.autocrlf != "" {
+				repo.Git("config", "core.autocrlf", c.autocrlf)
+			}
+			writeFile(t, filepath.Join(repo.Dir, "f.txt"), c.content+"c\n", 0o644)
+			if err := stageErr(t, repo.Dir); err != nil {
+				t.Fatalf("StageWorktree refused an edit Git does not convert: %v", err)
+			}
+		})
+	}
+}
+
+// Under core.fileMode=false a new file is 100644 whatever its execute bit, as git add -A stages it.
+func TestStageWorktreeStagesANewFileAsPlainWithoutFileMode(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	repo.Git("config", "core.fileMode", "false")
+	writeFile(t, filepath.Join(repo.Dir, "new.sh"), "#!/bin/sh\n", 0o755)
+	tree, _ := captureTree(t, repo.Dir)
+	if got := runGit(t, repo.Dir, "ls-tree", tree, "new.sh"); !strings.HasPrefix(got, "100644 ") {
+		t.Fatalf("new.sh staged as %q, want mode 100644", got)
+	}
+	if want := addAllTree(t, repo.Dir); tree != want {
+		t.Fatalf("StageWorktree wrote %s, add -A writes %s", tree, want)
 	}
 }

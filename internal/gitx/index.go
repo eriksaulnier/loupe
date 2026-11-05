@@ -116,8 +116,12 @@ func (ix *Index) StageWorktree() error {
 				mode = "100755"
 			}
 			// With core.fileMode=false the filesystem's execute bit means nothing, so git add -A keeps the mode.
-			if was, ok := head[p]; keepMode && ok && (was.mode == "100644" || was.mode == "100755") {
-				mode = was.mode
+			// A file HEAD does not hold is 100644, as git add -A stages it.
+			if keepMode {
+				mode = "100644"
+				if was, ok := head[p]; ok && (was.mode == "100644" || was.mode == "100755") {
+					mode = was.mode
+				}
 			}
 			hashed = append(hashed, p)
 			entries = append(entries, entry{mode: mode, path: p})
@@ -182,24 +186,32 @@ func (ix *Index) stagedEntries() (map[string]stagedEntry, error) {
 	return entries, nil
 }
 
-// converted is the paths Git would convert on checkout, read from their attributes and the line ending config: a
-// filter, ident, a working-tree encoding, or CRLF line endings on a text file.
+// converted is the paths Git would convert on checkout, following its attribute rules: a filter; ident on a file that
+// holds $Id; a working-tree encoding other than UTF-8; or CRLF line endings on a text file, from the eol or legacy crlf
+// attribute, core.autocrlf or core.eol. A text=auto file holding a NUL is binary to Git and is never converted.
 func (ix *Index) converted(paths []string) ([]string, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
+	// core.autocrlf is a bool or input, and Git reads yes, on and 1 as true, so a bool lookup settles anything else.
 	autocrlf, _, err := configLookup(ix.clone, "--get", "core.autocrlf")
 	if err != nil {
 		return nil, err
+	}
+	if autocrlf = strings.ToLower(autocrlf); autocrlf != "" && autocrlf != "input" {
+		if autocrlf, _, err = configLookup(ix.clone, "--type=bool", "--get", "core.autocrlf"); err != nil {
+			return nil, err
+		}
 	}
 	eolConfig, _, err := configLookup(ix.clone, "--get", "core.eol")
 	if err != nil {
 		return nil, err
 	}
-	autocrlf = strings.ToLower(autocrlf)
-	crlfCheckout := autocrlf == "true" || (autocrlf != "input" && strings.EqualFold(eolConfig, "crlf"))
+	// With text set or auto and no eol attribute, checkout writes CRLF under autocrlf=true, or under core.eol=crlf
+	// when autocrlf is neither true nor input.
+	crlfByConfig := autocrlf == "true" || (autocrlf != "input" && strings.EqualFold(eolConfig, "crlf"))
 	stdin := []byte(strings.Join(paths, "\x00") + "\x00")
-	out, err := run(ix.clone, ix.env(), stdin, "check-attr", "-z", "--stdin", "text", "eol", "filter", "ident", "working-tree-encoding")
+	out, err := run(ix.clone, ix.env(), stdin, "check-attr", "-z", "--stdin", "text", "crlf", "eol", "filter", "ident", "working-tree-encoding")
 	if err != nil {
 		return nil, err
 	}
@@ -218,15 +230,68 @@ func (ix *Index) converted(paths []string) ([]string, error) {
 	var converting []string
 	for _, p := range paths {
 		a := attrs[p]
-		text := a["text"]
+		var data []byte
+		read := func() ([]byte, error) {
+			if data == nil {
+				var err error
+				if data, err = os.ReadFile(filepath.Join(ix.clone, filepath.FromSlash(p))); err != nil {
+					return nil, err
+				}
+			}
+			return data, nil
+		}
+		if given(a["filter"]) {
+			converting = append(converting, p)
+			continue
+		}
+		if enc := strings.ToLower(strings.ReplaceAll(a["working-tree-encoding"], "-", "")); given(enc) && enc != "utf8" {
+			converting = append(converting, p)
+			continue
+		}
+		if a["ident"] == "set" {
+			b, err := read()
+			if err != nil {
+				return nil, err
+			}
+			if bytes.Contains(b, []byte("$Id")) {
+				converting = append(converting, p)
+				continue
+			}
+		}
+		text, eol := a["text"], a["eol"]
+		// The legacy crlf attribute stands in for text when text is not given.
+		if text == "unspecified" {
+			switch a["crlf"] {
+			case "set":
+				text = "set"
+			case "unset":
+				text = "unset"
+			case "input":
+				text, eol = "set", "lf"
+			}
+		}
+		var crlf bool
 		switch {
-		case given(a["filter"]), a["ident"] == "set", given(a["working-tree-encoding"]):
-		case text == "unset":
-			continue
-		case a["eol"] == "crlf":
-		case crlfCheckout && (text == "set" || text == "auto" || (text == "unspecified" && autocrlf == "true")):
+		case text == "unset", eol == "lf":
+		case eol == "crlf":
+			crlf = true
+		case text == "set", text == "auto":
+			crlf = crlfByConfig
 		default:
+			crlf = autocrlf == "true"
+		}
+		if !crlf {
 			continue
+		}
+		if text != "set" && eol != "crlf" {
+			// Auto detection: a NUL makes the file binary to Git, which then converts nothing.
+			b, err := read()
+			if err != nil {
+				return nil, err
+			}
+			if bytes.IndexByte(b[:min(len(b), 8000)], 0) >= 0 {
+				continue
+			}
 		}
 		converting = append(converting, p)
 	}
