@@ -103,6 +103,15 @@ func TestNextLocalRefusesUnparsableNext(t *testing.T) {
 	}
 }
 
+// patientLock waits the longest the lock allows, because five run creations queue behind one lock and a slow
+// filesystem can take longer than the default for them.
+func patientLock(key string) string {
+	if key == "LOUPE_LOCK_TIMEOUT_MS" {
+		return "60000"
+	}
+	return ""
+}
+
 func TestNextLocalConcurrentCallsGetDistinctN(t *testing.T) {
 	root := t.TempDir()
 	target := sampleLocalTarget()
@@ -114,7 +123,7 @@ func TestNextLocalConcurrentCallsGetDistinctN(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+			_, ref, err := NextLocal(root, "test", patientLock, target, nil, sampleDraftJSON())
 			ns[i] = ref.Local
 			errs[i] = err
 		}(i)
