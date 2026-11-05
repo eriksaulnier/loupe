@@ -17,64 +17,10 @@ import (
 	"github.com/charmbracelet/x/exp/teatest/v2"
 	"github.com/charmbracelet/x/vt"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
-
-var testNow = time.Date(2026, 9, 13, 14, 0, 0, 0, time.UTC)
-
-var testEnv = map[string]string{"NO_COLOR": "1"}
-
-// newFixture writes a run with f-001 (blocking issue at multi.txt:3), f-002 (suggestion at multi.txt:21) and f-003
-// (a general question) over the multi-hunk diff.
-func newFixture(t *testing.T) string {
-	t.Helper()
-	dir := run.RunDir(t.TempDir(), "acme", "widgets", 42, 1)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	diffBytes, err := os.ReadFile(filepath.Join("..", "..", "testdata", "diffs", "multi-hunk.diff"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parsed, err := diff.Parse(diffBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := draft.NewEmpty()
-	_, err = draft.Add(d, []draft.FindingInput{
-		{Title: "Title one", Body: "Body one explains the rename.", Location: &draft.LocationInput{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Confidence: "high"},
-		{Title: "Title two", Body: "Body two suggests a helper.", Location: &draft.LocationInput{Path: "multi.txt", Line: 21}, Label: "suggestion", SuggestedFix: "extract insertAfter"},
-		{Title: "Title three", Body: "Body three asks about tests.", General: true, Label: "question"},
-	}, parsed, draft.Rules{}, draft.ByAgent, testNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d.Summary = "Two issues to look at."
-	d.Version = 2
-	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, Title: "Add widgets", DiffSHA256: run.DiffSHA256(diffBytes)}
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), target); err != nil {
-		t.Fatal(err)
-	}
-	if err := run.WriteFileAtomic(filepath.Join(dir, "pr.diff"), diffBytes); err != nil {
-		t.Fatal(err)
-	}
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
-func loadDraft(t *testing.T, dir string) *draft.Draft {
-	t.Helper()
-	d, err := draft.Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return d
-}
 
 func startApp(t *testing.T, dir string) *teatest.TestModel {
 	t.Helper()
@@ -382,14 +328,6 @@ func TestInitDropsKeysUntilTheSettleTick(t *testing.T) {
 	}
 }
 
-// corruptDraft writes a draft.json that no longer decodes.
-func corruptDraft(t *testing.T, dir string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "draft.json"), []byte("{"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // A draft that stops decoding while the review is open ends the program with its refusal, on ctrl+r and on a poll.
 func TestADraftThatStopsDecodingEndsTheReview(t *testing.T) {
 	for _, msg := range []tea.Msg{tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}, pollMsg{}} {
@@ -466,27 +404,6 @@ func TestDecideReturnsErrorsThatAreNotRefusals(t *testing.T) {
 func TestALeftSideLocationIsMarkedOld(t *testing.T) {
 	if got := formatLocation("multi.txt", 3, 0, draft.SideLeft); got != "multi.txt:3 (old)" {
 		t.Fatalf("location %q", got)
-	}
-}
-
-// breakLock puts a directory where the run's lock file goes, so every write to the draft fails with an error that is
-// not a refusal.
-func breakLock(t *testing.T, dir string) {
-	t.Helper()
-	path := filepath.Join(dir, ".lock")
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(path, 0o700); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// wantLockFailure checks that the review ended on the lock error breakLock causes.
-func wantLockFailure(t *testing.T, m *Model, cmd tea.Cmd) {
-	t.Helper()
-	if _, isRefusal := refusal.As(m.err); m.err == nil || isRefusal || !strings.Contains(m.err.Error(), "open lock") || !isQuit(cmd) {
-		t.Fatalf("err %v, quit %v", m.err, isQuit(cmd))
 	}
 }
 

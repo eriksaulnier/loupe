@@ -11,14 +11,6 @@ import (
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
-var (
-	ctrlS    = tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
-	tabKey   = tea.KeyPressMsg{Code: tea.KeyTab}
-	shiftTab = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
-	enterKey = tea.KeyPressMsg{Code: tea.KeyEnter}
-	escKey   = tea.KeyPressMsg{Code: tea.KeyEsc}
-)
-
 func typeText(m *Model, text string) {
 	for _, r := range text {
 		m.Update(runes(string(r)))
@@ -46,7 +38,7 @@ func screenText(m *Model) string { return ansi.Strip(m.View().Content) }
 
 func TestRewriteOpensUnderTheFindingWithItsTitleAndBody(t *testing.T) {
 	m, _ := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	if !m.rewriting {
 		t.Fatal("w did not open the editor")
 	}
@@ -75,7 +67,7 @@ func TestRewriteOpensUnderTheFindingWithItsTitleAndBody(t *testing.T) {
 
 func TestRewriteTabMovesBetweenTheInputs(t *testing.T) {
 	m, _ := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	m.Update(tabKey)
 	typeText(m, " X")
 	m.Update(shiftTab)
@@ -95,7 +87,7 @@ func TestRewriteTabMovesBetweenTheInputs(t *testing.T) {
 
 func TestRewriteTitleStaysOneLineAndTheBodyKeepsLineBreaks(t *testing.T) {
 	m, _ := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	m.Update(enterKey)
 	if m.rewriteFocus != rewriteFocusBody || m.rewriteTitle.Value() != "Title one" {
 		t.Fatalf("enter in the title: focus %v title %q", m.rewriteFocus, m.rewriteTitle.Value())
@@ -116,7 +108,7 @@ func TestRewriteTitleStaysOneLineAndTheBodyKeepsLineBreaks(t *testing.T) {
 func TestRewriteSavedOnAPendingFindingStaysPendingUntilAccepted(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
 	version := loadDraft(t, dir).Version
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " fixed")
 	m.Update(tabKey)
 	typeText(m, " Really.")
@@ -141,7 +133,7 @@ func TestRewriteSavedOnAPendingFindingStaysPendingUntilAccepted(t *testing.T) {
 		t.Fatalf("the detail does not show the new text:\n%s", view)
 	}
 
-	m.Update(runeKey("a"))
+	m.Update(runes("a"))
 	d = loadDraft(t, dir)
 	if got := d.Decisions["f-001"]; got.Decision != draft.DecisionAccepted || got.FindingRev != 2 {
 		t.Fatalf("decision %+v", got)
@@ -151,7 +143,7 @@ func TestRewriteSavedOnAPendingFindingStaysPendingUntilAccepted(t *testing.T) {
 func TestRewriteSavedUnchangedRecordsNothing(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
 	version := loadDraft(t, dir).Version
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	m.Update(ctrlS)
 	if d := loadDraft(t, dir); d.Version != version || m.rewriting || m.notice != "" {
 		t.Fatalf("version %d, want %d; rewriting %v notice %q", d.Version, version, m.rewriting, m.notice)
@@ -166,17 +158,17 @@ func TestRewriteLeavesUntouchedTabsAndCarriageReturnsAsTheAgentWrote(t *testing.
 		return nil
 	})
 	version := loadDraft(t, dir).Version
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	m.Update(ctrlS)
 	if d := loadDraft(t, dir); d.Version != version || m.rewriting {
 		t.Fatalf("an untouched save wrote the draft: version %d, want %d; rewriting %v", d.Version, version, m.rewriting)
 	}
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	m.Update(escKey)
 	if kept, ok := m.keptRewrites["f-001"]; ok {
 		t.Fatalf("esc kept untouched text %+v", kept)
 	}
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	m.Update(tabKey)
 	typeText(m, " Mine.")
 	m.Update(shiftTab)
@@ -184,7 +176,7 @@ func TestRewriteLeavesUntouchedTabsAndCarriageReturnsAsTheAgentWrote(t *testing.
 	if f := findingOf(t, dir, "f-001"); m.rewriting || f.Title != title || f.Body == body {
 		t.Fatalf("rewriting %v; a body rewrite changed the title: %+v", m.rewriting, f)
 	}
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " fixed")
 	m.Update(ctrlS)
 	if f := findingOf(t, dir, "f-001"); f.Title == title || !strings.HasSuffix(f.Body, " Mine.") {
@@ -200,7 +192,7 @@ func TestRewriteTypedFieldKeepsACarriageReturnLineFeedAsOneBreak(t *testing.T) {
 			d.Findings[0].Body = body
 			return nil
 		})
-		m.Update(runeKey("w"))
+		m.Update(runes("w"))
 		m.Update(tabKey)
 		typeText(m, " Mine.")
 		m.Update(ctrlS)
@@ -210,7 +202,7 @@ func TestRewriteTypedFieldKeepsACarriageReturnLineFeedAsOneBreak(t *testing.T) {
 	})
 	t.Run("rebased", func(t *testing.T) {
 		m, dir := editModel(t, "f-001", unchanged)
-		m.Update(runeKey("w"))
+		m.Update(runes("w"))
 		typeText(m, " fixed")
 		outside(t, dir, func(d *draft.Draft) error {
 			d.Findings[0].Body = body
@@ -242,7 +234,7 @@ func TestRewriteRefusedKeepsTheEditorAndTheText(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			m, dir := editModel(t, "f-001", unchanged)
 			version := loadDraft(t, dir).Version
-			m.Update(runeKey("w"))
+			m.Update(runes("w"))
 			c.edit(m)
 			title, body := m.rewriteTitle.Value(), m.rewriteBody.Value()
 			m.Update(ctrlS)
@@ -262,20 +254,20 @@ func TestRewriteRefusedKeepsTheEditorAndTheText(t *testing.T) {
 func TestRewriteEscKeepsTheTextForThatFinding(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
 	version := loadDraft(t, dir).Version
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " kept")
 	m.Update(escKey)
 	if m.rewriting || loadDraft(t, dir).Version != version {
 		t.Fatalf("esc recorded or left the editor open")
 	}
-	m.Update(runeKey("n"))
-	m.Update(runeKey("w"))
+	m.Update(runes("n"))
+	m.Update(runes("w"))
 	if got := m.rewriteTitle.Value(); got != "Title two" {
 		t.Fatalf("another finding opened on %q", got)
 	}
 	m.Update(escKey)
-	m.Update(runeKey("N"))
-	m.Update(runeKey("w"))
+	m.Update(runes("N"))
+	m.Update(runes("w"))
 	if got := m.rewriteTitle.Value(); got != "Title one kept" {
 		t.Fatalf("reopened on %q", got)
 	}
@@ -283,7 +275,7 @@ func TestRewriteEscKeepsTheTextForThatFinding(t *testing.T) {
 
 func TestRewriteSavedOverAnAgentEditRefusesAndKeepsTheText(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	m.Update(tabKey)
 	typeText(m, " Mine.")
 	agentRetitles(t, dir, "f-001", "Agent title")
@@ -318,7 +310,7 @@ func TestRewriteSavedOverAnAgentEditRefusesAndKeepsTheText(t *testing.T) {
 // agent's body, and the save leaves it as the agent wrote it.
 func TestRewriteKeptTextTakesTheAgentsNewerUntouchedField(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " fixed")
 	m.Update(escKey)
 	outside(t, dir, func(d *draft.Draft) error {
@@ -327,7 +319,7 @@ func TestRewriteKeptTextTakesTheAgentsNewerUntouchedField(t *testing.T) {
 		return nil
 	})
 	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	if m.rewriteTitle.Value() != "Title one fixed" || m.rewriteBody.Value() != "The agent's corrected body." {
 		t.Fatalf("reopened on title %q body %q", m.rewriteTitle.Value(), m.rewriteBody.Value())
 	}
@@ -347,7 +339,7 @@ func TestRewriteRefusesAWithdrawnFinding(t *testing.T) {
 		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	})
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	if m.rewriting || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "reinstate f-002 first") {
 		t.Fatalf("rewriting %v notice %q", m.rewriting, m.notice)
 	}
@@ -355,7 +347,7 @@ func TestRewriteRefusesAWithdrawnFinding(t *testing.T) {
 
 func TestRewritePollChangesNothingWhileTheEditorIsOpen(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " typed")
 	agentRetitles(t, dir, "f-002", "Agent title two")
 	m.Update(pollMsg{})
@@ -366,12 +358,12 @@ func TestRewritePollChangesNothingWhileTheEditorIsOpen(t *testing.T) {
 
 func TestRewriteKeptTextOnAChangedFindingSaysSo(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " kept")
 	m.Update(escKey)
 	agentRetitles(t, dir, "f-001", "Agent title")
 	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	if got := m.rewriteTitle.Value(); got != "Title one kept" {
 		t.Fatalf("reopened on %q", got)
 	}
@@ -390,7 +382,7 @@ func TestRewriteFitsTheSmallestWindow(t *testing.T) {
 			if err := m.openFinding("f-001"); err != nil {
 				t.Fatal(err)
 			}
-			m.Update(runeKey("w"))
+			m.Update(runes("w"))
 			m.Update(tabKey)
 			typeText(m, strings.Repeat(" more words", 30))
 			lines := strings.Split(screenText(m), "\n")
@@ -417,7 +409,7 @@ func TestRewriteFitsTheSmallestWindow(t *testing.T) {
 
 func TestRewriteSurvivesTheTooSmallWindow(t *testing.T) {
 	m, _ := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " one")
 	m.Update(tabKey)
 	typeText(m, " two")
@@ -446,7 +438,7 @@ func TestRewriteKeepsADecisionTheFindingHad(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			m, dir := editModel(t, "f-001", c.decide)
-			m.Update(runeKey("w"))
+			m.Update(runes("w"))
 			typeText(m, " fixed")
 			m.Update(ctrlS)
 			if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != c.disposition {
@@ -461,7 +453,7 @@ func TestRewriteKeepsADecisionTheFindingHad(t *testing.T) {
 
 func TestRewriteLeavesAnOpenNoteOpen(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.SendBack(d, "f-001", "Plainer?", testNow); return err })
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " plainer")
 	m.Update(ctrlS)
 	if got := noteStatuses(loadDraft(t, dir)); len(got) != 1 || got[0] != "n-001 open" {
@@ -471,7 +463,7 @@ func TestRewriteLeavesAnOpenNoteOpen(t *testing.T) {
 
 func TestDetailSaysTheAgentChangedTheHumansText(t *testing.T) {
 	m, dir := editModel(t, "f-003", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " mine")
 	m.Update(ctrlS)
 	if strings.Contains(screenText(m), "the agent changed text you wrote") {
@@ -491,7 +483,7 @@ func TestDetailSaysTheAgentChangedTheHumansText(t *testing.T) {
 // The detail then says both, the notice under the finding's meta and the reason below it.
 func TestDetailSaysTheAgentChangedTheHumansTextAndWhyItWithdrew(t *testing.T) {
 	m, dir := editModel(t, "f-003", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " mine")
 	m.Update(ctrlS)
 	outside(t, dir, func(d *draft.Draft) error {
@@ -514,7 +506,7 @@ func rewritePane(m *Model) string { return ansi.Strip(strings.Join(m.rewriteView
 // A pull request run has no proposal, so its editor keeps two fields.
 func TestRewriteOnAPullRequestRunKeepsTwoFields(t *testing.T) {
 	m, _ := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	if n := len(m.rewriteInputs()); n != 2 {
 		t.Fatalf("%d fields", n)
 	}
@@ -529,7 +521,7 @@ func TestRewriteOnAPullRequestRunKeepsTwoFields(t *testing.T) {
 // A rewrite that cannot be written ends the review.
 func TestARewriteThatCannotBeWrittenEndsTheReview(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
-	m.Update(runeKey("w"))
+	m.Update(runes("w"))
 	typeText(m, " typed")
 	breakLock(t, dir)
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})

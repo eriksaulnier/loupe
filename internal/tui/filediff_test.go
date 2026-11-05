@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -13,37 +11,14 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 // prNewFileFixture is a pull request run whose diff adds a.go whole, with f-001 at a.go:3.
 func prNewFileFixture(t *testing.T) string {
 	t.Helper()
-	dir := run.RunDir(t.TempDir(), "acme", "widgets", 42, 1)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	diffBytes := newFileDiff()
-	parsed, err := diff.Parse(diffBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := draft.NewEmpty()
-	if _, err := draft.Add(d, []draft.FindingInput{{Title: "Rename the helper", Body: "The helper name hides what it does.",
-		Location: &draft.LocationInput{Path: "a.go", Line: 3}, Label: "issue"}}, parsed, draft.Rules{}, draft.ByAgent, testNow); err != nil {
-		t.Fatal(err)
-	}
-	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, Title: "Add widgets", DiffSHA256: run.DiffSHA256(diffBytes)}
-	for name, v := range map[string]any{"target.json": target, "draft.json": d} {
-		if err := run.WriteJSONAtomic(filepath.Join(dir, name), v); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := run.WriteFileAtomic(filepath.Join(dir, "pr.diff"), diffBytes); err != nil {
-		t.Fatal(err)
-	}
-	return dir
+	return writePRRun(t, newFileDiff(), []draft.FindingInput{{Title: "Rename the helper", Body: "The helper name hides what it does.",
+		Location: &draft.LocationInput{Path: "a.go", Line: 3}, Label: "issue"}}, nil)
 }
 
 // codeRuns are the runs whose a.go is a whole-file addition, and whether each draws it as plain text.

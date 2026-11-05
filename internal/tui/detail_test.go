@@ -76,9 +76,6 @@ func TestDetailViewKeepsHarmlessReferences(t *testing.T) {
 	}
 }
 
-// utf8Env draws the Unicode tier without color.
-var utf8Env = map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}
-
 // threadView opens f-001 on a draft holding notes and replies and returns the view without color.
 func threadView(t *testing.T, env map[string]string, width int, notes []draft.Note, replies []draft.Reply) string {
 	t.Helper()
@@ -786,8 +783,6 @@ func TestBodyLinksShowAsText(t *testing.T) {
 	}
 }
 
-func runeKey(r string) tea.KeyPressMsg { return runes(r) }
-
 // editModel stores fn's change to the fixture, then opens id at 100 by 40.
 func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, string) {
 	t.Helper()
@@ -805,7 +800,7 @@ func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, st
 func TestEditKeepsTheDecision(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
 	version := loadDraft(t, dir).Version
-	for _, k := range []tea.KeyPressMsg{runeKey("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}} {
+	for _, k := range []tea.KeyPressMsg{runes("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}} {
 		m.Update(k)
 	}
 	if row := ansi.Strip(m.View().Content); !strings.Contains(row, "[suggestion]") || !strings.Contains(row, "[ ] blocking") {
@@ -833,8 +828,8 @@ func TestEditEscAndUnchangedRecordNothing(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
 	version := loadDraft(t, dir).Version
 	for _, keys := range [][]tea.KeyPressMsg{
-		{runeKey("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}, {Code: tea.KeyEsc}},
-		{runeKey("e"), {Code: tea.KeyEnter}},
+		{runes("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}, {Code: tea.KeyEsc}},
+		{runes("e"), {Code: tea.KeyEnter}},
 	} {
 		for _, k := range keys {
 			m.Update(k)
@@ -852,7 +847,7 @@ func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
 			return err
 		})
 		version := loadDraft(t, dir).Version
-		m.Update(runeKey("e"))
+		m.Update(runes("e"))
 		if row := ansi.Strip(m.View().Content); !strings.Contains(row, "["+c.shown+"]") {
 			t.Fatalf("the row does not open on %q:\n%s", c.shown, row)
 		}
@@ -873,7 +868,7 @@ func TestEditRefusesAWithdrawnFinding(t *testing.T) {
 		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	})
-	m.Update(runeKey("e"))
+	m.Update(runes("e"))
 	if m.editing || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "reinstate f-002 first") {
 		t.Fatalf("editing %v notice %q", m.editing, m.notice)
 	}
@@ -885,7 +880,7 @@ func TestEditRowWrapsBetweenParts(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(runeKey("e"))
+	m.Update(runes("e"))
 	row := strings.Join(m.editView(), "\n")
 	if !strings.Contains(row, m.glyphs.Blocking+" blocking") {
 		t.Fatalf("the blocking glyph wrapped away from its word:\n%s", row)
@@ -900,7 +895,7 @@ func TestEditRowWrapsBetweenParts(t *testing.T) {
 // An agent edit between opening the row and saving it refuses the save, as it does a stale accept.
 func TestEditRefusesAStaleDraft(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
-	m.Update(runeKey("e"))
+	m.Update(runes("e"))
 	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
 		d.Findings[0].Title = "Updated title"
@@ -944,13 +939,6 @@ func TestDetailBodyIsSizedForItsOwnFooterAfterHelpOrANote(t *testing.T) {
 		if m.body.Height() != fresh.body.Height() {
 			t.Errorf("%s: detail body is %d rows after closing, want %d", name, m.body.Height(), fresh.body.Height())
 		}
-	}
-}
-
-func mustOpenFinding(t *testing.T, m *Model, id string) {
-	t.Helper()
-	if err := m.openFinding(id); err != nil {
-		t.Fatal(err)
 	}
 }
 

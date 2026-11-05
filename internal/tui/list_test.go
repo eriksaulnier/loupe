@@ -2,8 +2,6 @@ package tui
 
 import (
 	"io"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -15,24 +13,12 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 	"github.com/eriksaulnier/loupe/internal/testutil/sgrtest"
 )
-
-func modelOf(t *testing.T, dir string, env map[string]string, width, height int) *Model {
-	t.Helper()
-	m, err := New(Config{Dir: dir, Getenv: envOf(env), Now: func() time.Time { return testNow }, Output: io.Discard})
-	if err != nil {
-		t.Fatal(err)
-	}
-	m.Update(tea.WindowSizeMsg{Width: width, Height: height})
-	return m
-}
 
 func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 	ascii := map[string]string{"NO_COLOR": "1", "LANG": "C"}
@@ -391,39 +377,15 @@ func TestListFooterWrapsAndKeepsTheCursorRow(t *testing.T) {
 // order the surfaces present is not the order the findings were filed in.
 func severityFixture(t *testing.T) string {
 	t.Helper()
-	dir := run.RunDir(t.TempDir(), "acme", "widgets", 42, 1)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	diffBytes, err := os.ReadFile(filepath.Join("..", "..", "testdata", "diffs", "multi-hunk.diff"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parsed, err := diff.Parse(diffBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := draft.NewEmpty()
-	if _, err := draft.Add(d, []draft.FindingInput{
+	return writePRRun(t, multiHunkDiff(t), []draft.FindingInput{
 		{Title: "Cosmetic one", Body: "Body one.", General: true, Label: "suggestion", Severity: "trivial"},
 		{Title: "Unrated two", Body: "Body two.", Location: &draft.LocationInput{Path: "multi.txt", Line: 21}, Label: "question"},
 		{Title: "Data loss three", Body: "Body three.", Location: &draft.LocationInput{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Severity: "critical"},
 		{Title: "Edge case four", Body: "Body four.", General: true, Label: "issue", Severity: "minor"},
-	}, parsed, draft.Rules{}, draft.ByAgent, testNow); err != nil {
-		t.Fatal(err)
-	}
-	d.Summary = "Four findings."
-	d.Version = 2
-	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, Title: "Add widgets", DiffSHA256: run.DiffSHA256(diffBytes)}
-	for name, v := range map[string]any{"target.json": target, "draft.json": d} {
-		if err := run.WriteJSONAtomic(filepath.Join(dir, name), v); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := run.WriteFileAtomic(filepath.Join(dir, "pr.diff"), diffBytes); err != nil {
-		t.Fatal(err)
-	}
-	return dir
+	}, func(d *draft.Draft) {
+		d.Summary = "Four findings."
+		d.Version = 2
+	})
 }
 
 // severityOrder is critical, major, minor, trivial, then every unrated finding in finding-id order.

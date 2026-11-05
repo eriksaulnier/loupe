@@ -18,45 +18,11 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
-	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
 // The tests here pin specs/038-review-visual-design: the counts and progress the header derives, the notice in the
 // pane border, the opener in list and detail, help as an overlay, and the layout at the contract's boundaries.
-
-// mixedFixture is newFixture with f-001 accepted although blocking, f-002 sent back with a reply and a second note,
-// and f-003 excluded and then withdrawn by the agent, so its exclusion is current on an unincluded finding.
-func mixedFixture(t *testing.T) string {
-	t.Helper()
-	dir := newFixture(t)
-	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
-		if _, err := draft.Accept(d, "f-001", testNow); err != nil {
-			return err
-		}
-		n, err := draft.SendBack(d, "f-002", "Why?", testNow)
-		if err != nil {
-			return err
-		}
-		if _, err := draft.AddReply(d, n.ID, "Because.", draft.ByAgent, testNow); err != nil {
-			return err
-		}
-		if _, err := draft.SendBack(d, "f-002", "And this?", testNow); err != nil {
-			return err
-		}
-		_, err = draft.Exclude(d, "f-003", testNow)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
-		d.Findings[2].Included = false
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
 
 // Counts come from the domain derivation: accepted and excluded are decided, a current exclusion on an unincluded
 // finding still counts, an open note keeps its finding pending however many replies it has, and blocking counts an
@@ -112,21 +78,6 @@ func TestWithdrawnRowsCountInPositionOnly(t *testing.T) {
 	}
 }
 
-// bodyTop is the first row under the header and the blank row that follows it in a window of height rows.
-func bodyTop(height int) int { return 1 + style.ReviewLayout{Height: height}.Gap() }
-
-// emptyFixture is a round with no findings at all.
-func emptyFixture(t *testing.T) string {
-	t.Helper()
-	dir := newFixture(t)
-	d := loadDraft(t, dir)
-	d.Findings, d.Summary = []draft.Finding{}, ""
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
 func TestEmptyRoundShowsZeroDecided(t *testing.T) {
 	view := modelOf(t, emptyFixture(t), utf8Env, 100, 30).View().Content
 	for _, want := range []string{"0/0 decided", "No findings", "No summary"} {
@@ -155,23 +106,6 @@ func TestLargeRoundGroupsTheBar(t *testing.T) {
 	header := strings.Split(m.View().Content, "\n")[0]
 	if !strings.Contains(header, strings.Repeat("-", 20)+"  0/31 decided") || strings.Contains(header, strings.Repeat("-", 21)) {
 		t.Errorf("31 findings header %q", header)
-	}
-}
-
-// drain runs cmd and every command a batch or sequence holds, and returns the messages they produce.
-func drain(cmd tea.Cmd) []tea.Msg {
-	if cmd == nil {
-		return nil
-	}
-	switch msg := cmd().(type) {
-	case tea.BatchMsg:
-		var out []tea.Msg
-		for _, c := range msg {
-			out = append(out, drain(c)...)
-		}
-		return out
-	default:
-		return []tea.Msg{msg}
 	}
 }
 
@@ -578,17 +512,6 @@ func TestColorProfilesKeepEveryState(t *testing.T) {
 	if strings.Contains(dark.View().Content, accent) {
 		t.Errorf("the dark palette uses the light accent %q", accent)
 	}
-}
-
-// sgrOf is the opening SGR sequence of a styled one-cell string, so a test can look for a role's color without
-// pinning its value.
-func sgrOf(t *testing.T, styled string) string {
-	t.Helper()
-	sgr, _, ok := strings.Cut(styled, "x")
-	if !ok || !strings.HasPrefix(sgr, "\x1b[") {
-		t.Fatalf("not a styled cell: %q", styled)
-	}
-	return sgr
 }
 
 // Long ids, graphemes and large counts fit by display cells in the list and the header.

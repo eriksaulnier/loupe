@@ -3,7 +3,6 @@ package tui
 import (
 	"encoding/json"
 	"io"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -11,7 +10,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 // newAwaitingModel opens review on the fixture after the human sent f-001 back as n-001, which is handed to the agent
@@ -37,14 +35,6 @@ func newPollModel(t *testing.T, dir string, height int) *Model {
 	return m
 }
 
-// outside writes the draft the way another loupe process does.
-func outside(t *testing.T, dir string, fn func(*draft.Draft) error) {
-	t.Helper()
-	if _, err := draft.Mutate(dir, "agent", nil, envOf(nil), fn); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func agentReplies(t *testing.T, dir, noteID, body string) {
 	t.Helper()
 	outside(t, dir, func(d *draft.Draft) error {
@@ -65,30 +55,6 @@ func agentRetitles(t *testing.T, dir, findingID, title string) {
 		delete(d.Decisions, findingID)
 		return nil
 	})
-}
-
-func update(t *testing.T, m *Model, msg tea.Msg) {
-	t.Helper()
-	m.Update(msg)
-	if m.Err() != nil {
-		t.Fatalf("model error: %v", m.Err())
-	}
-}
-
-func pressKeys(t *testing.T, m *Model, keys ...string) {
-	t.Helper()
-	for _, k := range keys {
-		switch k {
-		case "enter":
-			update(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
-		case "esc":
-			update(t, m, tea.KeyPressMsg{Code: tea.KeyEsc})
-		case "ctrl+r":
-			update(t, m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
-		default:
-			update(t, m, runes(k))
-		}
-	}
 }
 
 func cursorID(m *Model) string { return m.order[m.cursor].ID }
@@ -441,16 +407,6 @@ func TestDecisionNamesAnAmendedWithdrawalReason(t *testing.T) {
 	pressKeys(t, m, "a")
 	if !strings.Contains(m.notice, "f-003 changed") {
 		t.Errorf("notice %q does not name the amended reason", m.notice)
-	}
-}
-
-// writeDraftAsIs writes d straight to draft.json, as an outside writer that bypasses loupe would, so a test can drop a
-// finding no loupe command removes.
-func writeDraftAsIs(t *testing.T, dir string, d *draft.Draft) {
-	t.Helper()
-	d.Version++
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
-		t.Fatal(err)
 	}
 }
 

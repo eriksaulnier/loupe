@@ -82,12 +82,6 @@ func paneFrame(g GlyphSet) frame {
 	return frame{"╭", "╮", "╰", "╯", "│"}
 }
 
-func mustOpen(m *Model, id string) {
-	if err := m.openFinding(id); err != nil {
-		panic(err)
-	}
-}
-
 // Every screen, in every tier, with and without color, keeps every line inside the window, its header exactly as wide
 // and unclipped, and the actions it cannot do without in its footer.
 func TestEveryTierFitsTheWindow(t *testing.T) {
