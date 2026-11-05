@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
@@ -30,7 +31,18 @@ Result (--json):
               "body": "Added.", "by": "agent", "at": "2026-09-13T12:05:00Z"}]}],
    "findings": [{"id": "f-001", "title": "Retry loop can double-publish", "disposition": "accepted", "rev": 1},
                 {"id": "f-003", "title": "Rename the helper", "disposition": "withdrawn", "rev": 2,
-                 "withdrawReason": {"text": "Naming only.", "code": "no-runtime-effect"}}]}`
+                 "withdrawReason": {"text": "Naming only.", "code": "no-runtime-effect"}}]}
+
+On a local run the result adds "returned", true once the human returned the decisions, and
+"groups", the decided findings sorted by what the agent does with each:
+  "groups": {"apply": [...], "applyWithChanges": [...], "excluded": [...], "withdrawn": [...]}
+Each entry is {"id", "title", "body", "proposal"?, "label"?, "severity"?, "general", "path"?,
+"location"?: {"path", "line", "startLine"?, "heading"?}, "thread": [{"id", "body", "at", "status",
+"replies": [{"id", "body", "by", "at"}]}]}, where path is the absolute file to edit. apply holds
+accepted findings to apply as proposed. applyWithChanges holds accepted findings the human
+rewrote, or accepted with a note, carried as "suggestion", which wins over the proposal.
+excluded holds what the human rejected, with "reason" when one was given: change nothing.
+withdrawn holds what the agent withdrew, with "withdrawReason": nothing to do.`
 
 func newFeedbackCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -59,39 +71,15 @@ func runFeedback(cmd *cobra.Command, deps Deps) error {
 	if !wantJSON(cmd) {
 		return printFeedback(deps, ref.String(), d)
 	}
-	return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, feedbackPayload(d))
-}
-
-func feedbackPayload(d *draft.Draft) map[string]any {
-	notes := make([]map[string]any, 0, len(d.Notes))
-	for _, n := range d.Notes {
-		notes = append(notes, map[string]any{"id": n.ID, "findingId": n.FindingID, "status": n.Status, "body": n.Body, "at": n.At,
-			"replies": repliesTo(d, n.ID)})
+	m, err := runMode(dir)
+	if err != nil {
+		return err
 	}
-	dispositions := draft.Dispositions(d)
-	findings := make([]map[string]any, 0, len(d.Findings))
-	for _, f := range d.Findings {
-		entry := map[string]any{"id": f.ID, "title": f.Title, "disposition": dispositions[f.ID], "rev": f.Rev}
-		if reason := draft.CurrentReason(f); reason != nil {
-			entry["withdrawReason"] = reason
-		}
-		findings = append(findings, entry)
+	payload, err := m.Feedback(d, dir)
+	if err != nil {
+		return err
 	}
-	return map[string]any{
-		"readiness": draft.ReadinessOf(d),
-		"notes":     notes,
-		"findings":  findings,
-	}
-}
-
-func repliesTo(d *draft.Draft, noteID string) []draft.Reply {
-	out := []draft.Reply{}
-	for _, r := range d.Replies {
-		if r.NoteID == noteID {
-			out = append(out, r)
-		}
-	}
-	return out
+	return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 }
 
 func printFeedback(deps Deps, ref string, d *draft.Draft) error {
@@ -157,7 +145,7 @@ func writeNotes(b *strings.Builder, s style.Style, width int, d *draft.Draft, op
 		}
 		fmt.Fprintf(b, "%s on %s  %s\n", s.Note.Render(id), s.Accent.Render(oneLine(n.FindingID)), s.Dim.Render(oneLine(n.Status)))
 		fmt.Fprintf(b, "%s\n", s.Wrap(text(n.Body), width, "  "))
-		for _, r := range repliesTo(d, n.ID) {
+		for _, r := range mode.RepliesTo(d, n.ID) {
 			id, by := oneLine(r.ID), oneLine(r.By)
 			lead := fmt.Sprintf("  %s %s by %s  ", s.Glyphs.Reply, id, by)
 			painted := "  " + s.Note.Render(s.Glyphs.Reply+" "+id) + " " + s.Dim.Render("by "+by) + "  "

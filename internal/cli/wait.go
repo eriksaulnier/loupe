@@ -11,9 +11,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 const waitHelp = `Block until the human sends a finding back from loupe review or publishes the run.
@@ -41,13 +41,13 @@ Result (--json):
               "at": "2026-09-13T12:00:00Z", "replies": []}],
    "findings": [{"id": "f-001", "title": "Retry loop can double-publish", "disposition": "accepted", "rev": 1}]}
 
-reason is notes or published; awaiting lists the note ids the agent has to answer, empty when
-published. When published, reviewUrl is the published review's link, read from the receipt.
-The rest is the loupe feedback result.`
+reason is notes, published, or returned for a local run whose decisions the human returned;
+awaiting lists the note ids the agent has to answer, empty when published or returned. When
+published, reviewUrl is the published review's link, read from the receipt. The rest is the
+loupe feedback result, which on a local run carries returned and groups.`
 
 const (
-	waitReasonNotes     = "notes"
-	waitReasonPublished = "published"
+	waitReasonNotes = "notes"
 )
 
 // waitInterval is how often the run files are re-read; a rename does not guarantee a distinct mtime on every
@@ -80,6 +80,10 @@ func runWait(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
+	m, err := runMode(dir)
+	if err != nil {
+		return err
+	}
 	// The signal handling is installed here, not in main, so every other command keeps the default disposition.
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -92,12 +96,12 @@ func runWait(cmd *cobra.Command, deps Deps) error {
 	ticker := time.NewTicker(waitInterval)
 	defer ticker.Stop()
 	for {
-		d, reason, awaiting, err := pollWait(dir)
+		d, reason, awaiting, err := pollWait(dir, m)
 		if err != nil {
 			return err
 		}
 		if reason != "" {
-			return writeWait(cmd, deps, dir, ref.String(), d, reason, awaiting)
+			return writeWait(cmd, deps, m, dir, ref.String(), d, reason, awaiting)
 		}
 		select {
 		case <-ctx.Done():
@@ -111,16 +115,16 @@ func runWait(cmd *cobra.Command, deps Deps) error {
 }
 
 // pollWait reads the run once; reason is empty while there is nothing for the agent to do.
-func pollWait(dir string) (d *draft.Draft, reason string, awaiting []string, err error) {
-	published, err := run.HasReceipt(dir)
+func pollWait(dir string, m mode.Mode) (d *draft.Draft, reason string, awaiting []string, err error) {
+	ended, err := m.Ended(dir)
 	if err != nil {
 		return nil, "", nil, err
 	}
 	if d, err = draft.Load(dir); err != nil {
 		return nil, "", nil, err
 	}
-	if published {
-		return d, waitReasonPublished, []string{}, nil
+	if ended != "" {
+		return d, ended, []string{}, nil
 	}
 	h, err := draft.LoadHandBack(dir)
 	if err != nil {
@@ -132,9 +136,9 @@ func pollWait(dir string) (d *draft.Draft, reason string, awaiting []string, err
 	return d, "", nil, nil
 }
 
-func writeWait(cmd *cobra.Command, deps Deps, dir, ref string, d *draft.Draft, reason string, awaiting []string) error {
+func writeWait(cmd *cobra.Command, deps Deps, m mode.Mode, dir, ref string, d *draft.Draft, reason string, awaiting []string) error {
 	var reviewURL string
-	if reason == waitReasonPublished {
+	if reason == mode.EndedPublished {
 		receipt, _, err := publish.LoadReceipt(dir)
 		if err != nil {
 			return err
@@ -142,19 +146,25 @@ func writeWait(cmd *cobra.Command, deps Deps, dir, ref string, d *draft.Draft, r
 		reviewURL = receipt.ReviewURL
 	}
 	if wantJSON(cmd) {
-		payload := feedbackPayload(d)
+		payload, err := m.Feedback(d, dir)
+		if err != nil {
+			return err
+		}
 		payload["reason"] = reason
 		payload["awaiting"] = awaiting
-		if reason == waitReasonPublished {
+		if reason == mode.EndedPublished {
 			payload["reviewUrl"] = reviewURL
 		}
 		return writeSuccess(deps.Stdout, commandName(cmd), *invocationOf(cmd), &d.Version, payload)
 	}
 	s := deps.outStyle()
 	var line string
-	if reason == waitReasonPublished {
+	switch reason {
+	case mode.EndedPublished:
 		line = publishedLine(s, reviewURL) + "; nothing more to wait for"
-	} else {
+	case mode.EndedReturned:
+		line = s.Emphasis(s.Good).Render(s.Glyphs.Accepted+" returned") + "; read the decisions with loupe feedback --run " + ref + " --json"
+	default:
 		line = fmt.Sprintf("%s %d %s handed back: %s", s.Note.Render(s.Glyphs.Note), len(awaiting), plural(len(awaiting), "note"), ids(s, awaiting...))
 	}
 	if _, err := fmt.Fprintf(deps.Stdout, "%s\n\n", line); err != nil {
