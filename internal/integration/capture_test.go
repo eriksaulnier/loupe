@@ -259,7 +259,7 @@ func TestCaptureAllowClosed(t *testing.T) {
 	if err := json.Unmarshal(readFile(t, filepath.Join(h.RunDir(1), "target.json")), &target); err != nil {
 		t.Fatal(err)
 	}
-	if target["prState"] != "closed" || target["schema"] != float64(2) || target["headSha"] != h.Repo.HeadSHA() {
+	if target["prState"] != "closed" || target["schema"] != float64(3) || target["headSha"] != h.Repo.HeadSHA() {
 		t.Fatalf("target.json %v", target)
 	}
 	for _, name := range []string{"pr.diff", "draft.json", "previous.json", "comments.json", "outline.json"} {

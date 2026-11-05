@@ -7,7 +7,15 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const SchemaVersion = 4
+const SchemaVersion = 5
+
+// Rules configures which fields and input forms a mutator accepts. The zero value is today's PR behavior.
+type Rules struct {
+	// AllowProposal accepts a proposal on a finding. Local runs set this; PR runs do not.
+	AllowProposal bool
+	// GeneralOnly refuses any finding with a location. Local runs captured with --no-files set this.
+	GeneralOnly bool
+}
 
 // schemaVersion and handBackSchema are what this loupe reads and writes, as vars so a test can play the next loupe.
 var schemaVersion, handBackSchema = SchemaVersion, HandBackSchema
@@ -105,6 +113,8 @@ type Finding struct {
 	// Exactly one of Location or General is set.
 	Location *FindingLocation `json:"location,omitempty"`
 	General  bool             `json:"general"`
+	// Proposal is the code change the agent suggests, Markdown, at most 64 KiB. Local runs only.
+	Proposal string `json:"proposal,omitempty"`
 	// Label is issue, suggestion, question or any other word kept verbatim; empty means none.
 	Label    string `json:"label,omitempty"`
 	Blocking bool   `json:"blocking"`
@@ -157,6 +167,8 @@ type Decision struct {
 	// FindingRev is the finding's rev when decided; the decision is current only while they are equal.
 	FindingRev int       `json:"findingRev"`
 	At         time.Time `json:"at"`
+	// Note holds the human's accept note or exclude reason. It clears with the decision.
+	Note string `json:"note,omitempty"`
 }
 
 type Note struct {

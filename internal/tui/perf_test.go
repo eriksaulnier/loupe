@@ -48,7 +48,7 @@ func TestOpenUnder100ms(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := draft.NewEmpty()
-	if _, err := draft.Add(d, inputs, parsed, draft.ByAgent, testNow); err != nil {
+	if _, err := draft.Add(d, inputs, parsed, draft.Rules{}, draft.ByAgent, testNow); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()

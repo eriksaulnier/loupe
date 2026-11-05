@@ -183,7 +183,7 @@ func TestUnknownIDsRefuseNotFound(t *testing.T) {
 		"Accept":      errOf(Accept(d, "f-009", decideNow)),
 		"Exclude":     errOf(Exclude(d, "f-009", decideNow)),
 		"Restore":     Restore(d, "f-009"),
-		"Reinstate":   errOf(Reinstate(d, "f-009", decideNow)),
+		"Reinstate":   errOf(Reinstate(d, "f-009", Rules{}, decideNow)),
 		"ResolveNote": ResolveNote(d, "n-009", decideNow),
 		"DismissNote": DismissNote(d, "n-009", decideNow),
 	}
@@ -220,7 +220,7 @@ func TestDecisionsThroughMutateWithStaleVersionWriteNothing(t *testing.T) {
 		"Exclude":     func(d *Draft) error { return errOf(Exclude(d, "f-003", decideNow)) },
 		"SendBack":    func(d *Draft) error { _, err := SendBack(d, "f-003", "again", decideNow); return err },
 		"Restore":     func(d *Draft) error { return Restore(d, "f-001") },
-		"Reinstate":   func(d *Draft) error { return errOf(Reinstate(d, "f-002", decideNow)) },
+		"Reinstate":   func(d *Draft) error { return errOf(Reinstate(d, "f-002", Rules{}, decideNow)) },
 		"ResolveNote": func(d *Draft) error { return ResolveNote(d, "n-001", decideNow) },
 		"DismissNote": func(d *Draft) error { return DismissNote(d, "n-001", decideNow) },
 	}
@@ -242,7 +242,7 @@ func TestDecisionsThroughMutateWithStaleVersionWriteNothing(t *testing.T) {
 func TestReinstateIncludesAndAcceptsWithdrawnFinding(t *testing.T) {
 	d := threeFindings()
 	later := decideNow.Add(time.Hour)
-	closed, err := Reinstate(d, "f-002", later)
+	closed, err := Reinstate(d, "f-002", Rules{}, later)
 	if err != nil || len(closed) != 0 {
 		t.Fatalf("closed %v, %v", closed, err)
 	}
@@ -271,7 +271,7 @@ func TestReinstateResolvesOpenNotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	later := decideNow.Add(time.Hour)
-	closed, err := Reinstate(d, "f-002", later)
+	closed, err := Reinstate(d, "f-002", Rules{}, later)
 	if err != nil || !reflect.DeepEqual(closed, []string{"n-001"}) {
 		t.Fatalf("closed %v, %v", closed, err)
 	}
@@ -302,7 +302,7 @@ func TestReinstateRefusesFindingThatIsNotWithdrawn(t *testing.T) {
 			}
 			tc.setUp(d)
 			before := append([]Note{}, d.Notes...)
-			closed, err := Reinstate(d, "f-001", decideNow)
+			closed, err := Reinstate(d, "f-001", Rules{}, decideNow)
 			r := wantRefusal(t, err, refusal.Input)
 			if r.Message != "reinstate is for withdrawn findings only; f-001 is "+tc.disposition {
 				t.Fatalf("message %q", r.Message)
@@ -324,14 +324,14 @@ func TestReinstateRefusesAnExcludedWithdrawnFindingWithAReachableFix(t *testing.
 	if got := Dispositions(d)["f-002"]; got != DispositionExcluded {
 		t.Fatalf("disposition %q", got)
 	}
-	r := wantRefusal(t, errOf(Reinstate(d, "f-002", decideNow)), refusal.Input)
+	r := wantRefusal(t, errOf(Reinstate(d, "f-002", Rules{}, decideNow)), refusal.Input)
 	if r.Fix != "restore f-002 first, then reinstate it" {
 		t.Fatalf("fix %q", r.Fix)
 	}
 	if err := Restore(d, "f-002"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Reinstate(d, "f-002", decideNow); err != nil {
+	if _, err := Reinstate(d, "f-002", Rules{}, decideNow); err != nil {
 		t.Fatalf("the fix does not work: %v", err)
 	}
 	if Dispositions(d)["f-002"] != DispositionAccepted {

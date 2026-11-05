@@ -23,6 +23,123 @@ func sampleTarget() Target {
 	}
 }
 
+func sampleLocalTargetForTest() Target {
+	return Target{
+		Kind:       KindLocal,
+		Title:      "my run",
+		Applier:    "claude",
+		Source:     "tool@1.0",
+		Model:      "anthropic/claude",
+		CapturedAt: time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC),
+		DiffSHA256: "abc",
+		Local: &LocalTarget{
+			N:       1,
+			Prefix:  "myrepo",
+			Capture: "files",
+			Root:    "/root",
+			Files:   []LocalFile{{Path: "foo.go", Abs: "/root/foo.go"}},
+			Skipped: []LocalSkipped{},
+		},
+	}
+}
+
+func TestPRTargetHasNoLocalFields(t *testing.T) {
+	data, err := json.Marshal(sampleTarget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"kind", "applier", "local"} {
+		if _, ok := m[key]; ok {
+			t.Fatalf("PR target must not have %q key: %v", key, m)
+		}
+	}
+	// schema must be 3
+	if s, ok := m["schema"].(float64); !ok || int(s) != TargetSchema {
+		t.Fatalf("schema = %v, want %d", m["schema"], TargetSchema)
+	}
+}
+
+func TestLocalTargetMarshalsThroughLocalTargetFile(t *testing.T) {
+	target := sampleLocalTargetForTest()
+	data, err := json.Marshal(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	// must have exactly the LocalTargetFile fields
+	want := []string{"applier", "capturedAt", "diffSha256", "kind", "local", "model", "schema", "source", "title"}
+	var got []string
+	for k := range m {
+		got = append(got, k)
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("local target keys: got %v, want %v", got, want)
+	}
+	// no PR-only fields
+	for _, key := range []string{"owner", "repo", "number", "url", "author", "viewer", "baseSha", "headSha", "round", "clonePath", "baseRef", "headRef", "mergeBaseSha", "prState"} {
+		if _, ok := m[key]; ok {
+			t.Fatalf("local target must not have PR field %q", key)
+		}
+	}
+}
+
+func TestLoadTargetReadsMissingKindAsPR(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte(`{"schema": 1, "owner": "o"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	target, err := LoadTarget(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.Kind != "" {
+		t.Fatalf("missing kind should read as empty string, got %q", target.Kind)
+	}
+}
+
+func TestLoadTargetRefusesLocalKindAtSchema2(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.json")
+	if err := os.WriteFile(path, []byte(`{"schema": 2, "kind": "local"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadTarget(dir)
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.Record || r.Fix != "inspect it with: cat "+path {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestReadDiffChecksLocalRunWithEmptyDiff(t *testing.T) {
+	root := t.TempDir()
+	target := sampleLocalTarget()
+	emptyDiff := []byte{}
+	target.DiffSHA256 = DiffSHA256(emptyDiff)
+	dir, _, err := NextLocal(root, "test", os.Getenv, target, emptyDiff, sampleDraftJSON())
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadTarget(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadDiff(dir, loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("empty diff: got %q", got)
+	}
+}
+
 func TestCreateRunAndLoadTarget(t *testing.T) {
 	root := t.TempDir()
 	dir := RunDir(root, "o", "r", 12, 2)
@@ -250,5 +367,30 @@ func TestLoadTargetReadsSchemaOneWithoutPRState(t *testing.T) {
 	}
 	if target.Schema != 1 || target.PRState != "" {
 		t.Fatalf("got schema %d prState %q, want 1 and empty", target.Schema, target.PRState)
+	}
+}
+
+// A local target with no file list, or none at all, still writes files and skipped as empty arrays, never null.
+func TestLocalTargetWritesEmptyListsForMissingFiles(t *testing.T) {
+	bare := sampleLocalTargetForTest()
+	bare.Local = nil
+	nilLists := sampleLocalTargetForTest()
+	nilLists.Local.Files, nilLists.Local.Skipped = nil, nil
+	for name, target := range map[string]Target{"no local block": bare, "nil lists": nilLists} {
+		data, err := json.Marshal(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m struct {
+			Local map[string]json.RawMessage `json:"local"`
+		}
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"files", "skipped"} {
+			if got := string(m.Local[key]); got != "[]" {
+				t.Errorf("%s: local.%s is %s, want []", name, key, got)
+			}
+		}
 	}
 }

@@ -102,7 +102,7 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 	if _, err := Add(d, []FindingInput{
 		{Title: "One", Body: "Body.", General: true, Label: "question"},
 		{Title: "Two", Body: "Body.", General: true, Label: "question"},
-	}, nil, ByAgent, time.Now()); err != nil {
+	}, nil, Rules{}, ByAgent, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
@@ -132,7 +132,7 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 		t.Fatal("a write elsewhere, or a reload, changed the finding's state")
 	}
 	mutate(func(d *Draft) error {
-		_, err := Add(d, []FindingInput{{Title: "Three", Body: "Body.", General: true, Label: "question"}}, nil, ByAgent, time.Now())
+		_, err := Add(d, []FindingInput{{Title: "Three", Body: "Body.", General: true, Label: "question"}}, nil, Rules{}, ByAgent, time.Now())
 		return err
 	})
 	mutate(func(d *Draft) error { _, err := Accept(d, "f-002", time.Now()); return err })
@@ -151,12 +151,12 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 		{"reply", func(d *Draft) error { _, err := AddReply(d, "n-001", "Because.", ByAgent, time.Now()); return err }},
 		{"resolve", func(d *Draft) error { return ResolveNote(d, "n-001", time.Now()) }},
 		{"edit", func(d *Draft) error {
-			_, _, err := Edit(d, "f-001", EditInput{Title: title}, nil, nil, ByAgent, time.Now())
+			_, _, err := Edit(d, "f-001", EditInput{Title: title}, nil, nil, ByAgent, Rules{}, time.Now())
 			return err
 		}},
 		{"withdraw", func(d *Draft) error {
 			excluded := false
-			_, _, err := Edit(d, "f-001", EditInput{}, &excluded, nil, ByAgent, time.Now())
+			_, _, err := Edit(d, "f-001", EditInput{}, &excluded, nil, ByAgent, Rules{}, time.Now())
 			return err
 		}},
 	} {

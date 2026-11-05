@@ -345,7 +345,7 @@ func TestRewriteKeptTextTakesTheAgentsNewerUntouchedField(t *testing.T) {
 func TestRewriteRefusesAWithdrawnFinding(t *testing.T) {
 	m, _ := editModel(t, "f-002", func(d *draft.Draft) error {
 		withdraw := false
-		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, testNow)
+		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	})
 	m.Update(runeKey("w"))
@@ -488,7 +488,7 @@ func TestDetailSaysTheAgentChangedTheHumansText(t *testing.T) {
 		t.Fatal("the line shows before the agent changed anything")
 	}
 	outside(t, dir, func(d *draft.Draft) error {
-		_, _, err := draft.Edit(d, "f-003", draft.EditInput{Title: []byte(`"The agent's title"`)}, nil, nil, draft.ByAgent, testNow)
+		_, _, err := draft.Edit(d, "f-003", draft.EditInput{Title: []byte(`"The agent's title"`)}, nil, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	})
 	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
@@ -506,7 +506,7 @@ func TestDetailSaysTheAgentChangedTheHumansTextAndWhyItWithdrew(t *testing.T) {
 	m.Update(ctrlS)
 	outside(t, dir, func(d *draft.Draft) error {
 		withdraw := false
-		_, _, err := draft.Edit(d, "f-003", draft.EditInput{Title: []byte(`"The agent's title"`), WithdrawReason: []byte(`{"text": "Naming only."}`)}, &withdraw, nil, draft.ByAgent, testNow)
+		_, _, err := draft.Edit(d, "f-003", draft.EditInput{Title: []byte(`"The agent's title"`), WithdrawReason: []byte(`{"text": "Naming only."}`)}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	})
 	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})

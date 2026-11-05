@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -164,10 +165,14 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 	dispositions := draft.Dispositions(d)
 	readiness := draft.ReadinessOf(d)
 	if wantJSON(cmd) {
+		findings, err := mode.Shown(mode.Of(target), shownFindings(d))
+		if err != nil {
+			return err
+		}
 		payload := map[string]any{
 			"schema":       d.Schema,
 			"summary":      d.Summary,
-			"findings":     shownFindings(d),
+			"findings":     findings,
 			"decisions":    d.Decisions,
 			"notes":        d.Notes,
 			"replies":      d.Replies,

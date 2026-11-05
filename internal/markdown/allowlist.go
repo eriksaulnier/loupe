@@ -23,6 +23,16 @@ const (
 	Message
 	// WithdrawReason is a withdrawn finding's reason, which sits at the body's depth.
 	WithdrawReason
+	// Proposal is a finding's code-change suggestion on a local run, at the body's depth.
+	Proposal
+	// AcceptNote is a human's accept note on a decision, at the body's depth.
+	AcceptNote
+	// ExcludeReason is a human's exclude reason on a decision, at the body's depth.
+	ExcludeReason
+	// RunTitle is a local run's title, at the body's depth.
+	RunTitle
+	// Applier is a local run's applier name, at the body's depth.
+	Applier
 )
 
 const maxBytes = 64 * 1024
@@ -74,6 +84,16 @@ func (k Kind) field() string {
 		return "message"
 	case WithdrawReason:
 		return "withdrawReason"
+	case Proposal:
+		return "proposal"
+	case AcceptNote:
+		return "acceptNote"
+	case ExcludeReason:
+		return "excludeReason"
+	case RunTitle:
+		return "runTitle"
+	case Applier:
+		return "applier"
 	}
 	return "body"
 }

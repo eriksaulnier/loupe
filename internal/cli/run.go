@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -50,7 +52,40 @@ func resolveRun(cmd *cobra.Command, deps Deps, positional string) (string, run.R
 	if err := recordRun(cmd, resolved, dir); err != nil {
 		return "", run.Ref{}, err
 	}
+	if resolved.Local > 0 {
+		if err := checkLocalRun(cmd, resolved, dir); err != nil {
+			return "", run.Ref{}, err
+		}
+	}
 	return dir, resolved, nil
+}
+
+// checkLocalRun refuses a command that does not apply to a local run. A returned run refuses review and handoff as
+// returned first, because no later loupe can reopen it, while wrong-mode only says the command is for pull requests.
+func checkLocalRun(cmd *cobra.Command, ref run.Ref, dir string) error {
+	name := commandName(cmd)
+	if name == "review" || name == "handoff" {
+		returned, err := run.HasReturn(dir)
+		if err != nil {
+			return err
+		}
+		if returned {
+			return refusal.New(refusal.Returned, fmt.Sprintf("%s was returned and cannot be reviewed again", ref),
+				fmt.Sprintf("loupe feedback --run %s to read the decisions, or loupe capture --changed|--files|--no-files to start a new run", ref))
+		}
+	}
+	target, err := run.LoadTarget(dir)
+	if err != nil {
+		return err
+	}
+	return mode.Of(target).Refuses(name, changedFlags(cmd))
+}
+
+// changedFlags names the flags set on cmd's command line.
+func changedFlags(cmd *cobra.Command) []string {
+	var names []string
+	cmd.Flags().Visit(func(f *pflag.Flag) { names = append(names, f.Name) })
+	return names
 }
 
 // recordRun names the run for the result envelope. Only the recorded dir is made absolute; every command keeps

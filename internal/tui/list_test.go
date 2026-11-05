@@ -199,7 +199,7 @@ func TestInitialSelectionIsWhatNeedsTheHuman(t *testing.T) {
 		}
 		// Accepting would resolve the note, so a withdrawal is what leaves it open with nothing pending.
 		withdrawn := false
-		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdrawn, nil, draft.ByAgent, testNow)
+		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdrawn, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	})
 	if m := modelOf(t, dir, env, 100, 24); m.cursor != orderedIndex(m.order, "f-002") || len(draft.ReadinessOf(m.draft).Pending) != 0 {
@@ -431,7 +431,7 @@ func severityFixture(t *testing.T) string {
 		{Title: "Unrated two", Body: "Body two.", Location: &draft.LocationInput{Path: "multi.txt", Line: 21}, Label: "question"},
 		{Title: "Data loss three", Body: "Body three.", Location: &draft.LocationInput{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Severity: "critical"},
 		{Title: "Edge case four", Body: "Body four.", General: true, Label: "issue", Severity: "minor"},
-	}, parsed, draft.ByAgent, testNow); err != nil {
+	}, parsed, draft.Rules{}, draft.ByAgent, testNow); err != nil {
 		t.Fatal(err)
 	}
 	d.Summary = "Four findings."
@@ -697,7 +697,7 @@ func TestEscapeKeepsTheCursorOnTheOpenFinding(t *testing.T) {
 	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
 		_, err := draft.Add(d, []draft.FindingInput{
 			{Title: "Filed while the human read", Body: "Body five.", General: true, Label: "issue", Severity: "critical"},
-		}, nil, draft.ByAgent, testNow)
+		}, nil, draft.Rules{}, draft.ByAgent, testNow)
 		return err
 	}); err != nil {
 		t.Fatal(err)

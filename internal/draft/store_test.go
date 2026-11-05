@@ -244,7 +244,7 @@ func newRunWithFinding(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	d := NewEmpty()
-	if _, err := Add(d, []FindingInput{{Title: "Title", Body: "Body.", General: true, Label: "question"}}, nil, ByAgent, time.Time{}); err != nil {
+	if _, err := Add(d, []FindingInput{{Title: "Title", Body: "Body.", General: true, Label: "question"}}, nil, Rules{}, ByAgent, time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {

@@ -29,3 +29,7 @@ func RunsDir(root string) string {
 func RunDir(root, owner, repo string, number, round int) string {
 	return filepath.Join(RunsDir(root), owner, repo, strconv.Itoa(number), strconv.Itoa(round))
 }
+
+func LocalRoot(root string) string { return filepath.Join(root, "local") }
+
+func LocalDir(root string, n int) string { return filepath.Join(LocalRoot(root), strconv.Itoa(n)) }

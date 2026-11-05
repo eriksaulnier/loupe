@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
@@ -85,11 +87,12 @@ var (
 		"clear-impact":        {"impact"},
 		"clear-references":    {"reference"},
 		"clear-suggested-fix": {"suggested-fix"},
+		"clear-proposal":      {"proposal"},
 		"not-blocking":        {"blocking"},
 	}
 	editContentFlags = append(append([]string{}, addContentFlags...),
 		"clear-location", "clear-label", "clear-confidence", "clear-severity", "clear-verified", "clear-impact", "clear-references",
-		"clear-suggested-fix", "not-blocking", "reason", "reason-code")
+		"clear-suggested-fix", "clear-proposal", "not-blocking", "reason", "reason-code")
 )
 
 // WarnWithdrawReasonMissing is the warning code an edit result carries when an agent withdrew a finding without saying
@@ -127,6 +130,7 @@ func newEditCmd(deps Deps) *cobra.Command {
 	f.String("impact", "", "Markdown: what goes wrong and under what input")
 	f.StringArray("reference", nil, "an http or https URL the finding rests on; repeatable, replaces the list")
 	f.String("suggested-fix", "", "the correction, as Markdown; fence any code")
+	f.String("proposal", "", "local runs only: the change the agent will make if accepted, as Markdown")
 	f.Bool("clear-location", false, "remove the location, making the finding general")
 	f.Bool("clear-label", false, "remove the label")
 	f.Bool("clear-confidence", false, "remove the confidence")
@@ -135,6 +139,7 @@ func newEditCmd(deps Deps) *cobra.Command {
 	f.Bool("clear-impact", false, "remove the impact")
 	f.Bool("clear-references", false, "remove every reference")
 	f.Bool("clear-suggested-fix", false, "remove the suggested fix")
+	f.Bool("clear-proposal", false, "local runs only: remove the proposal")
 	f.Bool("not-blocking", false, "the finding does not block approval")
 	f.Bool("exclude", false, "withdraw the finding from the review")
 	f.Bool("include", false, "restore a withdrawn finding")
@@ -177,7 +182,14 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 	if err != nil {
 		return err
 	}
-	in, err := editInput(cmd, deps)
+	m, err := runMode(dir)
+	if err != nil {
+		return err
+	}
+	if err := checkModeFlags(cmd, m); err != nil {
+		return err
+	}
+	in, err := editInput(cmd, deps, m)
 	if err != nil {
 		return err
 	}
@@ -197,7 +209,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 			}
 		}
 		var editErr error
-		edited, cleared, editErr = draft.Edit(d, findingID, in.input(), included, dif, by, deps.Now().UTC())
+		edited, cleared, editErr = draft.Edit(d, findingID, in.input(), included, dif, by, m.Rules(), deps.Now().UTC())
 		return editErr
 	})
 	if err != nil {
@@ -235,7 +247,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 
 // editFields is comparable so an empty edit can be detected; each field is raw JSON as in draft.EditInput.
 type editFields struct {
-	title, body, location, general, label, blocking, confidence, severity, verified, impact, references, suggestedFix, withdrawReason string
+	title, body, location, general, label, blocking, confidence, severity, verified, impact, references, suggestedFix, proposal, withdrawReason string
 }
 
 func (e editFields) input() draft.EditInput {
@@ -247,7 +259,7 @@ func (e editFields) input() draft.EditInput {
 	}
 	return draft.EditInput{Title: raw(e.title), Body: raw(e.body), Location: raw(e.location), General: raw(e.general), Label: raw(e.label),
 		Blocking: raw(e.blocking), Confidence: raw(e.confidence), Severity: raw(e.severity), Verified: raw(e.verified), Impact: raw(e.impact),
-		References: raw(e.references), SuggestedFix: raw(e.suggestedFix), WithdrawReason: raw(e.withdrawReason)}
+		References: raw(e.references), SuggestedFix: raw(e.suggestedFix), Proposal: raw(e.proposal), WithdrawReason: raw(e.withdrawReason)}
 }
 
 // namesHeading reports whether the edit sets a heading anchor, the one case that reads the outline.
@@ -256,18 +268,25 @@ func (e editFields) namesHeading() bool {
 	return e.location != "" && json.Unmarshal([]byte(e.location), &loc) == nil && loc.Heading != nil
 }
 
-func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
+func editInput(cmd *cobra.Command, deps Deps, m mode.Mode) (editFields, error) {
 	f := cmd.Flags()
 	if f.Changed("from") {
 		from, _ := f.GetString("from")
+		raw, err := readInput("edit", from, deps.Stdin)
+		if err != nil {
+			return editFields{}, err
+		}
+		if err := checkModeKeys(raw, m); err != nil {
+			return editFields{}, err
+		}
 		var in draft.EditInput
-		if err := DecodeInput("edit", from, deps.Stdin, &in); err != nil {
+		if err := DecodeInput("edit", "-", bytes.NewReader(raw), &in); err != nil {
 			return editFields{}, err
 		}
 		return editFields{title: string(in.Title), body: string(in.Body), location: string(in.Location), general: string(in.General),
 			label: string(in.Label), blocking: string(in.Blocking), confidence: string(in.Confidence), severity: string(in.Severity),
 			verified: string(in.Verified), impact: string(in.Impact), references: string(in.References), suggestedFix: string(in.SuggestedFix),
-			withdrawReason: string(in.WithdrawReason)}, nil
+			proposal: string(in.Proposal), withdrawReason: string(in.WithdrawReason)}, nil
 	}
 
 	var out editFields
@@ -295,6 +314,7 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 	set(&out.impact, "impact", str("impact"))
 	set(&out.references, "reference", func() (any, error) { return f.GetStringArray("reference") })
 	set(&out.suggestedFix, "suggested-fix", str("suggested-fix"))
+	set(&out.proposal, "proposal", str("proposal"))
 	set(&out.general, "general", func() (any, error) { return f.GetBool("general") })
 	set(&out.blocking, "blocking", func() (any, error) { return f.GetBool("blocking") })
 	for _, name := range []string{"reason", "reason-code"} {
@@ -319,7 +339,7 @@ func editInput(cmd *cobra.Command, deps Deps) (editFields, error) {
 	}
 	clears := map[string]*string{"clear-location": &out.location, "clear-label": &out.label, "clear-confidence": &out.confidence,
 		"clear-severity": &out.severity, "clear-verified": &out.verified, "clear-impact": &out.impact, "clear-references": &out.references,
-		"clear-suggested-fix": &out.suggestedFix}
+		"clear-suggested-fix": &out.suggestedFix, "clear-proposal": &out.proposal}
 	for flag, dst := range clears {
 		if v, _ := f.GetBool(flag); v {
 			*dst = "null"

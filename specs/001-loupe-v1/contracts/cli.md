@@ -7,11 +7,23 @@ This is the agent-facing and human-facing command contract. `/speckit-plan` Phas
 ## Conventions
 
 - Binary: `loupe`. Exit 0 on success, 1 on refusal, 2 on usage error.
-- Run selection, in order: `--run <ref>`, `LOUPE_RUN`, else the pull request of the current branch in the working directory (through the GitHub API) at its newest round. `<ref>` is `owner/repo#123` or `owner/repo#123@2`.
+- Run selection, in order: `--run <ref>`, `LOUPE_RUN`, else the pull request of the current branch in the working directory (through the GitHub API) at its newest round. `<ref>` is `owner/repo#123` or `owner/repo#123@2`, or `[<prefix>:]local#<n>` for a local run (`specs/049-apply-mode`). loupe ignores a typed prefix, and every result echoes the one the run recorded. A command with no reference never selects a local run.
 - Data root: `LOUPE_HOME`, else `XDG_DATA_HOME/loupe`, else `~/.local/share/loupe`.
 - `--json` on every command prints exactly one object on stdout and nothing else on stdout. Without it, output is human-readable text. Diagnostics always go to stderr.
 - `--from <path>` reads JSON input from a file; `--from -` reads it from stdin. `--from` conflicts with any flag that sets the same content.
 - `--by agent|human` on `add`, `edit`, `summary`, `reply`; default `agent`.
+- On a local run (`specs/049-apply-mode`), `add` and `edit` take a different set of finding fields. The check runs on raw key presence for `--from` input, so `"blocking": false` refuses as well, and on whether a flag was set. It refuses at the first hit, with `details.entry` naming the entry's index in a batch:
+
+| Input | PR run | Local run |
+| :--- | :--- | :--- |
+| `proposal` key, or `--proposal` | `input`, fix names `suggestedFix` | Accepted. Markdown, at most 64 KiB, the finding-id rule |
+| `edit --clear-proposal`, or `{"proposal": null}` | `input`, fix names `suggestedFix` | Clears the proposal |
+| `suggestedFix` key, or `--suggested-fix` | Accepted | `input`, fix names `proposal` |
+| `blocking` key, or `--blocking` / `--not-blocking` | Accepted | `input`, fix: drop it |
+| `location.side` key, or `--side` | Accepted | `location`, fix: drop it |
+| `location` on a `--no-files` run | n/a | `location`, fix: `"general": true` |
+
+  A change to `proposal` bumps `rev` and clears the decision. `show --json` on a local run omits `blocking` and `location.side`.
 - `--expect-version <n>` on `add`, `edit`, `summary`, `assess`, `reply`: refuse inside the lock unless the draft version equals `n`.
 - Unknown JSON fields are refused. JSON input MUST NOT carry `included`, `decision`, `status` or any decision field; such input is refused. `assess` is the one exception: its `status` assesses a finding an earlier round filed and decides nothing in this round. `edit` input MAY carry `withdrawReason`, and only together with `--exclude` (amended on 2026-10-28 by `specs/041-withdraw-reason`).
 - `loupe --help` describes the workflow (capture → add → summary → review → publish), the run reference syntax, and states that `review` and `publish` are human-only: an agent MUST NOT operate either, pipe confirmation into them, drive them through a pseudo-terminal, or start `publish` by any route; an agent MAY run `loupe handoff` to start `review` in a new terminal pane the human sees, and MUST NOT then send to, read, resize, close or reuse that pane (ruled 2026-09-15, `specs/006-agent-plugins`). `loupe <command> --help` is complete without any run and shows the command's JSON input and result shapes.
@@ -68,6 +80,8 @@ Refusal or error (exit 1 or 2):
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
 | `pane-failed` | The host refused or garbled a `handoff` call; `details.host` (`herdr`, `tmux`, `orca`, `iterm2` or `ghostty`) and `details.step` name where | the same; the message carries the host's error and, after any step but `probe`, says a pane may already be open |
 | `review-open` | `handoff` while a `review` of any round of the pull request is running; `details.run` names that run (`specs/036-review-pane-guards`) | when `details.run` is the resolved run, tell the human their review is already open, then `loupe wait`; otherwise ask the human to finish or quit that review, then `loupe handoff` again |
+| `returned` | A local run was returned, and it accepts no change, no review and no handoff (`specs/049-apply-mode`) | `loupe feedback --run <ref>` to read the decisions, or `loupe capture --changed\|--files\|--no-files` to start a new run |
+| `wrong-mode` | The command or flag applies only to PR runs (`specs/049-apply-mode`) | on a local run, the return action in `loupe review`, or `loupe feedback` |
 | `internal` | A defect | file an issue; stack on stderr |
 
 ## Warning codes

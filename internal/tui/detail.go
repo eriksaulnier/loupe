@@ -533,7 +533,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
 			var closed []string
 			decide := func(d *draft.Draft) (err error) {
-				closed, err = draft.Reinstate(d, f.ID, m.cfg.Now())
+				closed, err = draft.Reinstate(d, f.ID, draft.Rules{}, m.cfg.Now())
 				return err
 			}
 			return m.decideAndShow(decide, func() string {
@@ -693,7 +693,7 @@ func (m *Model) updateEdit(msg tea.KeyPressMsg) tea.Cmd {
 		id, label, blocking := m.openID, m.editLabels[m.editPick], m.editBlocking
 		changed, disposition := false, ""
 		return m.decideAndStay(func(d *draft.Draft) error {
-			_, err := draft.Recalibrate(d, id, label, blocking, m.diff, m.cfg.Now())
+			_, err := draft.Recalibrate(d, id, label, blocking, m.diff, draft.Rules{}, m.cfg.Now())
 			if err == nil {
 				changed, disposition = true, draft.Dispositions(d)[id]
 			}

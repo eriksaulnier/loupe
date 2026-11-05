@@ -34,6 +34,7 @@ type FindingInput struct {
 	Impact       string         `json:"impact,omitempty"`
 	References   []string       `json:"references,omitempty"`
 	SuggestedFix string         `json:"suggestedFix,omitempty"`
+	Proposal     string         `json:"proposal,omitempty"`
 }
 
 // LocationInput is a location as add and edit read it: a line form, or a heading anchor that resolves to one.
@@ -114,11 +115,11 @@ func validateSeverity(word string) error {
 }
 
 // Add validates every entry before appending any, so a batch is stored entirely or not at all.
-func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Time) ([]Finding, error) {
+func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, rules Rules, by string, now time.Time) ([]Finding, error) {
 	if by == "" {
 		by = ByAgent
 	}
-	locations, err := checkBatch(inputs, nil, dif)
+	locations, err := checkBatch(inputs, nil, dif, rules)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +138,7 @@ func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Ti
 			Verified:     in.Verified,
 			Impact:       in.Impact,
 			SuggestedFix: in.SuggestedFix,
+			Proposal:     in.Proposal,
 			By:           by,
 			Included:     true,
 			CreatedAt:    now,
@@ -154,8 +156,8 @@ func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, by string, now time.Ti
 }
 
 // validateInput returns the location to store, which for a heading anchor is the range it resolved to.
-func validateInput(in FindingInput, dif *diff.Diff) (*FindingLocation, error) {
-	if err := validateFields(in); err != nil {
+func validateInput(in FindingInput, dif *diff.Diff, rules Rules) (*FindingLocation, error) {
+	if err := validateFields(in, rules); err != nil {
 		return nil, err
 	}
 	if in.Location == nil {
@@ -164,7 +166,7 @@ func validateInput(in FindingInput, dif *diff.Diff) (*FindingLocation, error) {
 	return resolveLocation(*in.Location, dif)
 }
 
-func validateFields(in FindingInput) error {
+func validateFields(in FindingInput, rules Rules) error {
 	switch {
 	case strings.TrimSpace(in.Title) == "":
 		return refusal.New(refusal.Input, "title is required and must not be empty", inputFix)
@@ -174,6 +176,17 @@ func validateFields(in FindingInput) error {
 		return refusal.New(refusal.Input, `a finding has either location or "general": true, not both`, inputFix)
 	case in.Location == nil && !in.General:
 		return refusal.New(refusal.Input, `a finding needs a location or "general": true`, inputFix)
+	}
+	if rules.GeneralOnly && in.Location != nil {
+		return refusal.New(refusal.Location, `this run accepts only general findings; it was captured with --no-files`, `use "general": true`)
+	}
+	if in.Proposal != "" {
+		if !rules.AllowProposal {
+			return refusal.New(refusal.Input, "proposal applies only to local runs", `use "suggestedFix" instead`)
+		}
+		if err := markdown.Check(in.Proposal, markdown.Proposal, "loupe edit <id> --from -"); err != nil {
+			return err
+		}
 	}
 	if err := ValidateLabel(in.Label); err != nil {
 		return err
@@ -242,9 +255,9 @@ func resolveLocation(in LocationInput, dif *diff.Diff) (*FindingLocation, error)
 	return &FindingLocation{Path: in.Path, Side: side, Line: in.Line, StartLine: in.StartLine}, nil
 }
 
-// checkFindingIDs refuses a finding id in the title, body, impact or suggested fix, in that order. Edit passes ""
-// for a field it leaves unchanged, so a finding stored before the check stays editable.
-func checkFindingIDs(title, body, impact, fix, retry string) error {
+// checkFindingIDs refuses a finding id in the title, body, impact, suggested fix or proposal, in that order. Edit
+// passes "" for a field it leaves unchanged, so a finding stored before the check stays editable.
+func checkFindingIDs(title, body, impact, fix, proposal, retry string) error {
 	if err := markdown.TitleFindingIDs(title, retry); err != nil {
 		return err
 	}
@@ -254,7 +267,10 @@ func checkFindingIDs(title, body, impact, fix, retry string) error {
 	if err := markdown.FindingIDs(impact, markdown.Impact, retry); err != nil {
 		return err
 	}
-	return markdown.FindingIDs(fix, markdown.SuggestedFix, retry)
+	if err := markdown.FindingIDs(fix, markdown.SuggestedFix, retry); err != nil {
+		return err
+	}
+	return markdown.FindingIDs(proposal, markdown.Proposal, retry)
 }
 
 // EntryFailure is one batch entry that was refused before or during validation.
@@ -267,13 +283,13 @@ type EntryFailure struct {
 
 // CheckBatch validates every input not already in failed and refuses once, naming every invalid entry, so a caller
 // can fix the whole batch in one retry. The top level is the first invalid entry's own refusal.
-func CheckBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) error {
-	_, err := checkBatch(inputs, failed, dif)
+func CheckBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff, rules Rules) error {
+	_, err := checkBatch(inputs, failed, dif, rules)
 	return err
 }
 
 // checkBatch also returns each entry's location to store.
-func checkBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) ([]*FindingLocation, error) {
+func checkBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff, rules Rules) ([]*FindingLocation, error) {
 	locations := make([]*FindingLocation, len(inputs))
 	known := make(map[int]bool, len(failed))
 	for _, f := range failed {
@@ -284,9 +300,9 @@ func checkBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff) ([
 		if known[i] {
 			continue
 		}
-		loc, err := validateInput(in, dif)
+		loc, err := validateInput(in, dif, rules)
 		if err == nil {
-			err = checkFindingIDs(in.Title, in.Body, in.Impact, in.SuggestedFix, "run loupe add again")
+			err = checkFindingIDs(in.Title, in.Body, in.Impact, in.SuggestedFix, in.Proposal, "run loupe add again")
 		}
 		if err != nil {
 			failures = append(failures, EntryFailure{Entry: i, Err: err})
@@ -450,7 +466,7 @@ func Restore(d *Draft, findingID string) error {
 // the review and accepts it in one move, since the human decided while looking at it. The command line MUST NOT
 // reach it: --by is self-reported there, so an agent could undo its own withdrawal unseen. Like Accept it resolves
 // the finding's open notes and returns their ids, since overriding the withdrawal is the human's answer to them.
-func Reinstate(d *Draft, findingID string, now time.Time) ([]string, error) {
+func Reinstate(d *Draft, findingID string, rules Rules, now time.Time) ([]string, error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
 		return nil, err
@@ -466,7 +482,7 @@ func Reinstate(d *Draft, findingID string, now time.Time) ([]string, error) {
 	}
 	included := true
 	// No publishable field changes, so Edit needs no diff to validate against.
-	f, _, err := Edit(d, findingID, EditInput{}, &included, nil, ByHuman, now)
+	f, _, err := Edit(d, findingID, EditInput{}, &included, nil, ByHuman, rules, now)
 	if err != nil {
 		return nil, err
 	}
@@ -521,6 +537,7 @@ type EditInput struct {
 	Impact       json.RawMessage `json:"impact"`
 	References   json.RawMessage `json:"references"`
 	SuggestedFix json.RawMessage `json:"suggestedFix"`
+	Proposal     json.RawMessage `json:"proposal"`
 	// WithdrawReason is not a finding field: it goes on the history entry, and only with --exclude.
 	WithdrawReason json.RawMessage `json:"withdrawReason"`
 }
@@ -576,7 +593,7 @@ func decodeReason(raw json.RawMessage, included *bool) (*Reason, error) {
 // needed only when in changes a publishable field. A withdrawal reason goes on that entry. A new reason for a finding
 // already not included, with nothing else changed, appends an entry of its own and keeps rev and the decision, so a
 // human's exclusion stands. An edit that changes nothing returns the finding with ErrNoChange.
-func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Diff, by string, now time.Time) (f Finding, cleared bool, err error) {
+func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Diff, by string, rules Rules, now time.Time) (f Finding, cleared bool, err error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
 		return Finding{}, false, err
@@ -621,6 +638,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 	note("impact", next.Impact != stored.Impact, stored.Impact)
 	note("references", !slices.Equal(next.References, stored.References), stored.References)
 	note("suggestedFix", next.SuggestedFix != stored.SuggestedFix, stored.SuggestedFix)
+	note("proposal", next.Proposal != stored.Proposal, stored.Proposal)
 	publishable := len(changed) > 0
 	note("included", next.Included != stored.Included, stored.Included)
 	if len(changed) == 0 {
@@ -642,6 +660,10 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		if fix == stored.SuggestedFix {
 			fix = ""
 		}
+		proposal := next.Proposal
+		if proposal == stored.Proposal {
+			proposal = ""
+		}
 		// The stored location is checked as the range it is; its heading was resolved when it was set.
 		var loc *LocationInput
 		if next.Location != nil {
@@ -649,7 +671,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		}
 		_, err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: loc, General: next.General, Label: next.Label,
 			Blocking: next.Blocking, Confidence: next.Confidence, Severity: severity, Verified: next.Verified, Impact: next.Impact,
-			References: next.References, SuggestedFix: fix}, dif)
+			References: next.References, SuggestedFix: fix, Proposal: proposal}, dif, rules)
 		if err != nil {
 			return Finding{}, false, err
 		}
@@ -663,7 +685,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		if impact == stored.Impact {
 			impact = ""
 		}
-		if err := checkFindingIDs(title, body, impact, fix, fmt.Sprintf("run loupe edit %s --from - again", next.ID)); err != nil {
+		if err := checkFindingIDs(title, body, impact, fix, proposal, fmt.Sprintf("run loupe edit %s --from - again", next.ID)); err != nil {
 			return Finding{}, false, err
 		}
 	}
@@ -690,7 +712,7 @@ func Recalibratable(f Finding) error {
 // decision, since the human made the change while looking at the finding. The command line MUST NOT reach it: --by
 // is self-reported there, so an agent could change an accepted finding unseen. It closes no note, so a label change
 // never answers a note the human has not read.
-func Recalibrate(d *Draft, findingID, label string, blocking bool, dif *diff.Diff, now time.Time) (Finding, error) {
+func Recalibrate(d *Draft, findingID, label string, blocking bool, dif *diff.Diff, rules Rules, now time.Time) (Finding, error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
 		return Finding{}, err
@@ -708,7 +730,7 @@ func Recalibrate(d *Draft, findingID, label string, blocking bool, dif *diff.Dif
 	}
 	decision, decided := d.Decisions[stored.ID]
 	current := decided && decision.FindingRev == stored.Rev
-	f, _, err := Edit(d, findingID, EditInput{Label: labelJSON, Blocking: blockingJSON}, nil, dif, ByHuman, now)
+	f, _, err := Edit(d, findingID, EditInput{Label: labelJSON, Blocking: blockingJSON}, nil, dif, ByHuman, rules, now)
 	if err != nil {
 		return f, err
 	}
@@ -740,7 +762,7 @@ const (
 // Rewrite is the human's title and body edit from the review interface. It keeps a current decision and closes no
 // note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding. The
 // command line MUST NOT reach it.
-func Rewrite(d *Draft, findingID, title, body string, dif *diff.Diff, now time.Time) (Finding, error) {
+func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Rules, dif *diff.Diff, now time.Time) (Finding, error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
 		return Finding{}, err
@@ -754,9 +776,16 @@ func Rewrite(d *Draft, findingID, title, body string, dif *diff.Diff, now time.T
 		return Finding{}, refusal.New(refusal.Input, "the title must not be empty", rewriteFix)
 	case strings.TrimSpace(body) == "":
 		return Finding{}, refusal.New(refusal.Input, "the body must not be empty", rewriteFix)
+	case proposal != nil && stored.Proposal != "" && strings.TrimSpace(*proposal) == "":
+		return Finding{}, refusal.New(refusal.Input, "the proposal must not be empty", rewriteFix)
 	}
 	if err := markdown.Check(body, markdown.Body, rewriteFix); err != nil {
 		return Finding{}, err
+	}
+	if proposal != nil && *proposal != "" {
+		if err := markdown.Check(*proposal, markdown.Proposal, rewriteFix); err != nil {
+			return Finding{}, err
+		}
 	}
 	changedTitle, changedBody := title, body
 	if changedTitle == stored.Title {
@@ -765,7 +794,11 @@ func Rewrite(d *Draft, findingID, title, body string, dif *diff.Diff, now time.T
 	if changedBody == stored.Body {
 		changedBody = ""
 	}
-	if err := checkFindingIDs(changedTitle, changedBody, "", "", rewriteIDRetry); err != nil {
+	changedProposal := ""
+	if proposal != nil && *proposal != stored.Proposal {
+		changedProposal = *proposal
+	}
+	if err := checkFindingIDs(changedTitle, changedBody, "", "", changedProposal, rewriteIDRetry); err != nil {
 		return Finding{}, err
 	}
 	titleJSON, err := json.Marshal(title)
@@ -776,9 +809,17 @@ func Rewrite(d *Draft, findingID, title, body string, dif *diff.Diff, now time.T
 	if err != nil {
 		return Finding{}, err
 	}
+	editIn := EditInput{Title: titleJSON, Body: bodyJSON}
+	if proposal != nil {
+		p, err := json.Marshal(*proposal)
+		if err != nil {
+			return Finding{}, err
+		}
+		editIn.Proposal = p
+	}
 	decision, decided := d.Decisions[stored.ID]
 	current := decided && decision.FindingRev == stored.Rev
-	f, _, err := Edit(d, findingID, EditInput{Title: titleJSON, Body: bodyJSON}, nil, dif, ByHuman, now)
+	f, _, err := Edit(d, findingID, editIn, nil, dif, ByHuman, rules, now)
 	if err != nil {
 		return f, err
 	}
@@ -855,6 +896,9 @@ func applyEdit(f *Finding, in EditInput) (anchor *LocationInput, err error) {
 			f.Location = nil
 		}
 	}
+	if err := decodeOptional("proposal", in.Proposal, &f.Proposal); err != nil {
+		return nil, err
+	}
 	return anchor, nil
 }
 
@@ -865,7 +909,7 @@ func decodeRequired(field string, raw json.RawMessage, dst any) error {
 		return nil
 	}
 	if isNull(raw) {
-		return refusal.New(refusal.Input, fmt.Sprintf("%s cannot be null; only location, label, confidence, severity, verified, impact, references and suggestedFix can be cleared", field), editFix)
+		return refusal.New(refusal.Input, fmt.Sprintf("%s cannot be null; only location, label, confidence, severity, verified, impact, references, suggestedFix and proposal can be cleared", field), editFix)
 	}
 	return decodeValue(field, raw, dst)
 }

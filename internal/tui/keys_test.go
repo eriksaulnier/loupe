@@ -335,7 +335,7 @@ func withdrawnFixture(t *testing.T) string {
 			return err
 		}
 		withdraw := false
-		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, testNow)
+		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	}); err != nil {
 		t.Fatal(err)

@@ -6,9 +6,9 @@ Every implementation task follows a failing test, then the change, then a passin
 
 ## Phase 0: Setup
 
-- [ ] T001 Run `mise run check` on the branch with only the spec documents changed, and record the result. Stop if it fails.
-- [ ] T002 Remove the Sync Impact Report comment from `.specify/memory/constitution.md`. Commit the spec set (`specs/049-apply-mode/`, the constitution at 3.2.0, and the FR-001 amendment in `specs/048-update-warning/spec.md`) as `docs(specs): add spec 049 apply mode with plan and tasks`.
-- [ ] T003 Create branch `049-apply-foundation` from the commit of T002 for Phase 1.
+- [x] T001 Run `mise run check` on the branch with only the spec documents changed, and record the result. Stop if it fails.
+- [x] T002 Remove the Sync Impact Report comment from `.specify/memory/constitution.md`. Commit the spec set (`specs/049-apply-mode/`, the constitution at 3.2.0, and the FR-001 amendment in `specs/048-update-warning/spec.md`) as `docs(specs): add spec 049 apply mode with plan and tasks`.
+- [x] T003 Create branch `049-apply-foundation` from the commit of T002 for Phase 1.
 
 ## Phase 1: PR 1, Foundation (`049-apply-foundation`)
 
@@ -18,69 +18,69 @@ Every implementation task follows a failing test, then the change, then a passin
 
 ### Refs and layout
 
-- [ ] T004 [P] Add failing tests in `internal/run/ref_test.go`:
+- [x] T004 [P] Add failing tests in `internal/run/ref_test.go`:
   - `ParseRef` accepts `local#7`, `eriksaulnier/loupe:local#7` and `myrepo:local#7`.
   - It refuses `local#0`, `:local#1`, `a/b/c:local#1` and `local#1@2` with `usage`.
   - `String()` prints `local#7` with an empty prefix and `<prefix>:local#7` otherwise.
   - The `invalidRef` fix names both the PR form and `local#<n>`.
-- [ ] T005 Implement `Ref.Local`, `Ref.Prefix` and the local pattern `^(?:([A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?):)?local#([1-9][0-9]*)$` in `internal/run/ref.go`. `ParseRef` tries the PR pattern first.
-- [ ] T006 [P] Add failing tests in a new `internal/run/local_test.go`:
+- [x] T005 Implement `Ref.Local`, `Ref.Prefix` and the local pattern `^(?:([A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?):)?local#([1-9][0-9]*)$` in `internal/run/ref.go`. `ParseRef` tries the PR pattern first.
+- [x] T006 [P] Add failing tests in a new `internal/run/local_test.go`:
   - `NextLocal` creates `local/` with `MkdirAll`, takes the lock on `local/.lock`, reads a missing `local/next` as 1, writes `2` atomically, and creates `local/1` through `CreateRun`.
   - A deleted `local/1` does not make the next run reuse 1.
   - An unparsable `local/next` refuses with `record`.
   - Two concurrent `NextLocal` calls get distinct n.
   - `WalkLocal` lists `local/<n>` in numeric order and skips non-numeric entries and `.tmp` directories.
   - `HasReturn(dir)` reports whether `return.json` exists.
-- [ ] T007 Implement `LocalRoot`, `LocalDir` in `internal/run/root.go`, and `NextLocal`, `WalkLocal`, `HasReturn` in a new `internal/run/local.go`.
-- [ ] T008 [P] Add failing tests in `internal/run/resolve_test.go` and `internal/run/session_test.go`:
+- [x] T007 Implement `LocalRoot`, `LocalDir` in `internal/run/root.go`, and `NextLocal`, `WalkLocal`, `HasReturn` in a new `internal/run/local.go`.
+- [x] T008 [P] Add failing tests in `internal/run/resolve_test.go` and `internal/run/session_test.go`:
   - `ResolveRef(local#7)` and `ResolveRef(wrong:local#7)` both return the ref with the prefix recorded in the target.
   - A missing run refuses `no-run`, and the fix names `loupe list`.
   - `OpenSession` on a local ref probes only that run's directory.
-- [ ] T009 Implement the local branches of `ResolveRef` and `noRun` in `internal/run/resolve.go`, and of `OpenSession` in `internal/run/session.go`.
+- [x] T009 Implement the local branches of `ResolveRef` and `noRun` in `internal/run/resolve.go`, and of `OpenSession` in `internal/run/session.go`.
 
 ### Target schema 3
 
-- [ ] T010 [P] Add failing tests in `internal/run/target_test.go`:
+- [x] T010 [P] Add failing tests in `internal/run/target_test.go`:
   - A PR target round-trips with today's fields, writes `"schema": 3`, and has no `kind`, `applier` or `local` key.
   - A local target marshals exactly the fields of `run.LocalTargetFile`: `schema`, `kind`, `title`, `applier`, `source`, `model`, `capturedAt`, `diffSha256` and `local` with its sub-fields from data-model.md. No PR field appears.
   - `LoadTarget` reads schemas 1, 2 and 3, and reads a missing `kind` as `""`.
   - `kind: local` at schema 2 refuses with `record`.
   - `ReadDiff` checks `diffSha256` on a local run, including an empty diff.
-- [ ] T011 Implement `Kind`, `KindLocal`, `LocalTarget` (`n`, `prefix`, `repository`, `capture`, `root`, `branch`, `baseRef`, `mergeBase`, `files [{path, abs, new}]`, `skipped [{path, reason}]`), the exported `LocalTargetFile`, `func (t Target) MarshalJSON()`, `TargetSchema = 3` and the kind check in `LoadTarget`, all in `internal/run/target.go`.
-- [ ] T012 Update `internal/publish/schema_test.go`. Pin the schema-3 field set of `run.Target` and of `run.LocalTargetFile`, and keep `TestWritersStampTheirOwnSchema`.
+- [x] T011 Implement `Kind`, `KindLocal`, `LocalTarget` (`n`, `prefix`, `repository`, `capture`, `root`, `branch`, `baseRef`, `mergeBase`, `files [{path, abs, new}]`, `skipped [{path, reason}]`), the exported `LocalTargetFile`, `func (t Target) MarshalJSON()`, `TargetSchema = 3` and the kind check in `LoadTarget`, all in `internal/run/target.go`.
+- [x] T012 Update `internal/publish/schema_test.go`. Pin the schema-3 field set of `run.Target` and of `run.LocalTargetFile`, and keep `TestWritersStampTheirOwnSchema`.
 
 ### Draft schema 5 and rules
 
-- [ ] T013 [P] Add failing tests in `internal/draft/mutate_add_test.go` and `internal/draft/mutate_edit_test.go`:
+- [x] T013 [P] Add failing tests in `internal/draft/mutate_add_test.go` and `internal/draft/mutate_edit_test.go`:
   - With `Rules{AllowProposal: true}`, `proposal` is stored. It refuses past 64 KiB, outside the allowlist, or when it cites an unknown finding id.
   - With `Rules{}`, any proposal refuses `input`, and the fix names `suggestedFix`.
   - With `GeneralOnly`, a location refuses `location`, and the fix names `"general": true`.
   - An `Edit` that changes `proposal` bumps `rev` and clears the decision.
   - `{"proposal": null}` clears it under `AllowProposal`.
   - `Edit`'s re-validation of a stored finding with a proposal and `side: RIGHT` passes under the apply rules.
-- [ ] T014 Implement the following:
+- [x] T014 Implement the following:
   - `Finding.Proposal` (`json:"proposal,omitempty"`), `Decision.Note` (`json:"note,omitempty"`), `SchemaVersion = 5` and `Rules{AllowProposal, GeneralOnly bool}` in `internal/draft/model.go`.
   - The `Proposal`, `AcceptNote`, `ExcludeReason`, `RunTitle` and `Applier` kinds in `internal/markdown/allowlist.go`.
   - The rules parameter on `Add`, `CheckBatch`, `Edit`, `Rewrite`, `Recalibrate` and `Reinstate`, plus `proposal` in `Edit`'s change list and `EditInput.Proposal`, in `internal/draft/mutate.go`.
   - Update the callers in `internal/draft/*_test.go`, `internal/tui/*`, `internal/cli/*` and `cmd/loupe-demo/main.go`.
-- [ ] T015 Update `internal/publish/schema_test.go` for draft schema 5 (`findings.proposal`, `decisions.note`). Add rows to `docs/versioning.md` for draft 5 and target 3.
+- [x] T015 Update `internal/publish/schema_test.go` for draft schema 5 (`findings.proposal`, `decisions.note`). Add rows to `docs/versioning.md` for draft 5 and target 3.
 
 ### Mode and refusals
 
-- [ ] T016 [P] Add failing tests in a new `internal/mode/mode_test.go`:
+- [x] T016 [P] Add failing tests in a new `internal/mode/mode_test.go`:
   - `Of` maps `""` to publish and `local` to apply.
   - `publish.Rules()` is `draft.Rules{}`, and `apply.Rules()` is `{AllowProposal: true, GeneralOnly: <capture == "no-files">}`.
   - `apply.InputRules()` refuses `blocking`, `side` and `suggestedFix`.
   - `apply.Refuses` gives `wrong-mode` for `publish`, `assess`, `show` with `previous` or `comments`, `review` and `handoff`. The last two are the stopgap.
   - `publish.Refuses` gives nil for every command.
-- [ ] T017 Create `internal/mode/mode.go`, `internal/mode/publish.go` and `internal/mode/apply.go` with `Mode{Kind, Rules, InputRules, Refuses}` and `Of`. Add `returned` and `wrong-mode` after `review-open` and before `internal` in `internal/refusal/refusal.go`, and update `refusal_test.go`'s contract order.
-- [ ] T018 [P] Add failing tests in `internal/cli/run_test.go`:
+- [x] T017 Create `internal/mode/mode.go`, `internal/mode/publish.go` and `internal/mode/apply.go` with `Mode{Kind, Rules, InputRules, Refuses}` and `Of`. Add `returned` and `wrong-mode` after `review-open` and before `internal` in `internal/refusal/refusal.go`, and update `refusal_test.go`'s contract order.
+- [x] T018 [P] Add failing tests in `internal/cli/run_test.go`:
   - On a returned local run, `review` and `handoff` refuse with `returned`, checked before `Refuses` runs. `add`, `edit`, `reply` and `summary` refuse with `returned` from `draft.Mutate`. `publish`, `assess` and `show --previous` or `--comments` keep refusing with `wrong-mode`. `feedback`, `wait`, `show` and `list` MUST still read a returned run, since the agent applies the decisions from them.
   - It passes `commandName(cmd)` and the names of the flags set on the command.
   - `show --previous local#1` refuses with `wrong-mode`.
   - Plain `show local#1` succeeds.
-- [ ] T019 Implement the check in `resolveRun` (`internal/cli/run.go`), with a `changedFlags(cmd)` helper.
-- [ ] T020 [P] Add failing tests in `internal/cli/add_test.go` and `internal/cli/edit_test.go` for a local run:
+- [x] T019 Implement the check in `resolveRun` (`internal/cli/run.go`), with a `changedFlags(cmd)` helper.
+- [x] T020 [P] Add failing tests in `internal/cli/add_test.go` and `internal/cli/edit_test.go` for a local run:
   - `--from` input with a `blocking` key (including `false`) refuses with `input`, `details.entry` set to the index, and a fix to drop it.
   - `suggestedFix` refuses with `input`, and the fix names `proposal`.
   - `location.side` refuses with `location`.
@@ -88,10 +88,10 @@ Every implementation task follows a failing test, then the change, then a passin
   - `edit --path a --line 3` does not refuse.
   - `--proposal` stores a proposal, and `edit --clear-proposal` clears it.
   - On a PR run, `--proposal` and a `proposal` key refuse with a fix that names `suggestedFix`.
-- [ ] T021 Implement the raw-key check before decoding in `internal/cli/input.go`, called from `internal/cli/add.go` and `internal/cli/edit.go`. Add the `--proposal` and `--clear-proposal` flags, and update the list of clearable fields in `decodeRequired` (`internal/draft/mutate.go`).
-- [ ] T022 [P] Add a failing test in `internal/cli/show_test.go`: `show --json` on a local run omits `blocking` and `location.side` and prints the local `target` shape. On a PR run it is unchanged.
-- [ ] T023 Implement the omission in `internal/cli/show.go`.
-- [ ] T024 Amend `specs/001-loupe-v1/contracts/cli.md` with the run-reference convention, the two codes, and the `add` and `edit` table from `contracts/cli-apply.md`. Run `mise run check`.
+- [x] T021 Implement the raw-key check before decoding in `internal/cli/input.go`, called from `internal/cli/add.go` and `internal/cli/edit.go`. Add the `--proposal` and `--clear-proposal` flags, and update the list of clearable fields in `decodeRequired` (`internal/draft/mutate.go`).
+- [x] T022 [P] Add a failing test in `internal/cli/show_test.go`: `show --json` on a local run omits `blocking` and `location.side` and prints the local `target` shape. On a PR run it is unchanged.
+- [x] T023 Implement the omission in `internal/cli/show.go`.
+- [x] T024 Amend `specs/001-loupe-v1/contracts/cli.md` with the run-reference convention, the two codes, and the `add` and `edit` table from `contracts/cli-apply.md`. Run `mise run check`.
 
 **Checkpoint**: PR 1 is green, and no user-visible capture form exists yet.
 

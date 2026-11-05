@@ -27,7 +27,7 @@ func anchored(heading string) *LocationInput {
 
 func TestAddResolvesAHeadingAnchor(t *testing.T) {
 	d := NewEmpty()
-	added, err := Add(d, []FindingInput{{Title: "t", Body: "b", Location: anchored("  Rollout ")}}, planDiff(t), ByAgent, addNow)
+	added, err := Add(d, []FindingInput{{Title: "t", Body: "b", Location: anchored("  Rollout ")}}, planDiff(t), Rules{}, ByAgent, addNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,19 +56,19 @@ func TestAddRefusesAMalformedHeadingAnchor(t *testing.T) {
 	}
 	for name, loc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := Add(NewEmpty(), []FindingInput{{Title: "t", Body: "b", Location: loc}}, planDiff(t), ByAgent, addNow)
+			_, err := Add(NewEmpty(), []FindingInput{{Title: "t", Body: "b", Location: loc}}, planDiff(t), Rules{}, ByAgent, addNow)
 			_ = wantRefusal(t, err, refusal.Input)
 		})
 	}
 	right := anchored("Rollout")
 	right.Side = SideRight
-	if _, err := Add(NewEmpty(), []FindingInput{{Title: "t", Body: "b", Location: right}}, planDiff(t), ByAgent, addNow); err != nil {
+	if _, err := Add(NewEmpty(), []FindingInput{{Title: "t", Body: "b", Location: right}}, planDiff(t), Rules{}, ByAgent, addNow); err != nil {
 		t.Fatalf("side RIGHT refused: %v", err)
 	}
 }
 
 func TestAddReportsAMissingTitleBeforeTheHeading(t *testing.T) {
-	_, err := Add(NewEmpty(), []FindingInput{{Body: "b", Location: anchored("Nope")}}, planDiff(t), ByAgent, addNow)
+	_, err := Add(NewEmpty(), []FindingInput{{Body: "b", Location: anchored("Nope")}}, planDiff(t), Rules{}, ByAgent, addNow)
 	if r := wantRefusal(t, err, refusal.Input); r.Message != "entry 0: title is required and must not be empty" {
 		t.Fatalf("message %q", r.Message)
 	}
@@ -79,7 +79,7 @@ func TestAddRefusesABatchWithOneBadHeading(t *testing.T) {
 	_, err := Add(d, []FindingInput{
 		{Title: "good", Body: "b", Location: anchored("Rollout")},
 		{Title: "bad", Body: "b", Location: anchored("Nope")},
-	}, planDiff(t), ByAgent, addNow)
+	}, planDiff(t), Rules{}, ByAgent, addNow)
 	r := wantRefusal(t, err, refusal.Location)
 	if r.Details["entry"] != 1 || len(d.Findings) != 0 {
 		t.Fatalf("details %v, findings %d", r.Details, len(d.Findings))
@@ -93,7 +93,7 @@ func TestAddRefusesABatchWithOneBadHeading(t *testing.T) {
 func headingDraft(t *testing.T) *Draft {
 	t.Helper()
 	d := NewEmpty()
-	if _, err := Add(d, []FindingInput{{Title: "t", Body: "b", Location: anchored("Rollout")}}, planDiff(t), ByAgent, addNow); err != nil {
+	if _, err := Add(d, []FindingInput{{Title: "t", Body: "b", Location: anchored("Rollout")}}, planDiff(t), Rules{}, ByAgent, addNow); err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -101,10 +101,10 @@ func headingDraft(t *testing.T) *Draft {
 
 func TestEditSetsAndReplacesAHeading(t *testing.T) {
 	d := NewEmpty()
-	if _, err := Add(d, []FindingInput{{Title: "t", Body: "b", Location: &LocationInput{Path: "plan.md", Line: 14}}}, planDiff(t), ByAgent, addNow); err != nil {
+	if _, err := Add(d, []FindingInput{{Title: "t", Body: "b", Location: &LocationInput{Path: "plan.md", Line: 14}}}, planDiff(t), Rules{}, ByAgent, addNow); err != nil {
 		t.Fatal(err)
 	}
-	f, _, err := Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Rollout"}}`), nil, planDiff(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Rollout"}}`), nil, planDiff(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,10 +113,10 @@ func TestEditSetsAndReplacesAHeading(t *testing.T) {
 	}
 
 	d = headingDraft(t)
-	if _, _, err := Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Rollout"}}`), nil, planDiff(t), ByAgent, editNow); !errors.Is(err, ErrNoChange) {
+	if _, _, err := Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Rollout"}}`), nil, planDiff(t), ByAgent, Rules{}, editNow); !errors.Is(err, ErrNoChange) {
 		t.Fatalf("same heading: %v, want ErrNoChange", err)
 	}
-	f, _, err = Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "line": 17, "startLine": 11}}`), nil, planDiff(t), ByAgent, editNow)
+	f, _, err = Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "line": 17, "startLine": 11}}`), nil, planDiff(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestEditSetsAndReplacesAHeading(t *testing.T) {
 	}
 
 	d = headingDraft(t)
-	f, _, err = Edit(d, "f-001", editInput(t, `{"location": null}`), nil, planDiff(t), ByAgent, editNow)
+	f, _, err = Edit(d, "f-001", editInput(t, `{"location": null}`), nil, planDiff(t), ByAgent, Rules{}, editNow)
 	if err != nil || f.Location != nil || !f.General {
 		t.Fatalf("null: %+v, %v", f, err)
 	}
@@ -133,7 +133,7 @@ func TestEditSetsAndReplacesAHeading(t *testing.T) {
 
 func TestEditOfAnotherFieldKeepsTheHeading(t *testing.T) {
 	d := headingDraft(t)
-	f, _, err := Edit(d, "f-001", editInput(t, `{"title": "new"}`), nil, planDiff(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-001", editInput(t, `{"title": "new"}`), nil, planDiff(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,10 +144,10 @@ func TestEditOfAnotherFieldKeepsTheHeading(t *testing.T) {
 
 func TestEditRefusesAHeadingThatDoesNotResolve(t *testing.T) {
 	d := headingDraft(t)
-	_, _, err := Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Risks"}}`), nil, planDiff(t), ByAgent, editNow)
+	_, _, err := Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Risks"}}`), nil, planDiff(t), ByAgent, Rules{}, editNow)
 	if r := wantRefusal(t, err, refusal.Location); r.Message != `the section "Risks" of plan.md has no changes in the diff` {
 		t.Fatalf("message %q", r.Message)
 	}
-	_, _, err = Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Rollout", "line": 12}}`), nil, planDiff(t), ByAgent, editNow)
+	_, _, err = Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Rollout", "line": 12}}`), nil, planDiff(t), ByAgent, Rules{}, editNow)
 	_ = wantRefusal(t, err, refusal.Input)
 }
