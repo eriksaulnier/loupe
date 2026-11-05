@@ -160,6 +160,11 @@ func TestCaptureNoFilesAcceptsOnlyGeneralFindings(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("general add: exit %d stdout %q", code, s.stdout.String())
 	}
+	code, s = runWithStdin(t, home, `{"title": "T", "body": "B", "location": {"path": "a.go", "line": 2}}`, "add", "--run", "local#1", "--from", "-", "--json")
+	errObj := wantCode(t, code, s, refusal.Location)
+	if fix, _ := errObj["fix"].(string); !strings.Contains(fix, `"general": true`) {
+		t.Fatalf("located add: fix %q", fix)
+	}
 }
 
 func TestCaptureFilesAnchorsEveryLine(t *testing.T) {
@@ -193,9 +198,7 @@ func TestBareCommandNeverSelectsALocalRun(t *testing.T) {
 	}
 	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
 	deps.WorkDir = dir
-	if code := Execute(deps, []string{"feedback", "--json"}); code == 0 {
-		t.Fatalf("bare feedback selected a run: %s", s.stdout.String())
-	}
+	wantCode(t, Execute(deps, []string{"feedback", "--json"}), s, refusal.NoRun)
 	if env := decodeOne(t, s.stdout.Bytes()); env["run"] != nil {
 		t.Fatalf("bare feedback named a run: %v", env)
 	}

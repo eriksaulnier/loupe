@@ -5,14 +5,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 func TestListRefusesAnUnreadableLocalRun(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		damage func(t *testing.T, home, dir string)
+		name    string
+		code    refusal.Code
+		message string
+		damage  func(t *testing.T, home, dir string)
 	}{
-		{"the local directory is a file", func(t *testing.T, home, dir string) {
+		{"the local directory is a file", refusal.Internal, "local: not a directory", func(t *testing.T, home, dir string) {
 			if err := os.RemoveAll(filepath.Join(home, "local")); err != nil {
 				t.Fatal(err)
 			}
@@ -20,17 +24,17 @@ func TestListRefusesAnUnreadableLocalRun(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"target.json is corrupt", func(t *testing.T, home, dir string) {
+		{"target.json is corrupt", refusal.Record, "target.json: unexpected EOF", func(t *testing.T, home, dir string) {
 			if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("{"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}},
-		{"draft.json is corrupt", func(t *testing.T, home, dir string) {
+		{"draft.json is corrupt", refusal.Record, "draft.json: unexpected EOF", func(t *testing.T, home, dir string) {
 			if err := os.WriteFile(filepath.Join(dir, "draft.json"), []byte("{"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}},
-		{"return.json cannot be examined", func(t *testing.T, home, dir string) {
+		{"return.json cannot be examined", refusal.Internal, "return.json: too many levels of symbolic links", func(t *testing.T, home, dir string) {
 			// A link to itself makes stat fail with a loop error rather than a missing file.
 			if err := os.Symlink("return.json", filepath.Join(dir, "return.json")); err != nil {
 				t.Fatal(err)
@@ -41,8 +45,9 @@ func TestListRefusesAnUnreadableLocalRun(t *testing.T) {
 			home, dir := localRun(t, "changed", localFinding("f-001"))
 			tc.damage(t, home, dir)
 			deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
-			if code := Execute(deps, []string{"list", "--json"}); code == 0 {
-				t.Fatalf("list succeeded; stdout %q", s.stdout.String())
+			errObj := wantCode(t, Execute(deps, []string{"list", "--json"}), s, tc.code)
+			if msg, _ := errObj["message"].(string); !strings.HasSuffix(msg, tc.message) {
+				t.Fatalf("message %q, want it to end %q", msg, tc.message)
 			}
 		})
 	}
@@ -65,7 +70,8 @@ func TestLocalCaptureReturnsAFailureToCreateTheRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, s, _ := localCapture(t, t.TempDir(), map[string]string{"LOUPE_HOME": home}, "--no-files", "--title", "x", "--json")
-	if code == 0 {
-		t.Fatalf("captured under a data root that is a file; stdout %q", s.stdout.String())
+	errObj := wantCode(t, code, s, refusal.Internal)
+	if want := "create local runs directory " + filepath.Join(home, "local") + ": mkdir " + home + ": not a directory"; errObj["message"] != want {
+		t.Fatalf("message %q, want %q", errObj["message"], want)
 	}
 }

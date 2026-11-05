@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -34,23 +36,28 @@ func TestEditFromEmptyStdinRefusesTheInput(t *testing.T) {
 }
 
 func TestRunModeRefusesAMissingTarget(t *testing.T) {
-	if _, err := runMode(t.TempDir()); err == nil {
-		t.Fatal("want an error for a run directory without a target")
+	dir := t.TempDir()
+	_, err := runMode(dir)
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record || r.Fix != "inspect it with: cat "+filepath.Join(dir, "target.json") {
+		t.Fatalf("runMode = %#v, want a record refusal naming target.json", err)
 	}
 }
 
 func TestCheckLocalRunReturnsLoadErrors(t *testing.T) {
 	ref := run.Ref{Local: 1}
-	if err := checkLocalRun(&cobra.Command{Use: "show"}, ref, t.TempDir()); err == nil {
-		t.Error("want an error when the target cannot be loaded")
+	dir := t.TempDir()
+	err := checkLocalRun(&cobra.Command{Use: "show"}, ref, dir)
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record || r.Fix != "inspect it with: cat "+filepath.Join(dir, "target.json") {
+		t.Errorf("checkLocalRun = %#v, want a record refusal naming target.json", err)
 	}
 	file := filepath.Join(t.TempDir(), "file")
 	if err := os.WriteFile(file, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// A path below a file makes the return.json stat fail with something other than not-exist.
-	if err := checkLocalRun(&cobra.Command{Use: "review"}, ref, filepath.Join(file, "run")); err == nil {
-		t.Error("want an error when return.json cannot be statted")
+	err = checkLocalRun(&cobra.Command{Use: "review"}, ref, filepath.Join(file, "run"))
+	if _, ok := refusal.As(err); ok || !errors.Is(err, syscall.ENOTDIR) {
+		t.Errorf("checkLocalRun = %#v, want the ENOTDIR of the return.json stat", err)
 	}
 }
 

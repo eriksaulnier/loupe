@@ -180,21 +180,16 @@ func TestLocalAddAndEditTheProposal(t *testing.T) {
 	}
 	for _, flags := range [][]string{{"--not-blocking"}, {"--suggested-fix", "x"}, {"--side", "RIGHT"}} {
 		code, s := runWithStdin(t, home, "", append([]string{"edit", "f-001", "--run", "local#1", "--json"}, flags...)...)
-		if code != 1 {
-			t.Errorf("edit %v: exit %d stdout %q", flags, code, s.stdout.String())
+		want := refusal.Input
+		if flags[0] == "--side" {
+			want = refusal.Location
+		}
+		if errObj := wantCode(t, code, s, want); !strings.HasPrefix(errObj["message"].(string), flags[0]+" does not apply to local runs") {
+			t.Errorf("edit %v: message %q", flags, errObj["message"])
 		}
 	}
 	code, s = runWithStdin(t, home, `{"blocking": false}`, "edit", "f-001", "--run", "local#1", "--from", "-", "--json")
 	wantCode(t, code, s, refusal.Input)
-}
-
-func TestNoFilesRunRefusesALocation(t *testing.T) {
-	home, _ := localRun(t, "no-files")
-	code, s := runWithStdin(t, home, `{"title": "T", "body": "B", "location": {"path": "a.go", "line": 2}}`, "add", "--run", "local#1", "--from", "-", "--json")
-	errObj := wantCode(t, code, s, refusal.Location)
-	if fix, _ := errObj["fix"].(string); !strings.Contains(fix, `"general": true`) {
-		t.Fatalf("fix %q", fix)
-	}
 }
 
 func TestPRRunRefusesAProposal(t *testing.T) {
@@ -238,15 +233,18 @@ func TestLocalShowOmitsPRFields(t *testing.T) {
 
 func TestInputKeyChecksIgnoreCase(t *testing.T) {
 	home, _ := localRun(t, "changed")
-	for _, input := range []string{
-		`{"title": "T", "body": "B", "general": true, "Blocking": true}`,
-		`{"title": "T", "body": "B", "general": true, "SUGGESTEDFIX": "x"}`,
-		`{"title": "T", "body": "B", "Location": {"path": "a.go", "line": 2, "Side": "RIGHT"}}`,
-		`{"title": "T", "body": "B", "general": true, "Included": false}`,
+	for _, c := range []struct {
+		input, field string
+		code         refusal.Code
+	}{
+		{`{"title": "T", "body": "B", "general": true, "Blocking": true}`, "blocking", refusal.Input},
+		{`{"title": "T", "body": "B", "general": true, "SUGGESTEDFIX": "x"}`, "suggestedFix", refusal.Input},
+		{`{"title": "T", "body": "B", "Location": {"path": "a.go", "line": 2, "Side": "RIGHT"}}`, "location.side", refusal.Location},
+		{`{"title": "T", "body": "B", "general": true, "Included": false}`, "included", refusal.Input},
 	} {
-		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
-		if code != 1 {
-			t.Errorf("%s: exit %d stdout %q", input, code, s.stdout.String())
+		code, s := runWithStdin(t, home, c.input, "add", "--run", "local#1", "--from", "-", "--json")
+		if details, _ := wantCode(t, code, s, c.code)["details"].(map[string]any); details["field"] != c.field {
+			t.Errorf("%s: details %v, want field %s", c.input, details, c.field)
 		}
 	}
 }
@@ -384,13 +382,13 @@ func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
 func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
 	home, _ := localRun(t, "changed")
 	// encoding/json folds ſ (U+017F) to s and K (U+212A) to k when it matches field names.
-	for _, input := range []string{
-		`{"title": "T", "body": "B", "general": true, "ſuggestedFix": "x"}`,
-		`{"title": "T", "body": "B", "general": true, "blocKing": true}`,
+	for _, c := range []struct{ input, field string }{
+		{`{"title": "T", "body": "B", "general": true, "ſuggestedFix": "x"}`, "suggestedFix"},
+		{`{"title": "T", "body": "B", "general": true, "blocKing": true}`, "blocking"},
 	} {
-		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
-		if code != 1 {
-			t.Errorf("%s: exit %d stdout %q", input, code, s.stdout.String())
+		code, s := runWithStdin(t, home, c.input, "add", "--run", "local#1", "--from", "-", "--json")
+		if details, _ := wantCode(t, code, s, refusal.Input)["details"].(map[string]any); details["field"] != c.field {
+			t.Errorf("%s: details %v, want field %s", c.input, details, c.field)
 		}
 	}
 }
