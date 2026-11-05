@@ -30,6 +30,8 @@ const (
 )
 
 // TestMain sets the environment the helpers would otherwise set per test with t.Setenv, which panics under t.Parallel.
+// It also writes the stand-in Herdr before any test runs, since a script written while parallel tests fork can fail
+// to run with ETXTBSY.
 func TestMain(m *testing.M) {
 	ghConfig, err := os.MkdirTemp("", "loupe-integration-gh-")
 	if err != nil {
@@ -41,6 +43,10 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	if err := fakegh.IsolateConfig(ghConfig); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if herdrStub, err = writeHerdrStub(ghConfig); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

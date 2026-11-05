@@ -51,22 +51,34 @@ func (h *harness) writeRepoFile(name, content string) {
 	}
 }
 
-// handoffToStub runs loupe handoff with a stand-in Herdr on PATH, which records the pane command and runs nothing, and
-// checks that the pane would open review on ref. The test then plays the human in that pane with Start.
+// herdrStub is a stand-in Herdr that TestMain writes once. Each hand-off runs it through a hard link of its own, and
+// the stub logs each call's argv beside the name it was run by, NUL-separated and newline-terminated.
+var herdrStub string
+
+const herdrScript = `#!/bin/sh
+log="$(dirname "$0")/argv"
+for a in "$@"; do printf '%s\0' "$a" >> "$log"; done
+printf '\n' >> "$log"
+case "$2" in
+layout) printf '%s\n' '{"id":"cli:pane:layout","result":{"layout":{"panes":[{"pane_id":"w1:p1","rect":{"height":40,"width":150}}]},"type":"pane_layout"}}';;
+split) printf '%s\n' '{"id":"cli:pane:split","result":{"pane":{"pane_id":"w1:p2"},"type":"pane_info"}}';;
+run) printf '%s\n' '{"id":"cli:pane:run","result":{"type":"ok"}}';;
+esac
+`
+
+func writeHerdrStub(dir string) (string, error) {
+	path := filepath.Join(dir, "herdr-stub")
+	return path, os.WriteFile(path, []byte(herdrScript), 0o755)
+}
+
+// handoffToStub runs loupe handoff with the stand-in Herdr on PATH, which records the pane command and runs nothing,
+// and checks that the pane would open review on ref. The test then plays the human in that pane with Start.
 func (h *harness) handoffToStub(ref string) {
 	h.t.Helper()
 	bin := h.t.TempDir()
-	log := filepath.Join(h.t.TempDir(), "argv")
-	script := fmt.Sprintf(`#!/bin/sh
-for a in "$@"; do printf '%%s\0' "$a" >> '%[1]s'; done
-printf '\n' >> '%[1]s'
-case "$2" in
-layout) printf '%%s\n' '{"id":"cli:pane:layout","result":{"layout":{"panes":[{"pane_id":"w1:p1","rect":{"height":40,"width":150}}]},"type":"pane_layout"}}';;
-split) printf '%%s\n' '{"id":"cli:pane:split","result":{"pane":{"pane_id":"w1:p2"},"type":"pane_info"}}';;
-run) printf '%%s\n' '{"id":"cli:pane:run","result":{"type":"ok"}}';;
-esac
-`, log)
-	if err := os.WriteFile(filepath.Join(bin, "herdr"), []byte(script), 0o755); err != nil {
+	log := filepath.Join(bin, "argv")
+	// A link opens no file for writing, so no forked child can hold the stub busy.
+	if err := os.Link(herdrStub, filepath.Join(bin, "herdr")); err != nil {
 		h.t.Fatal(err)
 	}
 	stub := map[string]string{"HERDR_ENV": "1", "HERDR_PANE_ID": "w1:p1", "PATH": bin}
