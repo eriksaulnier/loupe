@@ -459,3 +459,38 @@ func TestReviewReturnsALocalRun(t *testing.T) {
 		t.Fatalf("the run was not returned: %v", err)
 	}
 }
+
+// Plain show on a local run prints each proposal and names the step that applies to a local run: review to decide and
+// return, then feedback once returned. It never names publish, which refuses a local run.
+func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
+	f := localFinding("f-001")
+	f.Proposal = "Rename the helper."
+	home, dir := localRun(t, "changed", f)
+	show := func() string {
+		t.Helper()
+		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+		if code := Execute(deps, []string{"show", "--run", "local#1"}); code != 0 {
+			t.Fatalf("exit %d stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
+		}
+		return s.stdout.String()
+	}
+	out := show()
+	if !strings.Contains(out, "Proposal") || !strings.Contains(out, "Rename the helper.") || !strings.Contains(out, "loupe review acme/widgets:local#1") {
+		t.Fatalf("pending local show:\n%s", out)
+	}
+	if _, err := draft.Mutate(dir, "test", nil, func(string) string { return "" }, func(d *draft.Draft) error {
+		_, err := draft.Accept(d, "f-001", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if out := show(); !strings.Contains(out, "Return them in") || strings.Contains(out, "loupe publish") {
+		t.Fatalf("decided local show:\n%s", out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "return.json"), []byte(`{"schema":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out := show(); !strings.Contains(out, "loupe feedback --run acme/widgets:local#1 --json") {
+		t.Fatalf("returned local show:\n%s", out)
+	}
+}
