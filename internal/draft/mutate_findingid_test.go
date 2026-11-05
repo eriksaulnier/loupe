@@ -34,7 +34,7 @@ func TestAddRefusesAFindingIDInPublishedFields(t *testing.T) {
 		{"suggestedFix", fix, "suggestedFix", 1}} {
 		t.Run(c.name, func(t *testing.T) {
 			d := NewEmpty()
-			_, err := Add(d, []FindingInput{c.in}, multiHunk(t), ByHuman, addNow)
+			_, err := Add(d, []FindingInput{c.in}, multiHunk(t), Rules{}, ByHuman, addNow)
 			r := wantFindingID(t, err, c.field, "f-002", c.line)
 			if !strings.HasSuffix(r.Fix, "run loupe add again") || len(d.Findings) != 0 {
 				t.Fatalf("fix %q findings %v", r.Fix, d.Findings)
@@ -46,10 +46,10 @@ func TestAddRefusesAFindingIDInPublishedFields(t *testing.T) {
 func TestAddReportsTheFirstFieldCitingAnID(t *testing.T) {
 	in := general("Cites f-003")
 	in.Body, in.Impact = "Cites f-004.", "Cites f-005."
-	_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), "", addNow)
+	_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	_ = wantFindingID(t, err, "title", "f-003", 1)
 	in.Title = "Clean"
-	_, err = Add(NewEmpty(), []FindingInput{in}, multiHunk(t), "", addNow)
+	_, err = Add(NewEmpty(), []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	_ = wantFindingID(t, err, "body", "f-004", 1)
 }
 
@@ -57,7 +57,7 @@ func TestAddBatchRefusesAnEntryCitingAnID(t *testing.T) {
 	d := NewEmpty()
 	cites := general("Second")
 	cites.Body = "Same as f-001."
-	_, err := Add(d, []FindingInput{general("First"), cites, located("Off", 10)}, multiHunk(t), "", addNow)
+	_, err := Add(d, []FindingInput{general("First"), cites, located("Off", 10)}, multiHunk(t), Rules{}, "", addNow)
 	r := wantFindingID(t, err, "body", "f-001", 1)
 	entries := entriesOf(t, r)
 	if r.Details["entry"] != 1 || len(entries) != 2 || entries[0]["entry"] != 1 || entries[1]["entry"] != 2 {
@@ -74,7 +74,7 @@ func TestAddBatchRefusesAnEntryCitingAnID(t *testing.T) {
 func TestAddAllowlistRefusalComesBeforeTheIDCheck(t *testing.T) {
 	in := general("Cites f-002")
 	in.Body = "f-002 <br>"
-	_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), "", addNow)
+	_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	if r := wantRefusal(t, err, refusal.Markdown); r.Details["rule"] != "html" {
 		t.Fatalf("details %v, want the allowlist's refusal", r.Details)
 	}
@@ -92,13 +92,13 @@ func TestAddStoresTextThatOnlyResemblesAnID(t *testing.T) {
 	for _, body := range bodies {
 		in := general("Retry loop")
 		in.Body, in.Impact = body, body
-		if _, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), "", addNow); err != nil {
+		if _, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), Rules{}, "", addNow); err != nil {
 			t.Fatalf("%q refused: %v", body, err)
 		}
 	}
 	fix := general("Retry loop")
 	fix.SuggestedFix = "Rename it:\n\n```go\nf-002\n```"
-	if _, err := Add(NewEmpty(), []FindingInput{fix}, multiHunk(t), "", addNow); err != nil {
+	if _, err := Add(NewEmpty(), []FindingInput{fix}, multiHunk(t), Rules{}, "", addNow); err != nil {
 		t.Fatalf("fenced suggestedFix refused: %v", err)
 	}
 }
@@ -106,7 +106,7 @@ func TestAddStoresTextThatOnlyResemblesAnID(t *testing.T) {
 func TestEditRefusesAChangedFieldCitingAnID(t *testing.T) {
 	d := editable()
 	before := d.Findings[0]
-	_, _, err := Edit(d, "f-001", editInput(t, `{"body": "Like f-001."}`), nil, multiHunk(t), ByHuman, editNow)
+	_, _, err := Edit(d, "f-001", editInput(t, `{"body": "Like f-001."}`), nil, multiHunk(t), ByHuman, Rules{}, editNow)
 	r := wantFindingID(t, err, "body", "f-001", 1)
 	if !strings.HasSuffix(r.Fix, "run loupe edit f-001 --from - again") {
 		t.Fatalf("fix %q", r.Fix)
@@ -130,22 +130,22 @@ func TestEditChecksOnlyChangedFieldsForIDs(t *testing.T) {
 		`{"title": "Clean title"}`,
 		`{"body": "As f-002 showed.", "label": "suggestion"}`,
 	} {
-		if _, _, err := Edit(stored(), "f-001", editInput(t, raw), nil, multiHunk(t), ByAgent, editNow); err != nil {
+		if _, _, err := Edit(stored(), "f-001", editInput(t, raw), nil, multiHunk(t), ByAgent, Rules{}, editNow); err != nil {
 			t.Fatalf("%s refused: %v", raw, err)
 		}
 	}
-	if _, err := Recalibrate(stored(), "f-001", "nit", false, multiHunk(t), editNow); err != nil {
+	if _, err := Recalibrate(stored(), "f-001", "nit", false, multiHunk(t), Rules{}, editNow); err != nil {
 		t.Fatalf("recalibrate refused: %v", err)
 	}
 	d := stored()
 	d.Findings[0].Included = false
 	delete(d.Decisions, "f-001")
-	if _, err := Reinstate(d, "f-001", editNow); err != nil {
+	if _, err := Reinstate(d, "f-001", Rules{}, editNow); err != nil {
 		t.Fatalf("reinstate refused: %v", err)
 	}
-	_, _, err := Edit(stored(), "f-001", editInput(t, `{"impact": "Like f-003."}`), nil, multiHunk(t), ByAgent, editNow)
+	_, _, err := Edit(stored(), "f-001", editInput(t, `{"impact": "Like f-003."}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	_ = wantFindingID(t, err, "impact", "f-003", 1)
-	_, _, err = Edit(stored(), "f-001", editInput(t, `{"suggestedFix": "Rename f-003."}`), nil, multiHunk(t), ByAgent, editNow)
+	_, _, err = Edit(stored(), "f-001", editInput(t, `{"suggestedFix": "Rename f-003."}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	_ = wantFindingID(t, err, "suggestedFix", "f-003", 1)
 }
 

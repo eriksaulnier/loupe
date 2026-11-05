@@ -58,7 +58,7 @@ func wantField(t *testing.T, r *refusal.Error, field string) {
 
 func TestAddOne(t *testing.T) {
 	d := NewEmpty()
-	added, err := Add(d, []FindingInput{located("First", 3)}, multiHunk(t), "", addNow)
+	added, err := Add(d, []FindingInput{located("First", 3)}, multiHunk(t), Rules{}, "", addNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestAddBatchAssignsSequentialIDs(t *testing.T) {
 		Title: "Second", Body: "Body.", Location: &LocationInput{Path: "multi.txt", Side: SideLeft, Line: 36, StartLine: 33},
 		Label: "perf-nit", Blocking: true, Confidence: "low", Severity: "minor", SuggestedFix: "Do less.",
 	}
-	added, err := Add(d, []FindingInput{general("First"), in}, multiHunk(t), ByHuman, addNow)
+	added, err := Add(d, []FindingInput{general("First"), in}, multiHunk(t), Rules{}, ByHuman, addNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestAddBatchAssignsSequentialIDs(t *testing.T) {
 		t.Fatalf("first %+v", d.Findings[0])
 	}
 
-	more, err := Add(d, []FindingInput{general("Third")}, multiHunk(t), "", addNow)
+	more, err := Add(d, []FindingInput{general("Third")}, multiHunk(t), Rules{}, "", addNow)
 	if err != nil || more[0].ID != "f-003" {
 		t.Fatalf("third %+v %v", more, err)
 	}
@@ -103,7 +103,7 @@ func TestAddBatchAssignsSequentialIDs(t *testing.T) {
 
 func TestAddBatchWithOffDiffEntryStoresNothing(t *testing.T) {
 	d := NewEmpty()
-	_, err := Add(d, []FindingInput{located("Good", 3), located("Off", 10)}, multiHunk(t), "", addNow)
+	_, err := Add(d, []FindingInput{located("Good", 3), located("Off", 10)}, multiHunk(t), Rules{}, "", addNow)
 	r := wantRefusal(t, err, refusal.Location)
 	if r.Details["entry"] != 1 || r.Details["nearest"] == nil {
 		t.Fatalf("details %v", r.Details)
@@ -142,7 +142,7 @@ func TestAddRefusesInvalidInput(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			d := NewEmpty()
-			_, err := Add(d, []FindingInput{general("Good"), c.in}, multiHunk(t), "", addNow)
+			_, err := Add(d, []FindingInput{general("Good"), c.in}, multiHunk(t), Rules{}, "", addNow)
 			r := wantRefusal(t, err, refusal.Input)
 			if r.Details["entry"] != 1 || len(d.Findings) != 0 {
 				t.Fatalf("details %v findings %d", r.Details, len(d.Findings))
@@ -156,7 +156,7 @@ func TestAddStoresEveryOptionalField(t *testing.T) {
 	in := general("Full")
 	in.Severity, in.Verified, in.Impact = "major", "reproduced", "A 502 leaves two reviews."
 	in.References = []string{"https://github.com/o/r/issues/12", "http://localhost/a?b=c#d"}
-	added, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	added, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestAddStoresEmptyReferencesAsAbsent(t *testing.T) {
 	d := NewEmpty()
 	in := general("Empty")
 	in.References = []string{}
-	added, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	added, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestAddRefusesReferenceNamingTheEntry(t *testing.T) {
 	d := NewEmpty()
 	in := general("Bad ref")
 	in.References = []string{"https://github.com/o/r/issues/1", "ftp://a/b"}
-	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	r := wantRefusal(t, err, refusal.Input)
 	if !strings.Contains(r.Message, "references[1]") || r.Details["entry"] != 0 || len(d.Findings) != 0 {
 		t.Fatalf("message %q details %v findings %d", r.Message, r.Details, len(d.Findings))
@@ -194,7 +194,7 @@ func TestAddRefusesImpactFailingAllowlist(t *testing.T) {
 	d := NewEmpty()
 	in := general("Bad impact")
 	in.Impact = "one<br>two"
-	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	r := wantRefusal(t, err, refusal.Markdown)
 	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
 		t.Fatalf("fix %q details %v", r.Fix, r.Details)
@@ -206,7 +206,7 @@ func TestAddRefusesBodyFailingAllowlist(t *testing.T) {
 	d := NewEmpty()
 	in := general("Bad body")
 	in.Body = "one<br>two"
-	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	r := wantRefusal(t, err, refusal.Markdown)
 	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
 		t.Fatalf("fix %q details %v", r.Fix, r.Details)
@@ -216,7 +216,7 @@ func TestAddRefusesBodyFailingAllowlist(t *testing.T) {
 
 func TestSetSummaryCountMismatch(t *testing.T) {
 	d := NewEmpty()
-	if _, err := Add(d, []FindingInput{located("First", 3), general("Second")}, multiHunk(t), "", addNow); err != nil {
+	if _, err := Add(d, []FindingInput{located("First", 3), general("Second")}, multiHunk(t), Rules{}, "", addNow); err != nil {
 		t.Fatal(err)
 	}
 	d.Summary = "before"
@@ -236,7 +236,7 @@ func TestSetSummaryCountMismatch(t *testing.T) {
 
 func TestSetSummaryStores(t *testing.T) {
 	d := NewEmpty()
-	if _, err := Add(d, []FindingInput{general("First"), general("Second")}, multiHunk(t), "", addNow); err != nil {
+	if _, err := Add(d, []FindingInput{general("First"), general("Second")}, multiHunk(t), Rules{}, "", addNow); err != nil {
 		t.Fatal(err)
 	}
 	two := 2
@@ -263,14 +263,14 @@ func TestAddValidatesLabel(t *testing.T) {
 	for _, label := range []string{"", "issue", "nit", "a11y", "perf.hot-path", "follow_up", "Frage", "問題", strings.Repeat("x", 40)} {
 		in := general("Labeled")
 		in.Label = label
-		if _, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), "", addNow); err != nil {
+		if _, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), Rules{}, "", addNow); err != nil {
 			t.Errorf("label %q refused: %v", label, err)
 		}
 	}
 	for _, label := range []string{"-lead", "_lead", ".lead", "two words", "use`x`", "*now*", "[a](b)", `back\slash`, "bang!", "#tag", "a|b", "~x", "x:", strings.Repeat("x", 41)} {
 		in := general("Labeled")
 		in.Label = label
-		_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), "", addNow)
+		_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 		r := wantRefusal(t, err, refusal.Input)
 		if !strings.Contains(r.Message, "label") || !strings.Contains(r.Message, LabelPattern) {
 			t.Errorf("label %q: message %q does not name the field and pattern", label, r.Message)
@@ -311,9 +311,9 @@ func TestAddBatchRefusalNamesEveryInvalidEntry(t *testing.T) {
 	inputs[5] = FindingInput{Title: "No body", General: true}
 	inputs[8] = located("Also off", 11)
 
-	_, err := Add(d, inputs, multiHunk(t), "", addNow)
+	_, err := Add(d, inputs, multiHunk(t), Rules{}, "", addNow)
 	r := wantRefusal(t, err, refusal.Location)
-	alone := wantRefusal(t, validationErr(validateInput(inputs[2], multiHunk(t))), refusal.Location)
+	alone := wantRefusal(t, validationErr(validateInput(inputs[2], multiHunk(t), Rules{})), refusal.Location)
 	if r.Fix != alone.Fix || r.Details["entry"] != 2 || !reflect.DeepEqual(r.Details["nearest"], alone.Details["nearest"]) {
 		t.Fatalf("top level %+v, want entry 2's own refusal %+v", r, alone)
 	}
@@ -326,7 +326,7 @@ func TestAddBatchRefusalNamesEveryInvalidEntry(t *testing.T) {
 	}
 	for i, want := range []int{2, 5, 8} {
 		e := entries[i]
-		own := wantRefusal(t, validationErr(validateInput(inputs[want], multiHunk(t))), refusal.Code(e["code"].(string)))
+		own := wantRefusal(t, validationErr(validateInput(inputs[want], multiHunk(t), Rules{})), refusal.Code(e["code"].(string)))
 		if e["entry"] != want || e["message"] != own.Message || e["fix"] != own.Fix {
 			t.Fatalf("entries[%d] %v, want entry %d with %+v", i, e, want, own)
 		}
@@ -344,9 +344,9 @@ func TestAddBatchRefusalNamesEveryInvalidEntry(t *testing.T) {
 
 func TestAddBatchRefusalWithOneInvalidEntryIsUnchanged(t *testing.T) {
 	d := NewEmpty()
-	_, err := Add(d, []FindingInput{located("Good", 3), located("Off", 10)}, multiHunk(t), "", addNow)
+	_, err := Add(d, []FindingInput{located("Good", 3), located("Off", 10)}, multiHunk(t), Rules{}, "", addNow)
 	r := wantRefusal(t, err, refusal.Location)
-	alone := wantRefusal(t, validationErr(validateInput(located("Off", 10), multiHunk(t))), refusal.Location)
+	alone := wantRefusal(t, validationErr(validateInput(located("Off", 10), multiHunk(t), Rules{})), refusal.Location)
 	if r.Message != "entry 1: "+alone.Message || r.Fix != alone.Fix || r.Details["entry"] != 1 {
 		t.Fatalf("refusal %+v", r)
 	}
@@ -358,7 +358,7 @@ func TestAddBatchRefusalWithOneInvalidEntryIsUnchanged(t *testing.T) {
 func TestCheckBatchMergesEarlierFailuresInEntryOrder(t *testing.T) {
 	decode := refusal.New(refusal.Input, `unknown field "titel"`, "see loupe add --help for the input shape")
 	inputs := []FindingInput{{}, located("Good", 3), located("Off", 10)}
-	err := CheckBatch(inputs, []EntryFailure{{Entry: 0, Err: decode, Decoding: true}}, multiHunk(t))
+	err := CheckBatch(inputs, []EntryFailure{{Entry: 0, Err: decode, Decoding: true}}, multiHunk(t), Rules{})
 	r := wantRefusal(t, err, refusal.Input)
 	if r.Message != `input entry 0: unknown field "titel"; entry 2 is refused too` {
 		t.Fatalf("message %q", r.Message)
@@ -368,7 +368,7 @@ func TestCheckBatchMergesEarlierFailuresInEntryOrder(t *testing.T) {
 		entries[1]["code"] != string(refusal.Location) {
 		t.Fatalf("entries %v", entries)
 	}
-	if err := CheckBatch([]FindingInput{located("Good", 3)}, nil, multiHunk(t)); err != nil {
+	if err := CheckBatch([]FindingInput{located("Good", 3)}, nil, multiHunk(t), Rules{}); err != nil {
 		t.Fatalf("a valid batch is refused: %v", err)
 	}
 }
@@ -378,7 +378,7 @@ func TestAddRefusesSuggestedFixFailingAllowlist(t *testing.T) {
 	d := NewEmpty()
 	in := general("Bad fix")
 	in.SuggestedFix = "one<br>two"
-	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	r := wantRefusal(t, err, refusal.Markdown)
 	if r.Fix != "loupe edit <id> --from -" || r.Details["entry"] != 0 || r.Details["rule"] != "html" {
 		t.Fatalf("fix %q details %v", r.Fix, r.Details)
@@ -391,10 +391,70 @@ func TestAddRefusesReferenceWithoutAHostname(t *testing.T) {
 	d := NewEmpty()
 	in := general("No host")
 	in.References = []string{"https://:80/x"}
-	_, err := Add(d, []FindingInput{in}, multiHunk(t), "", addNow)
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
 	if r := wantRefusal(t, err, refusal.Input); !strings.Contains(r.Message, "with a host") {
 		t.Fatalf("message %q", r.Message)
 	}
 }
 
 func validationErr(_ *FindingLocation, err error) error { return err }
+
+func TestAddWithAllowProposalStoresProposal(t *testing.T) {
+	d := NewEmpty()
+	in := general("With proposal")
+	in.Proposal = "Change X to Y."
+	added, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{AllowProposal: true}, "", addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added[0].Proposal != "Change X to Y." || d.Findings[0].Proposal != "Change X to Y." {
+		t.Fatalf("proposal %q stored %q", added[0].Proposal, d.Findings[0].Proposal)
+	}
+}
+
+func TestAddWithAllowProposalRefusesTooLargeProposal(t *testing.T) {
+	d := NewEmpty()
+	in := general("Too large")
+	in.Proposal = strings.Repeat("x", 64*1024+1)
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{AllowProposal: true}, "", addNow)
+	r := wantRefusal(t, err, refusal.Markdown)
+	wantField(t, r, "proposal")
+}
+
+func TestAddWithAllowProposalRefusesInvalidMarkdownInProposal(t *testing.T) {
+	d := NewEmpty()
+	in := general("Bad proposal")
+	in.Proposal = "one<br>two"
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{AllowProposal: true}, "", addNow)
+	r := wantRefusal(t, err, refusal.Markdown)
+	wantField(t, r, "proposal")
+}
+
+func TestAddWithAllowProposalRefusesFindingIDInProposal(t *testing.T) {
+	d := NewEmpty()
+	in := general("Citing ID")
+	in.Proposal = "See f-002 for context."
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{AllowProposal: true}, "", addNow)
+	_ = wantRefusal(t, err, refusal.Markdown)
+}
+
+func TestAddWithDefaultRulesRefusesProposal(t *testing.T) {
+	d := NewEmpty()
+	in := general("With proposal")
+	in.Proposal = "Change X to Y."
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
+	r := wantRefusal(t, err, refusal.Input)
+	if !strings.Contains(r.Fix, "suggestedFix") {
+		t.Fatalf("fix %q, want it to name suggestedFix", r.Fix)
+	}
+}
+
+func TestAddWithGeneralOnlyRefusesLocation(t *testing.T) {
+	d := NewEmpty()
+	in := located("With location", 3)
+	_, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{GeneralOnly: true}, "", addNow)
+	r := wantRefusal(t, err, refusal.Location)
+	if !strings.Contains(r.Fix, `"general": true`) {
+		t.Fatalf("fix %q, want it to name \"general\": true", r.Fix)
+	}
+}

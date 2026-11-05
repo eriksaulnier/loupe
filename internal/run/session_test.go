@@ -102,6 +102,26 @@ func holdFor(t *testing.T, dir string) *Session {
 	return s
 }
 
+func TestOpenSessionLocalProbesOnlyItsDir(t *testing.T) {
+	root := t.TempDir()
+	target := sampleLocalTarget()
+	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No session held: not open
+	open, ok, err := OpenSession(root, ref)
+	if err != nil || ok {
+		t.Fatalf("no session: open=%v ok=%v err=%v", open, ok, err)
+	}
+	// Hold a session on the local run dir
+	holdFor(t, dir)
+	open, ok, err = OpenSession(root, ref)
+	if err != nil || !ok || open.Local != ref.Local {
+		t.Fatalf("session held: open=%v ok=%v err=%v", open, ok, err)
+	}
+}
+
 // The guard is per pull request: a new round is a new run, and a batch hands off several pull requests at once.
 func TestOpenSessionCoversEveryRoundOfThePullRequest(t *testing.T) {
 	root := t.TempDir()

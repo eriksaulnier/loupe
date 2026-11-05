@@ -62,7 +62,7 @@ func TestEditEachPublishableField(t *testing.T) {
 	for field, c := range cases {
 		t.Run(field, func(t *testing.T) {
 			d := editable()
-			f, cleared, err := Edit(d, "f-001", editInput(t, c.input), nil, multiHunk(t), ByHuman, editNow)
+			f, cleared, err := Edit(d, "f-001", editInput(t, c.input), nil, multiHunk(t), ByHuman, Rules{}, editNow)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -84,7 +84,7 @@ func TestEditEachPublishableField(t *testing.T) {
 func TestEditToCurrentValuesChangesNothing(t *testing.T) {
 	d := editable()
 	in := editInput(t, `{"title": "One", "body": "Body one.", "location": {"path": "multi.txt", "line": 3}, "label": "issue", "blocking": true}`)
-	f, cleared, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, editNow)
+	f, cleared, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	if !errors.Is(err, ErrNoChange) {
 		t.Fatalf("got %v, want ErrNoChange", err)
 	}
@@ -99,7 +99,7 @@ func TestEditToCurrentValuesChangesNothing(t *testing.T) {
 func TestEditNullClearsOptionalFields(t *testing.T) {
 	d := editable()
 	in := editInput(t, `{"label": null, "confidence": null, "severity": null, "verified": null, "impact": null, "references": null, "suggestedFix": null}`)
-	f, _, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestEditNullClearsOptionalFields(t *testing.T) {
 
 func TestEditEmptyReferencesClears(t *testing.T) {
 	d := editable()
-	f, _, err := Edit(d, "f-001", editInput(t, `{"references": []}`), nil, multiHunk(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-001", editInput(t, `{"references": []}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,14 +128,14 @@ func TestEditEmptyReferencesClears(t *testing.T) {
 func TestEditKeepsALegacySeverity(t *testing.T) {
 	d := editable()
 	d.Findings[0].Severity = "P2"
-	f, _, err := Edit(d, "f-001", editInput(t, `{"title": "Renamed"}`), nil, multiHunk(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-001", editInput(t, `{"title": "Renamed"}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f.Severity != "P2" || f.Title != "Renamed" {
 		t.Fatalf("finding %+v", f)
 	}
-	_, _, err = Edit(d, "f-001", editInput(t, `{"severity": "P1"}`), nil, multiHunk(t), ByAgent, editNow)
+	_, _, err = Edit(d, "f-001", editInput(t, `{"severity": "P1"}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	_ = wantRefusal(t, err, refusal.Input)
 }
 
@@ -144,20 +144,20 @@ func TestEditKeepsALegacySeverity(t *testing.T) {
 func TestEditKeepsALegacySuggestedFix(t *testing.T) {
 	d := editable()
 	d.Findings[0].SuggestedFix = "one<br>two"
-	f, _, err := Edit(d, "f-001", editInput(t, `{"title": "Renamed"}`), nil, multiHunk(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-001", editInput(t, `{"title": "Renamed"}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f.SuggestedFix != "one<br>two" || f.Title != "Renamed" {
 		t.Fatalf("finding %+v", f)
 	}
-	_, _, err = Edit(d, "f-001", editInput(t, `{"suggestedFix": "three<br>four"}`), nil, multiHunk(t), ByAgent, editNow)
+	_, _, err = Edit(d, "f-001", editInput(t, `{"suggestedFix": "three<br>four"}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	wantField(t, wantRefusal(t, err, refusal.Markdown), "suggestedFix")
 }
 
 func TestEditNullLocationMakesFindingGeneral(t *testing.T) {
 	d := editable()
-	f, _, err := Edit(d, "f-001", editInput(t, `{"location": null}`), nil, multiHunk(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-001", editInput(t, `{"location": null}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestEditNullLocationMakesFindingGeneral(t *testing.T) {
 func TestEditRefusesNullForRequiredFields(t *testing.T) {
 	for _, field := range []string{"title", "body", "blocking", "general"} {
 		d := editable()
-		_, _, err := Edit(d, "f-001", editInput(t, `{"`+field+`": null}`), nil, multiHunk(t), ByAgent, editNow)
+		_, _, err := Edit(d, "f-001", editInput(t, `{"`+field+`": null}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 		r := wantRefusal(t, err, refusal.Input)
 		if !strings.Contains(r.Message, field) {
 			t.Errorf("%s: message %q", field, r.Message)
@@ -182,7 +182,7 @@ func TestEditRefusesNullForRequiredFields(t *testing.T) {
 
 func TestEditLocationAndGeneralReplaceEachOther(t *testing.T) {
 	d := editable()
-	f, _, err := Edit(d, "f-002", editInput(t, `{"location": {"path": "multi.txt", "line": 35}}`), nil, multiHunk(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-002", editInput(t, `{"location": {"path": "multi.txt", "line": 35}}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestEditLocationAndGeneralReplaceEachOther(t *testing.T) {
 		t.Fatalf("history %#v", f.History[0].Changed)
 	}
 
-	f, _, err = Edit(d, "f-001", editInput(t, `{"general": true}`), nil, multiHunk(t), ByAgent, editNow)
+	f, _, err = Edit(d, "f-001", editInput(t, `{"general": true}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestEditValidatesNewValues(t *testing.T) {
 		if input == `{"general": false}` {
 			id = "f-002"
 		}
-		_, _, err := Edit(d, id, editInput(t, input), nil, multiHunk(t), ByAgent, editNow)
+		_, _, err := Edit(d, id, editInput(t, input), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 		_ = wantRefusal(t, err, code)
 		if !reflect.DeepEqual(d, editable()) {
 			t.Errorf("%s: draft changed", input)
@@ -233,7 +233,7 @@ func TestEditValidatesNewValues(t *testing.T) {
 func TestEditWithdrawsAndIncludes(t *testing.T) {
 	d := editable()
 	withdraw, include := false, true
-	f, cleared, err := Edit(d, "f-001", EditInput{}, &withdraw, nil, ByAgent, editNow)
+	f, cleared, err := Edit(d, "f-001", EditInput{}, &withdraw, nil, ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestEditWithdrawsAndIncludes(t *testing.T) {
 		t.Fatalf("history %#v", f.History)
 	}
 
-	f, cleared, err = Edit(d, "f-001", EditInput{}, &include, nil, ByAgent, editNow)
+	f, cleared, err = Edit(d, "f-001", EditInput{}, &include, nil, ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestEditWithdrawsAndIncludes(t *testing.T) {
 		t.Fatalf("included %+v cleared %v dispositions %v", f, cleared, Dispositions(d))
 	}
 
-	f, _, err = Edit(d, "f-001", EditInput{}, &include, nil, ByAgent, editNow)
+	f, _, err = Edit(d, "f-001", EditInput{}, &include, nil, ByAgent, Rules{}, editNow)
 	if !errors.Is(err, ErrNoChange) || f.Rev != 3 {
 		t.Fatalf("including an included finding changed it: %+v err %v", f, err)
 	}
@@ -289,7 +289,7 @@ func TestReplyChangesNoStatusOrDecision(t *testing.T) {
 
 func TestEditUnknownIDsRefuseNotFound(t *testing.T) {
 	d := editable()
-	_, _, err := Edit(d, "f-009", editInput(t, `{"title": "x"}`), nil, multiHunk(t), ByAgent, editNow)
+	_, _, err := Edit(d, "f-009", editInput(t, `{"title": "x"}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
 	_ = wantRefusal(t, err, refusal.NotFound)
 	_, err = AddReply(d, "n-009", "x", ByAgent, editNow)
 	_ = wantRefusal(t, err, refusal.NotFound)
@@ -310,7 +310,7 @@ func TestRecalibrateKeepsTheDecision(t *testing.T) {
 				t.Fatal(err)
 			}
 			before, hadDecision := d.Decisions["f-001"]
-			f, err := Recalibrate(d, "f-001", "suggestion", false, multiHunk(t), editNow)
+			f, err := Recalibrate(d, "f-001", "suggestion", false, multiHunk(t), Rules{}, editNow)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -337,7 +337,7 @@ func TestRecalibrateLeavesNotesOpen(t *testing.T) {
 	if _, err := SendBack(d, "f-002", "Is this blocking?", editNow); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Recalibrate(d, "f-002", "question", true, multiHunk(t), editNow); err != nil {
+	if _, err := Recalibrate(d, "f-002", "question", true, multiHunk(t), Rules{}, editNow); err != nil {
 		t.Fatal(err)
 	}
 	if d.Notes[0].Status != NoteOpen || d.Notes[0].ClosedAt != nil {
@@ -348,7 +348,7 @@ func TestRecalibrateLeavesNotesOpen(t *testing.T) {
 func TestRecalibrateDoesNotReviveAStaleDecision(t *testing.T) {
 	d := editable()
 	d.Findings[0].Rev = 2
-	f, err := Recalibrate(d, "f-001", "suggestion", true, multiHunk(t), editNow)
+	f, err := Recalibrate(d, "f-001", "suggestion", true, multiHunk(t), Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,22 +360,22 @@ func TestRecalibrateDoesNotReviveAStaleDecision(t *testing.T) {
 func TestRecalibrateRefusals(t *testing.T) {
 	d := editable()
 	withdraw := false
-	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, editNow); err != nil {
+	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, Rules{}, editNow); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Recalibrate(d, "f-002", "issue", false, multiHunk(t), editNow)
+	_, err := Recalibrate(d, "f-002", "issue", false, multiHunk(t), Rules{}, editNow)
 	r := wantRefusal(t, err, refusal.Input)
 	if !strings.Contains(r.Fix, "reinstate f-002 first") {
 		t.Fatalf("fix %q", r.Fix)
 	}
 
-	_, err = Recalibrate(d, "f-001", "not a label!", true, multiHunk(t), editNow)
+	_, err = Recalibrate(d, "f-001", "not a label!", true, multiHunk(t), Rules{}, editNow)
 	_ = wantRefusal(t, err, refusal.Input)
 
-	_, err = Recalibrate(d, "f-009", "issue", true, multiHunk(t), editNow)
+	_, err = Recalibrate(d, "f-009", "issue", true, multiHunk(t), Rules{}, editNow)
 	_ = wantRefusal(t, err, refusal.NotFound)
 
-	f, err := Recalibrate(d, "f-001", "issue", true, multiHunk(t), editNow)
+	f, err := Recalibrate(d, "f-001", "issue", true, multiHunk(t), Rules{}, editNow)
 	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
 		t.Fatalf("unchanged recalibration %+v err %v", f, err)
 	}
@@ -396,7 +396,7 @@ func TestRewriteKeepsTheDecision(t *testing.T) {
 				t.Fatal(err)
 			}
 			before, hadDecision := d.Decisions["f-001"]
-			f, err := Rewrite(d, "f-001", "One, said better", "Body one, said better.", multiHunk(t), editNow)
+			f, err := Rewrite(d, "f-001", "One, said better", "Body one, said better.", nil, Rules{}, multiHunk(t), editNow)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -420,7 +420,7 @@ func TestRewriteKeepsTheDecision(t *testing.T) {
 
 func TestRewriteRecordsOnlyWhatChanged(t *testing.T) {
 	d := editable()
-	f, err := Rewrite(d, "f-001", "One", "Body one, said better.", multiHunk(t), editNow)
+	f, err := Rewrite(d, "f-001", "One", "Body one, said better.", nil, Rules{}, multiHunk(t), editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestRewriteLeavesNotesOpen(t *testing.T) {
 	if _, err := SendBack(d, "f-002", "Say it plainer.", editNow); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Rewrite(d, "f-002", "Two", "Body two, plainer.", multiHunk(t), editNow); err != nil {
+	if _, err := Rewrite(d, "f-002", "Two", "Body two, plainer.", nil, Rules{}, multiHunk(t), editNow); err != nil {
 		t.Fatal(err)
 	}
 	if d.Notes[0].Status != NoteOpen || d.Notes[0].ClosedAt != nil {
@@ -445,7 +445,7 @@ func TestRewriteLeavesNotesOpen(t *testing.T) {
 func TestRewriteDoesNotReviveAStaleDecision(t *testing.T) {
 	d := editable()
 	d.Findings[0].Rev = 2
-	f, err := Rewrite(d, "f-001", "One", "Body one, again.", multiHunk(t), editNow)
+	f, err := Rewrite(d, "f-001", "One", "Body one, again.", nil, Rules{}, multiHunk(t), editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,10 +457,10 @@ func TestRewriteDoesNotReviveAStaleDecision(t *testing.T) {
 func TestRewriteRefusals(t *testing.T) {
 	d := editable()
 	withdraw := false
-	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, editNow); err != nil {
+	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, Rules{}, editNow); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Rewrite(d, "f-002", "Two", "Body two, again.", multiHunk(t), editNow)
+	_, err := Rewrite(d, "f-002", "Two", "Body two, again.", nil, Rules{}, multiHunk(t), editNow)
 	r := wantRefusal(t, err, refusal.Input)
 	if !strings.Contains(r.Message, "rewritten") || r.Fix != "reinstate f-002 first" {
 		t.Fatalf("refusal %+v", r)
@@ -477,7 +477,7 @@ func TestRewriteRefusals(t *testing.T) {
 		{"finding id in the body", "One", "Body one, as f-002 says.", "finding id f-002", refusal.Markdown},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := Rewrite(d, "f-001", c.title, c.body, multiHunk(t), editNow)
+			_, err := Rewrite(d, "f-001", c.title, c.body, nil, Rules{}, multiHunk(t), editNow)
 			r := wantRefusal(t, err, c.code)
 			if !strings.Contains(r.Message, c.says) || !strings.Contains(r.Fix, "ctrl+s") || strings.Contains(r.Fix, "loupe") {
 				t.Fatalf("refusal %+v", r)
@@ -490,14 +490,17 @@ func TestRewriteRefusals(t *testing.T) {
 			}
 		})
 	}
-	if r, _ := refusal.As(func() error { _, err := Rewrite(d, "f-001", "One", "<div>no</div>", multiHunk(t), editNow); return err }()); r.Details["line"] != 1 || r.Details["rule"] == nil {
+	if r, _ := refusal.As(func() error {
+		_, err := Rewrite(d, "f-001", "One", "<div>no</div>", nil, Rules{}, multiHunk(t), editNow)
+		return err
+	}()); r.Details["line"] != 1 || r.Details["rule"] == nil {
 		t.Fatalf("details %v", r.Details)
 	}
 
-	_, err = Rewrite(d, "f-009", "One", "Body.", multiHunk(t), editNow)
+	_, err = Rewrite(d, "f-009", "One", "Body.", nil, Rules{}, multiHunk(t), editNow)
 	_ = wantRefusal(t, err, refusal.NotFound)
 
-	f, err := Rewrite(d, "f-001", "One", "Body one.", multiHunk(t), editNow)
+	f, err := Rewrite(d, "f-001", "One", "Body one.", nil, Rules{}, multiHunk(t), editNow)
 	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
 		t.Fatalf("unchanged rewrite %+v err %v", f, err)
 	}
@@ -507,7 +510,7 @@ func TestRewriteRefusals(t *testing.T) {
 func TestEditOfTheTextClearsTheDecisionForEveryBy(t *testing.T) {
 	for _, by := range []string{ByAgent, ByHuman, ""} {
 		d := editable()
-		_, cleared, err := Edit(d, "f-001", editInput(t, `{"body": "Body one, edited."}`), nil, multiHunk(t), by, editNow)
+		_, cleared, err := Edit(d, "f-001", editInput(t, `{"body": "Body one, edited."}`), nil, multiHunk(t), by, Rules{}, editNow)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -524,7 +527,7 @@ func withdrawWith(t *testing.T, d *Draft, id, reason string, by string) (Finding
 	if reason != "" {
 		in.WithdrawReason = json.RawMessage(reason)
 	}
-	return Edit(d, id, in, &excluded, nil, by, editNow)
+	return Edit(d, id, in, &excluded, nil, by, Rules{}, editNow)
 }
 
 func TestEditWithdrawsWithAReason(t *testing.T) {
@@ -544,7 +547,7 @@ func TestEditCarriesTheReasonOnTheSameEntryAsAFieldChange(t *testing.T) {
 	d := editable()
 	excluded := false
 	in := editInput(t, `{"title": "Renamed", "withdrawReason": {"text": "Duplicate of f-002."}}`)
-	f, _, err := Edit(d, "f-001", in, &excluded, multiHunk(t), ByAgent, editNow)
+	f, _, err := Edit(d, "f-001", in, &excluded, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +575,7 @@ func TestEditAmendsAReasonWithoutTouchingRevOrDecision(t *testing.T) {
 	later := editNow.Add(time.Minute)
 	excluded := false
 	in := EditInput{WithdrawReason: json.RawMessage(`{"text": "Duplicate of f-001.", "code": "duplicate"}`)}
-	f, cleared, err := Edit(d, "f-002", in, &excluded, nil, ByHuman, later)
+	f, cleared, err := Edit(d, "f-002", in, &excluded, nil, ByHuman, Rules{}, later)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,7 +617,7 @@ func TestEditAmendWithAFieldChangeIsAnOrdinaryEdit(t *testing.T) {
 	d := withdrawnUnexplained(t)
 	excluded := false
 	in := editInput(t, `{"body": "Clearer.", "withdrawReason": {"text": "Conceded."}}`)
-	f, cleared, err := Edit(d, "f-002", in, &excluded, multiHunk(t), ByAgent, editNow)
+	f, cleared, err := Edit(d, "f-002", in, &excluded, multiHunk(t), ByAgent, Rules{}, editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -651,7 +654,7 @@ func TestEditRefusesABadReason(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			d := editable()
-			_, _, err := Edit(d, "f-002", EditInput{WithdrawReason: json.RawMessage(c.reason)}, c.included, nil, ByAgent, editNow)
+			_, _, err := Edit(d, "f-002", EditInput{WithdrawReason: json.RawMessage(c.reason)}, c.included, nil, ByAgent, Rules{}, editNow)
 			r, ok := refusal.As(err)
 			if !ok || r.Code != c.code || !strings.Contains(r.Fix, c.fix) {
 				t.Fatalf("got %v, want a %s refusal whose fix names %q", err, c.code, c.fix)
@@ -665,7 +668,7 @@ func TestEditRefusesABadReason(t *testing.T) {
 
 func TestEditNamesTheReasonInAMarkdownRefusal(t *testing.T) {
 	excluded := false
-	_, _, err := Edit(editable(), "f-002", EditInput{WithdrawReason: json.RawMessage(`{"text": "<script>x</script>"}`)}, &excluded, nil, ByAgent, editNow)
+	_, _, err := Edit(editable(), "f-002", EditInput{WithdrawReason: json.RawMessage(`{"text": "<script>x</script>"}`)}, &excluded, nil, ByAgent, Rules{}, editNow)
 	r, ok := refusal.As(err)
 	if !ok || r.Details["field"] != "withdrawReason" || !strings.HasPrefix(r.Message, "withdrawReason ") {
 		t.Fatalf("got %v with details %v, want a refusal that names withdrawReason", err, r.Details)
@@ -677,5 +680,78 @@ func TestEditAcceptsTheLimits(t *testing.T) {
 	reason := `{"text": "` + strings.Repeat("é", 200) + `", "code": "` + strings.Repeat("a", 40) + `"}`
 	if _, _, err := withdrawWith(t, d, "f-002", reason, ByAgent); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestEditProposalBumpsRevAndClearsDecision(t *testing.T) {
+	d := editable()
+	d.Findings[0].Proposal = "Before."
+	in := editInput(t, `{"proposal": "After."}`)
+	f, cleared, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, Rules{AllowProposal: true}, editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Proposal != "After." || f.Rev != 2 || !cleared {
+		t.Fatalf("finding %+v cleared %v", f, cleared)
+	}
+	if _, ok := d.Decisions["f-001"]; ok {
+		t.Fatal("decision remains")
+	}
+	want := map[string]any{"proposal": "Before."}
+	if !reflect.DeepEqual(f.History[0].Changed, want) {
+		t.Fatalf("history %#v", f.History[0].Changed)
+	}
+}
+
+func TestEditNullProposalClearsUnderAllowProposal(t *testing.T) {
+	d := editable()
+	d.Findings[0].Proposal = "Before."
+	in := editInput(t, `{"proposal": null}`)
+	f, _, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, Rules{AllowProposal: true}, editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Proposal != "" {
+		t.Fatalf("proposal %q, want cleared", f.Proposal)
+	}
+}
+
+func TestEditReValidatesStoredFindingWithProposalAndSideRight(t *testing.T) {
+	d := editable()
+	d.Findings[0].Proposal = "Change X to Y."
+	in := editInput(t, `{"body": "Clearer body."}`)
+	f, _, err := Edit(d, "f-001", in, nil, multiHunk(t), ByAgent, Rules{AllowProposal: true}, editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Body != "Clearer body." || f.Proposal != "Change X to Y." {
+		t.Fatalf("finding %+v", f)
+	}
+}
+
+func TestRewriteChangesTheProposal(t *testing.T) {
+	d := editable()
+	d.Findings[0].Proposal = "Change X to Y."
+	proposal := "Change X to Z."
+	f, err := Rewrite(d, "f-001", "One", "Body one.", &proposal, Rules{AllowProposal: true}, multiHunk(t), editNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Proposal != "Change X to Z." || f.Rev != 2 {
+		t.Fatalf("finding %+v", f)
+	}
+	if want := []HistoryEntry{{At: editNow, By: ByHuman, Changed: map[string]any{"proposal": "Change X to Y."}}}; !reflect.DeepEqual(f.History, want) {
+		t.Fatalf("history %#v", f.History)
+	}
+}
+
+func TestRewriteRefusesEmptyingTheProposal(t *testing.T) {
+	d := editable()
+	d.Findings[0].Proposal = "Change X to Y."
+	empty := "  "
+	_, err := Rewrite(d, "f-001", "One", "Body one.", &empty, Rules{AllowProposal: true}, multiHunk(t), editNow)
+	_ = wantRefusal(t, err, refusal.Input)
+	if d.Findings[0].Proposal != "Change X to Y." {
+		t.Fatalf("proposal %q", d.Findings[0].Proposal)
 	}
 }

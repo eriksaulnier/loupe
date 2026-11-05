@@ -49,9 +49,9 @@ The format of the anchor is in [`comment-format.md`](comment-format.md).
 
 | Record | Version | Note |
 | :--- | :--- | :--- |
-| draft | `schema` 4 | 2 added `assessments` and `assessedAgainst` (`specs/031-open-findings`). 3 added `findings.location.heading` (`specs/044-heading-anchors`). 4 added `findings.history.reason` (`specs/041-withdraw-reason`) |
+| draft | `schema` 5 | 2 added `assessments` and `assessedAgainst` (`specs/031-open-findings`). 3 added `findings.location.heading` (`specs/044-heading-anchors`). 4 added `findings.history.reason` (`specs/041-withdraw-reason`). 5 added `findings.proposal` and `decisions.note` (`specs/049-apply-mode`) |
 | previous | `schema` 3 | 2 added `commit`, `publicationId` and `assessments` (`specs/031-open-findings`). 3 added `unreadable` (`specs/034-keep-findings-record`). A schema 1 or 2 file with no round reads as unreadable unless its reason is the one capture writes for no loupe review |
-| target | `schema` 2 | 2 added `prState` (`specs/039-capture-allow-closed`) |
+| target | `schema` 3 | 2 added `prState` (`specs/039-capture-allow-closed`). 3 added the local kind: `kind`, `applier` and `local`, written only by a local capture, while a pull request target keeps its fields (`specs/049-apply-mode`) |
 | hand-back, comments | `schema` 1 | Strict. Unchanged until the next field change |
 | outline | `schema` 1 | Strict. Capture writes it on every round from `specs/044-heading-anchors` on; a run without one was captured before heading anchors |
 | attempt, receipt | `schema` 2 | `author`, `edited` and `envelope.editReviewId` came at 1 without a bump, before this rule. 2 added `envelope.assessments` (`specs/031-open-findings`) |

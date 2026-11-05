@@ -3,6 +3,7 @@ package run
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -17,7 +18,9 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const TargetSchema = 2
+const TargetSchema = 3
+
+const KindLocal = "local"
 
 // Target is written once by capture and never changed.
 type Target struct {
@@ -50,6 +53,78 @@ type Target struct {
 	Model string `json:"model,omitempty"`
 	// PRState is the pull request's state as GitHub reported it at capture, open or closed; empty before schema 2.
 	PRState string `json:"prState,omitempty"`
+	// Kind is KindLocal for local runs; empty for PR runs.
+	Kind string `json:"kind,omitempty"`
+	// Applier names the agent that will apply changes; local runs only.
+	Applier string `json:"applier,omitempty"`
+	// Local holds the local-run-specific fields; nil for PR runs.
+	Local *LocalTarget `json:"local,omitempty"`
+}
+
+type LocalTarget struct {
+	N          int            `json:"n"`
+	Prefix     string         `json:"prefix"`
+	Repository string         `json:"repository,omitempty"`
+	Capture    string         `json:"capture"`
+	Root       string         `json:"root"`
+	Branch     string         `json:"branch,omitempty"`
+	BaseRef    string         `json:"baseRef,omitempty"`
+	MergeBase  string         `json:"mergeBase,omitempty"`
+	Files      []LocalFile    `json:"files"`
+	Skipped    []LocalSkipped `json:"skipped"`
+}
+
+type LocalFile struct {
+	Path string `json:"path"`
+	Abs  string `json:"abs"`
+	New  bool   `json:"new,omitempty"`
+}
+
+type LocalSkipped struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
+
+// LocalTargetFile is the on-disk format for local-run target.json. Local targets marshal through this struct
+// so that PR-only fields (owner, repo, round, etc.) are absent from the file.
+type LocalTargetFile struct {
+	Schema     int         `json:"schema"`
+	Kind       string      `json:"kind"`
+	Title      string      `json:"title,omitempty"`
+	Applier    string      `json:"applier,omitempty"`
+	Source     string      `json:"source,omitempty"`
+	Model      string      `json:"model,omitempty"`
+	CapturedAt time.Time   `json:"capturedAt"`
+	DiffSHA256 string      `json:"diffSha256"`
+	Local      LocalTarget `json:"local"`
+}
+
+// MarshalJSON writes local targets as LocalTargetFile and PR targets as the standard struct.
+func (t Target) MarshalJSON() ([]byte, error) {
+	if t.Kind == KindLocal {
+		ltf := LocalTargetFile{
+			Schema:     t.Schema,
+			Kind:       KindLocal,
+			Title:      t.Title,
+			Applier:    t.Applier,
+			Source:     t.Source,
+			Model:      t.Model,
+			CapturedAt: t.CapturedAt,
+			DiffSHA256: t.DiffSHA256,
+		}
+		if t.Local != nil {
+			ltf.Local = *t.Local
+		}
+		if ltf.Local.Files == nil {
+			ltf.Local.Files = []LocalFile{}
+		}
+		if ltf.Local.Skipped == nil {
+			ltf.Local.Skipped = []LocalSkipped{}
+		}
+		return json.Marshal(ltf)
+	}
+	type noMethods Target
+	return json.Marshal(noMethods(t))
 }
 
 // SourcePattern keeps a source to one token without > because loupe-meta carries it unescaped inside an HTML comment.
@@ -94,6 +169,9 @@ func LoadTarget(dir string) (Target, error) {
 	var t Target
 	if err := ReadJSON(path, &t, TargetSchema); err != nil {
 		return Target{}, err
+	}
+	if t.Kind == KindLocal && t.Schema < 3 {
+		return Target{}, RecordRefusal(path, fmt.Errorf("kind %q is not valid at schema %d", KindLocal, t.Schema))
 	}
 	if err := ValidateSource(t.Source); err != nil {
 		return Target{}, RecordRefusal(path, err)

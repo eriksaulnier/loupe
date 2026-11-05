@@ -223,7 +223,7 @@ func demoStickyBody(now time.Time) (string, error) {
 		for _, n := range r.findings {
 			in = append(in, findings[n])
 		}
-		if _, err := draft.Add(d, in, parsed, draft.ByAgent, now); err != nil {
+		if _, err := draft.Add(d, in, parsed, draft.Rules{}, draft.ByAgent, now); err != nil {
 			return "", fmt.Errorf("add round %d's findings: %w", round, err)
 		}
 		d.Summary = r.summary

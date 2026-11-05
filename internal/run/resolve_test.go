@@ -72,6 +72,42 @@ func TestResolveRef(t *testing.T) {
 	}
 }
 
+func TestResolveLocalRef(t *testing.T) {
+	root := t.TempDir()
+	target := sampleLocalTarget()
+	target.Local.Prefix = "myrepo"
+	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// prefix from input is ignored; prefix from stored target is returned
+	for _, inputRef := range []Ref{{Local: ref.Local}, {Local: ref.Local, Prefix: "wrong"}} {
+		gotDir, gotRef, err := ResolveRef(root, inputRef)
+		if err != nil {
+			t.Fatalf("%v: %v", inputRef, err)
+		}
+		if gotDir != dir {
+			t.Fatalf("%v: dir %q, want %q", inputRef, gotDir, dir)
+		}
+		if gotRef.Local != ref.Local || gotRef.Prefix != "myrepo" {
+			t.Fatalf("%v: ref %+v, want Local=%d Prefix=myrepo", inputRef, gotRef, ref.Local)
+		}
+	}
+}
+
+func TestResolveLocalRefMissingRefusesNoRun(t *testing.T) {
+	root := t.TempDir()
+	_, _, err := ResolveRef(root, Ref{Local: 99})
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.NoRun {
+		t.Fatalf("got %v", err)
+	}
+	if r.Fix != "loupe list" {
+		t.Fatalf("fix %q, want %q", r.Fix, "loupe list")
+	}
+}
+
 func TestHasReceipt(t *testing.T) {
 	dir := t.TempDir()
 	if ok, err := HasReceipt(dir); err != nil || ok {

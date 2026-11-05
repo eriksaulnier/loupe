@@ -197,7 +197,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 			}
 		}
 		var editErr error
-		edited, cleared, editErr = draft.Edit(d, findingID, in.input(), included, dif, by, deps.Now().UTC())
+		edited, cleared, editErr = draft.Edit(d, findingID, in.input(), included, dif, by, draft.Rules{}, deps.Now().UTC())
 		return editErr
 	})
 	if err != nil {

@@ -1224,10 +1224,10 @@ func reasonFixture(t *testing.T, title string, reason draft.Reason) string {
 			return err
 		}
 		withdraw := false
-		if _, _, err := draft.Edit(d, "f-003", draft.EditInput{WithdrawReason: raw}, &withdraw, nil, draft.ByAgent, testNow); err != nil {
+		if _, _, err := draft.Edit(d, "f-003", draft.EditInput{WithdrawReason: raw}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow); err != nil {
 			return err
 		}
-		_, _, err = draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, testNow)
+		_, _, err = draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	}); err != nil {
 		t.Fatal(err)

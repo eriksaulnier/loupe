@@ -180,7 +180,7 @@ func TestPollRunsWithNothingAwaiting(t *testing.T) {
 
 	pressKeys(t, m, "esc")
 	outside(t, dir, func(d *draft.Draft) error {
-		_, err := draft.Add(d, []draft.FindingInput{{Title: "Four", Body: "Body four.", General: true, Label: "nit"}}, nil, draft.ByAgent, testNow)
+		_, err := draft.Add(d, []draft.FindingInput{{Title: "Four", Body: "Body four.", General: true, Label: "nit"}}, nil, draft.Rules{}, draft.ByAgent, testNow)
 		return err
 	})
 	update(t, m, pollMsg{})
@@ -330,7 +330,7 @@ func TestDecisionIgnoresWritesToOtherFindings(t *testing.T) {
 	agentReplies(t, dir, "n-001", "Because.")
 	agentRetitles(t, dir, "f-003", "Retitled three")
 	outside(t, dir, func(d *draft.Draft) error {
-		_, err := draft.Add(d, []draft.FindingInput{{Title: "Four", Body: "Body four.", General: true, Label: "nit"}}, nil, draft.ByAgent, testNow)
+		_, err := draft.Add(d, []draft.FindingInput{{Title: "Four", Body: "Body four.", General: true, Label: "nit"}}, nil, draft.Rules{}, draft.ByAgent, testNow)
 		return err
 	})
 	pressKeys(t, m, "a")
@@ -364,7 +364,7 @@ func TestDecisionIsStaleWhenItsOwnFindingChanged(t *testing.T) {
 			return nil
 		},
 		"withdraw": func(d *draft.Draft) error {
-			_, _, err := draft.Edit(d, "f-001", draft.EditInput{}, &excluded, nil, draft.ByAgent, testNow)
+			_, _, err := draft.Edit(d, "f-001", draft.EditInput{}, &excluded, nil, draft.ByAgent, draft.Rules{}, testNow)
 			return err
 		},
 		"reply": func(d *draft.Draft) error {
@@ -439,7 +439,7 @@ func TestDecisionNamesAnAmendedWithdrawalReason(t *testing.T) {
 		outside(t, dir, func(d *draft.Draft) error {
 			withdrawn := false
 			_, _, err := draft.Edit(d, "f-003", draft.EditInput{WithdrawReason: json.RawMessage(`{"text": "` + text + `"}`)},
-				&withdrawn, nil, draft.ByAgent, testNow)
+				&withdrawn, nil, draft.ByAgent, draft.Rules{}, testNow)
 			return err
 		})
 	}

@@ -218,7 +218,7 @@ func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool, prState
 // demoRun is one seeded run's target and draft, decided by decide.
 func demoRun(parsed *diff.Diff, number int, decide func(d *draft.Draft) error, now time.Time) (run.Target, *draft.Draft, error) {
 	d := draft.NewEmpty()
-	if _, err := draft.Add(d, findings, parsed, draft.ByAgent, now); err != nil {
+	if _, err := draft.Add(d, findings, parsed, draft.Rules{}, draft.ByAgent, now); err != nil {
 		return run.Target{}, nil, fmt.Errorf("add the demo findings: %w", err)
 	}
 	d.Summary = summary
@@ -258,7 +258,7 @@ func midReview(parsed *diff.Diff, now time.Time) func(d *draft.Draft) error {
 		}
 		withdrawn := false
 		reason := draft.EditInput{WithdrawReason: json.RawMessage(`{"text": "Both values agree, so nothing runs differently.", "code": "no-runtime-effect"}`)}
-		_, _, err = draft.Edit(d, "f-007", reason, &withdrawn, parsed, draft.ByAgent, now)
+		_, _, err = draft.Edit(d, "f-007", reason, &withdrawn, parsed, draft.ByAgent, draft.Rules{}, now)
 		return err
 	}
 }

@@ -232,7 +232,7 @@ func bigHunkRun(t *testing.T) string {
 	}
 	d := draft.NewEmpty()
 	if _, err := draft.Add(d, []draft.FindingInput{{Title: "Wide", Body: "Spans the hunk.", Location: &draft.LocationInput{Path: "big.go", Line: 30, StartLine: 5}}},
-		parsed, draft.ByAgent, testNow); err != nil {
+		parsed, draft.Rules{}, draft.ByAgent, testNow); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
@@ -851,7 +851,7 @@ func TestEditEscAndUnchangedRecordNothing(t *testing.T) {
 func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
 	for _, c := range []struct{ label, shown string }{{"perf-nit", "perf-nit"}, {"", "no label"}} {
 		m, dir := editModel(t, "f-003", func(d *draft.Draft) error {
-			_, err := draft.Recalibrate(d, "f-003", c.label, false, nil, testNow)
+			_, err := draft.Recalibrate(d, "f-003", c.label, false, nil, draft.Rules{}, testNow)
 			return err
 		})
 		version := loadDraft(t, dir).Version
@@ -873,7 +873,7 @@ func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
 func TestEditRefusesAWithdrawnFinding(t *testing.T) {
 	m, _ := editModel(t, "f-002", func(d *draft.Draft) error {
 		withdraw := false
-		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, testNow)
+		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
 		return err
 	})
 	m.Update(runeKey("e"))

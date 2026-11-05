@@ -65,7 +65,18 @@ func SessionOpen(dir string) (bool, error) {
 
 // OpenSession reports a review running on any round of ref's pull request: the resolved run first, then the others
 // newest first. A new round is a new run, so a per-run probe would let a second pane open on the same pull request.
+// For local refs, only that run's directory is probed.
 func OpenSession(root string, ref Ref) (Ref, bool, error) {
+	if ref.Local > 0 {
+		open, err := SessionOpen(LocalDir(root, ref.Local))
+		if err != nil {
+			return Ref{}, false, err
+		}
+		if open {
+			return ref, true, nil
+		}
+		return Ref{}, false, nil
+	}
 	rounds, err := Rounds(root, ref.Owner, ref.Repo, ref.Number)
 	if err != nil {
 		return Ref{}, false, err

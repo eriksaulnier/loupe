@@ -46,7 +46,7 @@ func newFixture(t *testing.T) string {
 		{Title: "Title one", Body: "Body one explains the rename.", Location: &draft.LocationInput{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Confidence: "high"},
 		{Title: "Title two", Body: "Body two suggests a helper.", Location: &draft.LocationInput{Path: "multi.txt", Line: 21}, Label: "suggestion", SuggestedFix: "extract insertAfter"},
 		{Title: "Title three", Body: "Body three asks about tests.", General: true, Label: "question"},
-	}, parsed, draft.ByAgent, testNow)
+	}, parsed, draft.Rules{}, draft.ByAgent, testNow)
 	if err != nil {
 		t.Fatal(err)
 	}

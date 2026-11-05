@@ -38,6 +38,9 @@ func Newest(root, owner, repo string, number int) (int, error) {
 }
 
 func ResolveRef(root string, ref Ref) (string, Ref, error) {
+	if ref.Local > 0 {
+		return resolveLocalRef(root, ref)
+	}
 	resolved := ref
 	if resolved.Round == 0 {
 		newest, err := Newest(root, ref.Owner, ref.Repo, ref.Number)
@@ -58,6 +61,26 @@ func ResolveRef(root string, ref Ref) (string, Ref, error) {
 		return "", Ref{}, fmt.Errorf("stat run %s: %w", dir, err)
 	}
 	return dir, resolved, nil
+}
+
+func resolveLocalRef(root string, ref Ref) (string, Ref, error) {
+	dir := LocalDir(root, ref.Local)
+	info, err := os.Stat(dir)
+	if errors.Is(err, fs.ErrNotExist) || (err == nil && !info.IsDir()) {
+		return "", Ref{}, noLocalRun(ref)
+	}
+	if err != nil {
+		return "", Ref{}, fmt.Errorf("stat local run %s: %w", dir, err)
+	}
+	target, err := LoadTarget(dir)
+	if err != nil {
+		return "", Ref{}, err
+	}
+	prefix := ""
+	if target.Local != nil {
+		prefix = target.Local.Prefix
+	}
+	return dir, Ref{Local: ref.Local, Prefix: prefix}, nil
 }
 
 func noRun(ref Ref) error {
