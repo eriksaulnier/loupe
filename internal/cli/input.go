@@ -114,12 +114,12 @@ func checkForbidden(raw json.RawMessage, fix string) error {
 
 // forbiddenIn checks one object; entry is its array index, or -1 for a top-level object.
 func forbiddenIn(object []byte, entry int, fix string) error {
-	var keys map[string]json.RawMessage
-	if err := json.Unmarshal(object, &keys); err != nil {
+	keys, err := foldedKeys(object)
+	if err != nil {
 		return malformed(err, len(object), fix)
 	}
 	for _, key := range forbiddenInputKeys {
-		if _, ok := keys[key]; !ok {
+		if _, ok := keys[strings.ToLower(key)]; !ok {
 			continue
 		}
 		r := refusal.New(refusal.Input, fmt.Sprintf("input field %q is not allowed; only the human sets it in loupe review", key), fix)
@@ -172,8 +172,8 @@ func checkModeKeys(raw json.RawMessage, m mode.Mode) error {
 
 // modeKeysIn checks one object; a malformed one is left for decoding to refuse.
 func modeKeysIn(object []byte, entry int, m mode.Mode) error {
-	var keys map[string]json.RawMessage
-	if json.Unmarshal(object, &keys) != nil {
+	keys, err := foldedKeys(object)
+	if err != nil {
 		return nil
 	}
 	refuse := func(code refusal.Code, field, message, fix string) error {
@@ -185,7 +185,7 @@ func modeKeysIn(object []byte, entry int, m mode.Mode) error {
 		}
 		return r
 	}
-	has := func(key string) bool { _, ok := keys[key]; return ok }
+	has := func(key string) bool { _, ok := keys[strings.ToLower(key)]; return ok }
 	ir := m.InputRules()
 	switch {
 	case has("proposal") && !m.Rules().AllowProposal:
@@ -196,8 +196,7 @@ func modeKeysIn(object []byte, entry int, m mode.Mode) error {
 		return refuse(refusal.Input, "suggestedFix", "does not apply to local runs", `use "proposal" instead`)
 	}
 	if ir.RefuseSide {
-		var loc map[string]json.RawMessage
-		if json.Unmarshal(keys["location"], &loc) == nil {
+		if loc, err := foldedKeys(keys["location"]); err == nil {
 			if _, ok := loc["side"]; ok {
 				return refuse(refusal.Location, "location.side", "does not apply to local runs", `drop "side" from the location`)
 			}
@@ -242,4 +241,18 @@ func runMode(dir string) (mode.Mode, error) {
 		return nil, err
 	}
 	return mode.Of(target), nil
+}
+
+// foldedKeys returns an object's keys in lower case, because encoding/json matches field names without regard to
+// case, so "Blocking" sets the same field as "blocking".
+func foldedKeys(object []byte) (map[string]json.RawMessage, error) {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(object, &keys); err != nil {
+		return nil, err
+	}
+	folded := make(map[string]json.RawMessage, len(keys))
+	for k, v := range keys {
+		folded[strings.ToLower(k)] = v
+	}
+	return folded, nil
 }
