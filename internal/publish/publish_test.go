@@ -690,23 +690,44 @@ func TestRunNamesContentsPermissionWhenCompareIsForbidden(t *testing.T) {
 }
 
 func TestRunRefusesApproveAtMovedHead(t *testing.T) {
-	d := readyDraft()
-	d.Findings[0].Blocking = false
-	fx := newRun(t, d)
-	fx.opts.Action = "approve"
-	fx.moveHead(movedSHA, 2, github.ComparedFile{Filename: "a.go"})
-	_, err := fx.run()
-	msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment", "--action request-changes", "loupe capture "+prLink)
-	if !strings.Contains(msg, "2 commits") {
-		t.Errorf("message %q", msg)
+	for commits, want := range map[int]string{1: "moved 1 commit past the captured head", 2: "moved 2 commits past the captured head"} {
+		t.Run(want, func(t *testing.T) {
+			d := readyDraft()
+			d.Findings[0].Blocking = false
+			fx := newRun(t, d)
+			fx.opts.Action = "approve"
+			fx.moveHead(movedSHA, commits, github.ComparedFile{Filename: "a.go"})
+			_, err := fx.run()
+			msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment", "--action request-changes", "loupe capture "+prLink)
+			if !strings.Contains(msg, want) {
+				t.Errorf("message %q lacks %q", msg, want)
+			}
+			if fx.compared() {
+				t.Error("the commit list counts the commits without compare")
+			}
+			if len(fx.previews) != 0 {
+				t.Error("confirmation shown")
+			}
+			fx.check(0)
+		})
 	}
-	if fx.compared() {
-		t.Error("the commit list counts the commits without compare")
+}
+
+func TestRunReturnsAGitHubFailureWhileReadingTheMovedHead(t *testing.T) {
+	comparePath := "/repos/acme/widgets/compare/acme:widgets:" + headSHA + "...acme:widgets:" + movedSHA
+	for _, path := range []string{"/repos/acme/widgets/pulls/42/commits", comparePath} {
+		t.Run(path, func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			fx.moveHead(movedSHA, 1, github.ComparedFile{Filename: "a.go"})
+			fx.gh.Fail("GET", path, http.StatusInternalServerError)
+			_, err := fx.run()
+			wantHTTPStatus(t, err, http.StatusInternalServerError)
+			if len(fx.previews) != 0 {
+				t.Error("confirmation shown")
+			}
+			fx.check(0)
+		})
 	}
-	if len(fx.previews) != 0 {
-		t.Error("confirmation shown")
-	}
-	fx.check(0)
 }
 
 // The second move is itself ahead, so only comparing against the head the confirmation showed catches it.
