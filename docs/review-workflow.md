@@ -61,7 +61,7 @@ On a local run, which the agent captured with `loupe capture --changed`, `--file
 
 Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
 
-While review is open, it reads the pull request from GitHub as it opens and 60 seconds after each check. The header tags a pull request that merged, closed or gained commits since capture with `PR merged`, `PR closed` or `head moved`, and the first time each shows, one notice says so. With no network or credentials the tag reads `state unknown`, and review works as before. A run captured with `--allow-closed` is not tagged for being closed.
+On a pull request run, while review is open, it reads the pull request from GitHub as it opens and 60 seconds after each check. The header tags a pull request that merged, closed or gained commits since capture with `PR merged`, `PR closed` or `head moved`, and the first time each shows, one notice says so. With no network or credentials the tag reads `state unknown`, and review works as before. A run captured with `--allow-closed` is not tagged for being closed.
 
 ### 5. The agent answers what you send back
 

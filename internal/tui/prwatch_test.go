@@ -76,6 +76,10 @@ func TestWatchNeverChecksALocalRun(t *testing.T) {
 	if tag := m.prTag(); tag != "" {
 		t.Fatalf("a local run is tagged %q", tag)
 	}
+	m.target.Local = nil
+	if cmd := m.startPRCheck(); cmd != nil {
+		t.Fatal("a check started on a local run whose target has no local block")
+	}
 }
 
 func TestWatchTagsEachState(t *testing.T) {

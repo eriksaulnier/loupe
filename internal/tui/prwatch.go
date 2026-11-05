@@ -38,7 +38,7 @@ type liveState struct {
 // startPRCheck starts one check, unless the watch is off, one is already armed, or the review has been sent. A local
 // run has no pull request and contacts no service, so it is never checked.
 func (m *Model) startPRCheck() tea.Cmd {
-	if !m.cfg.WatchPR || m.target.Local != nil || m.prArmed || m.view == viewPublished || m.err != nil {
+	if !m.cfg.WatchPR || !m.ui.watchesPR() || m.prArmed || m.view == viewPublished || m.err != nil {
 		return nil
 	}
 	m.prArmed = true

@@ -10,6 +10,7 @@
 
 ## Relationship to earlier specifications
 
+- `specs/049-apply-mode` amends it: a local run has no pull request and contacts no service (049 FR-008), so review never checks one.
 - It amends `specs/048-update-warning`. That spec's clarifications say "No other command gains a network call" and that review "makes no network call". `loupe review` now reads the pull request from the GitHub API. The update notice itself is unchanged and still reads only the cache.
 - It amends `specs/039-capture-allow-closed` FR-008. The publish confirmation now names the pull request's state when the pull request is no longer open, and the review header reads `prState` to decide whether a merged or closed state gets a tag. The state still MUST NOT change what any command accepts, refuses or publishes. That spec's Assumptions named this as "a candidate for a later specification".
 - It amends the `loupe capture`, `loupe review` and `loupe publish` sections of `specs/001-loupe-v1/contracts/cli.md`. The capture section says no command reads `prState` to decide anything, which is no longer true. No `--json` field, refusal code, exit code or flag changes.
@@ -124,7 +125,7 @@ The human reviews offline, without GitHub credentials, or while GitHub fails. Re
 
 ### Functional Requirements
 
-- **FR-001**: `loupe review` MUST start a check of the pull request's live state and head when it opens, without delaying the first draw or any key.
+- **FR-001**: `loupe review` on a pull request run MUST start a check of the pull request's live state and head when it opens, without delaying the first draw or any key.
 - **FR-002**: While open, review MUST start the next check 60 seconds after the last one ended. The interval MUST NOT be configurable. At most one check MAY run at a time. Checks MUST stop once the human has published from review.
 - **FR-003**: Each check MUST use the GitHub API with the credentials loupe already uses, and a time limit.
 - **FR-004**: A check MUST tell a merged pull request from one closed without a merge.
