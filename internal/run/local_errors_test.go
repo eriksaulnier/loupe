@@ -13,7 +13,7 @@ func TestNextLocalFailsWhenLocalRootIsAFile(t *testing.T) {
 	if err := os.WriteFile(LocalRoot(root), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON()); err == nil {
+	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil); err == nil {
 		t.Fatal("want an error when local/ is a file")
 	}
 }
@@ -35,7 +35,7 @@ func TestNextLocalRefusesWhileTheLockIsHeld(t *testing.T) {
 		}
 		return ""
 	}
-	_, _, err = NextLocal(root, "test", noWait, sampleLocalTarget(), nil, sampleDraftJSON())
+	_, _, err = NextLocal(root, "test", noWait, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.Lock {
 		t.Fatalf("got %v, want a lock refusal", err)
 	}
@@ -46,7 +46,7 @@ func TestNextLocalRefusesAnUnreadableNext(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(LocalRoot(root), "next"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON())
+	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record {
 		t.Fatalf("got %v, want a record refusal", err)
 	}
@@ -69,7 +69,7 @@ func TestNextLocalFailsWhenTheCounterCannotBeWritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(localRoot, 0o755) })
-	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON()); err == nil {
+	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil); err == nil {
 		t.Fatal("want an error when the counter cannot be written")
 	}
 }
@@ -82,14 +82,14 @@ func TestNextLocalFailsWhenTheRunDirectoryCannotBeCreated(t *testing.T) {
 	if err := os.WriteFile(LocalDir(root, 1), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON()); err == nil {
+	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil); err == nil {
 		t.Fatal("want an error when the run directory is taken by a file")
 	}
 }
 
 func TestResolveLocalRefRefusesACorruptTarget(t *testing.T) {
 	root := t.TempDir()
-	dir, ref, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON())
+	dir, ref, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestOpenSessionReturnsTheProbeErrorForALocalRef(t *testing.T) {
 		t.Skip("root ignores file permissions")
 	}
 	root := t.TempDir()
-	dir, ref, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON())
+	dir, ref, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
