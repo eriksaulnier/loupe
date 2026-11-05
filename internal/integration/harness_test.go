@@ -11,7 +11,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -86,6 +88,7 @@ func newHarness(t *testing.T) *harness {
 // newHarnessWithBase is newHarness with base also committed in the pull request's base.
 func newHarnessWithBase(t *testing.T, base map[string]string) *harness {
 	t.Helper()
+	takeRunSlot(t)
 	r := gitrepo.NewWithBase(t, owner, repo, number, base)
 	gh := fakegh.New(t)
 	gh.SetPR(owner, repo, github.PullRequest{
@@ -367,4 +370,39 @@ func (h *harness) lastPostBody() string {
 func (h *harness) lastPostComments() []any {
 	comments, _ := h.lastPost()["comments"].([]any)
 	return comments
+}
+
+// runSlots keeps the tests that run at once to GOMAXPROCS. go test sets -parallel from GOMAXPROCS before -cpu changes
+// it, so under -cpu 1 or 2 a dozen tests would share one or two Ps and starve each other's terminal waits.
+var runSlots = struct {
+	mu     sync.Mutex
+	freed  *sync.Cond
+	active int
+	held   map[*testing.T]bool
+}{held: map[*testing.T]bool{}}
+
+func init() { runSlots.freed = sync.NewCond(&runSlots.mu) }
+
+// takeRunSlot blocks until fewer than GOMAXPROCS tests hold a slot, and keeps the slot until t and its cleanups end.
+// A test that builds a second harness keeps the slot it has.
+func takeRunSlot(t *testing.T) {
+	t.Helper()
+	runSlots.mu.Lock()
+	defer runSlots.mu.Unlock()
+	if runSlots.held[t] {
+		return
+	}
+	for runSlots.active >= max(1, runtime.GOMAXPROCS(0)) {
+		runSlots.freed.Wait()
+	}
+	runSlots.active++
+	runSlots.held[t] = true
+	// Registered before any other cleanup of t, so it runs after them.
+	t.Cleanup(func() {
+		runSlots.mu.Lock()
+		defer runSlots.mu.Unlock()
+		runSlots.active--
+		delete(runSlots.held, t)
+		runSlots.freed.Signal()
+	})
 }
