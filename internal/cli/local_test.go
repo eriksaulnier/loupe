@@ -306,22 +306,6 @@ func TestListLocalRunWithNoFindingsIsNotReady(t *testing.T) {
 	}
 }
 
-func TestStatsIgnoresLocalRuns(t *testing.T) {
-	home, _ := localRun(t, "changed", localFinding("f-001"))
-	empty := t.TempDir()
-	outputs := []string{}
-	for _, h := range []string{home, empty} {
-		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": h})
-		if code := Execute(deps, []string{"stats", "--json"}); code != 0 {
-			t.Fatalf("exit %d stdout %q", code, s.stdout.String())
-		}
-		outputs = append(outputs, s.stdout.String())
-	}
-	if outputs[0] != outputs[1] {
-		t.Fatalf("stats saw the local run:\n%s\nwant\n%s", outputs[0], outputs[1])
-	}
-}
-
 func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
 	f := localFinding("f-001")
 	home, dir := localRun(t, "changed", f)
@@ -473,5 +457,20 @@ func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
 	}
 	if out := show(); !strings.Contains(out, "loupe feedback --run acme/widgets:local#1 --json") {
 		t.Fatalf("returned local show:\n%s", out)
+	}
+}
+
+func TestLocalRunWithACorruptTargetRefusesEveryCommand(t *testing.T) {
+	home, dir := localRun(t, "changed")
+	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"show", "--run", "local#1", "--json"},
+		{"add", "--run", "local#1", "--title", "T", "--body", "B", "--json"},
+		{"edit", "f-001", "--run", "local#1", "--title", "T", "--json"},
+	} {
+		code, s := runWithStdin(t, home, "", args...)
+		wantCode(t, code, s, refusal.Record)
 	}
 }

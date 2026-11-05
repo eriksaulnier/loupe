@@ -2,10 +2,13 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -29,5 +32,49 @@ func TestListHumanOutputEscapesTitle(t *testing.T) {
 	}
 	if !strings.Contains(got, `ti\u001B[2Jtle \u202Egnp.exe`) {
 		t.Fatalf("escaped title missing from %q", got)
+	}
+}
+
+func TestListRefusesAnUnreadableLocalRun(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		code    refusal.Code
+		message string
+		damage  func(t *testing.T, home, dir string)
+	}{
+		{"the local directory is a file", refusal.Internal, "local: not a directory", func(t *testing.T, home, dir string) {
+			if err := os.RemoveAll(filepath.Join(home, "local")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(home, "local"), []byte("x"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"target.json is corrupt", refusal.Record, "target.json: unexpected EOF", func(t *testing.T, home, dir string) {
+			if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("{"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"draft.json is corrupt", refusal.Record, "draft.json: unexpected EOF", func(t *testing.T, home, dir string) {
+			if err := os.WriteFile(filepath.Join(dir, "draft.json"), []byte("{"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"return.json cannot be examined", refusal.Internal, "return.json: too many levels of symbolic links", func(t *testing.T, home, dir string) {
+			// A link to itself makes stat fail with a loop error rather than a missing file.
+			if err := os.Symlink("return.json", filepath.Join(dir, "return.json")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home, dir := localRun(t, "changed", localFinding("f-001"))
+			tc.damage(t, home, dir)
+			deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+			errObj := wantCode(t, Execute(deps, []string{"list", "--json"}), s, tc.code)
+			if msg, _ := errObj["message"].(string); !strings.HasSuffix(msg, tc.message) {
+				t.Fatalf("message %q, want it to end %q", msg, tc.message)
+			}
+		})
 	}
 }

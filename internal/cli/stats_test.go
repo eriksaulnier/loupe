@@ -478,3 +478,19 @@ func TestStatsReadsFiveHundredRunsInUnderASecond(t *testing.T) {
 	}
 	t.Logf("stats over 500 runs: %s", elapsed)
 }
+
+func TestStatsIgnoresLocalRuns(t *testing.T) {
+	home, _ := localRun(t, "changed", localFinding("f-001"))
+	empty := t.TempDir()
+	outputs := []string{}
+	for _, h := range []string{home, empty} {
+		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": h})
+		if code := Execute(deps, []string{"stats", "--json"}); code != 0 {
+			t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+		}
+		outputs = append(outputs, s.stdout.String())
+	}
+	if outputs[0] != outputs[1] {
+		t.Fatalf("stats saw the local run:\n%s\nwant\n%s", outputs[0], outputs[1])
+	}
+}

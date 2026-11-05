@@ -285,3 +285,26 @@ func TestListNamesAnUntitledLocalRun(t *testing.T) {
 		t.Errorf("list output lacks (no title):\n%s", out)
 	}
 }
+
+func TestLocalCaptureRefusesWithoutADataRoot(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	deps.WorkDir = t.TempDir()
+	if code := Execute(deps, []string{"capture", "--no-files", "--title", "x", "--json"}); code != 2 {
+		t.Fatalf("exit %d; stdout %q", code, s.stdout.String())
+	}
+	if !strings.Contains(s.stdout.String(), "cannot locate the loupe data root") {
+		t.Fatalf("stdout %q", s.stdout.String())
+	}
+}
+
+func TestLocalCaptureReturnsAFailureToCreateTheRun(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.WriteFile(home, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s, _ := localCapture(t, t.TempDir(), map[string]string{"LOUPE_HOME": home}, "--no-files", "--title", "x", "--json")
+	errObj := wantCode(t, code, s, refusal.Internal)
+	if want := "create local runs directory " + filepath.Join(home, "local") + ": mkdir " + home + ": not a directory"; errObj["message"] != want {
+		t.Fatalf("message %q, want %q", errObj["message"], want)
+	}
+}

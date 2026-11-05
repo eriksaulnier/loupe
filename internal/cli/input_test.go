@@ -8,7 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 type sampleInput struct {
@@ -115,5 +117,27 @@ func TestConflictsWithFrom(t *testing.T) {
 	r := refusalOf(t, ConflictsWithFrom(newCmd("--from", "-", "--body", "x"), "title", "body"))
 	if r.Code != refusal.Usage || !strings.Contains(r.Message, "--body") {
 		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestRunModeRefusesAMissingTarget(t *testing.T) {
+	dir := t.TempDir()
+	_, err := runMode(dir)
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record || r.Fix != "inspect it with: cat "+filepath.Join(dir, "target.json") {
+		t.Fatalf("runMode = %#v, want a record refusal naming target.json", err)
+	}
+}
+
+func TestCheckModeKeysSkipsInputThatDecodingRefuses(t *testing.T) {
+	publish := mode.Of(run.Target{})
+	for _, raw := range []string{"", "  \n", `"text"`, `[1]`, `[null, 3]`} {
+		if err := checkModeKeys([]byte(raw), publish); err != nil {
+			t.Errorf("checkModeKeys(%q) = %v, want nil: decoding refuses what is not an object", raw, err)
+		}
+	}
+	// A malformed entry is skipped, not a reason to stop checking the entries after it.
+	err := checkModeKeys([]byte(`[1, {"proposal": "x"}]`), publish)
+	if r, ok := refusal.As(err); !ok || r.Details["entry"] != 1 || r.Details["field"] != "proposal" {
+		t.Fatalf("got %v, want a refusal of entry 1's proposal", err)
 	}
 }

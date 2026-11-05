@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -339,4 +340,10 @@ func TestEditKeepsACodeOutsideTheList(t *testing.T) {
 	if got := draft.CurrentReason(storedFinding(t, dir, "f-001")); got == nil || got.Code != "style-only" {
 		t.Fatalf("reason %+v", got)
 	}
+}
+
+func TestEditFromEmptyStdinRefusesTheInput(t *testing.T) {
+	home, _ := localRun(t, "changed")
+	code, s := runWithStdin(t, home, "", "edit", "f-001", "--run", "local#1", "--from", "-", "--json")
+	wantCode(t, code, s, refusal.Input)
 }
