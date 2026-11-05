@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -1321,5 +1322,72 @@ func TestCodePaneOfAFilesRunIsPlain(t *testing.T) {
 				t.Errorf("plain %v, added tint %v", c.plain, tinted)
 			}
 		})
+	}
+}
+
+// US4 on an apply run: the human sends an accepted finding back, the agent revises the proposal and replies, review
+// shows the revision on its next poll, and the human accepts it and returns the run.
+func TestApplySendBackRoundTrip(t *testing.T) {
+	dir := applyFixture(t, "Claude", applyInputs...)
+	outside(t, dir, func(d *draft.Draft) error {
+		for _, f := range d.Findings {
+			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	m := newPollModel(t, dir, 40)
+	mustOpenFinding(t, m, "f-001")
+	pressKeys(t, m, "s")
+	m.Update(runes("Which call sites does the rename touch?"))
+	pressKeys(t, m, "enter")
+	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
+		t.Fatalf("send back left f-001 %s", got)
+	}
+
+	parsed, err := diff.Parse(newFileDiff())
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside(t, dir, func(d *draft.Draft) error {
+		proposal := json.RawMessage(`"Rename helper to insertAfter in a.go and its two callers."`)
+		if _, _, err := draft.Edit(d, "f-001", draft.EditInput{Proposal: proposal}, nil, parsed, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow); err != nil {
+			return err
+		}
+		_, err := draft.AddReply(d, "n-001", "Two callers, both in a.go.", draft.ByAgent, testNow)
+		return err
+	})
+	d := loadDraft(t, dir)
+	if _, decided := d.Decisions["f-001"]; decided || draft.Dispositions(d)["f-001"] != draft.DispositionPending {
+		t.Fatalf("the agent's edit left a decision: %+v", d.Decisions["f-001"])
+	}
+	// Send back moved the view on to the next finding; the poll names the change, and N goes back to it.
+	update(t, m, pollMsg{})
+	if !strings.Contains(m.notice, "n-001 answered on f-001, f-001 changed") {
+		t.Errorf("the poll notice %q does not name the reply and the edit", m.notice)
+	}
+	pressKeys(t, m, "N")
+	if m.openID != "f-001" {
+		t.Fatalf("N opened %s", m.openID)
+	}
+	screen := screenText(m)
+	for _, want := range []string{"and its two callers.", "Two callers, both in a.go."} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("the detail lacks %q after the poll:\n%s", want, screen)
+		}
+	}
+
+	pressKeys(t, m, "a")
+	d = loadDraft(t, dir)
+	if got := d.Decisions["f-001"]; got.Decision != draft.DecisionAccepted || got.FindingRev != findingOf(t, dir, "f-001").Rev {
+		t.Fatalf("a did not accept the revised f-001: %+v; notice %q", got, m.notice)
+	}
+	if _, open := firstOpenNote(d, "f-001"); open {
+		t.Error("accepting left the note open")
+	}
+	pressKeys(t, m, "esc", "p", "y")
+	if !returned(t, dir) {
+		t.Fatalf("p then y did not return the run; view %d notice %q", m.view, m.notice)
 	}
 }
