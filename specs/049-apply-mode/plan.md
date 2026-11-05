@@ -203,6 +203,7 @@ These extend the research:
 | :--- | :--- | :--- |
 | `tui` switches once on `mode.Of(t).Kind()` to pick its `modeUI`, outside the mode implementations that FR-030 names | The review surface uses Bubble Tea types that `mode` must not import | Putting key tables in `mode` would pull the TUI into the command layer |
 | Local targets marshal through a second struct, `LocalTargetFile` | `Target`'s PR fields have no `omitempty`, and adding it is a retag that needs a migration | One struct with zero-valued PR fields would contradict the contract's local shape |
+| `--changed` reads the user's index for one stat check | A smudged git-lfs or git-crypt file never matches `HEAD`'s blob, so without the index every capture in such a repository refused (owner, 2026-11-05) | Running the filter, or `git diff-files`, would run a command from the user's config |
 | `review` and `handoff` refuse local runs during PRs 2 and 3 | The PR review surface would reach GitHub on a local run (owner, plan card 2) | Merging PRs 2 to 4 as one change would make a 3,500-line review |
 | `run.Ref` carries `Local int` instead of `Local bool` plus `Number` | One field says both that the ref is local and which run it names | Reusing `Number` would let PR code paths read a local run number as a pull request number |
 | No `mode.ListEntry`; `list` builds local rows from `run.WalkLocal` | `list` is the only reader of those rows | A mode method for one caller adds an interface method and no reuse |

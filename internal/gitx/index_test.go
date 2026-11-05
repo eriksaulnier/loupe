@@ -581,10 +581,25 @@ func TestStageWorktreeKeepsAnUntouchedFilteredFile(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "ran")
 	repo.Git("config", "filter.up.clean", "touch "+marker)
 	repo.Git("config", "filter.up.smudge", "touch "+marker)
+	// Reading the user's index runs no fsmonitor hook either.
+	hookRan := filepath.Join(t.TempDir(), "hook-ran")
+	hook := filepath.Join(t.TempDir(), "fsmonitor.sh")
+	writeFile(t, hook, "#!/bin/sh\necho \"$@\" >> "+hookRan+"\n", 0o755)
+	repo.Git("config", "core.fsmonitor", hook)
 
 	tree, _ := captureTree(t, repo.Dir)
 	if want := runGit(t, repo.Dir, "rev-parse", "HEAD^{tree}"); tree != want {
 		t.Fatalf("an untouched filtered file changed the tree: %s, want %s", tree, want)
+	}
+	// A same-size edit with its mtime put back still changes the ctime, which Git's stat check also compares.
+	if err := os.WriteFile(big, []byte("XYZ\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(big, past, past); err != nil {
+		t.Fatal(err)
+	}
+	if err := stageErr(t, repo.Dir); err == nil {
+		t.Fatal("a same-size edit with its mtime restored kept HEAD's blob")
 	}
 	writeFile(t, big, "EDITED\n", 0o644)
 	var conv *ConvertedError
@@ -593,5 +608,8 @@ func TestStageWorktreeKeepsAnUntouchedFilteredFile(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("capture ran the filter (stat %v)", err)
+	}
+	if b, err := os.ReadFile(hookRan); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("capture ran the fsmonitor hook: %q", b)
 	}
 }

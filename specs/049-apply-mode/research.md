@@ -28,7 +28,7 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
 
 **Rationale**:
 
-- `git diff <commit>` against the working tree reads the user's index, which FR-004 forbids.
+- `git diff <commit>` against the working tree may refresh and write the user's index and runs its filters, which FR-004 and the no-filter rule forbid.
 - Step 4 reads only `HEAD`'s tree. Step 5 locks only `<tmp>/index.lock` and runs no hooks.
 - Without a ref, nothing under `refs/` changes. The rest of SC-005 (the index, the working files, the branch and `HEAD`) is pinned by tests.
 

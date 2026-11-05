@@ -13,7 +13,8 @@ import (
 	"syscall"
 )
 
-// Index runs git against a temporary index file, so the user's .git/index is never read or written.
+// Index runs git against a temporary index file, so the user's .git/index is never written or locked. Only the stat
+// check for untouched filtered files reads it.
 type Index struct {
 	clone string
 	path  string
@@ -30,11 +31,17 @@ func (ix *Index) env() []string {
 }
 
 func (ix *Index) git(args ...string) ([]byte, error) {
+	return ix.run(nil, args...)
+}
+
+// run runs git on the temporary index with fsmonitor off, since a configured fsmonitor hook is a command from the
+// user's config, and capture runs none.
+func (ix *Index) run(stdin []byte, args ...string) ([]byte, error) {
 	// Git resolves a relative GIT_INDEX_FILE against a directory it may have changed to.
 	if !filepath.IsAbs(ix.path) {
 		return nil, fmt.Errorf("temporary index path %q is not absolute", ix.path)
 	}
-	return run(ix.clone, ix.env(), nil, args...)
+	return run(ix.clone, ix.env(), stdin, append([]string{"-c", "core.fsmonitor=false"}, args...)...)
 }
 
 func (ix *Index) ReadTree(treeish string) error {
@@ -69,7 +76,7 @@ func (ix *Index) StageWorktree() error {
 		return err
 	}
 	keepMode := set && fileMode == "false"
-	out, err := ix.git("-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.splitIndex=false",
+	out, err := ix.git("-c", "core.untrackedCache=false", "-c", "core.splitIndex=false",
 		"ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ":/")
 	if err != nil {
 		return err
@@ -171,12 +178,12 @@ func (ix *Index) StageWorktree() error {
 		fmt.Fprintf(&info, "%s %s\t%s\x00", e.mode, e.oid, e.path)
 	}
 	if len(removed) > 0 {
-		if _, err := run(ix.clone, ix.env(), []byte(strings.Join(removed, "\x00")+"\x00"), "update-index", "-z", "--force-remove", "--stdin"); err != nil {
+		if _, err := ix.run([]byte(strings.Join(removed, "\x00")+"\x00"), "update-index", "-z", "--force-remove", "--stdin"); err != nil {
 			return err
 		}
 	}
 	if info.Len() > 0 {
-		if _, err := run(ix.clone, ix.env(), info.Bytes(), "update-index", "-z", "--index-info"); err != nil {
+		if _, err := ix.run(info.Bytes(), "update-index", "-z", "--index-info"); err != nil {
 			return err
 		}
 	}
@@ -231,7 +238,7 @@ func (ix *Index) converted(paths []string) (converting, filtered []string, err e
 	// when autocrlf is neither true nor input.
 	crlfByConfig := autocrlf == "true" || (autocrlf != "input" && strings.EqualFold(eolConfig, "crlf"))
 	stdin := []byte(strings.Join(paths, "\x00") + "\x00")
-	out, err := run(ix.clone, ix.env(), stdin, "check-attr", "-z", "--stdin", "text", "crlf", "eol", "filter", "ident", "working-tree-encoding")
+	out, err := ix.run(stdin, "check-attr", "-z", "--stdin", "text", "crlf", "eol", "filter", "ident", "working-tree-encoding")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -317,63 +324,95 @@ func (ix *Index) converted(paths []string) (converting, filtered []string, err e
 	return converting, filtered, nil
 }
 
-// untouched is the paths among paths that the user's own index still records as HEAD's blob with the same size and
-// mtime as the file on disk, read without refreshing the index or running a filter. A file modified no earlier than the
-// index was written may have changed since its stat was recorded, so it never counts as untouched, as Git treats a
-// racily clean entry.
+// untouched is the paths among paths that the user's own index still records as HEAD's blob with the same size,
+// mtime, ctime and inode as the file on disk, as Git's own stat check compares them. It reads the index without a
+// pathspec, a refresh, fsmonitor or a filter, and never writes or locks it. A file modified no earlier than the index
+// was written may have changed since its stat was recorded, so it never counts as untouched, as Git treats a racily
+// clean entry. A path the parser cannot match counts as changed.
 func (ix *Index) untouched(paths []string, head map[string]stagedEntry) (map[string]bool, error) {
-	indexPath, err := git(ix.clone, "rev-parse", "--path-format=absolute", "--git-path", "index")
+	indexPath, err := git(ix.clone, "rev-parse", "--git-path", "index")
 	if err != nil {
 		return nil, err
 	}
-	indexInfo, err := os.Stat(strings.TrimSpace(string(indexPath)))
+	// --path-format=absolute needs Git 2.31, so a relative answer is joined to the clone, as CommonDir does.
+	at := strings.TrimSpace(string(indexPath))
+	if !filepath.IsAbs(at) {
+		at = filepath.Join(ix.clone, at)
+	}
+	indexInfo, err := os.Stat(at)
 	if err != nil {
 		return nil, fmt.Errorf("stat the index: %w", err)
 	}
-	args := append([]string{"-c", "core.quotePath=false", "ls-files", "--stage", "--debug", "--"}, paths...)
-	out, err := git(ix.clone, args...)
+	// No pathspec, so a repository with tens of thousands of filtered files never meets the argument limit.
+	out, err := git(ix.clone, "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.quotePath=false",
+		"ls-files", "--stage", "--debug")
 	if err != nil {
 		return nil, err
 	}
+	want := map[string]bool{}
+	for _, p := range paths {
+		want[p] = true
+	}
 	type recorded struct {
-		oid       string
-		sec, nsec int64
-		size      int64
+		oid                       string
+		mSec, mNsec, cSec, cNsec  uint32
+		ino                       uint32
+		size                      int64
+		haveM, haveC, haveIno, ok bool
+	}
+	pair := func(v string) (uint32, uint32, bool) {
+		a, b, ok := strings.Cut(strings.TrimSpace(v), ":")
+		x, err1 := strconv.ParseUint(a, 10, 32)
+		y, err2 := strconv.ParseUint(b, 10, 32)
+		return uint32(x), uint32(y), ok && err1 == nil && err2 == nil
 	}
 	byPath := map[string]*recorded{}
 	var cur *recorded
 	for _, line := range strings.Split(string(out), "\n") {
 		switch {
-		case strings.HasPrefix(line, "  mtime: ") && cur != nil:
-			sec, nsec, _ := strings.Cut(strings.TrimPrefix(line, "  mtime: "), ":")
-			cur.sec, _ = strconv.ParseInt(sec, 10, 64)
-			cur.nsec, _ = strconv.ParseInt(nsec, 10, 64)
-		case strings.HasPrefix(line, "  size: ") && cur != nil:
-			size, _, _ := strings.Cut(strings.TrimPrefix(line, "  size: "), "\t")
-			cur.size, _ = strconv.ParseInt(size, 10, 64)
-		case line != "" && !strings.HasPrefix(line, " "):
+		case !strings.HasPrefix(line, " "):
+			cur = nil
 			meta, path, ok := strings.Cut(line, "\t")
 			fields := strings.Fields(meta)
-			if !ok || len(fields) != 3 || fields[2] != "0" {
-				cur = nil
-				continue
+			if ok && len(fields) == 3 && fields[2] == "0" && want[path] {
+				cur = &recorded{oid: fields[1]}
+				byPath[path] = cur
 			}
-			cur = &recorded{oid: fields[1]}
-			byPath[path] = cur
+		case cur == nil:
+		case strings.HasPrefix(line, "  ctime: "):
+			cur.cSec, cur.cNsec, cur.haveC = pair(strings.TrimPrefix(line, "  ctime: "))
+		case strings.HasPrefix(line, "  mtime: "):
+			cur.mSec, cur.mNsec, cur.haveM = pair(strings.TrimPrefix(line, "  mtime: "))
+		case strings.HasPrefix(line, "  dev: "):
+			if _, ino, ok := strings.Cut(line, "ino: "); ok {
+				n, err := strconv.ParseUint(strings.TrimSpace(ino), 10, 32)
+				cur.ino, cur.haveIno = uint32(n), err == nil
+			}
+		case strings.HasPrefix(line, "  size: "):
+			size, _, _ := strings.Cut(strings.TrimPrefix(line, "  size: "), "\t")
+			n, err := strconv.ParseInt(strings.TrimSpace(size), 10, 64)
+			cur.size, cur.ok = n, err == nil
 		}
 	}
 	clean := map[string]bool{}
 	for _, p := range paths {
 		r, ok := byPath[p]
-		if !ok || r.oid != head[p].oid {
+		if !ok || !r.ok || !r.haveM || !r.haveC || !r.haveIno || r.oid != head[p].oid {
 			continue
 		}
 		info, err := os.Lstat(filepath.Join(ix.clone, filepath.FromSlash(p)))
 		if err != nil {
 			return nil, fmt.Errorf("stat %s: %w", p, err)
 		}
+		id, ok := identityOf(info)
+		if !ok {
+			continue
+		}
+		// The index keeps 32 bits of each time and of the inode, so the disk's are cut to match.
 		mtime := info.ModTime()
-		if info.Size() == r.size && mtime.Unix() == r.sec && int64(mtime.Nanosecond()) == r.nsec && mtime.Before(indexInfo.ModTime()) {
+		if info.Size() == r.size && uint32(mtime.Unix()) == r.mSec && uint32(mtime.Nanosecond()) == r.mNsec &&
+			uint32(id.ctimeSec) == r.cSec && uint32(id.ctimeNsec) == r.cNsec && uint32(id.ino) == r.ino &&
+			mtime.Before(indexInfo.ModTime()) {
 			clean[p] = true
 		}
 	}
@@ -406,7 +445,7 @@ func (ix *Index) hashPaths(paths []string) ([]string, error) {
 		in.WriteString(paths[i])
 		in.WriteByte('\n')
 	}
-	out, err := run(ix.clone, ix.env(), in.Bytes(), "hash-object", "-w", "--no-filters", "--stdin-paths")
+	out, err := ix.run(in.Bytes(), "hash-object", "-w", "--no-filters", "--stdin-paths")
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +460,7 @@ func (ix *Index) hashPaths(paths []string) ([]string, error) {
 }
 
 func (ix *Index) hashStdin(data []byte) (string, error) {
-	out, err := run(ix.clone, ix.env(), data, "hash-object", "-w", "--no-filters", "--stdin")
+	out, err := ix.run(data, "hash-object", "-w", "--no-filters", "--stdin")
 	if err != nil {
 		return "", err
 	}
