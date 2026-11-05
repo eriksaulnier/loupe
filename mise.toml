@@ -86,10 +86,11 @@ ln -sfn "{{config_root}}/dist/loupe" "$dir/loupe"
 # Resolved without this repository's dist/ on PATH, which is what a shell elsewhere sees.
 found=$(PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "{{config_root}}/dist" | paste -sd: -) command -v loupe || true)
 # Compared by directory, resolved, so a trailing slash or a symlinked directory names the same file.
-want="$(cd -P "$dir" && pwd)/loupe"
+# CDPATH is cleared, since cd prints the directory it found through one and pwd's output would follow it.
+want="$(CDPATH= cd -P -- "$dir" >/dev/null && pwd)/loupe"
 got=""
 if [ -n "$found" ]; then
-	got="$(cd -P "$(dirname "$found")" && pwd)/$(basename "$found")"
+	got="$(CDPATH= cd -P -- "$(dirname "$found")" >/dev/null && pwd)/$(basename "$found")"
 fi
 if [ "$got" != "$want" ]; then
 	echo "error: outside the repository, loupe resolves to ${found:-nothing}, not $dir/loupe" >&2
