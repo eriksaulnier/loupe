@@ -194,6 +194,8 @@ func TestReadRecordRefusals(t *testing.T) {
 		"empty title":      {body: withData(t, body, []byte(`[`+strings.Replace(finding, `"T"`, `""`, 1)+`]`), true), want: "title"},
 		"repeated id":      {body: withData(t, body, []byte(`[`+finding+`,`+finding+`]`), true), want: "f-001"},
 		"inflates too far": {body: withData(t, body, append([]byte(`["`), bytes.Repeat([]byte("a"), 16<<20)...), true), want: "16 MiB"},
+		"line not in form": {body: strings.Replace(body, record, "<!-- loupe-findings v=1 sha256=short data -->", 1), want: "not in loupe's form"},
+		"broken list":      {body: withData(t, body, []byte(`[{"id":`), true), want: "not a list of findings: unexpected end of JSON input"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -338,6 +340,7 @@ func TestReadRecordVersion2Refusals(t *testing.T) {
 		"unknown status":      {v2(`{"findings":[],"assessments":[{"ref":"e-1","status":"fixed","finding":` + earlier + `}]}`), "fixed"},
 		"assessment no title": {v2(`{"findings":[],"assessments":[{"ref":"e-1","status":"open","finding":` + strings.Replace(earlier, `"T"`, `""`, 1) + `}]}`), "title"},
 		"version 1 object":    {withData(t, body, []byte(`{"findings":[],"assessments":[]}`), true), "list"},
+		"broken object":       {v2(`{"findings":`), "not findings and assessments: unexpected end of JSON input"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f, a, err := ReadRecord(c.body)
@@ -366,5 +369,24 @@ func TestRecordAsNoteNamesAssessments(t *testing.T) {
 		if got := recordOf(t, RecordAsNote(Body(in))); got != want {
 			t.Errorf("note %q, want %q", got, want)
 		}
+	}
+}
+
+// A record the note cannot read stays as it is, so the terminal shows what GitHub holds rather than a wrong count.
+func TestRecordAsNoteLeavesAnUnreadableRecord(t *testing.T) {
+	body := Body(exampleInput())
+	_, record, _ := tail(t, body)
+	for name, broken := range map[string]string{
+		"not base64":       withRecordLine(t, body, record, "!!!!", true),
+		"not deflate":      withRecordLine(t, body, record, base64.StdEncoding.EncodeToString([]byte("plain text")), true),
+		"inflates too far": withData(t, body, append([]byte(`["`), bytes.Repeat([]byte("a"), 16<<20)...), true),
+		"version 3":        strings.Replace(body, "loupe-findings v=1 ", "loupe-findings v=3 ", 1),
+		"not JSON":         withData(t, body, []byte(`[{"id":`), true),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := RecordAsNote(broken); got != broken {
+				t.Fatalf("RecordAsNote rewrote an unreadable record:\n%s", got)
+			}
+		})
 	}
 }
