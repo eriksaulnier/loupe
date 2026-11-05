@@ -826,19 +826,12 @@ type LocalPlace struct {
 	Repo, Branch, Capture string
 }
 
-// localTier is the local header's width tier: 0 at 100 columns and above, 1 from 80, and 2 below that.
-func localTier(width int) int {
-	switch {
-	case width >= 100:
-		return 0
-	case width >= 80:
-		return 1
-	}
-	return 2
-}
+// localTitleRoom is the cells of title a local header keeps when it picks how much of the place to show, so a short
+// title stays whole and a long one does not crowd the place out.
+const localTitleRoom = 16
 
-// localSpans is the place a local header names at a tier: the repository, branch and capture, then without the
-// capture, then the branch alone. Each joint is a span in the overlay.
+// localSpans is the place a local header names at a tier: 0 is the repository, branch and capture, 1 drops the
+// capture, and 2 is the branch alone. Each joint is a span in the overlay.
 func (s Style) localSpans(p LocalPlace, tier int) []Span {
 	text, dim := s.Text(), s.Overlay()
 	if tier == 2 {
@@ -943,15 +936,24 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	mode := ""
 	used := func() int { return Width(badge) + gap(ref) + gap(mode) + gap(round) + right() }
 	if h.Local != nil {
-		tier := localTier(width)
-		setPlace(tier)
-		if len(badges) > 0 {
-			badges = badges[min(tier, len(badges)-1):]
-			mode = s.ApplyBadge(badges[0])
+		// The richest tier that leaves the title its room wins. The badge shortens with the place, and the bar gives
+		// way with the repository.
+		titleRoom := 0
+		if title != "" {
+			titleRoom = 2 + min(Width(title), localTitleRoom)
 		}
-		// The capture summary gives way before the badge shortens.
-		if tier == 0 && used() > avail {
-			setPlace(1)
+		for tier := range 3 {
+			setPlace(tier)
+			if len(h.Badges) > 0 {
+				badges = h.Badges[min(tier, len(h.Badges)-1):]
+				mode = s.ApplyBadge(badges[0])
+			}
+			if tier == 2 {
+				bar = ""
+			}
+			if used()+titleRoom <= avail {
+				break
+			}
 		}
 	}
 	for i, form := range badges {

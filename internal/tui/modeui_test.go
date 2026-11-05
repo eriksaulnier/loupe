@@ -300,7 +300,7 @@ func TestApplyHeaderShowsTheBadge(t *testing.T) {
 		{utf8Env, "[local · returns to Claude]"},
 		{map[string]string{"NO_COLOR": "1", "LANG": "C"}, "[local -> Claude]"},
 	} {
-		m := modelOf(t, dir, c.env, 100, 30)
+		m := modelOf(t, dir, c.env, 124, 30)
 		for _, show := range []func(){func() {}, func() { press(m, "l") }, func() { mustOpenFinding(t, m, "f-001") }} {
 			show()
 			if header := ansi.Strip(m.reviewHeader()); !strings.Contains(header, c.want) {
@@ -308,7 +308,7 @@ func TestApplyHeaderShowsTheBadge(t *testing.T) {
 			}
 		}
 	}
-	nobody := modelOf(t, applyFixture(t, "", applyInputs...), utf8Env, 100, 30)
+	nobody := modelOf(t, applyFixture(t, "", applyInputs...), utf8Env, 124, 30)
 	if header := ansi.Strip(nobody.reviewHeader()); !strings.Contains(header, "[local · returns to the agent]") {
 		t.Errorf("with no applier: header %q", header)
 	}
@@ -318,6 +318,7 @@ func TestApplyHeaderShowsTheBadge(t *testing.T) {
 		t.Errorf("at 60 columns the badge did not shorten first: %q", header)
 	}
 	colored := colorOf(t, dir)
+	colored.Update(tea.WindowSizeMsg{Width: 124, Height: 40})
 	if view := colored.reviewHeader(); !strings.Contains(view, colored.styles.ApplyBadge("local · returns to Claude")) || strings.Contains(ansi.Strip(view), "[local") {
 		t.Errorf("the colored badge is not drawn in the apply token: %q", view)
 	}

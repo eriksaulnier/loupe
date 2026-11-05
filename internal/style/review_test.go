@@ -752,8 +752,8 @@ func localHeading() ReviewHeading {
 	}
 }
 
-// A local header names the repository, branch and capture in place of a ref, and gives them up by width
-// (docs/tui-design.md, The header).
+// A local header names the repository, branch and capture in place of a ref, and shows the richest form that leaves
+// the title its room. These widths are the approved frames' (docs/tui-design.md, The header).
 func TestLocalReviewHeader(t *testing.T) {
 	s := reviewStyle(t, false, nil)
 	for _, c := range []struct {
@@ -761,9 +761,9 @@ func TestLocalReviewHeader(t *testing.T) {
 		want, not []string
 	}{
 		{160, []string{"[local · returns to Claude]", "widgets @ feat/cache · 2 files", "Cache plan", "----", "0/4 decided"}, nil},
-		{100, []string{"[local · returns to Claude]", "widgets @ feat/cache · 2 files", "Cache", "0/4 decided"}, nil},
-		{99, []string{"[local · Claude]", "widgets @ feat/cache", "Cache plan", "----", "0/4 decided"}, []string{"2 files", "returns to"}},
-		{79, []string{"[local]", "feat/cache", "0/4 decided"}, []string{"widgets", "----", "Claude"}},
+		{124, []string{"[local · returns to Claude]", "widgets @ feat/cache · 2 files", "Cache plan", "----", "0/4 decided"}, nil},
+		{100, []string{"[local · Claude]", "widgets @ feat/cache", "Cache plan", "----", "0/4 decided"}, []string{"2 files", "returns to"}},
+		{80, []string{"[local]", "feat/cache", "Cache plan", "0/4 decided"}, []string{"widgets", "----", "Claude"}},
 		{60, []string{"[local]", "feat/cache", "0/4 decided"}, []string{"widgets", "----"}},
 	} {
 		got := s.ReviewHeader(localHeading(), c.width)
@@ -825,12 +825,12 @@ func TestUnderlinedSeesThePRRef(t *testing.T) {
 	}
 }
 
-// A capture summary too long for the row gives way before the badge shortens.
-func TestLocalCaptureGivesWayBeforeTheBadge(t *testing.T) {
+// A long title truncates rather than crowd out the place: the place is chosen with only part of the title counted.
+func TestLocalHeaderKeepsThePlaceBesideALongTitle(t *testing.T) {
 	h := localHeading()
-	h.Local.Capture = "changes since origin/main-with-a-long-name"
-	got := reviewStyle(t, false, nil).ReviewHeader(h, 100)
-	if !strings.Contains(got, "[local · returns to Claude]") || strings.Contains(got, "changes since") || !strings.Contains(got, "widgets @ feat/cache") {
+	h.Title = "A plan with a title far longer than the header has room to show whole"
+	got := reviewStyle(t, false, nil).ReviewHeader(h, 124)
+	if !strings.Contains(got, "widgets @ feat/cache · 2 files") || !strings.Contains(got, "A plan with") || strings.Contains(got, "show whole") {
 		t.Errorf("header %q", got)
 	}
 }

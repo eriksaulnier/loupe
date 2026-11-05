@@ -67,12 +67,12 @@ The header is one row, then one blank row, then the body.
 - `<repo>` is the repository name from the run's prefix, or the base name of its root when there is no prefix.
 - `<capture>` summarizes what `loupe capture` took: `N files` for `--files`, `changes since <base>` for `--changed --base <base>`, `uncommitted changes` for `--changed` alone, and `no files` for `--no-files`.
 
-The local header gives way in this order as the terminal narrows:
+The local header has three forms. It MUST draw the richest form that fits with room for up to 16 cells of the title:
 
-| Width | Badge | Location |
-| :--- | :--- | :--- |
-| 100 and above | `local · returns to X` | `<repo> @ <branch> · <capture>` |
-| 80 to 99 | `local · X` | `<repo> @ <branch>` |
-| Below 80 | `local` | `<branch>` |
+| Form | Badge | Place | Progress bar |
+| :--- | :--- | :--- | :--- |
+| Full | `local · returns to X` | `<repo> @ <branch> · <capture>` | Shown |
+| Medium | `local · X` | `<repo> @ <branch>` | Shown |
+| Short | `local` | `<branch>`, or `<repo>` on a detached head | Dropped |
 
-Below 80 columns the progress bar drops and the bold `N/M decided` count stays. The count MUST NOT give way. The title gives way before the location does.
+In the frames, 124 columns draws the full form, 100 the medium form and 80 the short form. The title then takes what is left and truncates. The bold `N/M decided` count MUST NOT give way.

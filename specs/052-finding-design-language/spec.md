@@ -62,13 +62,13 @@ A human opens a local run. The header names the repository, the branch and what 
 
 **Why this priority**: The ref looked like a PR link and said nothing useful.
 
-**Independent Test**: Open the demo's local run at 160, 100 and 60 columns and read the header.
+**Independent Test**: Open the demo's local run at 124, 100 and 80 columns and read the header.
 
 **Acceptance Scenarios**:
 
-1. **Given** a local run captured with `--files` on branch `feat/cache`, **When** the window is 100 columns or wider, **Then** the header shows `local · returns to Claude`, `widgets @ feat/cache · 2 files`, the title and the progress.
-2. **Given** the same run, **When** the window is 80 to 99 columns, **Then** the badge is `local · Claude` and the capture summary is gone.
-3. **Given** the same run, **When** the window is narrower than 80 columns, **Then** the badge is `local`, the repository is gone, the progress bar is gone and `N/M decided` stays.
+1. **Given** a local run captured with `--files` on branch `feat/cache`, **When** the window is 124 columns wide, **Then** the header shows `local · returns to Claude`, `widgets @ feat/cache · 2 files`, the title and the progress.
+2. **Given** the same run, **When** the window is 100 columns wide, **Then** the badge is `local · Claude`, the capture summary is gone and the title is whole.
+3. **Given** the same run, **When** the window is 80 columns wide, **Then** the badge is `local`, the repository is gone, the progress bar is gone and `N/M decided` stays.
 4. **Given** any local run, **When** the header draws, **Then** no part of it is underlined.
 
 ### User Story 3 - See the fix under a long hunk (Priority: P2)
@@ -100,7 +100,7 @@ A finding points at a long hunk. The location pane stops at a maximum height and
 - **FR-004**: The suggested fix and the local proposal MUST be drawn by one renderer.
 - **FR-005**: The location pane MUST have a maximum height and MUST scroll inside itself when the hunk exceeds it.
 - **FR-006**: Pane titles in the rewrite and confirmation screens MUST be drawn by `internal/style` helpers.
-- **FR-007**: The local header MUST show the repository, the branch and the capture summary, and MUST NOT show the run's ref. It MUST give way at 100 and 80 columns as the contract says.
+- **FR-007**: The local header MUST show the repository, the branch and the capture summary, and MUST NOT show the run's ref. It MUST draw the richest of its three forms that leaves the title its room, as the contract says.
 - **FR-008**: The published review MUST NOT change. The `internal/render` goldens MUST NOT move.
 - **FR-009**: PR-run headers MUST NOT change.
 
@@ -114,7 +114,7 @@ A finding points at a long hunk. The location pane stops at a maximum height and
 ### Measurable Outcomes
 
 - **SC-001**: Every block in a finding below the meta is either the location pane or a section drawn by the one helper. A test asserts this for a PR finding, a local finding, a question-only finding and a withdrawn finding.
-- **SC-002**: The local header at 160, 100 and 60 columns matches `frames/local-headers.png` in content and order.
+- **SC-002**: The local header at 124, 100 and 80 columns matches `frames/local-headers.png` in content and order.
 - **SC-003**: `go test ./internal/render/` passes with no golden regenerated.
 - **SC-004**: `mise run check` passes.
 
