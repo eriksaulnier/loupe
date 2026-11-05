@@ -1,5 +1,7 @@
 # Interactive layout contract
 
+[`docs/tui-design.md`](../../../docs/tui-design.md) supersedes this file for the finding document and the header (spec 052). The rest stays as history and still holds where that file is silent.
+
 This contract supplements [spec.md](../spec.md). It changes no CLI or publication contract. Dimensions are display cells, not bytes or Unicode code points. The reference frames show synthetic content. Dynamic text MUST follow these rules rather than copy the fixture values.
 
 ## Shell and row budget

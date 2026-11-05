@@ -34,7 +34,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `install.sh` | The script behind `curl ... \| sh`, which installs a released binary. `pages.yml` publishes it, and `TestInstallScript*` runs it against a fake `curl` |
 | `action.yml` | The composite action that installs a released loupe in a GitHub Actions job. release-please stamps its `version` default at each release, and `TestInstallAction` pins it to the manifest |
 | `specs/NNN-topic/` | One directory per feature: `spec.md`, then `plan.md` and `tasks.md`. `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
-| `docs/` | `comment-format.md` (the published review format, a contract) and `github-facts.md` (observed GitHub behavior). `tapes/` drives the README's terminal images in `assets/`, and `scripts/review-screenshot.sh` its picture of a published review; neither is read by the binary |
+| `docs/` | `comment-format.md` (the published review format, a contract), `tui-design.md` (how the review window draws a finding and its header, a contract) and `github-facts.md` (observed GitHub behavior). `tapes/` drives the README's terminal images in `assets/`, and `scripts/review-screenshot.sh` its picture of a published review; neither is read by the binary |
 | `testdata/` | Diff fixtures and goldens |
 | `assets/review/v1/` | The severity pill SVGs every published review hotlinks from `main`. A file here MUST NOT change once on `main`; a redesign adds `v2`. A test pins their hashes |
 | `scripts/` | `check-tests.sh`, the test-hygiene grep that `mise run check` runs, and `review-screenshot.sh`, which `mise run review-screenshot` runs |

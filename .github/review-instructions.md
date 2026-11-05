@@ -26,6 +26,7 @@ A change that alters behavior any of these documents promises, without a matchin
 
 - `review/head/specs/001-loupe-v1/contracts/cli.md` — the `--json` result envelopes, the refusal codes and the exit codes (0 success, 1 refusal, 2 usage).
 - `review/head/docs/comment-format.md` — the published review format, shared with humans reading GitHub. The constitution says changing it requires a spec amendment under `specs/`.
+- `review/head/docs/tui-design.md` — how the review window draws a finding and its header: section shape, tones, boxes, order and header anatomy. A screen that styles a heading, bar or pane title inline instead of through `internal/style` breaks it.
 - The `error: <message>` and `fix: <fix>` stderr shape under `NO_COLOR`.
 
 A run's on-disk layout under `LOUPE_HOME` is documented but is **not** a contract; reaching into it from outside loupe is the finding, not depending on it from inside `internal/run`.
