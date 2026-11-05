@@ -397,7 +397,7 @@ func TestApplyDetailLeadsWithWhatTheApplierWillDo(t *testing.T) {
 }
 
 // On a local run the notices and note panes use the agent-facing verbs of the footer: reject, ask and tweak.
-func TestLocalRunNoticesUseTheAgentVerbs(t *testing.T) {
+func TestApplyNoticesUseTheAgentVerbs(t *testing.T) {
 	dir := localFixture(t, "changed", "Claude", applyInputs...)
 	m := modelOf(t, dir, utf8Env, 100, 40)
 	mustOpenFinding(t, m, "f-001")
