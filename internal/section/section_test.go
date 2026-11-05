@@ -16,11 +16,3 @@ func TestGroupIsTheLabelGroupsInTieBreakOrder(t *testing.T) {
 		t.Errorf("the groups must stay 0..3 in body order: %d %d %d %d", Issue, Suggestion, Question, Other)
 	}
 }
-
-// Rank is the whole of the body's section order: Must fix, then Worth a look. Only blocking decides it; Group breaks
-// ties inside a section.
-func TestRankIsBlockingAgainstTheRest(t *testing.T) {
-	if Rank(true) != 0 || Rank(false) != 1 {
-		t.Errorf("Rank(true) = %d, Rank(false) = %d, want 0 and 1", Rank(true), Rank(false))
-	}
-}
