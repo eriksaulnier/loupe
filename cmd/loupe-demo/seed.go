@@ -409,8 +409,9 @@ func seedLocal(home string, now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("capture the demo local run: %w", err)
 	}
-	// The demo source sits in a temporary directory with no origin; it stands for the acme/widgets checkout.
-	captured.Local.Prefix, captured.Local.Repository = owner+"/"+repo, owner+"/"+repo
+	// The demo source sits in a temporary directory with no origin or branch; it stands for the acme/widgets checkout
+	// on the pull request's branch.
+	captured.Local.Prefix, captured.Local.Repository, captured.Local.Branch = owner+"/"+repo, owner+"/"+repo, "feat/cache"
 	target := run.Target{
 		Kind: run.KindLocal, Title: "Cache plan", Applier: "Claude", CapturedAt: now.UTC(),
 		DiffSHA256: run.DiffSHA256(captured.Diff), Local: &captured.Local,
