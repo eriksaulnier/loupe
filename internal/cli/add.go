@@ -142,10 +142,11 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	m, err := runMode(dir)
+	target, err := run.LoadTarget(dir)
 	if err != nil {
 		return err
 	}
+	m := mode.Of(target)
 	if err := checkModeFlags(cmd, m); err != nil {
 		return err
 	}
@@ -153,7 +154,7 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	dif, err := loadDiff(dir, slices.ContainsFunc(inputs, func(in draft.FindingInput) bool { return in.Location != nil && in.Location.Heading != nil }))
+	dif, err := loadDiff(dir, target, slices.ContainsFunc(inputs, func(in draft.FindingInput) bool { return in.Location != nil && in.Location.Heading != nil }))
 	if err != nil {
 		return err
 	}
@@ -259,11 +260,7 @@ func locationFlags(cmd *cobra.Command) *draft.LocationInput {
 
 // loadDiff reads pr.diff once per command; the diff is the only authority for locations. headings also reads the
 // outline, only when an input names a heading, so a damaged outline never refuses a line location.
-func loadDiff(dir string, headings bool) (*diff.Diff, error) {
-	target, err := run.LoadTarget(dir)
-	if err != nil {
-		return nil, err
-	}
+func loadDiff(dir string, target run.Target, headings bool) (*diff.Diff, error) {
 	d, err := run.LoadDiff(dir, target)
 	if err != nil || !headings {
 		return d, err

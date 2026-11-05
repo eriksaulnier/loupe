@@ -8,7 +8,6 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 const assessHelp = `Mark earlier findings as still open or addressed by this round's head.
@@ -88,7 +87,7 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 		v, _ := cmd.Flags().GetInt("expect-version")
 		expectVersion = &v
 	}
-	dir, ref, err := resolveRun(cmd, deps, "")
+	root, dir, ref, err := resolveRunRoot(cmd, deps, "")
 	if err != nil {
 		return err
 	}
@@ -104,10 +103,6 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 		}
 		inputs = in.Assessments
 	}
-	root, err := run.DataRoot(deps.Getenv)
-	if err != nil {
-		return err
-	}
 	p, err := previousRound(root, ref)
 	if err != nil {
 		return err
@@ -115,13 +110,9 @@ func runAssess(cmd *cobra.Command, deps Deps, refs []string) error {
 	// Publish checks the previous round against GitHub by its publication id, so without one nothing would catch a
 	// newer round published from another data root.
 	if p.publicationID == "" {
-		target, err := run.LoadTarget(dir)
-		if err != nil {
-			return err
-		}
 		return refusal.New(refusal.NotFound,
 			fmt.Sprintf("the previous round of %s was captured by an older loupe that did not record its publication id, so publish could not check that it is still the previous round", ref),
-			fmt.Sprintf("run %s from an empty data root, then assess again", publish.RecaptureCommand(target)))
+			fmt.Sprintf("run %s from an empty data root, then assess again", publish.RecaptureCommand(p.target)))
 	}
 	dropped := 0
 	d, err := draft.Mutate(dir, "assess", expectVersion, deps.Getenv, func(d *draft.Draft) (err error) {

@@ -16,10 +16,17 @@ import (
 // resolveRun selects the run from --run or the positional reference, then LOUPE_RUN, then the pull request of the
 // working directory's current branch.
 func resolveRun(cmd *cobra.Command, deps Deps, positional string) (string, run.Ref, error) {
+	_, dir, ref, err := resolveRunRoot(cmd, deps, positional)
+	return dir, ref, err
+}
+
+// resolveRunRoot is resolveRun that also returns the data root it resolved the run under, for a command that reads
+// other runs there.
+func resolveRunRoot(cmd *cobra.Command, deps Deps, positional string) (root, dir string, ref run.Ref, err error) {
 	selected := positional
 	if flag := cmd.Flags().Lookup("run"); flag != nil && flag.Changed {
 		if positional != "" {
-			return "", run.Ref{}, refusal.New(refusal.Usage,
+			return "", "", run.Ref{}, refusal.New(refusal.Usage,
 				"a run reference was given both as an argument and with --run",
 				"pass the run reference once: "+cmd.CommandPath()+" --run <ref>")
 		}
@@ -28,36 +35,35 @@ func resolveRun(cmd *cobra.Command, deps Deps, positional string) (string, run.R
 	if selected == "" {
 		selected = deps.Getenv("LOUPE_RUN")
 	}
-	var ref run.Ref
 	if selected != "" {
 		parsed, err := run.ParseRef(selected)
 		if err != nil {
-			return "", run.Ref{}, err
+			return "", "", run.Ref{}, err
 		}
 		ref = parsed
 	}
-	root, err := run.DataRoot(deps.Getenv)
+	root, err = run.DataRoot(deps.Getenv)
 	if err != nil {
-		return "", run.Ref{}, err
+		return "", "", run.Ref{}, err
 	}
 	if selected == "" {
 		if ref, err = run.ResolveBranch(cmd.Context(), root, deps.WorkDir, deps.GitHub); err != nil {
-			return "", run.Ref{}, positionalFix(cmd, err)
+			return "", "", run.Ref{}, positionalFix(cmd, err)
 		}
 	}
 	dir, resolved, err := run.ResolveRef(root, ref)
 	if err != nil {
-		return "", run.Ref{}, positionalFix(cmd, err)
+		return "", "", run.Ref{}, positionalFix(cmd, err)
 	}
 	if err := recordRun(cmd, resolved, dir); err != nil {
-		return "", run.Ref{}, err
+		return "", "", run.Ref{}, err
 	}
 	if resolved.Local > 0 {
 		if err := checkLocalRun(cmd, resolved, dir); err != nil {
-			return "", run.Ref{}, err
+			return "", "", run.Ref{}, err
 		}
 	}
-	return dir, resolved, nil
+	return root, dir, resolved, nil
 }
 
 // checkLocalRun refuses a command that does not apply to a local run. A returned run refuses review and handoff as

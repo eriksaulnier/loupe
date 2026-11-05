@@ -141,7 +141,7 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 			"--comments cannot be combined with --diff or --previous; each shows a different part of the run",
 			"run loupe show --comments on its own")
 	}
-	dir, ref, err := resolveRun(cmd, deps, "")
+	root, dir, ref, err := resolveRunRoot(cmd, deps, "")
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func runShow(cmd *cobra.Command, deps Deps) error {
 		return runShowDiff(cmd, deps, dir, ref)
 	}
 	if previous {
-		return runShowPrevious(cmd, deps, ref)
+		return runShowPrevious(cmd, deps, root, ref)
 	}
 	if comments {
 		return runShowComments(cmd, deps, dir, ref)
@@ -232,11 +232,7 @@ func runShowDiff(cmd *cobra.Command, deps Deps, dir string, ref run.Ref) error {
 	return err
 }
 
-func runShowPrevious(cmd *cobra.Command, deps Deps, ref run.Ref) error {
-	root, err := run.DataRoot(deps.Getenv)
-	if err != nil {
-		return err
-	}
+func runShowPrevious(cmd *cobra.Command, deps Deps, root string, ref run.Ref) error {
 	p, err := previousRound(root, ref)
 	if err != nil {
 		return err
@@ -313,6 +309,8 @@ func (p previous) against() draft.AssessedAgainst {
 }
 
 type previous struct {
+	// target is the current round's, which previousRound reads to find the publisher.
+	target    run.Target
 	from      string
 	round     int
 	reviewURL string
@@ -336,7 +334,7 @@ func previousRound(root string, ref run.Ref) (previous, error) {
 	if err == nil {
 		env := receipt.Envelope
 		filedIn := draft.FiledIn{Round: round, ReviewURL: receipt.ReviewURL, Commit: env.CommitID}
-		return previous{from: "receipt", round: round, reviewURL: receipt.ReviewURL, publicationID: env.PublicationID, findings: env.Findings,
+		return previous{target: target, from: "receipt", round: round, reviewURL: receipt.ReviewURL, publicationID: env.PublicationID, findings: env.Findings,
 			earlier: publish.Earlier(env.Findings, env.Assessments, filedIn)}, nil
 	}
 	local, ok := refusal.As(err)
@@ -359,7 +357,7 @@ func previousRound(root string, ref run.Ref) (previous, error) {
 			fmt.Sprintf("%s, and none can be read back from GitHub: %s", publishedHere(local.Message), stored.Reason), fix)
 	}
 	filedIn := draft.FiledIn{Round: stored.Round, ReviewURL: stored.ReviewURL, Commit: stored.Commit}
-	return previous{from: "github", round: stored.Round, reviewURL: stored.ReviewURL, publicationID: stored.PublicationID, findings: stored.Findings,
+	return previous{target: target, from: "github", round: stored.Round, reviewURL: stored.ReviewURL, publicationID: stored.PublicationID, findings: stored.Findings,
 		earlier: publish.Earlier(stored.Findings, stored.Assessments, filedIn)}, nil
 }
 
