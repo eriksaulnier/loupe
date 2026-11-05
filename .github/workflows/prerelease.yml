@@ -40,11 +40,14 @@ jobs:
           set -euo pipefail
           # The build takes .goreleaser.yaml from the dispatched commit, and install-script takes install.sh from it. Both
           # MUST be what main ships.
-          # Anyone with write access can dispatch, and a published pre-release can never be removed.
-          if [ "$GITHUB_ACTOR" != "$GITHUB_REPOSITORY_OWNER" ]; then
-            echo "::error::$GITHUB_ACTOR dispatched this workflow. Only $GITHUB_REPOSITORY_OWNER, the repository's owner, may cut a pre-release."
-            exit 1
-          fi
+          # Anyone with write access can dispatch, and a published pre-release can never be removed. A re-run keeps
+          # GITHUB_ACTOR from the dispatch, so the one who re-ran it is GITHUB_TRIGGERING_ACTOR.
+          for actor in "$GITHUB_ACTOR" "$GITHUB_TRIGGERING_ACTOR"; do
+            if [ "$actor" != "$GITHUB_REPOSITORY_OWNER" ]; then
+              echo "::error::$actor started this run. Only $GITHUB_REPOSITORY_OWNER, the repository's owner, may cut a pre-release."
+              exit 1
+            fi
+          done
           if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
             echo "::error::this workflow ran from $GITHUB_REF. Dispatch it from $DEFAULT_BRANCH, and name the branch to release in ref."
             exit 1
@@ -150,6 +153,13 @@ jobs:
       TAG: v${{ inputs.version }}
       VERSION: ${{ inputs.version }}
     steps:
+      # Re-running failed jobs skips validate, so the job that publishes checks who started this attempt itself.
+      - run: |
+          set -euo pipefail
+          if [ "$GITHUB_TRIGGERING_ACTOR" != "$GITHUB_REPOSITORY_OWNER" ]; then
+            echo "::error::$GITHUB_TRIGGERING_ACTOR started this attempt. Only $GITHUB_REPOSITORY_OWNER, the repository's owner, may publish a pre-release."
+            exit 1
+          fi
       - uses: actions/download-artifact@v8
         with:
           name: release-assets
