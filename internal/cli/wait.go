@@ -139,9 +139,13 @@ func pollWait(dir string, m mode.Mode) (d *draft.Draft, reason string, awaiting 
 func writeWait(cmd *cobra.Command, deps Deps, m mode.Mode, dir, ref string, d *draft.Draft, reason string, awaiting []string) error {
 	var reviewURL string
 	if reason == mode.EndedPublished {
-		receipt, _, err := publish.LoadReceipt(dir)
+		receipt, found, err := publish.LoadReceipt(dir)
 		if err != nil {
 			return err
+		}
+		if !found {
+			return refusal.New(refusal.Record, "receipt.json in "+dir+" disappeared after loupe wait saw the review published",
+				"run loupe wait again")
 		}
 		reviewURL = receipt.ReviewURL
 	}

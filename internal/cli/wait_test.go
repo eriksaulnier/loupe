@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 // fastWait shortens the poll so a hand-back that appears mid-wait is seen well inside the test's timeout.
@@ -170,5 +172,17 @@ func TestWaitShowsTheReviewURLWithoutJSON(t *testing.T) {
 	if code := Execute(deps, []string{"wait", "--run", "o/r#1"}); code != 0 ||
 		!strings.Contains(s.stdout.String(), "Published "+testReviewURL+"; nothing more to wait for") {
 		t.Fatalf("exit %d stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
+	}
+}
+
+// The wait saw receipt.json before it read the review URL from it, so a receipt gone by then is refused rather than
+// reported as published to no URL.
+func TestWaitRefusesAReceiptThatDisappears(t *testing.T) {
+	_, dir := sendBackRun(t)
+	err := writeWait(nil, Deps{}, nil, dir, "o/r#1@1", nil, mode.EndedPublished, []string{})
+	r, ok := refusal.As(err)
+	want := "receipt.json in " + dir + " disappeared after loupe wait saw the review published"
+	if !ok || r.Code != refusal.Record || r.Message != want || r.Fix != "run loupe wait again" {
+		t.Fatalf("writeWait = %#v, want a record refusal %q", err, want)
 	}
 }
