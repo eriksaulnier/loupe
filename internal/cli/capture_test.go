@@ -94,6 +94,8 @@ type prFixture struct {
 	repo *gitrepo.Repo
 	gh   *fakegh.Server
 	home string
+	// client, when set, is the client every command gets; otherwise each capture gets a user-token client.
+	client github.Client
 }
 
 func newPRFixture(t *testing.T) *prFixture {
@@ -113,7 +115,10 @@ func (f *prFixture) capture(t *testing.T, env map[string]string, args ...string)
 	maps.Copy(all, env)
 	deps, s := testDeps(t, all)
 	deps.WorkDir = f.repo.Dir
-	client := f.gh.Client(t)
+	client := f.client
+	if client == nil {
+		client = f.gh.Client(t)
+	}
 	deps.GitHub = func() (github.Client, error) { return client, nil }
 	return Execute(deps, append([]string{"capture", "https://github.com/o/r/pull/7"}, args...)), s
 }
@@ -263,5 +268,23 @@ func TestCaptureRefusesBeforeTheDataRoot(t *testing.T) {
 				t.Fatalf("capture created the data root: %v", err)
 			}
 		})
+	}
+}
+
+// A file where the next round's directory goes is not a round, so capture tries to create that round, finds the
+// name taken as a lost race would, and names the refs it fetched.
+func TestCaptureReportsARoundItCannotCreate(t *testing.T) {
+	f := newPRFixture(t)
+	prDir := filepath.Join(f.home, "runs", "o", "r", "7")
+	mkdirAll(t, prDir)
+	if err := os.WriteFile(filepath.Join(prDir, "1"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s := f.capture(t, nil, "--json")
+	errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
+	details, _ := errObj["details"].(map[string]any)
+	if cleanup, _ := details["cleanup"].([]any); code != 1 || errObj["code"] != string(refusal.Lock) || len(cleanup) != 2 ||
+		errObj["message"] != "another capture created round 1 of o/r#7 at the same time" {
+		t.Fatalf("exit %d error %v", code, errObj)
 	}
 }

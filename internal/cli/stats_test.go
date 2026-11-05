@@ -517,6 +517,7 @@ func TestStatsHeaderNamesEveryFilter(t *testing.T) {
 		want string
 	}{
 		{statsQuery{filter: stats.Filter{States: published}, sinceText: "2026-11-01"}, "Published runs in every repository, since 2026-11-01."},
+		{statsQuery{filter: stats.Filter{States: published}, sinceText: "2026-11-01", untilText: "2026-11-30"}, "Published runs in every repository, from 2026-11-01 to 2026-11-30."},
 		{statsQuery{filter: stats.Filter{States: published, GroupBy: stats.GroupWeek}, untilText: "2026-11-30"}, "Published runs in every repository, until 2026-11-30, by ISO week."},
 	} {
 		if got := statsHeader(c.q); got != c.want {

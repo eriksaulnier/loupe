@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"io/fs"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,5 +186,79 @@ func TestPublishRefusesAPreviousRoundItCannotReread(t *testing.T) {
 	code := Execute(deps, []string{"publish", "o/r#1@2", "--unattended", "--json"})
 	if errObj := wantCode(t, code, s, refusal.Record); !strings.Contains(errObj["message"].(string), "receipt.json") {
 		t.Fatalf("error %v", errObj)
+	}
+}
+
+// fakeTransport sends every request to the fake GitHub, so a client can hold a token of the test's choosing.
+type fakeTransport struct{ target *url.URL }
+
+func (rt fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.URL.Scheme, req.URL.Host = rt.target.Scheme, rt.target.Host
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// unattendedRound captures the fixture's pull request as its next round, files one general finding and a summary,
+// and returns deps that publish it unattended. Every command holds an App installation token, as a pipeline does.
+func (f *prFixture) unattendedRound(t *testing.T) Deps {
+	t.Helper()
+	if f.client == nil {
+		target, err := url.Parse(f.gh.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GH_CONFIG_DIR", t.TempDir())
+		if f.client, err = github.NewRESTWithToken(fakeTransport{target}, "ghs_installation"); err != nil {
+			t.Fatal(err)
+		}
+		f.gh.DenyUser()
+	}
+	if code, s := f.capture(t, nil, "--json"); code != 0 {
+		t.Fatalf("capture exit %d stdout %q", code, s.stdout.String())
+	}
+	for _, args := range [][]string{
+		{"add", "--run", "o/r#7", "--title", "T", "--body", "B", "--general", "--json"},
+		{"summary", "--run", "o/r#7", "--body", "One thing.", "--expect-findings", "1", "--json"},
+	} {
+		if code, s := runWithStdin(t, f.home, "", args...); code != 0 {
+			t.Fatalf("%v: exit %d stdout %q", args, code, s.stdout.String())
+		}
+	}
+	deps, _ := testDeps(t, map[string]string{"LOUPE_HOME": f.home, "NO_COLOR": "1"})
+	deps.GitHub = func() (github.Client, error) { return f.client, nil }
+	return deps
+}
+
+// The review is sent before the result is printed, so a stderr that fails then is reported but sends nothing twice.
+func TestPublishReportsAStderrItCannotWriteAfterSending(t *testing.T) {
+	f := newPRFixture(t)
+	deps := f.unattendedRound(t)
+	var stdout bytes.Buffer
+	deps.Stdout, deps.Stderr = &stdout, failWriter{}
+	if code := Execute(deps, []string{"publish", "o/r#7", "--unattended"}); code != 1 || stdout.Len() != 0 || f.gh.CreateCount() != 1 {
+		t.Fatalf("exit %d stdout %q, %d reviews sent", code, stdout.String(), f.gh.CreateCount())
+	}
+}
+
+// After an unattended round is sent, a previous round that cannot be read is a warning: the review is already out.
+func TestPublishWarnsWhenItCannotCheckTheEarlierFindings(t *testing.T) {
+	f := newPRFixture(t)
+	deps := f.unattendedRound(t)
+	if code := Execute(deps, []string{"publish", "o/r#7", "--unattended", "--json"}); code != 0 {
+		t.Fatalf("round 1 publish exit %d", code)
+	}
+	head := f.repo.PushHead(map[string]string{"src/later.go": "package src\n"})
+	f.gh.SetHead("o", "r", 7, head)
+	deps = f.unattendedRound(t)
+	if err := os.WriteFile(filepath.Join(run.RunDir(f.home, "o", "r", 7, 1), "receipt.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	deps.Stderr = &stderr
+	if code := Execute(deps, []string{"publish", "o/r#7@2", "--unattended", "--json"}); code != 0 {
+		t.Fatalf("round 2 publish exit %d stderr %q", code, stderr.String())
+	}
+	if !strings.HasPrefix(stderr.String(), "warning: could not check for unassessed earlier findings: ") || !strings.Contains(stderr.String(), "receipt.json") {
+		t.Fatalf("stderr %q", stderr.String())
 	}
 }

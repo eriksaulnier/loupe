@@ -400,6 +400,10 @@ func terminalDeps(t *testing.T, home string) (Deps, *streams) {
 	deps.IsTerminal = func() bool { return true }
 	deps.StderrIsTerminal = func() bool { return true }
 	deps.Screen = &tui.Screen{Width: 100, Height: 30}
+	// As on a machine with no credentials, so the pull request watch, which may start before the program ends, fails.
+	deps.GitHub = func() (github.Client, error) {
+		return nil, refusal.New(refusal.Auth, "no GitHub token", "gh auth login")
+	}
 	return deps, s
 }
 

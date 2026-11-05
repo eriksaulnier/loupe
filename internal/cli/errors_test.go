@@ -256,6 +256,12 @@ func TestReportNamesTheCleanup(t *testing.T) {
 	if want := "cleanup:\n  git update-ref -d refs/loupe/a\n"; !strings.HasSuffix(stderr.String(), want) {
 		t.Fatalf("stderr %q, want it to end %q", stderr.String(), want)
 	}
+
+	var colored bytes.Buffer
+	writeRefusalText(&colored, colorStyle(t, &colored), 100, r, err)
+	if want := "cleanup:\n  git update-ref -d refs/loupe/a\n"; !strings.HasSuffix(stripANSI(colored.String()), want) || !strings.Contains(colored.String(), "\x1b[") {
+		t.Fatalf("colored stderr %q, want it to end %q", colored.String(), want)
+	}
 }
 
 // A result that cannot be written is reported on stderr, since stdout is what failed.
