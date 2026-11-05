@@ -114,6 +114,14 @@ func TestReadFilesThroughASymlinkedDirectory(t *testing.T) {
 			t.Errorf("file %d: %s %s, want %s %s", i, f.Path, f.Abs, want[i].Path, want[i].Abs)
 		}
 	}
+	// Named relative to a cwd under the symlink, the linked directory still keeps its name in the repository.
+	files, _, err = ReadFiles([]string{"shared/s.md"}, cwd, root, filepath.Join(link, "home"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files[0].Path != "shared/s.md" {
+		t.Errorf("relative path through a linked directory shows as %s", files[0].Path)
+	}
 }
 
 func TestReadFilesRefuses(t *testing.T) {
