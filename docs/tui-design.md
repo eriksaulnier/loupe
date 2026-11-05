@@ -60,10 +60,11 @@ The header is one row, then one blank row, then the body.
 
 | Run | Anatomy |
 | :--- | :--- |
-| Pull request | `badge  owner/repo#N  rN  title  progress  N/M decided` |
+| Pull request | `badge  owner/repo#N  rN  title  [tag]  progress  N/M decided` |
 | Local | `badge  [local · returns to X]  <repo> @ <branch> · <capture>  title  progress  N/M decided` |
 
 - A pull request's reference is bold and underlined, and links to the pull request.
+- `[tag]` is the pull request's live state when it needs the human's eye (`PR merged`, `PR closed`, `head moved`, `state unknown`), bold in the warn color (spec 050). Like the count, it MUST NOT give way. A local run never shows one.
 - A local run MUST NOT show its reference (`owner/repo:local#N`) in the header. Nothing in it is a link. `loupe list` and `loupe show` still name the run by its reference.
 - `<repo>` is the repository name from the run's prefix, or the base name of its root when there is no prefix.
 - `<capture>` summarizes what `loupe capture` took: `N files` for `--files`, `changes since <base>` for `--changed --base <base>`, `uncommitted changes` for `--changed` alone, and `no files` for `--no-files`.

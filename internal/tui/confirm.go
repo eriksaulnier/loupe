@@ -395,7 +395,7 @@ func (c *confirmation) summary(m *Model) string {
 	inline := fmt.Sprintf("inline %s (%d)", c.title.inline, c.title.comments)
 	var required []string
 	if c.preview.Closed != "" {
-		required = append(required, m.styles.Warn.Render("PR "+c.preview.Closed))
+		required = append(required, m.styles.WarnTitle("PR "+c.preview.Closed, false))
 	}
 	if moved := c.preview.HeadMoved; moved != nil {
 		required = append(required, m.styles.WarnTitle(fmt.Sprintf("head moved +%d", moved.AheadBy), false))
