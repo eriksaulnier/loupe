@@ -464,7 +464,7 @@ func TestReviewReturnsALocalRun(t *testing.T) {
 // return, then feedback once returned. It never names publish, which refuses a local run.
 func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
 	f := localFinding("f-001")
-	f.Proposal = "Rename the helper."
+	f.Proposal = "Rename the helper.\n\n```go\nresult := computeSomethingVeryLongIndeed(index, anotherArgument, yetAnotherArgument, andOneMoreArgumentToPassTheWidth, andAnother)\n```"
 	home, dir := localRun(t, "changed", f)
 	show := func() string {
 		t.Helper()
@@ -477,6 +477,9 @@ func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
 	out := show()
 	if !strings.Contains(out, "Proposal") || !strings.Contains(out, "Rename the helper.") || !strings.Contains(out, "loupe review acme/widgets:local#1") {
 		t.Fatalf("pending local show:\n%s", out)
+	}
+	if !strings.Contains(out, "result := computeSomethingVeryLongIndeed(index, anotherArgument, yetAnotherArgument, andOneMoreArgumentToPassTheWidth, andAnother)") {
+		t.Fatalf("the fenced proposal line was wrapped:\n%s", out)
 	}
 	if _, err := draft.Mutate(dir, "test", nil, func(string) string { return "" }, func(d *draft.Draft) error {
 		_, err := draft.Accept(d, "f-001", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))

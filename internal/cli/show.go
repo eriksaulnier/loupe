@@ -534,6 +534,24 @@ func metaLine(s style.Style, cells []metaCell, width int) []string {
 
 const findingIndent = "         "
 
+// writeProse wraps text's prose lines under the finding and prints its fenced lines as written, since a proposal is
+// often code that a word wrap would split mid-identifier.
+func writeProse(b *strings.Builder, s style.Style, width int, text string) {
+	fenced := false
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		fence := strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
+		if fenced || fence || line == "" {
+			fmt.Fprintf(b, "%s\n", strings.TrimRight(findingIndent+line, " "))
+		} else {
+			fmt.Fprintf(b, "%s\n", s.Wrap(line, width, findingIndent))
+		}
+		if fence {
+			fenced = !fenced
+		}
+	}
+}
+
 func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) {
 	title := s.Bold.Render(oneLine(f.title))
 	if f.blocking {
@@ -557,7 +575,7 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 	}
 	if proposal := text(f.proposal); proposal != "" {
 		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render("Proposal"))
-		fmt.Fprintf(b, "%s\n", s.Wrap(proposal, width, findingIndent))
+		writeProse(b, s, width, proposal)
 	}
 	if impact := text(f.impact); impact != "" {
 		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render("Impact"))
