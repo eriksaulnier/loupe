@@ -60,7 +60,7 @@ const basicNone = -1
 type reviewPalette struct {
 	base, text, surface0, surface1, accent, secondary, overlay1 color.Color
 	good, note, brand, blockingDim, bad, muted, mutedBorder     color.Color
-	// apply marks a local run, which instructs the human's own agent; no pull request screen draws it.
+	// apply marks a local run, which instructs the human's own agent. No pull request screen draws it.
 	apply           color.Color
 	pills, pillFill [4]color.Color
 	// toneFill is each tone's chip fill, indexed by Tone.
