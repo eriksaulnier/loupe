@@ -355,7 +355,7 @@ func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
 		t.Fatal(err)
 	}
-	if err := draft.Seal(dir, 0, func(string) string { return "" }, time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)); err != nil {
+	if err := draft.Seal(dir, 0, "", func(string) string { return "" }, time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
@@ -429,7 +429,8 @@ func TestWaitSaysAReturnedRunIsReturned(t *testing.T) {
 	}
 }
 
-// review opens a local run in apply mode: the human decides, returns with p and y, and the run is sealed.
+// review opens a local run in apply mode: the human decides, the return step opens, enter seals the run, and review
+// quits with one line.
 func TestReviewReturnsALocalRun(t *testing.T) {
 	home, dir := localRun(t, "changed", localFinding("f-001"))
 	sc := screen.Start(t, 100, 30, func(stdin io.Reader, stdout, stderr io.Writer) int {
@@ -440,17 +441,16 @@ func TestReviewReturnsALocalRun(t *testing.T) {
 		deps.Screen = &tui.Screen{Width: 100, Height: 30}
 		return Execute(deps, []string{"review", "local#1"})
 	})
-	sc.WaitFor("acme/widgets:local#1", "p return")
+	sc.WaitFor("acme/widgets:local#1", "1 finding to decide")
 	sc.Press("enter", "a")
-	sc.WaitFor("1/1 decided")
-	sc.Press("p")
-	sc.WaitFor("y return to Claude")
-	sc.Press("y")
-	sc.WaitFor("Returned to Claude")
-	sc.Press("q")
+	sc.WaitFor("1/1 decided", "enter return to Claude")
+	sc.Press("enter")
 	stdout, stderr, code := sc.Wait()
 	if code != 0 {
 		t.Fatalf("exit %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Returned to Claude: 1 accepted, 0 rejected.") {
+		t.Errorf("review left no return line:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "Publish review") {
 		t.Errorf("review showed a publish step:\n%s", stdout)

@@ -486,10 +486,10 @@ func (m *Model) collapsedSummary(full []string, width int) []string {
 	return []string{first}
 }
 
-// listFooter is the list's keys, or the return prompt's while it asks.
+// listFooter is the list's keys, or the return step's while it is open.
 func (m *Model) listFooter() []string {
-	if m.returning {
-		return m.returnKeys()
+	if m.noting {
+		return m.detailFooter()
 	}
 	return m.keys(groupHints(m.listHints())...)
 }
@@ -501,7 +501,8 @@ func (m *Model) listView() string {
 	findings := style.Pane{Width: m.width, Titles: style.PaneTitles{TopLeft: "Findings", TopRight: m.listCounts()}, Focus: true}
 	room := m.withBorderNotice(&findings)
 	notice := m.noticeRows(inner, room)
-	l := m.layoutList(len(footer), len(notice))
+	editor := m.editorRows()
+	l := m.layoutList(len(footer), len(notice)+editor)
 	if len(m.order) <= l.rows {
 		// The selection marker already shows the place in a list that fits; the position is kept for one that scrolls.
 		position = ""
@@ -545,15 +546,18 @@ func (m *Model) listView() string {
 	for len(lines) < l.heads+rows {
 		lines = append(lines, "")
 	}
-	findingsHeight := m.bodyRows(len(footer)) - len(body)
+	findingsHeight := m.bodyRows(len(footer)) - len(body) - editor
 	if len(notice) > findingsHeight-style.PaneRows {
 		// A refusal taller than the findings pane takes the summary's rows too, so none of it is cut.
-		body, findingsHeight = nil, m.bodyRows(len(footer))
+		body, findingsHeight = nil, m.bodyRows(len(footer))-editor
 	}
 	findings.Height, findings.Lines = findingsHeight, m.withNotice(lines, notice, findingsHeight-style.PaneRows)
 	findings.Titles.BottomRight = position
 	findings.Scroll = style.Scroll{Offset: offset, Visible: rows, Total: len(m.order)}
 	body = append(body, m.styles.Pane(findings)...)
+	if m.noting {
+		body = append(body, m.noteView()...)
+	}
 	return m.shell(body, footer)
 }
 

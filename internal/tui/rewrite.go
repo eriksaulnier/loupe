@@ -17,8 +17,10 @@ type rewriteField int
 const (
 	rewriteFocusTitle rewriteField = iota
 	rewriteFocusBody
-	rewriteFocusProposal
 )
+
+// rewriteFields names the fields w edits, in tab order.
+var rewriteFields = []string{"title", "body"}
 
 // keptRewrite is text the human left with esc, and the revision it was typed against, so reopening it on a finding
 // the agent has since changed can say so. Typed holds only the fields the human changed: a field left alone takes
@@ -80,14 +82,13 @@ func (m *Model) openRewrite(f draft.Finding) tea.Cmd {
 	return m.focusRewrite(rewriteFocusTitle)
 }
 
-// rewriteInputs are the inputs for the fields the mode edits, in tab order.
+// rewriteInputs are the inputs for the fields w edits, in tab order.
 func (m *Model) rewriteInputs() []*textarea.Model {
-	all := []*textarea.Model{&m.rewriteTitle, &m.rewriteBody, &m.rewriteProposal}
-	return all[:len(m.ui.rewriteFields())]
+	return []*textarea.Model{&m.rewriteTitle, &m.rewriteBody}
 }
 
 // rewriteSource is f's text in the order of the rewrite fields.
-func rewriteSource(f draft.Finding) []string { return []string{f.Title, f.Body, f.Proposal} }
+func rewriteSource(f draft.Finding) []string { return []string{f.Title, f.Body} }
 
 // rewriteTyped is the editor's text in each field the human changed, and nil in each they left alone.
 func (m *Model) rewriteTyped() []*string {
@@ -203,13 +204,9 @@ func (m *Model) keepRewrite() {
 func (m *Model) saveRewrite() tea.Cmd {
 	id := m.openID
 	text := m.rewriteText()
-	var proposal *string
-	if len(text) > int(rewriteFocusProposal) {
-		proposal = &text[rewriteFocusProposal]
-	}
 	changed, disposition := false, ""
 	recorded, err := m.Decide(id, func(d *draft.Draft) error {
-		_, err := draft.Rewrite(d, id, text[rewriteFocusTitle], text[rewriteFocusBody], proposal, m.rules, m.diff, m.cfg.Now())
+		_, err := draft.Rewrite(d, id, text[rewriteFocusTitle], text[rewriteFocusBody], m.rules, m.diff, m.cfg.Now())
 		if err == nil {
 			changed, disposition = true, draft.Dispositions(d)[id]
 		}
@@ -239,18 +236,13 @@ func (m *Model) saveRewrite() tea.Cmd {
 }
 
 // sizeRewrite fits the inputs in the pane: together with the dividers, at most a third of the window, as the note
-// is, with the title at most two rows and every other field at least one. A proposal takes at most half of what the
-// title leaves, so the body keeps its share.
+// is, with the title at most two rows and every other field at least one.
 func (m *Model) sizeRewrite() {
 	width, _ := style.PaneInner(m.width, 0)
 	inputs := m.rewriteInputs()
 	limit := max(2*len(inputs)-1, m.height/3)
 	m.rewriteTitle.MaxHeight = max(1, min(2, limit-2*(len(inputs)-1)))
 	rest := limit - (len(inputs) - 1) - m.rewriteTitle.Height()
-	if len(inputs) > int(rewriteFocusProposal) {
-		m.rewriteProposal.MaxHeight = max(1, rest/2)
-		rest -= m.rewriteProposal.Height()
-	}
 	m.rewriteBody.MaxHeight = max(1, rest)
 	for _, input := range inputs {
 		input.SetWidth(max(1, width))
@@ -270,7 +262,7 @@ func (m *Model) rewriteView() []string {
 		markCaret(field, input.Cursor())
 		rows = append(rows, field...)
 	}
-	field := m.ui.rewriteFields()[m.rewriteFocus]
+	field := rewriteFields[m.rewriteFocus]
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
 		Titles: style.PaneTitles{TopLeft: "Rewrite " + m.openID, TopRight: m.styles.Note.Render(field)}, Tone: style.ToneNote, Focus: true})
 }

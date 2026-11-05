@@ -14,6 +14,9 @@ import (
 // modeUI is what review offers on a run of one mode: its hints, its help, the keys only it binds and how the run
 // ends. New picks it once, so no other code in this package asks a run's kind.
 type modeUI interface {
+	// word is the on-screen word for an action or a party in notices and note panes. PR runs keep their words;
+	// a local run speaks of rejecting and asking, and names the applier.
+	word(m *Model, w string) string
 	// settleKeys are the decision keys a settling detail drops.
 	settleKeys() string
 	helpSections(g GlyphSet) map[view]helpSection
@@ -29,10 +32,14 @@ type modeUI interface {
 	question(f draft.Finding) bool
 	// watchesPR reports whether review checks the live pull request; a local run has none and contacts no service.
 	watchesPR() bool
+	// opening is the view review opens on.
+	opening(m *Model) view
+	// nextAfter is the finding to open after a decision on the finding at index i, or -1 to return to the list.
+	nextAfter(m *Model, i int) int
+	// atList is what follows once a decision has returned the view to the list.
+	atList(m *Model) tea.Cmd
 	// plainCode reports whether the code pane and the file diff draw t's files as plain text, with no diff gutter.
 	plainCode(t run.Target) bool
-	// rewriteFields names the fields w edits, in tab order: title and body, then the proposal where the mode has one.
-	rewriteFields() []string
 }
 
 func uiFor(t run.Target) modeUI {
@@ -44,6 +51,8 @@ func uiFor(t run.Target) modeUI {
 
 // publishUI is a pull request run, which ends in one GitHub review.
 type publishUI struct{}
+
+func (publishUI) word(_ *Model, w string) string { return w }
 
 func (publishUI) settleKeys() string { return "axsurdew" }
 
@@ -147,9 +156,18 @@ func (publishUI) question(draft.Finding) bool { return false }
 
 func (publishUI) watchesPR() bool { return true }
 
-func (publishUI) plainCode(run.Target) bool { return false }
+func (publishUI) opening(*Model) view { return viewList }
 
-func (publishUI) rewriteFields() []string { return []string{"title", "body"} }
+func (publishUI) nextAfter(m *Model, i int) int {
+	if i < 0 || i+1 >= len(m.order) {
+		return -1
+	}
+	return i + 1
+}
+
+func (publishUI) atList(*Model) tea.Cmd { return nil }
+
+func (publishUI) plainCode(run.Target) bool { return false }
 
 // detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An
 // action the finding cannot take is not advertised, though its key still answers with a notice.
@@ -192,7 +210,21 @@ func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote 
 // applyUI is a local run, which ends when the human returns the decisions to the agent that applies them.
 type applyUI struct{}
 
-func (applyUI) settleKeys() string { return "axsurdwt" }
+func (applyUI) word(m *Model, w string) string {
+	switch w {
+	case "excluded":
+		return "rejected"
+	case "Send back":
+		return "Ask about"
+	case "sent back":
+		return "asked"
+	case "the agent":
+		return m.applier()
+	}
+	return w
+}
+
+func (applyUI) settleKeys() string { return "aAxXsurd" }
 
 func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 	upDown, leftRight := g.Up+"/"+g.Down, g.Left+"/"+g.Right
@@ -201,7 +233,7 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{upDown, "move", "k/j"},
 			{"enter", "open the finding", ""},
 			{"tab", "expand or collapse the summary", ""},
-			{"p", "return the decisions once every finding is decided", ""},
+			{"p", "return the decisions to the agent, with a closing note if you like", ""},
 			{"ctrl+r", "reload the draft from disk", ""},
 		}},
 		viewDetail: {"Finding detail", "detail", []helpKey{
@@ -210,15 +242,15 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{"PgUp/PgDn", "scroll one page", ""},
 			{"space", "scroll one page down", ""},
 			{"a", "accept; resolves its open notes", ""},
-			{"t", "accept with a note; enter accepts, esc cancels", ""},
-			{"x", "exclude with an optional reason; dismisses its open notes", ""},
-			{"s", "send back; enter sends, esc cancels", ""},
-			{"w", "rewrite title, body and proposal; ctrl+s saves", ""},
+			{"A", "tweak: accept with a note; enter accepts, esc cancels", ""},
+			{"x", "reject; dismisses its open notes", ""},
+			{"X", "reject with a reason; enter rejects, esc cancels", ""},
+			{"s", "ask: send back with a question; enter sends, esc cancels", ""},
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
 			{"ctrl+r", "reload the draft from disk", ""},
-			{"esc", "back to the list", ""},
+			{"l / esc", "back to the list", ""},
 		}},
 		viewFileDiff: fileDiffHelp(g),
 	}
@@ -229,7 +261,7 @@ func (applyUI) listHints(m *Model) []style.Hint {
 		{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "move", Role: style.RoleNav},
 		{Key: "enter", Verb: "open", Role: style.RoleNav},
 		{Key: "tab", Verb: "summary", Role: style.RoleNav},
-		m.endHint("return"),
+		m.endHint("return to " + m.applier()),
 		{Key: "?", Verb: "help", Role: style.RoleHelp},
 		{Key: "q", Verb: "quit", Role: style.RoleHelp},
 	}
@@ -247,16 +279,13 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	}
 	switch draft.Dispositions(m.draft)[f.ID] {
 	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept"), decide("t", "accept with note"), decide("x", "exclude"), decide("s", "send back"))
+		hints = append(hints, decide("a", "accept"), decide("A", "tweak"), decide("x", "reject"), decide("X", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionAccepted:
-		hints = append(hints, decide("t", "accept with note"), decide("x", "exclude"), decide("s", "send back"))
+		hints = append(hints, decide("A", "tweak"), decide("x", "reject"), decide("X", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionExcluded:
 		hints = append(hints, decide("u", "restore"))
 	case draft.DispositionWithdrawn:
 		hints = append(hints, decide("u", "reinstate"))
-	}
-	if f.Included {
-		hints = append(hints, decide("w", "rewrite"))
 	}
 	if hasOpenNote {
 		hints = append(hints, decide("r", "resolve"), decide("d", "dismiss"))
@@ -264,7 +293,7 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	if f.Location != nil {
 		hints = append(hints, style.Hint{Key: "f", Verb: "file", Role: style.RoleFile})
 	}
-	return append(hints, style.Hint{Key: "esc", Verb: "list", Role: style.RoleNav}, style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp})
+	return append(hints, style.Hint{Key: "l", Verb: "list", Role: style.RoleNav}, style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp})
 }
 
 func (applyUI) listKey(m *Model, key string) (tea.Cmd, bool) {
@@ -276,10 +305,15 @@ func (applyUI) listKey(m *Model, key string) (tea.Cmd, bool) {
 
 func (applyUI) detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool) {
 	switch key {
-	case "t":
+	case "A":
 		return m.openNote(noteAccept, heldNote(m.draft, f, draft.DispositionAccepted)), true
-	case "x":
+	case "X":
 		return m.openNote(noteExclude, heldNote(m.draft, f, draft.DispositionExcluded)), true
+	case "t", "w":
+		// Absent here, and swallowed so the shared handler cannot give them a pull request run's meaning.
+		return nil, true
+	case "l":
+		return m.backToList(), true
 	}
 	return nil, false
 }
@@ -293,8 +327,14 @@ func heldNote(d *draft.Draft, f draft.Finding, want string) string {
 	return d.Decisions[f.ID].Note
 }
 
+// heading carries the badge that says the decisions go to the human's own agent and nowhere else.
 func (applyUI) heading(m *Model) style.ReviewHeading {
-	return style.ReviewHeading{Ref: localRef(m.target)}
+	full, mid := "local "+m.glyphs.Sep+" returns to "+m.applier(), "local "+m.glyphs.Sep+" "+m.applier()
+	if m.glyphs.Tier == style.ASCII {
+		full = "local -> " + m.applier()
+		mid = full
+	}
+	return style.ReviewHeading{Ref: localRef(m.target), Badges: []string{full, mid, "local"}}
 }
 
 func (applyUI) runRef(m *Model) string { return localRef(m.target) }
@@ -303,10 +343,36 @@ func (applyUI) question(f draft.Finding) bool { return f.Proposal == "" }
 
 func (applyUI) watchesPR() bool { return false }
 
+// opening is the start screen while a finding waits, so the human starts the cards with one key.
+func (applyUI) opening(m *Model) view {
+	if len(draft.ReadinessOf(m.draft).Pending) > 0 {
+		return viewStart
+	}
+	return viewList
+}
+
+// nextAfter is the next pending finding, wrapping past the end, so the cards skip what is already decided.
+func (applyUI) nextAfter(m *Model, i int) int {
+	dispositions := draft.Dispositions(m.draft)
+	for step := 1; step < len(m.order); step++ {
+		j := (i + step) % len(m.order)
+		if dispositions[m.order[j].ID] == draft.DispositionPending {
+			return j
+		}
+	}
+	return -1
+}
+
+// atList opens the return step once nothing is left to decide.
+func (applyUI) atList(m *Model) tea.Cmd {
+	if !draft.ReadinessOf(m.draft).Ready {
+		return nil
+	}
+	return m.openReturn()
+}
+
 // plainCode is true on a --files run, whose diff adds each file whole only because it was captured from nothing.
 func (applyUI) plainCode(t run.Target) bool { return t.Local != nil && t.Local.Capture == "files" }
-
-func (applyUI) rewriteFields() []string { return []string{"title", "body", "proposal"} }
 
 func localRef(t run.Target) string {
 	ref := run.Ref{Local: 1}

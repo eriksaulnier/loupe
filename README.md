@@ -22,6 +22,8 @@ loupe collects a review agent's findings into a local draft so you decide each o
 2. You decide each finding in `loupe review`, which opens in a pane beside the agent in Herdr, tmux, Orca, iTerm2 or Ghostty. You accept, rewrite or drop each one, or send it back with a note for the agent to answer.
 3. `loupe publish` shows the review as it will read, with its exact Markdown one key away. You write its opening, and one key posts it.
 
+Local work, such as uncommitted changes, a plan or a spec, goes through the same review with no pull request. The agent captures it with `loupe capture --changed` or `--files`, and each finding shows the change the agent will make. Once you have decided the last one, you return the run, and the agent applies what you accepted. Nothing reaches GitHub. [Local work](docs/review-workflow.md#local-work) has the steps.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/review-dark.png">
   <img alt="The published review on GitHub: a row of counts, then your opening, then a Must fix section with the blocking finding and a Worth a look section with the rest, each finding one collapsed line with a colored dot, its label, a severity pill and its title." src="docs/assets/review.png">
@@ -56,7 +58,7 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 
 - [Install](docs/install.md): the binary, the agent plugin for each host, and updating the two together.
 - [Comment format](docs/comment-format.md): the full reference for a published review, for anyone building on it.
-- [The review workflow](docs/review-workflow.md): the attended loop, the pane hand-off, adapting a review skill you already have, and the command and environment reference.
+- [The review workflow](docs/review-workflow.md): the attended loop, local work, the pane hand-off, adapting a review skill you already have, and the command and environment reference.
 - [Unattended reviews in CI](docs/ci-action.md): the GitHub Action, the pipeline steps, sticky rounds and the rules an unattended review follows.
 - [Withdrawal reasons](docs/reason-codes.md): how an agent says why it withdrew a finding, and the recommended reason codes.
 - [CLI contract](specs/001-loupe-v1/contracts/cli.md): commands, input, results and errors, for scripting against loupe.

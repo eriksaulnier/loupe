@@ -329,7 +329,7 @@ func TestShowJSONPresentsARewrittenFinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := draft.Mutate(dir, "review", nil, func(string) string { return "" }, func(d *draft.Draft) error {
-		_, err := draft.Rewrite(d, "f-001", "Human title", "Human body.", nil, draft.Rules{}, nil, time.Now())
+		_, err := draft.Rewrite(d, "f-001", "Human title", "Human body.", draft.Rules{}, nil, time.Now())
 		return err
 	}); err != nil {
 		t.Fatal(err)

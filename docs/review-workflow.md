@@ -41,23 +41,25 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 | `o` | Open the pull request in the browser |
 | `?` | List the keys for the current view |
 
-On a local run, which the agent captured with `loupe capture --changed`, `--files` or `--no-files`, a finding can carry a proposal: the change the agent makes if you accept it. A finding with no proposal is a question. The keys there are these:
+On a local run, which the agent captured with `loupe capture --changed`, `--files` or `--no-files`, a finding can carry a proposal: the change the agent makes if you accept it. A finding with no proposal is a question. The header carries a `local · returns to <applier>` badge, so the run never reads as a pull request review. Review opens on a start screen with the summary and the number of findings to decide, `enter` starts at the first pending one, and each decision opens the next pending one. The keys there are these:
 
 | Key | What it does |
 | :--- | :--- |
 | `a` | Accept the finding |
-| `t` | Accept the finding with a note for the agent; an empty note is a plain accept |
-| `x` | Exclude the finding, with an optional reason |
-| `s` | Send the finding back to the agent with a note |
-| `w` | Rewrite the finding's title, body and proposal; `ctrl+s` saves and keeps the decision |
+| `A` | Tweak: accept the finding with a note for the agent; an empty note is a plain accept |
+| `x` | Reject the finding, with no reason |
+| `X` | Reject the finding with a reason; an empty reason is a plain reject |
+| `s` | Ask: send the finding back to the agent with a question |
 | `u` | Restore an excluded finding to pending, or reinstate and accept a withdrawn one |
 | `r`, `d` | Resolve or dismiss the finding's open note |
 | `f` | Show the whole file's diff; a `--files` run shows the file as plain text |
+| `enter` | On the start screen, start at the first pending finding; in the list, open the finding |
+| `l` | Back to the list, as `esc` is, and from the start screen |
 | `j`, `k`, `n`, `N`, `space`, `PgUp`, `PgDn`, `ctrl+r`, `esc` | Move, scroll, reload and go back, as on a pull request run |
-| `p` | In the list, return the decisions to the agent after one `y` |
+| `p` | In the list, return the decisions to the agent, with an optional closing note; `enter` returns |
 | `?` | List the keys for the current view |
 
-`e` and `o` are absent, and there is no publish step.
+`t`, `w`, `e` and `o` are absent, and there is no publish step.
 
 Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
 
@@ -106,10 +108,10 @@ The `p` key in `loupe review` always posts a new review, so a sticky round goes 
 
 The same loop works on local work: uncommitted changes, a plan or a spec, with no pull request and no GitHub. The agent follows the plugin's `human-decide` skill instead of `human-review`.
 
-1. The agent captures the work with `loupe capture --changed`, `--files <path>` or `--no-files --title <title>`. That makes a local run, such as `owner/repo:local#7`, and no network call. `--changed` reads your staged, unstaged and untracked changes through a temporary index, so your own index, branch and files stay as they were.
+1. The agent captures the work with `loupe capture --changed`, `--files <path>` or `--no-files --title <title>`. That makes a local run, such as `owner/repo:local#7`, and no network call. `--changed` reads your staged, unstaged and untracked changes through a temporary index, so your own index, branch and files stay as they were. It runs none of your Git filters. So when Git converts a changed file on checkout, through CRLF line endings, git-lfs or `ident`, `--changed` cannot tell your edit from the conversion. It refuses, and `--files` captures those files instead.
 2. It files each finding with a `proposal`, the change it will make if you accept. A finding with no proposal is a question.
-3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`t`), exclude with a reason (`x`) or send it back.
-4. You press `p`, then `y`, to return the run. Nothing posts anywhere.
+3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`A`), reject (`x`, or `X` with a reason) or ask.
+4. Once the last finding is decided, the return step opens on its own. You type an optional closing note for the agent and press `enter`, or press `p` in the list, then `enter`. Review quits and prints one line, such as `Returned to Claude: 6 accepted, 2 rejected.` Nothing posts anywhere.
 5. The agent reads your decisions with `loupe feedback` and applies the accepted ones, following your notes where they differ from its proposals.
 
 ## Handing off in a terminal pane

@@ -60,7 +60,9 @@ const basicNone = -1
 type reviewPalette struct {
 	base, text, surface0, surface1, accent, secondary, overlay1 color.Color
 	good, note, brand, blockingDim, bad, muted, mutedBorder     color.Color
-	pills, pillFill                                             [4]color.Color
+	// apply marks a local run, which instructs the human's own agent. No pull request screen draws it.
+	apply           color.Color
+	pills, pillFill [4]color.Color
 	// toneFill is each tone's chip fill, indexed by Tone.
 	toneFill              [toneCount]color.Color
 	added, deleted, cited color.Color
@@ -74,6 +76,7 @@ var (
 	palSurface1  = both("#45475a", "#bcc0cc")
 	palAccent    = both("#b4befe", "#7287fd")
 	palBrand     = both("#edb447", "#b57d26") // the logo's amber, for the program alone: yellow elsewhere is a note
+	palApply     = both("#94e2d5", "#179299") // teal, for local runs alone
 	palSecondary = both("#a6adc8", "#6c6f85")
 	palOverlay1  = both("#7f849c", "#8c8fa1")
 	palGood      = both("#a6e3a1", "#40a02b")
@@ -121,6 +124,7 @@ func (s *Style) buildReviewPalette() {
 		surface1:    s.role(palSurface1.in(d), 8),
 		accent:      s.role(palAccent.in(d), 12),
 		brand:       s.role(palBrand.in(d), 3),
+		apply:       s.role(palApply.in(d), 6),
 		secondary:   s.role(palSecondary.in(d), basicNone),
 		overlay1:    s.role(palOverlay1.in(d), 8),
 		good:        s.role(palGood.in(d), 2),
@@ -778,6 +782,17 @@ type ReviewHeading struct {
 	// Tag is the pull request's live state when it needs the human's eye, such as "PR merged"; empty for none
 	// (specs/050-pr-state-awareness).
 	Tag string
+	// Badges are a local run's mode badge, longest form first. The header draws the longest that fits, and gives
+	// it up only after the title, the bar and the round.
+	Badges []string
+}
+
+// ApplyBadge is a local run's mode badge: a tab in the apply color, or the text in brackets without color.
+func (s Style) ApplyBadge(text string) string {
+	if !s.Color {
+		return "[" + text + "]"
+	}
+	return s.Emphasis(s.bg(s.fg(s.rv.base), s.rv.apply)).Render(" " + text + " ")
 }
 
 // badge is the program's mark at the head of every review screen.
@@ -838,7 +853,14 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 		}
 		return n
 	}
-	used := func() int { return Width(badge) + gap(ref) + gap(round) + right() }
+	mode := ""
+	used := func() int { return Width(badge) + gap(ref) + gap(mode) + gap(round) + right() }
+	for i, form := range h.Badges {
+		mode = s.ApplyBadge(form)
+		if i == len(h.Badges)-1 || used() <= avail {
+			break
+		}
+	}
 	if room := avail - used() - 2; room >= 8 && title != "" {
 		title = s.TruncRight(title, room)
 	} else {
@@ -862,6 +884,9 @@ func (s Style) ReviewHeader(h ReviewHeading, width int) string {
 	if ref != "" {
 		out.WriteString(band(Span{Text: "  "}))
 		out.WriteString(s.Link(h.URL, band(Span{Text: ref, Style: refStyle})))
+	}
+	if mode != "" {
+		out.WriteString(band(Span{Text: "  "}) + s.OnSurface(SurfaceHeader, mode))
 	}
 	if round != "" {
 		out.WriteString(band(Span{Text: "  " + round, Style: s.Overlay()}))

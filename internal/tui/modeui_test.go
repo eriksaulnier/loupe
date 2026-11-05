@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -258,4 +261,158 @@ func applyModel(t *testing.T, applier string) (*Model, string) {
 	t.Helper()
 	dir := applyFixture(t, applier, applyInputs...)
 	return modelOf(t, dir, utf8Env, 100, 40), dir
+}
+
+// keysOf is the keys of hints, in order.
+func keysOf(hints []style.Hint) []string {
+	var out []string
+	for _, h := range hints {
+		out = append(out, h.Key)
+	}
+	return out
+}
+
+// On a local run the detail offers each decision key next to its shift, which adds the human's words: a and A, x
+// and X. Neither t nor w is offered.
+func TestApplyDetailPairsEachDecisionWithItsShift(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	if got, want := strings.Join(keysOf(m.detailHints()), " "), "a A x X s"; !strings.Contains(got, want) {
+		t.Errorf("pending detail keys %q lack %q", got, want)
+	}
+	outside(t, dir, accepted("f-001"))
+	if _, err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(keysOf(m.detailHints()), " "), "A x X s"; !strings.Contains(got, want) {
+		t.Errorf("accepted detail keys %q lack %q", got, want)
+	}
+}
+
+// The header of a local run carries the apply badge as words at every icon tier, and a pull request run's carries none.
+func TestApplyHeaderShowsTheBadge(t *testing.T) {
+	dir := applyFixture(t, "Claude", applyInputs...)
+	for _, c := range []struct {
+		env  map[string]string
+		want string
+	}{
+		{map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8", style.IconsEnv: "nerd"}, "[local · returns to Claude]"},
+		{utf8Env, "[local · returns to Claude]"},
+		{map[string]string{"NO_COLOR": "1", "LANG": "C"}, "[local -> Claude]"},
+	} {
+		m := modelOf(t, dir, c.env, 100, 30)
+		for _, show := range []func(){func() {}, func() { press(m, "l") }, func() { mustOpenFinding(t, m, "f-001") }} {
+			show()
+			if header := ansi.Strip(m.reviewHeader()); !strings.Contains(header, c.want) {
+				t.Errorf("tier %v view %d: header %q lacks %q", m.glyphs.Tier, m.view, header, c.want)
+			}
+		}
+	}
+	nobody := modelOf(t, applyFixture(t, "", applyInputs...), utf8Env, 100, 30)
+	if header := ansi.Strip(nobody.reviewHeader()); !strings.Contains(header, "[local · returns to the agent]") {
+		t.Errorf("with no applier: header %q", header)
+	}
+	narrow := modelOf(t, dir, utf8Env, 60, 20)
+	header := ansi.Strip(narrow.reviewHeader())
+	if !strings.Contains(header, "acme/widgets:local#1") || !strings.Contains(header, "[local") || strings.Contains(header, "returns to") {
+		t.Errorf("at 60 columns the badge did not shorten first: %q", header)
+	}
+	colored := colorOf(t, dir)
+	if view := colored.reviewHeader(); !strings.Contains(view, colored.styles.ApplyBadge("local · returns to Claude")) || strings.Contains(ansi.Strip(view), "[local") {
+		t.Errorf("the colored badge is not drawn in the apply token: %q", view)
+	}
+	for _, env := range []map[string]string{utf8Env, {"NO_COLOR": "1", "LANG": "C"}} {
+		pr := modelOf(t, newFixture(t), env, 100, 30)
+		if header := ansi.Strip(pr.reviewHeader()); strings.Contains(header, "local") {
+			t.Errorf("a pull request run's header has the badge: %q", header)
+		}
+	}
+}
+
+// A local run's footer, help and verbs are aimed at the agent: accept, tweak, reject, ask, and return to the applier.
+func TestApplyVerbsAreAimedAtTheAgent(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	press(m, "l")
+	if got, want := hintText(m.listHints()), "↑↓:move enter:open tab:summary p:return to Claude(not ready) ?:help q:quit"; got != want {
+		t.Errorf("list hints\n got %s\nwant %s", got, want)
+	}
+	mustOpenFinding(t, m, "f-001")
+	if got, want := hintText(m.detailHints()), "←→:finding ↑↓:scroll a:accept A:tweak x:reject X:reject with reason s:ask f:file l:list ?:help"; got != want {
+		t.Errorf("detail hints\n got %s\nwant %s", got, want)
+	}
+	want := `Finding detail [detail]
+←/→ | previous / next finding | N/n
+↑/↓ | scroll the finding | k/j
+PgUp/PgDn | scroll one page |
+space | scroll one page down |
+a | accept; resolves its open notes |
+A | tweak: accept with a note; enter accepts, esc cancels |
+x | reject; dismisses its open notes |
+X | reject with a reason; enter rejects, esc cancels |
+s | ask: send back with a question; enter sends, esc cancels |
+u | restore or reinstate the finding |
+r / d | resolve / dismiss its open note |
+f | whole-file diff |
+ctrl+r | reload the draft from disk |
+l / esc | back to the list |`
+	if got := helpText(m.helpSections()[viewDetail]); got != want {
+		t.Errorf("detail help\n got %s\nwant %s", got, want)
+	}
+}
+
+// The detail of a local finding leads with what the applier will do; a question shows its marker and no will block.
+func TestApplyDetailLeadsWithWhatTheApplierWillDo(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	screen := screenText(m)
+	order := []string{"Rename the helper", "Claude will:", "Rename helper to insertAfter in a.go.", "a.go:3", "The helper name hides what it does."}
+	at := -1
+	for _, want := range order {
+		i := strings.Index(screen, want)
+		if i <= at {
+			t.Fatalf("%q is missing or out of order (want %q):\n%s", want, order, screen)
+		}
+		at = i
+	}
+	mustOpenFinding(t, m, "f-002")
+	screen = screenText(m)
+	if strings.Contains(screen, "will:") || !strings.Contains(screen, m.glyphs.Question+" A question for Claude") {
+		t.Errorf("a question shows a will block or no marker:\n%s", screen)
+	}
+	nobody, _ := applyModel(t, "")
+	mustOpenFinding(t, nobody, "f-003")
+	if screen := screenText(nobody); !strings.Contains(screen, "The agent will:") {
+		t.Errorf("with no applier the lead does not name the agent:\n%s", screen)
+	}
+	pr := modelOf(t, newFixture(t), utf8Env, 100, 40)
+	mustOpenFinding(t, pr, "f-003")
+	if screen := screenText(pr); strings.Contains(screen, "A question for") {
+		t.Errorf("a pull request run marks a question:\n%s", screen)
+	}
+}
+
+// On a local run the notices and note panes use the agent-facing verbs of the footer: reject, ask and tweak.
+func TestLocalRunNoticesUseTheAgentVerbs(t *testing.T) {
+	dir := localFixture(t, "changed", "Claude", applyInputs...)
+	m := modelOf(t, dir, utf8Env, 100, 40)
+	mustOpenFinding(t, m, "f-001")
+	press(m, "x")
+	if !strings.Contains(m.notice, "f-001 rejected") || strings.Contains(m.notice, "excluded") {
+		t.Errorf("x notice %q", m.notice)
+	}
+	mustOpenFinding(t, m, "f-002")
+	press(m, "A")
+	if view := screenText(m); !strings.Contains(view, "Tweak f-002") {
+		t.Errorf("A pane title:\n%s", view)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	press(m, "s")
+	if view := screenText(m); !strings.Contains(view, "Ask about f-002") || strings.Contains(view, "Send back f-002") {
+		t.Errorf("s pane title:\n%s", view)
+	}
+	typeText(m, "Which cache?")
+	press(m, "enter")
+	if !strings.Contains(m.notice, "f-002 asked as n-") || !strings.Contains(m.notice, "Claude has it") {
+		t.Errorf("s notice %q", m.notice)
+	}
 }

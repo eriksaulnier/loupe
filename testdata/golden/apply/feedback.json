@@ -138,6 +138,7 @@
       }
     ]
   },
+  "note": "Run the tests before you commit.",
   "notes": [
     {
       "at": "2026-09-13T12:00:00Z",

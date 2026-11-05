@@ -40,7 +40,7 @@ const (
 	viewConfirm
 	viewPublishing
 	viewPublished
-	viewReturned
+	viewStart
 )
 
 type Config struct {
@@ -128,13 +128,12 @@ type Model struct {
 	editBlocking bool
 	// rewriting is true while the rewrite editor is open. rewriteRev is the revision its text started from, and
 	// rewriteOpened the finding's text it stands on.
-	rewriting       bool
-	rewriteTitle    textarea.Model
-	rewriteBody     textarea.Model
-	rewriteProposal textarea.Model
-	rewriteFocus    rewriteField
-	rewriteRev      int
-	rewriteOpened   []openedText
+	rewriting     bool
+	rewriteTitle  textarea.Model
+	rewriteBody   textarea.Model
+	rewriteFocus  rewriteField
+	rewriteRev    int
+	rewriteOpened []openedText
 	// keptRewrites holds, per finding, text the human left in the editor with esc. It lives only as long as the program.
 	keptRewrites map[string]keptRewrite
 	glamour      *glamour.TermRenderer
@@ -159,10 +158,11 @@ type Model struct {
 	// message is the review's opening as the human last left it, kept for the life of this program so a cancel or
 	// a refusal does not make them write it again. It reaches no file, and nothing but the confirmation sets it.
 	message string
-	// returning is true while the list asks for the y that returns an apply run; returnVersion is the draft version
-	// the human saw when they asked, which is the one sealed.
-	returning     bool
+	// returnVersion is the draft version the human saw when the return step opened, which is the one sealed.
+	// keptReturn is the closing note left with esc, and returnedTo the return this program made, if any.
 	returnVersion int
+	keptReturn    string
+	returnedTo    *Returned
 	// settling is true right after a decision moved the view; decision keys are dropped until the new finding has
 	// had time to be seen.
 	settling bool
@@ -194,13 +194,15 @@ type Model struct {
 	watchCancel context.CancelFunc
 }
 
-// noteKind is what the note input records on enter: a send-back note, an accept note or an exclude reason.
+// noteKind is what the note input records on enter: a send-back note, an accept note, an exclude reason or the
+// closing note of a return.
 type noteKind int
 
 const (
 	noteSend noteKind = iota
 	noteAccept
 	noteExclude
+	noteReturn
 )
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
@@ -232,24 +234,23 @@ func New(cfg Config) (*Model, error) {
 	note.SetVirtualCursor(false)
 	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
-		cfg:             cfg,
-		target:          target,
-		ui:              uiFor(target),
-		rules:           mode.Of(target).Rules(),
-		diff:            parsed,
-		glyphs:          st.Glyphs,
-		styles:          st,
-		width:           80,
-		height:          24,
-		note:            note,
-		keptNotes:       map[string]string{},
-		keptRewrites:    map[string]keptRewrite{},
-		prNoticed:       map[string]bool{},
-		rewriteTitle:    newRewriteInput(false),
-		rewriteBody:     newRewriteInput(true),
-		rewriteProposal: newRewriteInput(true),
-		body:            viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
-		file:            viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		cfg:          cfg,
+		target:       target,
+		ui:           uiFor(target),
+		rules:        mode.Of(target).Rules(),
+		diff:         parsed,
+		glyphs:       st.Glyphs,
+		styles:       st,
+		width:        80,
+		height:       24,
+		note:         note,
+		keptNotes:    map[string]string{},
+		keptRewrites: map[string]keptRewrite{},
+		prNoticed:    map[string]bool{},
+		rewriteTitle: newRewriteInput(false),
+		rewriteBody:  newRewriteInput(true),
+		body:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		file:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
 	}
 	if cfg.Screen != nil {
 		m.width, m.height = cfg.Screen.Width, cfg.Screen.Height
@@ -257,6 +258,7 @@ func New(cfg Config) (*Model, error) {
 	m.watchCtx, m.watchCancel = context.WithCancel(context.Background())
 	m.setDraft(d)
 	m.cursor = initialCursor(d, m.order)
+	m.view = m.ui.opening(m)
 	if cfg.UpdateNotice != "" {
 		m.say(style.Note, strings.TrimSpace(m.glyphs.Update+" "+cfg.UpdateNotice))
 	}
@@ -326,7 +328,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // pollHeld is true while redrawing would move something the human is writing or confirming.
 func (m *Model) pollHeld() bool {
-	return m.noting || m.editing || m.rewriting || m.sending || m.returning || (m.view != viewList && m.view != viewDetail)
+	return m.noting || m.editing || m.rewriting || m.sending || (m.view != viewList && m.view != viewDetail && m.view != viewStart)
 }
 
 func (m *Model) schedulePoll() tea.Cmd {
@@ -532,12 +534,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewPublished {
 			return m, m.updatePublished(msg)
 		}
-		if m.view == viewReturned {
-			return m, m.updateReturned(msg)
-		}
-		if m.returning {
-			return m, m.confirmReturn(msg)
-		}
 		if m.noting {
 			return m, m.updateNote(msg)
 		}
@@ -557,7 +553,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// The help overlay promises q everywhere; the pickers and the confirmation keep their own keys because esc
 		// there means back, not out.
-		if msg.String() == "q" && (m.view == viewList || m.view == viewDetail || m.view == viewFileDiff) {
+		if msg.String() == "q" && (m.view == viewList || m.view == viewDetail || m.view == viewFileDiff || m.view == viewStart) {
 			return m, tea.Quit
 		}
 		switch m.view {
@@ -571,6 +567,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updateAction(msg)
 		case viewInline:
 			return m, m.updateInline(msg)
+		case viewStart:
+			return m, m.updateStart(msg)
 		}
 	}
 	return m, nil
@@ -610,8 +608,8 @@ func (m *Model) viewContent() string {
 		return m.publishingView()
 	case viewPublished:
 		return m.publishedView()
-	case viewReturned:
-		return m.returnedView()
+	case viewStart:
+		return m.startView()
 	}
 	return m.listView()
 }
@@ -747,8 +745,8 @@ func (m *Model) viewFooter() []string {
 		return m.keys(style.KeyGroup{{Key: "ctrl+c", Verb: "quit"}})
 	case viewPublished:
 		return m.publishedKeys()
-	case viewReturned:
-		return m.returnedKeys()
+	case viewStart:
+		return m.startKeys()
 	}
 	return m.listFooter()
 }

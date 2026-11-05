@@ -103,34 +103,39 @@ func (h *harness) handoffToStub(ref string) {
 	}
 }
 
-// openReview starts loupe review on ref as the human in the handed-off pane, and waits for the list to show want.
+// openReview starts loupe review on ref as the human in the handed-off pane, and waits for the start screen to show
+// want.
 func (h *harness) openReview(ref string, want ...string) *screen.Screen {
 	h.t.Helper()
 	s := h.Start("review", ref)
-	s.WaitFor(append([]string{ref, "p return", "q quit"}, want...)...)
+	s.WaitFor(append([]string{ref, "to decide", "enter start", "q quit"}, want...)...)
 	return s
 }
 
-// returnRun returns the decisions from the list, with p and then y, and quits. It checks that the confirmation offers
-// no publish step and that the session printed none.
-func (h *harness) returnRun(s *screen.Screen, applier string) {
+// returnRun returns the decisions from the return step, which the last decision opened, with note typed when it is
+// not empty, then enter. It checks that the step offers no publish step, and that review quit on its own and left
+// the one line naming the return.
+func (h *harness) returnRun(s *screen.Screen, applier, note string) {
 	h.t.Helper()
-	s.Press("p")
-	shown := s.WaitFor("y return to " + applier)
+	shown := s.WaitFor("Return to "+applier, "enter return to "+applier)
 	for _, step := range []string{"Action", "Inline comments", "Message", "Publish"} {
 		if strings.Contains(shown, step) {
 			h.t.Fatalf("the return step shows %q:\n%s", step, shown)
 		}
 	}
-	s.Press("y")
-	s.WaitFor("Returned to " + applier)
-	s.Press("q")
+	if note != "" {
+		s.Type(note)
+	}
+	s.Press("enter")
 	stdout, stderr, exit := s.Wait()
 	if exit != 0 {
 		h.t.Fatalf("review exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
 	if strings.Contains(stdout, "Publish") {
 		h.t.Fatalf("review showed a publish step:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Returned to "+applier+": ") {
+		h.t.Fatalf("review left no return line:\n%s", stdout)
 	}
 }
 
@@ -140,22 +145,24 @@ func accept(s *screen.Screen, id string) {
 	s.WaitFor(id + " accepted")
 }
 
-// acceptWithNote presses t on the open finding, types note and confirms it.
+// acceptWithNote presses A on the open finding, types note and confirms it.
 func acceptWithNote(s *screen.Screen, id, note string) {
-	s.Press("t")
+	s.Press("A")
 	s.Type(note)
 	s.Press("enter")
 	s.WaitFor(id + " accepted")
 }
 
-// exclude presses x on the open finding, types reason, which may be empty, and confirms it.
+// exclude rejects the open finding: x alone with no reason, or X with reason typed and confirmed.
 func exclude(s *screen.Screen, id, reason string) {
-	s.Press("x")
-	if reason != "" {
+	if reason == "" {
+		s.Press("x")
+	} else {
+		s.Press("X")
 		s.Type(reason)
+		s.Press("enter")
 	}
-	s.Press("enter")
-	s.WaitFor(id + " excluded")
+	s.WaitFor(id + " rejected")
 }
 
 // group returns the entries of one feedback group by id.
@@ -244,11 +251,16 @@ func (h *harness) userState(untracked ...string) string {
 }
 
 // TestApplyLocalCodeReview is User Story 1: a branch with committed, staged, unstaged and untracked changes is
-// captured without touching the user's state, decided with one key per accept and two per exclude, and returned with
-// two keys.
+// captured without touching the user's state, decided with one key per accept and per reject, and returned from
+// the return step that opens on its own, with a closing note that reaches wait and feedback.
 func TestApplyLocalCodeReview(t *testing.T) {
 	t.Parallel()
 	h := newApplyHarness(t)
+	// --changed reports paths under git's toplevel, which has its symlinks resolved.
+	clone, err := filepath.EvalSymlinks(h.Repo.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	h.Repo.Git("checkout", "--quiet", "-b", "feat")
 	h.writeRepoFile("src/app.go", strings.Replace(lines(numberedLines("app line ", 1, 40)...), "app line 3\n", "app line 3 committed\n", 1))
 	h.Repo.Git("commit", "--quiet", "-am", "feat")
@@ -273,7 +285,7 @@ func TestApplyLocalCodeReview(t *testing.T) {
 		if entry["new"] == true {
 			fresh = append(fresh, entry["path"].(string))
 		}
-		if entry["abs"] != filepath.Join(h.Repo.Dir, entry["path"].(string)) {
+		if entry["abs"] != filepath.Join(clone, entry["path"].(string)) {
 			t.Errorf("file %v: abs is not under the clone", entry)
 		}
 	}
@@ -291,21 +303,28 @@ func TestApplyLocalCodeReview(t *testing.T) {
 		 "proposal": "Move notes.txt to docs/notes.txt."}]`))
 	h.handoffToStub(applyRef)
 
-	s := h.openReview(applyRef)
+	s := h.openReview(applyRef, "3 findings to decide", "[local -> Claude]")
 	s.Press("enter")
-	s.WaitFor("Guard the committed line", "If you accept, Claude will", "Wrap line 3 in a nil check.")
+	s.WaitFor("Guard the committed line", "Claude will:", "Wrap line 3 in a nil check.")
 	accept(s, "f-001")
 	s.WaitFor("Name the staged line")
 	acceptWithNote(s, "f-002", "Call it the digest line.")
 	s.WaitFor("Move the untracked note")
 	exclude(s, "f-003", "")
-	h.returnRun(s, "Claude")
+	const closing = "Run the tests before you commit."
+	h.returnRun(s, "Claude", closing)
 
 	w := h.mustOK("wait", "--run", applyRef, "--timeout", "5s")
 	if w["reason"] != "returned" || awaitingOf(w) != "" || w["reviewUrl"] != nil || w["returned"] != true || w["groups"] == nil {
 		t.Fatalf("wait %v", w)
 	}
+	if w["note"] != closing {
+		t.Fatalf("wait note %v, want the closing note (SC-001)", w["note"])
+	}
 	fb := h.mustOK("feedback", "--run", applyRef)
+	if fb["note"] != closing {
+		t.Fatalf("feedback note %v, want the closing note (SC-001)", fb["note"])
+	}
 	apply, changes, excluded := group(t, fb, "apply"), group(t, fb, "applyWithChanges"), group(t, fb, "excluded")
 	if ids(apply) != "f-001" || ids(changes) != "f-002" || ids(excluded) != "f-003" || ids(group(t, fb, "withdrawn")) != "" {
 		t.Fatalf("groups %v", fb["groups"])
@@ -315,7 +334,7 @@ func TestApplyLocalCodeReview(t *testing.T) {
 	}
 	for _, entry := range []map[string]any{apply["f-001"], changes["f-002"], excluded["f-003"]} {
 		loc := entry["location"].(map[string]any)
-		if entry["path"] != filepath.Join(h.Repo.Dir, loc["path"].(string)) || loc["side"] != nil || entry["blocking"] != nil {
+		if entry["path"] != filepath.Join(clone, loc["path"].(string)) || loc["side"] != nil || entry["blocking"] != nil {
 			t.Fatalf("entry %v", entry)
 		}
 	}
@@ -336,7 +355,7 @@ Entries never expire.
 `
 
 // TestApplyPlanDecisions is User Story 2: a plan outside the repository and a code file inside it are captured whole,
-// the plan shows as plain text, and an accept with a note and a rewritten proposal both land in applyWithChanges.
+// the plan shows as plain text, and each accept with a note lands in applyWithChanges.
 func TestApplyPlanDecisions(t *testing.T) {
 	t.Parallel()
 	h := newApplyHarness(t)
@@ -367,7 +386,7 @@ func TestApplyPlanDecisions(t *testing.T) {
 
 	s := h.openReview(applyRef)
 	s.Press("enter")
-	shown := s.WaitFor("Choose the store", "If you accept, Claude will", "Evict the oldest entry first.")
+	shown := s.WaitFor("Choose the store", "Claude will:", "Evict the oldest entry first.")
 	if strings.Contains(shown, "+Evict") || strings.Contains(shown, "+ Evict") {
 		t.Fatalf("a --files run drew the plan as an addition (US2 scenario 3):\n%s", shown)
 	}
@@ -375,14 +394,8 @@ func TestApplyPlanDecisions(t *testing.T) {
 	s.WaitFor("Who owns the cache?")
 	accept(s, "f-002")
 	s.WaitFor("Pick an expiry")
-	s.Press("w")
-	s.WaitFor("Rewrite f-003")
-	s.Press("tab", "tab")
-	s.Type(" Make the hour configurable.")
-	s.Press("ctrl+s")
-	s.WaitFor("f-003 rewritten")
-	accept(s, "f-003")
-	h.returnRun(s, "Claude")
+	acceptWithNote(s, "f-003", "Make the hour configurable.")
+	h.returnRun(s, "Claude", "")
 
 	fb := h.mustOK("feedback", "--run", applyRef)
 	apply, changes := group(t, fb, "apply"), group(t, fb, "applyWithChanges")
@@ -392,7 +405,7 @@ func TestApplyPlanDecisions(t *testing.T) {
 	if c := changes["f-001"]; c["suggestion"] != "Use disk instead." || c["path"] != plan || c["location"].(map[string]any)["heading"] != "Storage" {
 		t.Fatalf("f-001 %v", c)
 	}
-	if c := changes["f-003"]; c["proposal"] != "Expire entries after one hour. Make the hour configurable." || c["suggestion"] != nil {
+	if c := changes["f-003"]; c["proposal"] != "Expire entries after one hour." || c["suggestion"] != "Make the hour configurable." {
 		t.Fatalf("f-003 %v", c)
 	}
 	if a := apply["f-002"]; a["general"] != true || a["path"] != nil || a["proposal"] != nil {
@@ -425,13 +438,15 @@ func TestApplyQuestionsWithNoFiles(t *testing.T) {
 	h.handoffToStub(applyRef)
 
 	// The list marks the question, the finding with no proposal (FR-012).
-	s := h.openReview(applyRef, "Cache design", "? Who owns it?")
+	s := h.openReview(applyRef, "Cache design")
+	s.Press("l")
+	s.WaitFor("? Who owns it?")
 	s.Press("enter")
-	s.WaitFor("Which store?", "If you accept, Claude will", "Use memory.")
+	s.WaitFor("Which store?", "Claude will:", "Use memory.")
 	accept(s, "f-001")
 	s.WaitFor("Who owns it?")
 	accept(s, "f-002")
-	h.returnRun(s, "Claude")
+	h.returnRun(s, "Claude", "")
 
 	fb := h.mustOK("feedback", "--run", applyRef)
 	if apply := group(t, fb, "apply"); ids(apply) != "f-001,f-002" || apply["f-002"]["proposal"] != nil {
@@ -456,7 +471,7 @@ func TestApplySendBackWhileReviewStaysOpen(t *testing.T) {
 	s.Press("s")
 	s.Type("What is the LRU store?")
 	s.Press("enter")
-	s.WaitFor("f-001 sent back as n-001")
+	s.WaitFor("f-001 asked as n-001")
 
 	w := h.mustOK("wait", "--run", applyRef, "--timeout", "10s")
 	if w["reason"] != "notes" || awaitingOf(w) != "n-001" {
@@ -474,7 +489,7 @@ func TestApplySendBackWhileReviewStaysOpen(t *testing.T) {
 	s.Press("enter")
 	s.WaitFor("Keep entries in a map in memory.", "It was memory; the proposal says so now.")
 	accept(s, "f-001")
-	h.returnRun(s, "Claude")
+	h.returnRun(s, "Claude", "")
 
 	w = h.mustOK("wait", "--run", applyRef, "--timeout", "5s")
 	if w["reason"] != "returned" {
@@ -548,7 +563,7 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 	s.Press("s")
 	s.Type("Which two things?")
 	s.Press("enter")
-	s.WaitFor("f-004 sent back as n-001")
+	s.WaitFor("f-004 asked as n-001")
 	s.Press("q")
 	if _, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("review exit %d stderr %q", exit, stderr)
@@ -564,11 +579,8 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 	s.Press("enter")
 	s.WaitFor("Split the loop", "Reading and counting.")
 	accept(s, "f-004")
-	// The last decision opens the next finding, the withdrawn f-005, so the human goes back to the list to return.
-	s.WaitFor("f-005", "u reinstate")
-	s.Press("esc")
-	s.WaitFor("4/4 decided")
-	h.returnRun(s, "Claude")
+	// The withdrawn f-005 is not pending, so the last decision opens the return step.
+	h.returnRun(s, "Claude", "Run the tests before you commit.")
 
 	if w := h.agent("wait", "--run", applyRef, "--timeout", "5s"); w["reason"] != "returned" {
 		t.Fatalf("wait after return %v", w)
@@ -644,7 +656,7 @@ func TestApplyListFindsLocalRuns(t *testing.T) {
 	s := h.openReview(applyRef)
 	s.Press("enter")
 	accept(s, "f-001")
-	h.returnRun(s, "Claude")
+	h.returnRun(s, "Claude", "")
 
 	runs := listRuns(t, h.mustOK("list"))
 	byRef := map[string]map[string]any{}

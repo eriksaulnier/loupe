@@ -33,6 +33,8 @@ const (
 	RunTitle
 	// Applier is a local run's applier name, at the body's depth.
 	Applier
+	// ReturnNote is the human's closing note when they return a local run, at the body's depth.
+	ReturnNote
 )
 
 const maxBytes = 64 * 1024
@@ -94,6 +96,8 @@ func (k Kind) field() string {
 		return "runTitle"
 	case Applier:
 		return "applier"
+	case ReturnNote:
+		return "closing note"
 	}
 	return "body"
 }

@@ -64,7 +64,7 @@ func TestApplyFeedbackGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
-		"apply": {"f-001"}, "applyWithChanges": {"f-002", "f-003"}, "excluded": {"f-004", "f-005"}, "withdrawn": {"f-006"},
+		"apply": {"f-001", "f-003"}, "applyWithChanges": {"f-002"}, "excluded": {"f-004", "f-005"}, "withdrawn": {"f-006"},
 	}
 	if got := groupIDs(t, payload); !reflect.DeepEqual(got, want) {
 		t.Fatalf("groups %v, want %v", got, want)
@@ -92,7 +92,7 @@ func TestApplyFeedbackGroups(t *testing.T) {
 	if changed["suggestion"] != "Use option B." || string(threadJSON) != wantThread {
 		t.Errorf("applyWithChanges entry %v thread %s", changed, threadJSON)
 	}
-	if _, ok := groups["applyWithChanges"][1]["suggestion"]; ok {
+	if _, ok := groups["apply"][1]["suggestion"]; ok {
 		t.Errorf("a human edit without a note carries a suggestion")
 	}
 	if groups["excluded"][0]["reason"] != "Out of scope." {
@@ -190,5 +190,36 @@ func TestApplyFeedbackRefusesAnUnreadableReturn(t *testing.T) {
 	}
 	if _, err := Of(run.Target{Kind: run.KindLocal}).Feedback(draft.NewEmpty(), dir); err == nil {
 		t.Fatal("feedback read a broken return.json")
+	}
+}
+
+// note is in the payload when return.json holds one, and absent otherwise.
+func TestApplyFeedbackCarriesTheClosingNote(t *testing.T) {
+	m := Of(run.Target{Kind: run.KindLocal, Local: &run.LocalTarget{}})
+	for _, c := range []struct {
+		name, record string
+		want         any
+	}{
+		{"not returned", "", nil},
+		{"returned with no note", `{"schema":1,"returnedAt":"2026-11-03T00:00:00Z","draftVersion":0}`, nil},
+		{"returned with a note", `{"schema":1,"returnedAt":"2026-11-03T00:00:00Z","draftVersion":0,"note":"Run the tests."}`, "Run the tests."},
+	} {
+		dir := t.TempDir()
+		if c.record != "" {
+			if err := os.WriteFile(filepath.Join(dir, draft.ReturnFile), []byte(c.record), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		payload, err := m.Feedback(draft.NewEmpty(), dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, present := payload["note"]
+		if c.want == nil && present {
+			t.Errorf("%s: note %v present", c.name, got)
+		}
+		if c.want != nil && got != c.want {
+			t.Errorf("%s: note %v, want %v", c.name, got, c.want)
+		}
 	}
 }

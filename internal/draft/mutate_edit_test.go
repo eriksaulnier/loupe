@@ -396,7 +396,7 @@ func TestRewriteKeepsTheDecision(t *testing.T) {
 				t.Fatal(err)
 			}
 			before, hadDecision := d.Decisions["f-001"]
-			f, err := Rewrite(d, "f-001", "One, said better", "Body one, said better.", nil, Rules{}, multiHunk(t), editNow)
+			f, err := Rewrite(d, "f-001", "One, said better", "Body one, said better.", Rules{}, multiHunk(t), editNow)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -420,7 +420,7 @@ func TestRewriteKeepsTheDecision(t *testing.T) {
 
 func TestRewriteRecordsOnlyWhatChanged(t *testing.T) {
 	d := editable()
-	f, err := Rewrite(d, "f-001", "One", "Body one, said better.", nil, Rules{}, multiHunk(t), editNow)
+	f, err := Rewrite(d, "f-001", "One", "Body one, said better.", Rules{}, multiHunk(t), editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestRewriteLeavesNotesOpen(t *testing.T) {
 	if _, err := SendBack(d, "f-002", "Say it plainer.", editNow); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Rewrite(d, "f-002", "Two", "Body two, plainer.", nil, Rules{}, multiHunk(t), editNow); err != nil {
+	if _, err := Rewrite(d, "f-002", "Two", "Body two, plainer.", Rules{}, multiHunk(t), editNow); err != nil {
 		t.Fatal(err)
 	}
 	if d.Notes[0].Status != NoteOpen || d.Notes[0].ClosedAt != nil {
@@ -445,7 +445,7 @@ func TestRewriteLeavesNotesOpen(t *testing.T) {
 func TestRewriteDoesNotReviveAStaleDecision(t *testing.T) {
 	d := editable()
 	d.Findings[0].Rev = 2
-	f, err := Rewrite(d, "f-001", "One", "Body one, again.", nil, Rules{}, multiHunk(t), editNow)
+	f, err := Rewrite(d, "f-001", "One", "Body one, again.", Rules{}, multiHunk(t), editNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +460,7 @@ func TestRewriteRefusals(t *testing.T) {
 	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, Rules{}, editNow); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Rewrite(d, "f-002", "Two", "Body two, again.", nil, Rules{}, multiHunk(t), editNow)
+	_, err := Rewrite(d, "f-002", "Two", "Body two, again.", Rules{}, multiHunk(t), editNow)
 	r := wantRefusal(t, err, refusal.Input)
 	if !strings.Contains(r.Message, "rewritten") || r.Fix != "reinstate f-002 first" {
 		t.Fatalf("refusal %+v", r)
@@ -477,7 +477,7 @@ func TestRewriteRefusals(t *testing.T) {
 		{"finding id in the body", "One", "Body one, as f-002 says.", "finding id f-002", refusal.Markdown},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := Rewrite(d, "f-001", c.title, c.body, nil, Rules{}, multiHunk(t), editNow)
+			_, err := Rewrite(d, "f-001", c.title, c.body, Rules{}, multiHunk(t), editNow)
 			r := wantRefusal(t, err, c.code)
 			if !strings.Contains(r.Message, c.says) || !strings.Contains(r.Fix, "ctrl+s") || strings.Contains(r.Fix, "loupe") {
 				t.Fatalf("refusal %+v", r)
@@ -491,16 +491,16 @@ func TestRewriteRefusals(t *testing.T) {
 		})
 	}
 	if r, _ := refusal.As(func() error {
-		_, err := Rewrite(d, "f-001", "One", "<div>no</div>", nil, Rules{}, multiHunk(t), editNow)
+		_, err := Rewrite(d, "f-001", "One", "<div>no</div>", Rules{}, multiHunk(t), editNow)
 		return err
 	}()); r.Details["line"] != 1 || r.Details["rule"] == nil {
 		t.Fatalf("details %v", r.Details)
 	}
 
-	_, err = Rewrite(d, "f-009", "One", "Body.", nil, Rules{}, multiHunk(t), editNow)
+	_, err = Rewrite(d, "f-009", "One", "Body.", Rules{}, multiHunk(t), editNow)
 	_ = wantRefusal(t, err, refusal.NotFound)
 
-	f, err := Rewrite(d, "f-001", "One", "Body one.", nil, Rules{}, multiHunk(t), editNow)
+	f, err := Rewrite(d, "f-001", "One", "Body one.", Rules{}, multiHunk(t), editNow)
 	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
 		t.Fatalf("unchanged rewrite %+v err %v", f, err)
 	}
@@ -726,55 +726,5 @@ func TestEditReValidatesStoredFindingWithProposalAndSideRight(t *testing.T) {
 	}
 	if f.Body != "Clearer body." || f.Proposal != "Change X to Y." {
 		t.Fatalf("finding %+v", f)
-	}
-}
-
-func TestRewriteChangesTheProposal(t *testing.T) {
-	d := editable()
-	d.Findings[0].Proposal = "Change X to Y."
-	proposal := "Change X to Z."
-	f, err := Rewrite(d, "f-001", "One", "Body one.", &proposal, Rules{AllowProposal: true}, multiHunk(t), editNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if f.Proposal != "Change X to Z." || f.Rev != 2 {
-		t.Fatalf("finding %+v", f)
-	}
-	if want := []HistoryEntry{{At: editNow, By: ByHuman, Changed: map[string]any{"proposal": "Change X to Y."}}}; !reflect.DeepEqual(f.History, want) {
-		t.Fatalf("history %#v", f.History)
-	}
-}
-
-func TestRewriteRefusesEmptyingTheProposal(t *testing.T) {
-	d := editable()
-	d.Findings[0].Proposal = "Change X to Y."
-	empty := "  "
-	_, err := Rewrite(d, "f-001", "One", "Body one.", &empty, Rules{AllowProposal: true}, multiHunk(t), editNow)
-	r := wantRefusal(t, err, refusal.Input)
-	if r.Message != "a proposal can't be empty" || r.Fix != "the agent turns a finding into a question with loupe edit" {
-		t.Fatalf("refusal %q; fix %q", r.Message, r.Fix)
-	}
-	if d.Findings[0].Proposal != "Change X to Y." {
-		t.Fatalf("proposal %q", d.Findings[0].Proposal)
-	}
-}
-
-func TestRewriteRefusesAProposalOutsideTheMarkdownAllowlist(t *testing.T) {
-	d := editable()
-	proposal := "<script>x</script>"
-	_, err := Rewrite(d, "f-001", "One", "Body one.", &proposal, Rules{AllowProposal: true}, multiHunk(t), editNow)
-	wantField(t, wantRefusal(t, err, refusal.Markdown), "proposal")
-}
-
-// A question has no proposal, and an empty or blank field leaves it a question.
-func TestRewriteLeavesAQuestionWithABlankProposal(t *testing.T) {
-	d := editable()
-	blank := " \n"
-	f, err := Rewrite(d, "f-002", "Two", "Body two.", &blank, Rules{AllowProposal: true}, multiHunk(t), editNow)
-	if !errors.Is(err, ErrNoChange) {
-		t.Fatalf("finding %+v, err %v; want no change", f, err)
-	}
-	if d.Findings[1].Proposal != "" || d.Findings[1].Rev != 1 {
-		t.Fatalf("finding %+v", d.Findings[1])
 	}
 }

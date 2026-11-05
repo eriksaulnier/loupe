@@ -48,6 +48,7 @@ func ReadFiles(args []string, cwd, root, home string) ([]File, []run.LocalSkippe
 	seen := map[string]string{}
 	shown := map[string]string{}
 	external := 0
+	realRoot, realHome := resolved(root), resolved(home)
 	for _, arg := range args {
 		abs := arg
 		if !filepath.IsAbs(abs) {
@@ -75,9 +76,28 @@ func ReadFiles(args []string, cwd, root, home string) ([]File, []run.LocalSkippe
 			return nil, nil, refusal.New(refusal.Usage, fmt.Sprintf("--files %s names the same file as %s", arg, first), filesFix)
 		}
 		seen[real] = arg
+		// The path as given wins, so a file reached through a symlink inside root keeps its name there. The resolved
+		// path covers a cwd or home that reaches root through a symlink. Only its directory resolves, so a symlinked
+		// file keeps the name the user gave it.
+		named := filepath.Join(resolved(filepath.Dir(abs)), filepath.Base(abs))
 		display, ok := under(root, abs, "")
+		if !ok && !filepath.IsAbs(arg) {
+			// A cwd under a symlink still names the file through the repository, so the argument joined onto the
+			// resolved cwd keeps the name of a linked directory inside root. A ".." can climb somewhere else from
+			// there, so the name counts only when it reaches the file read.
+			candidate := filepath.Join(resolved(cwd), arg)
+			if r, err := filepath.EvalSymlinks(candidate); err == nil && r == real {
+				display, ok = under(root, candidate, "")
+			}
+		}
+		if !ok {
+			display, ok = under(realRoot, named, "")
+		}
 		if !ok {
 			display, ok = under(home, abs, "~/")
+		}
+		if !ok {
+			display, ok = under(realHome, named, "~/")
 		}
 		if !ok {
 			external++
@@ -111,6 +131,18 @@ func ReadFiles(args []string, cwd, root, home string) ([]File, []run.LocalSkippe
 		files = append(files, File{Path: display, Abs: abs, Content: content})
 	}
 	return files, skipped, nil
+}
+
+// resolved returns path with its symlinks resolved, to compare it with git's resolved toplevel. A path that does not
+// resolve is compared as given.
+func resolved(path string) string {
+	if path == "" {
+		return ""
+	}
+	if r, err := filepath.EvalSymlinks(path); err == nil {
+		return r
+	}
+	return path
 }
 
 // under returns abs relative to dir with prefix, when abs is inside dir.

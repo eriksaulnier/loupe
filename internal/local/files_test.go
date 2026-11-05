@@ -78,6 +78,52 @@ func TestReadFilesFollowsASymlinkAndKeepsItsName(t *testing.T) {
 	}
 }
 
+// Git reports a resolved toplevel, while the working directory and $HOME keep the path the shell used.
+func TestReadFilesThroughASymlinkedDirectory(t *testing.T) {
+	base := t.TempDir()
+	real, link := filepath.Join(base, "real"), filepath.Join(base, "link")
+	write(t, filepath.Join(real, "repo", "docs", "p.md"), []byte("# P\n"))
+	inHome := write(t, filepath.Join(real, "home", "n.md"), []byte("n\n"))
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.EvalSymlinks(filepath.Join(real, "repo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A directory inside the repository that links out of it keeps its name in the repository.
+	write(t, filepath.Join(base, "shared", "s.md"), []byte("s\n"))
+	if err := os.Symlink(filepath.Join(base, "shared"), filepath.Join(real, "repo", "shared")); err != nil {
+		t.Fatal(err)
+	}
+	cwd := filepath.Join(link, "repo")
+	files, _, err := ReadFiles([]string{"docs/p.md", inHome, filepath.Join(root, "shared", "s.md")}, cwd, root, filepath.Join(link, "home"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []run.LocalFile{
+		{Path: "docs/p.md", Abs: filepath.Join(cwd, "docs", "p.md")},
+		{Path: "~/n.md", Abs: inHome},
+		{Path: "shared/s.md", Abs: filepath.Join(root, "shared", "s.md")},
+	}
+	if len(files) != len(want) {
+		t.Fatalf("files %+v", files)
+	}
+	for i, f := range files {
+		if f.Path != want[i].Path || f.Abs != want[i].Abs {
+			t.Errorf("file %d: %s %s, want %s %s", i, f.Path, f.Abs, want[i].Path, want[i].Abs)
+		}
+	}
+	// Named relative to a cwd under the symlink, the linked directory still keeps its name in the repository.
+	files, _, err = ReadFiles([]string{"shared/s.md"}, cwd, root, filepath.Join(link, "home"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files[0].Path != "shared/s.md" {
+		t.Errorf("relative path through a linked directory shows as %s", files[0].Path)
+	}
+}
+
 func TestReadFilesRefuses(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "a.md"), []byte("a\n"))
@@ -166,5 +212,29 @@ func TestReadFilesWithoutARoot(t *testing.T) {
 	}
 	if len(files) != 1 || files[0].Path != "~/p.md" {
 		t.Fatalf("files %+v", files)
+	}
+}
+
+// A ".." from a cwd under a symlink names the file it reads, never a same-named file the resolved cwd climbs to.
+func TestReadFilesNamesTheFileItReads(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "repo")
+	write(t, filepath.Join(root, "sub", "x.md"), []byte("x\n"))
+	write(t, filepath.Join(root, "README.md"), []byte("repo\n"))
+	home := filepath.Join(base, "home")
+	write(t, filepath.Join(home, "README.md"), []byte("home\n"))
+	if err := os.Symlink(filepath.Join(root, "sub"), filepath.Join(home, "work")); err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, _, err := ReadFiles([]string{"../README.md"}, filepath.Join(home, "work"), root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files[0].Path != "~/README.md" || string(files[0].Content) != "home\n" {
+		t.Errorf("file %s holds %q, want ~/README.md holding home", files[0].Path, files[0].Content)
 	}
 }

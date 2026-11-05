@@ -23,6 +23,16 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 	return string(out)
 }
 
+// realDir is dir with its symlinks resolved, as git reports a toplevel. macOS's temporary directory sits under one.
+func realDir(t *testing.T, dir string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
 // plainRepo makes a repository with one commit and no origin at <tmp>/<name>.
 func plainRepo(t *testing.T, name string) string {
 	t.Helper()
@@ -33,7 +43,7 @@ func plainRepo(t *testing.T, name string) string {
 	write(t, filepath.Join(dir, "a.txt"), []byte("a\n"))
 	gitIn(t, dir, "add", "a.txt")
 	gitIn(t, dir, "commit", "--quiet", "-m", "one")
-	return dir
+	return realDir(t, dir)
 }
 
 func TestLocateGitHubOrigin(t *testing.T) {
@@ -43,7 +53,7 @@ func TestLocateGitHubOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Prefix != "acme/widgets" || got.Repository != "acme/widgets" || got.Root != repo.Dir || !got.InGit {
+	if got.Prefix != "acme/widgets" || got.Repository != "acme/widgets" || got.Root != realDir(t, repo.Dir) || !got.InGit {
 		t.Fatalf("located %+v", got)
 	}
 }
@@ -58,7 +68,7 @@ func TestLocateNamesTheRepositoryDirectory(t *testing.T) {
 		t.Fatalf("located %+v", got)
 	}
 
-	worktree := filepath.Join(t.TempDir(), "elsewhere")
+	worktree := filepath.Join(realDir(t, t.TempDir()), "elsewhere")
 	gitIn(t, dir, "worktree", "add", "--quiet", "--detach", worktree)
 	got, err = Locate(worktree)
 	if err != nil {

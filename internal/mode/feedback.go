@@ -67,7 +67,7 @@ func (apply) Ended(dir string) (string, error) {
 }
 
 // Feedback adds to the pull request payload whether the run was returned, and its decided findings in the groups the
-// agent acts on: apply as proposed, apply as the human changed it, leave out, or nothing to do.
+// agent acts on: apply as proposed, apply with the human's note, leave out, or nothing to do.
 func (a apply) Feedback(d *draft.Draft, dir string) (map[string]any, error) {
 	payload := prFeedback(d)
 	// The draft was read before return.json, so a seal of a newer draft does not make d the returned decisions.
@@ -75,17 +75,19 @@ func (a apply) Feedback(d *draft.Draft, dir string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	payload["returned"] = returned && sealed.DraftVersion == d.Version
+	returned = returned && sealed.DraftVersion == d.Version
+	payload["returned"] = returned
+	if returned && sealed.Note != "" {
+		payload["note"] = sealed.Note
+	}
 	groups := map[string][]map[string]any{"apply": {}, "applyWithChanges": {}, "excluded": {}, "withdrawn": {}}
 	for _, f := range d.Findings {
 		entry := a.entry(d, f)
 		decision := d.Decisions[f.ID]
 		switch draft.GateOf(d, f).Disposition {
 		case draft.DispositionAccepted:
-			if decision.Note != "" || draft.HumanEdited(f) {
-				if decision.Note != "" {
-					entry["suggestion"] = decision.Note
-				}
+			if decision.Note != "" {
+				entry["suggestion"] = decision.Note
 				groups["applyWithChanges"] = append(groups["applyWithChanges"], entry)
 				continue
 			}
