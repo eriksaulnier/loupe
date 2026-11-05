@@ -62,6 +62,22 @@ func TestWatchIsOffUnlessAsked(t *testing.T) {
 	}
 }
 
+// A local run has no pull request and contacts no service, so review never checks one even when asked to watch.
+func TestWatchNeverChecksALocalRun(t *testing.T) {
+	m, err := New(Config{Dir: applyFixture(t, "Claude", applyInputs...), Getenv: envOf(testEnv), Now: func() time.Time { return testNow },
+		Output: io.Discard, WatchPR: true,
+		GitHub: func() (github.Client, error) { t.Error("GitHub built for a local run"); return nil, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd := m.startPRCheck(); cmd != nil {
+		t.Fatal("a check started on a local run")
+	}
+	if tag := m.prTag(); tag != "" {
+		t.Fatalf("a local run is tagged %q", tag)
+	}
+}
+
 func TestWatchTagsEachState(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
