@@ -12,7 +12,7 @@ Every `--changed` git command runs with `clone` set to `gitx.Toplevel(workdir)`,
 2. Read `core.sparseCheckout` through `configValue` (`gitx.go:160`) with `--type=bool`. `true` refuses with `usage`, and the fix names `--files`.
 3. Resolve `--base` through `gitx.RevParse`, then `gitx.MergeBase(HEAD, base)` (`gitx.go:181`). A base that does not resolve refuses with `usage`. With no `--base`, the diff base is `HEAD`.
 4. `read-tree HEAD`.
-5. `-c core.fsmonitor=false -c core.untrackedCache=false -c core.splitIndex=false add -A -- :/`.
+5. Stage the worktree as `add -A` would, without running any filter (owner, build round 2026-11-03): `ls-files -z --cached --others --exclude-standard` lists the paths, `hash-object -w --no-filters --stdin-paths` stores each regular file's bytes as they are on disk, a symlink stores its target, a directory with a `HEAD` becomes a gitlink, and `update-index --force-remove` and `--index-info` write the temporary index. A test checks that the tree equals the one `add -A` writes in a repository with no filter.
 6. `write-tree` gives `<tree>`.
 7. Choose the files (R2), then run the diff (R2).
 8. Read the outline of each captured Markdown file with `gitx.Blob(clone, <tree>, path)` (`gitx.go:200`).
@@ -22,7 +22,7 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
 
 **Accepted behavior**:
 
-- `add -A` runs the user's clean and process filters. For example, git-lfs stores objects, and git-crypt blobs are ciphertext, which skip as `binary`. This matches what `git add` does in that repository.
+- Capture runs no clean or process filter and converts no line ending, so a git-lfs file shows its real content and a git-crypt file its plaintext, as the editor shows them. The PR 2 review showed that running filters let a filter write into the worktree and contact the network. Overriding each filter with `-c filter.<name>.process=` does not disable a process filter in Git 2.43, and `--attr-source` with the empty tree still ran it, so capture hashes the files itself.
 - A fresh index has no skip-worktree or assume-unchanged bits, so files marked by hand show as changed or deleted.
 - The cost matches `git add -A` on a fresh index, because a fresh index has no stat cache. Quickstart section 5 measures it.
 

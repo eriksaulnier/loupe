@@ -56,6 +56,7 @@ var sendBackLoop = [][2]string{
 var runReferences = [][2]string{
 	{"owner/repo#123", "the newest round of pull request 123"},
 	{"owner/repo#123@2", "round 2"},
+	{"local#7", "local run 7; only --run or the <ref> argument selects it"},
 }
 
 var conventions = [][2]string{

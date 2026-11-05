@@ -123,7 +123,7 @@ func TestReadDiffChecksLocalRunWithEmptyDiff(t *testing.T) {
 	target := sampleLocalTarget()
 	emptyDiff := []byte{}
 	target.DiffSHA256 = DiffSHA256(emptyDiff)
-	dir, _, err := NextLocal(root, "test", os.Getenv, target, emptyDiff, sampleDraftJSON())
+	dir, _, err := NextLocal(root, "test", os.Getenv, target, emptyDiff, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

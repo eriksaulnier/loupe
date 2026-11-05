@@ -103,6 +103,17 @@ Result payload: `target` (as in `target.json`, with `source` and `model` when gi
 
 Update check (added by `specs/048-update-warning`): after the run exists, capture looks up the latest loupe release through the GitHub API, at most once per 24 hours and for at most 2 seconds, and stores the version and the time of the check in `update-check.json` under the data root. A newer release warns under `update-available` on each capture. A failed lookup changes nothing. An installation token, a build whose version is not `X.Y.Z`, `CI` and `LOUPE_NO_UPDATE_CHECK` skip the lookup.
 
+### `loupe capture --changed [--base <ref>] | --files <path>... | --no-files --title <t> [--title <t>] [--applier <a>] [--source] [--model] [--json]`
+
+Captures local work into a local run, `local/<n>` under the data root, whose decisions the human returns to the agent instead of publishing (`specs/049-apply-mode`). `capture` takes at most one positional argument, a pull request URL, and exactly one form: a URL, `--changed`, `--files` or `--no-files`. It refuses `usage` for two forms, no form, `--base` with any form but `--changed`, `--no-files` without `--title`, `--title`, `--applier` or `--base` with a URL, `--repo` or `--allow-closed` with a local form, a `--title` over 120 characters or an `--applier` over 64, or either with a control character.
+
+- `--changed` stages the worktree's changes into a temporary index under `os.MkdirTemp`, never the user's (`read-tree HEAD`, then each listed path hashed with `hash-object --no-filters`, so no clean or process filter runs and no line ending changes, then `write-tree`), at the worktree root, and diffs `HEAD`, or the merge base of `HEAD` and `--base`, against the written tree with `--no-renames`. It writes no ref and no commit. It refuses `usage` outside a worktree, on an unborn `HEAD`, in a sparse checkout, for a `--base` that names no commit, and when nothing changed or every change was skipped. It also refuses `usage` when a tracked file's bytes differ from `HEAD`'s while Git converts that file on checkout (a filter, `ident`, `working-tree-encoding`, or CRLF line endings from `eol`, `core.autocrlf` or `core.eol`), since without running the conversion an edit and the conversion look the same. With `core.fileMode=false` a tracked file keeps the mode `HEAD` records, and a submodule directory with no `.git` keeps its gitlink.
+- `--files` reads each path whole. Its display path is relative to the root inside it, `~/<path>` under the home directory, else `ext/<i>/<base name>`. It refuses `usage`, naming the path, for a missing or unreadable path, a directory or other non-regular file, the same file twice, or a display path with a control character, `"` or `\`.
+- `--no-files` captures an empty diff; every finding must be general.
+- Both file forms skip, into `local.skipped`, files that are `binary` (a NUL in the first 8,000 bytes, or numstat `-`), `empty`, `deleted`, a `submodule`, or `too-large` (over 1 MiB). `new: true` marks a `--changed` file `HEAD` does not hold.
+
+It makes no network call. It MAY carry `warnings: ["update-available"]` from the release cached by an earlier pull request capture. Result: `target` (schema 3, `kind: "local"`, `title`, `applier`, `source`, `model`, `capturedAt`, `diffSha256` and `local`: `n`, `prefix`, `repository`, `capture`, `root`, `branch`, `baseRef`, `mergeBase`, `files [{path, abs, new}]`, `skipped [{path, reason}]`), `headings` (each captured Markdown file's headings, by display path), `next` (each passing `--run`). The prefix is `owner/repo` for a GitHub origin, else the repository directory's name, else empty outside Git; it is display only.
+
 ### `loupe add [--from <path>|-] [flags] [--by a] [--expect-version n] [--json]`
 
 Input: one finding object or an array of them.
@@ -186,7 +197,7 @@ Result payload: `reply` (`{id, noteId}`), `version`.
 
 ### `loupe list [--json]`
 
-All runs, newest capture first, as an array under `runs`: `ref`, `url`, `title`, `round`, `state` (`captured`, `ready`, `published`), `counts` (accepted, pending, excluded, withdrawn, openNotes), `capturedAt`.
+All runs, newest capture first, as an array under `runs`: `ref`, `url`, `title`, `round`, `state` (`captured`, `ready`, `published`), `counts` (accepted, pending, excluded, withdrawn, openNotes), `capturedAt`. A local run (`specs/049-apply-mode`) lists as `{ref, kind: "local", repository?, title, state, counts, capturedAt}`, with no `url` or `round`, sorted with the pull request runs by `capturedAt`. Its state is `returned` once `return.json` exists, else `ready` when it holds a finding and none is pending or open, else `captured`. `stats` ignores local runs.
 
 ### `loupe stats [owner/repo]... [--since <date>] [--until <date>] [--state captured|ready|published]... [--group-by none|repo|week|month] [--json]`
 

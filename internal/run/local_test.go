@@ -34,7 +34,7 @@ func sampleDraftJSON() []byte { return []byte(`{"schema":1}`) }
 func TestNextLocalCreatesRun(t *testing.T) {
 	root := t.TempDir()
 	target := sampleLocalTarget()
-	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestNextLocalCreatesRun(t *testing.T) {
 func TestNextLocalDoesNotReuseDeletedN(t *testing.T) {
 	root := t.TempDir()
 	target := sampleLocalTarget()
-	dir1, ref1, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	dir1, ref1, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestNextLocalDoesNotReuseDeletedN(t *testing.T) {
 	if err := os.RemoveAll(dir1); err != nil {
 		t.Fatal(err)
 	}
-	_, ref2, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	_, ref2, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestNextLocalRefusesUnparsableNext(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := sampleLocalTarget()
-	_, _, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	_, _, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
 	r, ok := refusal.As(err)
 	if !ok || r.Code != refusal.Record {
 		t.Fatalf("got %v", err)
@@ -123,7 +123,7 @@ func TestNextLocalConcurrentCallsGetDistinctN(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, ref, err := NextLocal(root, "test", patientLock, target, nil, sampleDraftJSON())
+			_, ref, err := NextLocal(root, "test", patientLock, target, nil, sampleDraftJSON(), nil)
 			ns[i] = ref.Local
 			errs[i] = err
 		}(i)
@@ -204,7 +204,7 @@ func TestHasReturn(t *testing.T) {
 func TestNextLocalSetsN(t *testing.T) {
 	root := t.TempDir()
 	target := sampleLocalTarget()
-	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestNextLocalSetsN(t *testing.T) {
 func TestNextLocalReadsMissingNextAsOne(t *testing.T) {
 	root := t.TempDir()
 	target := sampleLocalTarget()
-	_, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	_, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
