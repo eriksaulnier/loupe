@@ -1,6 +1,7 @@
 package draft
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -445,5 +446,13 @@ func TestAddWithGeneralOnlyRefusesLocation(t *testing.T) {
 	r := refusaltest.Want(t, err, refusal.Location)
 	if !strings.Contains(r.Fix, `"general": true`) {
 		t.Fatalf("fix %q, want it to name \"general\": true", r.Fix)
+	}
+}
+
+// A caller's failure that is not a refusal is an error loupe did not expect, so it comes back as it is.
+func TestCheckBatchReturnsAFailureThatIsNotARefusal(t *testing.T) {
+	boom := errors.New("boom")
+	if err := CheckBatch([]FindingInput{located("Good", 3)}, []EntryFailure{{Entry: 0, Err: boom}}, multiHunk(t), Rules{}); err != boom {
+		t.Fatalf("got %v, want the caller's error", err)
 	}
 }

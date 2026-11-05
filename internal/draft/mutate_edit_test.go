@@ -216,6 +216,8 @@ func TestEditValidatesNewValues(t *testing.T) {
 		`{"label": "two words"}`:                                     refusal.Input,
 		`{"general": false}`:                                         refusal.Input,
 		`{"location": {"path": "multi.txt", "line": 3, "bogus": 1}}`: refusal.Input,
+		`{"label": 5}`:                                               refusal.Input,
+		`{"references": "a/b"}`:                                      refusal.Input,
 	}
 	for input, code := range cases {
 		d := editable()
@@ -279,6 +281,9 @@ func TestReplyChangesNoStatusOrDecision(t *testing.T) {
 	}
 	if r2, err := AddReply(d, "n-001", "More.", ByHuman, editNow); err != nil || r2.ID != "r-002" {
 		t.Fatalf("second reply %+v err %v", r2, err)
+	}
+	if r3, err := AddReply(d, "n-001", "Unsigned.", "", editNow); err != nil || r3.By != ByAgent {
+		t.Fatalf("a reply without by %+v err %v, want by agent", r3, err)
 	}
 
 	_ = refusaltest.Want(t, func() error { _, err := AddReply(d, "n-001", " ", ByAgent, editNow); return err }(), refusal.Input)

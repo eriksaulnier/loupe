@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func finding(id string, rev int, included bool, by string) Finding {
@@ -510,4 +512,9 @@ func TestAnAmendMovesNoGateCount(t *testing.T) {
 			t.Fatalf("withdrawn by %s: counts %+v, then %+v", by, before, after)
 		}
 	}
+}
+
+func TestFindingStateRefusesAnUnknownFinding(t *testing.T) {
+	_, err := FindingState(NewEmpty(), "f-001")
+	_ = refusaltest.Want(t, err, refusal.NotFound)
 }

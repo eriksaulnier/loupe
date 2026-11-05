@@ -440,3 +440,7 @@ func TestValidateExcludeReason(t *testing.T) {
 		t.Fatalf("decisions %v", d.Decisions)
 	}
 }
+
+func TestExcludeWithReasonRefusesAnUnknownFinding(t *testing.T) {
+	_ = refusaltest.Want(t, errOf(ExcludeWithReason(threeFindings(), "f-009", "out of scope", decideNow)), refusal.NotFound)
+}

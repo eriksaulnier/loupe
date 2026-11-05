@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -216,7 +217,9 @@ func TestLoadRefusesIncompleteDraft(t *testing.T) {
 	cases := map[string]string{
 		"null":           `null`,
 		"empty object":   `{}`,
+		"null findings":  `{"schema": 1, "findings": null, "decisions": {}, "notes": [], "replies": []}`,
 		"null decisions": `{"schema": 1, "findings": [], "decisions": null, "notes": [], "replies": []}`,
+		"null replies":   `{"schema": 1, "findings": [], "decisions": {}, "notes": [], "replies": null}`,
 		"missing notes":  `{"schema": 1, "findings": [], "decisions": {}, "replies": []}`,
 		"schema 0":       `{"schema": 0, "findings": [], "decisions": {}, "notes": [], "replies": []}`,
 		"unknown status": `{"schema": 2, "findings": [], "decisions": {}, "notes": [], "replies": [], "assessments": [{"ref": "e-1", "status": "fixed", "finding": {"id": "f-001", "title": "T"}}]}`,
@@ -373,5 +376,52 @@ func TestASchema2DraftLoadsWithNoReason(t *testing.T) {
 	d := loadStored(t, dir)
 	if d.Schema != 2 || CurrentReason(d.Findings[0]) != nil {
 		t.Fatalf("schema %d, reason %+v", d.Schema, CurrentReason(d.Findings[0]))
+	}
+}
+
+// A send-back that cannot record its note for the agent writes no draft, so the note is never lost between the two.
+func TestMutateWritesNoDraftWhenTheHandBackFails(t *testing.T) {
+	dir := newRunWithFinding(t)
+	if err := os.WriteFile(filepath.Join(dir, "handback.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = sendBack(dir, "Why?")
+	_ = refusaltest.Want(t, err, refusal.Record)
+	if after, err := os.ReadFile(filepath.Join(dir, "draft.json")); err != nil || !bytes.Equal(after, before) {
+		t.Fatalf("draft.json changed after a failed hand-back: %v", err)
+	}
+}
+
+func TestMutateReturnsTheDraftWriteFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := newRunWithFinding(t)
+	// Lock creates its file on demand, so the file must exist before the directory goes read-only.
+	if err := os.WriteFile(filepath.Join(dir, ".lock"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	_, err := Mutate(dir, "add", nil, noEnv, func(d *Draft) error { d.Summary = "changed"; return nil })
+	if !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), "draft.json") {
+		t.Fatalf("got %v, want the permission error writing draft.json", err)
+	}
+}
+
+func TestMutateReturnsTheLockFailure(t *testing.T) {
+	dir := newRunDir(t)
+	if err := os.Mkdir(filepath.Join(dir, ".lock"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Mutate(dir, "add", nil, noEnv, func(*Draft) error { t.Fatal("fn ran without the lock"); return nil })
+	if !errors.Is(err, syscall.EISDIR) || !strings.HasPrefix(err.Error(), "open lock ") {
+		t.Fatalf("got %v, want EISDIR opening the lock", err)
 	}
 }
