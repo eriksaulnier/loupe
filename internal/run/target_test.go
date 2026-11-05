@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func sampleTarget() Target {
@@ -370,5 +371,86 @@ func TestLocalTargetWritesEmptyListsForMissingFiles(t *testing.T) {
 				t.Errorf("%s: local.%s is %s, want []", name, key, got)
 			}
 		}
+	}
+}
+
+func TestLoadDiffRefusesAMissingOrUnparsableDiff(t *testing.T) {
+	root := t.TempDir()
+	dir := RunDir(root, "o", "r", 12, 2)
+	bad := []byte("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n x\n")
+	target := sampleTarget()
+	target.DiffSHA256 = DiffSHA256(bad)
+	if err := CreateRun(dir, target, bad, []byte("{}\n"), nil); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadDiff(dir, target)
+	if r := refusaltest.Want(t, err, refusal.Record); !strings.Contains(r.Message, "fragment header miscounts lines") {
+		t.Fatalf("message %q", r.Message)
+	}
+	if err := os.Remove(filepath.Join(dir, "pr.diff")); err != nil {
+		t.Fatal(err)
+	}
+	_, err = LoadDiff(dir, target)
+	if r := refusaltest.Want(t, err, refusal.Record); !strings.Contains(r.Message, "no such file") {
+		t.Fatalf("message %q", r.Message)
+	}
+}
+
+// A parent that cannot be created, or cannot hold the temporary directory, fails the capture with nothing written.
+func TestCreateRunReturnsTheParentFailures(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	for _, c := range []struct{ name, run, prefix string }{
+		{"create the parent", filepath.Join("o", "r", "12", "1"), "create "},
+		{"create the temp directory", "1", "create temp run directory in "},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			locked := t.TempDir()
+			if err := os.Chmod(locked, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+			err := CreateRun(filepath.Join(locked, c.run), sampleTarget(), nil, []byte("{}\n"), nil)
+			if !errors.Is(err, os.ErrPermission) || !strings.HasPrefix(err.Error(), c.prefix) {
+				t.Fatalf("got %v, want a permission error starting %q", err, c.prefix)
+			}
+			if entries, _ := os.ReadDir(locked); len(entries) != 0 {
+				t.Fatalf("left %v behind", entries)
+			}
+		})
+	}
+}
+
+// A failure after the temporary directory exists removes it, so a failed capture leaves no partial run behind. An
+// optional file under a missing directory fails its write, and one named ../<run> takes the run's place before the
+// rename, as a concurrent capture would.
+func TestCreateRunRemovesItsTempDirectoryOnFailure(t *testing.T) {
+	for _, c := range []struct {
+		name, file string
+		check      func(t *testing.T, err error)
+	}{
+		{"optional write", filepath.Join("missing", "x.json"), func(t *testing.T, err error) {
+			if !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("got %v, want not-exist writing the optional file", err)
+			}
+		}},
+		{"run taken before the rename", filepath.Join("..", "2"), func(t *testing.T, err error) {
+			if r := refusaltest.Want(t, err, refusal.Internal); !strings.HasSuffix(r.Message, "2 already exists") {
+				t.Fatalf("message %q", r.Message)
+			}
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			parent := t.TempDir()
+			err := CreateRun(filepath.Join(parent, "2"), sampleTarget(), nil, []byte("{}\n"), map[string][]byte{c.file: []byte("{}\n")})
+			c.check(t, err)
+			entries, _ := os.ReadDir(parent)
+			for _, e := range entries {
+				if strings.HasPrefix(e.Name(), ".2.tmp-") {
+					t.Fatalf("left the temp directory %s", e.Name())
+				}
+			}
+		})
 	}
 }
