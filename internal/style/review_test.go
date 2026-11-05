@@ -827,3 +827,91 @@ func TestLocalHeaderKeepsAShortTitle(t *testing.T) {
 		}
 	}
 }
+
+func TestMidTruncAtItsEdges(t *testing.T) {
+	for _, c := range []struct {
+		text  string
+		width int
+		want  string
+	}{
+		{"o/r#12", 6, "o/r#12"},
+		{"o/r#12", 2, "12"},
+		{"acme/widgets#42", 9, "acme…s#42"},
+	} {
+		if got := midTrunc(c.text, c.width, "…"); got != c.want {
+			t.Errorf("midTrunc(%q, %d) = %q, want %q", c.text, c.width, got, c.want)
+		}
+	}
+}
+
+func TestSeverityRankOfAnUnratedWordIsMinusOne(t *testing.T) {
+	if got := severityRank("P2"); got != -1 {
+		t.Fatalf("severityRank(P2) = %d", got)
+	}
+}
+
+// A palette color is a literal in the source, so a bad one is a programming error that panics at startup.
+func TestHexPanicsOnABadColor(t *testing.T) {
+	defer func() {
+		if r := recover(); r != `style: bad palette color "#zz"` {
+			t.Fatalf("recovered %v", r)
+		}
+	}()
+	hex("#zz")
+}
+
+func TestPlainPiecesWithoutColor(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	if got := s.TitleTab("Findings", ToneAccent); got != "Findings" {
+		t.Errorf("TitleTab = %q", got)
+	}
+	if got := s.Verified("plausible"); got != "plausible" {
+		t.Errorf("Verified = %q", got)
+	}
+	if got := s.Pane(Pane{Width: PaneCols - 1, Height: PaneRows}); got != nil {
+		t.Errorf("a pane below the minimum drew %q", got)
+	}
+	if got := splitCells("plain"); !slices.Equal(got, []string{"plain"}) {
+		t.Errorf("splitCells of an unstyled bar = %q", got)
+	}
+}
+
+// The right title survives whole while it fits, then gives way by cells, and a border too narrow for any title is
+// plain.
+func TestPaneRightTitleGivesWayLast(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	narrow := ansi.Strip(s.Pane(Pane{Width: 12, Height: 2, Titles: PaneTitles{TopLeft: "abcdef", TopRight: "123456789"}})[0])
+	if narrow != "╭─ 12345… ─╮" {
+		t.Errorf("narrow top %q", narrow)
+	}
+	tiny := ansi.Strip(s.Pane(Pane{Width: PaneCols, Height: 2, Titles: PaneTitles{TopRight: "123"}})[0])
+	if tiny != "╭──╮" {
+		t.Errorf("tiny top %q", tiny)
+	}
+}
+
+func TestReviewFrameCutsAFooterTallerThanTheFrame(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	if got := s.ReviewFrame("head", nil, []string{"a", "b", "c"}, 20, 2); strings.Count(got, "\n") != 1 || !strings.HasPrefix(got, "head\n") {
+		t.Fatalf("frame %q, want 2 rows", got)
+	}
+}
+
+func TestLocalSpansNameTheRepositoryOnADetachedHead(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	if got := s.localSpans(LocalPlace{Repo: "loupe", Capture: "changed"}, 2); len(got) != 1 || got[0].Text != "loupe" {
+		t.Fatalf("spans %+v", got)
+	}
+}
+
+// The header is exactly the width it is given, however narrow.
+func TestReviewHeaderFillsEveryWidth(t *testing.T) {
+	for _, color := range []bool{false, true} {
+		s := reviewStyle(t, color, nil)
+		for w := 1; w <= 100; w++ {
+			if got := Width(s.ReviewHeader(heading(), w)); got != w {
+				t.Fatalf("color %v: header at %d is %d cells", color, w, got)
+			}
+		}
+	}
+}

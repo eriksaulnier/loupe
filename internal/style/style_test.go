@@ -300,3 +300,13 @@ func TestBackgroundSelectsOnePalette(t *testing.T) {
 		t.Fatalf("ANSI critical color: %q", got)
 	}
 }
+
+func TestTruncatesToNothingAtZeroWidth(t *testing.T) {
+	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
+	if got := s.TruncRight("abc", 0); got != "" {
+		t.Errorf("TruncRight at 0 = %q", got)
+	}
+	if got := s.TruncLeft("abc", -1); got != "" {
+		t.Errorf("TruncLeft below 0 = %q", got)
+	}
+}

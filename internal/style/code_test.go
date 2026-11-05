@@ -1,12 +1,15 @@
 package style
 
 import (
+	"errors"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -136,5 +139,49 @@ func TestCodeLineBackgroundsAndMarkers(t *testing.T) {
 	ctx := s.CodeLine(CodeRow{Num: 7, Kind: CodeContext, Tokens: []CodeToken{{Role: TokenKeyword, Text: "if"}}}, 4, 30)
 	if strings.Contains(ctx, "48;2;") {
 		t.Errorf("a context line has a background: %q", ctx)
+	}
+}
+
+// A tokenizer failure is returned, so the caller keeps the plain lines and says so.
+func TestHighlightReturnsATokenizerFailure(t *testing.T) {
+	t.Cleanup(func() { matchLexer = lexers.Match })
+	matchLexer = func(string) chroma.Lexer { return failingLexer{lexers.Get("go")} }
+	lines, err := Highlight("store.go", []string{"if x {"})
+	if err == nil || err.Error() != "highlight store.go: boom" || lines != nil {
+		t.Fatalf("Highlight returned %v, %v; want the tokenizer failure", lines, err)
+	}
+}
+
+type failingLexer struct{ chroma.Lexer }
+
+func (failingLexer) Tokenise(*chroma.TokeniseOptions, string) (chroma.Iterator, error) {
+	return nil, errors.New("boom")
+}
+
+// A lexer that emits no tokens for a line leaves that line as plain neutral text.
+func TestHighlightKeepsALineTheLexerSkippedAsPlainText(t *testing.T) {
+	silent := chroma.EmitterFunc(func([]string, *chroma.LexerState) chroma.Iterator { return chroma.Literator() })
+	lexer := chroma.MustNewLexer(&chroma.Config{Name: "silent"}, func() chroma.Rules {
+		return chroma.Rules{"root": {{Pattern: `(?s).+`, Type: silent}}}
+	})
+	t.Cleanup(func() { matchLexer = lexers.Match })
+	matchLexer = func(string) chroma.Lexer { return lexer }
+	lines, err := Highlight("store.go", []string{"if x {", "}"})
+	want := [][]CodeToken{{{Role: TokenNeutral, Text: "if x {"}}, {{Role: TokenNeutral, Text: "}"}}}
+	if err != nil || !reflect.DeepEqual(lines, want) {
+		t.Fatalf("Highlight = %v, %v; want each line as one neutral token", lines, err)
+	}
+}
+
+// Sixteen colors cannot mute a token, so a keyword is bold instead, and a line wider than its width is cut to fit.
+func TestCodeLineInSixteenColorsAndNarrow(t *testing.T) {
+	s := reviewStyle(t, true, nil)
+	s.SetColorProfile(colorprofile.ANSI)
+	s.UseReviewTheme()
+	if l := s.CodeLine(row(CodeContext, false, "if x {"), 4, 40); !regexp.MustCompile(`\x1b\[(?:[0-9;]*;)?1(?:;[0-9;]*)?mif`).MatchString(l) {
+		t.Errorf("the keyword is not bold in 16 colors: %q", l)
+	}
+	if l := s.CodeLine(row(CodeAdded, false, "if x { return }"), 4, 10); Width(l) != 10 {
+		t.Errorf("a narrow line is %d cells, want 10: %q", Width(l), l)
 	}
 }
