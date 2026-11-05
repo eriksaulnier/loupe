@@ -41,6 +41,8 @@ const (
 	NoPaneHost         Code = "no-pane-host"
 	PaneFailed         Code = "pane-failed"
 	ReviewOpen         Code = "review-open"
+	Returned           Code = "returned"
+	WrongMode          Code = "wrong-mode"
 	Internal           Code = "internal"
 )
 

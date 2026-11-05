@@ -68,6 +68,8 @@ Refusal or error (exit 1 or 2):
 | `no-pane-host` | `handoff` found no terminal that can open a pane | ask the human to run `loupe review '<ref>'` |
 | `pane-failed` | The host refused or garbled a `handoff` call; `details.host` (`herdr`, `tmux`, `orca`, `iterm2` or `ghostty`) and `details.step` name where | the same; the message carries the host's error and, after any step but `probe`, says a pane may already be open |
 | `review-open` | `handoff` while a `review` of any round of the pull request is running; `details.run` names that run (`specs/036-review-pane-guards`) | when `details.run` is the resolved run, tell the human their review is already open, then `loupe wait`; otherwise ask the human to finish or quit that review, then `loupe handoff` again |
+| `returned` | A local run was returned, and it accepts no change, no review and no handoff (`specs/049-apply-mode`) | `loupe feedback --run <ref>` to read the decisions, or `loupe capture --changed\|--files\|--no-files` to start a new run |
+| `wrong-mode` | The command or flag applies only to PR runs (`specs/049-apply-mode`) | on a local run, the return action in `loupe review`, or `loupe feedback` |
 | `internal` | A defect | file an issue; stack on stderr |
 
 ## Warning codes
