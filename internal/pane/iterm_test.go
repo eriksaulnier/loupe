@@ -175,3 +175,15 @@ func TestITermRunFailureLeavesThePane(t *testing.T) {
 		t.Fatalf("made %d calls, want 3: %q", len(f.calls), f.calls)
 	}
 }
+
+func TestITermSplitFailureStopsBeforeTheRun(t *testing.T) {
+	f := &fakeRunner{replies: map[string]reply{
+		"probe": {stdout: "150\n"},
+		"split": {stderr: "execution error: iTerm2 got an error: Can't split. (-1728)\n", err: errExit1},
+	}}
+	_, err := itermFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
+	assertPaneRefusal(t, err, "iterm2", "split", "iterm2 split: execution error: iTerm2 got an error: Can't split. (-1728); a pane may already be open")
+	if len(f.calls) != 2 {
+		t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
+	}
+}

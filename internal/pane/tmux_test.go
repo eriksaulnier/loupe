@@ -205,3 +205,39 @@ func TestTmuxRunFailureLeavesThePane(t *testing.T) {
 		}
 	}
 }
+
+// A failed split stops before any keys are sent, and a failed Enter after the typed command still refuses at run.
+func TestTmuxRefusesAtTheFailedStep(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		replies map[string]reply
+		step    string
+		calls   int
+		message string
+	}{
+		{"split fails", map[string]reply{
+			"display-message": {stdout: "%3 150 1 0\n"},
+			"split-window":    {stderr: "no space for new pane\n", err: errExit1},
+		}, "split", 2, "tmux split: no space for new pane; a pane may already be open"},
+		{"enter fails", map[string]reply{
+			"display-message": {stdout: "%3 150 1 0\n"},
+			"split-window":    {stdout: tmuxNew + "\n"},
+			"send-keys":       {},
+			"send-keys Enter": {stderr: "can't find pane: %7\n", err: errExit1},
+		}, "run", 4, "tmux run: can't find pane: %7; a pane may already be open"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := &fakeRunner{replies: c.replies, keyOf: func(args []string) string {
+				if args[len(args)-1] == "Enter" {
+					return args[2] + " Enter"
+				}
+				return args[2]
+			}}
+			_, err := Tmux{path: "/bin/tmux", socket: tmuxSocket, paneID: tmuxPane, run: f.run}.Open(context.Background(), Request{Command: command, Fix: fix})
+			assertPaneRefusal(t, err, "tmux", c.step, c.message)
+			if len(f.calls) != c.calls {
+				t.Fatalf("made %d calls, want %d: %q", len(f.calls), c.calls, f.calls)
+			}
+		})
+	}
+}

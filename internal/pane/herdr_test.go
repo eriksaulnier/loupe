@@ -103,6 +103,8 @@ func TestHerdrOpenRefusesAndStopsAtTheFailedStep(t *testing.T) {
 		{"probe is not JSON", map[string]reply{"layout": {stdout: "nope"}}, "probe", 1, "herdr probe: unreadable result: invalid character 'o' in literal null (expecting 'u')"},
 		{"agent pane missing", map[string]reply{"layout": {stdout: strings.ReplaceAll(herdrLayout, "w1:p1", "w1:p7")}}, "probe", 1, "herdr probe: the result does not list pane w1:p1"},
 		{"split fails", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stderr: "socket unreachable\n", err: errExit1}}, "split", 2, "herdr split: socket unreachable; a pane may already be open"},
+		{"split is not JSON", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stdout: "nope"}}, "split", 2,
+			"herdr split: unreadable result: invalid character 'o' in literal null (expecting 'u'); a pane may already be open"},
 		{"split lacks pane_id", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stdout: `{"result":{"pane":{}}}`}}, "split", 2, "herdr split: the result has no pane_id; a pane may already be open"},
 		{"run fails", map[string]reply{"layout": {stdout: herdrLayout}, "split": {stdout: herdrSplit}, "run": {err: errExit1}}, "run", 3, "herdr run: exit status 1; a pane may already be open"},
 	} {
