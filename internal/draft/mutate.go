@@ -807,11 +807,10 @@ const (
 	rewriteIDRetry = "press ctrl+s again"
 )
 
-// Rewrite is the human's title, body and proposal edit from the review interface. It keeps a current decision and
-// closes no note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding.
-// The command line MUST NOT reach it. A nil proposal is left as it is, and so is a blank one on a question, since only
-// the agent turns a finding into a question.
-func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Rules, dif *diff.Diff, now time.Time) (Finding, error) {
+// Rewrite is the human's title and body edit from the review interface. It keeps a current decision and closes no
+// note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding. The
+// command line MUST NOT reach it.
+func Rewrite(d *Draft, findingID, title, body string, rules Rules, dif *diff.Diff, now time.Time) (Finding, error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
 		return Finding{}, err
@@ -819,26 +818,15 @@ func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Ru
 	if err := Rewritable(*stored); err != nil {
 		return Finding{}, err
 	}
-	blankProposal := proposal != nil && strings.TrimSpace(*proposal) == ""
-	if blankProposal && stored.Proposal == "" {
-		proposal = nil
-	}
 	// Checked here, before Edit, whose refusals name loupe edit as the fix.
 	switch {
 	case strings.TrimSpace(title) == "":
 		return Finding{}, refusal.New(refusal.Input, "the title must not be empty", rewriteFix)
 	case strings.TrimSpace(body) == "":
 		return Finding{}, refusal.New(refusal.Input, "the body must not be empty", rewriteFix)
-	case blankProposal && stored.Proposal != "":
-		return Finding{}, refusal.New(refusal.Input, "a proposal can't be empty", "the agent turns a finding into a question with loupe edit")
 	}
 	if err := markdown.Check(body, markdown.Body, rewriteFix); err != nil {
 		return Finding{}, err
-	}
-	if proposal != nil && *proposal != "" {
-		if err := markdown.Check(*proposal, markdown.Proposal, rewriteFix); err != nil {
-			return Finding{}, err
-		}
 	}
 	changedTitle, changedBody := title, body
 	if changedTitle == stored.Title {
@@ -847,11 +835,7 @@ func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Ru
 	if changedBody == stored.Body {
 		changedBody = ""
 	}
-	changedProposal := ""
-	if proposal != nil && *proposal != stored.Proposal {
-		changedProposal = *proposal
-	}
-	if err := checkFindingIDs(changedTitle, changedBody, "", "", changedProposal, rewriteIDRetry); err != nil {
+	if err := checkFindingIDs(changedTitle, changedBody, "", "", "", rewriteIDRetry); err != nil {
 		return Finding{}, err
 	}
 	titleJSON, err := json.Marshal(title)
@@ -862,17 +846,9 @@ func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Ru
 	if err != nil {
 		return Finding{}, err
 	}
-	editIn := EditInput{Title: titleJSON, Body: bodyJSON}
-	if proposal != nil {
-		p, err := json.Marshal(*proposal)
-		if err != nil {
-			return Finding{}, err
-		}
-		editIn.Proposal = p
-	}
 	decision, decided := d.Decisions[stored.ID]
 	current := decided && decision.FindingRev == stored.Rev
-	f, _, err := Edit(d, findingID, editIn, nil, dif, ByHuman, rules, now)
+	f, _, err := Edit(d, findingID, EditInput{Title: titleJSON, Body: bodyJSON}, nil, dif, ByHuman, rules, now)
 	if err != nil {
 		return f, err
 	}

@@ -31,8 +31,6 @@ type modeUI interface {
 	watchesPR() bool
 	// plainCode reports whether the code pane and the file diff draw t's files as plain text, with no diff gutter.
 	plainCode(t run.Target) bool
-	// rewriteFields names the fields w edits, in tab order: title and body, then the proposal where the mode has one.
-	rewriteFields() []string
 }
 
 func uiFor(t run.Target) modeUI {
@@ -148,8 +146,6 @@ func (publishUI) question(draft.Finding) bool { return false }
 func (publishUI) watchesPR() bool { return true }
 
 func (publishUI) plainCode(run.Target) bool { return false }
-
-func (publishUI) rewriteFields() []string { return []string{"title", "body"} }
 
 // detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An
 // action the finding cannot take is not advertised, though its key still answers with a notice.
@@ -306,8 +302,6 @@ func (applyUI) watchesPR() bool { return false }
 
 // plainCode is true on a --files run, whose diff adds each file whole only because it was captured from nothing.
 func (applyUI) plainCode(t run.Target) bool { return t.Local != nil && t.Local.Capture == "files" }
-
-func (applyUI) rewriteFields() []string { return []string{"title", "body", "proposal"} }
 
 func localRef(t run.Target) string {
 	ref := run.Ref{Local: 1}

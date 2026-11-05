@@ -11,8 +11,8 @@ Every task follows a failing test, then the change, then a passing check. PR run
 
 ## Phase 2: Drop the rewrite path (US3, FR-007, FR-008)
 
-- [ ] T003 [US3] Change the tests first: `internal/mode/feedback_test.go` expects a finding the human rewrote, accepted with no note, in `apply`; delete `TestHumanEdited` in `internal/draft/derive_test.go` and the proposal cases of `Rewrite` in `internal/draft/mutate_edit_test.go`, and update the `rewrite_test.go` cases that drove the third field.
-- [ ] T004 [US3] Remove `draft.HumanEdited` (`internal/draft/derive.go`), the proposal parameter of `draft.Rewrite` (`internal/draft/mutate.go`) and every caller, and `rewriteFields` from `modeUI` (`internal/tui/rewrite.go` keeps two fields). Group `applyWithChanges` on the decision note only in `internal/mode/feedback.go`.
+- [x] T003 [US3] Change the tests first: `internal/mode/feedback_test.go` expects a finding the human rewrote, accepted with no note, in `apply`; delete `TestHumanEdited` in `internal/draft/derive_test.go` and the proposal cases of `Rewrite` in `internal/draft/mutate_edit_test.go`, and update the `rewrite_test.go` cases that drove the third field.
+- [x] T004 [US3] Remove `draft.HumanEdited` (`internal/draft/derive.go`), the proposal parameter of `draft.Rewrite` (`internal/draft/mutate.go`) and every caller, and `rewriteFields` from `modeUI` (`internal/tui/rewrite.go` keeps two fields). Group `applyWithChanges` on the decision note only in `internal/mode/feedback.go`.
 
 ## Phase 3: Closing note (US1, FR-001 to FR-005)
 

@@ -64,7 +64,7 @@ func TestApplyFeedbackGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
-		"apply": {"f-001"}, "applyWithChanges": {"f-002", "f-003"}, "excluded": {"f-004", "f-005"}, "withdrawn": {"f-006"},
+		"apply": {"f-001", "f-003"}, "applyWithChanges": {"f-002"}, "excluded": {"f-004", "f-005"}, "withdrawn": {"f-006"},
 	}
 	if got := groupIDs(t, payload); !reflect.DeepEqual(got, want) {
 		t.Fatalf("groups %v, want %v", got, want)
@@ -92,7 +92,7 @@ func TestApplyFeedbackGroups(t *testing.T) {
 	if changed["suggestion"] != "Use option B." || string(threadJSON) != wantThread {
 		t.Errorf("applyWithChanges entry %v thread %s", changed, threadJSON)
 	}
-	if _, ok := groups["applyWithChanges"][1]["suggestion"]; ok {
+	if _, ok := groups["apply"][1]["suggestion"]; ok {
 		t.Errorf("a human edit without a note carries a suggestion")
 	}
 	if groups["excluded"][0]["reason"] != "Out of scope." {

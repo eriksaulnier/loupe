@@ -128,13 +128,12 @@ type Model struct {
 	editBlocking bool
 	// rewriting is true while the rewrite editor is open. rewriteRev is the revision its text started from, and
 	// rewriteOpened the finding's text it stands on.
-	rewriting       bool
-	rewriteTitle    textarea.Model
-	rewriteBody     textarea.Model
-	rewriteProposal textarea.Model
-	rewriteFocus    rewriteField
-	rewriteRev      int
-	rewriteOpened   []openedText
+	rewriting     bool
+	rewriteTitle  textarea.Model
+	rewriteBody   textarea.Model
+	rewriteFocus  rewriteField
+	rewriteRev    int
+	rewriteOpened []openedText
 	// keptRewrites holds, per finding, text the human left in the editor with esc. It lives only as long as the program.
 	keptRewrites map[string]keptRewrite
 	glamour      *glamour.TermRenderer
@@ -232,24 +231,23 @@ func New(cfg Config) (*Model, error) {
 	note.SetVirtualCursor(false)
 	note.KeyMap.InsertNewline.SetEnabled(false)
 	m := &Model{
-		cfg:             cfg,
-		target:          target,
-		ui:              uiFor(target),
-		rules:           mode.Of(target).Rules(),
-		diff:            parsed,
-		glyphs:          st.Glyphs,
-		styles:          st,
-		width:           80,
-		height:          24,
-		note:            note,
-		keptNotes:       map[string]string{},
-		keptRewrites:    map[string]keptRewrite{},
-		prNoticed:       map[string]bool{},
-		rewriteTitle:    newRewriteInput(false),
-		rewriteBody:     newRewriteInput(true),
-		rewriteProposal: newRewriteInput(true),
-		body:            viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
-		file:            viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		cfg:          cfg,
+		target:       target,
+		ui:           uiFor(target),
+		rules:        mode.Of(target).Rules(),
+		diff:         parsed,
+		glyphs:       st.Glyphs,
+		styles:       st,
+		width:        80,
+		height:       24,
+		note:         note,
+		keptNotes:    map[string]string{},
+		keptRewrites: map[string]keptRewrite{},
+		prNoticed:    map[string]bool{},
+		rewriteTitle: newRewriteInput(false),
+		rewriteBody:  newRewriteInput(true),
+		body:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
+		file:         viewport.New(viewport.WithWidth(80), viewport.WithHeight(10)),
 	}
 	if cfg.Screen != nil {
 		m.width, m.height = cfg.Screen.Width, cfg.Screen.Height
