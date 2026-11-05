@@ -46,6 +46,7 @@ func ReadFiles(args []string, cwd, root, home string) ([]File, []run.LocalSkippe
 	var files []File
 	var skipped []run.LocalSkipped
 	seen := map[string]string{}
+	shown := map[string]string{}
 	external := 0
 	for _, arg := range args {
 		abs := arg
@@ -82,6 +83,11 @@ func ReadFiles(args []string, cwd, root, home string) ([]File, []run.LocalSkippe
 			external++
 			display = "ext/" + strconv.Itoa(external) + "/" + filepath.Base(abs)
 		}
+		if first, ok := shown[display]; ok {
+			return nil, nil, refusal.New(refusal.Usage, fmt.Sprintf("--files %s would show as %s, which %s already names", arg, display, first),
+				"capture the two files in separate runs, or move one so their paths differ")
+		}
+		shown[display] = arg
 		if i := strings.IndexFunc(display, quoted); i >= 0 {
 			return nil, nil, refusal.New(refusal.Usage, fmt.Sprintf("--files %s: its path %q holds %q, which a diff header would quote", arg, display, display[i]),
 				"rename the file, or capture a copy whose name has no control character, quote or backslash")

@@ -135,3 +135,12 @@ func TestReadFilesSkips(t *testing.T) {
 		t.Fatalf("files %+v", files)
 	}
 }
+
+func TestReadFilesRefusesTwoFilesWithOneDisplayPath(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "root")
+	write(t, filepath.Join(root, "ext", "1", "plan.md"), []byte("inside\n"))
+	outside := write(t, filepath.Join(base, "other", "plan.md"), []byte("outside\n"))
+	_, _, err := ReadFiles([]string{"ext/1/plan.md", outside}, root, root, filepath.Join(base, "home"))
+	wantUsage(t, err, outside)
+}
