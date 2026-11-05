@@ -1,0 +1,211 @@
+name: prerelease
+
+# Cuts X.Y.Z-rc.N from a branch, outside release-please, so a feature can be installed before it reaches main.
+# docs/releasing.md describes the flow and its rules.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The branch to release, such as 052-finding-design-language.
+        required: true
+        type: string
+      version:
+        description: The version without a leading v, as X.Y.Z-rc.N. X.Y.Z MUST be greater than the last release.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One run at a time, so two dispatches cannot race to one version. GitHub keeps one pending run per group, and a newer
+# dispatch cancels it before it has written anything.
+concurrency:
+  group: prerelease
+  cancel-in-progress: false
+
+jobs:
+  # Writes nothing, so every refusal here leaves GitHub as it was.
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.inputs.outputs.sha }}
+    steps:
+      - id: inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref }}
+          VERSION: ${{ inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # The release job takes .goreleaser.yaml from the dispatched commit. A dispatch from another branch could run a
+          # config without prerelease: auto, and publish the rc as a full release that becomes latest.
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "::error::this workflow ran from $GITHUB_REF. Dispatch it from $DEFAULT_BRANCH, and name the branch to release in ref."
+            exit 1
+          fi
+          n='(0|[1-9][0-9]*)'
+          if ! [[ "$VERSION" =~ ^$n\.$n\.$n-rc\.$n$ ]]; then
+            echo "::error::version '$VERSION' is not X.Y.Z-rc.N. Give it without the leading v, such as 0.22.0-rc.1."
+            exit 1
+          fi
+          base="${VERSION%%-*}"
+
+          released="$(gh api -H 'Accept: application/vnd.github.raw' "repos/$GITHUB_REPOSITORY/contents/.release-please-manifest.json?ref=$DEFAULT_BRANCH" | jq -r '."."')"
+          if ! [[ "$released" =~ ^$n\.$n\.$n$ ]]; then
+            echo "::error::.release-please-manifest.json on $DEFAULT_BRANCH holds '$released', not X.Y.Z."
+            exit 1
+          fi
+          if [ "$base" = "$released" ] || [ "$(printf '%s\n' "$base" "$released" | sort -V | tail -n 1)" != "$base" ]; then
+            echo "::error::$VERSION is based on $base, which is not greater than the last release, $released. Use a base above $released."
+            exit 1
+          fi
+
+          # matching-refs matches by prefix, so only the exact ref counts. A missing ref is an empty list, not an error.
+          tag="$(TAG="refs/tags/v$VERSION" gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$VERSION" --jq '.[] | select(.ref == env.TAG) | .ref')"
+          if [ -n "$tag" ]; then
+            echo "::error::tag v$VERSION already exists. A tag cannot be reused, so pick the next rc number."
+            exit 1
+          fi
+          sha="$(BRANCH="refs/heads/$REF" gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/heads/$REF" --jq '.[] | select(.ref == env.BRANCH) | .object.sha')"
+          if [ -z "$sha" ]; then
+            echo "::error::'$REF' is not a branch of $GITHUB_REPOSITORY. Give the branch name without refs/heads/."
+            exit 1
+          fi
+          echo "Releasing $REF at $sha as v$VERSION"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  # Runs the branch's code, so it gets no write token.
+  check:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+      - run: mise run check
+
+  release:
+    needs: [validate, check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      REF: ${{ inputs.ref }}
+      SHA: ${{ needs.validate.outputs.sha }}
+      TAG: v${{ inputs.version }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+      # The default branch's config, not the branch's: a branch cut before prerelease: auto would publish as a full
+      # release and become latest. Outside the clone, because goreleaser refuses a dirty tree.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api -H 'Accept: application/vnd.github.raw' "repos/$GITHUB_REPOSITORY/contents/.goreleaser.yaml?ref=$GITHUB_SHA" > "$RUNNER_TEMP/goreleaser.yaml"
+          grep -Eq '^  prerelease: auto$' "$RUNNER_TEMP/goreleaser.yaml" ||
+            { echo "::error::.goreleaser.yaml at $GITHUB_SHA does not set release.prerelease: auto, so the rc would publish as a full release"; exit 1; }
+      # goreleaser needs the tag at HEAD, and GitHub creates it only when goreleaser publishes the draft. This one
+      # stays in the runner's clone. GORELEASER_CURRENT_TAG wins over a release tag on the same commit.
+      - run: git tag "$TAG"
+      # Only an account with push access sees drafts, so this lookup cannot run in validate. A re-run of failed jobs
+      # finds the draft an earlier attempt created, and reuses it only when it targets the same commit.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          found="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.name == env.TAG or .tag_name == env.TAG) | "\(.id) \(.draft) \(.target_commitish)"')"
+          if [ -z "$found" ]; then
+            printf -v notes '%s\n\n%s' \
+              "A pre-release of \`$REF\` at $SHA, cut by the prerelease workflow. It is not a supported release, and the next release supersedes it." \
+              "Install the binary with \`curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=$VERSION sh\`. [Install a pre-release]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/docs/install.md#pre-releases) covers the plugin and what differs from a release."
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --prerelease --target "$SHA" --title "$TAG" --notes "$notes"
+          elif [ "$(wc -l <<<"$found")" -eq 1 ] && [ "$found" = "${found%% *} true $SHA" ]; then
+            echo "Reusing the draft $TAG at $SHA"
+          else
+            echo "::error::a release named or tagged $TAG already exists and is not a draft at $SHA: $found. Delete that draft, or pick the next rc number."
+            exit 1
+          fi
+      # The same guard as release.yml: goreleaser creates and publishes a release of its own when it finds no draft by
+      # this name, which an immutable release would make permanent.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          drafts="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft and .name == env.TAG) | .id' | wc -l | tr -d ' ')"
+          [ "$drafts" = 1 ] || { echo "::error::want exactly one draft release named $TAG for goreleaser to publish, found $drafts"; exit 1; }
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --config ${{ runner.temp }}/goreleaser.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+
+  # A job of its own, so a re-run after a failure here does not re-run release, which refuses a published release.
+  verify:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          state="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')"
+          [ "$state" = "false true" ] || { echo "::error::$TAG has isDraft and isPrerelease '$state', want 'false true'"; exit 1; }
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          [ "$latest" != "$TAG" ] || { echo "::error::$TAG is marked latest, so install.sh with no pin would install it"; exit 1; }
+          echo "Published $TAG as a pre-release. Latest is still $latest."
+
+  # At the pre-release's commit, which is the action that uses: eriksaulnier/loupe@<tag> runs.
+  install-action:
+    needs: [validate, verify]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          persist-credentials: false
+      - uses: ./
+        with:
+          version: v${{ inputs.version }}
+      - env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          want="loupe version $VERSION"
+          got="$(loupe --version)"
+          [ "$got" = "$want" ] || { echo "::error::loupe --version printed '$got', want '$want'"; exit 1; }
+
+  # From the default branch, because Pages serves install.sh from main, not from the pre-release.
+  install-script:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          LOUPE_VERSION="$VERSION" LOUPE_INSTALL_DIR="$RUNNER_TEMP/loupe-bin" sh install.sh
+          want="loupe version $VERSION"
+          got="$("$RUNNER_TEMP/loupe-bin/loupe" --version)"
+          [ "$got" = "$want" ] || { echo "::error::loupe --version printed '$got', want '$want'"; exit 1; }
