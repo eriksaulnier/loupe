@@ -807,9 +807,10 @@ const (
 	rewriteIDRetry = "press ctrl+s again"
 )
 
-// Rewrite is the human's title and body edit from the review interface. It keeps a current decision and closes no
-// note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding. The
-// command line MUST NOT reach it.
+// Rewrite is the human's title, body and proposal edit from the review interface. It keeps a current decision and
+// closes no note, as Recalibrate does, and for the same reason: the human typed the text while looking at the finding.
+// The command line MUST NOT reach it. A nil proposal is left as it is, and so is a blank one on a question, since only
+// the agent turns a finding into a question.
 func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Rules, dif *diff.Diff, now time.Time) (Finding, error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
@@ -818,14 +819,18 @@ func Rewrite(d *Draft, findingID, title, body string, proposal *string, rules Ru
 	if err := Rewritable(*stored); err != nil {
 		return Finding{}, err
 	}
+	blankProposal := proposal != nil && strings.TrimSpace(*proposal) == ""
+	if blankProposal && stored.Proposal == "" {
+		proposal = nil
+	}
 	// Checked here, before Edit, whose refusals name loupe edit as the fix.
 	switch {
 	case strings.TrimSpace(title) == "":
 		return Finding{}, refusal.New(refusal.Input, "the title must not be empty", rewriteFix)
 	case strings.TrimSpace(body) == "":
 		return Finding{}, refusal.New(refusal.Input, "the body must not be empty", rewriteFix)
-	case proposal != nil && stored.Proposal != "" && strings.TrimSpace(*proposal) == "":
-		return Finding{}, refusal.New(refusal.Input, "the proposal must not be empty", rewriteFix)
+	case blankProposal && stored.Proposal != "":
+		return Finding{}, refusal.New(refusal.Input, "a proposal can't be empty", "the agent turns a finding into a question with loupe edit")
 	}
 	if err := markdown.Check(body, markdown.Body, rewriteFix); err != nil {
 		return Finding{}, err
