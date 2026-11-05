@@ -2,11 +2,13 @@ package run
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -279,6 +281,21 @@ func TestCreateRunRefusesExisting(t *testing.T) {
 	entries, _ := os.ReadDir(filepath.Dir(dir))
 	if len(entries) != 1 {
 		t.Fatalf("leftover entries: %v", entries)
+	}
+}
+
+// Only a run directory that is already there is the bug to file. A path loupe cannot look at is reported as the
+// error it is.
+func TestCreateRunReportsARunDirectoryItCannotStat(t *testing.T) {
+	parent := filepath.Join(t.TempDir(), "runs")
+	if err := os.WriteFile(parent, []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(parent, "1")
+	err := CreateRun(dir, sampleTarget(), nil, []byte("{}\n"), nil)
+	if _, isRefusal := refusal.As(err); isRefusal || !errors.Is(err, syscall.ENOTDIR) ||
+		err.Error() != "lstat "+dir+": not a directory" {
+		t.Fatalf("CreateRun = %v, want the stat error for %s", err, dir)
 	}
 }
 

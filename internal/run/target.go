@@ -225,8 +225,11 @@ const CommentsFile = "comments.json"
 // not import draft or publish. The run appears complete or not at all: files are written to a sibling temp directory
 // that is renamed into place.
 func CreateRun(dir string, target Target, diff, draftJSON []byte, optional map[string][]byte) (err error) {
-	if _, statErr := os.Lstat(dir); !errors.Is(statErr, fs.ErrNotExist) {
+	switch _, statErr := os.Lstat(dir); {
+	case statErr == nil:
 		return refusal.New(refusal.Internal, fmt.Sprintf("run directory %s already exists", dir), "file an issue")
+	case !errors.Is(statErr, fs.ErrNotExist):
+		return statErr
 	}
 	parent := filepath.Dir(dir)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
