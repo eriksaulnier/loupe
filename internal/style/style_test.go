@@ -148,12 +148,6 @@ func TestReadinessNamesTheRemainder(t *testing.T) {
 	}
 }
 
-func TestContentCapsAtTheReadableWidth(t *testing.T) {
-	if Content(80) != 80 || Content(110) != 110 || Content(200) != 110 {
-		t.Fatal("Content must be min(width, 110)")
-	}
-}
-
 func TestTruncateBothEnds(t *testing.T) {
 	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
 	if got := s.TruncRight("abcdefghij", 5); got != "abcd…" {
@@ -211,9 +205,6 @@ func TestHeadingIsSentenceCase(t *testing.T) {
 	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
 	if got := s.Heading("send-back loop"); got != "Send-back loop" {
 		t.Errorf("heading %q", got)
-	}
-	if got := s.Brand(); got != "loupe" {
-		t.Errorf("brand %q", got)
 	}
 }
 

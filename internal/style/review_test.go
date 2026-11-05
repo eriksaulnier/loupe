@@ -3,6 +3,7 @@ package style
 import (
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -258,7 +259,7 @@ func states(counts map[ProgressState]int) []ProgressState {
 // Up to 30 counted findings get one cell each in list order; from 31 a 20-cell bar groups them (FR-004).
 func TestProgressCells(t *testing.T) {
 	order := []ProgressState{ProgressBlocking, ProgressNote, ProgressAccepted, ProgressAccepted, ProgressExcluded, ProgressPending}
-	if got := ProgressCells(order); !slicesEqual(got, order) {
+	if got := ProgressCells(order); !slices.Equal(got, order) {
 		t.Errorf("small round cells %v, want list order %v", got, order)
 	}
 	thirty := states(map[ProgressState]int{ProgressAccepted: 10, ProgressPending: 20})
@@ -293,18 +294,6 @@ func TestProgressCells(t *testing.T) {
 	if got := ProgressCells(nil); len(got) != 0 {
 		t.Errorf("empty round drew cells %v", got)
 	}
-}
-
-func slicesEqual(a, b []ProgressState) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestProgressBarGlyphs(t *testing.T) {
