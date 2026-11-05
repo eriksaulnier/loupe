@@ -244,3 +244,61 @@ func TestStageWorktreeRefusesAStagedFilteredEdit(t *testing.T) {
 		t.Fatalf("StageWorktree = %v, want a ConvertedError", err)
 	}
 }
+
+// erroringGit puts a git on PATH that exits 2 when any argument equals arg. A config lookup reads exit 1 as an unset
+// key, so only another code reaches its error return.
+func erroringGit(t *testing.T, arg string) {
+	t.Helper()
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"" + arg + "\" ]; then echo 'injected failure' >&2; exit 2; fi\ndone\nexec '" + real + "' \"$@\"\n"
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// A failed line ending config lookup comes back as an error, and so does an unreadable text=auto file Git would
+// otherwise inspect for a NUL.
+func TestConvertedReturnsConfigAndReadFailures(t *testing.T) {
+	for _, arg := range []string{"core.autocrlf", "core.eol"} {
+		t.Run(arg, func(t *testing.T) {
+			dir, _ := filteredRepo(t)
+			erroringGit(t, arg)
+			if err := stageErr(t, dir); err == nil {
+				t.Fatalf("no error when the %s lookup fails", arg)
+			}
+		})
+	}
+	t.Run("autocrlf bool", func(t *testing.T) {
+		dir, _ := filteredRepo(t)
+		runGit(t, dir, "config", "core.autocrlf", "yes")
+		erroringGit(t, "--type=bool")
+		if err := stageErr(t, dir); err == nil {
+			t.Fatal("no error when the core.autocrlf bool lookup fails")
+		}
+	})
+	t.Run("unreadable text=auto file", func(t *testing.T) {
+		repo := gitrepo.New(t, "o", "r", 1)
+		writeFile(t, filepath.Join(repo.Dir, ".gitattributes"), "*.t text=auto\n", 0o644)
+		writeFile(t, filepath.Join(repo.Dir, "f.t"), "a\n", 0o644)
+		repo.Git("add", ".gitattributes", "f.t")
+		repo.Git("commit", "-q", "-m", "auto")
+		repo.Git("config", "core.autocrlf", "true")
+		writeFile(t, filepath.Join(repo.Dir, "f.t"), "b\n", 0o644)
+		ix := WithIndex(repo.Dir, filepath.Join(t.TempDir(), "index"))
+		if err := ix.ReadTree("HEAD"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(filepath.Join(repo.Dir, "f.t"), 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(filepath.Join(repo.Dir, "f.t"), 0o644) })
+		if _, _, err := ix.converted([]string{"f.t"}); err == nil {
+			t.Fatal("no error reading an unreadable text=auto file")
+		}
+	})
+}
