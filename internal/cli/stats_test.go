@@ -418,6 +418,10 @@ func TestStatsRefusesBadArgumentsAsUsage(t *testing.T) {
 // Two runs are seeded the ordinary way and copied with plain writes, since CreateRun's fsyncs would cost the suite
 // far more than the command under test.
 func TestStatsReadsFiveHundredRunsInUnderASecond(t *testing.T) {
+	// The bound is wall-clock time, which coverage counters and the race detector inflate several times over.
+	if testing.CoverMode() != "" || raceDetector {
+		t.Skip("timing is not meaningful under coverage or the race detector")
+	}
 	var findings []draft.Finding
 	for i := 1; i <= 20; i++ {
 		findings = append(findings, statsFinding(fmt.Sprintf("f-%03d", i), "issue", false))
