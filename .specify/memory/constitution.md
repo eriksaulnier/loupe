@@ -1,6 +1,6 @@
 # loupe Constitution
 
-loupe gives any shell-capable agent a standard way to file pull-request review findings into a local draft, gives the human a terminal interface to decide each finding, and creates or edits exactly one GitHub review per publication: confirmed by the human, or sent by a GitHub App and marked unattended. These principles govern every specification, plan and task in this repository.
+loupe gives any shell-capable agent a standard way to file review findings into a local draft, and gives the human a terminal interface to decide each finding. A run ends in one of two ways. For a pull request, loupe creates or edits exactly one GitHub review per publication: confirmed by the human, or sent by a GitHub App and marked unattended. For local work, loupe returns the human's decisions to the agent that will apply them, and contacts no service. These principles govern every specification, plan and task in this repository.
 
 ## Core Principles
 
@@ -50,7 +50,9 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 This constitution supersedes every other practice in the repository. An amendment MUST state what changed and why, bump the version below (MAJOR for a removed or redefined principle, MINOR for a new principle or section, PATCH for wording), and update the specification and plan when a principle they rely on changes. Plans MUST include a Constitution Check and justify each violation in Complexity Tracking.
 
-**Version**: 3.1.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-26
+**Version**: 3.2.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-11-03
+
+**3.2.0** (2026-11-03): The preamble names a second ending for a run. loupe returns the human's decisions on local work to the agent that will apply them, and contacts no service. This is MINOR because it widens the scope that the principles govern, and it removes or redefines no principle (owner, 2026-11-03, decision D1 of spec 049). The preamble said loupe files pull-request findings and ends each run in one GitHub review, and `specs/049-apply-mode` adds apply mode for local plans, specs and code. Principle II still covers everything that reaches GitHub, and an apply run reaches nothing there.
 
 **3.1.0** (2026-09-26): Principle V gains a compatibility rule: run files and the findings record MUST follow the versioning rule in `docs/versioning.md`. This is MINOR because it adds a normative rule, which is more than wording, and it removes or redefines nothing (owner, 2026-09-26). Three fields reached the attempt and the receipt with no schema bump, and a file from a newer loupe read as damage with a fix that sent the human to inspect it rather than to upgrade. The rule now lives in one page, and a test pins each record's fields to its schema.
 
