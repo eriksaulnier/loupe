@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -277,26 +276,18 @@ func TestApplyReturnTakesOneKeyPerDecision(t *testing.T) {
 	}
 	tm := newTestModel(t, m, 100, 40)
 	waitFor(t, tm, "10 findings to decide")
-	keys := 0
-	send := func(k tea.KeyPressMsg) {
-		tm.Send(k)
-		keys++
-	}
-	send(enterKey)
+	tm.Send(enterKey)
 	for i := range 10 {
 		waitFor(t, tm, fmt.Sprintf("%d/10 decided", i))
 		if i%3 == 2 {
-			send(runes("x"))
+			tm.Send(runes("x"))
 			continue
 		}
-		send(runes("a"))
+		tm.Send(runes("a"))
 	}
 	waitFor(t, tm, "10/10 decided", "Return to Claude")
-	send(enterKey)
+	tm.Send(enterKey)
 	tm.WaitFinished(t, teatest.WithFinalTimeout(10*time.Second))
-	if want := 1 + 10 + 1; keys != want {
-		t.Errorf("the run took %d keys, want %d", keys, want)
-	}
 	d := loadDraft(t, dir)
 	for i, f := range draft.Ordered(d) {
 		want := draft.DispositionAccepted

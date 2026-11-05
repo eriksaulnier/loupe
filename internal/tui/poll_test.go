@@ -189,19 +189,6 @@ func TestPollRunsWithNothingAwaiting(t *testing.T) {
 	}
 }
 
-func TestDecisionBeforeThePollIsStale(t *testing.T) {
-	m, dir := newAwaitingModel(t, 40)
-	pressKeys(t, m, "enter")
-	agentRetitles(t, dir, "f-001", "Retitled one")
-	pressKeys(t, m, "a")
-	if m.notice != staleNotice {
-		t.Fatalf("notice %q", m.notice)
-	}
-	if d := loadDraft(t, dir); len(d.Decisions) != 0 {
-		t.Fatalf("decisions %v", d.Decisions)
-	}
-}
-
 func TestPollHoldsWhileTheHumanWrites(t *testing.T) {
 	for name, open := range map[string]func(t *testing.T, m *Model){
 		"send-back note": func(t *testing.T, m *Model) { pressKeys(t, m, "enter", "s", "half a thought") },

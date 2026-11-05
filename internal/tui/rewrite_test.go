@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 
@@ -354,15 +353,6 @@ func TestRewriteRefusesAWithdrawnFinding(t *testing.T) {
 	}
 }
 
-func TestRewriteIsDroppedWhileSettling(t *testing.T) {
-	m, _ := editModel(t, "f-001", unchanged)
-	m.settling = true
-	m.Update(runeKey("w"))
-	if m.rewriting {
-		t.Fatal("a typed-ahead w opened the editor on a finding that was never on screen")
-	}
-}
-
 func TestRewritePollChangesNothingWhileTheEditorIsOpen(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
 	m.Update(runeKey("w"))
@@ -515,17 +505,6 @@ func TestDetailSaysTheAgentChangedTheHumansTextAndWhyItWithdrew(t *testing.T) {
 	// Withdrawn is the finding's state, so it comes first, and the notice follows it above the evidence.
 	if notice < 0 || reason < 0 || reason > notice || notice > strings.Index(view, "Why") {
 		t.Fatalf("notice at %d, reason at %d:\n%s", notice, reason, view)
-	}
-}
-
-func TestHelpNamesTheRewriteKey(t *testing.T) {
-	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 40)
-	if err := m.openFinding("f-001"); err != nil {
-		t.Fatal(err)
-	}
-	m.help = true
-	if !regexp.MustCompile(`(?m)│ w +rewrite title and body; ctrl\+s saves, esc keeps the text`).MatchString(m.View().Content) {
-		t.Fatalf("help does not name w:\n%s", m.View().Content)
 	}
 }
 

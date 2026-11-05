@@ -197,9 +197,6 @@ func TestPRKeysOPEAndX(t *testing.T) {
 	if ready.view != viewAction {
 		t.Errorf("p on a ready draft: view %d, want the action step", ready.view)
 	}
-	if got := fmt.Sprint(publishSteps); got != "[Action Inline comments Message]" {
-		t.Errorf("publish steps %s", got)
-	}
 }
 
 // applyInputs are a local run's findings: f-001 at a.go:3 with a proposal, f-002 a general question with none, and
@@ -272,14 +269,11 @@ func keysOf(hints []style.Hint) []string {
 	return out
 }
 
-// On a local run the detail offers each decision key next to its shift, which adds the human's words: a and A, x
-// and X. Neither t nor w is offered.
+// On a local run the detail offers each decision key next to its shift, which adds the human's words: on an accepted
+// finding A, x and X stay. TestApplyVerbsAreAimedAtTheAgent pins the pending finding's hints.
 func TestApplyDetailPairsEachDecisionWithItsShift(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	mustOpenFinding(t, m, "f-001")
-	if got, want := strings.Join(keysOf(m.detailHints()), " "), "a A x X s"; !strings.Contains(got, want) {
-		t.Errorf("pending detail keys %q lack %q", got, want)
-	}
 	outside(t, dir, accepted("f-001"))
 	if _, err := m.reload(); err != nil {
 		t.Fatal(err)

@@ -1089,21 +1089,9 @@ func TestConfirmationReadsAsAReview(t *testing.T) {
 			t.Errorf("the review in color shows Markdown %q:\n%s", raw, colored)
 		}
 	}
-	m.styles.SetColorProfile(colorprofile.NoTTY)
+	// TestConfirmViewShowsReviewAndTogglesJSON steps v through the Markdown and the payload and back.
 	if !strings.Contains(view, "v markdown") {
 		t.Errorf("the footer does not offer the Markdown:\n%s", view)
-	}
-	m.Update(runes("v"))
-	if view := m.View().Content; !strings.Contains(view, "<details open>") || !strings.Contains(view, "v payload") {
-		t.Errorf("v did not show the Markdown:\n%s", view)
-	}
-	m.Update(runes("v"))
-	if view := m.View().Content; !strings.Contains(view, "exact request payload") || !strings.Contains(view, "v review") {
-		t.Errorf("a second v did not show the payload:\n%s", view)
-	}
-	m.Update(runes("v"))
-	if view := m.View().Content; strings.Contains(view, "<details") || !strings.Contains(paneText(view), "Must fix") {
-		t.Errorf("a third v did not return to the review:\n%s", view)
 	}
 }
 

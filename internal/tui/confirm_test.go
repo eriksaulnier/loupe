@@ -53,13 +53,17 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	if strings.Contains(view, "since capture") {
 		t.Errorf("an unmoved head shows the moved-head block:\n%s", view)
 	}
+	if !strings.Contains(view, "v payload") {
+		t.Errorf("the Markdown does not offer the payload:\n%s", view)
+	}
 
 	toggle := runes("v")
 	if _, cmd := m.Update(toggle); cmd != nil {
 		t.Fatalf("toggle %v ended the program", toggle)
 	}
 	json := m.View().Content
-	if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") {
+	if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") ||
+		!strings.Contains(json, "exact request payload") || !strings.Contains(json, "v review") {
 		t.Errorf("JSON view after %v:\n%s", toggle, json)
 	}
 	for range 2 {

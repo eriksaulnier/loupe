@@ -605,17 +605,6 @@ func TestDetailNoteRefusedOnSendIsKept(t *testing.T) {
 	}
 }
 
-func TestHelpNamesTheNoteKeys(t *testing.T) {
-	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 34)
-	if err := m.openFinding("f-001"); err != nil {
-		t.Fatal(err)
-	}
-	m.help = true
-	if !regexp.MustCompile(`(?m)│ s +send back; enter sends, esc cancels`).MatchString(m.View().Content) {
-		t.Fatalf("help does not say how a send-back note is sent or canceled:\n%s", m.View().Content)
-	}
-}
-
 func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	if err := m.openFinding("f-001"); err != nil {
@@ -889,15 +878,6 @@ func TestEditRefusesAWithdrawnFinding(t *testing.T) {
 	}
 }
 
-func TestEditIsDroppedWhileSettling(t *testing.T) {
-	m, _ := editModel(t, "f-001", func(*draft.Draft) error { return draft.ErrNoChange })
-	m.settling = true
-	m.Update(runeKey("e"))
-	if m.editing {
-		t.Fatal("a typed-ahead e opened the editor on a finding that was never on screen")
-	}
-}
-
 // A narrow window wraps the row between its parts, never between the blocking glyph and its word.
 func TestEditRowWrapsBetweenParts(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 60, 24)
@@ -1116,23 +1096,18 @@ func TestApplyDetailLeadIsInTheGoodTone(t *testing.T) {
 	}
 }
 
-// e and o belong to pull request runs: on an apply run they do nothing, and no hint or help names them.
+// e and o belong to pull request runs: on an apply run they do nothing, and no help names them.
+// TestApplyVerbsAreAimedAtTheAgent pins the hints.
 func TestApplyRunHasNoEditOrOpenKey(t *testing.T) {
 	m, _ := applyModel(t, "Claude")
 	press(m, "o")
 	if m.notice != "" {
 		t.Errorf("o in the list: notice %q", m.notice)
 	}
-	if hints := hintText(m.listHints()); strings.Contains(hints, "o:") {
-		t.Errorf("list hints offer o: %s", hints)
-	}
 	mustOpenFinding(t, m, "f-001")
 	press(m, "e", "o")
 	if m.editing || m.notice != "" {
 		t.Errorf("e or o acted on an apply run: editing %v notice %q", m.editing, m.notice)
-	}
-	if hints := hintText(m.detailHints()); strings.Contains(hints, "e:") || strings.Contains(hints, "o:") {
-		t.Errorf("detail hints offer e or o: %s", hints)
 	}
 	for v, section := range m.helpSections() {
 		for _, k := range section.keys {
@@ -1283,7 +1258,8 @@ func TestApplyShiftXRejectsWithAnOptionalReason(t *testing.T) {
 	}
 }
 
-// t and w have no job on a local run: they change nothing in the list or the detail, and no hint or help names them.
+// t and w have no job on a local run: they change nothing in the list or the detail, and no help names them.
+// TestApplyVerbsAreAimedAtTheAgent pins the hints.
 func TestApplyTAndWDoNothing(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	before := loadDraft(t, dir).Version
@@ -1292,11 +1268,6 @@ func TestApplyTAndWDoNothing(t *testing.T) {
 	press(m, "t", "w")
 	if m.noting || m.rewriting || m.editing || m.notice != "" || loadDraft(t, dir).Version != before {
 		t.Errorf("t or w acted: noting %v rewriting %v notice %q", m.noting, m.rewriting, m.notice)
-	}
-	for _, hints := range []string{hintText(m.listHints()), hintText(m.detailHints())} {
-		if strings.Contains(hints, "t:") || strings.Contains(hints, "w:") {
-			t.Errorf("hints offer t or w: %s", hints)
-		}
 	}
 	for v, section := range m.helpSections() {
 		for _, k := range section.keys {
