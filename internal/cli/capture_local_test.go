@@ -286,7 +286,7 @@ func TestListNamesAnUntitledLocalRun(t *testing.T) {
 	}
 }
 
-func TestLocalCaptureRefusesWithoutADataRoot(t *testing.T) {
+func TestApplyCaptureRefusesWithoutADataRoot(t *testing.T) {
 	deps, s := testDeps(t, nil)
 	deps.WorkDir = t.TempDir()
 	if code := Execute(deps, []string{"capture", "--no-files", "--title", "x", "--json"}); code != 2 {
@@ -297,7 +297,7 @@ func TestLocalCaptureRefusesWithoutADataRoot(t *testing.T) {
 	}
 }
 
-func TestLocalCaptureReturnsAFailureToCreateTheRun(t *testing.T) {
+func TestApplyCaptureReturnsAFailureToCreateTheRun(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
 	if err := os.WriteFile(home, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)

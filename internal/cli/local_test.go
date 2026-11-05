@@ -55,7 +55,7 @@ func localFinding(id string) draft.Finding {
 	return draft.Finding{ID: id, Rev: 1, Title: "T", Body: "B", General: true, By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}}
 }
 
-func TestLocalRunRefusesPROnlyCommands(t *testing.T) {
+func TestApplyRunRefusesPROnlyCommands(t *testing.T) {
 	home, _ := localRun(t, "changed", localFinding("f-001"))
 	for _, args := range [][]string{
 		{"show", "--run", "local#1", "--previous", "--json"},
@@ -68,7 +68,7 @@ func TestLocalRunRefusesPROnlyCommands(t *testing.T) {
 	}
 }
 
-func TestLocalRunShowsWithAnyPrefix(t *testing.T) {
+func TestApplyRunShowsWithAnyPrefix(t *testing.T) {
 	home, _ := localRun(t, "changed", localFinding("f-001"))
 	for _, ref := range []string{"local#1", "other/repo:local#1"} {
 		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
@@ -97,7 +97,7 @@ func TestReturnedLocalRunRefusesReturnedBeforeWrongMode(t *testing.T) {
 	}
 }
 
-func TestLocalAddRefusesPRFields(t *testing.T) {
+func TestApplyAddRefusesPRFields(t *testing.T) {
 	home, _ := localRun(t, "changed")
 	for _, c := range []struct {
 		input string
@@ -133,7 +133,7 @@ func TestLocalAddRefusesPRFields(t *testing.T) {
 	}
 }
 
-func TestLocalAddAndEditTheProposal(t *testing.T) {
+func TestApplyAddAndEditTheProposal(t *testing.T) {
 	home, dir := localRun(t, "changed")
 	code, s := runWithStdin(t, home, "", "add", "--run", "local#1", "--title", "T", "--body", "B", "--path", "a.go", "--line", "3", "--proposal", "Use Y.", "--json")
 	if code != 0 {
@@ -189,7 +189,7 @@ func TestPRRunRefusesAProposal(t *testing.T) {
 	}
 }
 
-func TestLocalShowOmitsPRFields(t *testing.T) {
+func TestApplyShowOmitsPRFields(t *testing.T) {
 	f := localFinding("f-001")
 	f.General, f.Location = false, &draft.FindingLocation{Path: "a.go", Line: 2, Side: "RIGHT"}
 	home, _ := localRun(t, "changed", f)
@@ -348,7 +348,7 @@ func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
 }
 
 // A malformed entry passes the key checks untouched and is refused as malformed input, never as a mode refusal.
-func TestLocalAddRefusesMalformedInput(t *testing.T) {
+func TestApplyAddRefusesMalformedInput(t *testing.T) {
 	home, _ := localRun(t, "changed")
 	for _, input := range []string{`[{"title": }]`, `"a string"`, `[{"title": "T", "body": "B", "general": true}, {"blocking": }]`} {
 		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
@@ -357,7 +357,7 @@ func TestLocalAddRefusesMalformedInput(t *testing.T) {
 }
 
 // A proposal of the wrong JSON type is refused on edit, as on add.
-func TestLocalEditRefusesAProposalOfTheWrongType(t *testing.T) {
+func TestApplyEditRefusesAProposalOfTheWrongType(t *testing.T) {
 	home, _ := localRun(t, "changed", localFinding("f-001"))
 	code, s := runWithStdin(t, home, `{"proposal": 5}`, "edit", "f-001", "--run", "local#1", "--from", "-", "--json")
 	errObj := wantCode(t, code, s, refusal.Input)
@@ -414,7 +414,7 @@ func TestReviewReturnsALocalRun(t *testing.T) {
 
 // Plain show on a local run prints each proposal and names the step that applies to a local run: review to decide and
 // return, then feedback once returned. It never names publish, which refuses a local run.
-func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
+func TestApplyRunShowNamesTheLocalSteps(t *testing.T) {
 	f := localFinding("f-001")
 	f.Proposal = "Rename the helper.\n\n```go\nresult := computeSomethingVeryLongIndeed(index, anotherArgument, yetAnotherArgument, andOneMoreArgumentToPassTheWidth, andAnother)\n```"
 	home, dir := localRun(t, "changed", f)
@@ -450,7 +450,7 @@ func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
 	}
 }
 
-func TestLocalRunWithACorruptTargetRefusesEveryCommand(t *testing.T) {
+func TestApplyRunWithACorruptTargetRefusesEveryCommand(t *testing.T) {
 	home, dir := localRun(t, "changed")
 	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("{"), 0o644); err != nil {
 		t.Fatal(err)
