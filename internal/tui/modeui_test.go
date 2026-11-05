@@ -1,11 +1,14 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
 
@@ -194,4 +197,54 @@ func TestPRKeysOPEAndX(t *testing.T) {
 	if got := fmt.Sprint(publishSteps); got != "[Action Inline comments Message]" {
 		t.Errorf("publish steps %s", got)
 	}
+}
+
+// applyInputs are a local run's findings: f-001 at a.go:3 with a proposal, f-002 a general question with none, and
+// f-003 general with a proposal.
+var applyInputs = []draft.FindingInput{
+	{Title: "Rename the helper", Body: "The helper name hides what it does.", Location: &draft.LocationInput{Path: "a.go", Line: 3}, Label: "issue",
+		Proposal: "Rename helper to insertAfter in a.go."},
+	{Title: "Which store wins", Body: "Two stores could hold the cache.", General: true, Label: "question"},
+	{Title: "Drop the flag", Body: "The flag is never read.", General: true, Label: "suggestion", Proposal: "Remove the flag."},
+}
+
+// applyFixture writes a local run captured with --changed over a new ten-line a.go, holding inputs, and applied by
+// applier.
+func applyFixture(t *testing.T, applier string, inputs ...draft.FindingInput) string {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("diff --git a/a.go b/a.go\nnew file mode 100644\n--- /dev/null\n+++ b/a.go\n@@ -0,0 +1,10 @@\n")
+	for i := range 10 {
+		fmt.Fprintf(&b, "+line %d\n", i+1)
+	}
+	diffBytes := []byte(b.String())
+	parsed, err := diff.Parse(diffBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := draft.NewEmpty()
+	if _, err := draft.Add(d, inputs, parsed, draft.Rules{AllowProposal: true}, draft.ByAgent, testNow); err != nil {
+		t.Fatal(err)
+	}
+	d.Summary = "Local work to check."
+	draftJSON, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := run.Target{
+		Kind: run.KindLocal, Title: "Cache rework", Applier: applier, CapturedAt: testNow, DiffSHA256: run.DiffSHA256(diffBytes),
+		Local: &run.LocalTarget{Prefix: "acme/widgets", Repository: "acme/widgets", Capture: "changed", Root: "/src",
+			Files: []run.LocalFile{{Path: "a.go", Abs: "/src/a.go", New: true}}, Skipped: []run.LocalSkipped{}},
+	}
+	dir, _, err := run.NextLocal(t.TempDir(), "test", envOf(nil), target, diffBytes, draftJSON, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func applyModel(t *testing.T, applier string) (*Model, string) {
+	t.Helper()
+	dir := applyFixture(t, applier, applyInputs...)
+	return modelOf(t, dir, utf8Env, 100, 40), dir
 }

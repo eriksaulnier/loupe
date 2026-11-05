@@ -60,6 +60,11 @@ func (m *Model) refreshDetail() error {
 	if _, rows := style.PaneInner(0, m.bodyRows(len(m.detailFooter()))); len(head) > rows/3 {
 		doc, m.detailHead = head, nil
 	}
+	proposal, err := m.proposal(f)
+	if err != nil {
+		return err
+	}
+	doc = append(doc, proposal...)
 	if draft.AgentChangedHumanText(f) {
 		doc = append(doc, m.styles.Note.Render(m.glyphs.Note+" the agent changed text you wrote"))
 	}
@@ -260,6 +265,24 @@ func (m *Model) partLines(parts []string, gap, width int) []string {
 		}
 	}
 	return append(lines, line)
+}
+
+// proposal is what the agent will do if the human accepts, read before the evidence it rests on. It is Markdown, so it
+// is rendered as the body is, under a heading in the good tone that names who will apply it.
+func (m *Model) proposal(f draft.Finding) ([]string, error) {
+	if f.Proposal == "" {
+		return nil, nil
+	}
+	rendered, err := m.renderMarkdown(render.ForDisplay(f.Proposal))
+	if err != nil {
+		return nil, err
+	}
+	who := "the agent"
+	if applier := render.ForDisplay(render.OneLine(m.target.Applier)); applier != "" {
+		who = applier
+	}
+	out := []string{"", m.styles.Emphasis(m.styles.Good).Render("If you accept, " + who + " will")}
+	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
 }
 
 // impact is Markdown by contract, so it is rendered the way the body is, under its own heading.

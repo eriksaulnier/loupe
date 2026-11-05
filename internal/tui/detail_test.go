@@ -1096,3 +1096,66 @@ func TestDetailPinsItsTitleAndMetadata(t *testing.T) {
 		t.Errorf("a short window pinned a head taller than a third of the pane, or lost the title:\n%s", ansi.Strip(m.View().Content))
 	}
 }
+
+// On an apply run the proposal comes directly under the title, before the evidence, headed by who will apply it.
+func TestApplyDetailShowsTheProposalUnderTheTitle(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	screen := screenText(m)
+	order := []string{"Rename the helper", "If you accept, Claude will", "Rename helper to insertAfter in a.go.", "a.go:3", "The helper name hides what it does."}
+	at := -1
+	for _, want := range order {
+		i := strings.Index(screen, want)
+		if i <= at {
+			t.Fatalf("%q is missing or out of order (want %q):\n%s", want, order, screen)
+		}
+		at = i
+	}
+	mustOpenFinding(t, m, "f-002")
+	if screen := screenText(m); strings.Contains(screen, "If you accept") {
+		t.Errorf("a question shows a proposal heading:\n%s", screen)
+	}
+
+	nobody, _ := applyModel(t, "")
+	mustOpenFinding(t, nobody, "f-003")
+	if screen := screenText(nobody); !strings.Contains(screen, "If you accept, the agent will") || !strings.Contains(screen, "Remove the flag.") {
+		t.Errorf("with no applier the heading does not name the agent:\n%s", screen)
+	}
+
+	colored, _ := applyModel(t, "Claude")
+	colored.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpenFinding(t, colored, "f-001")
+	if view := colored.View().Content; !strings.Contains(view, colored.styles.Emphasis(colored.styles.Good).Render("If you accept, Claude will")) {
+		t.Errorf("the proposal heading is not in the good tone:\n%q", view)
+	}
+}
+
+// e and o belong to pull request runs: on an apply run they do nothing, and no hint or help names them.
+func TestApplyRunHasNoEditOrOpenKey(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	press(m, "o")
+	if m.notice != "" {
+		t.Errorf("o in the list: notice %q", m.notice)
+	}
+	if hints := hintText(m.listHints()); strings.Contains(hints, "o:") {
+		t.Errorf("list hints offer o: %s", hints)
+	}
+	mustOpenFinding(t, m, "f-001")
+	press(m, "e", "o")
+	if m.editing || m.notice != "" {
+		t.Errorf("e or o acted on an apply run: editing %v notice %q", m.editing, m.notice)
+	}
+	if hints := hintText(m.detailHints()); strings.Contains(hints, "e:") || strings.Contains(hints, "o:") {
+		t.Errorf("detail hints offer e or o: %s", hints)
+	}
+	for v, section := range m.helpSections() {
+		for _, k := range section.keys {
+			if k.Keys == "e" || k.Keys == "o" {
+				t.Errorf("help for view %d names %s (%s)", v, k.Keys, k.Verb)
+			}
+		}
+	}
+	if _, ok := m.helpSections()[viewAction]; ok {
+		t.Error("help has publish steps on an apply run")
+	}
+}

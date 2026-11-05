@@ -78,10 +78,10 @@ func (m *Model) reviewHeader() string {
 		return m.styles.ReviewHeader(style.ReviewHeading{Ref: render.ForDisplay(m.confirm.title.ref), NoCount: true, Reserve: m.hostReserve()}, m.width)
 	}
 	order, decided, total := progressOf(m.draft, m.order)
-	return m.styles.ReviewHeader(style.ReviewHeading{
-		Ref: render.ForDisplay(m.ref()), URL: m.target.URL, Round: m.target.Round, Title: m.titleText(),
-		Progress: order, Current: m.currentCell(), Decided: decided, Total: total, Reserve: m.hostReserve(), Tag: m.prTag(),
-	}, m.width)
+	h := m.ui.heading(m)
+	h.Ref, h.Title = render.ForDisplay(h.Ref), m.titleText()
+	h.Progress, h.Current, h.Decided, h.Total, h.Reserve, h.Tag = order, m.currentCell(), decided, total, m.hostReserve(), m.prTag()
+	return m.styles.ReviewHeader(h, m.width)
 }
 
 // hostReserve is the header's columns a pane host draws over, which the header leaves blank.

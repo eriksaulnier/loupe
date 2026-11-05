@@ -245,8 +245,8 @@ type listColumns struct {
 	// shortLocation prefers the filename and line range to the path.
 	shortLocation bool
 	// noteSlot reserves the note marker's cell before every title while any finding has an open note, so the titles
-	// stay aligned.
-	noteSlot bool
+	// stay aligned. questionSlot does the same for the question marker.
+	noteSlot, questionSlot bool
 }
 
 // listTitleFloor is the narrowest a title gets before an optional column gives way.
@@ -254,7 +254,7 @@ const listTitleFloor = 8
 
 func (m *Model) listColumns() listColumns {
 	inner, _ := style.PaneInner(m.width, 0)
-	c := listColumns{id: 5, noteSlot: len(openNotes(m.draft)) > 0}
+	c := listColumns{id: 5, noteSlot: len(openNotes(m.draft)) > 0, questionSlot: m.anyQuestion()}
 	for _, f := range m.order {
 		c.id = max(c.id, style.Width(f.ID))
 	}
@@ -311,13 +311,16 @@ func (m *Model) listColumns() listColumns {
 func (m *Model) naturalWidths() (location, short, title int) {
 	location = style.Width("location")
 	short = location
-	notes := openNotes(m.draft)
+	notes, questions := openNotes(m.draft), m.anyQuestion()
 	for _, f := range m.order {
 		location = max(location, style.Width(locationText(f)))
 		short = max(short, style.Width(shortLocationText(f)))
 		need := style.Width(render.ForDisplay(render.OneLine(f.Title)))
 		if len(notes) > 0 {
 			need += style.Width(m.glyphs.Note) + 1
+		}
+		if questions {
+			need += style.Width(m.glyphs.Question) + 1
 		}
 		if reason := draft.CurrentReason(f); reason != nil {
 			need += style.Width(" "+m.glyphs.Sep+" ") + style.Width(render.ForDisplay(render.OneLine(reason.Text)))
@@ -547,7 +550,7 @@ func (m *Model) listView() string {
 }
 
 // runRef is the run as loupe's commands name it.
-func (m *Model) runRef() string { return fmt.Sprintf("%s@%d", m.ref(), m.target.Round) }
+func (m *Model) runRef() string { return m.ui.runRef(m) }
 
 func (m *Model) listHints() []style.Hint { return m.ui.listHints(m) }
 
@@ -569,6 +572,11 @@ func (m *Model) columnHeads(cols listColumns) string {
 	title := cols.title
 	if cols.noteSlot {
 		slot := style.Width(m.glyphs.Note) + 1
+		head += strings.Repeat(" ", slot)
+		title -= slot
+	}
+	if cols.questionSlot {
+		slot := style.Width(m.glyphs.Question) + 1
 		head += strings.Repeat(" ", slot)
 		title -= slot
 	}
@@ -608,6 +616,14 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 		}
 		b.WriteString(mark + " ")
 		titleWidth -= style.Width(m.glyphs.Note) + 1
+	}
+	if cols.questionSlot {
+		mark := strings.Repeat(" ", style.Width(m.glyphs.Question))
+		if m.ui.question(f) {
+			mark = s.Secondary().Render(m.glyphs.Question)
+		}
+		b.WriteString(mark + " ")
+		titleWidth -= style.Width(m.glyphs.Question) + 1
 	}
 	b.WriteString(m.titleCell(f, text.Render, max(0, titleWidth)))
 	if cols.location > 0 {
@@ -649,6 +665,11 @@ func (m *Model) titleCell(f draft.Finding, paint func(...string) string, width i
 	title, why = s.TruncRight(title, titleRoom), s.TruncRight(why, whyRoom)
 	cell := paint(title) + s.Dim.Italic(s.Color).Render(sep+why)
 	return cell + strings.Repeat(" ", max(0, width-style.Width(title)-style.Width(sep)-style.Width(why)))
+}
+
+// anyQuestion reports whether the list marks any finding as a question, which reserves the marker's slot.
+func (m *Model) anyQuestion() bool {
+	return slices.ContainsFunc(m.order, m.ui.question)
 }
 
 // openNotes maps each finding with an open note to whether the agent has replied to one, which makes it the human's
