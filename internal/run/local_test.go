@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -57,9 +56,13 @@ func TestNextLocalCreatesRun(t *testing.T) {
 	if err != nil || string(data) != "2" {
 		t.Fatalf("next=%q err=%v", data, err)
 	}
-	// run directory created with target.json
-	if _, err := LoadTarget(dir); err != nil {
+	// run directory created with target.json, its Local.N set to the run's number
+	loaded, err := LoadTarget(dir)
+	if err != nil {
 		t.Fatalf("LoadTarget: %v", err)
+	}
+	if loaded.Local == nil || loaded.Local.N != 1 {
+		t.Fatalf("loaded.Local = %+v, want N 1", loaded.Local)
 	}
 }
 
@@ -197,40 +200,5 @@ func TestHasReturn(t *testing.T) {
 	ok, err = HasReturn(dir)
 	if err != nil || !ok {
 		t.Fatalf("HasReturn after write: %v %v", ok, err)
-	}
-}
-
-// TestNextLocalSetsN verifies that NextLocal sets the N field on the stored target.
-func TestNextLocalSetsN(t *testing.T) {
-	root := t.TempDir()
-	target := sampleLocalTarget()
-	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	loaded, err := LoadTarget(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loaded.Local == nil || loaded.Local.N != ref.Local {
-		t.Fatalf("loaded.Local.N = %v, want %d", loaded.Local, ref.Local)
-	}
-}
-
-// TestNextLocalReadsMissingNextAsOne verifies that a missing next file starts at 1.
-func TestNextLocalReadsMissingNextAsOne(t *testing.T) {
-	root := t.TempDir()
-	target := sampleLocalTarget()
-	_, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ref.Local != 1 {
-		t.Fatalf("first run = %d, want 1", ref.Local)
-	}
-	// next should now be "2"
-	data, _ := os.ReadFile(filepath.Join(LocalRoot(root), "next"))
-	if n, _ := strconv.Atoi(string(data)); n != 2 {
-		t.Fatalf("next file = %q, want 2", data)
 	}
 }

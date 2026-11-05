@@ -168,29 +168,11 @@ func TestCreateRunAndLoadTarget(t *testing.T) {
 	}
 }
 
-func TestTargetJSONKeys(t *testing.T) {
-	data, err := json.Marshal(sampleTarget())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"author", "baseRef", "baseSha", "capturedAt", "clonePath", "diffSha256", "headRef", "headSha", "mergeBaseSha",
-		"number", "owner", "prState", "previousRound", "repo", "round", "schema", "title", "url", "viewer"}
-	var got []string
-	for k := range m {
-		got = append(got, k)
-	}
-	sort.Strings(got)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("keys %v", got)
-	}
-
+// publish/schema_test.go pins every tag. These are the values omitempty drops.
+func TestTargetOmitsUnsetOptionals(t *testing.T) {
 	first := sampleTarget()
 	first.Round, first.PreviousRound = 1, 0
-	data, err = json.Marshal(first)
+	data, err := json.Marshal(first)
 	if err != nil {
 		t.Fatal(err)
 	}
