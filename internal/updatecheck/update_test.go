@@ -126,23 +126,17 @@ func TestRefreshBoundsTheLookup(t *testing.T) {
 		if !ok {
 			t.Fatal("the lookup has no deadline")
 		}
-		if left := time.Until(deadline); left > LookupTimeout {
-			t.Errorf("the lookup may run for %v, want at most %v", left, LookupTimeout)
+		if left := time.Until(deadline); left > LookupTimeout || left < LookupTimeout-time.Second {
+			t.Errorf("the lookup may run for %v, want about %v", left, LookupTimeout)
 		}
 		return "", errors.New("offline")
 	})
 }
 
-// 048 FR-002 fixes the limit at 2 seconds, so the literal here pins the constant as well as Refresh.
-func TestRefreshGivesUpOnAStalledLookup(t *testing.T) {
-	path := CachePath(t.TempDir())
-	start := time.Now()
-	Refresh(context.Background(), path, checkTime, func(ctx context.Context) (string, error) {
-		<-ctx.Done()
-		return "", ctx.Err()
-	})
-	if elapsed := time.Since(start); elapsed < 2*time.Second-100*time.Millisecond || elapsed > 3*time.Second {
-		t.Errorf("Refresh returned after %v, want about 2s", elapsed)
+// 048 FR-002 fixes the limit at 2 seconds.
+func TestLookupTimeoutIsTwoSeconds(t *testing.T) {
+	if LookupTimeout != 2*time.Second {
+		t.Fatalf("LookupTimeout = %v, want 2s", LookupTimeout)
 	}
 }
 
