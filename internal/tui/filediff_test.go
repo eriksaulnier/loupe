@@ -62,6 +62,7 @@ func codeRuns(t *testing.T) map[string]struct {
 
 var (
 	addedRow = regexp.MustCompile(`(?m)\d \+ line \d`)
+	statText = regexp.MustCompile(`\+\d+ (\x{2212}|-)\d+`)
 	plainRow = regexp.MustCompile(`(?m)\d   line \d`)
 )
 
@@ -76,6 +77,9 @@ func checkCodeDrawing(t *testing.T, view string, plain bool) {
 	t.Helper()
 	if added := addedRow.MatchString(view); added == plain {
 		t.Errorf("plain %v, + gutter %v:\n%s", plain, added, view)
+	}
+	if counted := statText.MatchString(view); counted == plain {
+		t.Errorf("plain %v, +N -N count %v:\n%s", plain, counted, view)
 	}
 	if !plain {
 		return

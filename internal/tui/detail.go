@@ -158,7 +158,11 @@ func (m *Model) codePane(location, heading string, lines []diff.ViewLine, width 
 		}
 		rows = append(head, rows...)
 	}
-	stat := m.styles.Text().Render(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
+	// A --files run adds each file whole only because nothing was there before, so a line count says nothing.
+	stat := ""
+	if !m.ui.plainCode(m.target) {
+		stat = m.styles.Text().Render(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
+	}
 	title := m.styles.LocationTitle(location, max(8, inner-style.Width(stat)-6), true)
 	return m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
 		Titles: style.PaneTitles{TopLeft: title, TopRight: stat}})
