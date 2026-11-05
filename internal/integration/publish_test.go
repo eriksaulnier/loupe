@@ -76,18 +76,6 @@ func TestPublishSendsCapturedSource(t *testing.T) {
 	}
 }
 
-// lastPostComments is the inline comments of the last review request the fake GitHub received.
-func lastPostComments(h *harness) []any {
-	var comments []any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			m, _ := r.Body.(map[string]any)
-			comments, _ = m["comments"].([]any)
-		}
-	}
-	return comments
-}
-
 // Without --inline a blocking finding lives only in the body's Must fix section, not also as a line comment
 // (specs/026-inline-default-none).
 func TestPublishDefaultsToNoInlineComments(t *testing.T) {
@@ -107,10 +95,10 @@ func TestPublishDefaultsToNoInlineComments(t *testing.T) {
 				t.Fatalf("publish exit %d stderr %q", exit, stderr)
 			}
 			h.checkSends(1)
-			if got := len(lastPostComments(h)); got != tc.comments {
+			if got := len(h.lastPostComments()); got != tc.comments {
 				t.Errorf("sent %d inline comments, want %d", got, tc.comments)
 			}
-			body := lastPostBody(t, h)
+			body := h.lastPostBody()
 			mustFix, _, _ := strings.Cut(body, "Worth a look")
 			if !strings.Contains(mustFix, "Must fix") || !strings.Contains(mustFix, "Changed line") {
 				t.Errorf("the blocking finding is not under Must fix:\n%s", body)
@@ -177,12 +165,7 @@ func TestPublishEndToEnd(t *testing.T) {
 		t.Fatal("publish changed draft.json")
 	}
 
-	var post map[string]any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ = r.Body.(map[string]any)
-		}
-	}
+	post := h.lastPost()
 	comments, _ := post["comments"].([]any)
 	body, _ := post["body"].(string)
 	if post["commit_id"] != h.Repo.HeadSHA() || post["event"] != "COMMENT" || body != receipt.Envelope.Body || len(comments) != 2 {
@@ -222,20 +205,6 @@ func TestPublishEndToEnd(t *testing.T) {
 	h.checkSends(1)
 }
 
-// lastPostBody is the body of the last review loupe posted.
-func (h *harness) lastPostBody() string {
-	h.t.Helper()
-	var body string
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ := r.Body.(map[string]any)
-			body, _ = post["body"].(string)
-		}
-	}
-	return body
-}
-
-// TestPublishCarriesGateCounts is SC-001: one finding of each kind the gate counts, published attended.
 // shownBody is the review body a confirmation frame shows in its Markdown view, from the pane's top border to the
 // inline comments, with the pane's and the message box's borders dropped and the words in them kept where they sit.
 // Spaces and line breaks are dropped too, since the confirmation wraps prose to the width it reads at; every other
@@ -269,6 +238,7 @@ func withoutSpace(s string) string {
 	return strings.Join(strings.Fields(s), "")
 }
 
+// TestPublishCarriesGateCounts is SC-001: one finding of each kind the gate counts, published attended.
 func TestPublishCarriesGateCounts(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -521,12 +491,7 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 	}
 	h.checkSends(1)
 
-	var post map[string]any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ = r.Body.(map[string]any)
-		}
-	}
+	post := h.lastPost()
 	body, _ := post["body"].(string)
 	if post["event"] != "COMMENT" {
 		t.Fatalf("event %v, want COMMENT", post["event"])
@@ -566,10 +531,10 @@ func TestPublishUnattendedDefaultsToNoInlineComments(t *testing.T) {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
 	}
 	h.checkSends(1)
-	if got := len(lastPostComments(h)); got != 0 {
+	if got := len(h.lastPostComments()); got != 0 {
 		t.Errorf("sent %d inline comments, want 0", got)
 	}
-	if body := lastPostBody(t, h); !strings.Contains(body, " unattended=1 inline=none ") {
+	if body := h.lastPostBody(); !strings.Contains(body, " unattended=1 inline=none ") {
 		t.Errorf("marker lacks inline=none:\n%s", body)
 	}
 }
@@ -625,12 +590,7 @@ func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 	}
 	h.checkSends(1)
 
-	var post map[string]any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ = r.Body.(map[string]any)
-		}
-	}
+	post := h.lastPost()
 	body, _ := post["body"].(string)
 	if !strings.Contains(body, " · unattended\n\n<!-- loupe digest=") || !strings.Contains(body, "round=2 unattended=1") {
 		t.Errorf("body does not number this review 2:\n%s", body)

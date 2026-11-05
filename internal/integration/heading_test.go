@@ -74,7 +74,7 @@ func TestHeadingAnchorPublishesItsRange(t *testing.T) {
 		t.Fatalf("publish exit %d stderr %q", exit, stderr)
 	}
 	h.checkSends(1)
-	comments := lastPostComments(h)
+	comments := h.lastPostComments()
 	if len(comments) != 1 {
 		t.Fatalf("comments %v", comments)
 	}

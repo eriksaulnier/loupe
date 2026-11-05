@@ -345,3 +345,26 @@ func (h *harness) Restore(t *testing.T) {
 func (h *harness) RunDir(round int) string {
 	return filepath.Join(h.Home, "runs", owner, repo, fmt.Sprint(number), fmt.Sprint(round))
 }
+
+// lastPost is the body of the last review request the fake GitHub received, create or edit, or nil.
+func (h *harness) lastPost() map[string]any {
+	var post map[string]any
+	for _, r := range h.GH.Requests() {
+		if !r.Read() {
+			post, _ = r.Body.(map[string]any)
+		}
+	}
+	return post
+}
+
+// lastPostBody is the body of the last review loupe posted.
+func (h *harness) lastPostBody() string {
+	body, _ := h.lastPost()["body"].(string)
+	return body
+}
+
+// lastPostComments is the inline comments of the last review request the fake GitHub received.
+func (h *harness) lastPostComments() []any {
+	comments, _ := h.lastPost()["comments"].([]any)
+	return comments
+}

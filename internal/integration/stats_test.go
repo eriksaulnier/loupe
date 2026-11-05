@@ -100,7 +100,7 @@ func TestStatsMatchesThePublishedMarkers(t *testing.T) {
 	if stdout, stderr, exit := h.Publish("", "y", ref, "--action", "comment"); exit != 0 {
 		t.Fatalf("publish exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
-	marker := lastMeta(t, lastPostBody(t, h))
+	marker := lastMeta(t, h.lastPostBody())
 	if marker["excluded"] != 2 || marker["withdrawn"] != 1 || marker["reinstated"] != 1 || marker["regraded"] != 1 {
 		t.Fatalf("the attended round does not cover every count: %v", marker)
 	}
@@ -110,7 +110,7 @@ func TestStatsMatchesThePublishedMarkers(t *testing.T) {
 	}
 
 	h.publishAs(pipeline("loupe-ci[bot]", "loupe-ci"), "Unattended round.")
-	unattended := checkStatsAgainstMarker(t, h, lastMeta(t, lastPostBody(t, h)))
+	unattended := checkStatsAgainstMarker(t, h, lastMeta(t, h.lastPostBody()))
 	runs, _ := unattended["runs"].(map[string]any)
 	if count(t, runs["unattended"]) != 1 || unattended["precision"] != nil || unattended["medianCaptureToPublish"] != nil {
 		t.Errorf("unattended total %v, want one unattended run and no precision or median", unattended)
