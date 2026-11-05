@@ -181,7 +181,7 @@ func (m *Model) codeRows(location string, lines []diff.ViewLine, width int) (row
 			rows = append(rows, m.styles.Overlay().Render(render.ForDisplay(l.Text)))
 			continue
 		}
-		row := codeRow(l)
+		row := m.modeRow(l)
 		row.Tokens = tokens[i]
 		switch l.Kind {
 		case diff.Add:
@@ -192,6 +192,15 @@ func (m *Model) codeRows(location string, lines []diff.ViewLine, width int) (row
 		rows = append(rows, m.styles.CodeLine(row, numWidth, width))
 	}
 	return rows, added, removed
+}
+
+// modeRow is l as the mode draws it: on a run with no diff to show, an added line is plain text.
+func (m *Model) modeRow(l diff.ViewLine) style.CodeRow {
+	row := codeRow(l)
+	if row.Kind == style.CodeAdded && m.ui.plainCode(m.target) {
+		row.Kind = style.CodeContext
+	}
+	return row
 }
 
 // codeRow is a parsed diff line as the code primitive takes it. A deleted line has no new-side number, so it keeps the

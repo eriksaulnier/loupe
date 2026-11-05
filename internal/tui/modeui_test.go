@@ -212,12 +212,23 @@ var applyInputs = []draft.FindingInput{
 // applier.
 func applyFixture(t *testing.T, applier string, inputs ...draft.FindingInput) string {
 	t.Helper()
+	return localFixture(t, "changed", applier, inputs...)
+}
+
+// newFileDiff adds a.go, ten lines long.
+func newFileDiff() []byte {
 	var b strings.Builder
 	b.WriteString("diff --git a/a.go b/a.go\nnew file mode 100644\n--- /dev/null\n+++ b/a.go\n@@ -0,0 +1,10 @@\n")
 	for i := range 10 {
 		fmt.Fprintf(&b, "+line %d\n", i+1)
 	}
-	diffBytes := []byte(b.String())
+	return []byte(b.String())
+}
+
+// localFixture is applyFixture with the capture flag named: changed or files.
+func localFixture(t *testing.T, capture, applier string, inputs ...draft.FindingInput) string {
+	t.Helper()
+	diffBytes := newFileDiff()
 	parsed, err := diff.Parse(diffBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -233,7 +244,7 @@ func applyFixture(t *testing.T, applier string, inputs ...draft.FindingInput) st
 	}
 	target := run.Target{
 		Kind: run.KindLocal, Title: "Cache rework", Applier: applier, CapturedAt: testNow, DiffSHA256: run.DiffSHA256(diffBytes),
-		Local: &run.LocalTarget{Prefix: "acme/widgets", Repository: "acme/widgets", Capture: "changed", Root: "/src",
+		Local: &run.LocalTarget{Prefix: "acme/widgets", Repository: "acme/widgets", Capture: capture, Root: "/src",
 			Files: []run.LocalFile{{Path: "a.go", Abs: "/src/a.go", New: true}}, Skipped: []run.LocalSkipped{}},
 	}
 	dir, _, err := run.NextLocal(t.TempDir(), "test", envOf(nil), target, diffBytes, draftJSON, nil)

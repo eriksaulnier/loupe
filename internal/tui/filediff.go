@@ -75,7 +75,7 @@ func (m *Model) refreshFileDiff() {
 			rows[i] = lead + "  " + m.styles.Accent.Render(render.ForDisplay(l.Text))
 			continue
 		}
-		row := codeRow(l)
+		row := m.modeRow(l)
 		row.Tokens = tokens[i]
 		rows[i] = lead + " " + m.styles.CodeLine(row, numWidth, width-2)
 	}

@@ -1306,3 +1306,20 @@ func TestApplyReinstateAndRewriteKeepTheProposal(t *testing.T) {
 		t.Fatalf("the rewrite was not saved: %+v; notice %q", f, m.notice)
 	}
 }
+
+// The code pane of a --files run draws the file as plain text; a --changed run and a pull request keep the gutter.
+func TestCodePaneOfAFilesRunIsPlain(t *testing.T) {
+	for name, c := range codeRuns(t) {
+		t.Run(name, func(t *testing.T) {
+			m := modelOf(t, c.dir, utf8Env, 100, 40)
+			mustOpenFinding(t, m, "f-001")
+			checkCodeDrawing(t, screenText(m), c.plain)
+
+			colored := colorOf(t, c.dir)
+			mustOpenFinding(t, colored, "f-001")
+			if tinted := strings.Contains(colored.View().Content, addedTint(colored)); tinted == c.plain {
+				t.Errorf("plain %v, added tint %v", c.plain, tinted)
+			}
+		})
+	}
+}

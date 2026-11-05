@@ -27,6 +27,8 @@ type modeUI interface {
 	runRef(m *Model) string
 	// question reports whether the list marks f as a question.
 	question(f draft.Finding) bool
+	// plainCode reports whether the code pane and the file diff draw t's files as plain text, with no diff gutter.
+	plainCode(t run.Target) bool
 	// rewriteFields names the fields w edits, in tab order: title and body, then the proposal where the mode has one.
 	rewriteFields() []string
 }
@@ -140,6 +142,8 @@ func (publishUI) heading(m *Model) style.ReviewHeading {
 func (publishUI) runRef(m *Model) string { return fmt.Sprintf("%s@%d", m.ref(), m.target.Round) }
 
 func (publishUI) question(draft.Finding) bool { return false }
+
+func (publishUI) plainCode(run.Target) bool { return false }
 
 func (publishUI) rewriteFields() []string { return []string{"title", "body"} }
 
@@ -283,6 +287,9 @@ func (applyUI) heading(m *Model) style.ReviewHeading {
 func (applyUI) runRef(m *Model) string { return localRef(m.target) }
 
 func (applyUI) question(f draft.Finding) bool { return f.Proposal == "" }
+
+// plainCode is true on a --files run, whose diff adds each file whole only because it was captured from nothing.
+func (applyUI) plainCode(t run.Target) bool { return t.Local != nil && t.Local.Capture == "files" }
 
 func (applyUI) rewriteFields() []string { return []string{"title", "body", "proposal"} }
 
