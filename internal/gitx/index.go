@@ -41,10 +41,33 @@ func (ix *Index) ReadTree(treeish string) error {
 	return err
 }
 
+// ConvertedError is StageWorktree's refusal to stage tracked files whose bytes on disk differ from HEAD's while Git
+// converts them on checkout. Without running the conversion, which capture never does, an edit and the conversion
+// look the same.
+type ConvertedError struct {
+	Paths []string
+}
+
+func (e *ConvertedError) Error() string {
+	return fmt.Sprintf("Git converts %d tracked file(s) on checkout, so their bytes on disk cannot be compared with HEAD: %s",
+		len(e.Paths), strings.Join(e.Paths, ", "))
+}
+
 // StageWorktree stages the working tree as git add -A would, with each file's bytes exactly as they are on disk. It
 // hashes with --no-filters, so no clean or process filter from the user's config runs and no line ending changes:
-// a filter is a command, and capture runs none. It expects the index to hold HEAD, from ReadTree.
+// a filter is a command, and capture runs none. It expects the index to hold HEAD, from ReadTree. A tracked file
+// whose bytes differ from HEAD's while Git converts it on checkout refuses with a *ConvertedError.
 func (ix *Index) StageWorktree() error {
+	head, err := ix.stagedEntries()
+	if err != nil {
+		return err
+	}
+	// Unset means true, as Git reads it, and only an explicit false keeps the recorded mode.
+	fileMode, set, err := configLookup(ix.clone, "--type=bool", "--get", "core.fileMode")
+	if err != nil {
+		return err
+	}
+	keepMode := set && fileMode == "false"
 	out, err := ix.git("-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.splitIndex=false",
 		"ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ":/")
 	if err != nil {
@@ -78,14 +101,23 @@ func (ix *Index) StageWorktree() error {
 			}
 			entries = append(entries, entry{"120000", oid, p})
 		case info.IsDir():
-			// git lists an embedded repository or a submodule as its directory, and add -A records its HEAD.
-			if head, err := git(full, "rev-parse", "--verify", "HEAD"); err == nil {
-				entries = append(entries, entry{"160000", strings.TrimSpace(string(head)), p})
+			// git lists an embedded repository or a submodule as its directory, and add -A records its HEAD. A
+			// submodule never initialized is an empty directory, where rev-parse would answer with the superproject's
+			// HEAD, so it keeps the gitlink HEAD holds.
+			if _, err := os.Lstat(filepath.Join(full, ".git")); err != nil {
+				continue
+			}
+			if sub, err := git(full, "rev-parse", "--verify", "HEAD"); err == nil {
+				entries = append(entries, entry{"160000", strings.TrimSpace(string(sub)), p})
 			}
 		case info.Mode().IsRegular():
 			mode := "100644"
 			if info.Mode()&0o111 != 0 {
 				mode = "100755"
+			}
+			// With core.fileMode=false the filesystem's execute bit means nothing, so git add -A keeps the mode.
+			if was, ok := head[p]; keepMode && ok && (was.mode == "100644" || was.mode == "100755") {
+				mode = was.mode
 			}
 			hashed = append(hashed, p)
 			entries = append(entries, entry{mode: mode, path: p})
@@ -96,14 +128,23 @@ func (ix *Index) StageWorktree() error {
 		return err
 	}
 	var info bytes.Buffer
+	var differ []string
 	next := 0
 	for _, e := range entries {
 		// Regular files were hashed in one batch, in the order they were listed.
 		if e.oid == "" {
 			e.oid = oids[next]
 			next++
+			if was, ok := head[e.path]; ok && was.oid != e.oid {
+				differ = append(differ, e.path)
+			}
 		}
 		fmt.Fprintf(&info, "%s %s\t%s\x00", e.mode, e.oid, e.path)
+	}
+	if converted, err := ix.converted(differ); err != nil {
+		return err
+	} else if len(converted) > 0 {
+		return &ConvertedError{Paths: converted}
 	}
 	if len(removed) > 0 {
 		if _, err := run(ix.clone, ix.env(), []byte(strings.Join(removed, "\x00")+"\x00"), "update-index", "-z", "--force-remove", "--stdin"); err != nil {
@@ -116,6 +157,80 @@ func (ix *Index) StageWorktree() error {
 		}
 	}
 	return nil
+}
+
+type stagedEntry struct{ mode, oid string }
+
+// stagedEntries is the mode and object id of each path the index holds.
+func (ix *Index) stagedEntries() (map[string]stagedEntry, error) {
+	out, err := ix.git("ls-files", "-z", "--stage")
+	if err != nil {
+		return nil, err
+	}
+	entries := map[string]stagedEntry{}
+	for _, rec := range strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00") {
+		meta, path, ok := strings.Cut(rec, "\t")
+		fields := strings.Fields(meta)
+		if !ok || len(fields) != 3 {
+			if rec == "" {
+				continue
+			}
+			return nil, fmt.Errorf("parse ls-files --stage record %q", rec)
+		}
+		entries[path] = stagedEntry{mode: fields[0], oid: fields[1]}
+	}
+	return entries, nil
+}
+
+// converted is the paths Git would convert on checkout, read from their attributes and the line ending config: a
+// filter, ident, a working-tree encoding, or CRLF line endings on a text file.
+func (ix *Index) converted(paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	autocrlf, _, err := configLookup(ix.clone, "--get", "core.autocrlf")
+	if err != nil {
+		return nil, err
+	}
+	eolConfig, _, err := configLookup(ix.clone, "--get", "core.eol")
+	if err != nil {
+		return nil, err
+	}
+	autocrlf = strings.ToLower(autocrlf)
+	crlfCheckout := autocrlf == "true" || (autocrlf != "input" && strings.EqualFold(eolConfig, "crlf"))
+	stdin := []byte(strings.Join(paths, "\x00") + "\x00")
+	out, err := run(ix.clone, ix.env(), stdin, "check-attr", "-z", "--stdin", "text", "eol", "filter", "ident", "working-tree-encoding")
+	if err != nil {
+		return nil, err
+	}
+	fields := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+	if len(fields)%3 != 0 {
+		return nil, fmt.Errorf("parse check-attr output: %d fields", len(fields))
+	}
+	attrs := map[string]map[string]string{}
+	for i := 0; i+2 < len(fields); i += 3 {
+		if attrs[fields[i]] == nil {
+			attrs[fields[i]] = map[string]string{}
+		}
+		attrs[fields[i]][fields[i+1]] = fields[i+2]
+	}
+	given := func(v string) bool { return v != "" && v != "unspecified" && v != "unset" }
+	var converting []string
+	for _, p := range paths {
+		a := attrs[p]
+		text := a["text"]
+		switch {
+		case given(a["filter"]), a["ident"] == "set", given(a["working-tree-encoding"]):
+		case text == "unset":
+			continue
+		case a["eol"] == "crlf":
+		case crlfCheckout && (text == "set" || text == "auto" || (text == "unspecified" && autocrlf == "true")):
+		default:
+			continue
+		}
+		converting = append(converting, p)
+	}
+	return converting, nil
 }
 
 // hashPaths writes each file as a blob with no filter and returns the object ids in order. --stdin-paths reads one

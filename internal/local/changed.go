@@ -1,10 +1,12 @@
 package local
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/gitx"
 	"github.com/eriksaulnier/loupe/internal/refusal"
@@ -59,6 +61,11 @@ func captureChanged(c Captured, req Request, place Place) (Captured, error) {
 		return Captured{}, err
 	}
 	if err := ix.StageWorktree(); err != nil {
+		var conv *gitx.ConvertedError
+		if errors.As(err, &conv) {
+			return Captured{}, refusal.New(refusal.Usage, fmt.Sprintf("--changed cannot tell an edit from Git's checkout conversion (a filter, ident, an encoding or CRLF line endings) in %s",
+				firstPaths(conv.Paths, 5)), "capture the files with --files <path>")
+		}
 		return Captured{}, err
 	}
 	tree, err := ix.WriteTree()
@@ -149,4 +156,12 @@ func chooseChanged(clone, against, tree string) ([]string, []run.LocalSkipped, e
 		kept = append(kept, e.Path)
 	}
 	return kept, skipped, nil
+}
+
+// firstPaths names up to n paths and counts the rest, so a refusal over a whole repository stays one readable line.
+func firstPaths(paths []string, n int) string {
+	if len(paths) <= n {
+		return strings.Join(paths, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(paths[:n], ", "), len(paths)-n)
 }

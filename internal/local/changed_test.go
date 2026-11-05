@@ -178,6 +178,21 @@ func TestChangedRefuses(t *testing.T) {
 	write(t, filepath.Join(unborn, "a.txt"), []byte("a\n"))
 	_, err = Capture(Request{Form: FormChanged, WorkDir: unborn})
 	wantRefusal(t, err, "HEAD has none")
+
+	crlf := plainRepo(t, "crlf")
+	write(t, filepath.Join(crlf, ".gitattributes"), []byte("*.txt text eol=crlf\n"))
+	write(t, filepath.Join(crlf, "notes.txt"), []byte("a\nb\n"))
+	gitIn(t, crlf, "add", ".gitattributes", "notes.txt")
+	gitIn(t, crlf, "commit", "-q", "-m", "crlf")
+	if err := os.Remove(filepath.Join(crlf, "notes.txt")); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, crlf, "checkout", "--", "notes.txt")
+	_, err = Capture(Request{Form: FormChanged, WorkDir: crlf})
+	wantRefusal(t, err, "checkout conversion")
+	if r, _ := refusal.As(err); !strings.Contains(r.Fix, "--files") || !strings.Contains(r.Message, "notes.txt") {
+		t.Fatalf("refusal %+v does not name the file and --files", r)
+	}
 }
 
 func TestChangedRunsNoFilter(t *testing.T) {

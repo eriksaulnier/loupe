@@ -438,3 +438,74 @@ func TestStageWorktreeKeepsAPathWithANewline(t *testing.T) {
 			runGit(t, w.repo.Dir, "ls-tree", "-r", tree), runGit(t, w.repo.Dir, "ls-tree", "-r", want))
 	}
 }
+
+// stageErr stages clone's working tree onto HEAD in a temporary index and returns StageWorktree's error.
+func stageErr(t *testing.T, clone string) error {
+	t.Helper()
+	ix := WithIndex(clone, filepath.Join(t.TempDir(), "index"))
+	if err := ix.ReadTree("HEAD"); err != nil {
+		t.Fatal(err)
+	}
+	return ix.StageWorktree()
+}
+
+// A tracked file Git converts on checkout differs from HEAD's blob on disk even when nobody edited it, and capture
+// runs no conversion to tell the two apart, so it refuses rather than report every such file as changed.
+func TestStageWorktreeRefusesACheckoutConversion(t *testing.T) {
+	for _, c := range []struct{ name, attrs, file, content string }{
+		{"eol=crlf", "*.txt text eol=crlf\n", "f.txt", "a\nb\n"},
+		{"ident", "*.c ident\n", "f.c", "/* $Id$ */\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo := gitrepo.New(t, "o", "r", 1)
+			writeFile(t, filepath.Join(repo.Dir, ".gitattributes"), c.attrs, 0o644)
+			writeFile(t, filepath.Join(repo.Dir, c.file), c.content, 0o644)
+			repo.Git("add", ".gitattributes", c.file)
+			repo.Git("commit", "-q", "-m", "convert")
+			if err := os.Remove(filepath.Join(repo.Dir, c.file)); err != nil {
+				t.Fatal(err)
+			}
+			repo.Git("checkout", "--", c.file)
+			var conv *ConvertedError
+			if err := stageErr(t, repo.Dir); !errors.As(err, &conv) || !slices.Equal(conv.Paths, []string{c.file}) {
+				t.Fatalf("StageWorktree = %v, want a ConvertedError naming %s", err, c.file)
+			}
+		})
+	}
+}
+
+// With core.fileMode=false an execute bit on disk means nothing, so the tracked file keeps the mode HEAD records, as
+// git add -A keeps it.
+func TestStageWorktreeKeepsTheModeWithoutFileMode(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	writeFile(t, filepath.Join(repo.Dir, "plain.txt"), "x\n", 0o644)
+	repo.Git("add", "plain.txt")
+	repo.Git("commit", "-q", "-m", "plain")
+	repo.Git("config", "core.fileMode", "false")
+	if err := os.Chmod(filepath.Join(repo.Dir, "plain.txt"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tree, _ := captureTree(t, repo.Dir)
+	if got := runGit(t, repo.Dir, "ls-tree", tree, "plain.txt"); !strings.HasPrefix(got, "100644 ") {
+		t.Fatalf("plain.txt staged as %q, want mode 100644", got)
+	}
+	if want := addAllTree(t, repo.Dir); tree != want {
+		t.Fatalf("StageWorktree wrote %s, add -A writes %s", tree, want)
+	}
+}
+
+// A submodule never initialized is an empty directory, where rev-parse would answer with the superproject's HEAD.
+// It keeps the gitlink HEAD records.
+func TestStageWorktreeKeepsAnUninitializedSubmodule(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	link := runGit(t, repo.Dir, "rev-parse", "HEAD")
+	repo.Git("update-index", "--add", "--cacheinfo", "160000,"+link+",vendor")
+	repo.Git("commit", "-q", "-m", "submodule")
+	if err := os.MkdirAll(filepath.Join(repo.Dir, "vendor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tree, _ := captureTree(t, repo.Dir)
+	if want := runGit(t, repo.Dir, "rev-parse", "HEAD^{tree}"); tree != want {
+		t.Fatalf("StageWorktree wrote %s, want HEAD's tree %s:\n%s", tree, want, runGit(t, repo.Dir, "ls-tree", tree))
+	}
+}
