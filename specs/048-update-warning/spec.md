@@ -83,7 +83,7 @@ The network is down, GitHub returns an error, or the check is slow. Capture beha
 
 ### Functional Requirements
 
-- **FR-001**: `loupe capture` MUST look up the latest release at most once per 24 hours, after the run is created.
+- **FR-001**: `loupe capture` of a pull request MUST look up the latest release at most once per 24 hours, after the run is created. A local capture makes no lookup and MAY warn from the cached result (amended by `specs/049-apply-mode`, FR-008).
 - **FR-002**: The lookup MUST use the GitHub API with the token capture already holds, and a time limit of 2 seconds.
 - **FR-003**: A failed lookup MUST NOT change capture's result, output or exit code.
 - **FR-004**: loupe MUST cache the latest version and the time of the check in one plain file under the data root.
