@@ -26,7 +26,7 @@
 
 ## R4. The return step
 
-**Decision**: `askReturn` checks readiness as today, then opens the note textarea (newlines allowed) under a new `noteKind` `noteReturn`, with the footer "enter return to <applier> · esc cancel". Enter calls `draft.Seal` with the note and the version seen when the step opened. Esc closes the step. On success the program quits, and `Model.Returned()` reports the applier and the counts, so `reviewDone` prints "Returned to <applier>: N accepted, M rejected." `viewReturned` and its screen go.
+**Decision**: `askReturn` checks readiness as today, then opens the note textarea under a new `noteKind` `noteReturn`, with the footer "enter return to <applier> · esc cancel". Enter calls `draft.Seal` with the note and the version seen when the step opened. Esc closes the step. On success the program quits, and `Model.Returned()` reports the applier and the counts, so `reviewDone` prints "Returned to <applier>: N accepted, M rejected." `viewReturned` and its screen go.
 
 **FR-019**: after a decision leaves no pending finding and no open note, `applyUI` opens the same step. The trigger runs where the detail view settles after a decision, so the last decision's own redraw happens first.
 

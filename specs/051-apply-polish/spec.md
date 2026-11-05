@@ -56,7 +56,7 @@ The human has decided every finding and wants to tell the agent one more thing a
 
 **Acceptance Scenarios**:
 
-1. **Given** a ready local run, **When** the human presses the return key, **Then** an empty one-line-or-more note input opens with the applier's name in its prompt, and one confirming key returns the run with what they typed.
+1. **Given** a ready local run, **When** the human presses the return key, **Then** an empty one-line note input opens with the applier's name in its prompt, and one confirming key returns the run with what they typed.
 2. **Given** the note input, **When** the human confirms with the input empty, **Then** the run returns with no note, and the key count is the same as in spec 049 (SC-006 of spec 049 still holds).
 3. **Given** a run returned with a note, **When** the agent runs `loupe wait` or `loupe feedback --json`, **Then** the payload carries `note` with the human's text.
 4. **Given** the note input, **When** the human presses Esc, **Then** nothing is returned and the list is unchanged.
@@ -180,7 +180,7 @@ The human wants to work through the findings of a local run one at a time, decid
 - `return.json` schema 1 has never been released, so adding `note` amends schema 1 in place. If spec 049 ships before this spec, the field bumps the schema to 2 instead, with the usual `docs/versioning.md` row.
 - "Its own accent" means a new style token for apply mode, chosen to differ from every PR-run color in both light and dark palettes. The exact hue is a design choice for the plan.
 - The on-screen words "reject" and "ask" replace "exclude" and "send back" on local runs only. The JSON group `excluded` and the note mechanics do not change, so the agent-facing contract from spec 049 stands.
-- The note input reuses the review program's note textarea, as `A` and `X` do, with newlines allowed.
+- The note input reuses the review program's note textarea, as `A` and `X` do. It holds one line, since Enter returns the run, and a pasted line break joins the lines.
 - This specification authorizes no commit, push, pull request, release or live review.
 
 ## Out of scope
