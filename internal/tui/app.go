@@ -112,6 +112,7 @@ type Model struct {
 	// view; empty when the window is too short to spare them, and they scroll with the document instead.
 	detailHead []string
 	noting     bool
+	noteKind   noteKind
 	note       textarea.Model
 	// keptNotes holds, per finding, text the human typed into a note and then left without it being recorded, so the
 	// next send-back on that finding starts from it. It lives only as long as the program.
@@ -183,6 +184,15 @@ type Model struct {
 	watchCtx    context.Context
 	watchCancel context.CancelFunc
 }
+
+// noteKind is what the note input records on enter: a send-back note, an accept note or an exclude reason.
+type noteKind int
+
+const (
+	noteSend noteKind = iota
+	noteAccept
+	noteExclude
+)
 
 func loadRun(dir string) (run.Target, *diff.Diff, *draft.Draft, error) {
 	target, err := run.LoadTarget(dir)

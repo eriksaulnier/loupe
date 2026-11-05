@@ -257,7 +257,15 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 
 func (applyUI) listKey(*Model, string) (tea.Cmd, bool) { return nil, false }
 
-func (applyUI) detailKey(*Model, draft.Finding, string) (tea.Cmd, bool) { return nil, false }
+func (applyUI) detailKey(m *Model, _ draft.Finding, key string) (tea.Cmd, bool) {
+	switch key {
+	case "t":
+		return m.openNote(noteAccept, ""), true
+	case "x":
+		return m.openNote(noteExclude, ""), true
+	}
+	return nil, false
+}
 
 func (applyUI) heading(m *Model) style.ReviewHeading {
 	return style.ReviewHeading{Ref: localRef(m.target)}

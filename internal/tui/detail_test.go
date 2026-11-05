@@ -1159,3 +1159,124 @@ func TestApplyRunHasNoEditOrOpenKey(t *testing.T) {
 		t.Error("help has publish steps on an apply run")
 	}
 }
+
+// footerText is the detail footer as plain text.
+func footerText(m *Model) string { return ansi.Strip(strings.Join(m.detailFooter(), " ")) }
+
+// t opens an empty one-line input whose enter accepts with what was typed, and with nothing typed accepts plainly.
+func TestApplyTAcceptsWithANote(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	m.keptNotes["f-001"] = "kept send-back text"
+	mustOpenFinding(t, m, "f-001")
+	press(m, "t")
+	if !m.noting || m.note.Value() != "" {
+		t.Fatalf("t did not open an empty input: noting %v value %q", m.noting, m.note.Value())
+	}
+	if footer := footerText(m); !strings.Contains(footer, "enter accept") {
+		t.Errorf("footer %q does not say accept", footer)
+	}
+	m.Update(runes("Use the second store."))
+	m.Update(enterKey)
+	d := loadDraft(t, dir)
+	if got := d.Decisions["f-001"]; got.Decision != draft.DecisionAccepted || got.Note != "Use the second store." {
+		t.Fatalf("f-001 decision %+v", got)
+	}
+	if m.keptNotes["f-001"] != "kept send-back text" {
+		t.Errorf("t touched the kept send-back text: %q", m.keptNotes["f-001"])
+	}
+
+	mustOpenFinding(t, m, "f-003")
+	press(m, "t")
+	m.Update(enterKey)
+	if got := loadDraft(t, dir).Decisions["f-003"]; got.Decision != draft.DecisionAccepted || got.Note != "" {
+		t.Fatalf("an empty note did not accept plainly: %+v", got)
+	}
+}
+
+func TestApplyTEscDiscardsTheNote(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	press(m, "t")
+	m.Update(runes("half a thought"))
+	m.Update(escKey)
+	if m.noting || len(m.keptNotes) != 0 {
+		t.Fatalf("esc left the input open or kept its text: noting %v kept %v", m.noting, m.keptNotes)
+	}
+	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
+		t.Fatalf("esc decided f-001: %s", got)
+	}
+	press(m, "t")
+	if got := m.note.Value(); got != "" {
+		t.Fatalf("t reopened with %q", got)
+	}
+	m.Update(escKey)
+	press(m, "s")
+	if got := m.note.Value(); got != "" {
+		t.Fatalf("send back opened with the accept note %q", got)
+	}
+}
+
+// x opens the same input; an empty reason excludes plainly, and one too long refuses in review's own words.
+func TestApplyXExcludesWithAnOptionalReason(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	press(m, "x")
+	if !m.noting || m.note.Value() != "" {
+		t.Fatalf("x did not open an empty input: noting %v value %q", m.noting, m.note.Value())
+	}
+	if footer := footerText(m); !strings.Contains(footer, "enter exclude") {
+		t.Errorf("footer %q does not say exclude", footer)
+	}
+	long := strings.Repeat("a", 201)
+	m.Update(runes(long))
+	m.Update(enterKey)
+	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
+		t.Fatalf("a reason of 201 characters excluded f-001")
+	}
+	if !strings.Contains(m.notice, "201 characters") || strings.Contains(m.notice, "loupe edit") || strings.Contains(m.notice, "--") {
+		t.Errorf("refusal notice %q", m.notice)
+	}
+	if !m.noting || m.note.Value() != long {
+		t.Errorf("the refused reason was not handed back: noting %v value %q", m.noting, m.note.Value())
+	}
+	m.Update(escKey)
+
+	press(m, "x")
+	m.Update(runes("Out of scope."))
+	m.Update(enterKey)
+	if got := loadDraft(t, dir).Decisions["f-001"]; got.Decision != draft.DecisionExcluded || got.Note != "Out of scope." {
+		t.Fatalf("f-001 decision %+v", got)
+	}
+	mustOpenFinding(t, m, "f-002")
+	press(m, "x")
+	m.Update(enterKey)
+	if got := loadDraft(t, dir).Decisions["f-002"]; got.Decision != draft.DecisionExcluded || got.Note != "" {
+		t.Fatalf("an empty reason did not exclude plainly: %+v", got)
+	}
+}
+
+func TestApplySendBackStillRestoresKeptText(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	noteBox(t, m, "f-001", "why this name")
+	m.Update(escKey)
+	press(m, "s")
+	if got := m.note.Value(); got != "why this name" {
+		t.Fatalf("send back reopened with %q", got)
+	}
+	if footer := footerText(m); !strings.Contains(footer, "enter send") {
+		t.Errorf("footer %q", footer)
+	}
+}
+
+func TestApplySettleDropsTAndX(t *testing.T) {
+	for _, k := range strings.Split("axsurdwt", "") {
+		m, dir := applyModel(t, "Claude")
+		mustOpenFinding(t, m, "f-001")
+		before := loadDraft(t, dir).Version
+		m.settling = true
+		press(m, k)
+		if m.noting || m.rewriting || loadDraft(t, dir).Version != before {
+			t.Errorf("%s was acted on while settling", k)
+		}
+	}
+}
