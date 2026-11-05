@@ -2,12 +2,12 @@
 
 ## Prerequisites
 
-The worktree on `050-apply-polish`, with `mise install` done.
+The worktree on `051-apply-polish`, with `mise install` done.
 
 ## 1. The flow, by eye
 
 ```sh
-export LOUPE_DEMO_HOME=/tmp/loupe-050
+export LOUPE_DEMO_HOME=/tmp/loupe-051
 mise run demo -- review 'acme/widgets:local#1'
 ```
 

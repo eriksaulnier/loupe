@@ -1,12 +1,12 @@
 # Implementation Plan: Apply-mode polish
 
-**Branch**: `050-apply-polish` | **Date**: 2026-11-04 | **Spec**: [spec.md](spec.md)
+**Branch**: `051-apply-polish` | **Date**: 2026-11-04 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/050-apply-polish/spec.md`
+**Input**: Feature specification from `specs/051-apply-polish/spec.md`
 
 ## Summary
 
-Spec 050 changes only the apply side of the review program and the return record. Every change sits behind two seams that spec 049 built: `applyUI` in `internal/tui/modeui.go`, and the apply mode in `internal/mode`. `publishUI` and the publish mode stay byte-identical, and the characterization test `internal/tui/modeui_test.go` plus every golden pin them.
+Spec 051 changes only the apply side of the review program and the return record. Every change sits behind two seams that spec 049 built: `applyUI` in `internal/tui/modeui.go`, and the apply mode in `internal/mode`. `publishUI` and the publish mode stay byte-identical, and the characterization test `internal/tui/modeui_test.go` plus every golden pin them.
 
 The work, in delivery order:
 
@@ -56,12 +56,12 @@ No violation. Complexity Tracking stays empty.
 ### Documentation (this feature)
 
 ```text
-specs/050-apply-polish/
+specs/051-apply-polish/
 ├── spec.md
 ├── plan.md        # this file
 ├── research.md
 ├── data-model.md
-├── contracts/cli-apply-050.md
+├── contracts/cli-apply-051.md
 ├── quickstart.md
 └── tasks.md       # from speckit-tasks
 ```
@@ -94,7 +94,7 @@ specs/001-loupe-v1/contracts/cli.md   # M: note in feedback and wait
 
 ## Delivery
 
-One PR, `050-apply-polish`, stacked on `049-apply-skill`. Its tasks run in the order of the Summary.
+One PR, `051-apply-polish`, stacked on `049-apply-skill`. Its tasks run in the order of the Summary.
 
 ## Verification
 

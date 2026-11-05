@@ -1,12 +1,12 @@
 # Feature Specification: Apply-mode polish
 
-**Feature Branch**: `050-apply-polish`
+**Feature Branch**: `051-apply-polish`
 
 **Created**: 2026-11-04
 
 **Status**: Draft
 
-**Input**: User description: "Spec 050, apply-mode polish, on top of spec 049. Drop `w` on local runs, add a closing note to the return step, and make apply mode visually distinct from PR review. Open decisions: card view, `u` undoing any decision, one-key reject, and `reviewOpen` on a `wait` timeout. PR runs MUST NOT change in any visible way. Keep the human-decide skill in sync."
+**Input**: User description: "Spec 051, apply-mode polish, on top of spec 049. Drop `w` on local runs, add a closing note to the return step, and make apply mode visually distinct from PR review. Open decisions: card view, `u` undoing any decision, one-key reject, and `reviewOpen` on a `wait` timeout. PR runs MUST NOT change in any visible way. Keep the human-decide skill in sync."
 
 ## Problem and goals
 

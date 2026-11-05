@@ -1,8 +1,8 @@
 # Tasks: Apply-mode polish
 
-**Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/cli-apply-050.md](contracts/cli-apply-050.md) and [quickstart.md](quickstart.md).
+**Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/cli-apply-051.md](contracts/cli-apply-051.md) and [quickstart.md](quickstart.md).
 
-Every task follows a failing test, then the change, then a passing check. PR runs MUST stay byte-identical: `internal/tui/modeui_test.go` and every golden pass unchanged, with no `-update` of a PR golden. One PR on `050-apply-polish`, which ends with `mise run check` green.
+Every task follows a failing test, then the change, then a passing check. PR runs MUST stay byte-identical: `internal/tui/modeui_test.go` and every golden pass unchanged, with no `-update` of a PR golden. One PR on `051-apply-polish`, which ends with `mise run check` green.
 
 ## Phase 1: Keys (US3, FR-006, FR-013, FR-014, FR-016, FR-017)
 
