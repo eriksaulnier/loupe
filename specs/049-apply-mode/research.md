@@ -22,13 +22,13 @@ Capture writes no ref and no commit. The blobs and the tree become unreachable o
 
 **Accepted behavior**:
 
-- Capture runs no clean or process filter and converts no line ending, so a git-lfs file shows its real content and a git-crypt file its plaintext, as the editor shows them. The PR 2 review showed that running filters let a filter write into the worktree and contact the network. Overriding each filter with `-c filter.<name>.process=` does not disable a process filter in Git 2.43, and `--attr-source` with the empty tree still ran it, so capture hashes the files itself.
+- Capture runs no clean or process filter and converts no line ending. A new or edited git-lfs or git-crypt file therefore shows its real content or plaintext, as the editor shows it. A tracked filtered file that the user's own index still records as `HEAD`'s blob, with the same size, mtime, ctime and inode as on disk, counts as unchanged and keeps `HEAD`'s blob. An edited one, or one whose stat is racily clean, is refused, since without running the filter an edit and the smudge look the same. The PR 2 review showed that running filters let a filter write into the worktree and contact the network. Overriding each filter with `-c filter.<name>.process=` does not disable a process filter in Git 2.43, and `--attr-source` with the empty tree still ran it, so capture hashes the files itself.
 - A fresh index has no skip-worktree or assume-unchanged bits, so files marked by hand show as changed or deleted.
 - The cost matches `git add -A` on a fresh index, because a fresh index has no stat cache. Quickstart section 5 measures it.
 
 **Rationale**:
 
-- `git diff <commit>` against the working tree reads the user's index, which FR-004 forbids.
+- `git diff <commit>` against the working tree may refresh and write the user's index and runs its filters, which FR-004 and the no-filter rule forbid.
 - Step 4 reads only `HEAD`'s tree. Step 5 locks only `<tmp>/index.lock` and runs no hooks.
 - Without a ref, nothing under `refs/` changes. The rest of SC-005 (the index, the working files, the branch and `HEAD`) is pinned by tests.
 

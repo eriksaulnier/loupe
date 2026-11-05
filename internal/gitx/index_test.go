@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
 )
@@ -553,5 +554,63 @@ func TestStageWorktreeStagesANewFileAsPlainWithoutFileMode(t *testing.T) {
 	}
 	if want := addAllTree(t, repo.Dir); tree != want {
 		t.Fatalf("StageWorktree wrote %s, add -A writes %s", tree, want)
+	}
+}
+
+// A filtered file (git-lfs, git-crypt) holds its smudged bytes on disk, which never match HEAD's blob. One the user's
+// index still records as untouched keeps HEAD's blob, and only an edited one is refused. Capture runs no filter.
+func TestStageWorktreeKeepsAnUntouchedFilteredFile(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	repo.Git("config", "filter.up.clean", "tr A-Z a-z")
+	repo.Git("config", "filter.up.smudge", "tr a-z A-Z")
+	writeFile(t, filepath.Join(repo.Dir, ".gitattributes"), "*.big filter=up\n", 0o644)
+	writeFile(t, filepath.Join(repo.Dir, "data.big"), "abc\n", 0o644)
+	repo.Git("add", ".gitattributes", "data.big")
+	repo.Git("commit", "-q", "-m", "filtered")
+	big := filepath.Join(repo.Dir, "data.big")
+	if err := os.Remove(big); err != nil {
+		t.Fatal(err)
+	}
+	repo.Git("checkout", "--", "data.big")
+	// An mtime well before the index's write keeps the entry from being racily clean.
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(big, past, past); err != nil {
+		t.Fatal(err)
+	}
+	repo.Git("update-index", "--refresh")
+	marker := filepath.Join(t.TempDir(), "ran")
+	repo.Git("config", "filter.up.clean", "touch "+marker)
+	repo.Git("config", "filter.up.smudge", "touch "+marker)
+	// Reading the user's index runs no fsmonitor hook either.
+	hookRan := filepath.Join(t.TempDir(), "hook-ran")
+	hook := filepath.Join(t.TempDir(), "fsmonitor.sh")
+	writeFile(t, hook, "#!/bin/sh\necho \"$@\" >> "+hookRan+"\n", 0o755)
+	repo.Git("config", "core.fsmonitor", hook)
+
+	tree, _ := captureTree(t, repo.Dir)
+	if want := runGit(t, repo.Dir, "rev-parse", "HEAD^{tree}"); tree != want {
+		t.Fatalf("an untouched filtered file changed the tree: %s, want %s", tree, want)
+	}
+	// A same-size edit with its mtime put back still changes the ctime, which Git's stat check also compares.
+	if err := os.WriteFile(big, []byte("XYZ\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(big, past, past); err != nil {
+		t.Fatal(err)
+	}
+	var restored *ConvertedError
+	if err := stageErr(t, repo.Dir); !errors.As(err, &restored) {
+		t.Fatalf("a same-size edit with its mtime restored: %v, want a ConvertedError", err)
+	}
+	writeFile(t, big, "EDITED\n", 0o644)
+	var conv *ConvertedError
+	if err := stageErr(t, repo.Dir); !errors.As(err, &conv) || !slices.Equal(conv.Paths, []string{"data.big"}) {
+		t.Fatalf("StageWorktree = %v, want a ConvertedError naming data.big", err)
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("capture ran the filter (stat %v)", err)
+	}
+	if b, err := os.ReadFile(hookRan); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("capture ran the fsmonitor hook: %q", b)
 	}
 }
