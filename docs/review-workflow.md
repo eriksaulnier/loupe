@@ -41,6 +41,24 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 | `o` | Open the pull request in the browser |
 | `?` | List the keys for the current view |
 
+On a local run, which the agent captured with `loupe capture --changed`, `--files` or `--no-files`, a finding can carry a proposal: the change the agent makes if you accept it. A finding with no proposal is a question. The keys there are these:
+
+| Key | What it does |
+| :--- | :--- |
+| `a` | Accept the finding |
+| `t` | Accept the finding with a note for the agent; an empty note is a plain accept |
+| `x` | Exclude the finding, with an optional reason |
+| `s` | Send the finding back to the agent with a note |
+| `w` | Rewrite the finding's title, body and proposal; `ctrl+s` saves and keeps the decision |
+| `u` | Restore an excluded finding to pending, or reinstate and accept a withdrawn one |
+| `r`, `d` | Resolve or dismiss the finding's open note |
+| `f` | Show the whole file's diff; a `--files` run shows the file as plain text |
+| `j`, `k`, `n`, `N`, `space`, `PgUp`, `PgDn`, `ctrl+r`, `esc` | Move, scroll, reload and go back, as on a pull request run |
+| `p` | In the list, return the decisions to the agent after one `y` |
+| `?` | List the keys for the current view |
+
+`e` and `o` are absent, and there is no publish step.
+
 Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
 
 While review is open, it reads the pull request from GitHub as it opens and 60 seconds after each check. The header tags a pull request that merged, closed or gained commits since capture with `PR merged`, `PR closed` or `head moved`, and the first time each shows, one notice says so. With no network or credentials the tag reads `state unknown`, and review works as before. A run captured with `--allow-closed` is not tagged for being closed.
