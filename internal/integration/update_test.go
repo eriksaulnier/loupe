@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/updatecheck"
@@ -102,13 +101,24 @@ func TestCaptureSurvivesAFailedLookup(t *testing.T) {
 	}
 }
 
-// shortLookup gives the latest-release request a short deadline of its own, so a stalled lookup ends at once. The 2s
-// limit itself is pinned by updatecheck's TestLookupTimeoutIsTwoSeconds and TestRefreshBoundsTheLookup.
-type shortLookup struct{ github.Client }
+// cancelOnArrival cancels the latest-release request once the stalled fake server has it, so a stalled lookup ends
+// without waiting for the real 2s limit and without a timer that can fire before the request leaves. updatecheck's
+// TestLookupTimeoutIsTwoSeconds and TestRefreshBoundsTheLookup pin the limit itself.
+type cancelOnArrival struct {
+	github.Client
+	arrived <-chan struct{}
+}
 
-func (c shortLookup) LatestRelease(ctx context.Context, owner, repo string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+func (c cancelOnArrival) LatestRelease(ctx context.Context, owner, repo string) (string, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	go func() {
+		select {
+		case <-c.arrived:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 	return c.Client.LatestRelease(ctx, owner, repo)
 }
 
@@ -116,8 +126,7 @@ func TestCaptureSurvivesAStalledLookup(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	h.Version = "0.19.0"
-	h.GH.StallLatestRelease()
-	h.client = shortLookup{h.client}
+	h.client = cancelOnArrival{h.client, h.GH.StallLatestRelease()}
 
 	_, stderr, exit := h.Run("capture", prURL(), "--json")
 	if exit != 0 || stderr != "" {

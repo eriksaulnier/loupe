@@ -399,3 +399,27 @@ func TestOnUpdateRunsBeforeTheEditIsHandled(t *testing.T) {
 		t.Fatalf("update count %d", s.UpdateCount())
 	}
 }
+
+func TestStallLatestReleaseSignalsWhenTheRequestArrives(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	arrived := s.StallLatestRelease()
+
+	callCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.LatestRelease(callCtx, "o", "r")
+		done <- err
+	}()
+	<-arrived
+	select {
+	case err := <-done:
+		t.Fatalf("the stalled request returned before it was canceled: %v", err)
+	default:
+	}
+	cancel()
+	if err := <-done; err == nil {
+		t.Fatal("a canceled stalled request must fail")
+	}
+}

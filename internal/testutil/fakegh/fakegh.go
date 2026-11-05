@@ -91,32 +91,33 @@ type compareKey struct {
 type Server struct {
 	URL string
 
-	mu            sync.Mutex
-	prs           map[prKey]github.PullRequest
-	branches      map[prKey]string
-	headOwners    map[prKey]string
-	failures      map[string]int
-	reviews       map[prKey][]github.Review
-	issueComments map[prKey][]github.IssueComment
-	threads       map[prKey][]github.ReviewThread
-	pageSize      int
-	failAfter     map[string]failRule
-	served        map[string]int
-	comparisons   map[compareKey]github.Comparison
-	commits       map[prKey][]github.Commit
-	viewer        string
-	latestRelease string
-	stallRelease  bool
-	stallPR       bool
-	userForbidden bool
-	outcomes      []Outcome
-	updates       []Outcome
-	requests      []Request
-	createCount   int
-	updateCount   int
-	nextID        int64
-	onCreate      func(*http.Request)
-	onUpdate      func(*http.Request)
+	mu             sync.Mutex
+	prs            map[prKey]github.PullRequest
+	branches       map[prKey]string
+	headOwners     map[prKey]string
+	failures       map[string]int
+	reviews        map[prKey][]github.Review
+	issueComments  map[prKey][]github.IssueComment
+	threads        map[prKey][]github.ReviewThread
+	pageSize       int
+	failAfter      map[string]failRule
+	served         map[string]int
+	comparisons    map[compareKey]github.Comparison
+	commits        map[prKey][]github.Commit
+	viewer         string
+	latestRelease  string
+	stallRelease   bool
+	releaseArrived chan struct{}
+	stallPR        bool
+	userForbidden  bool
+	outcomes       []Outcome
+	updates        []Outcome
+	requests       []Request
+	createCount    int
+	updateCount    int
+	nextID         int64
+	onCreate       func(*http.Request)
+	onUpdate       func(*http.Request)
 }
 
 func New(t *testing.T) *Server {
@@ -323,11 +324,14 @@ func (s *Server) SetLatestRelease(tag string) {
 	s.latestRelease = tag
 }
 
-// StallLatestRelease makes the latest-release request hang until the caller cancels it.
-func (s *Server) StallLatestRelease() {
+// StallLatestRelease makes the latest-release request hang until the caller cancels it. The returned channel closes
+// when the first such request reaches the server, so a test cancels on arrival, not on a timer.
+func (s *Server) StallLatestRelease() <-chan struct{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stallRelease = true
+	s.releaseArrived = make(chan struct{})
+	return s.releaseArrived
 }
 
 // StallPullRequest makes the single pull request request hang until the caller cancels it.
@@ -532,7 +536,14 @@ func (s *Server) getUser(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) getLatestRelease(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
-	tag, stall := s.latestRelease, s.stallRelease
+	tag, stall, arrived := s.latestRelease, s.stallRelease, s.releaseArrived
+	if stall && arrived != nil {
+		select {
+		case <-arrived:
+		default:
+			close(arrived)
+		}
+	}
 	s.mu.Unlock()
 	if stall {
 		<-r.Context().Done()
