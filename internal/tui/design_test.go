@@ -321,8 +321,8 @@ func TestHelpIsAnOverlayThatKeepsTheScreen(t *testing.T) {
 	if !strings.HasPrefix(ansi.Strip(lines[bodyTop(30)]), "╭─ Reviewer") {
 		t.Errorf("the covered list is not drawn around the pane:\n%s", ansi.Strip(view))
 	}
-	if !strings.Contains(view, "38;2;78;80;100") {
-		t.Errorf("the covered list is not dimmed:\n%q", view)
+	if muted := sgrOf(t, m.styles.Muted("x")); !strings.Contains(view, muted) {
+		t.Errorf("the covered list is not dimmed in %q:\n%q", muted, view)
 	}
 	m.Update(arrow(tea.KeyDown))
 	m.Update(runes("enter"))
@@ -571,9 +571,24 @@ func TestColorProfilesKeepEveryState(t *testing.T) {
 	light := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
 	light.styles.SetColorProfile(colorprofile.TrueColor)
 	light.styles.SetDarkBackground(false)
-	if dark.View().Content == light.View().Content || !strings.Contains(light.View().Content, "38;2;114;135;253") {
-		t.Error("the light palette does not use its own accent")
+	accent := sgrOf(t, light.styles.ToneStyle(style.ToneAccent).Render("x"))
+	if dark.View().Content == light.View().Content || !strings.Contains(light.View().Content, accent) {
+		t.Errorf("the light palette does not use its own accent %q", accent)
 	}
+	if strings.Contains(dark.View().Content, accent) {
+		t.Errorf("the dark palette uses the light accent %q", accent)
+	}
+}
+
+// sgrOf is the opening SGR sequence of a styled one-cell string, so a test can look for a role's color without
+// pinning its value.
+func sgrOf(t *testing.T, styled string) string {
+	t.Helper()
+	sgr, _, ok := strings.Cut(styled, "x")
+	if !ok || !strings.HasPrefix(sgr, "\x1b[") {
+		t.Fatalf("not a styled cell: %q", styled)
+	}
+	return sgr
 }
 
 // Long ids, graphemes and large counts fit by display cells in the list and the header.
