@@ -82,13 +82,13 @@ func newHandoffCmd(deps Deps) *cobra.Command {
 }
 
 func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
-	_, ref, err := resolveRun(cmd, deps, positional)
+	root, _, ref, err := resolveRunRoot(cmd, deps, positional)
 	if err != nil {
 		return err
 	}
 	// Checked before detecting a host: without one the fallback tells the human to run review, which is wrong advice
 	// while one is already open.
-	if err := refuseOpenReview(deps, ref); err != nil {
+	if err := refuseOpenReview(root, ref); err != nil {
 		return err
 	}
 	fix := "ask the human to run loupe review " + shellQuote(ref.String())
@@ -96,7 +96,7 @@ func runHandoff(cmd *cobra.Command, deps Deps, positional string) error {
 	if len(hosts) == 0 {
 		return noPaneHost(fix)
 	}
-	command, err := reviewCommand(deps, ref)
+	command, err := reviewCommand(root, ref)
 	if err != nil {
 		return err
 	}
@@ -134,11 +134,7 @@ func noPaneHost(fix string) error {
 
 // refuseOpenReview names the open run in details.run, so an agent can tell its own round from another it must ask the
 // human to finish.
-func refuseOpenReview(deps Deps, ref run.Ref) error {
-	root, err := run.DataRoot(deps.Getenv)
-	if err != nil {
-		return err
-	}
+func refuseOpenReview(root string, ref run.Ref) error {
 	open, ok, err := run.OpenSession(root, ref)
 	if err != nil || !ok {
 		return err
@@ -156,14 +152,10 @@ func refuseOpenReview(deps Deps, ref run.Ref) error {
 // reviewCommand names this executable rather than loupe on PATH, so the pane runs the same build the agent ran. The
 // pane's shell loads the user's profile rather than inheriting loupe's environment, and Orca's split takes no --env,
 // so the data root rides in the command line.
-func reviewCommand(deps Deps, ref run.Ref) (string, error) {
+func reviewCommand(root string, ref run.Ref) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locating the loupe executable: %w", err)
-	}
-	root, err := run.DataRoot(deps.Getenv)
-	if err != nil {
-		return "", err
 	}
 	// The pane's shell starts in its own directory, so a relative LOUPE_HOME would name a different root there.
 	if root, err = filepath.Abs(root); err != nil {

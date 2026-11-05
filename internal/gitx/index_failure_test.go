@@ -3,34 +3,14 @@ package gitx
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
 )
-
-// failingGit puts a git on PATH that fails, or prints nothing, when any argument equals failArg or emptyArg, and
-// otherwise runs the real git. It lets a test reach the error returns of calls that succeed on any real repository.
-func failingGit(t *testing.T, failArg, emptyArg string) {
-	t.Helper()
-	real, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := "#!/bin/sh\n" +
-		"for a in \"$@\"; do\n" +
-		"  if [ \"$a\" = \"" + failArg + "\" ]; then echo 'injected failure' >&2; exit 1; fi\n" +
-		"  if [ \"$a\" = \"" + emptyArg + "\" ]; then exit 0; fi\n" +
-		"done\n" +
-		"exec '" + real + "' \"$@\"\n"
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
 
 func TestGitFunctionsReturnTheGitFailure(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing")
@@ -51,10 +31,18 @@ func TestGitFunctionsReturnTheGitFailure(t *testing.T) {
 	}
 	for name, call := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := call(); err == nil {
-				t.Fatal("no error from a clone that does not exist")
+			if err := call(); err == nil || !strings.Contains(err.Error(), "cannot change to") {
+				t.Fatalf("err = %v, want git's missing-clone failure", err)
 			}
 		})
+	}
+}
+
+// wantInjected fails the test unless err carries the stderr of a gitfail shim.
+func wantInjected(t *testing.T, err error) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), "injected failure") {
+		t.Fatalf("err = %v, want the injected git failure", err)
 	}
 }
 
@@ -76,8 +64,8 @@ func TestHashPathsHashesOnlyPathsWithANewline(t *testing.T) {
 func TestHashPathsRefusesAnUnreadablePathWithANewline(t *testing.T) {
 	w := newWorkTree(t)
 	ix := WithIndex(w.repo.Dir, filepath.Join(t.TempDir(), "index"))
-	if _, err := ix.hashPaths([]string{"no\nsuch.txt"}); err == nil {
-		t.Fatal("hashPaths accepted a path that is not there")
+	if _, err := ix.hashPaths([]string{"no\nsuch.txt"}); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("err = %v, want a not-exist read error", err)
 	}
 }
 
@@ -86,26 +74,26 @@ func TestHashPathsRefusesAFailedHashOfANewlinePath(t *testing.T) {
 	ix := WithIndex(w.repo.Dir, filepath.Join(t.TempDir(), "index"))
 	name := "line\nbreak.txt"
 	writeFile(t, filepath.Join(w.repo.Dir, name), "x\n", 0o644)
-	failingGit(t, "hash-object", "")
-	if _, err := ix.hashPaths([]string{name}); err == nil {
-		t.Fatal("hashPaths ignored a failed git hash-object")
-	}
+	gitfail.WhenArg(t, "hash-object", 1)
+	_, err := ix.hashPaths([]string{name})
+	wantInjected(t, err)
 }
 
 func TestHashPathsRefusesAnObjectCountThatDiffers(t *testing.T) {
 	w := newWorkTree(t)
 	ix := WithIndex(w.repo.Dir, filepath.Join(t.TempDir(), "index"))
-	failingGit(t, "", "hash-object")
-	if _, err := ix.hashPaths([]string{"run.sh"}); err == nil {
-		t.Fatal("hashPaths accepted no object id for one path")
+	gitfail.SilentWhenArg(t, "hash-object")
+	if _, err := ix.hashPaths([]string{"run.sh"}); err == nil || !strings.Contains(err.Error(), "0 object ids for 1 paths") {
+		t.Fatalf("err = %v, want the object id count refusal", err)
 	}
 }
 
 func TestBatchCheckSizesRefusesALineCountThatDiffers(t *testing.T) {
 	w := newWorkTree(t)
-	failingGit(t, "", "cat-file")
-	if _, err := BatchCheckSizes(w.repo.Dir, []string{w.head}); err == nil {
-		t.Fatal("BatchCheckSizes accepted no output for one object")
+	gitfail.SilentWhenArg(t, "cat-file")
+	tree := w.repo.Git("rev-parse", "HEAD^{tree}")
+	if _, err := BatchCheckSizes(w.repo.Dir, []string{w.head, tree}); err == nil || !strings.Contains(err.Error(), "1 lines for 2 objects") {
+		t.Fatalf("err = %v, want the line count refusal", err)
 	}
 }
 
@@ -114,7 +102,7 @@ func TestStageWorktreeReturnsEachGitFailure(t *testing.T) {
 		name, fail string
 		prepare    func(t *testing.T, dir string)
 	}{
-		{"list the files", "ls-files", nil},
+		{"list the files", "--others", nil},
 		{"hash a file", "hash-object", nil},
 		{"hash a link", "hash-object", func(t *testing.T, dir string) {
 			if err := os.Remove(filepath.Join(dir, "src/app.go")); err != nil {
@@ -139,10 +127,8 @@ func TestStageWorktreeReturnsEachGitFailure(t *testing.T) {
 			if err := ix.ReadTree("HEAD"); err != nil {
 				t.Fatal(err)
 			}
-			failingGit(t, tc.fail, "")
-			if err := ix.StageWorktree(); err == nil {
-				t.Fatal("StageWorktree ignored a failed git call")
-			}
+			gitfail.WhenArg(t, tc.fail, 1)
+			wantInjected(t, ix.StageWorktree())
 		})
 	}
 }
@@ -193,10 +179,8 @@ func TestStageWorktreeReturnsTheCheckFailures(t *testing.T) {
 	for _, failArg := range []string{"check-attr", "--git-path", "--debug"} {
 		t.Run(failArg, func(t *testing.T) {
 			dir, _ := filteredRepo(t)
-			failingGit(t, failArg, "no-such-argument")
-			if err := stageErr(t, dir); err == nil {
-				t.Fatalf("no error when git %s fails", failArg)
-			}
+			gitfail.WhenArg(t, failArg, 1)
+			wantInjected(t, stageErr(t, dir))
 		})
 	}
 	t.Run("missing index", func(t *testing.T) {
@@ -228,8 +212,8 @@ func TestStageWorktreeReturnsTheCheckFailures(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = os.Chmod(filepath.Join(repo.Dir, "f.c"), 0o644) })
-		if _, _, err := ix.converted([]string{"f.c"}); err == nil {
-			t.Fatalf("no error reading an unreadable ident file (head %v)", head)
+		if _, _, err := ix.converted([]string{"f.c"}); !errors.Is(err, os.ErrPermission) {
+			t.Fatalf("err = %v, want a permission error reading the ident file (head %v)", err, head)
 		}
 	})
 }
@@ -240,25 +224,29 @@ func TestStageWorktreeRefusesAStagedFilteredEdit(t *testing.T) {
 	writeFile(t, big, "STAGED\n", 0o644)
 	runGit(t, dir, "add", "data.big")
 	var conv *ConvertedError
-	if err := stageErr(t, dir); !errors.As(err, &conv) {
+	err := stageErr(t, dir)
+	if !errors.As(err, &conv) {
 		t.Fatalf("StageWorktree = %v, want a ConvertedError", err)
+	}
+	if want := "Git converts 1 tracked file(s) on checkout, so their bytes on disk cannot be compared with HEAD: data.big"; err.Error() != want {
+		t.Fatalf("message %q", err.Error())
 	}
 }
 
-// erroringGit puts a git on PATH that exits 2 when any argument equals arg. A config lookup reads exit 1 as an unset
-// key, so only another code reaches its error return.
-func erroringGit(t *testing.T, arg string) {
-	t.Helper()
-	real, err := exec.LookPath("git")
-	if err != nil {
+// A path below a directory that cannot be searched has no stat, and that is an error, not a removal.
+func TestStageWorktreeReturnsAStatFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	w := newWorkTree(t)
+	src := filepath.Join(w.repo.Dir, "src")
+	if err := os.Chmod(src, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"" + arg + "\" ]; then echo 'injected failure' >&2; exit 2; fi\ndone\nexec '" + real + "' \"$@\"\n"
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
+	t.Cleanup(func() { _ = os.Chmod(src, 0o755) })
+	if err := stageErr(t, w.repo.Dir); !errors.Is(err, os.ErrPermission) || !strings.HasPrefix(err.Error(), "stat "+src) {
+		t.Fatalf("got %v, want the permission error statting a path in src", err)
 	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 // A failed line ending config lookup comes back as an error, and so does an unreadable text=auto file Git would
@@ -267,20 +255,20 @@ func TestConvertedReturnsConfigAndReadFailures(t *testing.T) {
 	for _, arg := range []string{"core.autocrlf", "core.eol"} {
 		t.Run(arg, func(t *testing.T) {
 			dir, _ := filteredRepo(t)
-			erroringGit(t, arg)
-			if err := stageErr(t, dir); err == nil {
-				t.Fatalf("no error when the %s lookup fails", arg)
-			}
+			gitfail.WhenArg(t, arg, 2)
+			wantInjected(t, stageErr(t, dir))
 		})
 	}
-	t.Run("autocrlf bool", func(t *testing.T) {
-		dir, _ := filteredRepo(t)
-		runGit(t, dir, "config", "core.autocrlf", "yes")
-		erroringGit(t, "--type=bool")
-		if err := stageErr(t, dir); err == nil {
-			t.Fatal("no error when the core.autocrlf bool lookup fails")
-		}
-	})
+	// A value Git cannot read as a bool, such as banana, fails read-tree before either lookup runs, so the shim fails
+	// the two bool lookups themselves.
+	for _, pattern := range []string{"--type=bool --get core.fileMode", "--type=bool --get core.autocrlf"} {
+		t.Run(pattern, func(t *testing.T) {
+			dir, _ := filteredRepo(t)
+			runGit(t, dir, "config", "core.autocrlf", "yes")
+			gitfail.WhenContains(t, pattern)
+			wantInjected(t, stageErr(t, dir))
+		})
+	}
 	t.Run("unreadable text=auto file", func(t *testing.T) {
 		repo := gitrepo.New(t, "o", "r", 1)
 		writeFile(t, filepath.Join(repo.Dir, ".gitattributes"), "*.t text=auto\n", 0o644)
@@ -297,8 +285,8 @@ func TestConvertedReturnsConfigAndReadFailures(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = os.Chmod(filepath.Join(repo.Dir, "f.t"), 0o644) })
-		if _, _, err := ix.converted([]string{"f.t"}); err == nil {
-			t.Fatal("no error reading an unreadable text=auto file")
+		if _, _, err := ix.converted([]string{"f.t"}); !errors.Is(err, os.ErrPermission) {
+			t.Fatalf("err = %v, want a permission error reading the text=auto file", err)
 		}
 	})
 }

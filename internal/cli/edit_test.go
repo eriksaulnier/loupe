@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
 
@@ -43,20 +45,6 @@ func sendBackRun(t *testing.T) (home, dir string) {
 		t.Fatal(err)
 	}
 	return home, dir
-}
-
-// execIn runs loupe with stdin against home and returns the exit code and the decoded stdout object.
-func execIn(t *testing.T, home, stdin string, args ...string) (int, map[string]any, *streams) {
-	t.Helper()
-	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
-	deps.Stdin = strings.NewReader(stdin)
-	code := Execute(deps, append(args, "--run", "o/r#1", "--json"))
-	return code, decodeOne(t, s.stdout.Bytes()), s
-}
-
-func errorCode(env map[string]any) any {
-	errObj, _ := env["error"].(map[string]any)
-	return errObj["code"]
 }
 
 // Keeping a decision is only for an edit the human makes in review; --by is self-reported on the command line.
@@ -124,7 +112,7 @@ func TestEditRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			code, env, _ := execIn(t, home, c.stdin, c.args...)
-			if code != c.exit || errorCode(env) != c.code {
+			if code != c.exit || errorOf(env)["code"] != c.code {
 				t.Fatalf("exit %d envelope %v", code, env)
 			}
 			if after, err := os.ReadFile(filepath.Join(dir, "draft.json")); err != nil || string(after) != string(before) {
@@ -320,35 +308,13 @@ func TestEditRefusesAMisplacedReason(t *testing.T) {
 				t.Fatal(err)
 			}
 			code, env, _ := execIn(t, home, c.stdin, c.args...)
-			if code != c.exit || errorCode(env) != c.code {
+			if code != c.exit || errorOf(env)["code"] != c.code {
 				t.Fatalf("exit %d envelope %v", code, env)
 			}
 			if after, err := os.ReadFile(filepath.Join(dir, "draft.json")); err != nil || string(after) != string(before) {
 				t.Fatalf("draft.json changed (err %v)", err)
 			}
 		})
-	}
-}
-
-// SC-001: one withdrawal with a reason and one without, read back through show.
-func TestAWithdrawalWithAndWithoutAReason(t *testing.T) {
-	home, first, second := reasonRun(t)
-	if first.stderr.Len() != 0 || !strings.Contains(second.stderr.String(), "--reason") {
-		t.Fatalf("stderr %q then %q", first.stderr.String(), second.stderr.String())
-	}
-	if env := decodeOne(t, second.stdout.Bytes()); env["warnings"] == nil {
-		t.Fatalf("second edit %v", env)
-	}
-	_, env, _ := execIn(t, home, "", "show")
-	findings, _ := env["findings"].([]any)
-	have := map[string]bool{}
-	for _, f := range findings {
-		m, _ := f.(map[string]any)
-		_, ok := m["withdrawReason"]
-		have[m["id"].(string)] = ok
-	}
-	if !have["f-001"] || have["f-002"] {
-		t.Fatalf("withdrawReason on %v", have)
 	}
 }
 
@@ -374,5 +340,83 @@ func TestEditKeepsACodeOutsideTheList(t *testing.T) {
 	}
 	if got := draft.CurrentReason(storedFinding(t, dir, "f-001")); got == nil || got.Code != "style-only" {
 		t.Fatalf("reason %+v", got)
+	}
+}
+
+func TestEditFromEmptyStdinRefusesTheInput(t *testing.T) {
+	home, _ := localRun(t, "changed")
+	code, s := runWithStdin(t, home, "", "edit", "f-001", "--run", "local#1", "--from", "-", "--json")
+	wantCode(t, code, s, refusal.Input)
+}
+
+func TestEditFlagRefusals(t *testing.T) {
+	home, _ := sendBackRun(t)
+	checkRefusals(t, home, []refusalCase{
+		{"an unknown --by", "", []string{"edit", "f-001", "--run", "o/r#1", "--title", "T", "--by", "bot"}, refusal.Usage, `--by must be agent or human, not "bot"`},
+		{"nothing to edit", "", []string{"edit", "f-001", "--run", "o/r#1"}, refusal.Usage, "nothing to edit"},
+	})
+}
+
+// An agent's edit of an accepted finding clears the human's decision, and the human line says so.
+func TestEditSaysWhenItClearsTheDecision(t *testing.T) {
+	home, dir := sendBackRun(t)
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"edit", "f-001", "--run", "o/r#1", "--blocking"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if want := "+ Edited f-001 on o/r#1@1: rev 2, included; its decision was cleared  draft version 1\n"; s.stdout.String() != want {
+		t.Fatalf("stdout %q, want %q", s.stdout.String(), want)
+	}
+	if f := storedFinding(t, dir, "f-001"); !f.Blocking {
+		t.Fatalf("finding %+v, want it blocking", f)
+	}
+}
+
+// --general and --not-blocking set what the JSON keys set.
+func TestEditGeneralAndNotBlockingFlags(t *testing.T) {
+	home, dir := sendBackRun(t)
+	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--blocking"); code != 0 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--general", "--not-blocking"); code != 0 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if f := storedFinding(t, dir, "f-001"); !f.General || f.Location != nil || f.Blocking {
+		t.Fatalf("finding %+v, want it general and not blocking", f)
+	}
+}
+
+// The stored diff is checked against its fingerprint on every load. An edit that still parses can only be caught by
+// the fingerprint.
+func TestChangedDiffIsRefusedOnEveryLoad(t *testing.T) {
+	home, dir := sendBackRun(t)
+	diffPath := filepath.Join(dir, "pr.diff")
+	stored, err := os.ReadFile(diffPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := bytes.Replace(stored, []byte("+line three"), []byte("+line 3 edited"), 1)
+	if bytes.Equal(edited, stored) {
+		t.Fatal("the test diff has no line to edit")
+	}
+	if err := os.WriteFile(diffPath, edited, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"add", "--title", "t", "--body", "b", "--general"},
+		{"edit", "f-001", "--title", "u"},
+	} {
+		code, env, _ := execIn(t, home, "", args...)
+		errObj := errorOf(env)
+		msg, _ := errObj["message"].(string)
+		if code != 1 || errObj["code"] != "record" || !strings.Contains(msg, diffPath) || !strings.Contains(msg, "diffSha256") {
+			t.Fatalf("%s: exit %d error %v, want a record refusal naming the file and the fingerprint", args[0], code, errObj)
+		}
+	}
+	deps, st := terminalDeps(t, home)
+	code := Execute(deps, []string{"review", "o/r#1", "--json"})
+	errObj := errorOf(decodeOne(t, st.stdout.Bytes()))
+	if msg, _ := errObj["message"].(string); code != 1 || errObj["code"] != "record" || !strings.Contains(msg, diffPath) {
+		t.Fatalf("review: exit %d error %v, want a record refusal naming the file", code, errObj)
 	}
 }

@@ -377,8 +377,10 @@ func TestAnchorsAsNotes(t *testing.T) {
 			t.Fatalf("round %s not shown:\n%s", n, shown)
 		}
 	}
-	if strings.Contains(shown, "sha256=") && !strings.Contains(shown, "loupe-findings") || strings.Contains(shown, "commit=") {
-		t.Fatalf("an anchor is left:\n%s", shown)
+	for _, line := range strings.Split(shown, "\n") {
+		if strings.Contains(line, anchorPrefix+"v=") {
+			t.Fatalf("an anchor is left: %q", line)
+		}
 	}
 	fenced := "```\n" + sealAnchor("v=1 n=9 commit=ab", "x") + "\n```"
 	if AnchorsAsNotes(fenced) != fenced {
@@ -427,5 +429,34 @@ func TestReadStickyCarriesTextAboveTheTopAnchor(t *testing.T) {
 	again, _, err := ReadSticky(Body(next))
 	if err != nil || again[1] != (Round{N: 3, Commit: top.Commit, Anchor: top.Anchor, Block: top.Block}) {
 		t.Fatalf("err %v, round 3 read back as %+v", err, again[1])
+	}
+}
+
+// Each structural refusal of an anchored body names what it found.
+func TestReadStickyNamesTheBrokenTail(t *testing.T) {
+	body := threeRounds(t)
+	meta := body[strings.LastIndex(strings.TrimRight(body, "\n"), "\n")+1:]
+	one := Body(stickyInputOne())
+	top, rest, _ := strings.Cut(one, "\n")
+	a, err := parseAnchor(top)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := lastDigest(one)
+	shown := rest[:strings.Index(rest, "\n\n"+digest)]
+	// Sealed over its own text, so the round reads as loupe wrote it, but its counts promise prose it does not hold.
+	miscounted := sealAnchor(regexp.MustCompile(` prose=\d+`).ReplaceAllString(a.fields, " prose=9"), shown+"\n"+digest) + "\n" + rest
+	for name, c := range map[string]struct{ body, want string }{
+		"no loupe-meta marker": {strings.TrimSuffix(body, meta), "its last line is not a loupe-meta marker"},
+		"digest without its blank line": {strings.Replace(body, "\n\n"+lastDigest(body), "\n"+lastDigest(body), 1),
+			"it does not end with loupe's reconciliation marker"},
+		"top round renumbered":   {strings.Replace(body, "v=1 n=3 ", "v=1 n=4 ", 1), "the round it shows is numbered 4, but sticky=3"},
+		"counts that do not fit": {miscounted, "the round it shows does not fit its anchor's counts"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, _, err := ReadSticky(c.body); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("ReadSticky = %v, want %q", err, c.want)
+			}
+		})
 	}
 }

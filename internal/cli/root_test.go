@@ -1,53 +1,19 @@
 package cli
 
 import (
-	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
-
 	"github.com/eriksaulnier/loupe/internal/style"
 )
-
-type streams struct {
-	stdout, stderr bytes.Buffer
-}
-
-func testDeps(t *testing.T, env map[string]string) (Deps, *streams) {
-	t.Helper()
-	s := &streams{}
-	return Deps{
-		Stdin:  strings.NewReader(""),
-		Stdout: &s.stdout,
-		Stderr: &s.stderr,
-		// The icon tier defaults to unicode so the goldens keep their glyphs; a test that wants another tier sets it.
-		Getenv: func(k string) string {
-			if v, ok := env[k]; ok {
-				return v
-			}
-			if k == style.IconsEnv {
-				return "unicode"
-			}
-			return ""
-		},
-		Now: func() time.Time { return time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC) },
-		GitHub: func() (github.Client, error) {
-			t.Error("GitHub must not be built")
-			return nil, errors.New("unexpected GitHub client")
-		},
-		IsTerminal:       func() bool { return false },
-		StderrIsTerminal: func() bool { return false },
-	}, s
-}
 
 // paletteEnv are the variables the palette reads on every invocation to decide color and the glyph set.
 var paletteEnv = map[string]bool{"COLORTERM": true, "TERM_PROGRAM": true, "TMUX": true, "CLICOLOR": true, "CLICOLOR_FORCE": true, "COLORFGBG": true, "NO_COLOR": true, "TERM": true, "LC_ALL": true, "LC_CTYPE": true, "LANG": true, style.IconsEnv: true}
@@ -103,7 +69,7 @@ func TestUnknownFlagIsUsage(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	m := decodeOne(t, s.stdout.Bytes())
-	e := m["error"].(map[string]any)
+	e := errorOf(m)
 	if e["code"] != "usage" || !strings.Contains(e["message"].(string), "bogus") || e["fix"] != "run loupe --help" {
 		t.Fatalf("got %v", m)
 	}
@@ -126,7 +92,7 @@ func TestUnknownIconsTierIsUsage(t *testing.T) {
 		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
 	}
 	m := decodeOne(t, s.stdout.Bytes())
-	e := m["error"].(map[string]any)
+	e := errorOf(m)
 	if m["command"] != "list" || e["code"] != "usage" || !strings.Contains(e["message"].(string), "emoji") {
 		t.Fatalf("got %v", m)
 	}
@@ -172,7 +138,7 @@ func TestArgumentErrorIsUsage(t *testing.T) {
 	if code := execute(testRoot(deps, nil), deps, []string{"probe", "a", "b", "--json"}); code != 2 {
 		t.Fatalf("exit %d, stdout %q", code, s.stdout.String())
 	}
-	e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	e := errorOf(decodeOne(t, s.stdout.Bytes()))
 	if e["code"] != "usage" || e["fix"] != "run loupe probe --help" {
 		t.Fatalf("got %v", e)
 	}
@@ -244,7 +210,7 @@ func TestResolveRunRefusals(t *testing.T) {
 				t.Fatalf("exit %d, want %d: %s", code, c.exit, s.stdout.String())
 			}
 			m := decodeOne(t, s.stdout.Bytes())
-			if e := m["error"].(map[string]any); e["code"] != c.code {
+			if e := errorOf(m); e["code"] != c.code {
 				t.Fatalf("got %v", m)
 			}
 			if _, ok := m["run"]; ok {
@@ -262,7 +228,7 @@ func TestRefusalAfterResolutionCarriesRun(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	m := decodeOne(t, s.stdout.Bytes())
-	if m["run"] != "o/r#5@2" || m["command"] != "probe" || m["error"].(map[string]any)["code"] != "version" {
+	if m["run"] != "o/r#5@2" || m["command"] != "probe" || errorOf(m)["code"] != "version" {
 		t.Fatalf("got %v", m)
 	}
 }
@@ -273,7 +239,7 @@ func TestRunErrorIsInternal(t *testing.T) {
 	if code := execute(testRoot(deps, errors.New("boom")), deps, []string{"probe", "o/r#5", "--json"}); code != 1 {
 		t.Fatalf("exit %d", code)
 	}
-	if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "internal" {
+	if e := errorOf(decodeOne(t, s.stdout.Bytes())); e["code"] != "internal" {
 		t.Fatalf("got %v", e)
 	}
 	if !strings.Contains(s.stderr.String(), "boom") || strings.Contains(s.stderr.String(), "goroutine ") {
@@ -294,7 +260,7 @@ func TestPanicIsInternal(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	m := decodeOne(t, s.stdout.Bytes())
-	e := m["error"].(map[string]any)
+	e := errorOf(m)
 	if m["command"] != "explode" || e["code"] != "internal" || !strings.Contains(e["message"].(string), "kaboom") {
 		t.Fatalf("got %v", m)
 	}
@@ -317,7 +283,72 @@ func TestNoCompletionCommand(t *testing.T) {
 	if code := execute(testRoot(deps, nil), deps, []string{"completion", "bash", "--json"}); code != 2 {
 		t.Fatalf("exit %d, stdout %q", code, s.stdout.String())
 	}
-	if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "usage" {
+	if e := errorOf(decodeOne(t, s.stdout.Bytes())); e["code"] != "usage" {
 		t.Fatalf("got %v", e)
+	}
+}
+
+// argsWantJSON routes help and parse errors before cobra parses anything; once the flags parse, the parsed --json wins.
+func TestJSONScanAndParsedFlag(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		args []string
+		json bool
+		exit int
+	}{
+		{"--json=true", []string{"--json=true", "--help"}, true, 0},
+		{"--json=false", []string{"--json=false", "--help"}, false, 0},
+		{"a bad --json value", []string{"list", "--json=maybe"}, false, 2},
+		{"--json after --", []string{"list", "--", "--json"}, false, 2},
+		{"--json taken as a flag value", []string{"add", "--title", "--json", "--help"}, false, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+			if code := Execute(deps, c.args); code != c.exit {
+				t.Fatalf("exit %d, want %d; stdout %q stderr %q", code, c.exit, s.stdout.String(), s.stderr.String())
+			}
+			switch {
+			case c.exit != 0:
+				if s.stdout.Len() != 0 || !strings.HasPrefix(s.stderr.String(), "error: ") {
+					t.Fatalf("stdout %q stderr %q, want the usage refusal as text", s.stdout.String(), s.stderr.String())
+				}
+			case c.json:
+				if help, _ := decodeOne(t, s.stdout.Bytes())["help"].(string); !strings.Contains(help, "Collect pull request review findings") {
+					t.Fatalf("help %q", help)
+				}
+			default:
+				if out := s.stdout.String(); strings.HasPrefix(out, "{") || !strings.Contains(out, "loupe ") {
+					t.Fatalf("stdout %q, want the help as text", out)
+				}
+			}
+		})
+	}
+}
+
+func TestWidthFallsBackWhenTheTerminalReportsNone(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		term func() int
+		want int
+	}{
+		{"no source", nil, defaultWidth},
+		{"zero columns", func() int { return 0 }, defaultWidth},
+		{"a terminal", func() int { return 60 }, style.Content(60)},
+	} {
+		if got := (Deps{TermWidth: c.term}).width(); got != c.want {
+			t.Errorf("%s: width %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
+func TestInvocationOfACommandRunOutsideExecuteIsEmpty(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	if inv := invocationOf(cmd); *inv != (invocation{}) {
+		t.Fatalf("invocation %+v", *inv)
+	}
+	wrapped := &commandError{err: errors.New("boom")}
+	if wrapped.Error() != "boom" || !errors.Is(wrapped, wrapped.err) {
+		t.Fatalf("commandError %q does not pass its error through", wrapped.Error())
 	}
 }

@@ -1,10 +1,9 @@
 package tui
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -75,9 +75,6 @@ func TestDetailViewKeepsHarmlessReferences(t *testing.T) {
 		t.Fatalf("view does not render a & b:\n%s", view)
 	}
 }
-
-// utf8Env draws the Unicode tier without color.
-var utf8Env = map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}
 
 // threadView opens f-001 on a draft holding notes and replies and returns the view without color.
 func threadView(t *testing.T, env map[string]string, width int, notes []draft.Note, replies []draft.Reply) string {
@@ -606,17 +603,6 @@ func TestDetailNoteRefusedOnSendIsKept(t *testing.T) {
 	}
 }
 
-func TestHelpNamesTheNoteKeys(t *testing.T) {
-	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 34)
-	if err := m.openFinding("f-001"); err != nil {
-		t.Fatal(err)
-	}
-	m.help = true
-	if !regexp.MustCompile(`(?m)│ s +send back; enter sends, esc cancels`).MatchString(m.View().Content) {
-		t.Fatalf("help does not say how a send-back note is sent or canceled:\n%s", m.View().Content)
-	}
-}
-
 func TestFileDiffBandCountsAndMarksFindings(t *testing.T) {
 	m := modelOf(t, newFixture(t), map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)
 	if err := m.openFinding("f-001"); err != nil {
@@ -661,16 +647,9 @@ func TestDecisionOpensTheNextFinding(t *testing.T) {
 }
 
 // Keys settle instantly in tests; the tests of the settle windows raise the delays on purpose.
-func TestMain(m *testing.M) {
-	settleAfterDecision = 0
-	settleOnOpen = 0
-	// Poll tests deliver the tick themselves; a real one would race them.
-	pollInterval = time.Hour
-	os.Exit(m.Run())
-}
-
 func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
-	settleAfterDecision = time.Second
+	// Longer than the test, so only the settledMsg sent below ends the window.
+	settleAfterDecision = time.Hour
 	defer func() { settleAfterDecision = 0 }()
 	dir := newFixture(t)
 	tm := startApp(t, dir)
@@ -681,6 +660,8 @@ func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
 	// Both keys are queued before the first decision has been on screen; the second lands on a finding never seen.
 	tm.Type("aa")
 	waitFor(t, tm, "f-001 accepted", "Body two suggests a helper.")
+	// settledMsg queues behind the second key on the program's one message channel, so that key lands inside the window.
+	tm.Send(settledMsg{})
 	tm.Type("q")
 	finalView(t, tm)
 	d := loadDraft(t, dir)
@@ -802,8 +783,6 @@ func TestBodyLinksShowAsText(t *testing.T) {
 	}
 }
 
-func runeKey(r string) tea.KeyPressMsg { return runes(r) }
-
 // editModel stores fn's change to the fixture, then opens id at 100 by 40.
 func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, string) {
 	t.Helper()
@@ -821,7 +800,7 @@ func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, st
 func TestEditKeepsTheDecision(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
 	version := loadDraft(t, dir).Version
-	for _, k := range []tea.KeyPressMsg{runeKey("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}} {
+	for _, k := range []tea.KeyPressMsg{runes("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}} {
 		m.Update(k)
 	}
 	if row := ansi.Strip(m.View().Content); !strings.Contains(row, "[suggestion]") || !strings.Contains(row, "[ ] blocking") {
@@ -849,8 +828,8 @@ func TestEditEscAndUnchangedRecordNothing(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
 	version := loadDraft(t, dir).Version
 	for _, keys := range [][]tea.KeyPressMsg{
-		{runeKey("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}, {Code: tea.KeyEsc}},
-		{runeKey("e"), {Code: tea.KeyEnter}},
+		{runes("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}, {Code: tea.KeyEsc}},
+		{runes("e"), {Code: tea.KeyEnter}},
 	} {
 		for _, k := range keys {
 			m.Update(k)
@@ -868,7 +847,7 @@ func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
 			return err
 		})
 		version := loadDraft(t, dir).Version
-		m.Update(runeKey("e"))
+		m.Update(runes("e"))
 		if row := ansi.Strip(m.View().Content); !strings.Contains(row, "["+c.shown+"]") {
 			t.Fatalf("the row does not open on %q:\n%s", c.shown, row)
 		}
@@ -883,24 +862,20 @@ func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
 	}
 }
 
-func TestEditRefusesAWithdrawnFinding(t *testing.T) {
-	m, _ := editModel(t, "f-002", func(d *draft.Draft) error {
-		withdraw := false
-		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
-		return err
-	})
-	m.Update(runeKey("e"))
-	if m.editing || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "reinstate f-002 first") {
-		t.Fatalf("editing %v notice %q", m.editing, m.notice)
-	}
-}
-
-func TestEditIsDroppedWhileSettling(t *testing.T) {
-	m, _ := editModel(t, "f-001", func(*draft.Draft) error { return draft.ErrNoChange })
-	m.settling = true
-	m.Update(runeKey("e"))
-	if m.editing {
-		t.Fatal("a typed-ahead e opened the editor on a finding that was never on screen")
+// e and w both refuse a withdrawn finding, which has to be reinstated before its words or labels change.
+func TestEditorsRefuseAWithdrawnFinding(t *testing.T) {
+	for _, key := range []string{"e", "w"} {
+		t.Run(key, func(t *testing.T) {
+			m, _ := editModel(t, "f-002", func(d *draft.Draft) error {
+				withdraw := false
+				_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
+				return err
+			})
+			m.Update(runes(key))
+			if m.editing || m.rewriting || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "reinstate f-002 first") {
+				t.Fatalf("editing %v rewriting %v notice %q", m.editing, m.rewriting, m.notice)
+			}
+		})
 	}
 }
 
@@ -910,7 +885,7 @@ func TestEditRowWrapsBetweenParts(t *testing.T) {
 	if err := m.openFinding("f-001"); err != nil {
 		t.Fatal(err)
 	}
-	m.Update(runeKey("e"))
+	m.Update(runes("e"))
 	row := strings.Join(m.editView(), "\n")
 	if !strings.Contains(row, m.glyphs.Blocking+" blocking") {
 		t.Fatalf("the blocking glyph wrapped away from its word:\n%s", row)
@@ -925,7 +900,7 @@ func TestEditRowWrapsBetweenParts(t *testing.T) {
 // An agent edit between opening the row and saving it refuses the save, as it does a stale accept.
 func TestEditRefusesAStaleDraft(t *testing.T) {
 	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
-	m.Update(runeKey("e"))
+	m.Update(runes("e"))
 	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
 		d.Findings[0].Title = "Updated title"
@@ -969,13 +944,6 @@ func TestDetailBodyIsSizedForItsOwnFooterAfterHelpOrANote(t *testing.T) {
 		if m.body.Height() != fresh.body.Height() {
 			t.Errorf("%s: detail body is %d rows after closing, want %d", name, m.body.Height(), fresh.body.Height())
 		}
-	}
-}
-
-func mustOpenFinding(t *testing.T, m *Model, id string) {
-	t.Helper()
-	if err := m.openFinding(id); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -1110,362 +1078,6 @@ func TestDetailPinsItsTitleAndMetadata(t *testing.T) {
 	}
 }
 
-// On an apply run the proposal is a section in the good tone, drawn as a suggested fix is.
-func TestApplyDetailLeadIsInTheGoodTone(t *testing.T) {
-	colored, _ := applyModel(t, "Claude")
-	colored.styles.SetColorProfile(colorprofile.TrueColor)
-	mustOpenFinding(t, colored, "f-001")
-	good := colored.styles.ToneStyle(style.ToneGood)
-	view := colored.View().Content
-	if !strings.Contains(view, colored.styles.Emphasis(good).Render("Claude will")) || strings.Contains(ansi.Strip(view), "will:") || !strings.Contains(view, good.Render(colored.glyphs.Quote)+" ") {
-		t.Errorf("the proposal is not a section in the good tone:\n%q", view)
-	}
-}
-
-// e and o belong to pull request runs: on an apply run they do nothing, and no hint or help names them.
-func TestApplyRunHasNoEditOrOpenKey(t *testing.T) {
-	m, _ := applyModel(t, "Claude")
-	press(m, "o")
-	if m.notice != "" {
-		t.Errorf("o in the list: notice %q", m.notice)
-	}
-	if hints := hintText(m.listHints()); strings.Contains(hints, "o:") {
-		t.Errorf("list hints offer o: %s", hints)
-	}
-	mustOpenFinding(t, m, "f-001")
-	press(m, "e", "o")
-	if m.editing || m.notice != "" {
-		t.Errorf("e or o acted on an apply run: editing %v notice %q", m.editing, m.notice)
-	}
-	if hints := hintText(m.detailHints()); strings.Contains(hints, "e:") || strings.Contains(hints, "o:") {
-		t.Errorf("detail hints offer e or o: %s", hints)
-	}
-	for v, section := range m.helpSections() {
-		for _, k := range section.keys {
-			if k.Keys == "e" || k.Keys == "o" {
-				t.Errorf("help for view %d names %s (%s)", v, k.Keys, k.Verb)
-			}
-		}
-	}
-	if _, ok := m.helpSections()[viewAction]; ok {
-		t.Error("help has publish steps on an apply run")
-	}
-}
-
-// footerText is the detail footer as plain text.
-func footerText(m *Model) string { return ansi.Strip(strings.Join(m.detailFooter(), " ")) }
-
-// A opens an empty input whose enter accepts with what was typed, and with nothing typed accepts plainly.
-func TestApplyShiftAAcceptsWithANote(t *testing.T) {
-	m, dir := applyModel(t, "Claude")
-	m.keptNotes["f-001"] = "kept send-back text"
-	mustOpenFinding(t, m, "f-001")
-	press(m, "A")
-	if !m.noting || m.note.Value() != "" {
-		t.Fatalf("A did not open an empty input: noting %v value %q", m.noting, m.note.Value())
-	}
-	if footer := footerText(m); !strings.Contains(footer, "enter accept") {
-		t.Errorf("footer %q does not say accept", footer)
-	}
-	m.Update(runes("Use the second store."))
-	m.Update(enterKey)
-	d := loadDraft(t, dir)
-	if got := d.Decisions["f-001"]; got.Decision != draft.DecisionAccepted || got.Note != "Use the second store." {
-		t.Fatalf("f-001 decision %+v", got)
-	}
-	if m.keptNotes["f-001"] != "kept send-back text" {
-		t.Errorf("A touched the kept send-back text: %q", m.keptNotes["f-001"])
-	}
-
-	mustOpenFinding(t, m, "f-003")
-	press(m, "A")
-	m.Update(enterKey)
-	if got := loadDraft(t, dir).Decisions["f-003"]; got.Decision != draft.DecisionAccepted || got.Note != "" {
-		t.Fatalf("an empty note did not accept plainly: %+v", got)
-	}
-}
-
-// Reopening A or X on a finding already decided that way starts from the stored note, so enter keeps it rather than
-// saving a plain decision over it.
-func TestApplyNoteKeysStartFromTheStoredNote(t *testing.T) {
-	m, dir := applyModel(t, "Claude")
-	for _, c := range []struct{ id, key, note, decision string }{
-		{"f-001", "A", "Use the second store.", draft.DecisionAccepted},
-		{"f-003", "X", "Out of scope.", draft.DecisionExcluded},
-	} {
-		mustOpenFinding(t, m, c.id)
-		press(m, c.key)
-		m.Update(runes(c.note))
-		m.Update(enterKey)
-		mustOpenFinding(t, m, c.id)
-		press(m, c.key)
-		if got := m.note.Value(); got != c.note {
-			t.Fatalf("%s %s reopened with %q, want %q", c.id, c.key, got, c.note)
-		}
-		m.Update(enterKey)
-		if got := loadDraft(t, dir).Decisions[c.id]; got.Decision != c.decision || got.Note != c.note {
-			t.Fatalf("%s after a second enter: %+v", c.id, got)
-		}
-	}
-	mustOpenFinding(t, m, "f-001")
-	press(m, "X")
-	if got := m.note.Value(); got != "" {
-		t.Errorf("X on an accepted finding opened with %q, want an empty reason", got)
-	}
-}
-
-func TestApplyShiftAEscDiscardsTheNote(t *testing.T) {
-	m, dir := applyModel(t, "Claude")
-	mustOpenFinding(t, m, "f-001")
-	press(m, "A")
-	m.Update(runes("half a thought"))
-	m.Update(escKey)
-	if m.noting || len(m.keptNotes) != 0 {
-		t.Fatalf("esc left the input open or kept its text: noting %v kept %v", m.noting, m.keptNotes)
-	}
-	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
-		t.Fatalf("esc decided f-001: %s", got)
-	}
-	press(m, "A")
-	if got := m.note.Value(); got != "" {
-		t.Fatalf("A reopened with %q", got)
-	}
-	m.Update(escKey)
-	press(m, "s")
-	if got := m.note.Value(); got != "" {
-		t.Fatalf("send back opened with the accept note %q", got)
-	}
-}
-
-// x rejects at once with no input, as it excludes on a pull request run.
-func TestApplyXRejectsAtOnce(t *testing.T) {
-	m, dir := applyModel(t, "Claude")
-	mustOpenFinding(t, m, "f-001")
-	press(m, "x")
-	if m.noting {
-		t.Fatal("x opened an input")
-	}
-	if got := loadDraft(t, dir).Decisions["f-001"]; got.Decision != draft.DecisionExcluded || got.Note != "" {
-		t.Fatalf("f-001 decision %+v, want excluded with no reason", got)
-	}
-}
-
-// X opens the reason input; an empty reason excludes plainly, and one too long refuses in review's own words.
-func TestApplyShiftXRejectsWithAnOptionalReason(t *testing.T) {
-	m, dir := applyModel(t, "Claude")
-	mustOpenFinding(t, m, "f-001")
-	press(m, "X")
-	if !m.noting || m.note.Value() != "" {
-		t.Fatalf("X did not open an empty input: noting %v value %q", m.noting, m.note.Value())
-	}
-	if footer := footerText(m); !strings.Contains(footer, "enter reject") {
-		t.Errorf("footer %q does not say reject", footer)
-	}
-	long := strings.Repeat("a", 201)
-	m.Update(runes(long))
-	m.Update(enterKey)
-	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
-		t.Fatalf("a reason of 201 characters excluded f-001")
-	}
-	if !strings.Contains(m.notice, "201 characters") || strings.Contains(m.notice, "loupe edit") || strings.Contains(m.notice, "--") {
-		t.Errorf("refusal notice %q", m.notice)
-	}
-	if !m.noting || m.note.Value() != long {
-		t.Errorf("the refused reason was not handed back: noting %v value %q", m.noting, m.note.Value())
-	}
-	m.Update(escKey)
-
-	press(m, "X")
-	m.Update(runes("Out of scope."))
-	m.Update(enterKey)
-	if got := loadDraft(t, dir).Decisions["f-001"]; got.Decision != draft.DecisionExcluded || got.Note != "Out of scope." {
-		t.Fatalf("f-001 decision %+v", got)
-	}
-	mustOpenFinding(t, m, "f-002")
-	press(m, "X")
-	m.Update(enterKey)
-	if got := loadDraft(t, dir).Decisions["f-002"]; got.Decision != draft.DecisionExcluded || got.Note != "" {
-		t.Fatalf("an empty reason did not exclude plainly: %+v", got)
-	}
-}
-
-// t and w have no job on a local run: they change nothing in the list or the detail, and no hint or help names them.
-func TestApplyTAndWDoNothing(t *testing.T) {
-	m, dir := applyModel(t, "Claude")
-	before := loadDraft(t, dir).Version
-	press(m, "t", "w")
-	mustOpenFinding(t, m, "f-001")
-	press(m, "t", "w")
-	if m.noting || m.rewriting || m.editing || m.notice != "" || loadDraft(t, dir).Version != before {
-		t.Errorf("t or w acted: noting %v rewriting %v notice %q", m.noting, m.rewriting, m.notice)
-	}
-	for _, hints := range []string{hintText(m.listHints()), hintText(m.detailHints())} {
-		if strings.Contains(hints, "t:") || strings.Contains(hints, "w:") {
-			t.Errorf("hints offer t or w: %s", hints)
-		}
-	}
-	for v, section := range m.helpSections() {
-		for _, k := range section.keys {
-			if k.Keys == "t" || k.Keys == "w" {
-				t.Errorf("help for view %d names %s (%s)", v, k.Keys, k.Verb)
-			}
-		}
-	}
-}
-
-// u on an accepted finding changes nothing, as on a pull request run: another decision key changes an accept.
-func TestApplyUOnAnAcceptedFindingChangesNothing(t *testing.T) {
-	m, dir := applyModel(t, "Claude")
-	outside(t, dir, accepted("f-001"))
-	if _, err := m.reload(); err != nil {
-		t.Fatal(err)
-	}
-	mustOpenFinding(t, m, "f-001")
-	before := loadDraft(t, dir).Version
-	press(m, "u")
-	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionAccepted || loadDraft(t, dir).Version != before {
-		t.Errorf("u changed an accepted finding: %s", got)
-	}
-}
-
-func TestApplySendBackStillRestoresKeptText(t *testing.T) {
-	m, _ := applyModel(t, "Claude")
-	noteBox(t, m, "f-001", "why this name")
-	m.Update(escKey)
-	press(m, "s")
-	if got := m.note.Value(); got != "why this name" {
-		t.Fatalf("send back reopened with %q", got)
-	}
-	if footer := footerText(m); !strings.Contains(footer, "enter send") {
-		t.Errorf("footer %q", footer)
-	}
-}
-
-func TestApplySettleDropsItsDecisionKeys(t *testing.T) {
-	for _, k := range strings.Split("aAxXsurd", "") {
-		m, dir := applyModel(t, "Claude")
-		mustOpenFinding(t, m, "f-001")
-		before := loadDraft(t, dir).Version
-		m.settling = true
-		press(m, k)
-		if m.noting || m.rewriting || loadDraft(t, dir).Version != before {
-			t.Errorf("%s was acted on while settling", k)
-		}
-	}
-}
-
-// Reinstating on an apply run is checked against the run's rules, so a stored proposal never refuses it.
-func TestApplyReinstateKeepsTheProposal(t *testing.T) {
-	dir := applyFixture(t, "Claude", applyInputs...)
-	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
-		withdraw := false
-		_, _, err := draft.Edit(d, "f-001", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-	m := modelOf(t, dir, utf8Env, 100, 40)
-	mustOpenFinding(t, m, "f-001")
-	press(m, "u")
-	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionAccepted {
-		t.Fatalf("u did not reinstate f-001: %s; notice %q", got, m.notice)
-	}
-
-	if f := findingOf(t, dir, "f-001"); f.Proposal != "Rename helper to insertAfter in a.go." {
-		t.Fatalf("reinstating lost the proposal: %+v", f)
-	}
-}
-
-// The code pane of a --files run draws the file as plain text; a --changed run and a pull request keep the gutter.
-func TestCodePaneOfAFilesRunIsPlain(t *testing.T) {
-	for name, c := range codeRuns(t) {
-		t.Run(name, func(t *testing.T) {
-			m := modelOf(t, c.dir, utf8Env, 100, 40)
-			mustOpenFinding(t, m, "f-001")
-			checkCodeDrawing(t, screenText(m), c.plain)
-
-			colored := colorOf(t, c.dir)
-			mustOpenFinding(t, colored, "f-001")
-			if tinted := strings.Contains(colored.View().Content, addedTint(colored)); tinted == c.plain {
-				t.Errorf("plain %v, added tint %v", c.plain, tinted)
-			}
-		})
-	}
-}
-
-// US4 on an apply run: the human sends an accepted finding back, the agent revises the proposal and replies, review
-// shows the revision on its next poll, and the human accepts it and returns the run.
-func TestApplySendBackRoundTrip(t *testing.T) {
-	dir := applyFixture(t, "Claude", applyInputs...)
-	outside(t, dir, func(d *draft.Draft) error {
-		for _, f := range d.Findings {
-			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	m := newPollModel(t, dir, 40)
-	mustOpenFinding(t, m, "f-001")
-	pressKeys(t, m, "s")
-	m.Update(runes("Which call sites does the rename touch?"))
-	pressKeys(t, m, "enter")
-	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
-		t.Fatalf("send back left f-001 %s", got)
-	}
-
-	parsed, err := diff.Parse(newFileDiff())
-	if err != nil {
-		t.Fatal(err)
-	}
-	outside(t, dir, func(d *draft.Draft) error {
-		proposal := json.RawMessage(`"Rename helper to insertAfter in a.go and its two callers."`)
-		if _, _, err := draft.Edit(d, "f-001", draft.EditInput{Proposal: proposal}, nil, parsed, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow); err != nil {
-			return err
-		}
-		_, err := draft.AddReply(d, "n-001", "Two callers, both in a.go.", draft.ByAgent, testNow)
-		return err
-	})
-	d := loadDraft(t, dir)
-	if _, decided := d.Decisions["f-001"]; decided || draft.Dispositions(d)["f-001"] != draft.DispositionPending {
-		t.Fatalf("the agent's edit left a decision: %+v", d.Decisions["f-001"])
-	}
-	// Nothing else was pending, so send back returned to the list; the poll names the change, and enter opens it.
-	if m.view != viewList {
-		t.Fatalf("send back with nothing else pending left view %d", m.view)
-	}
-	update(t, m, pollMsg{})
-	if !strings.Contains(m.notice, "n-001 answered on f-001, f-001 changed") {
-		t.Errorf("the poll notice %q does not name the reply and the edit", m.notice)
-	}
-	pressKeys(t, m, "enter")
-	if m.openID != "f-001" {
-		t.Fatalf("enter opened %s", m.openID)
-	}
-	screen := screenText(m)
-	for _, want := range []string{"and its two callers.", "Two callers, both in a.go."} {
-		if !strings.Contains(screen, want) {
-			t.Errorf("the detail lacks %q after the poll:\n%s", want, screen)
-		}
-	}
-
-	pressKeys(t, m, "a")
-	d = loadDraft(t, dir)
-	if got := d.Decisions["f-001"]; got.Decision != draft.DecisionAccepted || got.FindingRev != findingOf(t, dir, "f-001").Rev {
-		t.Fatalf("a did not accept the revised f-001: %+v; notice %q", got, m.notice)
-	}
-	if _, open := firstOpenNote(d, "f-001"); open {
-		t.Error("accepting left the note open")
-	}
-	if !m.noting || m.noteKind != noteReturn {
-		t.Fatalf("accepting the last finding did not open the return step; view %d notice %q", m.view, m.notice)
-	}
-	pressKeys(t, m, "enter")
-	if !returned(t, dir) {
-		t.Fatalf("enter did not return the run; view %d notice %q", m.view, m.notice)
-	}
-}
-
 // A location taller than the cap shows a window of it opened on the finding's first line, says how to see the rest,
 // and leaves the proposed change on screen (docs/tui-design.md, The location pane).
 func TestLongLocationPaneIsCapped(t *testing.T) {
@@ -1504,6 +1116,362 @@ func TestCappedLocationKeepsItsSizeUnderAComposer(t *testing.T) {
 		}
 		if after := count(); after != before {
 			t.Errorf("at 80x%d the window shows %d code rows with the composer open, %d without", height, after, before)
+		}
+	}
+}
+
+// f on a general finding has no file to show, so the detail stays and says why.
+func TestFileKeyOnAGeneralFindingSaysThereIsNoFile(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	mustOpenFinding(t, m, "f-003")
+	press(m, "f")
+	if m.view != viewDetail || m.notice != "a general finding has no file diff" {
+		t.Fatalf("view %v notice %q", m.view, m.notice)
+	}
+}
+
+// The edit row's left and h step the label back, wrapping past the first, and space then enter records blocking.
+func TestEditRowStepsTheLabelBackAndRecordsBlocking(t *testing.T) {
+	m, dir := editModel(t, "f-002", unchanged)
+	press(m, "e")
+	if m.editLabels[m.editPick] != "suggestion" {
+		t.Fatalf("the row opened on %q", m.editLabels[m.editPick])
+	}
+	m.Update(keyOf("left"))
+	m.Update(keyOf("h"))
+	if got := m.editLabels[m.editPick]; got != "question" {
+		t.Fatalf("left then h from suggestion is %q, want question", got)
+	}
+	m.Update(keyOf("space"))
+	press(m, "enter")
+	if f := findingOf(t, dir, "f-002"); f.Label != "question" || !f.Blocking {
+		t.Fatalf("recorded label %q blocking %v", f.Label, f.Blocking)
+	}
+	if !strings.Contains(m.notice, "f-002 is now question, blocking") {
+		t.Errorf("notice %q", m.notice)
+	}
+}
+
+// A confidence word off the scale, as an older draft may hold, is shown as written rather than as a rating.
+func TestConfidenceOffTheScaleIsShownAsWritten(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	m.draft.Findings[0].Confidence = "fairly sure"
+	m.setDraft(m.draft)
+	mustOpenFinding(t, m, "f-001")
+	if screen := screenText(m); !strings.Contains(screen, "confidence fairly sure") {
+		t.Fatalf("the detail lacks the confidence word:\n%s", screen)
+	}
+}
+
+// A finding whose line an outside writer moved out of the diff cannot be drawn, so opening it ends the review with the
+// diff's refusal.
+func TestAFindingOutsideTheDiffEndsTheReview(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	m.draft.Findings[0].Location.Line = 30
+	m.setDraft(m.draft)
+	_, cmd := m.Update(keyOf("enter"))
+	if r, ok := refusal.As(m.err); !ok || r.Code != refusal.Location || !isQuit(cmd) {
+		t.Fatalf("err %v quit %v", m.err, isQuit(cmd))
+	}
+}
+
+// The detail title leads with the list's disposition glyph and says the disposition, and an open note, in words that
+// read without color; TestStatusesAreChips covers their color (demo feedback).
+func TestDetailTitleShowsTheStatus(t *testing.T) {
+	m := modelOf(t, mixedFixture(t), utf8Env, 100, 30)
+	for id, want := range map[string]string{
+		"f-001": m.glyphs.Accepted + " f-001 " + m.glyphs.Sep + " accepted",
+		"f-002": m.glyphs.Pending + " f-002 " + m.glyphs.Sep + " pending " + m.glyphs.Sep + " open note",
+	} {
+		mustOpen(m, id)
+		if view := m.View().Content; !strings.Contains(view, want) {
+			t.Errorf("%s: no %q:\n%s", id, want, view)
+		}
+	}
+}
+
+// The detail border takes the finding's decision color. An open note colors only its own thread, so a pending finding
+// with one keeps the accent (demo feedback).
+func TestDetailBordersFollowTheStatus(t *testing.T) {
+	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	corner := func(tone style.Tone) string { return m.styles.ToneStyle(tone).Render("╭") }
+	for id, tone := range map[string]style.Tone{"f-001": style.ToneGood, "f-002": style.ToneAccent, "f-003": style.ToneMuted} {
+		mustOpen(m, id)
+		pane := strings.Split(m.View().Content, "\n")[bodyTop(40)]
+		if !strings.HasPrefix(pane, corner(tone)) {
+			t.Errorf("%s border is not tone %d: %q", id, tone, pane)
+		}
+	}
+}
+
+// An open note's thread hangs from an amber bar under a colored headline above it, each author a chip; a closed one
+// from an overlay bar (demo feedback: notes as a left bar, not a pane; owner, 2026-10-30: the headline above the bar).
+func TestNoteThreadsHangFromATonedBar(t *testing.T) {
+	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-002")
+	view := m.View().Content
+	bar := m.styles.ToneStyle(style.ToneNote).Render(m.glyphs.Quote)
+	head := m.styles.Emphasis(m.styles.ToneStyle(style.ToneNote)).Render("Note n-001")
+	if !strings.Contains(view, head) || strings.Contains(view, bar+" "+head) || !strings.Contains(view, bar+" "+m.styles.Speaker("You", true)) {
+		t.Errorf("the open note's headline is not above an amber bar its author hangs from:\n%q", view)
+	}
+	if strings.Contains(ansi.Strip(view), "╭─ Note") {
+		t.Errorf("a note is still drawn as a pane:\n%s", ansi.Strip(view))
+	}
+}
+
+// Every block is a section: the body is Why on an accent bar, and the suggested fix is a heading and bar in the good
+// tone, so a proposed change reads apart from the finding's case (docs/tui-design.md).
+func TestDetailSectionsStandOut(t *testing.T) {
+	m := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-002")
+	view := m.View().Content
+	good := m.styles.ToneStyle(style.ToneGood)
+	if !strings.Contains(view, m.styles.Emphasis(good).Render("Suggested fix")) {
+		t.Errorf("the suggested fix heading is not in the good tone:\n%q", view)
+	}
+	if !strings.Contains(view, good.Render(m.glyphs.Quote)+" extract insertAfter") {
+		t.Errorf("the suggested fix does not hang from a green bar:\n%q", view)
+	}
+	accent := m.styles.ToneStyle(style.ToneAccent)
+	if !strings.Contains(view, m.styles.Emphasis(accent).Render("Why")) || !strings.Contains(view, accent.Render(m.glyphs.Quote)+" ") {
+		t.Errorf("the body is not a Why section on an accent bar:\n%q", view)
+	}
+}
+
+// Statuses are chips: the disposition and "open note" in the detail title, and a note's status in its headline
+// (demo feedback).
+func TestStatusesAreChips(t *testing.T) {
+	m := modelOf(t, mixedFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-001")
+	if view := m.View().Content; !strings.Contains(view, m.styles.Chip("accepted", style.ToneGood)) {
+		t.Errorf("accepted is not a chip:\n%q", view)
+	}
+	mustOpen(m, "f-002")
+	view := m.View().Content
+	for _, chip := range []string{m.styles.Chip("pending", style.ToneAccent), m.styles.Chip("open note", style.ToneNote), m.styles.Chip("open", style.ToneNote)} {
+		if !strings.Contains(view, chip) {
+			t.Errorf("%q is not shown as a chip:\n%q", ansi.Strip(chip), view)
+		}
+	}
+}
+
+// Deciding the last finding returns to the list with the cursor on the first finding still pending, or on the one
+// just decided when none is (demo feedback).
+func TestLastDecisionReturnsToTheList(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	mustOpen(m, "f-003")
+	m.Update(runes("a"))
+	if m.view != viewList || m.cursor != 0 {
+		t.Fatalf("after the last finding: view %v, cursor %d; want the list on f-001, the first pending", m.view, m.cursor)
+	}
+	if !strings.Contains(m.View().Content, "f-003 accepted") {
+		t.Errorf("the list does not say what was decided:\n%s", m.View().Content)
+	}
+	m = modelOf(t, newFixture(t), utf8Env, 100, 30)
+	mustOpen(m, "f-001")
+	for range 3 {
+		m.Update(runes("a"))
+		// Decision keys are dropped while the view settles on the next finding.
+		m.Update(settledMsg{})
+	}
+	if m.view != viewList || m.order[m.cursor].ID != "f-003" {
+		t.Errorf("with nothing pending: view %v, cursor on %s; want the list on f-003, just decided", m.view, m.order[m.cursor].ID)
+	}
+}
+
+// A tokenizer failure keeps the plain code on screen and says so on the notice line (review finding).
+func TestDetailSaysWhenHighlightingFails(t *testing.T) {
+	t.Cleanup(func() { highlightCode = style.Highlight })
+	highlightCode = func(path string, _ []string) ([][]style.CodeToken, error) {
+		return nil, errors.New("highlight " + path + ": line 1 did not round-trip")
+	}
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	view := paneText(m.View().Content)
+	if !strings.Contains(view, "syntax highlighting is unavailable for") || !strings.Contains(view, "did not round-trip") {
+		t.Errorf("the failure is not on the notice line:\n%s", m.View().Content)
+	}
+	if !strings.Contains(view, "3 + line three") {
+		t.Errorf("the plain code is not on screen:\n%s", m.View().Content)
+	}
+}
+
+// The detail shows the whole reason under its own head, before the location, hanging from a bar as a note thread
+// does, with the code as a chip in the headline above the bar (FR-007; owner, 2026-10-28 and 2026-10-30).
+func TestTheDetailSaysWhyAFindingWasWithdrawn(t *testing.T) {
+	long := "Test name only, the assertion is unchanged and nothing runs differently at all."
+	for _, c := range []struct{ width, height int }{{80, 24}, {100, 30}} {
+		m := modelOf(t, reasonFixture(t, "Title three", draft.Reason{Text: long, Code: "no-runtime-effect"}), utf8Env, c.width, c.height+20)
+		mustOpen(m, "f-003")
+		view := paneText(m.View().Content)
+		head, text := strings.Index(view, "Withdrawn "+m.glyphs.Sep+" no-runtime-effect"), strings.Index(view, "Test name only")
+		body := strings.Index(view, "Body three")
+		if head < 0 || text < head || body < text {
+			t.Errorf("%d: head %d, text %d, body %d:\n%s", c.width, head, text, body, view)
+		}
+		var hung int
+		for _, row := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+			inner := strings.TrimPrefix(strings.TrimSpace(row), "│ ")
+			if strings.Contains(inner, "Withdrawn") {
+				if strings.HasPrefix(inner, m.glyphs.Quote) {
+					t.Errorf("%d: headline %q hangs from the bar", c.width, row)
+				}
+				continue
+			}
+			if strings.Contains(inner, "Test name") || strings.Contains(inner, "differently") {
+				if !strings.HasPrefix(inner, m.glyphs.Quote+" ") {
+					t.Errorf("%d: row %q does not hang from the bar", c.width, row)
+				}
+				hung++
+			}
+		}
+		if hung < 1 {
+			t.Errorf("%d: %d rows hang from the bar", c.width, hung)
+		}
+		mustOpen(m, "f-002")
+		if view := paneText(m.View().Content); strings.Contains(view, "Withdrawn ") {
+			t.Errorf("%d: a withdrawal with no reason has a section:\n%s", c.width, view)
+		}
+	}
+	m := modelOf(t, reasonFixture(t, "Title one", draft.Reason{Text: "Naming."}), utf8Env, 100, 40)
+	mustOpen(m, "f-001")
+	if view := paneText(m.View().Content); strings.Contains(view, "Withdrawn ") {
+		t.Errorf("an included finding has a section:\n%s", view)
+	}
+}
+
+// In color the reason's bar and headline take the withdrawn tone, and the code is a muted chip.
+func TestTheWithdrawnReasonHangsFromAMutedBar(t *testing.T) {
+	m := modelOf(t, reasonFixture(t, "Title three", draft.Reason{Text: "Naming only.", Code: "no-runtime-effect"}), map[string]string{"LANG": "en_US.UTF-8"}, 100, 40)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	mustOpen(m, "f-003")
+	view := m.View().Content
+	edge := m.styles.ToneStyle(style.ToneMuted)
+	bar := edge.Render(m.glyphs.Quote)
+	head := m.styles.Emphasis(edge).Render("Withdrawn") + " " + m.styles.Chip("no-runtime-effect", style.ToneMuted)
+	if !strings.Contains(view, head) || strings.Contains(view, bar+" "+head) {
+		t.Errorf("the headline is not above the muted bar:\n%q", view)
+	}
+	if !strings.Contains(view, bar+" "+m.styles.Secondary().Render("Naming only.")) {
+		t.Errorf("the reason does not hang from the bar:\n%q", view)
+	}
+}
+
+// Reinstating takes the reason off the row and the detail, and history keeps it (User Story 1, scenario 4).
+func TestReinstatingDropsTheReason(t *testing.T) {
+	m := modelOf(t, reasonFixture(t, "Title three", draft.Reason{Text: "Naming only."}), utf8Env, 100, 30)
+	mustOpen(m, "f-003")
+	m.Update(tea.KeyPressMsg{Code: 'u', Text: "u"})
+	if got := draft.Dispositions(m.draft)["f-003"]; got != draft.DispositionAccepted {
+		t.Fatalf("f-003 is %s after u", got)
+	}
+	if m.view == viewDetail {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	}
+	if row := listRow(t, m, "f-003"); strings.Contains(row, "Naming only.") {
+		t.Errorf("row %q", row)
+	}
+	mustOpen(m, "f-003")
+	if view := paneText(m.View().Content); strings.Contains(view, "Naming only.") {
+		t.Errorf("detail:\n%s", view)
+	}
+	f := m.draft.Findings[2]
+	if f.History[0].Reason == nil || f.History[0].Reason.Text != "Naming only." {
+		t.Errorf("history %+v", f.History)
+	}
+}
+
+// A pull request finding reads in the fixed order: location, Why, the suggested fix, Impact, References, then notes
+// (docs/tui-design.md, Order).
+func TestPRFindingSectionsKeepTheFixedOrder(t *testing.T) {
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[1].Impact = "Stale titles."
+		d.Findings[1].References = []string{"https://github.com/acme/widgets/issues/1"}
+		_, err := draft.SendBack(d, "f-002", "Is this intentional?", testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 100, 80)
+	mustOpen(m, "f-002")
+	screen := screenText(m)
+	at := -1
+	for _, want := range []string{"multi.txt:21", "│ Why", "│ Suggested fix", "│ Impact", "│ References", "│ Note n-001"} {
+		i := strings.Index(screen, want)
+		if i <= at {
+			t.Fatalf("%q is missing or out of order:\n%s", want, screen)
+		}
+		at = i
+		// Each heading sits over the first row of its bar.
+		if want != "multi.txt:21" && !regexp.MustCompile(regexp.QuoteMeta(want)+` .*\n│ ┃ `).MatchString(screen[i:]) {
+			t.Errorf("%q is not over a bar:\n%s", want, screen)
+		}
+	}
+}
+
+// Every section of a withdrawn finding recedes to muted, so the human reads it as content the agent took back, and
+// it stays muted once the human excludes it, since its Withdrawn section still shows (docs/tui-design.md, Tone says
+// whose words they are).
+func TestWithdrawnFindingSectionsAreMuted(t *testing.T) {
+	for _, exclude := range []bool{false, true} {
+		dir := reasonFixture(t, "Title three", draft.Reason{Text: "Naming only."})
+		if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+			d.Findings[2].Impact = "Nothing runs differently."
+			if _, err := draft.SendBack(d, "f-003", "Sure?", testNow); err != nil {
+				return err
+			}
+			if exclude {
+				_, err := draft.Exclude(d, "f-003", testNow)
+				return err
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 60)
+		m.styles.SetColorProfile(colorprofile.TrueColor)
+		mustOpen(m, "f-003")
+		view := m.View().Content
+		muted := m.styles.Emphasis(m.styles.ToneStyle(style.ToneMuted))
+		for _, head := range []string{"Withdrawn", "Why", "Impact", "Note n-001"} {
+			if !strings.Contains(view, muted.Render(head)) {
+				t.Errorf("exclude %v: %s is not muted:\n%q", exclude, head, view)
+			}
+		}
+	}
+}
+
+// A finding that carries a suggested fix beside a proposal, or a local question beside a fix, shows the fix too, so no
+// text the agent filed is lost.
+func TestSuggestedFixShowsBesideAProposal(t *testing.T) {
+	dir := applyFixture(t, "Claude", applyInputs...)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[0].SuggestedFix = "Rename it in place."
+		d.Findings[1].SuggestedFix = "Use memory."
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 100, 60)
+	for id, want := range map[string][]string{"f-001": {"Claude will", "Suggested fix", "Rename it in place."}, "f-002": {"A question for Claude", "Suggested fix", "Use memory."}} {
+		mustOpenFinding(t, m, id)
+		screen := screenText(m)
+		at := -1
+		for _, w := range want {
+			i := strings.Index(screen, w)
+			if i <= at {
+				t.Errorf("%s: %q is missing or out of order:\n%s", id, w, screen)
+				break
+			}
+			at = i
 		}
 	}
 }

@@ -183,6 +183,7 @@ func TestUnreadablePreviousRoundDegrades(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := newHarness(t)
 			h.UseInstallationToken()
 			h.GH.SetViewer("github-actions[bot]")

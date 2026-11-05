@@ -2,7 +2,6 @@ package pane
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -27,15 +26,9 @@ func orcaFor(f *fakeRunner) Orca {
 }
 
 func TestDetectOrcaNeedsHandleAndBinary(t *testing.T) {
-	bin := t.TempDir()
+	bin := hostBins(t, "orca")
 	orca := filepath.Join(bin, "orca")
-	if err := os.WriteFile(orca, []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	notExec := t.TempDir()
-	if err := os.WriteFile(filepath.Join(notExec, "orca"), []byte("#!/bin/sh\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	notExec := notExecBins(t, "orca")
 	full := map[string]string{"ORCA_TERMINAL_HANDLE": orcaHandle, "PATH": bin}
 	var read []string
 	recording := func(k string) string {
@@ -66,7 +59,7 @@ func TestDetectOrcaNeedsHandleAndBinary(t *testing.T) {
 
 // switch is the only Orca call that moves the view, and it would drag the human to the agent's worktree from wherever
 // they are, so Open never runs it and never reports focus.
-func TestOpenSendsShowAndSplitAndNeverSwitches(t *testing.T) {
+func TestOrcaOpenSendsShowAndSplitAndNeverSwitches(t *testing.T) {
 	for _, c := range []struct {
 		name          string
 		tty           func() (int, bool)
@@ -101,38 +94,29 @@ func TestOpenSendsShowAndSplitAndNeverSwitches(t *testing.T) {
 	}
 }
 
-func assertOrcaRefusal(t *testing.T, err error, step, message string) {
-	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok || r.Code != refusal.PaneFailed || r.Fix != fix || r.Message != message ||
-		r.Details["host"] != "orca" || r.Details["step"] != step {
-		t.Fatalf("err = %#v, want pane-failed at %s with message %q and the fix", err, step, message)
-	}
-}
-
-func TestOpenRefusesOnAStaleHandle(t *testing.T) {
+func TestOrcaOpenRefusesOnAStaleHandle(t *testing.T) {
 	f := &fakeRunner{replies: map[string]reply{"show": {stdout: orcaStale, stderr: handshake, err: errExit1}}}
 	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertOrcaRefusal(t, err, "probe", "orca probe: "+orcaStaleIs)
+	assertPaneRefusal(t, err, "orca", "probe", "orca probe: "+orcaStaleIs)
 	if len(f.calls) != 1 {
 		t.Fatalf("made %d calls, want 1: %q", len(f.calls), f.calls)
 	}
 }
 
-func TestOpenRefusesOnASplitWithoutAHandle(t *testing.T) {
+func TestOrcaOpenRefusesOnASplitWithoutAHandle(t *testing.T) {
 	f := &fakeRunner{replies: map[string]reply{
 		"show":  {stdout: orcaShow, stderr: handshake},
 		"split": {stdout: `{"ok":true,"result":{"split":{}}}`, stderr: handshake},
 	}}
 	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertOrcaRefusal(t, err, "split", "orca split: the result has no handle; a pane may already be open")
+	assertPaneRefusal(t, err, "orca", "split", "orca split: the result has no handle; a pane may already be open")
 	if len(f.calls) != 2 {
 		t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
 	}
 }
 
 // Orca's stdout carries the success envelope, so output that is not JSON refuses at the step that produced it.
-func TestOpenRefusesOnUnreadableOutput(t *testing.T) {
+func TestOrcaOpenRefusesOnUnreadableOutput(t *testing.T) {
 	f := &fakeRunner{replies: map[string]reply{"show": {stdout: "nope", stderr: handshake}}}
 	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
 	r, ok := refusal.As(err)
@@ -144,20 +128,20 @@ func TestOpenRefusesOnUnreadableOutput(t *testing.T) {
 	}
 }
 
-func TestOpenRefusesWhenOrcaSaysNotOK(t *testing.T) {
+func TestOrcaOpenRefusesWhenOrcaSaysNotOK(t *testing.T) {
 	f := &fakeRunner{replies: map[string]reply{"show": {stdout: `{"ok":false}`, stderr: handshake}}}
 	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertOrcaRefusal(t, err, "probe", "orca probe: the result is not ok")
+	assertPaneRefusal(t, err, "orca", "probe", "orca probe: the result is not ok")
 }
 
 // Orca can exit 0 and still report a failure in its envelope; the refusal carries that message, not a generic one.
-func TestOpenRefusesWithTheMessageOfANotOKReplyOnExitZero(t *testing.T) {
+func TestOrcaOpenRefusesWithTheMessageOfANotOKReplyOnExitZero(t *testing.T) {
 	f := &fakeRunner{replies: map[string]reply{
 		"show":  {stdout: orcaShow, stderr: handshake},
 		"split": {stdout: `{"ok":false,"error":{"message":"split refused: tab is closing"}}`, stderr: handshake},
 	}}
 	_, err := orcaFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertOrcaRefusal(t, err, "split", "orca split: split refused: tab is closing; a pane may already be open")
+	assertPaneRefusal(t, err, "orca", "split", "orca split: split refused: tab is closing; a pane may already be open")
 	if len(f.calls) != 2 {
 		t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
 	}

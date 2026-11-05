@@ -145,3 +145,17 @@ func TestLockTimeoutDefault(t *testing.T) {
 		t.Fatalf("default lock timeout = %v, %v; want 3s", got, err)
 	}
 }
+
+// A lock path that cannot be truncated, here a link to /dev/full, fails the lock and leaves nothing held.
+func TestLockReturnsATruncateFailure(t *testing.T) {
+	if _, err := os.Stat("/dev/full"); err != nil {
+		t.Skip("no /dev/full on this platform")
+	}
+	dir := t.TempDir()
+	if err := os.Symlink("/dev/full", filepath.Join(dir, ".lock")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Lock(dir, "test", os.Getenv); err == nil || !strings.HasPrefix(err.Error(), "truncate lock ") {
+		t.Fatalf("got %v, want the truncate failure", err)
+	}
+}

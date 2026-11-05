@@ -80,6 +80,16 @@ func (fx *fixture) confirmMessage(answer bool, message string, during func()) fu
 	}
 }
 
+// asInstallation makes the fixture's own client report an installation token, so fx.gh still counts every request.
+func (fx *fixture) asInstallation() {
+	fx.t.Helper()
+	client, err := fx.opts.GitHub()
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+}
+
 func (fx *fixture) readDraft() []byte {
 	fx.t.Helper()
 	data, err := os.ReadFile(filepath.Join(fx.dir, "draft.json"))
@@ -92,6 +102,16 @@ func (fx *fixture) readDraft() []byte {
 func (fx *fixture) run() (Receipt, error) {
 	receipt, _, err := Run(context.Background(), fx.opts)
 	return receipt, err
+}
+
+// noRecords fails if the run holds an attempt or a receipt.
+func (fx *fixture) noRecords() {
+	fx.t.Helper()
+	for _, name := range []string{"attempt.json", "receipt.json"} {
+		if fx.exists(name) {
+			fx.t.Errorf("%s exists, want no record", name)
+		}
+	}
 }
 
 func (fx *fixture) exists(name string) bool {
@@ -121,6 +141,7 @@ func (fx *fixture) checkWrites(creates, updates int) {
 	}
 }
 
+// The terminal check answers first, before the draft is read and when there is no client to ask about the token.
 func TestRunRefusesTTYBeforeReadingDraftOrCredentials(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.IsTerminal = false
@@ -248,9 +269,7 @@ func TestRunRefusesAReviewWithNothingInIt(t *testing.T) {
 	fx := newRun(t, d)
 	_, err := fx.run()
 	wantRefusal(t, err, refusal.Empty, "write a message")
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt written")
-	}
+	fx.noRecords()
 	fx.check(0)
 
 	// The human's own words are enough to publish on: the review then says something the summary never did.
@@ -298,9 +317,7 @@ func TestRunRefusesDraftChangedDuringConfirmation(t *testing.T) {
 	})
 	_, err := fx.run()
 	wantRefusal(t, err, refusal.Changed, "loupe review", "loupe publish")
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt written")
-	}
+	fx.noRecords()
 	fx.draft = fx.readDraft()
 	fx.check(0)
 }
@@ -328,9 +345,7 @@ func TestRunRefusesDigestOrReadinessChangedDuringConfirmation(t *testing.T) {
 			})
 			_, err := fx.run()
 			wantRefusal(t, err, refusal.Changed, "loupe review")
-			if fx.exists("attempt.json") || fx.exists("receipt.json") {
-				t.Fatal("attempt or receipt written")
-			}
+			fx.noRecords()
 			fx.draft = fx.readDraft()
 			fx.check(0)
 		})
@@ -345,9 +360,7 @@ func TestRunRefusesViewerChangedDuringConfirmation(t *testing.T) {
 	if !strings.Contains(msg, "reviewer") || !strings.Contains(msg, "someone-else") {
 		t.Fatalf("viewer message %q", msg)
 	}
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt written")
-	}
+	fx.noRecords()
 	fx.check(0)
 }
 
@@ -677,23 +690,44 @@ func TestRunNamesContentsPermissionWhenCompareIsForbidden(t *testing.T) {
 }
 
 func TestRunRefusesApproveAtMovedHead(t *testing.T) {
-	d := readyDraft()
-	d.Findings[0].Blocking = false
-	fx := newRun(t, d)
-	fx.opts.Action = "approve"
-	fx.moveHead(movedSHA, 2, github.ComparedFile{Filename: "a.go"})
-	_, err := fx.run()
-	msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment", "--action request-changes", "loupe capture "+prLink)
-	if !strings.Contains(msg, "2 commits") {
-		t.Errorf("message %q", msg)
+	for commits, want := range map[int]string{1: "moved 1 commit past the captured head", 2: "moved 2 commits past the captured head"} {
+		t.Run(want, func(t *testing.T) {
+			d := readyDraft()
+			d.Findings[0].Blocking = false
+			fx := newRun(t, d)
+			fx.opts.Action = "approve"
+			fx.moveHead(movedSHA, commits, github.ComparedFile{Filename: "a.go"})
+			_, err := fx.run()
+			msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment", "--action request-changes", "loupe capture "+prLink)
+			if !strings.Contains(msg, want) {
+				t.Errorf("message %q lacks %q", msg, want)
+			}
+			if fx.compared() {
+				t.Error("the commit list counts the commits without compare")
+			}
+			if len(fx.previews) != 0 {
+				t.Error("confirmation shown")
+			}
+			fx.check(0)
+		})
 	}
-	if fx.compared() {
-		t.Error("the commit list counts the commits without compare")
+}
+
+func TestRunReturnsAGitHubFailureWhileReadingTheMovedHead(t *testing.T) {
+	comparePath := "/repos/acme/widgets/compare/acme:widgets:" + headSHA + "...acme:widgets:" + movedSHA
+	for _, path := range []string{"/repos/acme/widgets/pulls/42/commits", comparePath} {
+		t.Run(path, func(t *testing.T) {
+			fx := newRun(t, readyDraft())
+			fx.moveHead(movedSHA, 1, github.ComparedFile{Filename: "a.go"})
+			fx.gh.Fail("GET", path, http.StatusInternalServerError)
+			_, err := fx.run()
+			wantHTTPStatus(t, err, http.StatusInternalServerError)
+			if len(fx.previews) != 0 {
+				t.Error("confirmation shown")
+			}
+			fx.check(0)
+		})
 	}
-	if len(fx.previews) != 0 {
-		t.Error("confirmation shown")
-	}
-	fx.check(0)
 }
 
 // The second move is itself ahead, so only comparing against the head the confirmation showed catches it.
@@ -835,11 +869,7 @@ func newUnattendedRun(t *testing.T, d *draft.Draft) *fixture {
 	fx.opts.Unattended = true
 	// An installation-captured run.
 	fx.opts.Target.Viewer = ""
-	client, err := fx.opts.GitHub()
-	if err != nil {
-		t.Fatal(err)
-	}
-	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+	fx.asInstallation()
 	fx.opts.Confirm = func(Preview) (Confirmation, error) {
 		t.Fatal("Confirm must not be called when unattended")
 		return Confirmation{}, nil
@@ -903,9 +933,7 @@ func TestRunDefinite4xxRemovesAttempt(t *testing.T) {
 	if !strings.Contains(msg, "line must be part of the diff") {
 		t.Fatalf("message %q", msg)
 	}
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt remains")
-	}
+	fx.noRecords()
 	fx.check(1)
 }
 
@@ -1208,20 +1236,10 @@ func TestRunRetryUnknownRecheckListFailureKeepsAttempt(t *testing.T) {
 func TestRunRefusesInstallationTokenAheadOfTheTerminal(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.IsTerminal = false
-	_, client := newFake(t)
-	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+	fx.asInstallation()
 	_, err := fx.run()
 	wantRefusal(t, err, refusal.Token, "--unattended")
 	fx.check(0)
-}
-
-// The terminal check still answers first when there is no client to ask about the token.
-func TestRunRefusesTTYWhenNoClientCanBeBuilt(t *testing.T) {
-	fx := newRun(t, readyDraft())
-	fx.opts.IsTerminal = false
-	fx.opts.GitHub = func() (github.Client, error) { return nil, errors.New("no GitHub token found") }
-	_, err := fx.run()
-	wantRefusal(t, err, refusal.TTY)
 }
 
 // Constitution 2.0.0 II holds an unattended review to COMMENT. The CLI refuses the other actions as usage, and the
@@ -1233,8 +1251,7 @@ func TestRunRefusesUnattendedActionOtherThanComment(t *testing.T) {
 			fx.opts.IsTerminal = false
 			fx.opts.Unattended = true
 			fx.opts.Action = action
-			_, client := newFake(t)
-			fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+			fx.asInstallation()
 			_, err := fx.run()
 			wantRefusal(t, err, refusal.Usage, "--action comment")
 			fx.check(0)

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
 )
 
@@ -295,23 +296,6 @@ func TestCaptureClosedHumanOutput(t *testing.T) {
 	}
 }
 
-func TestUnattendedPublishOfAClosedPullRequest(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	h.closePR()
-	h.UseInstallationToken()
-	h.GH.SetViewer("github-actions[bot]")
-	h.capture("--allow-closed")
-	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
-	h.mustOK("summary", "--run", runRef, "--body", "Reviewed after the merge.", "--expect-findings", "3")
-	if sent := h.mustOK("publish", runRef, "--unattended"); sent["sent"] != true {
-		t.Fatalf("sent %v", sent)
-	}
-	if h.GH.CreateCount() != 1 {
-		t.Fatalf("create count %d, want 1", h.GH.CreateCount())
-	}
-}
-
 func TestCaptureRefusesOtherOrigin(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -385,27 +369,6 @@ func TestAddShowAndSummary(t *testing.T) {
 	dispositions, _ := env["dispositions"].(map[string]any)
 	if env["summary"] != "Two findings." || dispositions["f-001"] != "pending" || env["target"] == nil || env["readiness"] == nil {
 		t.Fatalf("show envelope %v", env)
-	}
-}
-
-func TestShowDiffHandsOverTheCapturedFile(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	h.capture()
-
-	stdout, stderr, exit := h.Run("show", "--run", runRef, "--diff")
-	if exit != 0 {
-		t.Fatalf("exit %d stderr %q", exit, stderr)
-	}
-	stored := readFile(t, filepath.Join(h.RunDir(1), "pr.diff"))
-	if stdout != string(stored) {
-		t.Fatalf("show --diff wrote %q, want the captured %q", stdout, stored)
-	}
-	if !strings.Contains(stdout, "diff --git") {
-		t.Fatalf("the captured diff looks empty: %q", stdout)
-	}
-	if env := h.mustOK("show", "--run", runRef, "--diff", "--json"); env["diff"] != string(stored) {
-		t.Fatalf("show --diff --json carried %v", env["diff"])
 	}
 }
 
@@ -628,5 +591,20 @@ func TestCaptureStoresAnEmptyOutlineWithoutMarkdown(t *testing.T) {
 	h.capture()
 	if got := string(readFile(t, filepath.Join(h.RunDir(1), "outline.json"))); got != "{\n  \"schema\": 1,\n  \"files\": []\n}\n" {
 		t.Fatalf("outline.json = %q", got)
+	}
+}
+
+// The heading outline reads each changed Markdown file from the fetched head. A read that fails stops the capture
+// and leaves the refs it fetched, which the refusal names.
+func TestCaptureStopsWhenAMarkdownFileCannotBeRead(t *testing.T) {
+	h := newHarness(t)
+	h.Repo.PushHead(map[string]string{"docs/a.md": "# A\n"})
+	h.GH.SetHead(owner, repo, number, h.Repo.RemoveHead("README.md"))
+
+	gitfail.WhenContains(t, "cat-file blob")
+
+	_, stderr, exit := h.Run("capture", prURL())
+	if exit != 1 || !strings.Contains(stderr, "injected failure") || !strings.Contains(stderr, "update-ref -d") {
+		t.Fatalf("exit %d stderr %q", exit, stderr)
 	}
 }

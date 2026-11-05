@@ -48,7 +48,7 @@ func TestCaptureFormRules(t *testing.T) {
 			t.Errorf("%v: captured", args)
 			continue
 		}
-		if env := decodeOne(t, s.stdout.Bytes()); env["error"].(map[string]any)["code"] != string(refusal.Usage) {
+		if env := decodeOne(t, s.stdout.Bytes()); errorOf(env)["code"] != string(refusal.Usage) {
 			t.Errorf("%v: %v", args, env["error"])
 		}
 	}
@@ -160,6 +160,11 @@ func TestCaptureNoFilesAcceptsOnlyGeneralFindings(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("general add: exit %d stdout %q", code, s.stdout.String())
 	}
+	code, s = runWithStdin(t, home, `{"title": "T", "body": "B", "location": {"path": "a.go", "line": 2}}`, "add", "--run", "local#1", "--from", "-", "--json")
+	errObj := wantCode(t, code, s, refusal.Location)
+	if fix, _ := errObj["fix"].(string); !strings.Contains(fix, `"general": true`) {
+		t.Fatalf("located add: fix %q", fix)
+	}
 }
 
 func TestCaptureFilesAnchorsEveryLine(t *testing.T) {
@@ -185,6 +190,36 @@ func TestCaptureFilesAnchorsEveryLine(t *testing.T) {
 	}
 }
 
+// A file outside the working tree and the home directory is shown as ext/<i>/<basename>, and abs names it.
+func TestCaptureFilesNamesAFileOutsideTheTreeUnderExt(t *testing.T) {
+	plan := filepath.Join(t.TempDir(), "plan.md")
+	if err := os.WriteFile(plan, []byte("# Plan\n\n## Storage\n\nKeep entries in memory.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s, _ := localCapture(t, t.TempDir(), nil, "--files", plan, "--json")
+	if code != 0 {
+		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+	}
+	var env struct {
+		Target struct {
+			Local struct {
+				Files []map[string]any `json:"files"`
+			} `json:"local"`
+		} `json:"target"`
+		Headings map[string][]any `json:"headings"`
+	}
+	if err := json.Unmarshal(s.stdout.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	files := env.Target.Local.Files
+	if len(files) != 1 || files[0]["path"] != "ext/1/plan.md" || files[0]["abs"] != plan {
+		t.Fatalf("files %v", files)
+	}
+	if got := len(env.Headings["ext/1/plan.md"]); got != 2 {
+		t.Fatalf("headings %v", env.Headings)
+	}
+}
+
 func TestBareCommandNeverSelectsALocalRun(t *testing.T) {
 	dir := t.TempDir()
 	code, _, home := localCapture(t, dir, nil, "--no-files", "--title", "Ideas", "--json")
@@ -193,9 +228,7 @@ func TestBareCommandNeverSelectsALocalRun(t *testing.T) {
 	}
 	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
 	deps.WorkDir = dir
-	if code := Execute(deps, []string{"feedback", "--json"}); code == 0 {
-		t.Fatalf("bare feedback selected a run: %s", s.stdout.String())
-	}
+	wantCode(t, Execute(deps, []string{"feedback", "--json"}), s, refusal.NoRun)
 	if env := decodeOne(t, s.stdout.Bytes()); env["run"] != nil {
 		t.Fatalf("bare feedback named a run: %v", env)
 	}
@@ -241,7 +274,7 @@ func TestCaptureLocalChecksItsTextFlags(t *testing.T) {
 			t.Errorf("%v: exit %d", c.args, code)
 			continue
 		}
-		errObj := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
 		if errObj["code"] != string(c.code) || !strings.Contains(errObj["message"].(string), c.word) {
 			t.Errorf("%v: %v", c.args, errObj)
 		}
@@ -258,7 +291,7 @@ func TestCaptureFilesRefusesWhenEveryFileIsSkipped(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
 	}
-	errObj := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
 	if errObj["code"] != string(refusal.Usage) || !strings.Contains(errObj["message"].(string), "every file given was skipped (1): empty.md") {
 		t.Fatalf("error %v", errObj)
 	}
@@ -280,5 +313,28 @@ func TestListNamesAnUntitledLocalRun(t *testing.T) {
 	}
 	if out := ls.stdout.String(); !strings.Contains(out, "(no title)") {
 		t.Errorf("list output lacks (no title):\n%s", out)
+	}
+}
+
+func TestApplyCaptureRefusesWithoutADataRoot(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	deps.WorkDir = t.TempDir()
+	if code := Execute(deps, []string{"capture", "--no-files", "--title", "x", "--json"}); code != 2 {
+		t.Fatalf("exit %d; stdout %q", code, s.stdout.String())
+	}
+	if !strings.Contains(s.stdout.String(), "cannot locate the loupe data root") {
+		t.Fatalf("stdout %q", s.stdout.String())
+	}
+}
+
+func TestApplyCaptureReturnsAFailureToCreateTheRun(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.WriteFile(home, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s, _ := localCapture(t, t.TempDir(), map[string]string{"LOUPE_HOME": home}, "--no-files", "--title", "x", "--json")
+	errObj := wantCode(t, code, s, refusal.Internal)
+	if want := "create local runs directory " + filepath.Join(home, "local") + ": mkdir " + home + ": not a directory"; errObj["message"] != want {
+		t.Fatalf("message %q, want %q", errObj["message"], want)
 	}
 }

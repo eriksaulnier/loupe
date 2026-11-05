@@ -46,6 +46,8 @@ const (
 	outcomeReject422
 	outcomeErrorAfterRecord
 	outcomeErrorDrop
+	outcomeUnauthorized
+	outcomeEmpty
 )
 
 type Outcome struct {
@@ -71,6 +73,12 @@ func ServerErrorAfterRecord() Outcome { return Outcome{kind: outcomeErrorAfterRe
 // ServerErrorDrop returns 500 without storing anything.
 func ServerErrorDrop() Outcome { return Outcome{kind: outcomeErrorDrop} }
 
+// Unauthorized stores nothing and returns 401, as when GitHub rejects the token.
+func Unauthorized() Outcome { return Outcome{kind: outcomeUnauthorized} }
+
+// OKWithoutIdentity stores nothing and returns 200 with an empty object, a success that names no review.
+func OKWithoutIdentity() Outcome { return Outcome{kind: outcomeEmpty} }
+
 type prKey struct {
 	owner, repo string
 	number      int
@@ -83,31 +91,34 @@ type compareKey struct {
 type Server struct {
 	URL string
 
-	mu            sync.Mutex
-	prs           map[prKey]github.PullRequest
-	branches      map[prKey]string
-	headOwners    map[prKey]string
-	failures      map[string]int
-	reviews       map[prKey][]github.Review
-	issueComments map[prKey][]github.IssueComment
-	threads       map[prKey][]github.ReviewThread
-	pageSize      int
-	failAfter     map[string]failRule
-	served        map[string]int
-	comparisons   map[compareKey]github.Comparison
-	commits       map[prKey][]github.Commit
-	viewer        string
-	latestRelease string
-	stallRelease  bool
-	stallPR       bool
-	userForbidden bool
-	outcomes      []Outcome
-	updates       []Outcome
-	requests      []Request
-	createCount   int
-	updateCount   int
-	nextID        int64
-	onCreate      func(*http.Request)
+	mu             sync.Mutex
+	prs            map[prKey]github.PullRequest
+	branches       map[prKey]string
+	headOwners     map[prKey]string
+	failures       map[string]int
+	reviews        map[prKey][]github.Review
+	issueComments  map[prKey][]github.IssueComment
+	threads        map[prKey][]github.ReviewThread
+	pageSize       int
+	failAfter      map[string]failRule
+	served         map[string]int
+	comparisons    map[compareKey]github.Comparison
+	commits        map[prKey][]github.Commit
+	viewer         string
+	latestRelease  string
+	stallRelease   bool
+	releaseArrived chan struct{}
+	stallPR        bool
+	prArrived      chan struct{}
+	userForbidden  bool
+	outcomes       []Outcome
+	updates        []Outcome
+	requests       []Request
+	createCount    int
+	updateCount    int
+	nextID         int64
+	onCreate       func(*http.Request)
+	onUpdate       func(*http.Request)
 }
 
 func New(t *testing.T) *Server {
@@ -314,18 +325,24 @@ func (s *Server) SetLatestRelease(tag string) {
 	s.latestRelease = tag
 }
 
-// StallLatestRelease makes the latest-release request hang until the caller cancels it.
-func (s *Server) StallLatestRelease() {
+// StallLatestRelease makes the latest-release request hang until the caller cancels it. The returned channel closes
+// when the first such request reaches the server, so a test cancels on arrival, not on a timer.
+func (s *Server) StallLatestRelease() <-chan struct{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stallRelease = true
+	s.releaseArrived = make(chan struct{})
+	return s.releaseArrived
 }
 
-// StallPullRequest makes the single pull request request hang until the caller cancels it.
-func (s *Server) StallPullRequest() {
+// StallPullRequest makes the single pull request request hang until the caller cancels it. The returned channel closes
+// when the first such request reaches the server, so a test can cancel a request it knows is in flight.
+func (s *Server) StallPullRequest() <-chan struct{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stallPR = true
+	s.prArrived = make(chan struct{})
+	return s.prArrived
 }
 
 // DenyUser makes GET /user answer 403, as GitHub does for an App installation token. The created review's author
@@ -391,6 +408,13 @@ func (s *Server) OnCreate(fn func(*http.Request)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onCreate = fn
+}
+
+// OnUpdate runs fn on every review edit request before the server stores or responds to anything.
+func (s *Server) OnUpdate(fn func(*http.Request)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onUpdate = fn
 }
 
 // QueueCreate sets the outcomes of the next review creations in order; once empty, creations succeed.
@@ -468,7 +492,14 @@ func (s *Server) getPullRequest(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	pr, found := s.prs[key]
 	branch := s.branches[key]
-	stall := s.stallPR
+	stall, arrived := s.stallPR, s.prArrived
+	if stall && arrived != nil {
+		select {
+		case <-arrived:
+		default:
+			close(arrived)
+		}
+	}
 	s.mu.Unlock()
 	if stall {
 		<-r.Context().Done()
@@ -516,7 +547,14 @@ func (s *Server) getUser(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) getLatestRelease(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
-	tag, stall := s.latestRelease, s.stallRelease
+	tag, stall, arrived := s.latestRelease, s.stallRelease, s.releaseArrived
+	if stall && arrived != nil {
+		select {
+		case <-arrived:
+		default:
+			close(arrived)
+		}
+	}
 	s.mu.Unlock()
 	if stall {
 		<-r.Context().Done()
@@ -768,12 +806,22 @@ func (s *Server) createReview(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
 	case outcomeErrorDrop:
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
+	case outcomeUnauthorized:
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"message": "Bad credentials"})
+	case outcomeEmpty:
+		writeJSON(w, http.StatusOK, map[string]any{})
 	}
 }
 
 // updateReview refuses an edit to another author's review with 403. That GitHub refuses it, and with which status, is
 // assumed until specs/025-sticky-review's probe runs.
 func (s *Server) updateReview(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	hook := s.onUpdate
+	s.mu.Unlock()
+	if hook != nil {
+		hook(r)
+	}
 	key, ok := keyOf(r)
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	s.mu.Lock()
@@ -816,6 +864,10 @@ func (s *Server) updateReview(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
 	case outcomeErrorDrop:
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
+	case outcomeUnauthorized:
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"message": "Bad credentials"})
+	case outcomeEmpty:
+		writeJSON(w, http.StatusOK, map[string]any{})
 	}
 }
 

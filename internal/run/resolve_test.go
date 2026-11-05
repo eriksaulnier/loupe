@@ -1,10 +1,13 @@
 package run
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
@@ -118,5 +121,33 @@ func TestHasReceipt(t *testing.T) {
 	}
 	if ok, err := HasReceipt(dir); err != nil || !ok {
 		t.Fatalf("receipt: %v %v", ok, err)
+	}
+}
+
+// A pull request or local runs directory that is a file, not a directory, is an error to report, not a missing run.
+func TestResolveRefReturnsAnUnreadableRunDirectory(t *testing.T) {
+	root := t.TempDir()
+	prDir := filepath.Dir(RunDir(root, "o", "r", 5, 1))
+	mkdirs(t, filepath.Dir(prDir))
+	if err := os.WriteFile(prDir, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(LocalRoot(root), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name   string
+		ref    Ref
+		prefix string
+	}{
+		{"newest round", Ref{Owner: "o", Repo: "r", Number: 5}, "list " + prDir},
+		{"given round", Ref{Owner: "o", Repo: "r", Number: 5, Round: 1}, "stat run "},
+		{"local run", Ref{Local: 1}, "stat local run "},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if _, _, err := ResolveRef(root, c.ref); !errors.Is(err, syscall.ENOTDIR) || !strings.HasPrefix(err.Error(), c.prefix) {
+				t.Fatalf("got %v, want ENOTDIR starting %q", err, c.prefix)
+			}
+		})
 	}
 }

@@ -2,6 +2,7 @@ package publish
 
 import (
 	"context"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -128,6 +129,13 @@ func TestReconcileListFailureRefusesGitHub(t *testing.T) {
 	wantRefusal(t, err, refusal.GitHub, prLink)
 }
 
+func TestReconcileKeepsARefusalFromTheClient(t *testing.T) {
+	gh, client := newFake(t)
+	gh.Fail("GET", reviewsPath, http.StatusUnauthorized)
+	_, err := Reconcile(context.Background(), client, unknownAttempt())
+	wantRefusal(t, err, refusal.Auth, "gh auth login")
+}
+
 func TestRunPendingReviewRejection(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.gh.QueueCreate(fakegh.Reject422("Unprocessable Entity (User can only have one Pending Review per pull request)"))
@@ -136,9 +144,7 @@ func TestRunPendingReviewRejection(t *testing.T) {
 	if !ok || r.Code != refusal.GitHub || r.Fix != "submit or discard your pending review on "+prLink+" first" {
 		t.Fatalf("got %#v", err)
 	}
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt remains")
-	}
+	fx.noRecords()
 	fx.check(1)
 }
 

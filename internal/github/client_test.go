@@ -485,9 +485,13 @@ func TestListReviewThreadsErrors(t *testing.T) {
 		check  func(error) bool
 	}{
 		"graphql error": {200, `{"data": {"repository": {"pullRequest": null}}, "errors": [{"type": "NOT_FOUND", "message": "Could not resolve to a PullRequest with the number of 7."}]}`,
-			func(err error) bool { return err != nil }},
+			func(err error) bool {
+				return err != nil && strings.HasPrefix(err.Error(), "GitHub GraphQL: ") && strings.Contains(err.Error(), "Could not resolve")
+			}},
 		"missing pull request": {200, `{"data": {"repository": {"pullRequest": null}}}`,
-			func(err error) bool { return err != nil }},
+			func(err error) bool {
+				return err != nil && err.Error() == "GitHub returned no pull request o/r#7 for its review threads"
+			}},
 		"server error": {502, `{"message": "Bad Gateway"}`,
 			func(err error) bool { var he *HTTPError; return errors.As(err, &he) && he.Status == 502 }},
 		"a review id that is not a number": {200, `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": false}, "nodes": [
@@ -504,5 +508,43 @@ func TestListReviewThreadsErrors(t *testing.T) {
 				t.Fatalf("got %+v, %#v", threads, err)
 			}
 		})
+	}
+}
+
+// A later page of a thread's comments that is gone or unreadable fails the whole read rather than dropping comments.
+func TestListReviewThreadsRefusesABadCommentPage(t *testing.T) {
+	first := `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": false}, "nodes": [
+		{"id": "T1", "path": "a.go", "line": 12, "diffSide": "RIGHT", "comments": {"pageInfo": {"hasNextPage": true, "endCursor": "c1"}, "nodes": [
+			{"author": null, "body": "first", "url": "u1", "createdAt": "2026-09-25T10:00:00Z", "pullRequestReview": null}]}}]}}}}}`
+	for name, tc := range map[string]struct {
+		page string
+		want string
+	}{
+		"thread gone": {`{"data": {"node": null}}`, "GitHub returned no review thread T1 on o/r#7"},
+		"bad review id": {`{"data": {"node": {"comments": {"pageInfo": {"hasNextPage": false}, "nodes": [
+			{"author": null, "body": "x", "url": "u", "createdAt": "2026-09-25T10:00:00Z", "pullRequestReview": {"fullDatabaseId": "x1"}}]}}}}`,
+			`GitHub sent review id "x1" on a thread comment`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				if decodeGraphQL(t, r).Variables["id"] == "T1" {
+					writeJSON(w, 200, tc.page)
+					return
+				}
+				writeJSON(w, 200, first)
+			})
+			threads, err := c.ListReviewThreads(context.Background(), "o", "r", 7)
+			if err == nil || !strings.HasPrefix(err.Error(), tc.want) || threads != nil {
+				t.Fatalf("got %+v, %v; want an error starting %q", threads, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestPullRequestCommitsRefusesAnUnreadablePage(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, `[{"sha": `) })
+	commits, err := c.PullRequestCommits(context.Background(), "o", "r", 7)
+	if err == nil || !strings.HasPrefix(err.Error(), "decode GitHub response from ") || commits != nil {
+		t.Fatalf("got %v, %v; want the decode failure", commits, err)
 	}
 }

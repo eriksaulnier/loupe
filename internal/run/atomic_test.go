@@ -1,6 +1,8 @@
 package run
 
 import (
+	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,8 +43,20 @@ func TestWriteFileAtomicReplaces(t *testing.T) {
 }
 
 func TestWriteFileAtomicMissingDir(t *testing.T) {
-	if err := WriteFileAtomic(filepath.Join(t.TempDir(), "nope", "f"), []byte("x")); err == nil {
-		t.Fatal("expected an error")
+	if err := WriteFileAtomic(filepath.Join(t.TempDir(), "nope", "f"), []byte("x")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("got %v, want not-exist creating the temp file", err)
+	}
+}
+
+// A value JSON cannot hold refuses before any file is touched.
+func TestWriteJSONAtomicRefusesAnUnencodableValue(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.json")
+	err := WriteJSONAtomic(path, map[string]float64{"x": math.NaN()})
+	if err == nil || !strings.HasPrefix(err.Error(), "encode "+path+": json: unsupported value: NaN") {
+		t.Fatalf("got %v", err)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("the file exists after a failed encode: %v", statErr)
 	}
 }
 

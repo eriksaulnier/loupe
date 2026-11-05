@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func wantFindingID(t *testing.T, err error, field, match string, line int) *refusal.Error {
 	t.Helper()
-	r := wantRefusal(t, err, refusal.Markdown)
+	r := refusaltest.Want(t, err, refusal.Markdown)
 	if r.Details["rule"] != "finding-id" || r.Details["field"] != field || r.Details["match"] != match || r.Details["line"] != line {
 		t.Fatalf("details %v, want field %s match %s line %d", r.Details, field, match, line)
 	}
@@ -75,7 +76,7 @@ func TestAddAllowlistRefusalComesBeforeTheIDCheck(t *testing.T) {
 	in := general("Cites f-002")
 	in.Body = "f-002 <br>"
 	_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), Rules{}, "", addNow)
-	if r := wantRefusal(t, err, refusal.Markdown); r.Details["rule"] != "html" {
+	if r := refusaltest.Want(t, err, refusal.Markdown); r.Details["rule"] != "html" {
 		t.Fatalf("details %v, want the allowlist's refusal", r.Details)
 	}
 }

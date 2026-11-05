@@ -1,29 +1,35 @@
 package run
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
+	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func sampleLocalTarget() Target {
 	return Target{
 		Kind:       KindLocal,
 		Title:      "test run",
+		Applier:    "claude",
+		Source:     "tool@1.0",
+		Model:      "anthropic/claude",
 		CapturedAt: time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC),
 		DiffSHA256: DiffSHA256(nil),
 		Local: &LocalTarget{
 			Prefix:  "myrepo",
 			Capture: "files",
 			Root:    "/root",
-			Files:   []LocalFile{},
+			Files:   []LocalFile{{Path: "foo.go", Abs: "/root/foo.go"}},
 			Skipped: []LocalSkipped{},
 		},
 	}
@@ -57,9 +63,13 @@ func TestNextLocalCreatesRun(t *testing.T) {
 	if err != nil || string(data) != "2" {
 		t.Fatalf("next=%q err=%v", data, err)
 	}
-	// run directory created with target.json
-	if _, err := LoadTarget(dir); err != nil {
+	// run directory created with target.json, its Local.N set to the run's number
+	loaded, err := LoadTarget(dir)
+	if err != nil {
 		t.Fatalf("LoadTarget: %v", err)
+	}
+	if loaded.Local == nil || loaded.Local.N != 1 {
+		t.Fatalf("loaded.Local = %+v, want N 1", loaded.Local)
 	}
 }
 
@@ -200,37 +210,122 @@ func TestHasReturn(t *testing.T) {
 	}
 }
 
-// TestNextLocalSetsN verifies that NextLocal sets the N field on the stored target.
-func TestNextLocalSetsN(t *testing.T) {
+func TestNextLocalFailsWhenLocalRootIsAFile(t *testing.T) {
 	root := t.TempDir()
-	target := sampleLocalTarget()
-	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
-	if err != nil {
+	if err := os.WriteFile(LocalRoot(root), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := LoadTarget(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loaded.Local == nil || loaded.Local.N != ref.Local {
-		t.Fatalf("loaded.Local.N = %v, want %d", loaded.Local, ref.Local)
+	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	if !errors.Is(err, syscall.ENOTDIR) || !strings.HasPrefix(err.Error(), "create local runs directory ") {
+		t.Fatalf("got %v, want ENOTDIR creating the local runs directory", err)
 	}
 }
 
-// TestNextLocalReadsMissingNextAsOne verifies that a missing next file starts at 1.
-func TestNextLocalReadsMissingNextAsOne(t *testing.T) {
+func TestNextLocalRefusesWhileTheLockIsHeld(t *testing.T) {
 	root := t.TempDir()
-	target := sampleLocalTarget()
-	_, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
+	localRoot := LocalRoot(root)
+	if err := os.MkdirAll(localRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	held, err := Lock(localRoot, "other", os.Getenv)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ref.Local != 1 {
-		t.Fatalf("first run = %d, want 1", ref.Local)
+	defer func() { _ = held.Unlock() }()
+	noWait := func(key string) string {
+		if key == "LOUPE_LOCK_TIMEOUT_MS" {
+			return "0"
+		}
+		return ""
 	}
-	// next should now be "2"
-	data, _ := os.ReadFile(filepath.Join(LocalRoot(root), "next"))
-	if n, _ := strconv.Atoi(string(data)); n != 2 {
-		t.Fatalf("next file = %q, want 2", data)
+	_, _, err = NextLocal(root, "test", noWait, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	_ = refusaltest.Want(t, err, refusal.Lock)
+}
+
+func TestNextLocalRefusesAnUnreadableNext(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(LocalRoot(root), "next"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	_ = refusaltest.Want(t, err, refusal.Record)
+}
+
+func TestNextLocalFailsWhenTheCounterCannotBeWritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root := t.TempDir()
+	localRoot := LocalRoot(root)
+	if err := os.MkdirAll(localRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Lock creates its file on demand, so the file must exist before the directory goes read-only.
+	if err := os.WriteFile(filepath.Join(localRoot, ".lock"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(localRoot, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(localRoot, 0o755) })
+	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	if !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), "local/next") {
+		t.Fatalf("got %v, want a permission error writing local/next", err)
+	}
+}
+
+func TestNextLocalFailsWhenTheRunDirectoryCannotBeCreated(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(LocalRoot(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(LocalDir(root, 1), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	if r := refusaltest.Want(t, err, refusal.Internal); !strings.HasSuffix(r.Message, "local/1 already exists") {
+		t.Fatalf("message %q, want local/1 already exists", r.Message)
+	}
+}
+
+func TestResolveLocalRefRefusesACorruptTarget(t *testing.T) {
+	root := t.TempDir()
+	dir, ref, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = ResolveRef(root, Ref{Local: ref.Local})
+	if r := refusaltest.Want(t, err, refusal.Record); !strings.Contains(r.Message, "target.json") {
+		t.Fatalf("message %q, want target.json named", r.Message)
+	}
+}
+
+func TestOpenSessionReturnsTheProbeErrorForALocalRef(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	root := t.TempDir()
+	dir, ref, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sessionPath(dir), nil, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := OpenSession(root, ref); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("got %v, want the permission error opening the session file", err)
+	}
+}
+
+func TestWalkLocalFailsWhenLocalRootIsAFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(LocalRoot(root), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WalkLocal(root); !errors.Is(err, syscall.ENOTDIR) {
+		t.Fatalf("got %v, want ENOTDIR listing local/", err)
 	}
 }

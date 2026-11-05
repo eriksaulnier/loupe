@@ -7,6 +7,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 // planDiff changes plan.md in one hunk, lines 11 to 17, inside Rollout, which runs from 10 to 21.
@@ -57,7 +58,7 @@ func TestAddRefusesAMalformedHeadingAnchor(t *testing.T) {
 	for name, loc := range cases {
 		t.Run(name, func(t *testing.T) {
 			_, err := Add(NewEmpty(), []FindingInput{{Title: "t", Body: "b", Location: loc}}, planDiff(t), Rules{}, ByAgent, addNow)
-			_ = wantRefusal(t, err, refusal.Input)
+			_ = refusaltest.Want(t, err, refusal.Input)
 		})
 	}
 	right := anchored("Rollout")
@@ -69,7 +70,7 @@ func TestAddRefusesAMalformedHeadingAnchor(t *testing.T) {
 
 func TestAddReportsAMissingTitleBeforeTheHeading(t *testing.T) {
 	_, err := Add(NewEmpty(), []FindingInput{{Body: "b", Location: anchored("Nope")}}, planDiff(t), Rules{}, ByAgent, addNow)
-	if r := wantRefusal(t, err, refusal.Input); r.Message != "entry 0: title is required and must not be empty" {
+	if r := refusaltest.Want(t, err, refusal.Input); r.Message != "entry 0: title is required and must not be empty" {
 		t.Fatalf("message %q", r.Message)
 	}
 }
@@ -80,7 +81,7 @@ func TestAddRefusesABatchWithOneBadHeading(t *testing.T) {
 		{Title: "good", Body: "b", Location: anchored("Rollout")},
 		{Title: "bad", Body: "b", Location: anchored("Nope")},
 	}, planDiff(t), Rules{}, ByAgent, addNow)
-	r := wantRefusal(t, err, refusal.Location)
+	r := refusaltest.Want(t, err, refusal.Location)
 	if r.Details["entry"] != 1 || len(d.Findings) != 0 {
 		t.Fatalf("details %v, findings %d", r.Details, len(d.Findings))
 	}
@@ -145,9 +146,9 @@ func TestEditOfAnotherFieldKeepsTheHeading(t *testing.T) {
 func TestEditRefusesAHeadingThatDoesNotResolve(t *testing.T) {
 	d := headingDraft(t)
 	_, _, err := Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Risks"}}`), nil, planDiff(t), ByAgent, Rules{}, editNow)
-	if r := wantRefusal(t, err, refusal.Location); r.Message != `the section "Risks" of plan.md has no changes in the diff` {
+	if r := refusaltest.Want(t, err, refusal.Location); r.Message != `the section "Risks" of plan.md has no changes in the diff` {
 		t.Fatalf("message %q", r.Message)
 	}
 	_, _, err = Edit(d, "f-001", editInput(t, `{"location": {"path": "plan.md", "heading": "Rollout", "line": 12}}`), nil, planDiff(t), ByAgent, Rules{}, editNow)
-	_ = wantRefusal(t, err, refusal.Input)
+	_ = refusaltest.Want(t, err, refusal.Input)
 }

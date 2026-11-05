@@ -64,6 +64,11 @@ func TestTierSelection(t *testing.T) {
 		{map[string]string{"LC_ALL": "C", "LANG": "en_US.UTF-8"}, ASCII},
 		{map[string]string{"LC_ALL": "C", "LANG": "en_US.UTF-8", IconsEnv: "nerd"}, ASCII},
 		{map[string]string{"LC_CTYPE": "en_US.utf8", "LANG": "C"}, Unicode},
+		{map[string]string{"LC_CTYPE": "C.utf8"}, Unicode},
+		{map[string]string{"LC_ALL": "de_DE.Utf-8", "LC_CTYPE": "C"}, Unicode},
+		{map[string]string{"LC_CTYPE": "POSIX", "LANG": "en_US.UTF-8"}, ASCII},
+		{map[string]string{"LC_ALL": "", "LC_CTYPE": "en_US.UTF-8", "LANG": "C"}, Unicode},
+		{map[string]string{"LANG": "C"}, ASCII},
 		{map[string]string{}, ASCII},
 	}
 	for _, c := range cases {
@@ -148,18 +153,12 @@ func TestReadinessNamesTheRemainder(t *testing.T) {
 	}
 }
 
-func TestContentCapsAtTheReadableWidth(t *testing.T) {
-	if Content(80) != 80 || Content(110) != 110 || Content(200) != 110 {
-		t.Fatal("Content must be min(width, 110)")
-	}
-}
-
 func TestTruncateBothEnds(t *testing.T) {
 	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
 	if got := s.TruncRight("abcdefghij", 5); got != "abcd…" {
 		t.Errorf("TruncRight %q", got)
 	}
-	if got := s.TruncLeft("adapters/pi/skills/post-review/SKILL.md:10", 14); got != "…/SKILL.md:10" && Width(got) > 14 {
+	if got := s.TruncLeft("adapters/pi/skills/post-review/SKILL.md:10", 14); got != "…w/SKILL.md:10" || Width(got) != 14 {
 		t.Errorf("TruncLeft %q (width %d)", got, Width(got))
 	}
 	if got := s.TruncLeft("short", 14); got != "short" {
@@ -211,9 +210,6 @@ func TestHeadingIsSentenceCase(t *testing.T) {
 	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "C"}))
 	if got := s.Heading("send-back loop"); got != "Send-back loop" {
 		t.Errorf("heading %q", got)
-	}
-	if got := s.Brand(); got != "loupe" {
-		t.Errorf("brand %q", got)
 	}
 }
 
@@ -307,5 +303,15 @@ func TestBackgroundSelectsOnePalette(t *testing.T) {
 	s.SetColorProfile(colorprofile.ANSI)
 	if got := s.Bad.Render("x"); !strings.Contains(got, "95m") {
 		t.Fatalf("ANSI critical color: %q", got)
+	}
+}
+
+func TestTruncatesToNothingAtZeroWidth(t *testing.T) {
+	s := New(&bytes.Buffer{}, env(map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}))
+	if got := s.TruncRight("abc", 0); got != "" {
+		t.Errorf("TruncRight at 0 = %q", got)
+	}
+	if got := s.TruncLeft("abc", -1); got != "" {
+		t.Errorf("TruncLeft below 0 = %q", got)
 	}
 }

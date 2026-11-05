@@ -9,6 +9,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func write(t *testing.T, path string, content []byte) string {
@@ -24,10 +25,7 @@ func write(t *testing.T, path string, content []byte) string {
 
 func wantUsage(t *testing.T, err error, path string) {
 	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok || r.Code != refusal.Usage {
-		t.Fatalf("got %v, want a usage refusal", err)
-	}
+	r := refusaltest.Want(t, err, refusal.Usage)
 	if !strings.Contains(r.Message, path) {
 		t.Fatalf("message %q does not name %s", r.Message, path)
 	}

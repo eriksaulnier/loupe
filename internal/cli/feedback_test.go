@@ -75,3 +75,29 @@ func TestFeedbackJSONCarriesTheCurrentReason(t *testing.T) {
 		t.Fatalf("f-002 %v", second)
 	}
 }
+
+// A closed note shows how it closed: the dismissed glyph, or, for a status a hand-edited draft carries, the status
+// alone. At a narrow width the readiness takes its own line.
+func TestPrintFeedbackShowsHowEachNoteClosed(t *testing.T) {
+	d := draft.NewEmpty()
+	d.Findings = []draft.Finding{{ID: "f-001", Rev: 1, Title: "T", Body: "b", General: true, Included: true}}
+	d.Notes = []draft.Note{
+		{ID: "n-001", FindingID: "f-001", Body: "Dropped.", Status: draft.NoteDismissed},
+		{ID: "n-002", FindingID: "f-001", Body: "Edited.", Status: "superseded"},
+	}
+	deps, out := printDeps(t)
+	deps.TermWidth = func() int { return 30 }
+	if err := printFeedback(deps, "owner/repository#123@4", d); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	first, _, _ := strings.Cut(got, "\n")
+	for _, want := range []string{"n-001 on f-001  x dismissed  Dropped.", "n-002 on f-001  superseded  Edited."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("feedback lacks %q:\n%s", want, got)
+		}
+	}
+	if !strings.HasSuffix(first, "draft version 0") {
+		t.Errorf("first line %q, want the readiness on a line of its own", first)
+	}
+}

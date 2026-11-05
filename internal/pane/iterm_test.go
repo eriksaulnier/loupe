@@ -6,8 +6,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 const (
@@ -135,15 +133,6 @@ func TestITermOpenSendsProbeSplitAndRun(t *testing.T) {
 	}
 }
 
-func assertITermRefusal(t *testing.T, err error, step, message string) {
-	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok || r.Code != refusal.PaneFailed || r.Fix != fix || r.Message != message ||
-		r.Details["host"] != "iterm2" || r.Details["step"] != step {
-		t.Fatalf("err = %#v, want pane-failed at %s with message %q and the fix", err, step, message)
-	}
-}
-
 func TestITermProbeRefuses(t *testing.T) {
 	for _, c := range []struct {
 		name, stderr, message string
@@ -157,7 +146,7 @@ func TestITermProbeRefuses(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			f := &fakeRunner{replies: map[string]reply{"probe": {stderr: c.stderr + "\n", err: errExit1}}}
 			_, err := itermFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-			assertITermRefusal(t, err, "probe", c.message)
+			assertPaneRefusal(t, err, "iterm2", "probe", c.message)
 			if len(f.calls) != 1 {
 				t.Fatalf("made %d calls, want 1: %q", len(f.calls), f.calls)
 			}
@@ -168,7 +157,7 @@ func TestITermProbeRefuses(t *testing.T) {
 func TestITermRefusesAnEmptySplit(t *testing.T) {
 	f := &fakeRunner{replies: map[string]reply{"probe": {stdout: "150\n"}, "split": {stdout: "\n"}}}
 	_, err := itermFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertITermRefusal(t, err, "split", "iterm2 split: the reply has no session id; a pane may already be open")
+	assertPaneRefusal(t, err, "iterm2", "split", "iterm2 split: the reply has no session id; a pane may already be open")
 	if len(f.calls) != 2 {
 		t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
 	}
@@ -181,8 +170,20 @@ func TestITermRunFailureLeavesThePane(t *testing.T) {
 		"run":   {stderr: "execution error: iTerm2 got an error: Can't get session. (-1728)\n", err: errExit1},
 	}}
 	_, err := itermFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
-	assertITermRefusal(t, err, "run", "iterm2 run: execution error: iTerm2 got an error: Can't get session. (-1728); a pane may already be open")
+	assertPaneRefusal(t, err, "iterm2", "run", "iterm2 run: execution error: iTerm2 got an error: Can't get session. (-1728); a pane may already be open")
 	if len(f.calls) != 3 {
 		t.Fatalf("made %d calls, want 3: %q", len(f.calls), f.calls)
+	}
+}
+
+func TestITermSplitFailureStopsBeforeTheRun(t *testing.T) {
+	f := &fakeRunner{replies: map[string]reply{
+		"probe": {stdout: "150\n"},
+		"split": {stderr: "execution error: iTerm2 got an error: Can't split. (-1728)\n", err: errExit1},
+	}}
+	_, err := itermFor(f).Open(context.Background(), Request{Command: command, Fix: fix})
+	assertPaneRefusal(t, err, "iterm2", "split", "iterm2 split: execution error: iTerm2 got an error: Can't split. (-1728); a pane may already be open")
+	if len(f.calls) != 2 {
+		t.Fatalf("made %d calls, want 2: %q", len(f.calls), f.calls)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 // changedRepo is a repository whose worktree holds every kind of change --changed sorts.
@@ -136,8 +137,9 @@ func TestChangedAgainstABase(t *testing.T) {
 	gitIn(t, dir, "add", "feature.txt")
 	gitIn(t, dir, "commit", "--quiet", "-m", "feature")
 	base := strings.TrimSpace(gitIn(t, dir, "rev-parse", "main"))
-	if _, err := Capture(Request{Form: FormChanged, WorkDir: dir}); err == nil {
-		t.Fatal("a clean worktree captured against HEAD")
+	_, err := Capture(Request{Form: FormChanged, WorkDir: dir})
+	if r := refusaltest.Want(t, err, refusal.Usage); r.Message != "nothing changed against HEAD" {
+		t.Fatalf("message %q, want nothing changed against HEAD", r.Message)
 	}
 	c, err := Capture(Request{Form: FormChanged, WorkDir: dir, Base: "main"})
 	if err != nil {
@@ -242,4 +244,15 @@ func TestChangedRefusesWithoutAWorktreeOrSharedHistory(t *testing.T) {
 	write(t, filepath.Join(repo, "a.txt"), []byte("b\n"))
 	_, err = Capture(Request{Form: FormChanged, WorkDir: repo, Base: "other"})
 	wantRefusal(t, err, "--base other shares no history with HEAD")
+}
+
+// A conversion refusal over a whole repository names five paths and counts the rest.
+func TestFirstPathsCountsThePathsItLeavesOut(t *testing.T) {
+	paths := []string{"a", "b", "c", "d", "e", "f", "g"}
+	if got := firstPaths(paths, 5); got != "a, b, c, d, e and 2 more" {
+		t.Fatalf("firstPaths = %q", got)
+	}
+	if got := firstPaths(paths[:5], 5); got != "a, b, c, d, e" {
+		t.Fatalf("firstPaths of five = %q", got)
+	}
 }

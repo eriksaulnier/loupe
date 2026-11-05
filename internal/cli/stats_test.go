@@ -15,9 +15,11 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/stats"
 	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/eriksaulnier/loupe/internal/testutil/golden"
 )
 
 // statsFinding is an included general finding filed by the agent.
@@ -329,7 +331,7 @@ func TestStatsGoldens(t *testing.T) {
 				t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 			}
 			checkFiledInResult(t, s.stdout.Bytes())
-			checkCLIGolden(t, "stats-json-"+group+".json", s.stdout.String())
+			golden.Check(t, "cli/"+"stats-json-"+group+".json", s.stdout.String())
 		})
 	}
 	empty := t.TempDir()
@@ -352,7 +354,7 @@ func TestStatsGoldens(t *testing.T) {
 				if code := Execute(deps, c.args); code != 0 {
 					t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 				}
-				checkCLIGolden(t, c.name+"."+strconv.Itoa(width)+".txt", s.stdout.String()+s.stderr.String())
+				golden.Check(t, "cli/"+c.name+"."+strconv.Itoa(width)+".txt", s.stdout.String()+s.stderr.String())
 				// Help text is not wrapped to the terminal, so only the list is held to the width.
 				for _, line := range strings.Split(s.stdout.String(), "\n") {
 					if c.name != "stats-help" && style.Width(line) > width {
@@ -417,6 +419,10 @@ func TestStatsRefusesBadArgumentsAsUsage(t *testing.T) {
 // Two runs are seeded the ordinary way and copied with plain writes, since CreateRun's fsyncs would cost the suite
 // far more than the command under test.
 func TestStatsReadsFiveHundredRunsInUnderASecond(t *testing.T) {
+	// The bound is wall-clock time, which coverage counters and the race detector inflate several times over.
+	if testing.CoverMode() != "" || raceDetector {
+		t.Skip("timing is not meaningful under coverage or the race detector")
+	}
 	var findings []draft.Finding
 	for i := 1; i <= 20; i++ {
 		findings = append(findings, statsFinding(fmt.Sprintf("f-%03d", i), "issue", false))
@@ -472,4 +478,72 @@ func TestStatsReadsFiveHundredRunsInUnderASecond(t *testing.T) {
 		t.Fatalf("stats took %s over 500 runs, want under 1s", elapsed)
 	}
 	t.Logf("stats over 500 runs: %s", elapsed)
+}
+
+func TestStatsIgnoresLocalRuns(t *testing.T) {
+	home, _ := localRun(t, "changed", localFinding("f-001"))
+	empty := t.TempDir()
+	outputs := []string{}
+	for _, h := range []string{home, empty} {
+		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": h})
+		if code := Execute(deps, []string{"stats", "--json"}); code != 0 {
+			t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+		}
+		outputs = append(outputs, s.stdout.String())
+	}
+	if outputs[0] != outputs[1] {
+		t.Fatalf("stats saw the local run:\n%s\nwant\n%s", outputs[0], outputs[1])
+	}
+}
+
+func TestCompactDurationKeepsTheTwoLargestUnits(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		26*time.Hour + 5*time.Minute:   "1d2h",
+		62 * time.Minute:               "1h2m",
+		14*time.Minute + 3*time.Second: "14m3s",
+		9 * time.Second:                "9s",
+		-90 * time.Second:              "-1m30s",
+	} {
+		if got := compactDuration(d); got != want {
+			t.Errorf("compactDuration(%s) = %q, want %q", d, got, want)
+		}
+	}
+}
+
+func TestStatsHeaderNamesEveryFilter(t *testing.T) {
+	published := []string{stats.StatePublished}
+	for _, c := range []struct {
+		q    statsQuery
+		want string
+	}{
+		{statsQuery{filter: stats.Filter{States: published}, sinceText: "2026-11-01"}, "Published runs in every repository, since 2026-11-01."},
+		{statsQuery{filter: stats.Filter{States: published}, sinceText: "2026-11-01", untilText: "2026-11-30"}, "Published runs in every repository, from 2026-11-01 to 2026-11-30."},
+		{statsQuery{filter: stats.Filter{States: published, GroupBy: stats.GroupWeek}, untilText: "2026-11-30"}, "Published runs in every repository, until 2026-11-30, by ISO week."},
+	} {
+		if got := statsHeader(c.q); got != c.want {
+			t.Errorf("statsHeader = %q, want %q", got, c.want)
+		}
+	}
+}
+
+func TestStatsExclusionsCountTheUnattendedRuns(t *testing.T) {
+	for n, want := range map[int]string{
+		1: "and 1 unattended run. The median also leaves out the unattended run.",
+		3: "and 3 unattended runs. The median also leaves out the unattended runs.",
+	} {
+		if got := statsExclusions(n); !strings.HasSuffix(got, want) {
+			t.Errorf("statsExclusions(%d) = %q, want it to end %q", n, got, want)
+		}
+	}
+}
+
+func TestStatsRefusesARunsDirectoryThatIsAFile(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, "runs"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s := runWithStdin(t, home, "", "stats", "--json")
+	if errObj := wantCode(t, code, s, refusal.Internal); !strings.Contains(errObj["message"].(string), "runs: not a directory") {
+		t.Fatalf("error %v", errObj)
+	}
 }

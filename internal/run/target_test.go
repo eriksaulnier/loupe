@@ -2,15 +2,18 @@ package run
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func sampleTarget() Target {
@@ -22,27 +25,6 @@ func sampleTarget() Target {
 		DiffSHA256: "abc", PRState: "open",
 	}
 }
-
-func sampleLocalTargetForTest() Target {
-	return Target{
-		Kind:       KindLocal,
-		Title:      "my run",
-		Applier:    "claude",
-		Source:     "tool@1.0",
-		Model:      "anthropic/claude",
-		CapturedAt: time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC),
-		DiffSHA256: "abc",
-		Local: &LocalTarget{
-			N:       1,
-			Prefix:  "myrepo",
-			Capture: "files",
-			Root:    "/root",
-			Files:   []LocalFile{{Path: "foo.go", Abs: "/root/foo.go"}},
-			Skipped: []LocalSkipped{},
-		},
-	}
-}
-
 func TestPRTargetHasNoLocalFields(t *testing.T) {
 	data, err := json.Marshal(sampleTarget())
 	if err != nil {
@@ -64,7 +46,7 @@ func TestPRTargetHasNoLocalFields(t *testing.T) {
 }
 
 func TestLocalTargetMarshalsThroughLocalTargetFile(t *testing.T) {
-	target := sampleLocalTargetForTest()
+	target := sampleLocalTarget()
 	data, err := json.Marshal(target)
 	if err != nil {
 		t.Fatal(err)
@@ -166,29 +148,11 @@ func TestCreateRunAndLoadTarget(t *testing.T) {
 	}
 }
 
-func TestTargetJSONKeys(t *testing.T) {
-	data, err := json.Marshal(sampleTarget())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"author", "baseRef", "baseSha", "capturedAt", "clonePath", "diffSha256", "headRef", "headSha", "mergeBaseSha",
-		"number", "owner", "prState", "previousRound", "repo", "round", "schema", "title", "url", "viewer"}
-	var got []string
-	for k := range m {
-		got = append(got, k)
-	}
-	sort.Strings(got)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("keys %v", got)
-	}
-
+// publish/schema_test.go pins every tag. These are the values omitempty drops.
+func TestTargetOmitsUnsetOptionals(t *testing.T) {
 	first := sampleTarget()
 	first.Round, first.PreviousRound = 1, 0
-	data, err = json.Marshal(first)
+	data, err := json.Marshal(first)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,6 +246,21 @@ func TestCreateRunRefusesExisting(t *testing.T) {
 	}
 }
 
+// Only a run directory that is already there is the bug to file. A path loupe cannot look at is reported as the
+// error it is.
+func TestCreateRunReportsARunDirectoryItCannotStat(t *testing.T) {
+	parent := filepath.Join(t.TempDir(), "runs")
+	if err := os.WriteFile(parent, []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(parent, "1")
+	err := CreateRun(dir, sampleTarget(), nil, []byte("{}\n"), nil)
+	if _, isRefusal := refusal.As(err); isRefusal || !errors.Is(err, syscall.ENOTDIR) ||
+		err.Error() != "lstat "+dir+": not a directory" {
+		t.Fatalf("CreateRun = %v, want the stat error for %s", err, dir)
+	}
+}
+
 func TestLoadTargetMissing(t *testing.T) {
 	_, err := LoadTarget(t.TempDir())
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record {
@@ -372,9 +351,9 @@ func TestLoadTargetReadsSchemaOneWithoutPRState(t *testing.T) {
 
 // A local target with no file list, or none at all, still writes files and skipped as empty arrays, never null.
 func TestLocalTargetWritesEmptyListsForMissingFiles(t *testing.T) {
-	bare := sampleLocalTargetForTest()
+	bare := sampleLocalTarget()
 	bare.Local = nil
-	nilLists := sampleLocalTargetForTest()
+	nilLists := sampleLocalTarget()
 	nilLists.Local.Files, nilLists.Local.Skipped = nil, nil
 	for name, target := range map[string]Target{"no local block": bare, "nil lists": nilLists} {
 		data, err := json.Marshal(target)
@@ -392,5 +371,86 @@ func TestLocalTargetWritesEmptyListsForMissingFiles(t *testing.T) {
 				t.Errorf("%s: local.%s is %s, want []", name, key, got)
 			}
 		}
+	}
+}
+
+func TestLoadDiffRefusesAMissingOrUnparsableDiff(t *testing.T) {
+	root := t.TempDir()
+	dir := RunDir(root, "o", "r", 12, 2)
+	bad := []byte("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n x\n")
+	target := sampleTarget()
+	target.DiffSHA256 = DiffSHA256(bad)
+	if err := CreateRun(dir, target, bad, []byte("{}\n"), nil); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadDiff(dir, target)
+	if r := refusaltest.Want(t, err, refusal.Record); !strings.Contains(r.Message, "fragment header miscounts lines") {
+		t.Fatalf("message %q", r.Message)
+	}
+	if err := os.Remove(filepath.Join(dir, "pr.diff")); err != nil {
+		t.Fatal(err)
+	}
+	_, err = LoadDiff(dir, target)
+	if r := refusaltest.Want(t, err, refusal.Record); !strings.Contains(r.Message, "no such file") {
+		t.Fatalf("message %q", r.Message)
+	}
+}
+
+// A parent that cannot be created, or cannot hold the temporary directory, fails the capture with nothing written.
+func TestCreateRunReturnsTheParentFailures(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	for _, c := range []struct{ name, run, prefix string }{
+		{"create the parent", filepath.Join("o", "r", "12", "1"), "create "},
+		{"create the temp directory", "1", "create temp run directory in "},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			locked := t.TempDir()
+			if err := os.Chmod(locked, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+			err := CreateRun(filepath.Join(locked, c.run), sampleTarget(), nil, []byte("{}\n"), nil)
+			if !errors.Is(err, os.ErrPermission) || !strings.HasPrefix(err.Error(), c.prefix) {
+				t.Fatalf("got %v, want a permission error starting %q", err, c.prefix)
+			}
+			if entries, _ := os.ReadDir(locked); len(entries) != 0 {
+				t.Fatalf("left %v behind", entries)
+			}
+		})
+	}
+}
+
+// A failure after the temporary directory exists removes it, so a failed capture leaves no partial run behind. An
+// optional file under a missing directory fails its write, and one named ../<run> takes the run's place before the
+// rename, as a concurrent capture would.
+func TestCreateRunRemovesItsTempDirectoryOnFailure(t *testing.T) {
+	for _, c := range []struct {
+		name, file string
+		check      func(t *testing.T, err error)
+	}{
+		{"optional write", filepath.Join("missing", "x.json"), func(t *testing.T, err error) {
+			if !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("got %v, want not-exist writing the optional file", err)
+			}
+		}},
+		{"run taken before the rename", filepath.Join("..", "2"), func(t *testing.T, err error) {
+			if r := refusaltest.Want(t, err, refusal.Internal); !strings.HasSuffix(r.Message, "2 already exists") {
+				t.Fatalf("message %q", r.Message)
+			}
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			parent := t.TempDir()
+			err := CreateRun(filepath.Join(parent, "2"), sampleTarget(), nil, []byte("{}\n"), map[string][]byte{c.file: []byte("{}\n")})
+			c.check(t, err)
+			entries, _ := os.ReadDir(parent)
+			for _, e := range entries {
+				if strings.HasPrefix(e.Name(), ".2.tmp-") {
+					t.Fatalf("left the temp directory %s", e.Name())
+				}
+			}
+		})
 	}
 }

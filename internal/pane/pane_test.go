@@ -69,15 +69,83 @@ func TestLookPathSkipsEmptyElements(t *testing.T) {
 	}
 }
 
+// hostBins is a directory holding an executable stand-in for each named host binary.
 func hostBins(t *testing.T, names ...string) string {
+	t.Helper()
+	return binsWithMode(t, 0o755, names)
+}
+
+// notExecBins is a directory holding each named host binary without its execute bit.
+func notExecBins(t *testing.T, names ...string) string {
+	t.Helper()
+	return binsWithMode(t, 0o644, names)
+}
+
+func binsWithMode(t *testing.T, mode os.FileMode, names []string) string {
 	t.Helper()
 	bin := t.TempDir()
 	for _, name := range names {
-		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), mode); err != nil {
 			t.Fatal(err)
 		}
 	}
 	return bin
+}
+
+// fakeRunner answers each call from replies, keyed by the argument at index key, or by keyOf when set, and records
+// every argv.
+type fakeRunner struct {
+	key     int
+	keyOf   func(args []string) string
+	calls   [][]string
+	replies map[string]reply
+}
+
+type reply struct {
+	stdout, stderr string
+	err            error
+}
+
+func (f *fakeRunner) run(_ context.Context, path string, args ...string) ([]byte, []byte, error) {
+	f.calls = append(f.calls, append([]string{path}, args...))
+	var k string
+	if f.keyOf != nil {
+		k = f.keyOf(args)
+	} else {
+		k = args[f.key]
+	}
+	r, ok := f.replies[k]
+	if !ok {
+		return nil, nil, errors.New("unexpected call")
+	}
+	return []byte(r.stdout), []byte(r.stderr), r.err
+}
+
+const command = "LOUPE_HOME='/data' '/bin/loupe' review 'o/r#1@1' && exit"
+
+var errExit1 = errors.New("exit status 1")
+
+// envWith reads m, with drop unset and key set to value.
+func envWith(m map[string]string, drop, key, value string) func(string) string {
+	return func(k string) string {
+		if k == drop {
+			return ""
+		}
+		if k == key {
+			return value
+		}
+		return m[k]
+	}
+}
+
+// assertPaneRefusal fails the test unless err is the pane-failed refusal of host at step, with message and the fix.
+func assertPaneRefusal(t *testing.T, err error, host, step, message string) {
+	t.Helper()
+	r, ok := refusal.As(err)
+	if !ok || r.Code != refusal.PaneFailed || r.Fix != fix || r.Message != message ||
+		r.Details["host"] != host || r.Details["step"] != step {
+		t.Fatalf("err = %#v, want %s pane-failed at %s with message %q and the fix", err, host, step, message)
+	}
 }
 
 // A Herdr session started inside an Orca terminal gives its panes both environments, and the agent sits in the Herdr

@@ -54,6 +54,10 @@ const (
 // filesystem, so every tick reads them whole.
 var waitInterval = time.Second
 
+// waitIdle runs after each read of the run that finds nothing to report. Tests set it to change the run between two
+// reads, so that "appears later" never depends on how fast the first read happens.
+var waitIdle = func() {}
+
 func newWaitCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "wait",
@@ -103,6 +107,7 @@ func runWait(cmd *cobra.Command, deps Deps) error {
 		if reason != "" {
 			return writeWait(cmd, deps, m, dir, ref.String(), d, reason, awaiting)
 		}
+		waitIdle()
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("wait ended: %w", context.Cause(ctx))
@@ -139,9 +144,13 @@ func pollWait(dir string, m mode.Mode) (d *draft.Draft, reason string, awaiting 
 func writeWait(cmd *cobra.Command, deps Deps, m mode.Mode, dir, ref string, d *draft.Draft, reason string, awaiting []string) error {
 	var reviewURL string
 	if reason == mode.EndedPublished {
-		receipt, _, err := publish.LoadReceipt(dir)
+		receipt, found, err := publish.LoadReceipt(dir)
 		if err != nil {
 			return err
+		}
+		if !found {
+			return refusal.New(refusal.Record, "receipt.json in "+dir+" disappeared after loupe wait saw the review published",
+				"run loupe wait again")
 		}
 		reviewURL = receipt.ReviewURL
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 type viewRow struct {
@@ -58,6 +59,9 @@ func TestHunkView(t *testing.T) {
 	} else if r, ok := refusal.As(err); !ok || r.Code != refusal.Location {
 		t.Fatalf("got %v, want a location refusal", err)
 	}
+	// A start after the line anchors nothing, so the range is not in the diff.
+	_, err := d.HunkView("multi.txt", "RIGHT", 3, 5, 3)
+	_ = refusaltest.Want(t, err, refusal.Location)
 }
 
 func TestFileView(t *testing.T) {
@@ -92,8 +96,9 @@ func TestFileView(t *testing.T) {
 	if !reflect.DeepEqual(marked, want) {
 		t.Fatalf("markers %v, want %v", marked, want)
 	}
-	if _, err := d.FileView("missing.txt", nil, nil); err == nil {
-		t.Fatal("FileView accepted a file outside the diff")
+	_, err = d.FileView("missing.txt", nil, nil)
+	if r := refusaltest.Want(t, err, refusal.Location); r.Message != "missing.txt is not a file in the diff" {
+		t.Fatalf("message %q", r.Message)
 	}
 }
 

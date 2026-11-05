@@ -7,34 +7,12 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
-
-func newModel(t *testing.T, dir string) *Model {
-	t.Helper()
-	m, err := New(Config{Dir: dir, Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})
-	if err != nil {
-		t.Fatal(err)
-	}
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	return m
-}
-
-func press(m *Model, keys ...string) {
-	for _, k := range keys {
-		switch k {
-		case "enter":
-			m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-		default:
-			m.Update(runes(k))
-		}
-	}
-}
 
 func noteStatuses(d *draft.Draft) []string {
 	var out []string
@@ -184,16 +162,6 @@ func TestDetailEscapesFindings(t *testing.T) {
 	}
 	assertEscaped(t, "detail view", m.View().Content, `Title \u202Eeno \u001B[31mred`, `Body \u2066hidden \u001B]52;c;x\u0007`, `fix \u200Fmark`,
 		`Heading \u202Eeno \u001B[31mred`)
-}
-
-func arrow(t rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: t} }
-
-func runes(k string) tea.KeyPressMsg {
-	code := rune(0)
-	if rs := []rune(k); len(rs) == 1 {
-		code = rs[0]
-	}
-	return tea.KeyPressMsg{Code: code, Text: k}
 }
 
 // ← and → move between findings exactly as N and n do, stopping at both ends.

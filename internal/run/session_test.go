@@ -2,10 +2,14 @@ package run
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -153,4 +157,39 @@ func TestOpenSessionCoversEveryRoundOfThePullRequest(t *testing.T) {
 
 	holdFor(t, RunDir(root, "o", "r", 1, 2))
 	want(round2, "o/r#1@2", true)
+}
+
+func TestHoldSessionReturnsTheOpenFailure(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "missing")
+	if _, err := HoldSession(dir); !errors.Is(err, os.ErrNotExist) || !strings.HasPrefix(err.Error(), "open review session ") {
+		t.Fatalf("got %v, want not-exist opening the session file", err)
+	}
+}
+
+func TestOpenSessionReturnsTheErrorsOfAPullRequest(t *testing.T) {
+	t.Run("rounds", func(t *testing.T) {
+		root := t.TempDir()
+		prDir := filepath.Dir(RunDir(root, "o", "r", 5, 1))
+		mkdirs(t, filepath.Dir(prDir))
+		if err := os.WriteFile(prDir, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := OpenSession(root, Ref{Owner: "o", Repo: "r", Number: 5, Round: 1}); !errors.Is(err, syscall.ENOTDIR) {
+			t.Fatalf("got %v, want ENOTDIR listing the rounds", err)
+		}
+	})
+	t.Run("probe", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root ignores file permissions")
+		}
+		root := t.TempDir()
+		dir := RunDir(root, "o", "r", 5, 1)
+		mkdirs(t, dir)
+		if err := os.WriteFile(sessionPath(dir), nil, 0); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := OpenSession(root, Ref{Owner: "o", Repo: "r", Number: 5, Round: 1}); !errors.Is(err, os.ErrPermission) {
+			t.Fatalf("got %v, want the permission error opening the session file", err)
+		}
+	})
 }

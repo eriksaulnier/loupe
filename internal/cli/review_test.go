@@ -7,9 +7,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -26,7 +26,7 @@ func TestReviewRefusesWithoutTerminalBeforeResolving(t *testing.T) {
 		if code := Execute(deps, args); code != 1 {
 			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
 		}
-		e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		e := errorOf(decodeOne(t, s.stdout.Bytes()))
 		if e["code"] != "tty" || e["fix"] != "run loupe review in an interactive terminal" {
 			t.Fatalf("%v: got %v", args, e)
 		}
@@ -41,10 +41,13 @@ func TestReviewRefusesATerminalItCannotDrawOn(t *testing.T) {
 	for _, c := range []struct {
 		name, term, reason string
 		screen             *tui.Screen
+		regularFile        bool
 	}{
-		{"TERM=dumb", "dumb", "TERM=dumb", &tui.Screen{Width: 100, Height: 30}},
+		{"TERM=dumb", "dumb", "TERM=dumb", &tui.Screen{Width: 100, Height: 30}, false},
 		// A reader that is not a terminal file fails the raw-mode probe, as a terminal that cannot enter raw mode does.
-		{"no raw mode", "", "cannot enter raw mode", nil},
+		{"no raw mode", "", "cannot enter raw mode", nil, false},
+		// A regular file is a file, but not a terminal, so making it raw fails.
+		{"stdin a regular file", "", "cannot enter raw mode: inappropriate ioctl for device", nil, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			home := filepath.Join(t.TempDir(), "loupe-home")
@@ -52,10 +55,18 @@ func TestReviewRefusesATerminalItCannotDrawOn(t *testing.T) {
 			deps.IsTerminal = func() bool { return true }
 			deps.StderrIsTerminal = func() bool { return true }
 			deps.Screen = c.screen
+			if c.regularFile {
+				f, err := os.Create(filepath.Join(t.TempDir(), "stdin"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = f.Close() })
+				deps.Stdin = f
+			}
 			if code := Execute(deps, []string{"review", "o/r#1", "--json"}); code != 1 {
 				t.Fatalf("exit %d stderr %q", code, s.stderr.String())
 			}
-			e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+			e := errorOf(decodeOne(t, s.stdout.Bytes()))
 			if e["code"] != "tty" || e["fix"] != "run loupe review in a terminal that can draw full screen" || !strings.Contains(e["message"].(string), c.reason) {
 				t.Fatalf("got %v", e)
 			}
@@ -73,7 +84,7 @@ func TestPlainFlagIsAUsageError(t *testing.T) {
 		if code := Execute(deps, args); code != 2 {
 			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
 		}
-		if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "usage" {
+		if e := errorOf(decodeOne(t, s.stdout.Bytes())); e["code"] != "usage" {
 			t.Fatalf("%v: got %v", args, e)
 		}
 	}
@@ -302,29 +313,76 @@ func TestReviewDoneNamesTheReturn(t *testing.T) {
 // The URL comes from GitHub by way of the receipt, so only a plain https link reaches the platform's handler.
 func TestOpenURLRefusesAnythingButAnHTTPSLink(t *testing.T) {
 	for _, url := range []string{"file:///tmp/x.command", "-a Calculator", "github.com/o/r", "https://github.com/o/r" + "\n-a"} {
-		if err := OpenURL(url); !errors.Is(err, errUnsafeURL) {
+		if err := OpenURL("linux")(url); !errors.Is(err, errUnsafeURL) {
 			t.Errorf("OpenURL(%q) = %v, want the URL refused before the handler runs", url, err)
 		}
 	}
 }
 
-// WSL often has wslview but not xdg-utils, so a missing xdg-open falls back to it. xdg-open wins where both exist.
-func TestURLOpenerFallsBackToWslview(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("macOS always opens with open")
+// fakeHandler writes a URL handler called name into dir. It records the argument it ran with in the returned file, or
+// exits 3 when fail is set.
+func fakeHandler(t *testing.T, dir, name string, fail bool) string {
+	t.Helper()
+	log := filepath.Join(t.TempDir(), name+".log")
+	script := "#!/bin/sh\nprintf '%s' \"$1\" > '" + log + "'\n"
+	if fail {
+		script = "#!/bin/sh\nexit 3\n"
 	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return log
+}
+
+// macOS opens with open whatever else is on PATH; elsewhere xdg-open wins, and wslview stands in where it is missing.
+func TestOpenURLRunsThePlatformsHandler(t *testing.T) {
+	const url = "https://github.com/o/r/pull/1#pullrequestreview-9"
+	for _, tc := range []struct {
+		goos, want string
+		onPath     []string
+	}{
+		{"darwin", "open", []string{"open", "xdg-open"}},
+		{"linux", "xdg-open", []string{"xdg-open", "wslview", "open"}},
+		{"linux", "wslview", []string{"wslview", "open"}},
+	} {
+		t.Run(tc.goos+"/"+tc.want, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("PATH", dir)
+			logs := map[string]string{}
+			for _, name := range tc.onPath {
+				logs[name] = fakeHandler(t, dir, name, false)
+			}
+			if err := OpenURL(tc.goos)(url); err != nil {
+				t.Fatal(err)
+			}
+			for name, log := range logs {
+				got, err := os.ReadFile(log)
+				switch {
+				case name == tc.want && string(got) != url:
+					t.Errorf("%s ran with %q, %v; want %q", name, got, err, url)
+				case name != tc.want && !errors.Is(err, fs.ErrNotExist):
+					t.Errorf("%s ran (%q, %v), want only %s to", name, got, err, tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestOpenURLNamesTheHandlerThatFailed(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	if name, err := urlOpener(); err == nil {
-		t.Fatalf("urlOpener() = %q with neither handler on PATH, want an error", name)
+	fakeHandler(t, dir, "xdg-open", true)
+	err := OpenURL("linux")("https://github.com/o/r/pull/1")
+	if err == nil || err.Error() != "xdg-open: exit status 3" {
+		t.Fatalf("OpenURL = %v, want xdg-open: exit status 3", err)
 	}
-	for _, name := range []string{"wslview", "xdg-open"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if got, err := urlOpener(); err != nil || got != name {
-			t.Fatalf("with %s on PATH, urlOpener() = %q, %v; want %q", name, got, err, name)
-		}
+}
+
+func TestOpenURLRefusesWithNoHandlerOnPATH(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	err := OpenURL("linux")("https://github.com/o/r/pull/1")
+	if err == nil || err.Error() != "found neither xdg-open nor wslview on PATH" {
+		t.Fatalf("OpenURL = %v, want found neither xdg-open nor wslview on PATH", err)
 	}
 }
 
@@ -332,5 +390,58 @@ func TestUpdateNoticeIsEmptyWithoutADataRoot(t *testing.T) {
 	deps := Deps{Version: "0.19.0", Getenv: func(string) string { return "" }}
 	if got := updateNotice(deps); got != "" {
 		t.Errorf("updateNotice = %q, want nothing", got)
+	}
+}
+
+// terminalDeps are deps for review at a terminal of a fixed size that the test does not type into.
+func terminalDeps(t *testing.T, home string) (Deps, *streams) {
+	t.Helper()
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	deps.IsTerminal = func() bool { return true }
+	deps.StderrIsTerminal = func() bool { return true }
+	deps.Screen = &tui.Screen{Width: 100, Height: 30}
+	// As on a machine with no credentials, so the pull request watch, which may start before the program ends, fails.
+	deps.GitHub = func() (github.Client, error) {
+		return nil, refusal.New(refusal.Auth, "no GitHub token", "gh auth login")
+	}
+	return deps, s
+}
+
+// A run directory review cannot write its session file into is reported before the interface opens.
+func TestReviewReportsASessionItCannotHold(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes into any directory")
+	}
+	home, dir := pendingRun(t)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	deps, s := terminalDeps(t, home)
+	code := Execute(deps, []string{"review", "o/r#1", "--json"})
+	if errObj := wantCode(t, code, s, refusal.Internal); !strings.Contains(errObj["message"].(string), "open review session") {
+		t.Fatalf("error %v", errObj)
+	}
+}
+
+// Input that fails ends the interface with an error, which review reports.
+func TestReviewReportsAnInterfaceThatFails(t *testing.T) {
+	home, _ := pendingRun(t)
+	deps, s := terminalDeps(t, home)
+	deps.Stdin = iotest.ErrReader(errors.New("input gone"))
+	code := Execute(deps, []string{"review", "o/r#1", "--json"})
+	if errObj := wantCode(t, code, s, refusal.Internal); !strings.HasPrefix(errObj["message"].(string), "review interface: ") ||
+		!strings.Contains(errObj["message"].(string), "input gone") {
+		t.Fatalf("error %v", errObj)
+	}
+}
+
+// The hand-back is recorded after a clean exit, so one that cannot be read is reported then.
+func TestReviewReportsAHandBackItCannotRecord(t *testing.T) {
+	home, dir := pendingRun(t)
+	mkdirAll(t, filepath.Join(dir, "handback.json"))
+	code, s := screenReview(t, home, true, "q", func(*screen.Screen) {})
+	if errObj := wantCode(t, code, s, refusal.Record); !strings.Contains(errObj["message"].(string), "handback.json") {
+		t.Fatalf("error %v", errObj)
 	}
 }

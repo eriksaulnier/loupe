@@ -35,14 +35,6 @@ func newPollModel(t *testing.T, dir string, height int) *Model {
 	return m
 }
 
-// outside writes the draft the way another loupe process does.
-func outside(t *testing.T, dir string, fn func(*draft.Draft) error) {
-	t.Helper()
-	if _, err := draft.Mutate(dir, "agent", nil, envOf(nil), fn); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func agentReplies(t *testing.T, dir, noteID, body string) {
 	t.Helper()
 	outside(t, dir, func(d *draft.Draft) error {
@@ -63,30 +55,6 @@ func agentRetitles(t *testing.T, dir, findingID, title string) {
 		delete(d.Decisions, findingID)
 		return nil
 	})
-}
-
-func update(t *testing.T, m *Model, msg tea.Msg) {
-	t.Helper()
-	m.Update(msg)
-	if m.Err() != nil {
-		t.Fatalf("model error: %v", m.Err())
-	}
-}
-
-func pressKeys(t *testing.T, m *Model, keys ...string) {
-	t.Helper()
-	for _, k := range keys {
-		switch k {
-		case "enter":
-			update(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
-		case "esc":
-			update(t, m, tea.KeyPressMsg{Code: tea.KeyEsc})
-		case "ctrl+r":
-			update(t, m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
-		default:
-			update(t, m, runes(k))
-		}
-	}
 }
 
 func cursorID(m *Model) string { return m.order[m.cursor].ID }
@@ -186,19 +154,6 @@ func TestPollRunsWithNothingAwaiting(t *testing.T) {
 	update(t, m, pollMsg{})
 	if m.view != viewList || !strings.Contains(m.View().Content, "Four") || !strings.Contains(m.notice, "f-004 filed") {
 		t.Fatalf("list: view %v notice %q\n%s", m.view, m.notice, m.View().Content)
-	}
-}
-
-func TestDecisionBeforeThePollIsStale(t *testing.T) {
-	m, dir := newAwaitingModel(t, 40)
-	pressKeys(t, m, "enter")
-	agentRetitles(t, dir, "f-001", "Retitled one")
-	pressKeys(t, m, "a")
-	if m.notice != staleNotice {
-		t.Fatalf("notice %q", m.notice)
-	}
-	if d := loadDraft(t, dir); len(d.Decisions) != 0 {
-		t.Fatalf("decisions %v", d.Decisions)
 	}
 }
 
@@ -452,5 +407,37 @@ func TestDecisionNamesAnAmendedWithdrawalReason(t *testing.T) {
 	pressKeys(t, m, "a")
 	if !strings.Contains(m.notice, "f-003 changed") {
 		t.Errorf("notice %q does not name the amended reason", m.notice)
+	}
+}
+
+// A decision on a finding an outside writer has dropped from the draft records nothing and says it is gone.
+func TestDecisionOnAFindingGoneFromTheDraftIsRefused(t *testing.T) {
+	dir := newFixture(t)
+	m := newModel(t, dir)
+	mustOpenFinding(t, m, "f-001")
+	d := loadDraft(t, dir)
+	d.Findings = d.Findings[1:]
+	writeDraftAsIs(t, dir, d)
+	recorded, err := m.Decide("f-001", accepted("f-001"))
+	if err != nil || recorded || !strings.Contains(m.notice, "f-001") {
+		t.Fatalf("recorded %v err %v notice %q", recorded, err, m.notice)
+	}
+	if got := loadDraft(t, dir); len(got.Decisions) != 0 {
+		t.Fatalf("decisions %v", got.Decisions)
+	}
+}
+
+// Enter on a start screen whose findings an outside writer emptied opens the list, with nothing to start on.
+func TestApplyStartWithNoFindingsLeftOpensTheList(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	d := loadDraft(t, dir)
+	d.Findings, d.Decisions = []draft.Finding{}, map[string]draft.Decision{}
+	writeDraftAsIs(t, dir, d)
+	m.Update(keyOf("ctrl+r"))
+	if m.view != viewStart || m.err != nil {
+		t.Fatalf("after the reload: view %v err %v", m.view, m.err)
+	}
+	if _, cmd := m.Update(keyOf("enter")); cmd != nil || m.view != viewList {
+		t.Fatalf("enter: view %v cmd %v", m.view, cmd)
 	}
 }

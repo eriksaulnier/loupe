@@ -112,3 +112,13 @@ func TestInlinePunctuationGolden(t *testing.T) {
 		t.Fatalf("the review body's summary was escaped:\n%s", Body(in))
 	}
 }
+
+// The inline mode comes from capture's own validation, so an unknown one is a programming error.
+func TestInlinePanicsOnAnUnknownMode(t *testing.T) {
+	defer func() {
+		if r := recover(); r != `render: unknown inline mode "some"` {
+			t.Fatalf("recovered %v", r)
+		}
+	}()
+	Comments(inlineInput("some"))
+}

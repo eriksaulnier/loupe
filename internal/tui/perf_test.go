@@ -3,23 +3,21 @@ package tui
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 const openBudget = 100 * time.Millisecond
 
 func TestOpenUnder100ms(t *testing.T) {
-	if testing.Short() {
-		t.Skip("performance check")
+	// The bound is wall-clock time, which coverage counters and the race detector inflate several times over.
+	if testing.Short() || testing.CoverMode() != "" || raceDetector {
+		t.Skip("timing is not meaningful in short mode, under coverage or under the race detector")
 	}
 	const files = 500
 	var b strings.Builder
@@ -42,26 +40,7 @@ func TestOpenUnder100ms(t *testing.T) {
 			Location: &draft.LocationInput{Path: name, Line: 207}, Label: "issue", Blocking: i%2 == 0,
 		})
 	}
-	diffBytes := []byte(b.String())
-	parsed, err := diff.Parse(diffBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := draft.NewEmpty()
-	if _, err := draft.Add(d, inputs, parsed, draft.Rules{}, draft.ByAgent, testNow); err != nil {
-		t.Fatal(err)
-	}
-	dir := t.TempDir()
-	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, Title: "Add widgets", DiffSHA256: run.DiffSHA256(diffBytes)}
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), target); err != nil {
-		t.Fatal(err)
-	}
-	if err := run.WriteFileAtomic(filepath.Join(dir, "pr.diff"), diffBytes); err != nil {
-		t.Fatal(err)
-	}
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
-		t.Fatal(err)
-	}
+	dir := writePRRun(t, []byte(b.String()), inputs, nil)
 
 	start := time.Now()
 	m, err := New(Config{Dir: dir, Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})

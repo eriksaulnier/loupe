@@ -13,18 +13,6 @@ const fullFinding = `{"title": "Changed line", "body": "Evidence for line 3.", "
   "impact": "A 502 leaves two reviews.", "references": ["https://github.com/o/r/issues/12", "http://localhost/a?b=c"],
   "suggestedFix": "Return the original error."}`
 
-// lastReviewBody is the body of the last review the fake GitHub received.
-func (h *harness) lastReviewBody() string {
-	var post map[string]any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ = r.Body.(map[string]any)
-		}
-	}
-	body, _ := post["body"].(string)
-	return body
-}
-
 func TestPublishRendersEveryFindingField(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -39,7 +27,7 @@ func TestPublishRendersEveryFindingField(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
 	}
-	body := h.lastReviewBody()
+	body := h.lastPostBody()
 	for _, want := range []string{
 		// An enum severity is on the row as a pill and in the meta block as text, for readers that drop images.
 		`<b>issue</b> <picture>`, `alt="MAJOR" height="16" align="absmiddle"></picture>: `,
@@ -107,7 +95,7 @@ func TestLegacySeverityStaysUsable(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
 	}
-	if body := h.lastReviewBody(); !strings.Contains(body, "**Severity:** `P2`\\\n> **Verified:**") {
+	if body := h.lastPostBody(); !strings.Contains(body, "**Severity:** `P2`\\\n> **Verified:**") {
 		t.Fatalf("legacy severity not rendered:\n%s", body)
 	}
 }

@@ -5,11 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 var at = time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
@@ -188,8 +191,9 @@ func TestApplyFeedbackRefusesAnUnreadableReturn(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, draft.ReturnFile), []byte("{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Of(run.Target{Kind: run.KindLocal}).Feedback(draft.NewEmpty(), dir); err == nil {
-		t.Fatal("feedback read a broken return.json")
+	_, err := Of(run.Target{Kind: run.KindLocal}).Feedback(draft.NewEmpty(), dir)
+	if r := refusaltest.Want(t, err, refusal.Record); !strings.Contains(r.Message, draft.ReturnFile) {
+		t.Fatalf("message %q, want %s named", r.Message, draft.ReturnFile)
 	}
 }
 

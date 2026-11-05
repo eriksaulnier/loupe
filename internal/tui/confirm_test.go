@@ -1,14 +1,15 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
+	"image/color"
 	"io"
-	"maps"
-	"net/http"
 	"os"
-	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 	"unicode/utf8"
 
@@ -17,14 +18,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
-	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
-	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 )
 
 func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
@@ -53,13 +50,17 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	if strings.Contains(view, "since capture") {
 		t.Errorf("an unmoved head shows the moved-head block:\n%s", view)
 	}
+	if !strings.Contains(view, "v payload") {
+		t.Errorf("the Markdown does not offer the payload:\n%s", view)
+	}
 
 	toggle := runes("v")
 	if _, cmd := m.Update(toggle); cmd != nil {
 		t.Fatalf("toggle %v ended the program", toggle)
 	}
 	json := m.View().Content
-	if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") {
+	if !strings.Contains(json, `"event": "COMMENT"`) || !strings.Contains(json, `"body": "x\u202e"`) || strings.Contains(json, "<details open>") ||
+		!strings.Contains(json, "exact request payload") || !strings.Contains(json, "v review") {
 		t.Errorf("JSON view after %v:\n%s", toggle, json)
 	}
 	for range 2 {
@@ -179,23 +180,29 @@ func blanksAfter(rows []string, i int) int {
 	return n
 }
 
-// TestConfirmFocusedInputSwallowsY is FR-010: the key that confirms is not a key the human is typing with.
-func TestConfirmFocusedInputSwallowsY(t *testing.T) {
-	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	typeInto(m, "yes, y, and y again")
-	if _, cmd := m.Update(runes("y")); cmd != nil {
-		t.Fatal("a keystroke in the message ended the program")
-	}
-	if m.Confirmed() {
-		t.Fatal("typing y into the message confirmed the review")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if _, cmd := m.Update(runes("y")); cmd == nil {
-		t.Fatal("y did not confirm once the input was blurred")
-	}
-	if !m.Confirmed() || m.Message() != "yes, y, and y againy" {
-		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
+// TestConfirmFocusedInputSwallowsTheConfirmKeys is FR-010: the key that confirms is not a key the human is typing with.
+// The confirmation opens on the message, so a y or p pressed by reflex lands in it, and only one pressed after leaving
+// the message publishes.
+func TestConfirmFocusedInputSwallowsTheConfirmKeys(t *testing.T) {
+	for _, c := range []struct{ key, typed string }{{"y", "yes, y, and y again"}, {"p", ""}} {
+		t.Run(c.key, func(t *testing.T) {
+			m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+			m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+			typeInto(m, c.typed)
+			if _, cmd := m.Update(runes(c.key)); cmd != nil || m.Confirmed() {
+				t.Fatalf("%s typed into the message ended the program or confirmed the review", c.key)
+			}
+			m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+			if !strings.Contains(m.View().Content, "y/p publish this review") {
+				t.Errorf("the footer does not offer y and p:\n%s", m.View().Content)
+			}
+			if _, cmd := m.Update(runes(c.key)); cmd == nil {
+				t.Fatalf("%s did not confirm once the input was blurred", c.key)
+			}
+			if want := c.typed + c.key; !m.Confirmed() || m.Message() != want {
+				t.Fatalf("confirmed %v message %q, want %q", m.Confirmed(), m.Message(), want)
+			}
+		})
 	}
 }
 
@@ -210,26 +217,6 @@ func TestConfirmFooterFollowsTheInput(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if view := m.View().Content; !strings.Contains(view, "tab/esc your message") || !strings.Contains(view, "publish this review") {
 		t.Errorf("the footer does not offer the confirmation keys once the message is left:\n%s", view)
-	}
-}
-
-// TestConfirmFocusedInputSwallowsP: the confirmation opens on the message, so a p pressed by reflex lands in it, and
-// only a p pressed after leaving the message publishes.
-func TestConfirmFocusedInputSwallowsP(t *testing.T) {
-	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	if _, cmd := m.Update(runes("p")); cmd != nil || m.Confirmed() {
-		t.Fatal("p pressed as the confirmation opened published the review")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if !strings.Contains(m.View().Content, "y/p publish this review") {
-		t.Errorf("the footer does not offer p:\n%s", m.View().Content)
-	}
-	if _, cmd := m.Update(runes("p")); cmd == nil {
-		t.Fatal("p did not confirm once the input was blurred")
-	}
-	if !m.Confirmed() || m.Message() != "p" {
-		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
 	}
 }
 
@@ -732,47 +719,6 @@ func TestConfirmOnlyYAndPConfirm(t *testing.T) {
 	}
 }
 
-// TestPublishFlowKeepsTheMessageAcrossACancel is FR-007: the words survive in the program's memory, so a cancel
-// or a refusal after y does not make the human write the opening twice. Nothing reaches disk, and publishing ends
-// them.
-func TestPublishFlowKeepsTheMessageAcrossACancel(t *testing.T) {
-	gh := newPublishFake(t)
-	dir := readyFixture(t, "reviewer", "author")
-	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "3/3 decided")
-	reachConfirmation(t, tm)
-	tm.Type("Mine to own.")
-	waitFor(t, tm, "Mine to own.")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
-	tm.Type("n")
-	waitFor(t, tm, "publish canceled; nothing was sent")
-
-	// Nothing wrote it down; only this process is holding it.
-	for _, name := range []string{"draft.json", "attempt.json", "receipt.json"} {
-		if data, err := os.ReadFile(filepath.Join(dir, name)); err == nil && strings.Contains(string(data), "Mine to own.") {
-			t.Fatalf("%s carries the message", name)
-		}
-	}
-
-	reachConfirmation(t, tm)
-	tm.Type(" And read again.")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
-	tm.Type("y")
-	waitFor(t, tm, "Published", "https://github.com/acme/widgets/pull/42#pullrequestreview-")
-	tm.Type("q")
-	finalView(t, tm)
-
-	var posted string
-	for _, r := range gh.Requests() {
-		if body, ok := r.Body.(map[string]any); r.Method == "POST" && ok {
-			posted, _ = body["body"].(string)
-		}
-	}
-	if !strings.Contains(posted, "Mine to own. And read again.") {
-		t.Fatalf("the restored message was not published:\n%s", posted)
-	}
-}
-
 // TestConfirmOpensOnWhatWasTypedBefore is the rendering half of FR-007: the words the program held are in the box
 // and in the body the box sits in, so the human re-reads them rather than being told they were kept.
 func TestConfirmOpensOnWhatWasTypedBefore(t *testing.T) {
@@ -790,17 +736,6 @@ func TestConfirmOpensOnWhatWasTypedBefore(t *testing.T) {
 	if !strings.Contains(m.confirm.shown.Body, "Mine to own.") {
 		t.Errorf("the body was not recomposed for the restored message:\n%s", m.confirm.shown.Body)
 	}
-}
-
-// reachConfirmation walks the two picker steps p opens, taking the default at each.
-func reachConfirmation(t *testing.T, tm *teatest.TestModel) {
-	t.Helper()
-	tm.Type("p")
-	waitFor(t, tm, "> comment")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "> none")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "your message")
 }
 
 // TestConfirmEscOnlyMovesToTheMessage: esc must not mean leave-the-input and throw-the-review-away one keystroke
@@ -854,258 +789,6 @@ func TestConfirmEndsAtEndOfInput(t *testing.T) {
 				t.Fatal("confirmation still running after its input ended")
 			}
 		})
-	}
-}
-
-// readyFixture accepts every finding, so f-001 is an accepted blocking finding, and records viewer and author.
-func readyFixture(t *testing.T, viewer, author string) string {
-	t.Helper()
-	dir := newFixture(t)
-	target, err := run.LoadTarget(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	target.Viewer, target.Author, target.URL, target.HeadSHA = viewer, author, "https://github.com/acme/widgets/pull/42", "1111111111111111111111111111111111111111"
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), target); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
-		for _, f := range d.Findings {
-			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
-// publishEnv answers LOUPE_HOME with the data root newFixture laid dir out under, since publish counts the pull
-// request's other rounds there.
-func publishEnv(dir string) func(string) string {
-	env := map[string]string{"LOUPE_HOME": filepath.Join(dir, "..", "..", "..", "..", "..")}
-	maps.Copy(env, testEnv)
-	return envOf(env)
-}
-
-func startPublishApp(t *testing.T, dir string, gh *fakegh.Server) *teatest.TestModel {
-	t.Helper()
-	return startPublishAppWith(t, dir, gh, nil)
-}
-
-func startPublishAppWith(t *testing.T, dir string, gh *fakegh.Server, open func(string) error) *teatest.TestModel {
-	t.Helper()
-	cfg := Config{Dir: dir, Getenv: publishEnv(dir), Now: func() time.Time { return testNow }, Output: io.Discard, OpenURL: open}
-	if gh != nil {
-		client := gh.Client(t)
-		cfg.GitHub = func() (github.Client, error) { return client, nil }
-	}
-	m, err := New(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return newTestModel(t, m, 240, 40)
-}
-
-func TestPublishKeyRefusedWhenNotReady(t *testing.T) {
-	tm := startApp(t, newFixture(t))
-	waitFor(t, tm, "Title one")
-	tm.Type("p")
-	waitFor(t, tm, "the draft is not ready: pending findings f-001, f-002, f-003; loupe review")
-	tm.Type("q")
-	finalView(t, tm)
-}
-
-func TestActionPickerDisablesBlockedApprove(t *testing.T) {
-	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), nil)
-	waitFor(t, tm, "3/3 decided")
-	tm.Type("p")
-	// The popup wraps the reason, so it is looked for in pieces that stay on one row.
-	waitFor(t, tm, "> comment", "  approve", "unavailable: cannot approve while", "f-001")
-	tm.Type("j")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "or exclude or unblock", "the finding in loupe review")
-	view := viewOf(t, tm)
-	if strings.Contains(view, "cannot request changes") {
-		t.Errorf("request-changes is disabled:\n%s", view)
-	}
-}
-
-func TestActionPickerOffersOnlyCommentOnOwnPullRequest(t *testing.T) {
-	tm := startPublishApp(t, readyFixture(t, "author", "author"), nil)
-	waitFor(t, tm, "3/3 decided")
-	tm.Type("p")
-	// The popup wraps each reason, so it is looked for in pieces that stay on one row.
-	waitFor(t, tm, "> comment", "unavailable: author is the author", "cannot approve it", "cannot request changes")
-	quitFromPicker(t, tm)
-}
-
-func quitFromPicker(t *testing.T, tm *teatest.TestModel) {
-	t.Helper()
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
-	tm.Type("q")
-	finalView(t, tm)
-}
-
-// viewOf ends the program from the action picker and returns the view it ended on.
-func viewOf(t *testing.T, tm *teatest.TestModel) string {
-	t.Helper()
-	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	m, ok := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(*Model)
-	if !ok {
-		t.Fatal("final model is not *Model")
-	}
-	return m.View().Content
-}
-
-func newPublishFake(t *testing.T) *fakegh.Server {
-	t.Helper()
-	gh := fakegh.New(t)
-	gh.SetPR("acme", "widgets", github.PullRequest{Number: 42, URL: "https://github.com/acme/widgets/pull/42", State: "open", Author: "author",
-		HeadSHA: "1111111111111111111111111111111111111111"})
-	gh.SetViewer("reviewer")
-	return gh
-}
-
-func TestPublishFlowDeclineSendsNothing(t *testing.T) {
-	gh := newPublishFake(t)
-	dir := readyFixture(t, "reviewer", "author")
-	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "3/3 decided")
-	tm.Type("p")
-	waitFor(t, tm, "> comment")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "> none")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, messageTitle, "multi.txt:3", "comment - inline none (0)")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
-	tm.Type("n")
-	waitFor(t, tm, "publish canceled; nothing was sent")
-	tm.Type("q")
-	finalView(t, tm)
-	if gh.CreateCount() != 0 {
-		t.Fatalf("CreateCount %d", gh.CreateCount())
-	}
-}
-
-func TestPublishFlowSendsAndShowsURL(t *testing.T) {
-	gh := newPublishFake(t)
-	dir := readyFixture(t, "reviewer", "author")
-	tm := startPublishApp(t, dir, gh)
-	waitFor(t, tm, "3/3 decided")
-	tm.Type("p")
-	waitFor(t, tm, "> comment")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "> none")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
-	waitFor(t, tm, "> blocking")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, messageTitle, "inline blocking (1)")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
-	tm.Type("y")
-	waitFor(t, tm, "Published", "https://github.com/acme/widgets/pull/42#pullrequestreview-")
-	tm.Type("q")
-	finalView(t, tm)
-	if gh.CreateCount() != 1 {
-		t.Fatalf("CreateCount %d", gh.CreateCount())
-	}
-	for _, r := range gh.Requests() {
-		if r.Method != "GET" && r.Method != "POST" {
-			t.Errorf("unexpected write %s %s", r.Method, r.Path)
-		}
-	}
-}
-
-// US2: a merged pull request is named before y, and y still sends exactly one review.
-func TestPublishFlowNamesAMergedPullRequestAndSends(t *testing.T) {
-	gh := newPublishFake(t)
-	gh.SetPR("acme", "widgets", github.PullRequest{Number: 42, URL: "https://github.com/acme/widgets/pull/42", State: "closed", Merged: true, Author: "author",
-		HeadSHA: "1111111111111111111111111111111111111111"})
-	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
-	waitFor(t, tm, "3/3 decided")
-	tm.Type("p")
-	waitFor(t, tm, "> comment")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "> none")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, messageTitle, "PR merged", closedLine("merged"))
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
-	tm.Type("y")
-	waitFor(t, tm, "Published")
-	tm.Type("q")
-	finalView(t, tm)
-	if gh.CreateCount() != 1 {
-		t.Fatalf("CreateCount %d", gh.CreateCount())
-	}
-}
-
-func TestPublishFlowShowsRefusalAndReturnsToList(t *testing.T) {
-	gh := newPublishFake(t)
-	gh.SetHead("acme", "widgets", 42, "3333333333333333333333333333333333333333")
-	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
-	waitFor(t, tm, "3/3 decided")
-	tm.Type("p")
-	waitFor(t, tm, "> comment")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "> none")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "no longer in the pull request's history", "loupe capture", "https://github.com/acme/widgets/pull/42")
-	tm.Type("q")
-	finalView(t, tm)
-	if gh.CreateCount() != 0 {
-		t.Fatalf("CreateCount %d", gh.CreateCount())
-	}
-}
-
-func TestPublishingViewIgnoresKeysWhileSending(t *testing.T) {
-	gh := newPublishFake(t)
-	entered, release := make(chan struct{}), make(chan struct{})
-	gh.OnCreate(func(*http.Request) {
-		close(entered)
-		<-release
-	})
-	tm := startPublishApp(t, readyFixture(t, "reviewer", "author"), gh)
-	waitFor(t, tm, "3/3 decided")
-	tm.Type("p")
-	waitFor(t, tm, "> comment")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, "> none")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitFor(t, tm, messageTitle)
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
-	tm.Type("y")
-	select {
-	case <-entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the review was not sent")
-	}
-	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	tm.Type("q")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEsc})
-	close(release)
-	waitFor(t, tm, "Published", "https://github.com/acme/widgets/pull/42#pullrequestreview-")
-	tm.Type("q")
-	finalView(t, tm)
-	if gh.CreateCount() != 1 {
-		t.Fatalf("CreateCount %d", gh.CreateCount())
-	}
-}
-
-func TestSendingFooterDoesNotOfferQuit(t *testing.T) {
-	m, err := New(Config{Dir: readyFixture(t, "reviewer", "author"), Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// A running program already has its poll in flight, so the key's command is the only one Update can return.
-	m.Init()
-	m.view, m.sending = viewPublishing, true
-	if _, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
-		t.Fatal("ctrl+c returned a command while sending")
-	}
-	if view := m.View().Content; strings.Contains(view, "quit") {
-		t.Fatalf("the sending view offers to quit:\n%s", view)
 	}
 }
 
@@ -1252,5 +935,242 @@ func TestConfirmNamesAnEditedRound(t *testing.T) {
 	typeInto(m, "A message long enough to drop a round.")
 	if view := ansi.Strip(m.confirm.content(m.shell)); strings.Contains(view, notice) || !strings.Contains(view, "The oldest round was dropped") {
 		t.Fatalf("the notice names a round the body no longer carries:\n%s", view)
+	}
+}
+
+// A composer that drops the message slot leaves no place to type: the confirmation says so and offers no input.
+func TestConfirmWithNoSlotForTheMessageOffersNoInput(t *testing.T) {
+	preview := confirmPreview()
+	plain := composeOpening(preview, nil)
+	preview.Compose = func(string) (publish.Envelope, string, error) { return plain("") }
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if m.confirm.typing || m.confirm.inline() {
+		t.Fatal("an input was offered with no slot for it")
+	}
+	if view := paneConcat(m.View().Content); !strings.Contains(view, "this review has no room for a message: the composed review has nowhere to put your message") {
+		t.Errorf("the confirmation does not say why there is no input:\n%s", view)
+	}
+}
+
+// A body that, once a message is typed, no longer opens the way the slot probe found draws whole and says why, so the
+// screen never shows a tail the body does not carry.
+func TestConfirmDrawsWholeWhenTheBodyMovesUnderTheMessage(t *testing.T) {
+	preview := confirmPreview()
+	opening := composeOpening(preview, nil)
+	preview.Compose = func(message string) (publish.Envelope, string, error) {
+		env, payload, err := opening(message)
+		if message != "" && message != messageSlot {
+			env.Body = "Moved.\n\n" + env.Body
+		}
+		return env, payload, err
+	}
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	typeInto(m, "Hi")
+	if m.confirm.inline() || m.confirm.slotErr == nil {
+		t.Fatalf("inline %v slotErr %v", m.confirm.inline(), m.confirm.slotErr)
+	}
+	if view := paneConcat(m.View().Content); !strings.Contains(view, "the composed review does not open where your message goes") || !strings.Contains(view, "Moved.") {
+		t.Errorf("the confirmation does not draw the moved body whole:\n%s", view)
+	}
+}
+
+// While the message is typed, page up scrolls the findings back, as page down scrolled them.
+func TestConfirmPageKeysScrollWhileTyping(t *testing.T) {
+	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 14})
+	if !m.confirm.typing {
+		t.Fatal("the confirmation opened without the input")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
+	down := m.confirm.scroll.YOffset()
+	m.Update(keyOf("pgup"))
+	if down == 0 || m.confirm.scroll.YOffset() >= down || !m.confirm.typing || m.confirm.value() != "" {
+		t.Fatalf("pgdown to %d, pgup to %d, typing %v value %q", down, m.confirm.scroll.YOffset(), m.confirm.typing, m.confirm.value())
+	}
+}
+
+// A refusal taller than the rows left under the preview keeps its first and last rows and says how many it left out.
+func TestConfirmShortensATallRefusal(t *testing.T) {
+	preview := confirmPreview()
+	long := refusal.New(refusal.Markdown, strings.Repeat("the message breaks a rule of the allowlist ", 6), "remove the raw tag")
+	preview.Compose = composeOpening(preview, long)
+	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
+	typeInto(m, "<b>")
+	whole := m.confirm.noticeLines(m.shell, "", 100)
+	if len(whole) < 3 {
+		t.Fatalf("the refusal is %d rows, too short to shorten: %q", len(whole), whole)
+	}
+	if lines := m.confirm.noticeLines(m.shell, "", 2); !slices.Equal(lines, []string{whole[0], whole[len(whole)-1]}) {
+		t.Fatalf("notice in 2 rows: %q, whole %q", lines, whole)
+	}
+}
+
+// The standalone confirmation follows the terminal's answer to the background query.
+func TestConfirmTakesTheTerminalBackground(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.Update(tea.BackgroundColorMsg{Color: color.White})
+	if !m.shell.backgroundReceived || m.shell.styles.Dark {
+		t.Fatalf("received %v dark %v", m.shell.backgroundReceived, m.shell.styles.Dark)
+	}
+}
+
+// Piped input reaches the confirmation as the terminal would send it: a bracketed paste types into the message, and
+// the answer to the background query types nothing.
+func TestConfirmReadsPastesAndColorReportsFromPipedInput(t *testing.T) {
+	for _, c := range []struct {
+		name, input, message string
+	}{
+		{"bracketed paste", "\x1b[200~Pasted words.\x1b[201~\ty", "Pasted words."},
+		{"OSC 11 reply", "\x1b]11;rgb:ffff/ffff/ffff\x07\ty", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			answer, err := runConfirm(t, strings.NewReader(c.input))
+			if err != nil || !answer.Publish || answer.Message != c.message {
+				t.Fatalf("answer %+v err %v, want publish with %q", answer, err, c.message)
+			}
+		})
+	}
+}
+
+// Input that fails, rather than ending, cancels the confirmation with the read error.
+func TestConfirmInputThatFailsIsAnError(t *testing.T) {
+	answer, err := runConfirm(t, iotest.ErrReader(errors.New("tty gone")))
+	if answer.Publish || err == nil || err.Error() != "read confirmation input: tty gone" {
+		t.Fatalf("answer %+v err %v", answer, err)
+	}
+	file, err := os.CreateTemp(t.TempDir(), "answers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = file.Close() })
+	// A regular file is no terminal, so it is read as piped input, and epoll refuses a regular file.
+	if answer, err = runConfirm(t, file); answer.Publish || err == nil || !strings.HasPrefix(err.Error(), "read confirmation input: ") {
+		t.Fatalf("answer %+v err %v", answer, err)
+	}
+}
+
+// runConfirm runs the standalone confirmation over in and fails the test if it is still running after five seconds.
+func runConfirm(t *testing.T, in io.Reader) (publish.Confirmation, error) {
+	t.Helper()
+	type result struct {
+		answer publish.Confirmation
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		answer, err := Confirm(in, io.Discard, envOf(testEnv), ConfirmTitle("acme/widgets#42", "comment", "blocking", 1), nil)(confirmPreview())
+		done <- result{answer, err}
+	}()
+	select {
+	case r := <-done:
+		return r.answer, r.err
+	case <-time.After(5 * time.Second):
+		t.Fatal("confirmation still running after its input ended")
+		return publish.Confirmation{}, nil
+	}
+}
+
+// The Action and Inline comments steps are a popup over the dimmed list: the list stays in view around it, the popup
+// is narrower than the window, and the steps sit under a blank row at its top (demo feedback).
+func TestPublishStepsArePopups(t *testing.T) {
+	for _, step := range []func(*Model){
+		func(m *Model) { m.view, m.pick = viewAction, 0 },
+		func(m *Model) { m.view, m.action, m.pick = viewInline, "comment", 0 },
+	} {
+		m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+		step(m)
+		view := m.View().Content
+		rows := strings.Split(view, "\n")
+		if len(rows) != 30 || !strings.Contains(view, "Title one") {
+			t.Fatalf("the list is not in view around the popup:\n%s", view)
+		}
+		top := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "─ Publish review ") })
+		if top < 0 || strings.HasPrefix(rows[top], "╭") || strings.Contains(rows[top+1], "Action") ||
+			!strings.Contains(rows[top+2], "Action") || !strings.Contains(rows[top+2], "Message") {
+			t.Errorf("no centered Publish review popup with the tabs as its first row:\n%s", view)
+		}
+	}
+}
+
+// At the minimum size the popup keeps the selected choice in view, dropping its spacing first and then the choices
+// furthest from the selection (review finding).
+func TestPopupKeepsTheSelectedChoice(t *testing.T) {
+	m := modelOf(t, readyFixture(t, "reviewer", "author"), utf8Env, 60, 12)
+	m.view, m.pick = viewAction, slices.Index(publish.Actions, "request-changes")
+	view := m.View().Content
+	if !strings.Contains(view, "> request-changes") {
+		t.Errorf("the selected choice is not in the popup at 60x12:\n%s", view)
+	}
+}
+
+// The Message step has no row of steps over its pane: the popup before it carried them, and here they added nothing
+// (demo feedback).
+func TestMessageStepHasNoStepsRow(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	showConfirmation(m)
+	rows := strings.Split(m.View().Content, "\n")
+	if top := rows[bodyTop(30)]; !strings.Contains(top, "─ Publish review ") || strings.Contains(m.View().Content, "Inline comments ›") {
+		t.Errorf("the Message step does not open on its pane:\n%s", m.View().Content)
+	}
+}
+
+// The message box opens two rows tall and grows as the message does (demo feedback).
+func TestMessageBoxOpensTwoRowsTall(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	showConfirmation(m)
+	m.confirm.typing = true
+	rows := strings.Split(m.View().Content, "\n")
+	top := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "─ your message ") })
+	bottom := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "esc when done") })
+	if top < 0 || bottom-top-1 != 2 {
+		t.Errorf("the empty box holds %d rows, want 2:\n%s", bottom-top-1, m.View().Content)
+	}
+}
+
+// While the message is typed, shift and an arrow scroll the findings a line at a time, for keyboards without page
+// keys; the plain arrows stay with the text (demo feedback).
+func TestShiftArrowsScrollTheFindingsWhileTyping(t *testing.T) {
+	rows := make([]string, 200)
+	for i := range rows {
+		rows[i] = fmt.Sprintf("row %03d", i+1)
+	}
+	p := publish.Preview{EnvelopeJSON: "{}"}
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		return publish.Envelope{Body: previewChips + "\n\n" + message + "\n\n---\n\n" + strings.Join(rows, "\n")}, "{}", nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	m.confirm, m.view = newConfirmation(p, ConfirmTitle(m.ref(), "comment", "none", 0), ""), viewConfirm
+	m.confirm.sync(m)
+	if !m.confirm.typing {
+		t.Fatal("the confirmation did not open typing")
+	}
+	top := m.confirm.scroll.YOffset()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift})
+	if m.confirm.scroll.YOffset() != top+1 || m.confirm.value() != "" {
+		t.Errorf("shift+down moved the view from %d to %d and typed %q", top, m.confirm.scroll.YOffset(), m.confirm.value())
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModShift})
+	if m.confirm.scroll.YOffset() != top {
+		t.Errorf("shift+up left the view at %d, want %d", m.confirm.scroll.YOffset(), top)
+	}
+	if !strings.Contains(m.View().Content, "scroll") {
+		t.Errorf("the typing footer does not offer the line scroll:\n%s", m.View().Content)
+	}
+	// Once esc leaves the message, the gesture the footer taught still scrolls and does not cancel (review finding).
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	for _, c := range []struct {
+		code rune
+		want int
+	}{{tea.KeyDown, top + 1}, {tea.KeyUp, top}} {
+		key := tea.KeyPressMsg{Code: c.code, Mod: tea.ModShift}
+		if done, _ := m.confirm.key(m, key); done || m.confirm.scroll.YOffset() != c.want {
+			t.Errorf("blurred, %s answered %v and left the view at %d, want %d", key, done, m.confirm.scroll.YOffset(), c.want)
+		}
 	}
 }

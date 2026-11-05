@@ -49,18 +49,6 @@ func decodeNumbers(t *testing.T, data []byte, v any) {
 	}
 }
 
-func lastPostBody(t *testing.T, h *harness) string {
-	t.Helper()
-	body := ""
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			m, _ := r.Body.(map[string]any)
-			body, _ = m["body"].(string)
-		}
-	}
-	return body
-}
-
 func TestFollowUpRoundReadsPreviousAndPublishesItsRound(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -104,7 +92,7 @@ func TestFollowUpRoundReadsPreviousAndPublishesItsRound(t *testing.T) {
 	}
 
 	h.publishRound(2)
-	if body := lastPostBody(t, h); !strings.Contains(body, "\n\nreviewed [`") || !strings.Contains(body, "<!-- loupe-meta v=1 round=2 ") {
+	if body := h.lastPostBody(); !strings.Contains(body, "\n\nreviewed [`") || !strings.Contains(body, "<!-- loupe-meta v=1 round=2 ") {
 		t.Fatalf("round 2 marker:\n%s", body)
 	}
 }
@@ -155,7 +143,7 @@ func TestAbandonedRoundDoesNotAdvancePublishedRound(t *testing.T) {
 	h.captureRound(2)
 	h.publishRound(2)
 
-	body := lastPostBody(t, h)
+	body := h.lastPostBody()
 	if !strings.Contains(body, "\n\nreviewed [`") || !strings.Contains(body, "<!-- loupe-meta v=1 round=1 ") {
 		t.Fatalf("round 2 published after an abandoned round 1:\n%s", body)
 	}

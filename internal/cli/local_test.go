@@ -55,20 +55,7 @@ func localFinding(id string) draft.Finding {
 	return draft.Finding{ID: id, Rev: 1, Title: "T", Body: "B", General: true, By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}}
 }
 
-func wantCode(t *testing.T, code int, s *streams, want refusal.Code) map[string]any {
-	t.Helper()
-	if code != 1 {
-		t.Fatalf("exit %d, want 1; stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
-	}
-	env := decodeOne(t, s.stdout.Bytes())
-	errObj, _ := env["error"].(map[string]any)
-	if errObj["code"] != string(want) {
-		t.Fatalf("error %v, want %s", env["error"], want)
-	}
-	return errObj
-}
-
-func TestLocalRunRefusesPROnlyCommands(t *testing.T) {
+func TestApplyRunRefusesPROnlyCommands(t *testing.T) {
 	home, _ := localRun(t, "changed", localFinding("f-001"))
 	for _, args := range [][]string{
 		{"show", "--run", "local#1", "--previous", "--json"},
@@ -81,7 +68,7 @@ func TestLocalRunRefusesPROnlyCommands(t *testing.T) {
 	}
 }
 
-func TestLocalRunShowsWithAnyPrefix(t *testing.T) {
+func TestApplyRunShowsWithAnyPrefix(t *testing.T) {
 	home, _ := localRun(t, "changed", localFinding("f-001"))
 	for _, ref := range []string{"local#1", "other/repo:local#1"} {
 		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
@@ -110,14 +97,7 @@ func TestReturnedLocalRunRefusesReturnedBeforeWrongMode(t *testing.T) {
 	}
 }
 
-func runWithStdin(t *testing.T, home, stdin string, args ...string) (int, *streams) {
-	t.Helper()
-	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
-	deps.Stdin = strings.NewReader(stdin)
-	return Execute(deps, args), s
-}
-
-func TestLocalAddRefusesPRFields(t *testing.T) {
+func TestApplyAddRefusesPRFields(t *testing.T) {
 	home, _ := localRun(t, "changed")
 	for _, c := range []struct {
 		input string
@@ -153,7 +133,7 @@ func TestLocalAddRefusesPRFields(t *testing.T) {
 	}
 }
 
-func TestLocalAddAndEditTheProposal(t *testing.T) {
+func TestApplyAddAndEditTheProposal(t *testing.T) {
 	home, dir := localRun(t, "changed")
 	code, s := runWithStdin(t, home, "", "add", "--run", "local#1", "--title", "T", "--body", "B", "--path", "a.go", "--line", "3", "--proposal", "Use Y.", "--json")
 	if code != 0 {
@@ -180,21 +160,16 @@ func TestLocalAddAndEditTheProposal(t *testing.T) {
 	}
 	for _, flags := range [][]string{{"--not-blocking"}, {"--suggested-fix", "x"}, {"--side", "RIGHT"}} {
 		code, s := runWithStdin(t, home, "", append([]string{"edit", "f-001", "--run", "local#1", "--json"}, flags...)...)
-		if code != 1 {
-			t.Errorf("edit %v: exit %d stdout %q", flags, code, s.stdout.String())
+		want := refusal.Input
+		if flags[0] == "--side" {
+			want = refusal.Location
+		}
+		if errObj := wantCode(t, code, s, want); !strings.HasPrefix(errObj["message"].(string), flags[0]+" does not apply to local runs") {
+			t.Errorf("edit %v: message %q", flags, errObj["message"])
 		}
 	}
 	code, s = runWithStdin(t, home, `{"blocking": false}`, "edit", "f-001", "--run", "local#1", "--from", "-", "--json")
 	wantCode(t, code, s, refusal.Input)
-}
-
-func TestNoFilesRunRefusesALocation(t *testing.T) {
-	home, _ := localRun(t, "no-files")
-	code, s := runWithStdin(t, home, `{"title": "T", "body": "B", "location": {"path": "a.go", "line": 2}}`, "add", "--run", "local#1", "--from", "-", "--json")
-	errObj := wantCode(t, code, s, refusal.Location)
-	if fix, _ := errObj["fix"].(string); !strings.Contains(fix, `"general": true`) {
-		t.Fatalf("fix %q", fix)
-	}
 }
 
 func TestPRRunRefusesAProposal(t *testing.T) {
@@ -214,7 +189,7 @@ func TestPRRunRefusesAProposal(t *testing.T) {
 	}
 }
 
-func TestLocalShowOmitsPRFields(t *testing.T) {
+func TestApplyShowOmitsPRFields(t *testing.T) {
 	f := localFinding("f-001")
 	f.General, f.Location = false, &draft.FindingLocation{Path: "a.go", Line: 2, Side: "RIGHT"}
 	home, _ := localRun(t, "changed", f)
@@ -236,17 +211,24 @@ func TestLocalShowOmitsPRFields(t *testing.T) {
 	}
 }
 
-func TestInputKeyChecksIgnoreCase(t *testing.T) {
+// The key checks match names as encoding/json does: without regard to case, and folding ſ (U+017F) to s and K (U+212A)
+// to k.
+func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
 	home, _ := localRun(t, "changed")
-	for _, input := range []string{
-		`{"title": "T", "body": "B", "general": true, "Blocking": true}`,
-		`{"title": "T", "body": "B", "general": true, "SUGGESTEDFIX": "x"}`,
-		`{"title": "T", "body": "B", "Location": {"path": "a.go", "line": 2, "Side": "RIGHT"}}`,
-		`{"title": "T", "body": "B", "general": true, "Included": false}`,
+	for _, c := range []struct {
+		input, field string
+		code         refusal.Code
+	}{
+		{`{"title": "T", "body": "B", "general": true, "Blocking": true}`, "blocking", refusal.Input},
+		{`{"title": "T", "body": "B", "general": true, "SUGGESTEDFIX": "x"}`, "suggestedFix", refusal.Input},
+		{`{"title": "T", "body": "B", "Location": {"path": "a.go", "line": 2, "Side": "RIGHT"}}`, "location.side", refusal.Location},
+		{`{"title": "T", "body": "B", "general": true, "Included": false}`, "included", refusal.Input},
+		{`{"title": "T", "body": "B", "general": true, "ſuggestedFix": "x"}`, "suggestedFix", refusal.Input},
+		{`{"title": "T", "body": "B", "general": true, "blocKing": true}`, "blocking", refusal.Input},
 	} {
-		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
-		if code != 1 {
-			t.Errorf("%s: exit %d stdout %q", input, code, s.stdout.String())
+		code, s := runWithStdin(t, home, c.input, "add", "--run", "local#1", "--from", "-", "--json")
+		if details, _ := wantCode(t, code, s, c.code)["details"].(map[string]any); details["field"] != c.field {
+			t.Errorf("%s: details %v, want field %s", c.input, details, c.field)
 		}
 	}
 }
@@ -328,22 +310,6 @@ func TestListLocalRunWithNoFindingsIsNotReady(t *testing.T) {
 	}
 }
 
-func TestStatsIgnoresLocalRuns(t *testing.T) {
-	home, _ := localRun(t, "changed", localFinding("f-001"))
-	empty := t.TempDir()
-	outputs := []string{}
-	for _, h := range []string{home, empty} {
-		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": h})
-		if code := Execute(deps, []string{"stats", "--json"}); code != 0 {
-			t.Fatalf("exit %d stdout %q", code, s.stdout.String())
-		}
-		outputs = append(outputs, s.stdout.String())
-	}
-	if outputs[0] != outputs[1] {
-		t.Fatalf("stats saw the local run:\n%s\nwant\n%s", outputs[0], outputs[1])
-	}
-}
-
 func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
 	f := localFinding("f-001")
 	home, dir := localRun(t, "changed", f)
@@ -381,22 +347,8 @@ func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
 	wantCode(t, code, s, refusal.Returned)
 }
 
-func TestInputKeyChecksFoldAsJSONDoes(t *testing.T) {
-	home, _ := localRun(t, "changed")
-	// encoding/json folds ſ (U+017F) to s and K (U+212A) to k when it matches field names.
-	for _, input := range []string{
-		`{"title": "T", "body": "B", "general": true, "ſuggestedFix": "x"}`,
-		`{"title": "T", "body": "B", "general": true, "blocKing": true}`,
-	} {
-		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
-		if code != 1 {
-			t.Errorf("%s: exit %d stdout %q", input, code, s.stdout.String())
-		}
-	}
-}
-
 // A malformed entry passes the key checks untouched and is refused as malformed input, never as a mode refusal.
-func TestLocalAddRefusesMalformedInput(t *testing.T) {
+func TestApplyAddRefusesMalformedInput(t *testing.T) {
 	home, _ := localRun(t, "changed")
 	for _, input := range []string{`[{"title": }]`, `"a string"`, `[{"title": "T", "body": "B", "general": true}, {"blocking": }]`} {
 		code, s := runWithStdin(t, home, input, "add", "--run", "local#1", "--from", "-", "--json")
@@ -405,7 +357,7 @@ func TestLocalAddRefusesMalformedInput(t *testing.T) {
 }
 
 // A proposal of the wrong JSON type is refused on edit, as on add.
-func TestLocalEditRefusesAProposalOfTheWrongType(t *testing.T) {
+func TestApplyEditRefusesAProposalOfTheWrongType(t *testing.T) {
 	home, _ := localRun(t, "changed", localFinding("f-001"))
 	code, s := runWithStdin(t, home, `{"proposal": 5}`, "edit", "f-001", "--run", "local#1", "--from", "-", "--json")
 	errObj := wantCode(t, code, s, refusal.Input)
@@ -462,7 +414,7 @@ func TestReviewReturnsALocalRun(t *testing.T) {
 
 // Plain show on a local run prints each proposal and names the step that applies to a local run: review to decide and
 // return, then feedback once returned. It never names publish, which refuses a local run.
-func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
+func TestApplyRunShowNamesTheLocalSteps(t *testing.T) {
 	f := localFinding("f-001")
 	f.Proposal = "Rename the helper.\n\n```go\nresult := computeSomethingVeryLongIndeed(index, anotherArgument, yetAnotherArgument, andOneMoreArgumentToPassTheWidth, andAnother)\n```"
 	home, dir := localRun(t, "changed", f)
@@ -495,5 +447,20 @@ func TestLocalRunShowNamesTheLocalSteps(t *testing.T) {
 	}
 	if out := show(); !strings.Contains(out, "loupe feedback --run acme/widgets:local#1 --json") {
 		t.Fatalf("returned local show:\n%s", out)
+	}
+}
+
+func TestApplyRunWithACorruptTargetRefusesEveryCommand(t *testing.T) {
+	home, dir := localRun(t, "changed")
+	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"show", "--run", "local#1", "--json"},
+		{"add", "--run", "local#1", "--title", "T", "--body", "B", "--json"},
+		{"edit", "f-001", "--run", "local#1", "--title", "T", "--json"},
+	} {
+		code, s := runWithStdin(t, home, "", args...)
+		wantCode(t, code, s, refusal.Record)
 	}
 }

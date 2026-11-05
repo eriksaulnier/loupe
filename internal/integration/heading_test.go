@@ -74,7 +74,7 @@ func TestHeadingAnchorPublishesItsRange(t *testing.T) {
 		t.Fatalf("publish exit %d stderr %q", exit, stderr)
 	}
 	h.checkSends(1)
-	comments := lastPostComments(h)
+	comments := h.lastPostComments()
 	if len(comments) != 1 {
 		t.Fatalf("comments %v", comments)
 	}
@@ -139,18 +139,6 @@ func TestHeadingBatchStoresNothingWithOneBadAnchor(t *testing.T) {
 	}
 	if got := storedLocations(t, h); len(got) != 0 {
 		t.Fatalf("stored %v", got)
-	}
-}
-
-func TestHeadingOnARunCapturedBeforeOutlines(t *testing.T) {
-	t.Parallel()
-	h := headingHarness(t)
-	if err := os.Remove(filepath.Join(h.RunDir(1), "outline.json")); err != nil {
-		t.Fatal(err)
-	}
-	errObj := h.mustRefuse("location", "add", "--run", runRef, "--from", h.WriteFile("f.json", findingJSON("t", `{"path": "`+planPath+`", "heading": "Rollout"}`)))
-	if !strings.Contains(errObj["message"].(string), "captured before heading anchors") {
-		t.Fatalf("refusal %v", errObj)
 	}
 }
 

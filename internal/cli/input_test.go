@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,7 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 type sampleInput struct {
@@ -115,5 +119,44 @@ func TestConflictsWithFrom(t *testing.T) {
 	r := refusalOf(t, ConflictsWithFrom(newCmd("--from", "-", "--body", "x"), "title", "body"))
 	if r.Code != refusal.Usage || !strings.Contains(r.Message, "--body") {
 		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestRunModeRefusesAMissingTarget(t *testing.T) {
+	dir := t.TempDir()
+	_, err := runMode(dir)
+	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record || r.Fix != "inspect it with: cat "+filepath.Join(dir, "target.json") {
+		t.Fatalf("runMode = %#v, want a record refusal naming target.json", err)
+	}
+}
+
+func TestCheckModeKeysSkipsInputThatDecodingRefuses(t *testing.T) {
+	publish := mode.Of(run.Target{})
+	for _, raw := range []string{"", "  \n", `"text"`, `[1]`, `[null, 3]`} {
+		if err := checkModeKeys([]byte(raw), publish); err != nil {
+			t.Errorf("checkModeKeys(%q) = %v, want nil: decoding refuses what is not an object", raw, err)
+		}
+	}
+	// A malformed entry is skipped, not a reason to stop checking the entries after it.
+	err := checkModeKeys([]byte(`[1, {"proposal": "x"}]`), publish)
+	if r, ok := refusal.As(err); !ok || r.Details["entry"] != 1 || r.Details["field"] != "proposal" {
+		t.Fatalf("got %v, want a refusal of entry 1's proposal", err)
+	}
+}
+
+// checkForbidden and malformed are also handed raw input that DecodeInput has not read, so they refuse what is not
+// JSON themselves, and an error of a kind malformed does not name is still reported.
+func TestInputCheckersRefuseWhatIsNotJSON(t *testing.T) {
+	if err := checkForbidden(json.RawMessage("  "), "fix"); err != nil {
+		t.Errorf("checkForbidden of blank input = %v, want nil", err)
+	}
+	for _, raw := range []string{`[1,`, `{"a":`} {
+		r := refusalOf(t, checkForbidden(json.RawMessage(raw), "fix"))
+		if r.Code != refusal.Input || !strings.HasPrefix(r.Message, "input is not valid JSON at byte") {
+			t.Errorf("checkForbidden(%q) = %v", raw, r)
+		}
+	}
+	if r := refusalOf(t, malformed(errors.New("odd"), 3, "fix")); r.Code != refusal.Input || r.Message != "input is not valid: odd" || r.Fix != "fix" {
+		t.Errorf("malformed = %+v", r)
 	}
 }

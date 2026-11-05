@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -139,7 +140,7 @@ func TestLineAt(t *testing.T) {
 }
 
 func TestParseRejectsGarbage(t *testing.T) {
-	if _, err := Parse([]byte("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n x\n")); err == nil {
-		t.Fatal("expected an error for a truncated hunk")
+	if _, err := Parse([]byte("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n x\n")); err == nil || !strings.Contains(err.Error(), "fragment header miscounts lines") {
+		t.Fatalf("err = %v, want the truncated hunk refused", err)
 	}
 }

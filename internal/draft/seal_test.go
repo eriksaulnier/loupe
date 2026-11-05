@@ -11,6 +11,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 var sealNow = time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
@@ -41,7 +42,7 @@ func TestSealRefuses(t *testing.T) {
 		{"empty", NewEmpty(), 0, refusal.Empty},
 	} {
 		dir := sealDir(t, c.d)
-		_ = wantRefusal(t, Seal(dir, c.version, "", noEnv, sealNow), c.code)
+		_ = refusaltest.Want(t, Seal(dir, c.version, "", noEnv, sealNow), c.code)
 		if _, err := os.Stat(filepath.Join(dir, ReturnFile)); !os.IsNotExist(err) {
 			t.Errorf("%s: return.json written", c.name)
 		}
@@ -70,12 +71,12 @@ func TestSealWritesTheRecordAndSealsTheDraft(t *testing.T) {
 	}
 	for _, command := range []string{"add", "edit", "reply", "summary", "review"} {
 		_, err := Mutate(dir, command, nil, noEnv, func(*Draft) error { return nil })
-		_ = wantRefusal(t, err, refusal.Returned)
+		_ = refusaltest.Want(t, err, refusal.Returned)
 	}
 	if _, err := RecordHandBack(dir, noEnv); err != nil {
 		t.Fatalf("RecordHandBack on a returned run: %v", err)
 	}
-	_ = wantRefusal(t, Seal(dir, 4, "", noEnv, sealNow), refusal.Returned)
+	_ = refusaltest.Want(t, Seal(dir, 4, "", noEnv, sealNow), refusal.Returned)
 }
 
 func TestSealAllExcluded(t *testing.T) {

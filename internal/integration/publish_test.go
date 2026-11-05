@@ -76,18 +76,6 @@ func TestPublishSendsCapturedSource(t *testing.T) {
 	}
 }
 
-// lastPostComments is the inline comments of the last review request the fake GitHub received.
-func lastPostComments(h *harness) []any {
-	var comments []any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			m, _ := r.Body.(map[string]any)
-			comments, _ = m["comments"].([]any)
-		}
-	}
-	return comments
-}
-
 // Without --inline a blocking finding lives only in the body's Must fix section, not also as a line comment
 // (specs/026-inline-default-none).
 func TestPublishDefaultsToNoInlineComments(t *testing.T) {
@@ -101,16 +89,17 @@ func TestPublishDefaultsToNoInlineComments(t *testing.T) {
 		{[]string{"--inline", "blocking"}, 1, "blocking"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
+			t.Parallel()
 			h := newHarness(t)
 			h.reviewed(decidedTwoOfThree)
 			if _, stderr, exit := h.Publish("", "y", append([]string{runRef, "--action", "comment"}, tc.flags...)...); exit != 0 {
 				t.Fatalf("publish exit %d stderr %q", exit, stderr)
 			}
 			h.checkSends(1)
-			if got := len(lastPostComments(h)); got != tc.comments {
+			if got := len(h.lastPostComments()); got != tc.comments {
 				t.Errorf("sent %d inline comments, want %d", got, tc.comments)
 			}
-			body := lastPostBody(t, h)
+			body := h.lastPostBody()
 			mustFix, _, _ := strings.Cut(body, "Worth a look")
 			if !strings.Contains(mustFix, "Must fix") || !strings.Contains(mustFix, "Changed line") {
 				t.Errorf("the blocking finding is not under Must fix:\n%s", body)
@@ -177,12 +166,7 @@ func TestPublishEndToEnd(t *testing.T) {
 		t.Fatal("publish changed draft.json")
 	}
 
-	var post map[string]any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ = r.Body.(map[string]any)
-		}
-	}
+	post := h.lastPost()
 	comments, _ := post["comments"].([]any)
 	body, _ := post["body"].(string)
 	if post["commit_id"] != h.Repo.HeadSHA() || post["event"] != "COMMENT" || body != receipt.Envelope.Body || len(comments) != 2 {
@@ -222,20 +206,6 @@ func TestPublishEndToEnd(t *testing.T) {
 	h.checkSends(1)
 }
 
-// lastPostBody is the body of the last review loupe posted.
-func (h *harness) lastPostBody() string {
-	h.t.Helper()
-	var body string
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ := r.Body.(map[string]any)
-			body, _ = post["body"].(string)
-		}
-	}
-	return body
-}
-
-// TestPublishCarriesGateCounts is SC-001: one finding of each kind the gate counts, published attended.
 // shownBody is the review body a confirmation frame shows in its Markdown view, from the pane's top border to the
 // inline comments, with the pane's and the message box's borders dropped and the words in them kept where they sit.
 // Spaces and line breaks are dropped too, since the confirmation wraps prose to the width it reads at; every other
@@ -269,6 +239,7 @@ func withoutSpace(s string) string {
 	return strings.Join(strings.Fields(s), "")
 }
 
+// TestPublishCarriesGateCounts is SC-001: one finding of each kind the gate counts, published attended.
 func TestPublishCarriesGateCounts(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -312,19 +283,6 @@ func TestPublishCarriesGateCounts(t *testing.T) {
 	}
 }
 
-func TestPublishRefusesWithoutTerminalBeforePrinting(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	h.reviewed(decidedTwoOfThree)
-	h.IsTerminal = false
-	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment")
-	if exit != 1 || stdout != "" || !strings.Contains(stderr, "interactive terminal") {
-		t.Fatalf("exit %d stdout %q stderr %q", exit, stdout, stderr)
-	}
-	h.mustRefuse("tty", "publish", runRef, "--action", "comment")
-	h.checkSends(0)
-}
-
 // The confirmation draws full screen, so a terminal that cannot draw one refuses with tty once the gates have passed,
 // and nothing is sent or recorded.
 func TestPublishRefusesATerminalItCannotDrawOn(t *testing.T) {
@@ -338,6 +296,7 @@ func TestPublishRefusesATerminalItCannotDrawOn(t *testing.T) {
 		{"no raw mode", "cannot enter raw mode", func(h *harness) { h.Screen = nil }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := newHarness(t)
 			h.reviewed(decidedTwoOfThree)
 			c.setup(h)
@@ -353,11 +312,17 @@ func TestPublishRefusesATerminalItCannotDrawOn(t *testing.T) {
 	}
 }
 
-func TestPublishRefusesTTYBeforeCredentialsAndRecords(t *testing.T) {
+// With no terminal, publish refuses with tty before it prints, reads credentials or opens the draft.
+func TestPublishRefusesWithoutTerminalBeforePrintingCredentialsOrRecords(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	h.reviewed(decidedTwoOfThree)
 	h.IsTerminal = false
+	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment")
+	if exit != 1 || stdout != "" || !strings.Contains(stderr, "interactive terminal") {
+		t.Fatalf("exit %d stdout %q stderr %q", exit, stdout, stderr)
+	}
+
 	h.GitHubErr = errors.New("no GitHub token found for github.com")
 	h.mustRefuse("tty", "publish", runRef, "--action", "comment")
 
@@ -405,6 +370,7 @@ func TestPublishGateRefusals(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := newHarness(t)
 			h.reviewed(c.steps)
 			if c.setup != nil {
@@ -451,26 +417,6 @@ func TestPublishRefusesEmptyDraft(t *testing.T) {
 		t.Fatalf("fix %v", errObj["fix"])
 	}
 	h.checkSends(0)
-}
-
-func TestPublishRefusesBadFlagsFirst(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	for _, args := range [][]string{
-		{"publish", "acme/widgets#99", "--inline", "all"},
-		{"publish", "acme/widgets#99", "--action", "merge"},
-		{"publish", "acme/widgets#99", "--action", "comment", "--inline", "some"},
-	} {
-		env, exit := h.RunJSON(args...)
-		errObj, _ := env["error"].(map[string]any)
-		if exit != 2 || errObj["code"] != "usage" {
-			t.Errorf("%v: exit %d envelope %v", args, exit, env)
-		}
-	}
-	h.checkSends(0)
-	if n := len(h.GH.Requests()); n != 0 {
-		t.Fatalf("requests %d", n)
-	}
 }
 
 func TestPublishJSONPrintsOneObject(t *testing.T) {
@@ -521,18 +467,17 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 	}
 	h.checkSends(1)
 
-	var post map[string]any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ = r.Body.(map[string]any)
-		}
-	}
+	post := h.lastPost()
 	body, _ := post["body"].(string)
 	if post["event"] != "COMMENT" {
 		t.Fatalf("event %v, want COMMENT", post["event"])
 	}
+	if comments, _ := post["comments"].([]any); len(comments) != 0 {
+		t.Errorf("sent %d inline comments, want 0", len(comments))
+	}
 	// No human touched the draft, and all three findings publish.
-	for _, want := range []string{"Changed line", "Second change", " · unattended", "unattended=1", "via `gadfly-review-pr 2.2.0`",
+	// The pipeline passes no --inline, so an unattended review takes the attended default (specs/026-inline-default-none).
+	for _, want := range []string{"Changed line", "Second change", " · unattended", "unattended=1", "inline=none", "via `gadfly-review-pr 2.2.0`",
 		" excluded=0 withdrawn=0 reinstated=0 regraded=0 -->\n"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body lacks %q:\n%s", want, body)
@@ -547,30 +492,6 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 	}
 	if receipt.Author != "github-actions[bot]" {
 		t.Fatalf("receipt author %q, want the bot login", receipt.Author)
-	}
-}
-
-// The review pipeline publishes with no --inline, so an unattended review takes the same default as an attended one
-// (specs/026-inline-default-none).
-func TestPublishUnattendedDefaultsToNoInlineComments(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	h.UseInstallationToken()
-	h.GH.SetViewer("github-actions[bot]")
-	h.capture()
-	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
-	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
-	h.IsTerminal = false
-
-	if stdout, stderr, exit := h.Run("publish", runRef, "--unattended", "--json"); exit != 0 {
-		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
-	}
-	h.checkSends(1)
-	if got := len(lastPostComments(h)); got != 0 {
-		t.Errorf("sent %d inline comments, want 0", got)
-	}
-	if body := lastPostBody(t, h); !strings.Contains(body, " unattended=1 inline=none ") {
-		t.Errorf("marker lacks inline=none:\n%s", body)
 	}
 }
 
@@ -625,31 +546,23 @@ func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 	}
 	h.checkSends(1)
 
-	var post map[string]any
-	for _, r := range h.GH.Requests() {
-		if !r.Read() {
-			post, _ = r.Body.(map[string]any)
-		}
-	}
+	post := h.lastPost()
 	body, _ := post["body"].(string)
 	if !strings.Contains(body, " · unattended\n\n<!-- loupe digest=") || !strings.Contains(body, "round=2 unattended=1") {
 		t.Errorf("body does not number this review 2:\n%s", body)
 	}
 }
 
+// github/client_test.go TestTokenKind pins every user-token prefix, so one stands for them here.
 func TestPublishUnattendedRefusesUserTokens(t *testing.T) {
 	t.Parallel()
-	for _, prefix := range []string{"ghu_", "gho_", "ghp_", "github_pat_"} {
-		t.Run(prefix, func(t *testing.T) {
-			h := newHarness(t)
-			h.capture()
-			h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
-			h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
-			h.UseToken(prefix + "user-token")
-			h.mustRefuse("token", "publish", runRef, "--unattended")
-			h.checkSends(0)
-		})
-	}
+	h := newHarness(t)
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+	h.UseToken("ghu_user-token")
+	h.mustRefuse("token", "publish", runRef, "--unattended")
+	h.checkSends(0)
 }
 
 func TestPublishTokenMismatchAttendedRefusesInstallationToken(t *testing.T) {
@@ -665,6 +578,7 @@ func TestPublishTokenMismatchAttendedRefusesInstallationToken(t *testing.T) {
 func TestPublishTokenMismatchRefusesViewer(t *testing.T) {
 	t.Parallel()
 	t.Run("user-captured published unattended", func(t *testing.T) {
+		t.Parallel()
 		h := newHarness(t)
 		h.capture()
 		h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
@@ -674,6 +588,7 @@ func TestPublishTokenMismatchRefusesViewer(t *testing.T) {
 		h.checkSends(0)
 	})
 	t.Run("installation-captured published attended", func(t *testing.T) {
+		t.Parallel()
 		h := newHarness(t)
 		h.UseInstallationToken()
 		h.capture()
@@ -839,23 +754,19 @@ func TestPublishUnattendedRetriesUnknownAttemptFromRestoredRoot(t *testing.T) {
 	}
 }
 
-func TestReviewJSONPrintsOneObject(t *testing.T) {
+func TestUnattendedPublishOfAClosedPullRequest(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.capture()
+	h.closePR()
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture("--allow-closed")
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
-	s := h.Start("review", runRef, "--json")
-	s.Press("enter")
-	s.WaitFor("Changed line")
-	s.Press("a")
-	s.WaitFor("f-001 accepted")
-	s.Press("q")
-	stdout, stderr, exit := s.Wait()
-	var env map[string]any
-	if err := json.Unmarshal([]byte(stdout), &env); err != nil || exit != 0 || env["ok"] != true || env["command"] != "review" || env["dir"] != h.RunDir(1) || len(env) != 5 {
-		t.Fatalf("exit %d err %v stdout %q", exit, err, stdout)
+	h.mustOK("summary", "--run", runRef, "--body", "Reviewed after the merge.", "--expect-findings", "3")
+	if sent := h.mustOK("publish", runRef, "--unattended"); sent["sent"] != true {
+		t.Fatalf("sent %v", sent)
 	}
-	if !strings.Contains(stderr, "Changed line") {
-		t.Fatalf("the review did not go to stderr: %q", stderr)
+	if h.GH.CreateCount() != 1 {
+		t.Fatalf("create count %d, want 1", h.GH.CreateCount())
 	}
 }

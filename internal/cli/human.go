@@ -28,9 +28,6 @@ func text(s string) string { return strings.TrimRight(render.ForDisplay(s), "\n"
 // next moves the command to its own line rather than wrap it, because a wrapped command cannot be copied.
 func next(s style.Style, width int, sentence, command string) string {
 	line := s.Dim.Render(sentence)
-	if command == "" {
-		return line
-	}
 	if len(sentence)+len(command)+1 > width {
 		return line + "\n  " + paintCommand(s, command)
 	}

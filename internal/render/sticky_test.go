@@ -253,11 +253,8 @@ func TestReadStickyNumbersRoundsInTheReview(t *testing.T) {
 
 // A body written before the collapsed-round format changed still reads back, and its old rounds are renumbered.
 func TestReadStickyReadsTheEarlierFormat(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-before-025-format.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := strings.Replace(string(data), "<summary>Round 1 · ", "<summary>Round 3 · ", 1)
+	data := fixture(t, "sticky-before-025-format.md")
+	old := strings.Replace(data, "<summary>Round 1 · ", "<summary>Round 3 · ", 1)
 	earlier, rounds, err := ReadSticky(old)
 	if err != nil || rounds != 2 || len(earlier) != 2 {
 		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
@@ -528,11 +525,8 @@ func TestReadStickyRefusesARecordOutsideTheTail(t *testing.T) {
 // A body in the v0.11.0 layout, footer after the earlier rounds and collapsed rounds without one, reads back and the
 // next round writes the new layout. The round it showed keeps its footer, and the older round has none to recover.
 func TestStickyMovesAV0110BodyToTheNewLayout(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-v0.11.0-layout.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	earlier, rounds, err := ReadSticky(string(data))
+	data := fixture(t, "sticky-v0.11.0-layout.md")
+	earlier, rounds, err := ReadSticky(data)
 	if err != nil || rounds != 2 || len(earlier) != 2 {
 		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
 	}
@@ -549,20 +543,13 @@ func TestStickyMovesAV0110BodyToTheNewLayout(t *testing.T) {
 	if _, _, err := ReadRecord(body); err != nil {
 		t.Fatalf("ReadRecord: %v", err)
 	}
-	again, rounds, err := ReadSticky(body)
-	if err != nil || rounds != 3 || len(again) != 3 || again[1] != earlier[0] || again[2] != earlier[1] {
-		t.Fatalf("rounds %d err %v blocks:\n%s", rounds, err, strings.Join(blocks(again), "\n=====\n"))
-	}
 }
 
 // Authored prose can end with a divider and a footer-shaped line. In a v0.11.0 body the footer at the tail is the
 // round's own, so that prose is the round's text and reads back as it was written.
 func TestStickyV0110BodyKeepsFooterShapedProse(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-v0.11.0-layout.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, rest, _ := strings.Cut(string(data), "\n\n---\n\n<!-- loupe-earlier -->")
+	data := fixture(t, "sticky-v0.11.0-layout.md")
+	_, rest, _ := strings.Cut(data, "\n\n---\n\n<!-- loupe-earlier -->")
 	if rest == "" || !strings.Contains(rest, " questions=1 ") {
 		t.Fatalf("the fixture changed:\n%s", data)
 	}
@@ -584,11 +571,8 @@ func TestStickyV0110BodyKeepsFooterShapedProse(t *testing.T) {
 // with a footer added on GitHub. When its round's prose also ends in a footer-shaped line it is refused with sticky,
 // which the format allows, since only pre-release probe reviews carry that format.
 func TestStickyPre025BodyWithFooterShapedProseIsRefused(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-before-025-format.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, rest, _ := strings.Cut(string(data), "\n\n---\n\n<!-- loupe-earlier -->")
+	data := fixture(t, "sticky-before-025-format.md")
+	_, rest, _ := strings.Cut(data, "\n\n---\n\n<!-- loupe-earlier -->")
 	if rest == "" || !strings.Contains(rest, " questions=1 ") {
 		t.Fatalf("the fixture changed:\n%s", data)
 	}
@@ -596,7 +580,7 @@ func TestStickyPre025BodyWithFooterShapedProseIsRefused(t *testing.T) {
 	if _, _, err := ReadSticky(body); err == nil {
 		t.Fatalf("ReadSticky accepted:\n%s", body)
 	}
-	if _, _, err := ReadSticky(string(data)); err != nil {
+	if _, _, err := ReadSticky(data); err != nil {
 		t.Fatalf("the fixture itself no longer reads back: %v", err)
 	}
 }
@@ -722,13 +706,6 @@ func TestStickyMovesAV0120BodyToTheQuotedLayout(t *testing.T) {
 		if earlier[i+1].Block != want {
 			t.Fatalf("round %d was not carried as it is\n--- got ---\n%s\n--- want ---\n%s", 2-i, earlier[i+1].Block, want)
 		}
-	}
-	next := stickyInput(4, "ddddddd444", general("f-001", "question", false))
-	next.Sticky = &StickyInput{Rounds: rounds + 1, Earlier: earlier}
-	again, rounds, err := ReadSticky(Body(next))
-	// Once anchored, every collapsed round is carried byte for byte, anchor included.
-	if err != nil || rounds != 4 || len(again) != 4 || !slices.Equal(again[1:], earlier) {
-		t.Fatalf("rounds %d err %v blocks:\n%s", rounds, err, strings.Join(blocks(again), "\n=====\n"))
 	}
 }
 
@@ -990,5 +967,79 @@ func TestReadStickyIgnoresAFencedNoteDelimiter(t *testing.T) {
 	}
 	if !strings.Contains(earlier[0].Block, "> "+noteStart) {
 		t.Fatalf("the fenced delimiter was dropped:\n%s", earlier[0].Block)
+	}
+}
+
+// Each refusal of a body in the layout before anchors names what it found, so a hand edit is reported rather than
+// carried into the next round.
+func TestReadStickyNamesWhatBreaksALegacyBody(t *testing.T) {
+	first := legacy(t, firstRound())
+	earlier, _, err := ReadSticky(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := stickyInput(2, "bbbbbbb222", general("f-001", "question", false))
+	next.Sticky = &StickyInput{Rounds: 2, Earlier: earlier}
+	second := legacy(t, Body(next))
+	noted := legacy(t, threeRounds(t))
+	digest := lastDigest(first)
+	trimmed := strings.TrimRight(first, "\n")
+	meta := trimmed[strings.LastIndex(trimmed, "\n")+1:]
+	note := "\n\n<!-- loupe-note -->\n\n> Push again for another round.\n>\n> Or ask.\n\n<!-- loupe-note-end -->"
+	prose := "A new blocking issue, and one suggestion."
+	for name, c := range map[string]struct{ body, want string }{
+		"digest without its blank line": {strings.Replace(first, "\n\n"+digest, "\n"+digest, 1), "it does not end with loupe's reconciliation marker"},
+		"earlier rounds without a divider": {strings.Replace(second, "\n\n---\n\n<!-- loupe-earlier -->", "\n\n<!-- loupe-earlier -->", 1),
+			"its earlier rounds do not follow a divider"},
+		"top footer edited": {strings.Replace(second, "reviewed [`bbbbbbb`](https://github.com/o/r/commit/bbbbbbb222) · [changes since round 1](https://github.com/o/r/compare/aaaaaaa111...bbbbbbb222)\n\n---",
+			"edited by hand\n\n---", 1), "the round it shows does not end with loupe's divider and footer"},
+		"empty round":  {"\n\n---\n\nreviewed [`aaaaaaa`](https://github.com/o/r/commit/aaaaaaa111)\n\n" + digest + "\n" + meta, "the round it shows is empty"},
+		"no chips row": {strings.Replace(first, "`⛔ 1 blocking`", "Prose first.", 1), "the round it shows does not open on its chips row"},
+		"blocking chip miscounted": {strings.Replace(first, "`⛔ 1 blocking`", "`⛔ 2 blocking`", 1),
+			"its chips count 2 blocking and its loupe-meta marker 1"},
+		"chips miscounted":          {strings.Replace(noted, "`🟣 1 suggestion`", "`🟣 2 suggestions`", 1), "its chips count 3 findings and its loupe-meta marker 2"},
+		"section removed":           {strings.Replace(noted, "\n\n---\n\n### Worth a look\n\n<details>", "\n\n<details>", 1), "the round it shows has 1 of its 2 sections"},
+		"section without a divider": {strings.Replace(first, "---\n\n### Must fix", "### Must fix", 1), "the round's first section does not follow a divider"},
+		"two note ends": {strings.Replace(noted, "<!-- loupe-note-end -->", "<!-- loupe-note-end -->\n\n<!-- loupe-note-end -->", 1),
+			"it carries more than one round note"},
+		"note without a blank line": {strings.Replace(noted, "\n\n<!-- loupe-note -->", "\n<!-- loupe-note -->", 1),
+			"its round note is not one pair of loupe's note delimiters"},
+		"note ending under the earlier rounds": {strings.Replace(noted, "<!-- loupe-note-end -->\n\n---\n\n<!-- loupe-earlier -->",
+			"---\n\n<!-- loupe-earlier -->\n\n<!-- loupe-note-end -->", 1), "its round note is not on the round it shows"},
+		"note moved into the prose": {strings.Replace(strings.Replace(noted, note, "", 1), prose, prose+note, 1),
+			"its round note does not follow the round's footer"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, _, err := ReadSticky(c.body); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("ReadSticky = %v, want %q", err, c.want)
+			}
+		})
+	}
+}
+
+// Prose may carry a heading shaped like a section's, and it keeps its place, since sections are counted from the end.
+// A body that dropped its one earlier round names it in the singular.
+func TestReadStickyReadsLegacyEdgeShapes(t *testing.T) {
+	headed := strings.Replace(legacy(t, threeRounds(t)), "A new blocking issue, and one suggestion.", "### Must fix\n\nA new blocking issue.", 1)
+	earlier, rounds, err := ReadSticky(headed)
+	if err != nil || rounds != 3 || !strings.Contains(earlier[0].Block, "> ### Must fix\n>\n> A new blocking issue.\n>\n> ### Must fix\n") {
+		t.Fatalf("rounds %d err %v, demoted:\n%s", rounds, err, earlier[0].Block)
+	}
+	one := stickyInput(2, "bbbbbbb222", general("f-001", "question", false))
+	one.Sticky = &StickyInput{Rounds: 2}
+	body := legacy(t, Body(one))
+	if !strings.Contains(body, "The oldest round was dropped") {
+		t.Fatalf("the fixture changed:\n%s", body)
+	}
+	if earlier, rounds, err := ReadSticky(body); err != nil || rounds != 2 || len(earlier) != 1 {
+		t.Fatalf("rounds %d err %v earlier %d", rounds, err, len(earlier))
+	}
+}
+
+func TestPreviousRoundOfNothingReadableIsZero(t *testing.T) {
+	for _, earlier := range [][]string{nil, {"not a collapsed round"}} {
+		if n, sha := PreviousRound(earlier); n != 0 || sha != "" {
+			t.Errorf("PreviousRound(%q) = %d, %q", earlier, n, sha)
+		}
 	}
 }

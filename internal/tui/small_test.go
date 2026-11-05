@@ -13,26 +13,6 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 )
 
-func keyOf(s string) tea.KeyPressMsg {
-	switch s {
-	case "enter":
-		return tea.KeyPressMsg{Code: tea.KeyEnter}
-	case "tab":
-		return tea.KeyPressMsg{Code: tea.KeyTab}
-	case "ctrl+c":
-		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
-	}
-	return runes(s)
-}
-
-func isQuit(cmd tea.Cmd) bool {
-	if cmd == nil {
-		return false
-	}
-	_, ok := cmd().(tea.QuitMsg)
-	return ok
-}
-
 func assertTooSmall(t *testing.T, view string, width, height int) {
 	t.Helper()
 	for _, want := range []string{"Window too small", fmt.Sprintf("This window is %d by %d", width, height), "Review needs 60 by 12", "press q to quit"} {

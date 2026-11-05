@@ -235,7 +235,7 @@ func checkModeFlags(cmd *cobra.Command, m mode.Mode) error {
 	return nil
 }
 
-// runMode loads the run's target once for the mode-dependent checks of add and edit.
+// runMode loads the run's target for a command that needs only its mode.
 func runMode(dir string) (mode.Mode, error) {
 	target, err := run.LoadTarget(dir)
 	if err != nil {

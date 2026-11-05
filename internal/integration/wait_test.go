@@ -1,12 +1,9 @@
 package integration
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/testutil/screen"
 )
 
@@ -117,30 +114,4 @@ func TestSendBackWakesWaitWhileReviewIsOpen(t *testing.T) {
 		t.Fatalf("review exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
 	h.mustRefuse("no-pane-host", "handoff", "--run", runRef)
-}
-
-func TestQuitStillHandsBackANoteNeverHandedBack(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	h.capture()
-	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", sendBackFindings))
-	h.mustOK("summary", "--run", runRef, "--body", "Two things.", "--expect-findings", "2")
-	// An older binary wrote this note and handed back only at exit, so it is open and not in the set.
-	dir := h.RunDir(1)
-	d, err := draft.Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d.Notes = append(d.Notes, draft.Note{ID: "n-001", FindingID: "f-001", Body: "Older.", At: fixedNow(), Status: draft.NoteOpen})
-	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
-		t.Fatal(err)
-	}
-	h.mustRefuse("timeout", "wait", "--run", runRef, "--timeout", "50ms")
-
-	if shown := h.review(runRef, func(*screen.Screen) {}); !strings.Contains(shown, "1 note sent back") {
-		t.Fatalf("review did not hand back the older note at exit:\n%s", shown)
-	}
-	if w := h.mustOK("wait", "--run", runRef, "--timeout", "5s"); w["reason"] != "notes" || awaitingOf(w) != "n-001" {
-		t.Fatalf("wait after exit %v", w)
-	}
 }

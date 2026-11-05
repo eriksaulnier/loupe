@@ -5,19 +5,8 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
-
-func locationRefusal(t *testing.T, err error) *refusal.Error {
-	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok {
-		t.Fatalf("got %v, want a refusal", err)
-	}
-	if r.Code != refusal.Location {
-		t.Fatalf("code %q, want location (message %q)", r.Code, r.Message)
-	}
-	return r
-}
 
 func TestValidateAcceptsLinesOnTheirSide(t *testing.T) {
 	d := parseFixture(t, "multi-hunk.diff")
@@ -60,7 +49,7 @@ func TestValidateRefusesLineBetweenHunks(t *testing.T) {
 		{"RIGHT", 7, "multi.txt:7 is not in the diff on side RIGHT", []int{4, 5, 6, 18, 19, 20}, "use one of: multi.txt:1-6, 18-24"},
 	}
 	for _, c := range cases {
-		r := locationRefusal(t, d.Validate("multi.txt", c.side, c.line, 0))
+		r := refusaltest.Want(t, d.Validate("multi.txt", c.side, c.line, 0), refusal.Location)
 		if r.Message != c.message || r.Fix != c.fix {
 			t.Errorf("%s %d: message %q fix %q", c.side, c.line, r.Message, r.Fix)
 		}
@@ -72,7 +61,7 @@ func TestValidateRefusesLineBetweenHunks(t *testing.T) {
 
 func TestValidateRefusesDeletedLineOnRight(t *testing.T) {
 	d := parseFixture(t, "deleted-file.diff")
-	r := locationRefusal(t, d.Validate("doomed.txt", "RIGHT", 1, 0))
+	r := refusaltest.Want(t, d.Validate("doomed.txt", "RIGHT", 1, 0), refusal.Location)
 	if nearest, _ := r.Details["nearest"].([]int); len(nearest) != 0 {
 		t.Fatalf("nearest %v, want none", nearest)
 	}
@@ -83,7 +72,7 @@ func TestValidateRefusesDeletedLineOnRight(t *testing.T) {
 
 func TestValidateRefusesUnknownPath(t *testing.T) {
 	d := parseFixture(t, "multi-hunk.diff")
-	r := locationRefusal(t, d.Validate("src/other.go", "RIGHT", 1, 0))
+	r := refusaltest.Want(t, d.Validate("src/other.go", "RIGHT", 1, 0), refusal.Location)
 	if !reflect.DeepEqual(r.Details["paths"], []string{"multi.txt"}) {
 		t.Fatalf("paths %v", r.Details["paths"])
 	}
@@ -104,7 +93,7 @@ func TestValidateRefusesBadRanges(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_ = locationRefusal(t, d.Validate("multi.txt", "RIGHT", c.line, c.startLine))
+			_ = refusaltest.Want(t, d.Validate("multi.txt", "RIGHT", c.line, c.startLine), refusal.Location)
 		})
 	}
 }
@@ -112,13 +101,13 @@ func TestValidateRefusesBadRanges(t *testing.T) {
 func TestValidateRefusesBinaryFile(t *testing.T) {
 	d := parseFixture(t, "binary.diff")
 	for _, side := range []string{"RIGHT", "LEFT"} {
-		_ = locationRefusal(t, d.Validate("blob.bin", side, 1, 0))
+		_ = refusaltest.Want(t, d.Validate("blob.bin", side, 1, 0), refusal.Location)
 	}
 }
 
 func TestValidateRefusesUnknownSide(t *testing.T) {
 	d := parseFixture(t, "multi-hunk.diff")
-	_ = locationRefusal(t, d.Validate("multi.txt", "MIDDLE", 3, 0))
+	_ = refusaltest.Want(t, d.Validate("multi.txt", "MIDDLE", 3, 0), refusal.Location)
 }
 
 func TestHunkFor(t *testing.T) {
@@ -137,7 +126,7 @@ func TestHunkFor(t *testing.T) {
 	if _, _, err := d.HunkFor("multi.txt", "RIGHT", 10); err == nil {
 		t.Fatal("HunkFor accepted a line between hunks")
 	} else {
-		_ = locationRefusal(t, err)
+		_ = refusaltest.Want(t, err, refusal.Location)
 	}
 }
 
@@ -153,7 +142,7 @@ func TestTypeChangeKeepsBothSides(t *testing.T) {
 	if err := d.Validate("l", "RIGHT", 2, 1); err != nil {
 		t.Fatalf("new side: %v", err)
 	}
-	r := locationRefusal(t, d.Validate("m", "RIGHT", 1, 0))
+	r := refusaltest.Want(t, d.Validate("m", "RIGHT", 1, 0), refusal.Location)
 	if !reflect.DeepEqual(r.Details["paths"], []string{"l"}) {
 		t.Fatalf("paths %v", r.Details["paths"])
 	}

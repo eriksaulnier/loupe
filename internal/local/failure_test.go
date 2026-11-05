@@ -2,33 +2,14 @@ package local
 
 import (
 	"errors"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
 )
-
-// failingGit puts a git on PATH that exits 2 when its arguments contain pattern, and otherwise runs the real git.
-// Exit code 2 is neither of the codes gitx reads as an answer, so the call fails as any broken git would.
-func failingGit(t *testing.T, pattern string) {
-	t.Helper()
-	real, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := "#!/bin/sh\n" +
-		"case \"$*\" in *'" + pattern + "'*) echo 'injected failure' >&2; exit 2;; esac\n" +
-		"exec '" + real + "' \"$@\"\n"
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
 
 func TestChangedNamesTheMergeBaseWhenNothingChangedAgainstIt(t *testing.T) {
 	dir := plainRepo(t, "work")
@@ -54,7 +35,7 @@ func TestChangedReturnsEachGitFailure(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := plainRepo(t, "work")
 			write(t, filepath.Join(dir, "a.txt"), []byte("b\n"))
-			failingGit(t, tc.pattern)
+			gitfail.WhenContains(t, tc.pattern)
 			_, err := Capture(Request{Form: FormChanged, WorkDir: dir})
 			if err == nil || !strings.Contains(err.Error(), "injected failure") {
 				t.Fatalf("got %v, want the git failure", err)
@@ -80,12 +61,12 @@ func TestLocateReturnsAGitFailure(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := plainRepo(t, "work")
-			failingGit(t, tc.pattern)
+			gitfail.WhenContains(t, tc.pattern)
 			if _, err := Locate(dir); err == nil || !strings.Contains(err.Error(), "injected failure") {
 				t.Fatalf("Locate got %v", err)
 			}
-			if _, err := Capture(Request{Form: FormNoFiles, WorkDir: dir}); err == nil {
-				t.Fatal("Capture ignored the Locate failure")
+			if _, err := Capture(Request{Form: FormNoFiles, WorkDir: dir}); err == nil || !strings.Contains(err.Error(), "injected failure") {
+				t.Fatalf("Capture got %v, want the Locate failure", err)
 			}
 		})
 	}

@@ -20,7 +20,7 @@ import (
 )
 
 func stickyMeta(rounds int) string {
-	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 inline=none sticky=" + string(rune('0'+rounds)) + " -->\n"
+	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 inline=none sticky=" + strconv.Itoa(rounds) + " -->\n"
 }
 
 // plainMeta is an ordinary loupe review's tail, from src when it is not empty.
@@ -36,35 +36,11 @@ func sourcedMeta(src string) string {
 	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 unattended=1 src=" + src + " inline=none sticky=1 -->\n"
 }
 
-// Two Apps can both publish loupe reviews, and an installation token cannot read its own login, so an unattended round
-// tells its own review by the source its capture recorded. The version is left out so a release keeps the same review.
-func TestFindStickyUnattendedMatchesItsSource(t *testing.T) {
-	reviews := []github.Review{
-		{ID: 1, User: "loupe-ci[bot]", State: "COMMENTED", Body: sourcedMeta("loupe-ci@1.0.0")},
-		{ID: 2, User: "other-app[bot]", State: "COMMENTED", Body: sourcedMeta("other-review")},
-		{ID: 3, User: "unsourced[bot]", State: "COMMENTED", Body: stickyMeta(1)},
-	}
-	for source, want := range map[string]int64{"loupe-ci@1.1.0": 1, "loupe-ci": 1, "other-review@2": 2, "third": 0} {
-		got, ok := findSticky(reviews, "", source)
-		if got.ID != want || ok != (want != 0) {
-			t.Errorf("source %q: found %d %v, want %d", source, got.ID, ok, want)
-		}
-	}
-	if got, ok := findSticky([]github.Review{{ID: 4, User: "reviewer", State: "COMMENTED", Body: sourcedMeta("other-review")}}, "reviewer", "loupe-ci"); !ok || got.ID != 4 {
-		t.Errorf("attended: a human's own review is theirs whatever its source, got %d %v", got.ID, ok)
-	}
-}
-
-func TestRunStickyUnattendedRefusesWithoutASource(t *testing.T) {
-	fx := newStickyRun(t, readyDraft(), nil, 1)
-	fx.opts.Target.Source = ""
-	_, err := fx.run()
-	wantRefusal(t, err, refusal.Usage, "--source")
-	fx.checkWrites(0, 0)
-}
-
+// findSticky picks the review a sticky round edits. Attended, that is the viewer's newest loupe review while no plain
+// loupe review follows it. Unattended, an installation token cannot read its own login, so a round tells its own review
+// by the source its capture recorded; the version is left out so a release keeps the same review.
 func TestFindSticky(t *testing.T) {
-	reviews := []github.Review{
+	mine := []github.Review{
 		{ID: 1, User: "reviewer", State: "COMMENTED", Body: stickyMeta(1)},
 		{ID: 5, User: "reviewer", State: "COMMENTED", Body: stickyMeta(2)},
 		{ID: 3, User: "reviewer", State: "COMMENTED", Body: stickyMeta(1)},
@@ -74,31 +50,52 @@ func TestFindSticky(t *testing.T) {
 		{ID: 6, User: "reviewer", State: "COMMENTED", Body: "A review of their own, not loupe's."},
 		{ID: 10, User: "app[bot]", State: "COMMENTED", Body: stickyMeta(1)},
 	}
-	if got, ok := findSticky(reviews, "reviewer", ""); !ok || got.ID != 5 {
-		t.Fatalf("attended: got %d %v, want 5", got.ID, ok)
-	}
 	// A plain loupe review after the sticky one ends the series, so the next sticky round starts a new review.
-	ended := append(reviews, github.Review{ID: 7, User: "reviewer", State: "COMMENTED", Body: plainMeta("")})
-	if got, ok := findSticky(ended, "reviewer", ""); ok {
-		t.Fatalf("attended: a plain review after the sticky one still found %d", got.ID)
-	}
-	bots := []github.Review{
+	ended := append(slices.Clone(mine), github.Review{ID: 7, User: "reviewer", State: "COMMENTED", Body: plainMeta("")})
+	apps := []github.Review{
 		{ID: 1, User: "loupe-ci[bot]", State: "COMMENTED", Body: sourcedMeta("loupe-ci@1.0.0")},
-		{ID: 2, User: "other[bot]", State: "COMMENTED", Body: plainMeta("other-review")},
-		{ID: 3, User: "loupe-ci[bot]", State: "COMMENTED", Body: plainMeta("loupe-ci@1.1.0")},
+		{ID: 2, User: "other-app[bot]", State: "COMMENTED", Body: sourcedMeta("other-review")},
+		{ID: 3, User: "unsourced[bot]", State: "COMMENTED", Body: stickyMeta(1)},
 	}
-	if got, ok := findSticky(bots[:2], "", "loupe-ci"); !ok || got.ID != 1 {
-		t.Fatalf("unattended: another source's plain review must not end this series, got %d %v", got.ID, ok)
+	// Another source's plain review must not end this source's series; the same source's own plain review does.
+	otherPlain := []github.Review{apps[0], {ID: 4, User: "other[bot]", State: "COMMENTED", Body: plainMeta("other-review")}}
+	ownPlain := append(slices.Clone(otherPlain), github.Review{ID: 5, User: "loupe-ci[bot]", State: "COMMENTED", Body: plainMeta("loupe-ci@1.1.0")})
+	human := []github.Review{{ID: 4, User: "reviewer", State: "COMMENTED", Body: sourcedMeta("other-review")}}
+
+	for _, tc := range []struct {
+		name    string
+		reviews []github.Review
+		viewer  string
+		source  string
+		want    int64
+	}{
+		{"attended finds the newest of the viewer's own", mine, "reviewer", "", 5},
+		{"attended stops at a later plain review", ended, "reviewer", "", 0},
+		{"attended finds nothing for a viewer with none", mine, "nobody", "", 0},
+		{"attended takes the human's own review whatever its source", human, "reviewer", "loupe-ci", 4},
+		{"unattended matches a newer version of its source", apps, "", "loupe-ci@1.1.0", 1},
+		{"unattended matches a source with no version", apps, "", "loupe-ci", 1},
+		{"unattended matches another source's own review", apps, "", "other-review@2", 2},
+		{"unattended finds nothing for an unknown source", apps, "", "third", 0},
+		{"unattended skips an unsourced review", mine, "", "loupe-ci", 0},
+		{"unattended ignores another source's plain review", otherPlain, "", "loupe-ci", 1},
+		{"unattended stops at its own source's plain review", ownPlain, "", "loupe-ci", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := findSticky(tc.reviews, tc.viewer, tc.source)
+			if got.ID != tc.want || ok != (tc.want != 0) {
+				t.Fatalf("found %d %v, want %d", got.ID, ok, tc.want)
+			}
+		})
 	}
-	if got, ok := findSticky(bots, "", "loupe-ci"); ok {
-		t.Fatalf("unattended: a plain review from the same source still found %d", got.ID)
-	}
-	if _, ok := findSticky(reviews, "", "loupe-ci"); ok {
-		t.Fatal("unattended: found a review from no source for source loupe-ci")
-	}
-	if _, ok := findSticky(reviews, "nobody", ""); ok {
-		t.Fatal("found a sticky review for a viewer with none")
-	}
+}
+
+func TestRunStickyUnattendedRefusesWithoutASource(t *testing.T) {
+	fx := newStickyRun(t, readyDraft(), nil, 1)
+	fx.opts.Target.Source = ""
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Usage, "--source")
+	fx.checkWrites(0, 0)
 }
 
 // newStickyRun is an unattended sticky round with a fresh data root, publishing to gh when it is given, so several
@@ -271,9 +268,7 @@ func TestRunStickyAttendedRefusesWhenTheReviewChangesDuringConfirmation(t *testi
 	_, err = second.run()
 	wantRefusal(t, err, refusal.Changed, "loupe publish")
 	second.checkWrites(1, 0)
-	if second.exists("receipt.json") || second.exists("attempt.json") {
-		t.Fatal("a refused round wrote a record")
-	}
+	second.noRecords()
 }
 
 func TestRunStickyAttendedRefusesWhenAStickyReviewAppearsDuringConfirmation(t *testing.T) {
@@ -330,9 +325,7 @@ func TestRunStickyRejectedEditRemovesAttempt(t *testing.T) {
 	if message := wantRefusal(t, err, refusal.GitHub); !strings.Contains(message, "Body is too long") {
 		t.Fatalf("message %q", message)
 	}
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("a rejected edit left a record")
-	}
+	fx.noRecords()
 }
 
 // A round's reconciliation marker stays in its collapsed section, so its lost attempt still reconciles after a later
@@ -560,18 +553,13 @@ func TestRunStickyRefusesANoteCitingAFindingID(t *testing.T) {
 	}
 }
 
-// A draft filed before the check may cite ids, and publish does not recheck them.
-func TestRunStickyPublishesADraftCitingFindingIDs(t *testing.T) {
-	d := readyDraft()
-	d.Summary = "f-001 is the retry loop."
-	for i := range d.Findings {
-		d.Findings[i].Body = "As f-002 showed."
+func TestRunStickyRefusesWhenTheReviewsCannotBeListedAfterConfirming(t *testing.T) {
+	fx := newAttendedStickyRun(t, nil)
+	fx.opts.Confirm = fx.confirmWith(true, func() { fx.gh.Fail("GET", reviewsPath, http.StatusBadGateway) })
+	_, err := fx.run()
+	if msg := wantRefusal(t, err, refusal.GitHub, prLink); !strings.Contains(msg, "to check the sticky review again") {
+		t.Fatalf("message %q", msg)
 	}
-	fx := newStickyRun(t, d, nil, 1)
-	if _, err := fx.run(); err != nil {
-		t.Fatalf("publish refused a stored id: %v", err)
-	}
-	if body := onlyReview(t, fx).Body; !strings.Contains(body, "f-001 is the retry loop.") || !strings.Contains(body, "As f-002 showed.") {
-		t.Fatalf("the stored text is not published as stored:\n%s", body)
-	}
+	fx.noRecords()
+	fx.checkWrites(0, 0)
 }

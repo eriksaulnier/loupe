@@ -1,9 +1,9 @@
 package tui
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -15,40 +15,12 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/eriksaulnier/loupe/internal/testutil/sgrtest"
 )
-
-func modelOf(t *testing.T, dir string, env map[string]string, width, height int) *Model {
-	t.Helper()
-	m, err := New(Config{Dir: dir, Getenv: envOf(env), Now: func() time.Time { return testNow }, Output: io.Discard})
-	if err != nil {
-		t.Fatal(err)
-	}
-	m.Update(tea.WindowSizeMsg{Width: width, Height: height})
-	return m
-}
-
-func TestListAtEightyColumnsDropsTheLabelColumn(t *testing.T) {
-	m, err := New(Config{Dir: newFixture(t), Getenv: envOf(testEnv), Now: func() time.Time { return testNow }, Output: io.Discard})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tm := newTestModel(t, m, 80, 24)
-	waitFor(t, tm, "acme/widgets#42", "r1", "> . f-001", "> . f-001  !", "###  Title one", "multi.txt:3")
-	tm.Type("q")
-	view := finalView(t, tm)
-	if strings.Contains(view, "Label") || strings.Contains(view, "suggestion") {
-		t.Errorf("80-column list still carries the label column:\n%s", view)
-	}
-	for _, line := range strings.Split(view, "\n") {
-		if w := len([]rune(line)); w > 80 {
-			t.Errorf("line is %d columns wide: %q", w, line)
-		}
-	}
-}
 
 func TestListUnderCLocaleUsesASCIIGlyphs(t *testing.T) {
 	ascii := map[string]string{"NO_COLOR": "1", "LANG": "C"}
@@ -98,16 +70,10 @@ func everyView(t *testing.T, m *Model) map[string]string {
 	return views
 }
 
-func TestNoColorEmitsNoEscapes(t *testing.T) {
-	dir := newFixture(t)
-	for name, view := range everyView(t, modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8"}, 100, 30)) {
-		if strings.ContainsRune(view, '\x1b') {
-			t.Errorf("%s view emits an escape sequence under NO_COLOR:\n%q", name, view)
-		}
-	}
-
-	// Without NO_COLOR the same views do paint, so the check above is not passing on a writer that never had color.
-	colored := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+// Without NO_COLOR every view paints, so the NO_COLOR check in TestColorProfilesKeepEveryState is not passing on a
+// writer that never had color.
+func TestEveryViewPaintsWhenColorIsAvailable(t *testing.T) {
+	colored := modelOf(t, newFixture(t), map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
 	colored.styles.SetColorProfile(colorprofile.ANSI)
 	colored.styles.Color = true
 	for name, view := range everyView(t, colored) {
@@ -413,39 +379,15 @@ func TestListFooterWrapsAndKeepsTheCursorRow(t *testing.T) {
 // order the surfaces present is not the order the findings were filed in.
 func severityFixture(t *testing.T) string {
 	t.Helper()
-	dir := run.RunDir(t.TempDir(), "acme", "widgets", 42, 1)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	diffBytes, err := os.ReadFile(filepath.Join("..", "..", "testdata", "diffs", "multi-hunk.diff"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parsed, err := diff.Parse(diffBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := draft.NewEmpty()
-	if _, err := draft.Add(d, []draft.FindingInput{
+	return writePRRun(t, multiHunkDiff(t), []draft.FindingInput{
 		{Title: "Cosmetic one", Body: "Body one.", General: true, Label: "suggestion", Severity: "trivial"},
 		{Title: "Unrated two", Body: "Body two.", Location: &draft.LocationInput{Path: "multi.txt", Line: 21}, Label: "question"},
 		{Title: "Data loss three", Body: "Body three.", Location: &draft.LocationInput{Path: "multi.txt", Line: 3}, Label: "issue", Blocking: true, Severity: "critical"},
 		{Title: "Edge case four", Body: "Body four.", General: true, Label: "issue", Severity: "minor"},
-	}, parsed, draft.Rules{}, draft.ByAgent, testNow); err != nil {
-		t.Fatal(err)
-	}
-	d.Summary = "Four findings."
-	d.Version = 2
-	target := run.Target{Schema: run.TargetSchema, Owner: "acme", Repo: "widgets", Number: 42, Round: 1, Title: "Add widgets", DiffSHA256: run.DiffSHA256(diffBytes)}
-	for name, v := range map[string]any{"target.json": target, "draft.json": d} {
-		if err := run.WriteJSONAtomic(filepath.Join(dir, name), v); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := run.WriteFileAtomic(filepath.Join(dir, "pr.diff"), diffBytes); err != nil {
-		t.Fatal(err)
-	}
-	return dir
+	}, func(d *draft.Draft) {
+		d.Summary = "Four findings."
+		d.Version = 2
+	})
 }
 
 // severityOrder is critical, major, minor, trivial, then every unrated finding in finding-id order.
@@ -786,7 +728,7 @@ func TestApplyHeaderNamesTheLocalRun(t *testing.T) {
 	if strings.Contains(colored.reviewHeader(), "\x1b]8;") {
 		t.Errorf("header links somewhere: %q", colored.reviewHeader())
 	}
-	if underlined(colored.reviewHeader()) {
+	if sgrtest.Underlined(colored.reviewHeader()) {
 		t.Errorf("header underlines something: %q", colored.reviewHeader())
 	}
 	for capture, want := range map[string]string{"files": "widgets @ feat/cache · 1 file", "changed": "widgets @ feat/cache · uncommitted changes"} {
@@ -797,22 +739,334 @@ func TestApplyHeaderNamesTheLocalRun(t *testing.T) {
 	}
 }
 
-// underlined reports whether any SGR sequence in s turns on underline, skipping the operands of 38 and 48 colors.
-func underlined(s string) bool {
-	for _, m := range regexp.MustCompile(`\x1b\[([0-9;:]*)m`).FindAllStringSubmatch(s, -1) {
-		params := strings.Split(m[1], ";")
-		for i := 0; i < len(params); i++ {
-			switch p := params[i]; {
-			case p == "38" || p == "48" || p == "58":
-				if i+1 < len(params) && params[i+1] == "5" {
-					i += 2
-				} else {
-					i += 4
-				}
-			case p == "4" || strings.HasPrefix(p, "4:"):
-				return true
+// j and down move the list cursor one finding, k and up move it back, and neither moves past an end.
+func TestListKeysMoveTheCursorWithinTheFindings(t *testing.T) {
+	m := newModel(t, newFixture(t))
+	for _, step := range []struct {
+		key  string
+		want int
+	}{{"j", 1}, {"down", 2}, {"j", 2}, {"k", 1}, {"up", 0}, {"up", 0}} {
+		m.Update(keyOf(step.key))
+		if m.cursor != step.want {
+			t.Fatalf("after %s the cursor is %d, want %d", step.key, m.cursor, step.want)
+		}
+	}
+}
+
+// Enter on a round with no findings has nothing to open.
+func TestEnterOnAnEmptyRoundOpensNothing(t *testing.T) {
+	m := newModel(t, emptyFixture(t))
+	if _, cmd := m.Update(keyOf("enter")); cmd != nil || m.view != viewList {
+		t.Fatalf("enter on an empty round: view %v cmd %v", m.view, cmd)
+	}
+}
+
+// Each publish step's picker moves within its own choices.
+func TestPublishPickersMoveWithinTheirChoices(t *testing.T) {
+	for _, c := range []struct {
+		view    view
+		choices int
+	}{{viewAction, len(publish.Actions)}, {viewInline, len(publish.InlineModes)}} {
+		m := newModel(t, readyFixture(t, "", ""))
+		m.view, m.pick, m.action = c.view, 0, "comment"
+		last := c.choices - 1
+		for _, step := range []struct {
+			key  string
+			want int
+		}{{"j", 1}, {"down", min(2, last)}, {"j", last}, {"j", last}, {"k", last - 1}, {"up", max(0, last-2)}, {"k", 0}, {"up", 0}} {
+			m.Update(keyOf(step.key))
+			if m.pick != step.want || m.view != c.view {
+				t.Fatalf("view %v after %s: pick %d view %v, want %d", c.view, step.key, m.pick, m.view, step.want)
 			}
 		}
 	}
-	return false
+}
+
+// p reloads the draft before it publishes or returns, so a draft that no longer decodes ends the review there.
+func TestEndingOnADraftThatStopsDecodingEndsTheReview(t *testing.T) {
+	for name, open := range map[string]func(t *testing.T) (*Model, string){
+		"pull request": func(t *testing.T) (*Model, string) {
+			dir := readyFixture(t, "", "")
+			return newModel(t, dir), dir
+		},
+		"local": func(t *testing.T) (*Model, string) {
+			m, dir := readyApplyModel(t, "Claude")
+			return m, dir
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, dir := open(t)
+			corruptDraft(t, dir)
+			_, cmd := m.Update(keyOf("p"))
+			if r, ok := refusal.As(m.err); !ok || r.Code != refusal.Record || !isQuit(cmd) {
+				t.Fatalf("err %v quit %v", m.err, isQuit(cmd))
+			}
+		})
+	}
+}
+
+// An id too long for the row takes the title's room: the location column gives way first and then the confidence,
+// so the title keeps its floor and the row fits.
+func TestALongIDTakesTheLocationAndConfidenceColumns(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 80, 24)
+	before := m.listColumns()
+	if before.location == 0 || !before.confidence {
+		t.Fatalf("at 80 columns the list has no location or confidence to give up: %+v", before)
+	}
+	m.draft.Findings[0].ID = "f-" + strings.Repeat("9", 48)
+	m.setDraft(m.draft)
+	c := m.listColumns()
+	if c.location != 0 || c.confidence || c.title < listTitleFloor {
+		t.Errorf("columns with a long id: %+v", c)
+	}
+	for _, l := range strings.Split(m.View().Content, "\n") {
+		if style.Width(l) > 80 {
+			t.Errorf("row is %d cells: %q", style.Width(l), l)
+		}
+	}
+}
+
+// A full-summary command too wide for one row beside its label, but not alone, moves to the row under the label whole,
+// with no backslash.
+func TestSummaryCommandTakesItsOwnRowWhenTheLabelCrowdsIt(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 60, 14)
+	m.target.Owner = "acme-" + strings.Repeat("o", 13)
+	m.draft.Summary = "- one\n- two\n- three\n- four\n- five\n- six"
+	command := "loupe show --run " + m.runRef()
+	if alone, labeled := 2+len(command), 2+len("full summary: ")+len(command); alone > 60 || labeled <= 60 {
+		t.Fatalf("the ref does not fall between the two widths: alone %d, with the label %d", alone, labeled)
+	}
+	_, below := m.summaryCommand()
+	if len(below) != 2 || ansi.Strip(below[1]) != "  "+command {
+		t.Fatalf("rows under the summary: %q", below)
+	}
+}
+
+// The list shows its position only when the findings overflow the pane; detail always shows it (demo feedback).
+func TestListPositionOnlyWhenTheFindingsScroll(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	if view := m.View().Content; strings.Contains(view, "1 of 3") {
+		t.Errorf("a list that fits shows its position:\n%s", view)
+	}
+	mustOpen(m, "f-001")
+	if view := m.View().Content; !strings.Contains(view, "1 of 3") {
+		t.Errorf("detail lost its position:\n%s", view)
+	}
+	m = modelOf(t, newFixture(t), utf8Env, 60, 12)
+	for i := 4; i <= 12; i++ {
+		f := m.order[2]
+		f.ID = fmt.Sprintf("f-%03d", i)
+		m.draft.Findings = append(m.draft.Findings, f)
+		m.order = append(m.order, f)
+	}
+	if view := m.View().Content; !strings.Contains(view, "1 of 12") {
+		t.Errorf("a list that scrolls hides its position:\n%s", view)
+	}
+}
+
+// A clipped summary offers the full-summary command whole on one row, in the border when it fits and under the pane
+// when it does not, so it can be copied at every width (layout contract, summary budget).
+func TestClippedSummaryCommandStaysWhole(t *testing.T) {
+	const command = "loupe show --run acme/widgets#42@1"
+	for _, width := range []int{60, 79, 100} {
+		m := modelOf(t, newFixture(t), utf8Env, width, 14)
+		m.draft.Summary = "- one\n- two\n- three\n- four\n- five\n- six"
+		l := m.layoutList(len(m.viewFooter()), 0)
+		if !l.summaryClipped {
+			t.Fatalf("at %d the summary is not clipped: %+v", width, l)
+		}
+		view := m.View().Content
+		lines := strings.Split(view, "\n")
+		if len(lines) != 14 {
+			t.Fatalf("at %d the list is %d rows:\n%s", width, len(lines), view)
+		}
+		found := false
+		for _, line := range lines {
+			if style.Width(line) > width {
+				t.Errorf("at %d a row is %d cells: %q", width, style.Width(line), line)
+			}
+			if strings.Contains(line, command) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("at %d the full-summary command is not whole on one row:\n%s", width, view)
+		}
+		if !strings.Contains(view, "Title one") {
+			t.Errorf("at %d the selected finding is gone:\n%s", width, view)
+		}
+	}
+}
+
+// A short window collapses the summary on its own without changing the human's choice, which comes back when the
+// window grows.
+func TestShortWindowCollapsesTheSummaryWithoutForgetting(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 80, 30)
+	m.draft.Summary = "- one\n- two\n- three\n- four"
+	if l := m.layoutList(len(m.viewFooter()), 0); l.collapsed || len(l.summary) != 4 {
+		t.Fatalf("a tall window collapsed the summary: %+v", l)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	if l := m.layoutList(len(m.viewFooter()), 0); !l.collapsed || l.gap != 0 || m.summaryCollapsed {
+		t.Fatalf("a short window: %+v, preference collapsed %v", l, m.summaryCollapsed)
+	}
+	if !strings.Contains(m.View().Content, "collapsed to fit") {
+		t.Errorf("an automatic collapse offers tab as if it could expand:\n%s", m.View().Content)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	if l := m.layoutList(len(m.viewFooter()), 0); l.collapsed {
+		t.Errorf("growing the window did not bring the expanded summary back")
+	}
+}
+
+// A full-summary command too wide for the window breaks into rows that paste back as the same command: each row but
+// the last ends in a backslash, which the shell joins with the next (review finding, long repository names).
+func TestSummaryCommandPastesWholeForLongNames(t *testing.T) {
+	for _, repo := range []string{"repository-with-a-perfectly-valid-but-long-name", strings.Repeat("r", 100)} {
+		m := modelOf(t, newFixture(t), utf8Env, 60, 16)
+		m.target.Repo = repo
+		_, below := m.summaryCommand()
+		if len(below) < 2 {
+			t.Fatalf("%s: the command did not move under the pane: %q", repo, below)
+		}
+		var rows []string
+		for _, r := range below[1:] {
+			r = ansi.Strip(r)
+			if style.Width(r) > m.width {
+				t.Errorf("%s: row %q is wider than %d", repo, r, m.width)
+			}
+			rows = append(rows, r)
+		}
+		pasted := strings.ReplaceAll(strings.Join(rows, "\n"), "\\\n", "")
+		want := []string{"loupe", "show", "--run", "acme/" + repo + "#42@1"}
+		if got := strings.Fields(pasted); !slices.Equal(got, want) {
+			t.Errorf("%s: pastes as %q, want %q", repo, got, want)
+		}
+	}
+}
+
+// reasonFixture withdraws f-003 with the given title and reason, and f-002 with no reason (specs/041-withdraw-reason).
+func reasonFixture(t *testing.T, title string, reason draft.Reason) string {
+	t.Helper()
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[2].Title = title
+		raw, err := json.Marshal(reason)
+		if err != nil {
+			return err
+		}
+		withdraw := false
+		if _, _, err := draft.Edit(d, "f-003", draft.EditInput{WithdrawReason: raw}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow); err != nil {
+			return err
+		}
+		_, _, err = draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// listRow is the finding's row as the list draws it, without color.
+func listRow(t *testing.T, m *Model, id string) string {
+	t.Helper()
+	for _, row := range listRows(m.View().Content) {
+		if strings.Contains(row, " "+id+" ") {
+			return ansi.Strip(row)
+		}
+	}
+	t.Fatalf("no row for %s:\n%s", id, m.View().Content)
+	return ""
+}
+
+// The reason follows the title in the title column, and when both overflow they split it about evenly, each ending in
+// an ellipsis (FR-006).
+func TestTheRowSaysWhyAFindingWasWithdrawn(t *testing.T) {
+	longTitle := "The retry loop resets its counter on every scrape attempt"
+	longReason := "Test name only, the assertion is unchanged and nothing runs differently"
+	for _, c := range []struct{ width, height int }{{80, 24}, {100, 30}} {
+		t.Run(fmt.Sprint(c.width), func(t *testing.T) {
+			m := modelOf(t, reasonFixture(t, longTitle, draft.Reason{Text: longReason, Code: "no-runtime-effect"}), utf8Env, c.width, c.height)
+			row := listRow(t, m, "f-003")
+			rest := m.listColumns().title - 3
+			title, reason := rest-rest/2, rest/2
+			want := m.styles.TruncRight(longTitle, title) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(longReason, reason)
+			if !strings.Contains(row, want) || !strings.HasSuffix(m.styles.TruncRight(longReason, reason), m.styles.Glyphs.Ellipsis) {
+				t.Errorf("row %q lacks %q", row, want)
+			}
+			if style.Width(row) > c.width || strings.Contains(row, "no-runtime-effect") {
+				t.Errorf("row %q is %d cells or carries the code", row, style.Width(row))
+			}
+			if bare := listRow(t, m, "f-002"); strings.Contains(bare, " "+m.glyphs.Sep+" ") || !strings.Contains(bare, "Title two") {
+				t.Errorf("a withdrawal with no reason drew one: %q", bare)
+			}
+		})
+	}
+}
+
+// A short title gives the reason the slack, and a short reason gives it to the title.
+func TestTheRowGivesTheSlackToTheLongerPart(t *testing.T) {
+	long := "Test name only, the assertion is unchanged and nothing runs differently"
+	m := modelOf(t, reasonFixture(t, "Short", draft.Reason{Text: long}), utf8Env, 80, 24)
+	if want := "Short " + m.glyphs.Sep + " " + m.styles.TruncRight(long, m.listColumns().title-3-5); !strings.Contains(listRow(t, m, "f-003"), want) {
+		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
+	}
+	m = modelOf(t, reasonFixture(t, long, draft.Reason{Text: "Naming."}), utf8Env, 80, 24)
+	if want := m.styles.TruncRight(long, m.listColumns().title-3-7) + " " + m.glyphs.Sep + " Naming."; !strings.Contains(listRow(t, m, "f-003"), want) {
+		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
+	}
+}
+
+// The blocking mark sits in the severity pill, so a blocking row splits the whole title cell.
+func TestABlockingRowSplitsTheWholeTitleCell(t *testing.T) {
+	long := "Test name only, the assertion is unchanged and nothing runs differently"
+	dir := reasonFixture(t, long, draft.Reason{Text: long})
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[2].Blocking = true
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 80, 24)
+	rest := m.listColumns().title - 3
+	want := m.styles.TruncRight(long, rest-rest/2) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, rest/2)
+	if row := listRow(t, m, "f-003"); !strings.Contains(row, want) {
+		t.Errorf("row %q lacks %q", row, want)
+	}
+}
+
+// A withdrawn row's title recedes to the same color as dim, so the reason is also italic to read apart from it. Without
+// color the row carries no escape.
+func TestTheRowSetsTheReasonApartFromTheTitle(t *testing.T) {
+	rawRow := func(m *Model) string {
+		for _, row := range listRows(m.View().Content) {
+			if strings.Contains(ansi.Strip(row), " f-003 ") {
+				return row
+			}
+		}
+		t.Fatalf("no row for f-003:\n%s", m.View().Content)
+		return ""
+	}
+	dir := reasonFixture(t, "Title three", draft.Reason{Text: "Naming only."})
+	m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	if row, want := rawRow(m), m.styles.Dim.Italic(true).Render(" "+m.glyphs.Sep+" Naming only."); !strings.Contains(row, want) {
+		t.Errorf("row %q lacks the italic reason %q", row, want)
+	}
+	m = modelOf(t, dir, utf8Env, 100, 30)
+	if row := rawRow(m); strings.Contains(row, "\x1b") || !strings.Contains(row, "Title three "+m.glyphs.Sep+" Naming only.") {
+		t.Errorf("row without color %q", row)
+	}
+}
+
+// A reason passes the same one-line display rule as a title.
+func TestTheRowEscapesAReason(t *testing.T) {
+	m := modelOf(t, reasonFixture(t, "T", draft.Reason{Text: "a\x1b[31mb"}), utf8Env, 100, 30)
+	if row := listRow(t, m, "f-003"); strings.Contains(row, "\x1b") || !strings.Contains(row, `a\u001B[31mb`) {
+		t.Errorf("row %q", row)
+	}
+	mustOpen(m, "f-003")
+	if view := m.View().Content; strings.Contains(ansi.Strip(view), "\x1b") || !strings.Contains(ansi.Strip(view), `a\u001B[31mb`) {
+		t.Errorf("detail %q", ansi.Strip(view))
+	}
 }

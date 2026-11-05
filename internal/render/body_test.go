@@ -3,7 +3,6 @@ package render
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"flag"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,29 +11,17 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/severity"
+	"github.com/eriksaulnier/loupe/internal/testutil/golden"
 )
 
-var update = flag.Bool("update", false, "rewrite golden files from the renderer, except example.md, which comes from docs/comment-format.md")
-
-func goldenPath(name string) string {
-	return filepath.Join("..", "..", "testdata", "golden", name)
-}
-
+// checkGolden leaves example.md alone under -update: it comes from docs/comment-format.md, not from the renderer.
 func checkGolden(t *testing.T, name, got string) {
 	t.Helper()
-	path := goldenPath(name)
-	if *update && name != "example.md" {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if name == "example.md" {
+		golden.Compare(t, name, got)
+		return
 	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != string(want) {
-		t.Fatalf("%s mismatch\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
+	golden.Check(t, name, got)
 }
 
 func exampleInput() Input {
@@ -118,13 +105,13 @@ func TestExampleGoldenMatchesDoc(t *testing.T) {
 		return hex.EncodeToString(sum[:])
 	}
 	want := strings.NewReplacer("8f3c…", hash("internal/publish/publish.go"), "5610…", hash("internal/draft/store.go")).Replace(string(m[1]))
-	golden, err := os.ReadFile(goldenPath("example.md"))
+	pinned, err := os.ReadFile(golden.Path(t, "example.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// The record's data and checksum are pinned by the golden, and the doc shows where the line goes.
 	got := regexp.MustCompile(`(?m)^<!-- loupe-findings v=1 sha256=[0-9a-f]{64} \S+ -->$`).
-		ReplaceAllLiteralString(string(golden), "<!-- loupe-findings v=1 sha256=<sha256> <data> -->")
+		ReplaceAllLiteralString(string(pinned), "<!-- loupe-findings v=1 sha256=<sha256> <data> -->")
 	if got != want {
 		t.Fatalf("testdata/golden/example.md differs from the doc example\n--- golden ---\n%s\n--- doc ---\n%s", got, want)
 	}
@@ -196,42 +183,6 @@ func TestBodyMetaBlockingPatternMatchesOnce(t *testing.T) {
 	}
 }
 
-func TestBodyFooterNamesSource(t *testing.T) {
-	in := exampleInput()
-	in.Source = "gadfly-review-pr@2.2.0"
-	body := Body(in)
-	if !strings.Contains(body, "\n\nreviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0`\n\n") ||
-		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 src=gadfly-review-pr@2.2.0 inline=blocking ") {
-		t.Fatalf("versioned source wrong\n%s", body)
-	}
-	in.Source = "loupe"
-	body = Body(in)
-	if !strings.Contains(body, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `loupe`\n\n") || !strings.Contains(body, "round=2 src=loupe inline=") {
-		t.Fatalf("unversioned source wrong\n%s", body)
-	}
-}
-
-func TestBodyNamesModel(t *testing.T) {
-	in := exampleInput()
-	in.Model = "anthropic/claude-sonnet-5"
-	body := Body(in)
-	if !strings.Contains(body, "\n\nreviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `anthropic/claude-sonnet-5`\n\n") ||
-		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 model=anthropic/claude-sonnet-5 inline=blocking ") {
-		t.Fatalf("model without source wrong\n%s", body)
-	}
-	in.Source = "gadfly-review-pr@2.2.0"
-	body = Body(in)
-	if !strings.Contains(body, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`\n\n") ||
-		!strings.Contains(body, "round=2 src=gadfly-review-pr@2.2.0 model=anthropic/claude-sonnet-5 inline=") {
-		t.Fatalf("model with source wrong\n%s", body)
-	}
-	in.Unattended, in.Source = true, ""
-	if body = Body(in); !strings.Contains(body, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `anthropic/claude-sonnet-5` · unattended\n\n") ||
-		!strings.Contains(body, "round=2 unattended=1 model=anthropic/claude-sonnet-5 inline=") {
-		t.Fatalf("model with unattended wrong\n%s", body)
-	}
-}
-
 // Severity, verified, impact and references each render alone, and a legacy free-text severity renders escaped.
 func TestBodyMetaLineParts(t *testing.T) {
 	in := exampleInput()
@@ -260,50 +211,41 @@ func TestBodyMetaLineParts(t *testing.T) {
 	}
 }
 
-func TestBodyUnattendedMarker(t *testing.T) {
-	in := exampleInput()
-	in.Unattended = true
-	body := Body(in)
-	if !strings.Contains(body, "\n\nreviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · unattended\n\n") {
-		t.Fatalf("unattended footer wrong\n%s", body)
-	}
-	if !strings.Contains(body, "<!-- loupe-meta v=1 round=2 unattended=1 inline=") {
-		t.Fatalf("unattended meta wrong\n%s", body)
-	}
-
-	in.Source = "gadfly-review-pr@2.2.0"
-	body = Body(in)
-	if !strings.Contains(body, "\n\nreviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · unattended\n\n") ||
-		!strings.Contains(body, "<!-- loupe-meta v=1 round=2 unattended=1 src=gadfly-review-pr@2.2.0 inline=") {
-		t.Fatalf("unattended with source wrong\n%s", body)
-	}
-}
-
+// The footer line and the loupe-meta marker each carry the source, the model and the unattended mark, in their own
+// order.
 func TestBodyFooterSegmentOrder(t *testing.T) {
+	const commit = "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2)"
+	const source, model = "gadfly-review-pr@2.2.0", "anthropic/claude-sonnet-5"
+	long := strings.Repeat("m", 64)
 	for _, tc := range []struct {
-		name       string
-		source     string
-		model      string
-		unattended bool
-		want       string
+		name          string
+		source, model string
+		unattended    bool
+		footer, meta  string
 	}{
-		{"bare", "", "", false, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2)"},
-		{"source", "gadfly-review-pr@2.2.0", "", false, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0`"},
-		{"unattended", "", "", true, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · unattended"},
-		{"source and unattended", "gadfly-review-pr@2.2.0", "", true, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · unattended"},
-		{"model", "", "anthropic/claude-sonnet-5", false, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `anthropic/claude-sonnet-5`"},
-		{"model and unattended", "", "anthropic/claude-sonnet-5", true, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `anthropic/claude-sonnet-5` · unattended"},
-		{"source and model", "gadfly-review-pr@2.2.0", "anthropic/claude-sonnet-5", false,
-			"reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`"},
-		{"source, model and unattended", "gadfly-review-pr@2.2.0", "anthropic/claude-sonnet-5", true,
-			"reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5` · unattended"},
-		{"longest model", "", strings.Repeat("m", 64), false, "reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2) · `" + strings.Repeat("m", 64) + "`"},
+		{"bare", "", "", false, commit, ""},
+		{"source", source, "", false, commit + " · via `gadfly-review-pr 2.2.0`", "src=" + source + " "},
+		{"unversioned source", "loupe", "", false, commit + " · via `loupe`", "src=loupe "},
+		{"unattended", "", "", true, commit + " · unattended", "unattended=1 "},
+		{"source and unattended", source, "", true, commit + " · via `gadfly-review-pr 2.2.0` · unattended", "unattended=1 src=" + source + " "},
+		{"model", "", model, false, commit + " · `anthropic/claude-sonnet-5`", "model=" + model + " "},
+		{"model and unattended", "", model, true, commit + " · `anthropic/claude-sonnet-5` · unattended", "unattended=1 model=" + model + " "},
+		{"source and model", source, model, false, commit + " · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5`",
+			"src=" + source + " model=" + model + " "},
+		{"source, model and unattended", source, model, true,
+			commit + " · via `gadfly-review-pr 2.2.0` · `anthropic/claude-sonnet-5` · unattended",
+			"unattended=1 src=" + source + " model=" + model + " "},
+		{"longest model", "", long, false, commit + " · `" + long + "`", "model=" + long + " "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := exampleInput()
 			in.Source, in.Model, in.Unattended = tc.source, tc.model, tc.unattended
-			if body := Body(in); !strings.Contains(body, "\n\n"+tc.want+"\n\n<!-- loupe digest=") {
-				t.Fatalf("footer wrong, want %q\n%s", tc.want, body)
+			body := Body(in)
+			if !strings.Contains(body, "\n\n"+tc.footer+"\n\n<!-- loupe digest=") {
+				t.Fatalf("footer wrong, want %q\n%s", tc.footer, body)
+			}
+			if !strings.Contains(body, "<!-- loupe-meta v=1 round=2 "+tc.meta+"inline=") {
+				t.Fatalf("meta wrong, want %q\n%s", tc.meta, body)
 			}
 		})
 	}

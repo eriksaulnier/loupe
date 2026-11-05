@@ -14,6 +14,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/style"
 )
@@ -351,7 +353,7 @@ func TestShowJSONPresentsARewrittenFinding(t *testing.T) {
 	deps, s = testDeps(t, map[string]string{"LOUPE_HOME": home})
 	deps.Stdin = strings.NewReader(`{"body": "Agent body, again."}`)
 	code := Execute(deps, []string{"edit", "f-001", "--run", "o/r#1", "--from", "-", "--expect-version", strconv.Itoa(before.Version), "--json"})
-	if env := decodeOne(t, s.stdout.Bytes()); code != 1 || env["error"].(map[string]any)["code"] != "version" {
+	if env := decodeOne(t, s.stdout.Bytes()); code != 1 || errorOf(env)["code"] != "version" {
 		t.Fatalf("exit %d result %v", code, env)
 	}
 }
@@ -416,5 +418,57 @@ func TestShowTextSaysWhyAFindingWasWithdrawn(t *testing.T) {
 	got := s.stdout.String()
 	if n := strings.Count(got, "withdrawn because"); n != 1 || !strings.Contains(got, "withdrawn because Naming only. [no-runtime-effect]") {
 		t.Fatalf("show output:\n%s", got)
+	}
+}
+
+// A run with no findings says so and names the command that files them.
+func TestShowOfARunWithNoFindings(t *testing.T) {
+	home := commentsRun(t, nil)
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"show", "--run", "o/r#1"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	out := s.stdout.String()
+	for _, want := range []string{"Findings\n  (none)\n", "No findings yet. File them with", "loupe add --run o/r#1@1 --from <file> --json"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// A previous round whose receipt holds no findings shows an empty list, under --json and to a human.
+func TestShowPreviousWithNoFindings(t *testing.T) {
+	home := assessRun(t, "pub-1")
+	receipt := &publish.Receipt{Schema: 1, ReviewID: 7, ReviewURL: testReviewURL, Action: "comment", Author: "reviewer",
+		Envelope: publish.Envelope{PublicationID: "pub-1", Viewer: "reviewer", Body: "Review.\n\n<!-- loupe-meta v=1 -->",
+			Target: publish.EnvelopeTarget{Owner: "o", Repo: "r", Number: 1, Round: 1}}}
+	if err := publish.SaveReceipt(run.RunDir(home, "o", "r", 1, 1), receipt); err != nil {
+		t.Fatal(err)
+	}
+	code, s := runWithStdin(t, home, "", "show", "--previous", "--run", "o/r#1@2", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+	}
+	if findings, ok := decodeOne(t, s.stdout.Bytes())["findings"].([]any); !ok || len(findings) != 0 {
+		t.Fatalf("findings %v, want an empty list", findings)
+	}
+	deps, h := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"show", "--previous", "--run", "o/r#1@2"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, h.stderr.String())
+	}
+	if !strings.Contains(h.stdout.String(), "Findings\n  (none)\n") {
+		t.Fatalf("output:\n%s", h.stdout.String())
+	}
+}
+
+// A damaged receipt in an earlier round is reported, not taken as "nothing published".
+func TestShowPreviousRefusesADamagedEarlierReceipt(t *testing.T) {
+	home := assessRun(t, "pub-1")
+	if err := os.WriteFile(filepath.Join(run.RunDir(home, "o", "r", 1, 1), "receipt.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s := runWithStdin(t, home, "", "show", "--previous", "--run", "o/r#1@2", "--json")
+	if errObj := wantCode(t, code, s, refusal.Record); !strings.Contains(errObj["message"].(string), "receipt.json") {
+		t.Fatalf("error %v", errObj)
 	}
 }

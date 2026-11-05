@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 )
@@ -38,37 +41,32 @@ func TestApplyStartEnterOpensTheFirstPendingFinding(t *testing.T) {
 	}
 }
 
-func TestApplyStartLOpensTheListAndQQuits(t *testing.T) {
-	m, _ := applyModel(t, "Claude")
-	press(m, "l")
-	if m.view != viewList {
-		t.Fatalf("l opened view %d, want the list", m.view)
+// l opens the list from the start screen and from the detail, as esc does there; q quits the start screen.
+func TestApplyLOpensTheList(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		keys []string
+	}{{"start screen", nil}, {"detail", []string{"enter"}}} {
+		m, _ := applyModel(t, "Claude")
+		press(m, c.keys...)
+		press(m, "l")
+		if m.view != viewList {
+			t.Fatalf("l in the %s opened view %d, want the list", c.name, m.view)
+		}
 	}
-	m, _ = applyModel(t, "Claude")
+	m, _ := applyModel(t, "Claude")
 	if _, cmd := m.update(runes("q")); !isQuit(cmd) {
 		t.Error("q did not quit the start screen")
 	}
 }
 
-// l in the detail opens the list, as esc does.
-func TestApplyDetailLOpensTheList(t *testing.T) {
-	m, _ := applyModel(t, "Claude")
-	press(m, "enter", "l")
-	if m.view != viewList {
-		t.Fatalf("l in the detail opened view %d, want the list", m.view)
-	}
-}
-
-func TestApplyWithNothingPendingOpensOnTheList(t *testing.T) {
-	_, dir := readyApplyModel(t, "Claude")
-	if m := modelOf(t, dir, utf8Env, 100, 40); m.view != viewList {
-		t.Fatalf("view %d, want the list", m.view)
-	}
-}
-
-func TestPullRequestRunOpensOnTheList(t *testing.T) {
-	if m := modelOf(t, newFixture(t), utf8Env, 100, 40); m.view != viewList {
-		t.Fatalf("view %d, want the list", m.view)
+// A run with nothing to start on opens on the list: a local run with nothing pending, and every pull request run.
+func TestRunsWithNothingToStartOpenOnTheList(t *testing.T) {
+	_, ready := readyApplyModel(t, "Claude")
+	for name, dir := range map[string]string{"local, nothing pending": ready, "pull request": newFixture(t)} {
+		if m := modelOf(t, dir, utf8Env, 100, 40); m.view != viewList {
+			t.Fatalf("%s: view %d, want the list", name, m.view)
+		}
 	}
 }
 
@@ -112,4 +110,29 @@ func TestApplyStartPaneFitsItsLines(t *testing.T) {
 		return
 	}
 	t.Fatal("no count on the start screen")
+}
+
+// ctrl+r on the start screen reloads the draft, so a change made since it opened shows in the count.
+func TestApplyStartCtrlRReloads(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	outside(t, dir, accepted("f-001"))
+	m.Update(keyOf("ctrl+r"))
+	if screen := screenText(m); m.view != viewStart || !strings.Contains(screen, "2 findings to decide") {
+		t.Fatalf("view %v after ctrl+r:\n%s", m.view, screen)
+	}
+}
+
+// A summary longer than the start pane ends in how many lines it left out, and a title taller than the pane still
+// leaves the count on screen.
+func TestApplyStartPaneShortensWhatDoesNotFit(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	m.draft.Summary = strings.Repeat("A line of the summary.\n", 30)
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
+	if screen := screenText(m); !regexp.MustCompile(`\d+ more lines`).MatchString(screen) || !strings.Contains(screen, "3 findings to decide") {
+		t.Errorf("a long summary:\n%s", screen)
+	}
+	m.target.Title = strings.Repeat("A very long title ", 40)
+	if screen := screenText(m); !strings.Contains(screen, "3 findings to decide") {
+		t.Errorf("a tall title hides the count:\n%s", screen)
+	}
 }

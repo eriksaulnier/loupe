@@ -128,25 +128,34 @@ esc | back to the finding |`,
 	}
 }
 
-// TestPRSettleDropsItsDecisionKeys pins the keys a settling detail drops on a pull request run.
-func TestPRSettleDropsItsDecisionKeys(t *testing.T) {
-	for _, k := range strings.Split("axsurdew", "") {
-		dir := decidedFixture(t)
-		m := newModel(t, dir)
-		if err := m.openFinding("f-001"); err != nil {
-			t.Fatal(err)
-		}
-		before := loadDraft(t, dir).Version
-		m.settling = true
-		press(m, k)
-		if m.noting || m.editing || m.rewriting || loadDraft(t, dir).Version != before {
-			t.Errorf("%s was acted on while settling", k)
-		}
+// TestSettleDropsTheModesDecisionKeys pins the keys a settling detail drops on each kind of run. f decides nothing,
+// so it still opens the file diff.
+func TestSettleDropsTheModesDecisionKeys(t *testing.T) {
+	for _, c := range []struct {
+		name, keys string
+		open       func(t *testing.T) (*Model, string)
+	}{
+		{"pull request", "axsurdew", func(t *testing.T) (*Model, string) {
+			dir := decidedFixture(t)
+			return newModel(t, dir), dir
+		}},
+		{"local", "aAxXsurd", func(t *testing.T) (*Model, string) { return applyModel(t, "Claude") }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, k := range strings.Split(c.keys, "") {
+				m, dir := c.open(t)
+				mustOpenFinding(t, m, "f-001")
+				before := loadDraft(t, dir).Version
+				m.settling = true
+				press(m, k)
+				if m.noting || m.editing || m.rewriting || loadDraft(t, dir).Version != before {
+					t.Errorf("%s was acted on while settling", k)
+				}
+			}
+		})
 	}
 	m := newModel(t, decidedFixture(t))
-	if err := m.openFinding("f-001"); err != nil {
-		t.Fatal(err)
-	}
+	mustOpenFinding(t, m, "f-001")
 	m.settling = true
 	press(m, "f")
 	if m.view != viewFileDiff {
@@ -196,9 +205,6 @@ func TestPRKeysOPEAndX(t *testing.T) {
 	press(ready, "p")
 	if ready.view != viewAction {
 		t.Errorf("p on a ready draft: view %d, want the action step", ready.view)
-	}
-	if got := fmt.Sprint(publishSteps); got != "[Action Inline comments Message]" {
-		t.Errorf("publish steps %s", got)
 	}
 }
 
@@ -272,14 +278,11 @@ func keysOf(hints []style.Hint) []string {
 	return out
 }
 
-// On a local run the detail offers each decision key next to its shift, which adds the human's words: a and A, x
-// and X. Neither t nor w is offered.
+// On a local run the detail offers each decision key next to its shift, which adds the human's words: on an accepted
+// finding A, x and X stay. TestApplyVerbsAreAimedAtTheAgent pins the pending finding's hints.
 func TestApplyDetailPairsEachDecisionWithItsShift(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	mustOpenFinding(t, m, "f-001")
-	if got, want := strings.Join(keysOf(m.detailHints()), " "), "a A x X s"; !strings.Contains(got, want) {
-		t.Errorf("pending detail keys %q lack %q", got, want)
-	}
 	outside(t, dir, accepted("f-001"))
 	if _, err := m.reload(); err != nil {
 		t.Fatal(err)
@@ -394,7 +397,7 @@ func TestApplyDetailLeadsWithWhatTheApplierWillDo(t *testing.T) {
 }
 
 // On a local run the notices and note panes use the agent-facing verbs of the footer: reject, ask and tweak.
-func TestLocalRunNoticesUseTheAgentVerbs(t *testing.T) {
+func TestApplyNoticesUseTheAgentVerbs(t *testing.T) {
 	dir := localFixture(t, "changed", "Claude", applyInputs...)
 	m := modelOf(t, dir, utf8Env, 100, 40)
 	mustOpenFinding(t, m, "f-001")
@@ -434,6 +437,19 @@ func TestLocalPlace(t *testing.T) {
 	} {
 		if got := *localPlace(run.Target{Local: &c.local}); got != c.want {
 			t.Errorf("%+v: place %+v, want %+v", c.local, got, c.want)
+		}
+	}
+	if got := *localPlace(run.Target{}); got != (style.LocalPlace{}) {
+		t.Errorf("a target with no local block: place %+v", got)
+	}
+}
+
+// A word a local run has no form of reads as on a pull request run.
+func TestApplyKeepsAWordItHasNoFormOf(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	for word, want := range map[string]string{"excluded": "rejected", "the agent": "Claude", "accepted": "accepted"} {
+		if got := m.ui.word(m, word); got != want {
+			t.Errorf("%q reads %q, want %q", word, got, want)
 		}
 	}
 }

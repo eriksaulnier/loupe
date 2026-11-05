@@ -26,7 +26,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `internal/style` | The one place terminal appearance is decided: colors, glyphs and layout helpers |
 | `internal/tui` | The human review interface: a full-screen Bubble Tea program |
 | `internal/updatecheck` | Decides whether a newer release exists, from a daily lookup that `capture` runs and a cache file that `review` reads |
-| `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, `fakegh`, an in-memory GitHub REST server, and `screen`, which types keys into the review program through a pipe and waits for what it draws |
+| `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, `fakegh`, an in-memory GitHub REST server, and `screen`, which types keys into the review program through a pipe and waits for what it draws. Also `gitfail`, a git on PATH that fails a chosen call, `golden`, the one `-update` flag and golden check, `refusaltest`, `sgrtest` and `herdrstub` |
 | `plugin/` | The agent plugin: the `human-review` workflow skill for pull requests, the `human-decide` workflow skill for local runs, and the Claude Code and Codex manifests. It ships no review skill and no command |
 | `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add eriksaulnier/loupe` find the plugin |
 | `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add eriksaulnier/loupe` |

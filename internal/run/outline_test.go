@@ -1,6 +1,7 @@
 package run
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -67,5 +68,16 @@ func TestLoadOutlineRefusesDamage(t *testing.T) {
 				t.Fatalf("LoadOutline = %v, want a record refusal", err)
 			}
 		})
+	}
+}
+
+// A capture with no Markdown files still writes a files array, never null.
+func TestEncodeOutlineWritesNoFilesAsAnEmptyArray(t *testing.T) {
+	data, err := EncodeOutline(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("{\n  \"schema\": %d,\n  \"files\": []\n}\n", OutlineSchema); string(data) != want {
+		t.Fatalf("EncodeOutline(nil) = %s, want %s", data, want)
 	}
 }

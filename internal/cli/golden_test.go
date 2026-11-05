@@ -2,9 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"flag"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,11 +9,9 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/run"
-
 	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/eriksaulnier/loupe/internal/testutil/golden"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files under testdata/golden/cli from the renderers")
 
 // goldenRuns is one home with two runs: one mid-review with a send-back, a reply and a blocking finding, and one that
 // has nothing filed against it yet, so every state a human view can show appears in the goldens.
@@ -102,7 +97,7 @@ func TestHumanOutputGoldens(t *testing.T) {
 				if strings.Contains(got, "\x1b") {
 					t.Fatalf("NO_COLOR output carries an escape sequence:\n%q", got)
 				}
-				checkCLIGolden(t, c.name+"."+strconv.Itoa(width)+".txt", got)
+				golden.Check(t, "cli/"+c.name+"."+strconv.Itoa(width)+".txt", got)
 			})
 		}
 	}
@@ -120,27 +115,7 @@ func TestNerdTierGolden(t *testing.T) {
 	if !strings.Contains(got, "\uf407 eriksaulnier/dev-loadout#2") || !strings.Contains(got, "\uf00c 1 \uf10c 1") || strings.Contains(got, "\ue0b0") {
 		t.Fatalf("nerd list:\n%s", got)
 	}
-	checkCLIGolden(t, "list.nerd.txt", got)
-}
-
-func checkCLIGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("..", "..", "testdata", "golden", "cli", name)
-	if *update {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != string(want) {
-		t.Fatalf("%s mismatch\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
+	golden.Check(t, "cli/"+"list.nerd.txt", got)
 }
 
 func TestASCIIGlyphsUnderANonUTF8Locale(t *testing.T) {

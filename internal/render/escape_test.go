@@ -59,6 +59,7 @@ func TestForDisplayANSI(t *testing.T) {
 		{"OSC escaped", "\x1b]52;c;Zm9v\x07", `\u001B]52;c;Zm9v\u0007`},
 		{"cursor movement escaped", "\x1b[2J\x1b[H", `\u001B[2J\u001B[H`},
 		{"lone escape at the end", "a\x1b", `a\u001B`},
+		{"unterminated SGR escaped", "a\x1b[1;3", `a\u001B[1;3`},
 		{"C1 CSI and bidi escaped", "\u009b2J\u202eabc", `\u009B2J\u202Eabc`},
 		{"newline and tab kept", "a\n\tb", "a\n\tb"},
 	}

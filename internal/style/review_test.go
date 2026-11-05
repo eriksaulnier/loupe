@@ -3,12 +3,15 @@ package style
 import (
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/eriksaulnier/loupe/internal/testutil/sgrtest"
 )
 
 // reviewStyle is the interactive theme on a true-color output, or with no color at all.
@@ -256,7 +259,7 @@ func states(counts map[ProgressState]int) []ProgressState {
 // Up to 30 counted findings get one cell each in list order; from 31 a 20-cell bar groups them (FR-004).
 func TestProgressCells(t *testing.T) {
 	order := []ProgressState{ProgressBlocking, ProgressNote, ProgressAccepted, ProgressAccepted, ProgressExcluded, ProgressPending}
-	if got := ProgressCells(order); !slicesEqual(got, order) {
+	if got := ProgressCells(order); !slices.Equal(got, order) {
 		t.Errorf("small round cells %v, want list order %v", got, order)
 	}
 	thirty := states(map[ProgressState]int{ProgressAccepted: 10, ProgressPending: 20})
@@ -291,18 +294,6 @@ func TestProgressCells(t *testing.T) {
 	if got := ProgressCells(nil); len(got) != 0 {
 		t.Errorf("empty round drew cells %v", got)
 	}
-}
-
-func slicesEqual(a, b []ProgressState) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestProgressBarGlyphs(t *testing.T) {
@@ -796,7 +787,7 @@ func TestLocalReviewHeader(t *testing.T) {
 		t.Errorf("narrow detached header falls back to the repository: %q", got)
 	}
 	colored := reviewStyle(t, true, nil).ReviewHeader(localHeading(), 160)
-	if strings.Contains(colored, "\x1b]8") || underlined(colored) {
+	if strings.Contains(colored, "\x1b]8") || sgrtest.Underlined(colored) {
 		t.Errorf("a local header is linked or underlined: %q", colored)
 	}
 	if Width(colored) != 160 {
@@ -804,29 +795,9 @@ func TestLocalReviewHeader(t *testing.T) {
 	}
 }
 
-// underlined reports whether any SGR sequence in s turns on underline, skipping the operands of 38 and 48 colors.
-func underlined(s string) bool {
-	for _, m := range regexp.MustCompile(`\x1b\[([0-9;:]*)m`).FindAllStringSubmatch(s, -1) {
-		params := strings.Split(m[1], ";")
-		for i := 0; i < len(params); i++ {
-			switch p := params[i]; {
-			case p == "38" || p == "48" || p == "58":
-				if i+1 < len(params) && params[i+1] == "5" {
-					i += 2
-				} else {
-					i += 4
-				}
-			case p == "4" || strings.HasPrefix(p, "4:"):
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // The PR header underlines its ref, so underlined must see it, or the local test proves nothing.
 func TestUnderlinedSeesThePRRef(t *testing.T) {
-	if !underlined(reviewStyle(t, true, nil).ReviewHeader(heading(), 100)) {
+	if !sgrtest.Underlined(reviewStyle(t, true, nil).ReviewHeader(heading(), 100)) {
 		t.Error("underlined misses the PR ref's underline")
 	}
 }
@@ -852,6 +823,94 @@ func TestLocalHeaderKeepsAShortTitle(t *testing.T) {
 			if got := s.ReviewHeader(h, width); !strings.Contains(got, "  "+title+" ") {
 				t.Errorf("%q at %d: header drops the title: %q", title, width, got)
 				break
+			}
+		}
+	}
+}
+
+func TestMidTruncAtItsEdges(t *testing.T) {
+	for _, c := range []struct {
+		text  string
+		width int
+		want  string
+	}{
+		{"o/r#12", 6, "o/r#12"},
+		{"o/r#12", 2, "12"},
+		{"acme/widgets#42", 9, "acme…s#42"},
+	} {
+		if got := midTrunc(c.text, c.width, "…"); got != c.want {
+			t.Errorf("midTrunc(%q, %d) = %q, want %q", c.text, c.width, got, c.want)
+		}
+	}
+}
+
+func TestSeverityRankOfAnUnratedWordIsMinusOne(t *testing.T) {
+	if got := severityRank("P2"); got != -1 {
+		t.Fatalf("severityRank(P2) = %d", got)
+	}
+}
+
+// A palette color is a literal in the source, so a bad one is a programming error that panics at startup.
+func TestHexPanicsOnABadColor(t *testing.T) {
+	defer func() {
+		if r := recover(); r != `style: bad palette color "#zz"` {
+			t.Fatalf("recovered %v", r)
+		}
+	}()
+	hex("#zz")
+}
+
+func TestPlainPiecesWithoutColor(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	if got := s.TitleTab("Findings", ToneAccent); got != "Findings" {
+		t.Errorf("TitleTab = %q", got)
+	}
+	if got := s.Verified("plausible"); got != "plausible" {
+		t.Errorf("Verified = %q", got)
+	}
+	if got := s.Pane(Pane{Width: PaneCols - 1, Height: PaneRows}); got != nil {
+		t.Errorf("a pane below the minimum drew %q", got)
+	}
+	if got := splitCells("plain"); !slices.Equal(got, []string{"plain"}) {
+		t.Errorf("splitCells of an unstyled bar = %q", got)
+	}
+}
+
+// The right title survives whole while it fits, then gives way by cells, and a border too narrow for any title is
+// plain.
+func TestPaneRightTitleGivesWayLast(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	narrow := ansi.Strip(s.Pane(Pane{Width: 12, Height: 2, Titles: PaneTitles{TopLeft: "abcdef", TopRight: "123456789"}})[0])
+	if narrow != "╭─ 12345… ─╮" {
+		t.Errorf("narrow top %q", narrow)
+	}
+	tiny := ansi.Strip(s.Pane(Pane{Width: PaneCols, Height: 2, Titles: PaneTitles{TopRight: "123"}})[0])
+	if tiny != "╭──╮" {
+		t.Errorf("tiny top %q", tiny)
+	}
+}
+
+func TestReviewFrameCutsAFooterTallerThanTheFrame(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	if got := s.ReviewFrame("head", nil, []string{"a", "b", "c"}, 20, 2); strings.Count(got, "\n") != 1 || !strings.HasPrefix(got, "head\n") {
+		t.Fatalf("frame %q, want 2 rows", got)
+	}
+}
+
+func TestLocalSpansNameTheRepositoryOnADetachedHead(t *testing.T) {
+	s := reviewStyle(t, false, nil)
+	if got := s.localSpans(LocalPlace{Repo: "loupe", Capture: "changed"}, 2); len(got) != 1 || got[0].Text != "loupe" {
+		t.Fatalf("spans %+v", got)
+	}
+}
+
+// The header is exactly the width it is given, however narrow.
+func TestReviewHeaderFillsEveryWidth(t *testing.T) {
+	for _, color := range []bool{false, true} {
+		s := reviewStyle(t, color, nil)
+		for w := 1; w <= 100; w++ {
+			if got := Width(s.ReviewHeader(heading(), w)); got != w {
+				t.Fatalf("color %v: header at %d is %d cells", color, w, got)
 			}
 		}
 	}

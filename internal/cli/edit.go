@@ -10,6 +10,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 const editHelp = `Change a finding, or withdraw or restore it.
@@ -182,10 +183,11 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 	if err != nil {
 		return err
 	}
-	m, err := runMode(dir)
+	target, err := run.LoadTarget(dir)
 	if err != nil {
 		return err
 	}
+	m := mode.Of(target)
 	if err := checkModeFlags(cmd, m); err != nil {
 		return err
 	}
@@ -196,7 +198,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 	if in == (editFields{}) && included == nil {
 		return refusal.New(refusal.Usage, "nothing to edit", "pass --from <file>|-, a field flag, --include or --exclude; see loupe edit --help")
 	}
-	dif, err := loadDiff(dir, in.namesHeading())
+	dif, err := loadDiff(dir, target, in.namesHeading())
 	if err != nil {
 		return err
 	}

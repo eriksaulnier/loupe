@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eriksaulnier/loupe/internal/testutil/golden"
+	"github.com/eriksaulnier/loupe/internal/testutil/herdrstub"
 	"github.com/eriksaulnier/loupe/internal/testutil/screen"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files under testdata/golden/apply")
 
 // applyRef is the first local run of the clone, whose origin names acme/widgets.
 const applyRef = owner + "/" + repo + ":local#1"
@@ -55,20 +54,9 @@ func (h *harness) writeRepoFile(name, content string) {
 // the stub logs each call's argv beside the name it was run by, NUL-separated and newline-terminated.
 var herdrStub string
 
-const herdrScript = `#!/bin/sh
-log="$(dirname "$0")/argv"
-for a in "$@"; do printf '%s\0' "$a" >> "$log"; done
-printf '\n' >> "$log"
-case "$2" in
-layout) printf '%s\n' '{"id":"cli:pane:layout","result":{"layout":{"panes":[{"pane_id":"w1:p1","rect":{"height":40,"width":150}}]},"type":"pane_layout"}}';;
-split) printf '%s\n' '{"id":"cli:pane:split","result":{"pane":{"pane_id":"w1:p2"},"type":"pane_info"}}';;
-run) printf '%s\n' '{"id":"cli:pane:run","result":{"type":"ok"}}';;
-esac
-`
-
 func writeHerdrStub(dir string) (string, error) {
 	path := filepath.Join(dir, "herdr-stub")
-	return path, os.WriteFile(path, []byte(herdrScript), 0o755)
+	return path, os.WriteFile(path, []byte(herdrstub.Script(herdrstub.Rect, "", "")), 0o755)
 }
 
 // handoffToStub runs loupe handoff with the stand-in Herdr on PATH, which records the pane command and runs nothing,
@@ -354,84 +342,12 @@ Evict the oldest entry first.
 Entries never expire.
 `
 
-// TestApplyPlanDecisions is User Story 2: a plan outside the repository and a code file inside it are captured whole,
-// the plan shows as plain text, and each accept with a note lands in applyWithChanges.
-func TestApplyPlanDecisions(t *testing.T) {
-	t.Parallel()
-	h := newApplyHarness(t)
-	plan := filepath.Join(t.TempDir(), "plan.md")
-	if err := os.WriteFile(plan, []byte(planDoc), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	captured := h.mustOK("capture", "--files", plan, "--applier", "Claude")
-	local := captured["target"].(map[string]any)["local"].(map[string]any)
-	file := local["files"].([]any)[0].(map[string]any)
-	// A file outside the repository and the home directory is shown as ext/<i>/<basename>, and abs names it.
-	if file["path"] != "ext/1/plan.md" || file["abs"] != plan || file["new"] != nil {
-		t.Fatalf("captured file %v", file)
-	}
-	headings := captured["headings"].(map[string]any)["ext/1/plan.md"].([]any)
-	if len(headings) != 3 {
-		t.Fatalf("headings %v", captured["headings"])
-	}
-
-	h.mustOK("add", "--run", applyRef, "--from", h.WriteFile("findings.json", `[
-		{"title": "Choose the store", "body": "Memory or disk. Disk survives a restart.", "location": {"path": "ext/1/plan.md", "heading": "Storage"},
-		 "proposal": "Keep entries in memory."},
-		{"title": "Who owns the cache?", "body": "No owner is named.", "general": true},
-		{"title": "Pick an expiry", "body": "Entries never expire, so memory grows.", "location": {"path": "ext/1/plan.md", "line": 10},
-		 "proposal": "Expire entries after one hour."}]`))
-	h.handoffToStub(applyRef)
-
-	s := h.openReview(applyRef)
-	s.Press("enter")
-	shown := s.WaitFor("Choose the store", "Claude will", "Evict the oldest entry first.")
-	if strings.Contains(shown, "+Evict") || strings.Contains(shown, "+ Evict") {
-		t.Fatalf("a --files run drew the plan as an addition (US2 scenario 3):\n%s", shown)
-	}
-	acceptWithNote(s, "f-001", "Use disk instead.")
-	s.WaitFor("Who owns the cache?")
-	accept(s, "f-002")
-	s.WaitFor("Pick an expiry")
-	acceptWithNote(s, "f-003", "Make the hour configurable.")
-	h.returnRun(s, "Claude", "")
-
-	fb := h.mustOK("feedback", "--run", applyRef)
-	apply, changes := group(t, fb, "apply"), group(t, fb, "applyWithChanges")
-	if ids(apply) != "f-002" || ids(changes) != "f-001,f-003" {
-		t.Fatalf("groups %v", fb["groups"])
-	}
-	if c := changes["f-001"]; c["suggestion"] != "Use disk instead." || c["path"] != plan || c["location"].(map[string]any)["heading"] != "Storage" {
-		t.Fatalf("f-001 %v", c)
-	}
-	if c := changes["f-003"]; c["proposal"] != "Expire entries after one hour." || c["suggestion"] != "Make the hour configurable." {
-		t.Fatalf("f-003 %v", c)
-	}
-	if a := apply["f-002"]; a["general"] != true || a["path"] != nil || a["proposal"] != nil {
-		t.Fatalf("f-002 %v", a)
-	}
-	h.noGitHub()
-}
-
 // TestApplyQuestionsWithNoFiles is User Story 3: a run with no files takes only general findings, and a question
 // accepted with no note goes to apply.
 func TestApplyQuestionsWithNoFiles(t *testing.T) {
 	t.Parallel()
 	h := newApplyHarness(t)
-	env, exit := h.RunJSON("capture", "--no-files")
-	if errObj, _ := env["error"].(map[string]any); exit != 2 || errObj["code"] != "usage" || !strings.Contains(fmt.Sprint(errObj["fix"]), "--title") {
-		t.Fatalf("capture --no-files: exit %d envelope %v, want usage naming --title", exit, env)
-	}
-	captured := h.mustOK("capture", "--no-files", "--title", "Cache design", "--applier", "Claude")
-	if captured["run"] != applyRef {
-		t.Fatalf("capture run %v", captured["run"])
-	}
-	errObj := h.mustRefuse("location", "add", "--run", applyRef, "--from",
-		h.WriteFile("anchored.json", `{"title": "Anchored", "body": "B", "location": {"path": "README.md", "line": 1}}`))
-	if !strings.Contains(fmt.Sprint(errObj["fix"]), `"general": true`) {
-		t.Fatalf("fix %q names no general", errObj["fix"])
-	}
+	h.mustOK("capture", "--no-files", "--title", "Cache design", "--applier", "Claude")
 	h.mustOK("add", "--run", applyRef, "--from", h.WriteFile("findings.json", `[
 		{"title": "Which store?", "body": "Memory or disk.", "general": true, "proposal": "Use memory."},
 		{"title": "Who owns it?", "body": "Name an owner, or leave it shared.", "general": true}]`))
@@ -553,7 +469,10 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 
 	s := h.openReview(applyRef)
 	s.Press("enter")
-	s.WaitFor("Choose the store")
+	shown := s.WaitFor("Choose the store", "Evict the oldest entry first.")
+	if strings.Contains(shown, "+Evict") || strings.Contains(shown, "+ Evict") {
+		t.Fatalf("a --files run drew the plan as an addition (US2 scenario 3):\n%s", shown)
+	}
 	accept(s, "f-001")
 	s.WaitFor("Pick an expiry")
 	acceptWithNote(s, "f-002", "Make it one day.")
@@ -589,7 +508,7 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("feedback exit %d stderr %q", exit, stderr)
 	}
-	checkApplyGolden(t, "feedback.json", maskPaths(t, stdout, map[string]string{h.Repo.Dir: "<repo>", h.Home: "<home>"}))
+	golden.Check(t, "apply/feedback.json", maskPaths(t, stdout, map[string]string{h.Repo.Dir: "<repo>", h.Home: "<home>"}))
 	h.noGitHub()
 }
 
@@ -605,26 +524,6 @@ func maskPaths(t *testing.T, stdout string, dirs map[string]string) string {
 		t.Fatalf("feedback is not JSON: %v\n%s", err, stdout)
 	}
 	return strings.TrimRight(out.String(), "\n") + "\n"
-}
-
-func checkApplyGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("..", "..", "testdata", "golden", "apply", name)
-	if *update {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != string(want) {
-		t.Fatalf("%s mismatch\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
 }
 
 // TestApplyListFindsLocalRuns is User Story 6: local runs from two worktrees of one repository share the prefix with

@@ -120,16 +120,113 @@ func TestSubcommandHelpKeepsTheGlobalJSONFlag(t *testing.T) {
 // An agent working from --help alone learns the finding-id rule where it writes published text and where it is
 // handed earlier rounds' ids.
 func TestHelpStatesTheFindingIDRule(t *testing.T) {
-	for name, c := range map[string]struct{ help, want string }{
-		"add":     {addHelp, "a code span is not"},
-		"edit":    {editHelp, "a code span is not"},
-		"summary": {summaryHelp, "a code span is not"},
-		"show":    {showHelp, "Each id there belongs to its own round"},
-		"publish": {publishHelp, "refuses a finding id"},
+	for name, want := range map[string]string{
+		"add":     "a code span is not",
+		"edit":    "a code span is not",
+		"summary": "a code span is not",
+		"show":    "Each id there belongs to its own round",
+		"publish": "refuses a finding id",
 	} {
-		help := strings.Join(strings.Fields(c.help), " ")
-		if !strings.Contains(help, c.want) || (name != "show" && !strings.Contains(help, "finding-id")) {
-			t.Errorf("%s --help does not state the finding-id rule", name)
+		deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+		if code := Execute(deps, []string{name, "--help"}); code != 0 {
+			t.Fatalf("%s --help: exit %d stderr %q", name, code, s.stderr.String())
 		}
+		help := strings.Join(strings.Fields(s.stdout.String()), " ")
+		if !strings.Contains(help, want) || (name != "show" && !strings.Contains(help, "finding-id")) {
+			t.Errorf("%s --help does not state the finding-id rule:\n%s", name, help)
+		}
+	}
+}
+
+func TestRootHelpListsEveryCommandOnceUnderItsGroup(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	if code := Execute(deps, []string{"--help"}); code != 0 {
+		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
+	}
+	help := s.stdout.String()
+	for _, heading := range []string{"Workflow", "Commands", "Send-back loop", "Run references", "Conventions", "Environment"} {
+		if !strings.Contains(help, heading) {
+			t.Errorf("root help lacks the %s section:\n%s", heading, help)
+		}
+	}
+	for _, tail := range []string{"Usage:", "Available Commands:", "Flags:", `Use "loupe`} {
+		if strings.Contains(help, tail) {
+			t.Errorf("cobra's %q tail is still printed:\n%s", tail, help)
+		}
+	}
+	other, _ := testDeps(t, nil)
+	for _, c := range NewRoot(other).Commands() {
+		if c.GroupID == "" {
+			continue
+		}
+		if n := strings.Count(help, c.Short); n != 1 {
+			t.Errorf("command %s is listed %d times, want once:\n%s", c.Name(), n, help)
+		}
+	}
+	if strings.Contains(help, "\x1b") {
+		t.Errorf("help on a buffer must carry no escape sequence:\n%q", help)
+	}
+}
+
+func TestSubcommandHelpIsHeadedAndKeepsItsSentences(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	if code := Execute(deps, []string{"publish", "--help"}); code != 0 {
+		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
+	}
+	help := s.stdout.String()
+	for _, want := range []string{"Usage", "Refuses", "Flags", "Examples", "Result"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("publish help lacks %s:\n%s", want, help)
+		}
+	}
+	for _, want := range []string{
+		"head-moved   the captured commit left the pull request's history, or approve at a moved head",
+		"the review is sent at the captured commit",
+		"GitHub does not mark its comments outdated for those commits",
+		"This command is human-only. An agent MUST NOT run it",
+		"The confirmation draws full screen, so once every check above has passed, TERM=dumb or a",
+	} {
+		if !strings.Contains(help, want) {
+			t.Errorf("publish help lost %q:\n%s", want, help)
+		}
+	}
+}
+
+func TestVersionFlag(t *testing.T) {
+	deps, s := testDeps(t, nil)
+	if code := Execute(deps, []string{"--version"}); code != 0 {
+		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
+	}
+	if got := s.stdout.String(); got != "loupe version "+version+"\n" {
+		t.Fatalf("stdout %q", got)
+	}
+
+	deps, s = testDeps(t, nil)
+	if code := Execute(deps, []string{"--version", "--json"}); code != 0 {
+		t.Fatalf("exit %d, stderr %q", code, s.stderr.String())
+	}
+	m := decodeOne(t, s.stdout.Bytes())
+	if m["loupeVersion"] != version || m["ok"] != true || s.stderr.Len() != 0 {
+		t.Fatalf("envelope %v stderr %q", m, s.stderr.String())
+	}
+}
+
+// Only a capitalized label of a few words heads a help section; a line like "for example:" stays prose.
+func TestHelpHeadingNeedsACapitalizedLabel(t *testing.T) {
+	for line, want := range map[string]string{"Result:": "Result", "for example:": "", "Input (JSON):": "Input"} {
+		if label, _, _ := headingOf(line); label != want {
+			t.Errorf("headingOf(%q) label %q, want %q", line, label, want)
+		}
+	}
+}
+
+// help with an unknown topic prints loupe's short usage, not cobra's command listing.
+func TestHelpOfAnUnknownTopicPrintsTheShortUsage(t *testing.T) {
+	deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+	if code := Execute(deps, []string{"help", "bogus"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if want := "Unknown help topic [`bogus`]\nUsage\n  loupe [flags]\n"; s.stdout.String() != want {
+		t.Fatalf("stdout %q, want %q", s.stdout.String(), want)
 	}
 }

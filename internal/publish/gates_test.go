@@ -2,6 +2,7 @@ package publish
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func newFake(t *testing.T) (*fakegh.Server, github.Client) {
@@ -50,10 +52,7 @@ func gateErr(ctx context.Context, in GateInput) error {
 // wantRefusal returns the refusal message.
 func wantRefusal(t *testing.T, err error, code refusal.Code, fixParts ...string) string {
 	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok || r.Code != code {
-		t.Fatalf("want refusal %s, got %#v", code, err)
-	}
+	r := refusaltest.Want(t, err, code)
 	for _, part := range fixParts {
 		if !strings.Contains(r.Fix, part) {
 			t.Errorf("%s fix %q lacks %q", code, r.Fix, part)
@@ -277,12 +276,14 @@ func TestGatesReportTheLiveState(t *testing.T) {
 	}
 }
 
-func TestGatesPassOnGitHubFailures(t *testing.T) {
+func TestGatesReturnGitHubFailuresAsTheyCame(t *testing.T) {
 	for _, path := range []string{"/repos/acme/widgets/pulls/42", "/user"} {
 		gh, client := newFake(t)
 		gh.Fail("GET", path, 500)
 		in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
-		if gated, err := Gates(context.Background(), in); err == nil || gated != (Gated{}) {
+		gated, err := Gates(context.Background(), in)
+		var httpErr *github.HTTPError
+		if gated != (Gated{}) || !errors.As(err, &httpErr) || httpErr.Status != 500 {
 			t.Errorf("%s failing: %+v, %v", path, gated, err)
 		}
 	}

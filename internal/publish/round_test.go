@@ -2,10 +2,13 @@ package publish
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -110,4 +113,45 @@ func TestUnattendedRoundCountsTheRoundsAStickyReviewHolds(t *testing.T) {
 	if got := listedRound(t, client); got != 5 {
 		t.Fatalf("unattendedRound = %d, want 5", got)
 	}
+}
+
+func TestPublishedRoundRefusesWhenARoundCannotBeRead(t *testing.T) {
+	t.Run("rounds cannot be listed", func(t *testing.T) {
+		root := t.TempDir()
+		prDir := filepath.Dir(run.RunDir(root, "acme", "widgets", 42, 1))
+		if err := os.MkdirAll(filepath.Dir(prDir), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(prDir, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := publishedRound(root, fixtureTarget())
+		if !errors.Is(err, syscall.ENOTDIR) || !strings.Contains(err.Error(), prDir) {
+			t.Fatalf("got %v, want ENOTDIR naming %s", err, prDir)
+		}
+	})
+	// A link that points at itself cannot be statted, which tells a damaged record from a missing one.
+	for _, name := range []string{receiptFile, attemptFile} {
+		t.Run(name+" cannot be statted", func(t *testing.T) {
+			root := t.TempDir()
+			writeRound(t, root, 1)
+			target := fixtureTarget()
+			target.Round = 2
+			path := filepath.Join(run.RunDir(root, target.Owner, target.Repo, target.Number, 1), name)
+			if err := os.Symlink(name, path); err != nil {
+				t.Fatal(err)
+			}
+			_, err := publishedRound(root, target)
+			if !errors.Is(err, syscall.ELOOP) || !strings.Contains(err.Error(), "stat "+path) {
+				t.Fatalf("got %v, want ELOOP from stat %s", err, path)
+			}
+		})
+	}
+}
+
+func TestListReviewsKeepsARefusalFromTheClient(t *testing.T) {
+	gh, client := newFake(t)
+	gh.Fail("GET", reviewsPath, http.StatusUnauthorized)
+	_, err := listReviews(context.Background(), client, fixtureTarget(), "number this round")
+	wantRefusal(t, err, refusal.Auth, "gh auth login")
 }
