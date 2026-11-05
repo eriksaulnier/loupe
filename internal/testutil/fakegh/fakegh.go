@@ -109,6 +109,7 @@ type Server struct {
 	stallRelease   bool
 	releaseArrived chan struct{}
 	stallPR        bool
+	prArrived      chan struct{}
 	userForbidden  bool
 	outcomes       []Outcome
 	updates        []Outcome
@@ -334,11 +335,14 @@ func (s *Server) StallLatestRelease() <-chan struct{} {
 	return s.releaseArrived
 }
 
-// StallPullRequest makes the single pull request request hang until the caller cancels it.
-func (s *Server) StallPullRequest() {
+// StallPullRequest makes the single pull request request hang until the caller cancels it. The returned channel closes
+// when the first such request reaches the server, so a test can cancel a request it knows is in flight.
+func (s *Server) StallPullRequest() <-chan struct{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stallPR = true
+	s.prArrived = make(chan struct{})
+	return s.prArrived
 }
 
 // DenyUser makes GET /user answer 403, as GitHub does for an App installation token. The created review's author
@@ -488,7 +492,14 @@ func (s *Server) getPullRequest(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	pr, found := s.prs[key]
 	branch := s.branches[key]
-	stall := s.stallPR
+	stall, arrived := s.stallPR, s.prArrived
+	if stall && arrived != nil {
+		select {
+		case <-arrived:
+		default:
+			close(arrived)
+		}
+	}
 	s.mu.Unlock()
 	if stall {
 		<-r.Context().Done()

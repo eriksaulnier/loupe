@@ -121,13 +121,18 @@ func TestStallPullRequestHangsUntilCanceled(t *testing.T) {
 	s := New(t)
 	c := s.Client(t)
 	s.SetPR("o", "r", samplePR())
-	s.StallPullRequest()
+	arrived := s.StallPullRequest()
 
 	short, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
 	if _, err := c.PullRequest(short, "o", "r", 3); err == nil {
 		t.Fatal("a stalled pull request must fail at the deadline")
+	}
+	select {
+	case <-arrived:
+	default:
+		t.Fatal("the stalled request did not signal its arrival")
 	}
 	if waited := time.Since(start); waited > 5*time.Second {
 		t.Fatalf("waited %v", waited)

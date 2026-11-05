@@ -296,13 +296,13 @@ func TestWatchStopsOncePublished(t *testing.T) {
 func TestStopWatchingCancelsAStalledCheck(t *testing.T) {
 	gh := fakegh.New(t)
 	gh.SetPR("acme", "widgets", github.PullRequest{Number: 42, State: "open"})
-	gh.StallPullRequest()
+	arrived := gh.StallPullRequest()
 	client := gh.Client(t)
 	m := newWatchModel(t, func() (github.Client, error) { return client, nil })
 	done := make(chan tea.Msg, 1)
 	cmd := m.startPRCheck()
 	go func() { done <- cmd() }()
-	time.Sleep(20 * time.Millisecond)
+	<-arrived
 	m.StopWatching()
 	select {
 	case msg := <-done:
