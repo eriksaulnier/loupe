@@ -186,7 +186,7 @@ func (m *Model) saveRewrite() tea.Cmd {
 	title, body := m.rewriteText()
 	changed, disposition := false, ""
 	recorded, err := m.Decide(id, func(d *draft.Draft) error {
-		_, err := draft.Rewrite(d, id, title, body, nil, draft.Rules{}, m.diff, m.cfg.Now())
+		_, err := draft.Rewrite(d, id, title, body, nil, m.rules, m.diff, m.cfg.Now())
 		if err == nil {
 			changed, disposition = true, draft.Dispositions(d)[id]
 		}

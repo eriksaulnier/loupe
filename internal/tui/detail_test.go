@@ -1280,3 +1280,29 @@ func TestApplySettleDropsTAndX(t *testing.T) {
 		}
 	}
 }
+
+// The human's own changes on an apply run are checked against the run's rules, so a stored proposal never refuses them.
+func TestApplyReinstateAndRewriteKeepTheProposal(t *testing.T) {
+	dir := applyFixture(t, "Claude", applyInputs...)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		withdraw := false
+		_, _, err := draft.Edit(d, "f-001", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 100, 40)
+	mustOpenFinding(t, m, "f-001")
+	press(m, "u")
+	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionAccepted {
+		t.Fatalf("u did not reinstate f-001: %s; notice %q", got, m.notice)
+	}
+
+	mustOpenFinding(t, m, "f-003")
+	press(m, "w")
+	m.Update(runes("!"))
+	m.Update(ctrlS)
+	if f := findingOf(t, dir, "f-003"); f.Title != "Drop the flag!" || f.Proposal != "Remove the flag." {
+		t.Fatalf("the rewrite was not saved: %+v; notice %q", f, m.notice)
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/render"
@@ -75,9 +76,11 @@ const (
 
 // Model is the review program. It holds no lock: every decision goes through draft.Mutate at the displayed version.
 type Model struct {
-	cfg     Config
-	target  run.Target
-	ui      modeUI
+	cfg    Config
+	target run.Target
+	ui     modeUI
+	// rules are the mode's finding rules, which every change the human makes to a finding is checked against.
+	rules   draft.Rules
 	draft   *draft.Draft
 	diff    *diff.Diff
 	version int
@@ -231,6 +234,7 @@ func New(cfg Config) (*Model, error) {
 		cfg:          cfg,
 		target:       target,
 		ui:           uiFor(target),
+		rules:        mode.Of(target).Rules(),
 		diff:         parsed,
 		glyphs:       st.Glyphs,
 		styles:       st,
