@@ -73,7 +73,7 @@ The owner mistypes the version, reuses one, or names a branch that fails the che
 1. **Given** a version that is not `X.Y.Z-rc.N`, such as `0.22.0`, `v0.22.0-rc.1` or `0.22.0-beta.1`, **When** the workflow runs, **Then** it refuses and names the expected shape.
 2. **Given** a base version not greater than the manifest on `main`, **When** the workflow runs, **Then** it refuses and names the manifest version.
 3. **Given** a tag `v<version>` that already exists, or a release named `v<version>` that targets another commit, **When** the workflow runs, **Then** it refuses.
-4. **Given** a branch that does not exist, or a dispatch from a branch other than `main`, **When** the workflow runs, **Then** it refuses.
+4. **Given** a branch that does not exist, a dispatch from a branch other than `main`, or a dispatch by anyone but the owner, **When** the workflow runs, **Then** it refuses.
 5. **Given** a branch that fails `mise run check` or does not build, **When** the workflow runs, **Then** no draft and no tag is created.
 
 ---
@@ -105,7 +105,7 @@ A colleague installs the candidate binary and the plugin from the same tag, and 
 
 ### Functional Requirements
 
-- **FR-001**: `.github/workflows/prerelease.yml` MUST run only on `workflow_dispatch` from the default branch, with required inputs `ref` (a branch) and `version` (`X.Y.Z-rc.N`).
+- **FR-001**: `.github/workflows/prerelease.yml` MUST run only on `workflow_dispatch` by the repository's owner from the default branch, with required inputs `ref` (a branch) and `version` (`X.Y.Z-rc.N`).
 - **FR-002**: The workflow MUST refuse, before it writes anything to GitHub, a version that is not `X.Y.Z-rc.N` with numeric parts and no leading zeros, a base not greater than `.release-please-manifest.json` on the default branch, an existing tag `v<version>`, and a `ref` that is not a branch.
 - **FR-003**: The workflow MUST resolve `ref` to one commit at the start, and every later job MUST use that commit.
 - **FR-004**: The workflow MUST run `mise run check` on that commit, and build the archives and `checksums.txt` from it with the default branch's `.goreleaser.yaml`, in jobs without write permission and without the mise cache.

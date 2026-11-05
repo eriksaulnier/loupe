@@ -36,7 +36,7 @@ tar -xzf snapshot/loupe_*_darwin_arm64.tar.gz -C snapshot loupe
 
 ## Pre-releases
 
-`prerelease.yml` cuts `X.Y.Z-rc.N` from a branch, so a feature can be installed before it reaches `main`. Only the owner dispatches it, from the Actions tab or with `gh workflow run prerelease.yml -f ref=<branch> -f version=<X.Y.Z-rc.N>`. It MUST run from the default branch, and refuses otherwise. It takes two inputs: `ref`, a branch, and `version`, without the leading `v`.
+`prerelease.yml` cuts `X.Y.Z-rc.N` from a branch, so a feature can be installed before it reaches `main`. Only the repository's owner may dispatch it, and `validate` refuses anyone else. Dispatch it from the Actions tab or with `gh workflow run prerelease.yml -f ref=<branch> -f version=<X.Y.Z-rc.N>`. It MUST run from the default branch, and refuses otherwise. It takes two inputs: `ref`, a branch, and `version`, without the leading `v`.
 
 1. `validate` refuses a version that is not `X.Y.Z-rc.N`, a base `X.Y.Z` that is not greater than `.release-please-manifest.json` on `main`, an existing tag `v<version>`, and a `ref` that is not a branch. It writes nothing, and it pins the branch to one commit that every later job uses.
 2. `check` runs `mise run check` on that commit, without a write token.

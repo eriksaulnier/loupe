@@ -109,7 +109,7 @@ codex plugin add loupe@loupe
 pi install git:github.com/eriksaulnier/loupe@v0.22.0-rc.1
 ```
 
-A pre-release differs from a release in two ways:
+A pre-release differs from a release in three ways:
 
 - The plugin shows the version in its branch's manifests, not the pre-release version. The pre-release does not change them.
 - The binary shows no update notice, because the update check reads only `X.Y.Z` versions.
