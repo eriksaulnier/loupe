@@ -661,7 +661,8 @@ func TestDecisionOpensTheNextFinding(t *testing.T) {
 
 // Keys settle instantly in tests; the tests of the settle windows raise the delays on purpose.
 func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
-	settleAfterDecision = time.Second
+	// Longer than the test, so only the settledMsg sent below ends the window.
+	settleAfterDecision = time.Hour
 	defer func() { settleAfterDecision = 0 }()
 	dir := newFixture(t)
 	tm := startApp(t, dir)
@@ -672,6 +673,8 @@ func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
 	// Both keys are queued before the first decision has been on screen; the second lands on a finding never seen.
 	tm.Type("aa")
 	waitFor(t, tm, "f-001 accepted", "Body two suggests a helper.")
+	// settledMsg queues behind the second key on the program's one message channel, so that key lands inside the window.
+	tm.Send(settledMsg{})
 	tm.Type("q")
 	finalView(t, tm)
 	d := loadDraft(t, dir)
