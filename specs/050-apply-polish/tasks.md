@@ -34,5 +34,5 @@ Every task follows a failing test, then the change, then a passing check. PR run
 ## Phase 6: Skill, docs and end to end
 
 - [x] T013 Update `plugin/skills/human-decide/SKILL.md` for `note` (act on it after the groups) and for `applyWithChanges` meaning a note only, with phrases pinned in `internal/cli/plugin_test.go`. Update `docs/review-workflow.md`'s local key table (`internal/tui/docs_test.go` checks it against `applyUI`), and `specs/001-loupe-v1/contracts/cli.md` for `note`.
-- [ ] T014 Extend `internal/integration/apply_test.go`: the start screen, decisions with `a`, `A`, `x`, `X`, the auto return step with a note, then `wait` and `feedback` carrying `note`; regenerate only `testdata/golden/apply/feedback.json` and read the diff. Update the demo seed only if a test needs it.
+- [x] T014 Extend `internal/integration/apply_test.go`: the start screen, decisions with `a`, `A`, `x`, `X`, the auto return step with a note, then `wait` and `feedback` carrying `note`; regenerate only `testdata/golden/apply/feedback.json` and read the diff. Update the demo seed only if a test needs it.
 - [ ] T015 Run `mise run check`, then the quickstart by eye through `mise run demo` and tmux, and record what was seen.

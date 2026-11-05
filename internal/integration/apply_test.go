@@ -251,8 +251,8 @@ func (h *harness) userState(untracked ...string) string {
 }
 
 // TestApplyLocalCodeReview is User Story 1: a branch with committed, staged, unstaged and untracked changes is
-// captured without touching the user's state, decided with one key per accept and per reject, and returned with
-// two keys.
+// captured without touching the user's state, decided with one key per accept and per reject, and returned from
+// the return step that opens on its own, with a closing note that reaches wait and feedback.
 func TestApplyLocalCodeReview(t *testing.T) {
 	t.Parallel()
 	h := newApplyHarness(t)
@@ -298,7 +298,7 @@ func TestApplyLocalCodeReview(t *testing.T) {
 		 "proposal": "Move notes.txt to docs/notes.txt."}]`))
 	h.handoffToStub(applyRef)
 
-	s := h.openReview(applyRef)
+	s := h.openReview(applyRef, "3 findings to decide", "[local -> Claude]")
 	s.Press("enter")
 	s.WaitFor("Guard the committed line", "Claude will:", "Wrap line 3 in a nil check.")
 	accept(s, "f-001")
@@ -306,13 +306,20 @@ func TestApplyLocalCodeReview(t *testing.T) {
 	acceptWithNote(s, "f-002", "Call it the digest line.")
 	s.WaitFor("Move the untracked note")
 	exclude(s, "f-003", "")
-	h.returnRun(s, "Claude", "")
+	const closing = "Run the tests before you commit."
+	h.returnRun(s, "Claude", closing)
 
 	w := h.mustOK("wait", "--run", applyRef, "--timeout", "5s")
 	if w["reason"] != "returned" || awaitingOf(w) != "" || w["reviewUrl"] != nil || w["returned"] != true || w["groups"] == nil {
 		t.Fatalf("wait %v", w)
 	}
+	if w["note"] != closing {
+		t.Fatalf("wait note %v, want the closing note (SC-001)", w["note"])
+	}
 	fb := h.mustOK("feedback", "--run", applyRef)
+	if fb["note"] != closing {
+		t.Fatalf("feedback note %v, want the closing note (SC-001)", fb["note"])
+	}
 	apply, changes, excluded := group(t, fb, "apply"), group(t, fb, "applyWithChanges"), group(t, fb, "excluded")
 	if ids(apply) != "f-001" || ids(changes) != "f-002" || ids(excluded) != "f-003" || ids(group(t, fb, "withdrawn")) != "" {
 		t.Fatalf("groups %v", fb["groups"])
@@ -568,7 +575,7 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 	s.WaitFor("Split the loop", "Reading and counting.")
 	accept(s, "f-004")
 	// The withdrawn f-005 is not pending, so the last decision opens the return step.
-	h.returnRun(s, "Claude", "")
+	h.returnRun(s, "Claude", "Run the tests before you commit.")
 
 	if w := h.agent("wait", "--run", applyRef, "--timeout", "5s"); w["reason"] != "returned" {
 		t.Fatalf("wait after return %v", w)
