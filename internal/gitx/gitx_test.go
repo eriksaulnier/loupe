@@ -14,7 +14,9 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func setConfig(t *testing.T, clone string, args ...string) {
@@ -41,6 +43,7 @@ func TestParseGitHubURL(t *testing.T) {
 		{"https://gitlab.com/o/r", "", "", false},
 		{"git@gitlab.com:o/r.git", "", "", false},
 		{"gh:o/r", "", "", false},
+		{"git://github.com/o/r", "", "", false},
 		{"/tmp/remote.git", "", "", false},
 		{"https://github.com/o", "", "", false},
 		{"https://github.com/o/r/extra", "", "", false},
@@ -305,5 +308,35 @@ func TestBlobReadsAFileAtARefAndChangesNothing(t *testing.T) {
 	}
 	if d := before.DiffIgnoringLoupeRefs(repo.Snapshot()); len(d) != 0 {
 		t.Fatalf("clone changed: %v", d)
+	}
+}
+
+func TestOriginMatchesRefusesACloneWithoutOrigin(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	repo.Git("remote", "remove", "origin")
+	r := refusaltest.Want(t, OriginMatches(repo.Dir, "o", "r"), refusal.Origin)
+	if !strings.HasPrefix(r.Message, repo.Dir+" has no origin remote: ") || r.Fix != "loupe capture <url> --repo <path>" {
+		t.Fatalf("refusal %+v", r)
+	}
+}
+
+// The insteadOf expansion and the upstream lookups return git's failure instead of a guess.
+func TestRemoteLookupsReturnTheGitFailure(t *testing.T) {
+	for name, call := range map[string]func(dir string) error{
+		"OriginMatches expansion": func(dir string) error { return OriginMatches(dir, "o", "r") },
+		"RemoteURLs expansion":    func(dir string) error { _, err := RemoteURLs(dir, "origin"); return err },
+		"BranchUpstream merge":    func(dir string) error { _, _, err := BranchUpstream(dir, "main"); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			repo := gitrepo.New(t, "o", "r", 1)
+			pattern := "ls-remote"
+			if name == "BranchUpstream merge" {
+				pattern = "branch.main.merge"
+			}
+			gitfail.WhenContains(t, pattern)
+			if err := call(repo.Dir); err == nil || !strings.Contains(err.Error(), "injected failure") {
+				t.Fatalf("got %v, want the git failure", err)
+			}
+		})
 	}
 }

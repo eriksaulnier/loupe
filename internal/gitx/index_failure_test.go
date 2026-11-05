@@ -224,8 +224,28 @@ func TestStageWorktreeRefusesAStagedFilteredEdit(t *testing.T) {
 	writeFile(t, big, "STAGED\n", 0o644)
 	runGit(t, dir, "add", "data.big")
 	var conv *ConvertedError
-	if err := stageErr(t, dir); !errors.As(err, &conv) {
+	err := stageErr(t, dir)
+	if !errors.As(err, &conv) {
 		t.Fatalf("StageWorktree = %v, want a ConvertedError", err)
+	}
+	if want := "Git converts 1 tracked file(s) on checkout, so their bytes on disk cannot be compared with HEAD: data.big"; err.Error() != want {
+		t.Fatalf("message %q", err.Error())
+	}
+}
+
+// A path below a directory that cannot be searched has no stat, and that is an error, not a removal.
+func TestStageWorktreeReturnsAStatFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	w := newWorkTree(t)
+	src := filepath.Join(w.repo.Dir, "src")
+	if err := os.Chmod(src, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(src, 0o755) })
+	if err := stageErr(t, w.repo.Dir); !errors.Is(err, os.ErrPermission) || !strings.HasPrefix(err.Error(), "stat "+src) {
+		t.Fatalf("got %v, want the permission error statting a path in src", err)
 	}
 }
 
@@ -239,12 +259,16 @@ func TestConvertedReturnsConfigAndReadFailures(t *testing.T) {
 			wantInjected(t, stageErr(t, dir))
 		})
 	}
-	t.Run("autocrlf bool", func(t *testing.T) {
-		dir, _ := filteredRepo(t)
-		runGit(t, dir, "config", "core.autocrlf", "yes")
-		gitfail.WhenArg(t, "--type=bool", 2)
-		wantInjected(t, stageErr(t, dir))
-	})
+	// A value Git cannot read as a bool, such as banana, fails read-tree before either lookup runs, so the shim fails
+	// the two bool lookups themselves.
+	for _, pattern := range []string{"--type=bool --get core.fileMode", "--type=bool --get core.autocrlf"} {
+		t.Run(pattern, func(t *testing.T) {
+			dir, _ := filteredRepo(t)
+			runGit(t, dir, "config", "core.autocrlf", "yes")
+			gitfail.WhenContains(t, pattern)
+			wantInjected(t, stageErr(t, dir))
+		})
+	}
 	t.Run("unreadable text=auto file", func(t *testing.T) {
 		repo := gitrepo.New(t, "o", "r", 1)
 		writeFile(t, filepath.Join(repo.Dir, ".gitattributes"), "*.t text=auto\n", 0o644)

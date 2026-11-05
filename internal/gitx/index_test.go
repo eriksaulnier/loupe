@@ -616,3 +616,71 @@ func TestStageWorktreeKeepsAnUntouchedFilteredFile(t *testing.T) {
 		t.Fatalf("capture ran the fsmonitor hook: %q", b)
 	}
 }
+
+// An empty tree lists nothing, and a tracked file replaced by an embedded repository is listed twice, cached and as a
+// directory; each stages as git add -A does.
+func TestStageWorktreeMatchesAddAllOnEdgeTrees(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		prepare func(t *testing.T, repo *gitrepo.Repo)
+	}{
+		{"empty tree", func(t *testing.T, repo *gitrepo.Repo) {
+			repo.Git("rm", "-rq", ".")
+			repo.Git("commit", "-qm", "empty")
+		}},
+		{"file replaced by an embedded repository", func(t *testing.T, repo *gitrepo.Repo) {
+			writeFile(t, filepath.Join(repo.Dir, "sub"), "a file\n", 0o644)
+			repo.Git("add", "sub")
+			repo.Git("commit", "-qm", "sub")
+			if err := os.Remove(filepath.Join(repo.Dir, "sub")); err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, filepath.Join(repo.Dir, "sub", "lib.txt"), "lib\n", 0o644)
+			runGit(t, filepath.Join(repo.Dir, "sub"), "init", "--quiet", "--initial-branch=main")
+			runGit(t, filepath.Join(repo.Dir, "sub"), "add", "lib.txt")
+			runGit(t, filepath.Join(repo.Dir, "sub"), "commit", "--quiet", "--message", "sub")
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo := gitrepo.New(t, "o", "r", 1)
+			c.prepare(t, repo)
+			tree, _ := captureTree(t, repo.Dir)
+			if want := addAllTree(t, repo.Dir); tree != want {
+				t.Fatalf("StageWorktree wrote %s, add -A writes %s:\n%s\n%s", tree, want,
+					runGit(t, repo.Dir, "ls-tree", "-r", tree), runGit(t, repo.Dir, "ls-tree", "-r", want))
+			}
+		})
+	}
+}
+
+// A working-tree encoding other than UTF-8 converts on checkout, and crlf=input writes LF, so only the first refuses.
+func TestStageWorktreeReadsTheEncodingAndLegacyInputAttributes(t *testing.T) {
+	for _, c := range []struct {
+		name, attrs, autocrlf string
+		converts              bool
+	}{
+		{"utf-16", "*.txt working-tree-encoding=UTF-16\n", "", true},
+		{"utf-8", "*.txt working-tree-encoding=UTF-8\n", "", false},
+		{"crlf=input under autocrlf", "*.txt crlf=input\n", "true", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo := gitrepo.New(t, "o", "r", 1)
+			if c.autocrlf != "" {
+				repo.Git("config", "core.autocrlf", c.autocrlf)
+			}
+			writeFile(t, filepath.Join(repo.Dir, "f.txt"), "a\n", 0o644)
+			repo.Git("add", "f.txt")
+			repo.Git("commit", "-qm", "f")
+			writeFile(t, filepath.Join(repo.Dir, ".gitattributes"), c.attrs, 0o644)
+			writeFile(t, filepath.Join(repo.Dir, "f.txt"), "b\n", 0o644)
+			var conv *ConvertedError
+			err := stageErr(t, repo.Dir)
+			if got := errors.As(err, &conv) && slices.Equal(conv.Paths, []string{"f.txt"}); got != c.converts {
+				t.Fatalf("StageWorktree = %v, want converting %v", err, c.converts)
+			}
+			if !c.converts && err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
