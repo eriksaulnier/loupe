@@ -190,6 +190,36 @@ func TestCaptureFilesAnchorsEveryLine(t *testing.T) {
 	}
 }
 
+// A file outside the working tree and the home directory is shown as ext/<i>/<basename>, and abs names it.
+func TestCaptureFilesNamesAFileOutsideTheTreeUnderExt(t *testing.T) {
+	plan := filepath.Join(t.TempDir(), "plan.md")
+	if err := os.WriteFile(plan, []byte("# Plan\n\n## Storage\n\nKeep entries in memory.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s, _ := localCapture(t, t.TempDir(), nil, "--files", plan, "--json")
+	if code != 0 {
+		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+	}
+	var env struct {
+		Target struct {
+			Local struct {
+				Files []map[string]any `json:"files"`
+			} `json:"local"`
+		} `json:"target"`
+		Headings map[string][]any `json:"headings"`
+	}
+	if err := json.Unmarshal(s.stdout.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	files := env.Target.Local.Files
+	if len(files) != 1 || files[0]["path"] != "ext/1/plan.md" || files[0]["abs"] != plan {
+		t.Fatalf("files %v", files)
+	}
+	if got := len(env.Headings["ext/1/plan.md"]); got != 2 {
+		t.Fatalf("headings %v", env.Headings)
+	}
+}
+
 func TestBareCommandNeverSelectsALocalRun(t *testing.T) {
 	dir := t.TempDir()
 	code, _, home := localCapture(t, dir, nil, "--no-files", "--title", "Ideas", "--json")

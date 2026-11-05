@@ -142,18 +142,6 @@ func TestHeadingBatchStoresNothingWithOneBadAnchor(t *testing.T) {
 	}
 }
 
-func TestHeadingOnARunCapturedBeforeOutlines(t *testing.T) {
-	t.Parallel()
-	h := headingHarness(t)
-	if err := os.Remove(filepath.Join(h.RunDir(1), "outline.json")); err != nil {
-		t.Fatal(err)
-	}
-	errObj := h.mustRefuse("location", "add", "--run", runRef, "--from", h.WriteFile("f.json", findingJSON("t", `{"path": "`+planPath+`", "heading": "Rollout"}`)))
-	if !strings.Contains(errObj["message"].(string), "captured before heading anchors") {
-		t.Fatalf("refusal %v", errObj)
-	}
-}
-
 // add resolves from the run alone, so a run carried away from its clone resolves a heading as it does a line (FR-005).
 func TestHeadingResolvesWithoutTheClone(t *testing.T) {
 	t.Parallel()

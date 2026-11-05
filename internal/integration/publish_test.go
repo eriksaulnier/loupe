@@ -282,19 +282,6 @@ func TestPublishCarriesGateCounts(t *testing.T) {
 	}
 }
 
-func TestPublishRefusesWithoutTerminalBeforePrinting(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	h.reviewed(decidedTwoOfThree)
-	h.IsTerminal = false
-	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment")
-	if exit != 1 || stdout != "" || !strings.Contains(stderr, "interactive terminal") {
-		t.Fatalf("exit %d stdout %q stderr %q", exit, stdout, stderr)
-	}
-	h.mustRefuse("tty", "publish", runRef, "--action", "comment")
-	h.checkSends(0)
-}
-
 // The confirmation draws full screen, so a terminal that cannot draw one refuses with tty once the gates have passed,
 // and nothing is sent or recorded.
 func TestPublishRefusesATerminalItCannotDrawOn(t *testing.T) {
@@ -323,11 +310,17 @@ func TestPublishRefusesATerminalItCannotDrawOn(t *testing.T) {
 	}
 }
 
-func TestPublishRefusesTTYBeforeCredentialsAndRecords(t *testing.T) {
+// With no terminal, publish refuses with tty before it prints, reads credentials or opens the draft.
+func TestPublishRefusesWithoutTerminalBeforePrintingCredentialsOrRecords(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	h.reviewed(decidedTwoOfThree)
 	h.IsTerminal = false
+	stdout, stderr, exit := h.Run("publish", runRef, "--action", "comment")
+	if exit != 1 || stdout != "" || !strings.Contains(stderr, "interactive terminal") {
+		t.Fatalf("exit %d stdout %q stderr %q", exit, stdout, stderr)
+	}
+
 	h.GitHubErr = errors.New("no GitHub token found for github.com")
 	h.mustRefuse("tty", "publish", runRef, "--action", "comment")
 
@@ -496,8 +489,12 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 	if post["event"] != "COMMENT" {
 		t.Fatalf("event %v, want COMMENT", post["event"])
 	}
+	if comments, _ := post["comments"].([]any); len(comments) != 0 {
+		t.Errorf("sent %d inline comments, want 0", len(comments))
+	}
 	// No human touched the draft, and all three findings publish.
-	for _, want := range []string{"Changed line", "Second change", " · unattended", "unattended=1", "via `gadfly-review-pr 2.2.0`",
+	// The pipeline passes no --inline, so an unattended review takes the attended default (specs/026-inline-default-none).
+	for _, want := range []string{"Changed line", "Second change", " · unattended", "unattended=1", "inline=none", "via `gadfly-review-pr 2.2.0`",
 		" excluded=0 withdrawn=0 reinstated=0 regraded=0 -->\n"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body lacks %q:\n%s", want, body)
@@ -512,30 +509,6 @@ func TestPublishUnattendedEndToEnd(t *testing.T) {
 	}
 	if receipt.Author != "github-actions[bot]" {
 		t.Fatalf("receipt author %q, want the bot login", receipt.Author)
-	}
-}
-
-// The review pipeline publishes with no --inline, so an unattended review takes the same default as an attended one
-// (specs/026-inline-default-none).
-func TestPublishUnattendedDefaultsToNoInlineComments(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	h.UseInstallationToken()
-	h.GH.SetViewer("github-actions[bot]")
-	h.capture()
-	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
-	h.mustOK("summary", "--run", runRef, "--body", "Two things to look at.", "--expect-findings", "3")
-	h.IsTerminal = false
-
-	if stdout, stderr, exit := h.Run("publish", runRef, "--unattended", "--json"); exit != 0 {
-		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
-	}
-	h.checkSends(1)
-	if got := len(h.lastPostComments()); got != 0 {
-		t.Errorf("sent %d inline comments, want 0", got)
-	}
-	if body := h.lastPostBody(); !strings.Contains(body, " unattended=1 inline=none ") {
-		t.Errorf("marker lacks inline=none:\n%s", body)
 	}
 }
 
@@ -599,7 +572,8 @@ func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 
 func TestPublishUnattendedRefusesUserTokens(t *testing.T) {
 	t.Parallel()
-	for _, prefix := range []string{"ghu_", "gho_", "ghp_", "github_pat_"} {
+	// github/client_test.go TestTokenKind pins every prefix, so one stands for them here.
+	for _, prefix := range []string{"ghu_"} {
 		t.Run(prefix, func(t *testing.T) {
 			h := newHarness(t)
 			h.capture()

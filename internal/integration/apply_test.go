@@ -342,66 +342,6 @@ Evict the oldest entry first.
 Entries never expire.
 `
 
-// TestApplyPlanDecisions is User Story 2: a plan outside the repository and a code file inside it are captured whole,
-// the plan shows as plain text, and each accept with a note lands in applyWithChanges.
-func TestApplyPlanDecisions(t *testing.T) {
-	t.Parallel()
-	h := newApplyHarness(t)
-	plan := filepath.Join(t.TempDir(), "plan.md")
-	if err := os.WriteFile(plan, []byte(planDoc), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	captured := h.mustOK("capture", "--files", plan, "--applier", "Claude")
-	local := captured["target"].(map[string]any)["local"].(map[string]any)
-	file := local["files"].([]any)[0].(map[string]any)
-	// A file outside the repository and the home directory is shown as ext/<i>/<basename>, and abs names it.
-	if file["path"] != "ext/1/plan.md" || file["abs"] != plan || file["new"] != nil {
-		t.Fatalf("captured file %v", file)
-	}
-	headings := captured["headings"].(map[string]any)["ext/1/plan.md"].([]any)
-	if len(headings) != 3 {
-		t.Fatalf("headings %v", captured["headings"])
-	}
-
-	h.mustOK("add", "--run", applyRef, "--from", h.WriteFile("findings.json", `[
-		{"title": "Choose the store", "body": "Memory or disk. Disk survives a restart.", "location": {"path": "ext/1/plan.md", "heading": "Storage"},
-		 "proposal": "Keep entries in memory."},
-		{"title": "Who owns the cache?", "body": "No owner is named.", "general": true},
-		{"title": "Pick an expiry", "body": "Entries never expire, so memory grows.", "location": {"path": "ext/1/plan.md", "line": 10},
-		 "proposal": "Expire entries after one hour."}]`))
-	h.handoffToStub(applyRef)
-
-	s := h.openReview(applyRef)
-	s.Press("enter")
-	shown := s.WaitFor("Choose the store", "Claude will", "Evict the oldest entry first.")
-	if strings.Contains(shown, "+Evict") || strings.Contains(shown, "+ Evict") {
-		t.Fatalf("a --files run drew the plan as an addition (US2 scenario 3):\n%s", shown)
-	}
-	acceptWithNote(s, "f-001", "Use disk instead.")
-	s.WaitFor("Who owns the cache?")
-	accept(s, "f-002")
-	s.WaitFor("Pick an expiry")
-	acceptWithNote(s, "f-003", "Make the hour configurable.")
-	h.returnRun(s, "Claude", "")
-
-	fb := h.mustOK("feedback", "--run", applyRef)
-	apply, changes := group(t, fb, "apply"), group(t, fb, "applyWithChanges")
-	if ids(apply) != "f-002" || ids(changes) != "f-001,f-003" {
-		t.Fatalf("groups %v", fb["groups"])
-	}
-	if c := changes["f-001"]; c["suggestion"] != "Use disk instead." || c["path"] != plan || c["location"].(map[string]any)["heading"] != "Storage" {
-		t.Fatalf("f-001 %v", c)
-	}
-	if c := changes["f-003"]; c["proposal"] != "Expire entries after one hour." || c["suggestion"] != "Make the hour configurable." {
-		t.Fatalf("f-003 %v", c)
-	}
-	if a := apply["f-002"]; a["general"] != true || a["path"] != nil || a["proposal"] != nil {
-		t.Fatalf("f-002 %v", a)
-	}
-	h.noGitHub()
-}
-
 // TestApplyQuestionsWithNoFiles is User Story 3: a run with no files takes only general findings, and a question
 // accepted with no note goes to apply.
 func TestApplyQuestionsWithNoFiles(t *testing.T) {
@@ -541,7 +481,10 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 
 	s := h.openReview(applyRef)
 	s.Press("enter")
-	s.WaitFor("Choose the store")
+	shown := s.WaitFor("Choose the store", "Evict the oldest entry first.")
+	if strings.Contains(shown, "+Evict") || strings.Contains(shown, "+ Evict") {
+		t.Fatalf("a --files run drew the plan as an addition (US2 scenario 3):\n%s", shown)
+	}
 	accept(s, "f-001")
 	s.WaitFor("Pick an expiry")
 	acceptWithNote(s, "f-002", "Make it one day.")
