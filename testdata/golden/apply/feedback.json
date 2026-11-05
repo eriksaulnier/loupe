@@ -1,0 +1,176 @@
+{
+  "loupe": 1,
+  "ok": true,
+  "command": "feedback",
+  "run": "acme/widgets:local#1",
+  "dir": "<home>/local/1",
+  "version": 9,
+  "findings": [
+    {
+      "disposition": "accepted",
+      "id": "f-001",
+      "rev": 1,
+      "title": "Choose the store"
+    },
+    {
+      "disposition": "accepted",
+      "id": "f-002",
+      "rev": 1,
+      "title": "Pick an expiry"
+    },
+    {
+      "disposition": "excluded",
+      "id": "f-003",
+      "rev": 1,
+      "title": "Rename the counter"
+    },
+    {
+      "disposition": "accepted",
+      "id": "f-004",
+      "rev": 1,
+      "title": "Split the loop"
+    },
+    {
+      "disposition": "withdrawn",
+      "id": "f-005",
+      "rev": 2,
+      "title": "Log each miss",
+      "withdrawReason": {
+        "text": "Logging is out of scope."
+      }
+    }
+  ],
+  "groups": {
+    "apply": [
+      {
+        "body": "Memory or disk.",
+        "general": false,
+        "id": "f-001",
+        "location": {
+          "heading": "Storage",
+          "line": 7,
+          "path": "docs/plan.md",
+          "startLine": 3
+        },
+        "path": "<repo>/docs/plan.md",
+        "proposal": "Keep entries in memory.",
+        "severity": "major",
+        "thread": [],
+        "title": "Choose the store"
+      },
+      {
+        "body": "Lines 10 to 12 do two things.",
+        "general": false,
+        "id": "f-004",
+        "location": {
+          "line": 12,
+          "path": "src/app.go",
+          "startLine": 10
+        },
+        "path": "<repo>/src/app.go",
+        "proposal": "Split the loop in two.",
+        "severity": "minor",
+        "thread": [
+          {
+            "at": "2026-09-13T12:00:00Z",
+            "body": "Which two things?",
+            "id": "n-001",
+            "replies": [
+              {
+                "at": "2026-09-13T12:00:00Z",
+                "body": "Reading and counting.",
+                "by": "agent",
+                "id": "r-001"
+              }
+            ],
+            "status": "resolved"
+          }
+        ],
+        "title": "Split the loop"
+      }
+    ],
+    "applyWithChanges": [
+      {
+        "body": "Entries never expire.",
+        "general": false,
+        "id": "f-002",
+        "location": {
+          "line": 10,
+          "path": "docs/plan.md"
+        },
+        "path": "<repo>/docs/plan.md",
+        "proposal": "Expire entries after one hour.",
+        "severity": "major",
+        "suggestion": "Make it one day.",
+        "thread": [],
+        "title": "Pick an expiry"
+      }
+    ],
+    "excluded": [
+      {
+        "body": "app line 3 names nothing.",
+        "general": false,
+        "id": "f-003",
+        "location": {
+          "line": 3,
+          "path": "src/app.go"
+        },
+        "path": "<repo>/src/app.go",
+        "proposal": "Rename it to hits.",
+        "reason": "The name is fine.",
+        "severity": "minor",
+        "thread": [],
+        "title": "Rename the counter"
+      }
+    ],
+    "withdrawn": [
+      {
+        "body": "Misses are silent.",
+        "general": true,
+        "id": "f-005",
+        "proposal": "Log each miss at debug.",
+        "severity": "trivial",
+        "thread": [],
+        "title": "Log each miss",
+        "withdrawReason": {
+          "text": "Logging is out of scope."
+        }
+      }
+    ]
+  },
+  "notes": [
+    {
+      "at": "2026-09-13T12:00:00Z",
+      "body": "Which two things?",
+      "findingId": "f-004",
+      "id": "n-001",
+      "replies": [
+        {
+          "id": "r-001",
+          "noteId": "n-001",
+          "body": "Reading and counting.",
+          "by": "agent",
+          "at": "2026-09-13T12:00:00Z"
+        }
+      ],
+      "status": "resolved"
+    }
+  ],
+  "readiness": {
+    "ready": true,
+    "accepted": [
+      "f-001",
+      "f-002",
+      "f-004"
+    ],
+    "pending": [],
+    "excluded": [
+      "f-003"
+    ],
+    "withdrawn": [
+      "f-005"
+    ],
+    "openNotes": []
+  },
+  "returned": true
+}
