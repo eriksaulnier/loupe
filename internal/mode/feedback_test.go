@@ -143,3 +143,52 @@ func TestApplyFeedbackIgnoresASealOfANewerDraft(t *testing.T) {
 		t.Fatalf("returned %v for a draft older than the seal", payload["returned"])
 	}
 }
+
+// An entry keeps a range's start line and a heading, and its path falls back to the root, or to the display path
+// when the target has no local block. A human withdrawal with a reason carries that reason in excluded.
+func TestApplyFeedbackEntryLocationsAndReasons(t *testing.T) {
+	d := draft.NewEmpty()
+	ranged := finding("f-001", &draft.FindingLocation{Path: "src/a.go", StartLine: 2, Line: 4, Side: draft.SideRight})
+	headed := finding("f-002", &draft.FindingLocation{Path: "docs/plan.md", Line: 1, Heading: "Goals", Side: draft.SideRight})
+	withdrawn := finding("f-003", nil, draft.HistoryEntry{By: draft.ByHuman, Changed: map[string]any{"included": true},
+		Reason: &draft.Reason{Text: "Duplicate of f-001."}})
+	withdrawn.Included = false
+	d.Findings = []draft.Finding{ranged, headed, withdrawn}
+	decide(d, "f-001", draft.DecisionAccepted, "")
+	decide(d, "f-002", draft.DecisionAccepted, "")
+
+	payload, err := Of(run.Target{Kind: run.KindLocal, Local: &run.LocalTarget{Root: "/src", Capture: "changed", Files: []run.LocalFile{}}}).Feedback(d, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups := payload["groups"].(map[string][]map[string]any)
+	first, second := groups["apply"][0], groups["apply"][1]
+	if loc := first["location"].(map[string]any); loc["startLine"] != 2 || loc["line"] != 4 || first["path"] != "/src/src/a.go" {
+		t.Errorf("ranged entry %v", first)
+	}
+	if loc := second["location"].(map[string]any); loc["heading"] != "Goals" {
+		t.Errorf("headed entry %v", second)
+	}
+	if got := groups["excluded"][0]["reason"]; got != "Duplicate of f-001." {
+		t.Errorf("excluded reason %v", got)
+	}
+
+	payload, err = Of(run.Target{Kind: run.KindLocal}).Feedback(d, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := payload["groups"].(map[string][]map[string]any)["apply"][0]["path"]; got != "src/a.go" {
+		t.Errorf("path without a local block %v, want the display path", got)
+	}
+}
+
+// A return.json that does not read refuses feedback instead of reporting the run as not returned.
+func TestApplyFeedbackRefusesAnUnreadableReturn(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, draft.ReturnFile), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Of(run.Target{Kind: run.KindLocal}).Feedback(draft.NewEmpty(), dir); err == nil {
+		t.Fatal("feedback read a broken return.json")
+	}
+}

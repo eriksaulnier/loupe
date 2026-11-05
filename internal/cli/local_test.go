@@ -411,3 +411,18 @@ func TestLocalEditRefusesAProposalOfTheWrongType(t *testing.T) {
 		t.Errorf("message %q does not name the proposal", msg)
 	}
 }
+
+// wait without --json says a returned run is returned and how to read its decisions.
+func TestWaitSaysAReturnedRunIsReturned(t *testing.T) {
+	home, dir := localRun(t, "changed", localFinding("f-001"))
+	if err := os.WriteFile(filepath.Join(dir, draft.ReturnFile), []byte(`{"schema":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"wait", "--run", "local#1"}); code != 0 {
+		t.Fatalf("wait: exit %d stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
+	}
+	if out := s.stdout.String(); !strings.Contains(out, "returned; read the decisions with loupe feedback --run acme/widgets:local#1 --json") {
+		t.Errorf("wait output:\n%s", out)
+	}
+}
