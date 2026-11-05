@@ -67,6 +67,8 @@ func (m *Model) updateReturn(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		if _, reloadErr := m.reload(); reloadErr != nil {
 			return m.fail(reloadErr), true
 		}
+		// The human now sees the draft as it is, so the next enter seals that version, not the one that refused.
+		m.returnVersion = m.version
 		m.say(style.Warn, refusalNotice(err))
 		m.sizeNote(0)
 		return nil, true

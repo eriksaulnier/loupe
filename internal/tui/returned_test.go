@@ -185,6 +185,27 @@ func TestApplyReturnRefusesADraftChangedAfterTheStepOpened(t *testing.T) {
 	}
 }
 
+// After the refusal the human has seen the changed draft, so a second enter in the same step returns it.
+func TestApplyReturnSecondEnterSealsTheReloadedDraft(t *testing.T) {
+	m, dir := readyApplyModel(t, "Claude")
+	press(m, "p")
+	m.Update(runes("Keep this."))
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Summary = "The agent changed its mind."
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(enterKey)
+	if returned(t, dir) || !m.noting {
+		t.Fatal("the first enter returned a draft that changed after the step opened")
+	}
+	m.Update(enterKey)
+	if got := returnRecord(t, dir).Note; got != "Keep this." {
+		t.Fatalf("the second enter did not return the reloaded draft: note %q", got)
+	}
+}
+
 // FR-019: deciding the last pending finding opens the return step on its own.
 func TestApplyLastDecisionOpensTheReturnStep(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
