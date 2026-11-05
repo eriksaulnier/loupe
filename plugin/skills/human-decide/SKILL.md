@@ -93,7 +93,7 @@ Only the human resolves or dismisses a note. When every note you were asked to a
 
 ## 6. Apply the decisions
 
-Act only once `loupe wait` returned `"reason": "returned"`, or `loupe feedback --run <ref> --json` shows `"returned": true`. `groups` sorts every decided finding by what you do with it. Each entry carries `path`, the absolute file to edit, and `thread`, the notes the human and you exchanged on it.
+Act only once `loupe wait` returned `"reason": "returned"`, or `loupe feedback --run <ref> --json` shows `"returned": true`. `groups` sorts every decided finding by what you do with it. Each entry with a `location` carries `path`, the absolute file to edit. A general finding has no `path`. Every entry carries `thread`, the notes the human and you exchanged on it.
 
 - `apply`: make the change in `proposal`, or address `body` when there is no proposal.
 - `applyWithChanges`: the human accepted the finding with a note, carried as `suggestion`, or rewrote its text in review. Make the change as the human shaped it. Where `suggestion` and `proposal` conflict, follow `suggestion`.
