@@ -164,8 +164,9 @@ func (m *Model) codePane(location, heading string, lines []diff.ViewLine, width 
 	pane := style.Pane{Width: width, Titles: style.PaneTitles{TopLeft: title, TopRight: stat}}
 	// A tall location would push the proposed change off screen, so the pane shows a window of its code opened on the
 	// finding's first line, under the whole heading, and the whole-file view shows the rest.
-	// Measured without a composer or notice, which come and go without a refresh, so the window keeps its size.
-	_, shown := style.PaneInner(0, m.bodyRows(len(m.detailFooter())))
+	// Measured against the finding's own footer, without a composer or notice, which come and go without a refresh,
+	// so the window keeps its size.
+	_, shown := style.PaneInner(0, m.bodyRows(len(m.keys(groupHints(m.detailHints())...))))
 	if limit := max(8, (shown-len(m.detailHead))/3); len(rows) > limit {
 		anchor := 0
 		for i, l := range lines {

@@ -1491,17 +1491,19 @@ func TestLongLocationPaneIsCapped(t *testing.T) {
 
 // The capped window keeps its size while a composer is open, since the composer closes without a refresh.
 func TestCappedLocationKeepsItsSizeUnderAComposer(t *testing.T) {
-	m := modelOf(t, bigHunkRun(t), testEnv, 80, 60)
-	if err := m.openFinding("f-001"); err != nil {
-		t.Fatal(err)
-	}
-	count := func() int { return strings.Count(m.body.GetContent(), "big line ") }
-	before := count()
-	press(m, "s")
-	if err := m.refreshDetail(); err != nil {
-		t.Fatal(err)
-	}
-	if after := count(); after != before {
-		t.Errorf("the window shows %d code rows with the composer open, %d without", after, before)
+	for height := 40; height <= 70; height++ {
+		m := modelOf(t, bigHunkRun(t), testEnv, 80, height)
+		if err := m.openFinding("f-001"); err != nil {
+			t.Fatal(err)
+		}
+		count := func() int { return strings.Count(m.body.GetContent(), "big line ") }
+		before := count()
+		press(m, "s")
+		if err := m.refreshDetail(); err != nil {
+			t.Fatal(err)
+		}
+		if after := count(); after != before {
+			t.Errorf("at 80x%d the window shows %d code rows with the composer open, %d without", height, after, before)
+		}
 	}
 }
