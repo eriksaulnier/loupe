@@ -9,7 +9,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 // handBackRun stores a draft with n-001 open on f-001, n-002 open with a reply on f-002 and n-003 resolved on f-003.
@@ -161,14 +163,16 @@ func TestLoadHandBackRefusesDamagedFile(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := handBackRun(t)
-			if err := os.WriteFile(filepath.Join(dir, "handback.json"), []byte(content), 0o644); err != nil {
+			path := filepath.Join(dir, "handback.json")
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := LoadHandBack(dir); err == nil {
-				t.Fatal("damaged handback.json loaded")
-			}
-			if _, err := RecordHandBack(dir, noEnv); err == nil {
-				t.Fatal("RecordHandBack overwrote a damaged handback.json")
+			_, err := LoadHandBack(dir)
+			_ = refusaltest.Want(t, err, refusal.Record)
+			_, err = RecordHandBack(dir, noEnv)
+			_ = refusaltest.Want(t, err, refusal.Record)
+			if got, err := os.ReadFile(path); err != nil || string(got) != content {
+				t.Fatalf("RecordHandBack changed a damaged handback.json: %q, %v", got, err)
 			}
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 const fix = "loupe edit <id> --from -"
@@ -150,8 +151,9 @@ func TestMapSummaryLinesReadsQuotedLines(t *testing.T) {
 
 // CommonMark ends a line at a lone carriage return, so a fence that opens after one is a fence.
 func TestCheckTreatsALoneCarriageReturnAsALineBreak(t *testing.T) {
-	if err := Check("Return the error\r```", Body, "fix"); err == nil {
-		t.Fatal("an unclosed fence after a lone CR passed")
+	r := refusaltest.Want(t, Check("Return the error\r```", Body, "fix"), refusal.Markdown)
+	if r.Details["rule"] != "fence" || r.Details["line"] != 2 {
+		t.Fatalf("details %v, want an unclosed fence on line 2", r.Details)
 	}
 }
 

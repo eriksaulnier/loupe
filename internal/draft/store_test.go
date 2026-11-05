@@ -17,6 +17,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 const storeHelperEnv = "LOUPE_TEST_STORE_HELPER"
@@ -155,9 +156,8 @@ func TestMutateTruncatedDraft(t *testing.T) {
 	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record {
 		t.Fatalf("got %v", err)
 	}
-	if _, err := Load(dir); err == nil {
-		t.Fatal("Load must refuse a truncated draft")
-	}
+	_, err = Load(dir)
+	_ = refusaltest.Want(t, err, refusal.Record)
 }
 
 func TestConcurrentProcessesMutate(t *testing.T) {

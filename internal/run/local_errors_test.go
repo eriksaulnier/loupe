@@ -1,11 +1,15 @@
 package run
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func TestNextLocalFailsWhenLocalRootIsAFile(t *testing.T) {
@@ -13,8 +17,9 @@ func TestNextLocalFailsWhenLocalRootIsAFile(t *testing.T) {
 	if err := os.WriteFile(LocalRoot(root), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil); err == nil {
-		t.Fatal("want an error when local/ is a file")
+	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	if !errors.Is(err, syscall.ENOTDIR) || !strings.HasPrefix(err.Error(), "create local runs directory ") {
+		t.Fatalf("got %v, want ENOTDIR creating the local runs directory", err)
 	}
 }
 
@@ -36,9 +41,7 @@ func TestNextLocalRefusesWhileTheLockIsHeld(t *testing.T) {
 		return ""
 	}
 	_, _, err = NextLocal(root, "test", noWait, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
-	if r, ok := refusal.As(err); !ok || r.Code != refusal.Lock {
-		t.Fatalf("got %v, want a lock refusal", err)
-	}
+	_ = refusaltest.Want(t, err, refusal.Lock)
 }
 
 func TestNextLocalRefusesAnUnreadableNext(t *testing.T) {
@@ -47,9 +50,7 @@ func TestNextLocalRefusesAnUnreadableNext(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
-	if r, ok := refusal.As(err); !ok || r.Code != refusal.Record {
-		t.Fatalf("got %v, want a record refusal", err)
-	}
+	_ = refusaltest.Want(t, err, refusal.Record)
 }
 
 func TestNextLocalFailsWhenTheCounterCannotBeWritten(t *testing.T) {
@@ -69,8 +70,9 @@ func TestNextLocalFailsWhenTheCounterCannotBeWritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(localRoot, 0o755) })
-	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil); err == nil {
-		t.Fatal("want an error when the counter cannot be written")
+	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	if !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), "local/next") {
+		t.Fatalf("got %v, want a permission error writing local/next", err)
 	}
 }
 
@@ -82,8 +84,9 @@ func TestNextLocalFailsWhenTheRunDirectoryCannotBeCreated(t *testing.T) {
 	if err := os.WriteFile(LocalDir(root, 1), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil); err == nil {
-		t.Fatal("want an error when the run directory is taken by a file")
+	_, _, err := NextLocal(root, "test", os.Getenv, sampleLocalTarget(), nil, sampleDraftJSON(), nil)
+	if r := refusaltest.Want(t, err, refusal.Internal); !strings.HasSuffix(r.Message, "local/1 already exists") {
+		t.Fatalf("message %q, want local/1 already exists", r.Message)
 	}
 }
 
@@ -96,8 +99,9 @@ func TestResolveLocalRefRefusesACorruptTarget(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "target.json"), []byte("{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := ResolveRef(root, Ref{Local: ref.Local}); err == nil {
-		t.Fatal("want an error for a corrupt target")
+	_, _, err = ResolveRef(root, Ref{Local: ref.Local})
+	if r := refusaltest.Want(t, err, refusal.Record); !strings.Contains(r.Message, "target.json") {
+		t.Fatalf("message %q, want target.json named", r.Message)
 	}
 }
 
@@ -113,8 +117,8 @@ func TestOpenSessionReturnsTheProbeErrorForALocalRef(t *testing.T) {
 	if err := os.WriteFile(sessionPath(dir), nil, 0o000); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := OpenSession(root, ref); err == nil {
-		t.Fatal("want an error when the session file cannot be opened")
+	if _, _, err := OpenSession(root, ref); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("got %v, want the permission error opening the session file", err)
 	}
 }
 
@@ -123,7 +127,7 @@ func TestWalkLocalFailsWhenLocalRootIsAFile(t *testing.T) {
 	if err := os.WriteFile(LocalRoot(root), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := WalkLocal(root); err == nil {
-		t.Fatal("want an error when local/ is a file")
+	if _, err := WalkLocal(root); !errors.Is(err, syscall.ENOTDIR) {
+		t.Fatalf("got %v, want ENOTDIR listing local/", err)
 	}
 }

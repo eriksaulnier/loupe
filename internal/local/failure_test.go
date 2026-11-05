@@ -65,8 +65,8 @@ func TestLocateReturnsAGitFailure(t *testing.T) {
 			if _, err := Locate(dir); err == nil || !strings.Contains(err.Error(), "injected failure") {
 				t.Fatalf("Locate got %v", err)
 			}
-			if _, err := Capture(Request{Form: FormNoFiles, WorkDir: dir}); err == nil {
-				t.Fatal("Capture ignored the Locate failure")
+			if _, err := Capture(Request{Form: FormNoFiles, WorkDir: dir}); err == nil || !strings.Contains(err.Error(), "injected failure") {
+				t.Fatalf("Capture got %v, want the Locate failure", err)
 			}
 		})
 	}

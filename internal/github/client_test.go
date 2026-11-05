@@ -485,9 +485,13 @@ func TestListReviewThreadsErrors(t *testing.T) {
 		check  func(error) bool
 	}{
 		"graphql error": {200, `{"data": {"repository": {"pullRequest": null}}, "errors": [{"type": "NOT_FOUND", "message": "Could not resolve to a PullRequest with the number of 7."}]}`,
-			func(err error) bool { return err != nil }},
+			func(err error) bool {
+				return err != nil && strings.HasPrefix(err.Error(), "GitHub GraphQL: ") && strings.Contains(err.Error(), "Could not resolve")
+			}},
 		"missing pull request": {200, `{"data": {"repository": {"pullRequest": null}}}`,
-			func(err error) bool { return err != nil }},
+			func(err error) bool {
+				return err != nil && err.Error() == "GitHub returned no pull request o/r#7 for its review threads"
+			}},
 		"server error": {502, `{"message": "Bad Gateway"}`,
 			func(err error) bool { var he *HTTPError; return errors.As(err, &he) && he.Status == 502 }},
 		"a review id that is not a number": {200, `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": false}, "nodes": [
