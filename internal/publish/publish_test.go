@@ -131,6 +131,7 @@ func (fx *fixture) checkWrites(creates, updates int) {
 	}
 }
 
+// The terminal check answers first, before the draft is read and when there is no client to ask about the token.
 func TestRunRefusesTTYBeforeReadingDraftOrCredentials(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.IsTerminal = false
@@ -1218,15 +1219,6 @@ func TestRunRefusesInstallationTokenAheadOfTheTerminal(t *testing.T) {
 	_, err := fx.run()
 	wantRefusal(t, err, refusal.Token, "--unattended")
 	fx.check(0)
-}
-
-// The terminal check still answers first when there is no client to ask about the token.
-func TestRunRefusesTTYWhenNoClientCanBeBuilt(t *testing.T) {
-	fx := newRun(t, readyDraft())
-	fx.opts.IsTerminal = false
-	fx.opts.GitHub = func() (github.Client, error) { return nil, errors.New("no GitHub token found") }
-	_, err := fx.run()
-	wantRefusal(t, err, refusal.TTY)
 }
 
 // Constitution 2.0.0 II holds an unattended review to COMMENT. The CLI refuses the other actions as usage, and the

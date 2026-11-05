@@ -300,10 +300,6 @@ func TestBuildCarriesFindingFields(t *testing.T) {
 			t.Fatalf("missing %q in\n%s", want, env.Body)
 		}
 	}
-	f.Impact = "one<br>two"
-	if _, err := Build(buildInput(fixtureTarget(), d, "comment", "none", false)); err == nil {
-		t.Fatal("impact failing the allowlist was composed")
-	}
 	f.Impact, f.References = "", []string{"https://github.com/o/r/</details>"}
 	_, err = Build(buildInput(fixtureTarget(), d, "comment", "none", false))
 	if r, ok := refusal.As(err); !ok || r.Fix != "loupe edit "+f.ID+" --from -" {

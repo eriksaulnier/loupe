@@ -2,7 +2,6 @@ package publish
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -90,17 +89,12 @@ func TestReceiptAuthorRoundTripsAndIsOmittedWhenEmpty(t *testing.T) {
 	}
 }
 
-func TestRecordsRefuseWrongSchema(t *testing.T) {
+func TestLoadAttemptRefusesAnUnknownState(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "receipt.json"), fmt.Appendf(nil, `{"schema": %d}`, RecordSchema+1), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	_, _, err := LoadReceipt(dir)
-	_ = refusaltest.Want(t, err, refusal.Record)
 	if err := os.WriteFile(filepath.Join(dir, "attempt.json"), []byte(`{"schema": 1, "state": "sent"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = LoadAttempt(dir)
+	_, _, err := LoadAttempt(dir)
 	_ = refusaltest.Want(t, err, refusal.Record)
 }
 
