@@ -1194,6 +1194,35 @@ func TestApplyTAcceptsWithANote(t *testing.T) {
 	}
 }
 
+// Reopening t or x on a finding already decided that way starts from the stored note, so enter keeps it rather than
+// saving a plain decision over it.
+func TestApplyNoteKeysStartFromTheStoredNote(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	for _, c := range []struct{ id, key, note, decision string }{
+		{"f-001", "t", "Use the second store.", draft.DecisionAccepted},
+		{"f-003", "x", "Out of scope.", draft.DecisionExcluded},
+	} {
+		mustOpenFinding(t, m, c.id)
+		press(m, c.key)
+		m.Update(runes(c.note))
+		m.Update(enterKey)
+		mustOpenFinding(t, m, c.id)
+		press(m, c.key)
+		if got := m.note.Value(); got != c.note {
+			t.Fatalf("%s %s reopened with %q, want %q", c.id, c.key, got, c.note)
+		}
+		m.Update(enterKey)
+		if got := loadDraft(t, dir).Decisions[c.id]; got.Decision != c.decision || got.Note != c.note {
+			t.Fatalf("%s after a second enter: %+v", c.id, got)
+		}
+	}
+	mustOpenFinding(t, m, "f-001")
+	press(m, "x")
+	if got := m.note.Value(); got != "" {
+		t.Errorf("x on an accepted finding opened with %q, want an empty reason", got)
+	}
+}
+
 func TestApplyTEscDiscardsTheNote(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	mustOpenFinding(t, m, "f-001")

@@ -270,14 +270,23 @@ func (applyUI) listKey(m *Model, key string) (tea.Cmd, bool) {
 	return nil, false
 }
 
-func (applyUI) detailKey(m *Model, _ draft.Finding, key string) (tea.Cmd, bool) {
+func (applyUI) detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool) {
 	switch key {
 	case "t":
-		return m.openNote(noteAccept, ""), true
+		return m.openNote(noteAccept, heldNote(m.draft, f, draft.DispositionAccepted)), true
 	case "x":
-		return m.openNote(noteExclude, ""), true
+		return m.openNote(noteExclude, heldNote(m.draft, f, draft.DispositionExcluded)), true
 	}
 	return nil, false
+}
+
+// heldNote is the note f's current decision holds when that decision is want, so reopening the input to change it
+// starts from what the human wrote instead of an empty line that enter would save over it.
+func heldNote(d *draft.Draft, f draft.Finding, want string) string {
+	if draft.Dispositions(d)[f.ID] != want {
+		return ""
+	}
+	return d.Decisions[f.ID].Note
 }
 
 func (applyUI) heading(m *Model) style.ReviewHeading {
