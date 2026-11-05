@@ -2,7 +2,10 @@ package cli
 
 import (
 	"bytes"
+	"strings"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 func TestSuccessEnvelope(t *testing.T) {
@@ -59,5 +62,19 @@ func TestSuccessEnvelopeNamesRunAndDirTogether(t *testing.T) {
 		if err := writeSuccess(&bytes.Buffer{}, "add", inv, nil, nil); err == nil {
 			t.Fatalf("expected an error for %+v, which names one of run and dir without the other", inv)
 		}
+	}
+}
+
+// A value JSON cannot encode fails the write and names its field, before anything reaches the writer.
+func TestEnvelopeRefusesAValueJSONCannotEncode(t *testing.T) {
+	var out bytes.Buffer
+	err := writeSuccess(&out, "add", invocation{}, nil, map[string]any{"findings": make(chan int)})
+	if err == nil || !strings.Contains(err.Error(), `encode result field "findings"`) || out.Len() != 0 {
+		t.Fatalf("writeSuccess = %v, stdout %q", err, out.String())
+	}
+	r := refusal.New(refusal.Input, "bad", "fix")
+	r.Details = map[string]any{"field": func() {}}
+	if err := writeRefusal(&out, "add", invocation{}, r); err == nil || !strings.Contains(err.Error(), `encode result field "details"`) || out.Len() != 0 {
+		t.Fatalf("writeRefusal = %v, stdout %q", err, out.String())
 	}
 }

@@ -210,3 +210,12 @@ func TestVersionFlag(t *testing.T) {
 		t.Fatalf("envelope %v stderr %q", m, s.stderr.String())
 	}
 }
+
+// Only a capitalized label of a few words heads a help section; a line like "for example:" stays prose.
+func TestHelpHeadingNeedsACapitalizedLabel(t *testing.T) {
+	for line, want := range map[string]string{"Result:": "Result", "for example:": "", "Input (JSON):": "Input"} {
+		if label, _, _ := headingOf(line); label != want {
+			t.Errorf("headingOf(%q) label %q, want %q", line, label, want)
+		}
+	}
+}

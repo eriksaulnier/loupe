@@ -131,3 +131,29 @@ func TestShowCommentsPrintsAuthorsAndBodiesEscaped(t *testing.T) {
 		}
 	}
 }
+
+// A quiet pull request shows each section as empty, and a current thread names its line on the head.
+func TestShowCommentsPrintsEmptySectionsAndTheCurrentLine(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		feedback publish.Comments
+		want     []string
+	}{
+		{"quiet", publish.Comments{Schema: publish.CommentsSchema, Read: true}, []string{"Reviews\n  (none)\n\nThreads\n  (none)\n\n"}},
+		{"current thread", publish.Comments{Schema: publish.CommentsSchema, Read: true, Threads: []publish.FeedbackThread{
+			{Path: "src/a.go", Line: 14, OriginalLine: 12, Side: "RIGHT", Comments: []publish.FeedbackComment{{Author: "bob", Body: "Off by one?", URL: "c1"}}}}},
+			[]string{"src/a.go:14"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			deps, s := testDeps(t, map[string]string{"LOUPE_HOME": commentsRun(t, &c.feedback), "NO_COLOR": "1"})
+			if code := Execute(deps, []string{"show", "--comments", "--run", "o/r#1"}); code != 0 {
+				t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+			}
+			for _, want := range c.want {
+				if !strings.Contains(s.stdout.String(), want) {
+					t.Errorf("output lacks %q:\n%s", want, s.stdout.String())
+				}
+			}
+		})
+	}
+}

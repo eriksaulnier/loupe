@@ -78,3 +78,24 @@ func TestListRefusesAnUnreadableLocalRun(t *testing.T) {
 		})
 	}
 }
+
+func TestListWithNoRunsNamesCapture(t *testing.T) {
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": t.TempDir(), "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"list"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if out := s.stdout.String(); !strings.HasPrefix(out, "No runs yet.") || !strings.Contains(out, "loupe capture <pr-url>") {
+		t.Fatalf("stdout %q", out)
+	}
+}
+
+func TestListRefusesARunsDirectoryThatIsAFile(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, "runs"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s := runWithStdin(t, home, "", "list", "--json")
+	if errObj := wantCode(t, code, s, refusal.Internal); !strings.Contains(errObj["message"].(string), "runs: not a directory") {
+		t.Fatalf("error %v", errObj)
+	}
+}

@@ -229,3 +229,52 @@ func TestReportHuman(t *testing.T) {
 		t.Fatalf("stderr %q", stderr.String())
 	}
 }
+
+// A capture that fails after fetching names the refs to delete: under --json beside the refusal's own details, and to
+// a human below the fix.
+func TestReportNamesTheCleanup(t *testing.T) {
+	r := refusal.New(refusal.HeadMoved, "the head moved", "rerun loupe capture https://github.com/o/r/pull/7")
+	r.Details = map[string]any{"head": "abc"}
+	err := &cleanupError{err: r, cleanup: []string{"git update-ref -d refs/loupe/a"}}
+
+	var stdout, stderr bytes.Buffer
+	if code := report(reportDeps(&stdout, &stderr), true, "capture", invocation{}, err); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	details, _ := errorOf(decodeOne(t, stdout.Bytes()))["details"].(map[string]any)
+	if cleanup, _ := details["cleanup"].([]any); details["head"] != "abc" || len(cleanup) != 1 || cleanup[0] != "git update-ref -d refs/loupe/a" {
+		t.Fatalf("details %v", details)
+	}
+	if r.Details["cleanup"] != nil {
+		t.Fatalf("report changed the refusal's own details: %v", r.Details)
+	}
+
+	stdout.Reset()
+	if code := report(reportDeps(&stdout, &stderr), false, "capture", invocation{}, err); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	if want := "cleanup:\n  git update-ref -d refs/loupe/a\n"; !strings.HasSuffix(stderr.String(), want) {
+		t.Fatalf("stderr %q, want it to end %q", stderr.String(), want)
+	}
+}
+
+// A result that cannot be written is reported on stderr, since stdout is what failed.
+func TestReportSaysWhenTheResultCannotBeWritten(t *testing.T) {
+	var stderr bytes.Buffer
+	if code := report(reportDeps(failWriter{}, &stderr), true, "add", invocation{}, refusal.New(refusal.Version, "stale", "retry")); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	if stderr.String() != "error: write result: disk full\n" {
+		t.Fatalf("stderr %q", stderr.String())
+	}
+}
+
+// A fix with no words prints as given, with nothing to put on lines of its own.
+func TestFixLinesKeepsAnEmptyFix(t *testing.T) {
+	s := style.New(io.Discard, func(string) string { return "" })
+	for _, fix := range []string{"", " , "} {
+		if got := fixLines(s, fix, 80, "     "); got != fix {
+			t.Errorf("fixLines(%q) = %q", fix, got)
+		}
+	}
+}

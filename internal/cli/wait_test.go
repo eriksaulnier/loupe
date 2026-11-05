@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -213,5 +215,48 @@ func TestWaitRefusesAReceiptThatDisappears(t *testing.T) {
 	want := "receipt.json in " + dir + " disappeared after loupe wait saw the review published"
 	if !ok || r.Code != refusal.Record || r.Message != want || r.Fix != "run loupe wait again" {
 		t.Fatalf("writeWait = %#v, want a record refusal %q", err, want)
+	}
+}
+
+// Every file wait reads is checked: a damaged one is refused rather than read as "nothing yet".
+func TestWaitRefusesADamagedRunFile(t *testing.T) {
+	for _, c := range []struct {
+		name, file string
+		run        func(*testing.T) (string, string)
+		ref        string
+	}{
+		{"a hand-back", "handback.json", sendBackRun, "o/r#1"},
+		{"a receipt", "receipt.json", sendBackRun, "o/r#1"},
+		{"a return", draft.ReturnFile, func(t *testing.T) (string, string) { return localRun(t, "changed", localFinding("f-001")) }, "local#1"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home, dir := c.run(t)
+			if err := os.WriteFile(filepath.Join(dir, c.file), []byte("{"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			code, s := runWithStdin(t, home, "", "wait", "--run", c.ref, "--json")
+			if errObj := wantCode(t, code, s, refusal.Record); !strings.Contains(errObj["message"].(string), c.file) {
+				t.Fatalf("error %v", errObj)
+			}
+		})
+	}
+}
+
+func TestWaitRefusesAnUnknownRun(t *testing.T) {
+	home, _ := sendBackRun(t)
+	code, s := runWithStdin(t, home, "", "wait", "--run", "o/r#9", "--json")
+	wantCode(t, code, s, refusal.NoRun)
+}
+
+// A stdout that cannot be written is reported, not taken as a wait that delivered its line.
+func TestWaitReportsAStdoutItCannotWrite(t *testing.T) {
+	home, dir := sendBackRun(t)
+	if _, err := draft.RecordHandBack(dir, func(string) string { return "" }); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	deps.Stdout = failWriter{}
+	if code := Execute(deps, []string{"wait", "--run", "o/r#1"}); code != 1 || !strings.Contains(s.stderr.String(), "disk full") {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
 	}
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,5 +141,22 @@ func TestCheckModeKeysSkipsInputThatDecodingRefuses(t *testing.T) {
 	err := checkModeKeys([]byte(`[1, {"proposal": "x"}]`), publish)
 	if r, ok := refusal.As(err); !ok || r.Details["entry"] != 1 || r.Details["field"] != "proposal" {
 		t.Fatalf("got %v, want a refusal of entry 1's proposal", err)
+	}
+}
+
+// checkForbidden and malformed are also handed raw input that DecodeInput has not read, so they refuse what is not
+// JSON themselves, and an error of a kind malformed does not name is still reported.
+func TestInputCheckersRefuseWhatIsNotJSON(t *testing.T) {
+	if err := checkForbidden(json.RawMessage("  "), "fix"); err != nil {
+		t.Errorf("checkForbidden of blank input = %v, want nil", err)
+	}
+	for _, raw := range []string{`[1,`, `{"a":`} {
+		r := refusalOf(t, checkForbidden(json.RawMessage(raw), "fix"))
+		if r.Code != refusal.Input || !strings.HasPrefix(r.Message, "input is not valid JSON at byte") {
+			t.Errorf("checkForbidden(%q) = %v", raw, r)
+		}
+	}
+	if r := refusalOf(t, malformed(errors.New("odd"), 3, "fix")); r.Code != refusal.Input || r.Message != "input is not valid: odd" || r.Fix != "fix" {
+		t.Errorf("malformed = %+v", r)
 	}
 }

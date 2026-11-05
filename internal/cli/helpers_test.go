@@ -123,3 +123,8 @@ func checkRefusals(t *testing.T, home string, cases []refusalCase) {
 		})
 	}
 }
+
+// failWriter refuses every write, as a closed pipe or a full disk does.
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("disk full") }
