@@ -40,6 +40,11 @@ jobs:
           set -euo pipefail
           # The build takes .goreleaser.yaml from the dispatched commit, and install-script takes install.sh from it. Both
           # MUST be what main ships.
+          # Anyone with write access can dispatch, and a published pre-release can never be removed.
+          if [ "$GITHUB_ACTOR" != "$GITHUB_REPOSITORY_OWNER" ]; then
+            echo "::error::$GITHUB_ACTOR dispatched this workflow. Only $GITHUB_REPOSITORY_OWNER, the repository's owner, may cut a pre-release."
+            exit 1
+          fi
           if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
             echo "::error::this workflow ran from $GITHUB_REF. Dispatch it from $DEFAULT_BRANCH, and name the branch to release in ref."
             exit 1
