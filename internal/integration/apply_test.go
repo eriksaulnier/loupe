@@ -305,7 +305,7 @@ func TestApplyLocalCodeReview(t *testing.T) {
 
 	s := h.openReview(applyRef, "3 findings to decide", "[local -> Claude]")
 	s.Press("enter")
-	s.WaitFor("Guard the committed line", "Claude will:", "Wrap line 3 in a nil check.")
+	s.WaitFor("Guard the committed line", "Claude will", "Wrap line 3 in a nil check.")
 	accept(s, "f-001")
 	s.WaitFor("Name the staged line")
 	acceptWithNote(s, "f-002", "Call it the digest line.")
@@ -386,7 +386,7 @@ func TestApplyPlanDecisions(t *testing.T) {
 
 	s := h.openReview(applyRef)
 	s.Press("enter")
-	shown := s.WaitFor("Choose the store", "Claude will:", "Evict the oldest entry first.")
+	shown := s.WaitFor("Choose the store", "Claude will", "Evict the oldest entry first.")
 	if strings.Contains(shown, "+Evict") || strings.Contains(shown, "+ Evict") {
 		t.Fatalf("a --files run drew the plan as an addition (US2 scenario 3):\n%s", shown)
 	}
@@ -442,7 +442,7 @@ func TestApplyQuestionsWithNoFiles(t *testing.T) {
 	s.Press("l")
 	s.WaitFor("? Who owns it?")
 	s.Press("enter")
-	s.WaitFor("Which store?", "Claude will:", "Use memory.")
+	s.WaitFor("Which store?", "Claude will", "Use memory.")
 	accept(s, "f-001")
 	s.WaitFor("Who owns it?")
 	accept(s, "f-002")

@@ -221,8 +221,9 @@ func TestNerdTierDrawsIcons(t *testing.T) {
 		t.Fatal(err)
 	}
 	detail := m.View().Content
-	if !strings.Contains(detail, "\uf0ad Suggested fix") || !strings.Contains(detail, "\uf016 multi.txt:21") {
-		t.Errorf("detail lacks its fix or file icon:\n%s", detail)
+	// A section heading carries no glyph (docs/tui-design.md, Tone says whose words they are).
+	if !strings.Contains(ansi.Strip(detail), "│ Suggested fix") || strings.Contains(detail, "\uf0ad") || !strings.Contains(detail, "\uf016 multi.txt:21") {
+		t.Errorf("detail lacks its plain fix heading or its file icon:\n%s", detail)
 	}
 
 	plain := modelOf(t, dir, map[string]string{"NO_COLOR": "1", "LANG": "en_US.UTF-8", style.IconsEnv: "nerd"}, 100, 30)

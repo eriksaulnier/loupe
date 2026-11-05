@@ -1098,13 +1098,15 @@ func TestDetailPinsItsTitleAndMetadata(t *testing.T) {
 	}
 }
 
-// On an apply run the lead is in the good tone.
+// On an apply run the proposal is a section in the good tone, drawn as a suggested fix is.
 func TestApplyDetailLeadIsInTheGoodTone(t *testing.T) {
 	colored, _ := applyModel(t, "Claude")
 	colored.styles.SetColorProfile(colorprofile.TrueColor)
 	mustOpenFinding(t, colored, "f-001")
-	if view := colored.View().Content; !strings.Contains(view, colored.styles.Emphasis(colored.styles.Good).Render("Claude will:")) {
-		t.Errorf("the lead is not in the good tone:\n%q", view)
+	good := colored.styles.ToneStyle(style.ToneGood)
+	view := colored.View().Content
+	if !strings.Contains(view, colored.styles.Emphasis(good).Render("Claude will")) || strings.Contains(ansi.Strip(view), "will:") || !strings.Contains(view, good.Render(colored.glyphs.Quote)+" ") {
+		t.Errorf("the proposal is not a section in the good tone:\n%q", view)
 	}
 }
 

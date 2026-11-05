@@ -120,7 +120,7 @@ A finding points at a long hunk. The location pane stops at a maximum height and
 
 ## Assumptions
 
-- The question-only body copy, "Claude proposes no change. Your answer goes back as the decision.", is a placeholder from the mocks. The implementation keeps the heading and MAY drop the body if it adds nothing.
+- The question-only body reads "No change is proposed. Your note tells <applier> what to do." The mocks carried placeholder copy; this wording matches the human-decide skill, where a finding with no proposal cannot be accepted as a change.
 - The location pane's cap is a fraction of the detail viewport, chosen in the plan, not a fixed row count.
 - Severity and the general marker keep their current chips. This spec does not restyle the meta line.
 

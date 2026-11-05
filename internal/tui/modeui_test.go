@@ -360,12 +360,13 @@ l / esc | back to the list |`
 	}
 }
 
-// The detail of a local finding leads with what the applier will do; a question shows its marker and no will block.
+// A local finding reads in the fixed order: location, Why, then what the applier will do. A question takes that slot
+// with no glyph and no will section (docs/tui-design.md, Order).
 func TestApplyDetailLeadsWithWhatTheApplierWillDo(t *testing.T) {
 	m, _ := applyModel(t, "Claude")
 	mustOpenFinding(t, m, "f-001")
 	screen := screenText(m)
-	order := []string{"Rename the helper", "Claude will:", "Rename helper to insertAfter in a.go.", "a.go:3", "The helper name hides what it does."}
+	order := []string{"Rename the helper", "a.go:3", "Why", "The helper name hides what it does.", "Claude will", "Rename helper to insertAfter in a.go."}
 	at := -1
 	for _, want := range order {
 		i := strings.Index(screen, want)
@@ -376,12 +377,12 @@ func TestApplyDetailLeadsWithWhatTheApplierWillDo(t *testing.T) {
 	}
 	mustOpenFinding(t, m, "f-002")
 	screen = screenText(m)
-	if strings.Contains(screen, "will:") || !strings.Contains(screen, m.glyphs.Question+" A question for Claude") {
-		t.Errorf("a question shows a will block or no marker:\n%s", screen)
+	if strings.Contains(screen, "will") || !strings.Contains(screen, "│ A question for Claude") || strings.Contains(screen, m.glyphs.Question+" A question") {
+		t.Errorf("a question shows a will section, no question section, or a glyph:\n%s", screen)
 	}
 	nobody, _ := applyModel(t, "")
 	mustOpenFinding(t, nobody, "f-003")
-	if screen := screenText(nobody); !strings.Contains(screen, "The agent will:") {
+	if screen := screenText(nobody); !strings.Contains(screen, "│ The agent will ") {
 		t.Errorf("with no applier the lead does not name the agent:\n%s", screen)
 	}
 	pr := modelOf(t, newFixture(t), utf8Env, 100, 40)

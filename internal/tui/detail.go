@@ -46,10 +46,6 @@ func (m *Model) refreshDetail() error {
 	if err != nil {
 		return err
 	}
-	body, err := m.renderMarkdown(render.ForDisplay(f.Body))
-	if err != nil {
-		return err
-	}
 	width, _ := style.PaneInner(m.width, 0)
 	var head, doc []string
 	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(f.Title)), width, ""), "\n") {
@@ -60,29 +56,30 @@ func (m *Model) refreshDetail() error {
 	if _, rows := style.PaneInner(0, m.bodyRows(len(m.detailFooter()))); len(head) > rows/3 {
 		doc, m.detailHead = head, nil
 	}
-	proposal, err := m.proposal(f)
+	sections, err := m.findingSections(f, width)
 	if err != nil {
 		return err
 	}
-	doc = append(doc, proposal...)
+	// docs/tui-design.md fixes this order in both modes: state, location, the finding's case, the proposed change,
+	// impact and references, then the conversation.
+	block := func(lines []string) {
+		if lines != nil {
+			doc = append(append(doc, ""), lines...)
+		}
+	}
+	block(sections.withdrawn)
 	if draft.AgentChangedHumanText(f) {
-		doc = append(doc, m.styles.Note.Render(m.glyphs.Note+" the agent changed text you wrote"))
+		block([]string{m.styles.Note.Render(m.glyphs.Note + " the agent changed text you wrote")})
 	}
-	doc = append(doc, m.withdrawReason(f, width)...)
-	doc = append(doc, "")
 	if f.Location != nil {
-		doc = append(doc, m.codePane(locationText(f), f.Location.Heading, lines, width)...)
-		doc = append(doc, "")
+		block(m.codePane(locationText(f), f.Location.Heading, lines, width))
 	}
-	doc = append(doc, strings.Split(body, "\n")...)
-	impact, err := m.impact(f)
-	if err != nil {
-		return err
+	for _, s := range [][]string{sections.why, sections.change, sections.impact, sections.references} {
+		block(s)
 	}
-	doc = append(doc, impact...)
-	doc = append(doc, m.suggestedFix(f)...)
-	doc = append(doc, m.references(f)...)
-	doc = append(doc, m.noteThread(f)...)
+	for _, note := range sections.notes {
+		block(note)
+	}
 
 	m.body.SetWidth(width)
 	m.sizeDetail()
@@ -280,111 +277,130 @@ func (m *Model) partLines(parts []string, gap, width int) []string {
 	return append(lines, line)
 }
 
-// proposal is what the agent will do if the human accepts, read before the evidence it rests on. It is Markdown, so it
-// is rendered as the body is, under a lead in the good tone that names who will apply it. A finding the mode reads as
-// a question shows that instead.
-func (m *Model) proposal(f draft.Finding) ([]string, error) {
-	who := m.applier()
-	if m.ui.question(f) {
-		return []string{"", m.styles.Note.Render(m.glyphs.Question + " A question for " + who)}, nil
-	}
-	if f.Proposal == "" {
-		return nil, nil
-	}
-	rendered, err := m.renderMarkdown(render.ForDisplay(f.Proposal))
-	if err != nil {
-		return nil, err
-	}
-	if who == "the agent" {
-		who = "The agent"
-	}
-	out := []string{"", m.styles.Emphasis(m.styles.Good).Render(who + " will:")}
-	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
+// detailSections are a finding's blocks, each one drawn as a section (docs/tui-design.md). A nil field is a block the
+// finding does not have.
+type detailSections struct {
+	withdrawn, why, change, impact, references []string
+	notes                                      [][]string
 }
 
-// impact is Markdown by contract, so it is rendered the way the body is, under its own heading.
-func (m *Model) impact(f draft.Finding) ([]string, error) {
-	if f.Impact == "" {
-		return nil, nil
-	}
-	rendered, err := m.renderMarkdown(render.ForDisplay(f.Impact))
-	if err != nil {
-		return nil, err
-	}
-	out := []string{"", m.sectionHead("Impact")}
-	return append(out, strings.Split(strings.TrimRight(rendered, "\n"), "\n")...), nil
-}
-
-// withdrawReason is read before the evidence, so the human judges the withdrawal before reinstating it. It hangs from
-// a bar in the withdrawn tone, as a note thread does: a headline with the code as a chip, then the text as a reply.
-func (m *Model) withdrawReason(f draft.Finding, width int) []string {
-	reason := draft.CurrentReason(f)
-	if reason == nil {
-		return nil
-	}
-	var chip string
-	if reason.Code != "" {
-		chip = m.styles.Chip(render.ForDisplay(render.OneLine(reason.Code)), style.ToneMuted)
-	}
-	var lines []string
-	for _, l := range m.threadBlock(reason.Text, max(1, width-2)) {
-		lines = append(lines, m.styles.Text().Render(l))
-	}
-	return append([]string{"", m.threadHead("Withdrawn", style.ToneMuted, chip)}, m.hangFromBar(lines, style.ToneMuted)...)
-}
-
-// sectionHead is a heading inside the detail document, in the accent as pane titles are, so the document reads as
-// sections.
-func (m *Model) sectionHead(text string) string {
-	return m.styles.Emphasis(m.styles.Accent).Render(text)
-}
-
-// suggestedFix is shown under a green gutter rather than as Markdown, so a fix that is not code still reads as a
-// proposed change apart from quoted text, and cannot close a fence.
-func (m *Model) suggestedFix(f draft.Finding) []string {
-	if f.SuggestedFix == "" {
-		return nil
-	}
-	out := []string{"", m.sectionHead(strings.TrimSpace(m.glyphs.Fix + " Suggested fix"))}
-	width, _ := style.PaneInner(m.width, 0)
-	for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), width-2, ""), "\n") {
-		out = append(out, m.styles.Good.Render(m.glyphs.Quote)+" "+line)
-	}
-	return out
-}
-
-// references are one URL per line, each a single token, so a reader can select one without picking up its neighbor.
-func (m *Model) references(f draft.Finding) []string {
-	if len(f.References) == 0 {
-		return nil
-	}
-	out := []string{"", m.sectionHead("References")}
-	width, _ := style.PaneInner(m.width, 0)
-	for _, ref := range f.References {
-		// Wrapped, since the detail cannot scroll sideways and a URL clipped at the edge cannot be read or copied.
-		for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(ref)), width, ""), "\n") {
-			out = append(out, m.styles.Dim.Render(line))
+// findingSections draws each of f's blocks in its tone. A withdrawn finding's blocks all recede to muted, so the human
+// reads them as content the agent took back.
+func (m *Model) findingSections(f draft.Finding, width int) (detailSections, error) {
+	withdrawn := draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn
+	tone := func(t style.Tone) style.Tone {
+		if withdrawn {
+			return style.ToneMuted
 		}
+		return t
 	}
-	return out
+	section := func(t style.Tone, heading string, body []string) []string {
+		return m.styles.Section(tone(t), heading, "", body)
+	}
+	var out detailSections
+	if reason := draft.CurrentReason(f); reason != nil {
+		var chip string
+		if reason.Code != "" {
+			chip = m.styles.Chip(render.ForDisplay(render.OneLine(reason.Code)), style.ToneMuted)
+		}
+		var lines []string
+		for _, l := range m.threadBlock(reason.Text, max(1, width-2)) {
+			lines = append(lines, m.styles.Secondary().Render(l))
+		}
+		out.withdrawn = m.styles.Section(style.ToneMuted, "Withdrawn", chip, lines)
+	}
+	body, err := m.markdownLines(f.Body)
+	if err != nil {
+		return out, err
+	}
+	if body != nil {
+		out.why = section(style.ToneAccent, "Why", body)
+	}
+	change, err := m.proposedChange(f, width)
+	if err != nil {
+		return out, err
+	}
+	if change.heading != "" {
+		out.change = section(change.tone, change.heading, change.body)
+	}
+	impact, err := m.markdownLines(f.Impact)
+	if err != nil {
+		return out, err
+	}
+	if impact != nil {
+		out.impact = section(style.ToneAccent, "Impact", impact)
+	}
+	if len(f.References) > 0 {
+		var refs []string
+		for _, ref := range f.References {
+			// Wrapped, since the detail cannot scroll sideways and a URL clipped at the edge cannot be read or copied.
+			for _, line := range strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(ref)), max(1, width-2), ""), "\n") {
+				refs = append(refs, m.styles.Dim.Render(line))
+			}
+		}
+		out.references = section(style.ToneAccent, "References", refs)
+	}
+	out.notes = m.noteThreads(f, width, tone)
+	return out, nil
 }
 
-// noteThread draws each of the finding's notes as a conversation: a headline with the note's id and status, then,
-// hanging from a left bar, the note and each reply under its author's chip, indented, as written. The bar and headline
-// are amber while the note is open; a closed note recedes to overlay.
-func (m *Model) noteThread(f draft.Finding) []string {
-	width, _ := style.PaneInner(m.width, 0)
+// markdownLines is md rendered as the body is, one entry per row, or nil for no text.
+func (m *Model) markdownLines(md string) ([]string, error) {
+	if md == "" {
+		return nil, nil
+	}
+	out, err := m.renderMarkdown(render.ForDisplay(md))
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(out, "\n"), nil
+}
+
+// proposal is the section in the proposed change's slot: its tone, heading and body.
+type proposal struct {
+	tone    style.Tone
+	heading string
+	body    []string
+}
+
+// proposedChange is what the agent will do if the human accepts, read after the case for it. On a local run it is the
+// proposal, rendered as the body is, or, with none, a question in the conversation's tone. On a pull request run the
+// suggested fix takes the slot, shown as written so a fix that is not code cannot close a fence. One renderer draws
+// both, so the two modes read alike.
+func (m *Model) proposedChange(f draft.Finding, width int) (proposal, error) {
+	who := m.applier()
+	switch {
+	case f.Proposal != "":
+		body, err := m.markdownLines(f.Proposal)
+		if err != nil {
+			return proposal{}, err
+		}
+		if who == "the agent" {
+			who = "The agent"
+		}
+		return proposal{style.ToneGood, who + " will", body}, nil
+	case m.ui.question(f):
+		return proposal{style.ToneNote, "A question for " + who, []string{m.styles.Text().Render("No change is proposed. Your note tells " + who + " what to do.")}}, nil
+	case f.SuggestedFix != "":
+		return proposal{style.ToneGood, "Suggested fix", strings.Split(m.styles.Wrap(render.ForDisplay(f.SuggestedFix), max(1, width-2), ""), "\n")}, nil
+	}
+	return proposal{}, nil
+}
+
+// noteThreads draws each of the finding's notes as a conversation: the note's id and status, then the note and each
+// reply under its author's chip, indented, as written. An open note is amber; a closed one recedes to muted.
+func (m *Model) noteThreads(f draft.Finding, width int, tone func(style.Tone) style.Tone) [][]string {
 	inner := max(1, width-4)
-	var out []string
+	var out [][]string
 	sep := m.styles.Dim.Render(" " + m.glyphs.Sep + " ")
 	for _, n := range m.draft.Notes {
 		if n.FindingID != f.ID {
 			continue
 		}
 		open := n.Status == draft.NoteOpen
-		tone, body := style.ToneMuted, m.styles.Secondary()
+		t, body := style.ToneMuted, m.styles.Secondary()
 		if open {
-			tone, body = style.ToneNote, m.styles.Text()
+			t, body = style.ToneNote, m.styles.Text()
 		}
 		var lines []string
 		author := func(who, id string) {
@@ -420,36 +436,7 @@ func (m *Model) noteThread(f draft.Finding) []string {
 			author(who, r.ID)
 			block(r.Body)
 		}
-		out = append(out, "", m.threadHead("Note "+render.ForDisplay(n.ID), tone, m.noteStatusChip(n.Status)))
-		out = append(out, m.hangFromBar(lines, tone)...)
-	}
-	return out
-}
-
-// threadHead is a thread's headline in its tone, bold, then its chip, if any. Without color the chip is a bare word,
-// so a separator stands between them.
-func (m *Model) threadHead(title string, tone style.Tone, chip string) string {
-	head := m.styles.Emphasis(m.styles.ToneStyle(tone)).Render(title)
-	if chip == "" {
-		return head
-	}
-	if m.styles.Color {
-		return head + " " + chip
-	}
-	return head + m.styles.Dim.Render(" "+m.glyphs.Sep+" ") + chip
-}
-
-// hangFromBar draws a thread's lines from a left bar in its tone. A blank line keeps the bar, so the thread reads as one
-// block.
-func (m *Model) hangFromBar(lines []string, tone style.Tone) []string {
-	bar := m.styles.ToneStyle(tone).Render(m.glyphs.Quote)
-	out := make([]string, 0, len(lines))
-	for _, l := range lines {
-		if l == "" {
-			out = append(out, bar)
-			continue
-		}
-		out = append(out, bar+" "+l)
+		out = append(out, m.styles.Section(tone(t), "Note "+render.ForDisplay(n.ID), m.noteStatusChip(n.Status), lines))
 	}
 	return out
 }
@@ -513,7 +500,8 @@ func noteStatus(g GlyphSet, status string) string {
 }
 
 func (m *Model) renderMarkdown(md string) (string, error) {
-	wrap := max(20, m.width-style.PaneCols)
+	// Every Markdown block sits behind a section's bar, which takes two columns.
+	wrap := max(20, m.width-style.PaneCols-2)
 	if m.glamour == nil || m.wrapWidth != wrap {
 		theme := glamourstyles.NoTTYStyleConfig
 		if m.styles.Color {

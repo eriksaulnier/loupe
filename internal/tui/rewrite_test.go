@@ -512,7 +512,8 @@ func TestDetailSaysTheAgentChangedTheHumansTextAndWhyItWithdrew(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	view := screenText(m)
 	notice, reason := strings.Index(view, "the agent changed text you wrote"), strings.Index(view, "Naming only.")
-	if notice < 0 || reason < 0 || notice > reason {
+	// Withdrawn is the finding's state, so it comes first, and the notice follows it above the evidence.
+	if notice < 0 || reason < 0 || reason > notice || notice > strings.Index(view, "Why") {
 		t.Fatalf("notice at %d, reason at %d:\n%s", notice, reason, view)
 	}
 }
