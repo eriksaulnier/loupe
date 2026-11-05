@@ -45,8 +45,8 @@ tags it state unknown and changes nothing else, so review works offline and with
 credentials. A run captured with --allow-closed is not tagged for being closed.
 
 A local run (local#7, from loupe capture) opens in apply mode: each finding leads with what the
-agent will do, and nothing reaches GitHub. a accepts, t accepts with a note, x excludes with an
-optional reason, s sends it back with a question, and w rewrites the title, body and proposal.
+agent will do, and nothing reaches GitHub. a accepts, A accepts with a note, x rejects, X rejects
+with a reason, and s sends it back with a question.
 Once every finding is decided, p returns the decisions to the agent that waits on loupe wait,
 and the run then takes no more changes.
 

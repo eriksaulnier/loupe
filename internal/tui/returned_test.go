@@ -206,6 +206,33 @@ func TestApplyReturnSecondEnterSealsTheReloadedDraft(t *testing.T) {
 	}
 }
 
+// A refusal for another reason does not adopt a change that landed meanwhile: the next enter is refused as changed,
+// so the human sees the change before the draft is returned.
+func TestApplyReturnShowsAChangeAfterANoteRefusal(t *testing.T) {
+	m, dir := readyApplyModel(t, "Claude")
+	press(m, "p")
+	m.Update(runes("See f-002."))
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Summary = "The agent changed its mind."
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(enterKey)
+	if returned(t, dir) {
+		t.Fatal("enter returned a note that cites a finding id")
+	}
+	m.note.SetValue("See the second finding.")
+	m.Update(enterKey)
+	if returned(t, dir) || !strings.Contains(m.notice, "moved to version") {
+		t.Fatalf("the second enter returned without showing the change: notice %q", m.notice)
+	}
+	m.Update(enterKey)
+	if got := returnRecord(t, dir).Note; got != "See the second finding." {
+		t.Fatalf("note %q", got)
+	}
+}
+
 // FR-019: deciding the last pending finding opens the return step on its own.
 func TestApplyLastDecisionOpensTheReturnStep(t *testing.T) {
 	m, dir := applyModel(t, "Claude")

@@ -61,14 +61,18 @@ func (m *Model) updateReturn(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 			m.returnedTo = m.returnCounts()
 			return tea.Quit, true
 		}
-		if _, ok := refusal.As(err); !ok {
+		r, ok := refusal.As(err)
+		if !ok {
 			return m.fail(err), true
 		}
 		if _, reloadErr := m.reload(); reloadErr != nil {
 			return m.fail(reloadErr), true
 		}
-		// The human now sees the draft as it is, so the next enter seals that version, not the one that refused.
-		m.returnVersion = m.version
+		// Only a changed-draft refusal tells the human the draft moved, so only then does the next enter seal the
+		// version now on screen. After any other refusal a change still has to be refused and shown first.
+		if r.Code == refusal.Changed {
+			m.returnVersion = m.version
+		}
 		m.say(style.Warn, refusalNotice(err))
 		m.sizeNote(0)
 		return nil, true
