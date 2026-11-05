@@ -1,6 +1,10 @@
 package cli
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -182,5 +186,65 @@ func TestAddSaysWhatItAdded(t *testing.T) {
 	}
 	if want := "+ Added f-003 to o/r#1@1  draft version 1\n"; s.stdout.String() != want {
 		t.Fatalf("stdout %q, want %q", s.stdout.String(), want)
+	}
+}
+
+// Every content flag of add and edit conflicts with --from at the command line.
+func TestFromConflictsWithEveryContentFlag(t *testing.T) {
+	home, _ := sendBackRun(t)
+	valued := map[string]string{
+		"title": "x", "body": "x", "path": "src/app.go", "line": "3", "start-line": "2", "side": "RIGHT",
+		"label": "issue", "confidence": "high", "severity": "minor", "verified": "plausible", "impact": "x",
+		"reference": "https://github.com/o/r/issues/1", "suggested-fix": "x",
+	}
+	var flags [][]string
+	for flag, value := range valued {
+		flags = append(flags, []string{"--" + flag, value})
+	}
+	for _, flag := range []string{"general", "blocking"} {
+		flags = append(flags, []string{"--" + flag})
+	}
+	var cases []refusalCase
+	for _, f := range flags {
+		name := f[0][2:]
+		cases = append(cases,
+			refusalCase{"add " + name, `{}`, append([]string{"add", "--run", "o/r#1", "--from", "-"}, f...), refusal.Usage, "--from cannot be combined with " + f[0]},
+			refusalCase{"edit " + name, `{}`, append([]string{"edit", "f-001", "--run", "o/r#1", "--from", "-"}, f...), refusal.Usage, "--from cannot be combined with " + f[0]})
+	}
+	for _, flag := range []string{"clear-location", "clear-label", "clear-confidence", "clear-severity", "clear-verified", "clear-impact", "clear-references", "clear-suggested-fix", "not-blocking"} {
+		cases = append(cases, refusalCase{"edit " + flag, `{}`, []string{"edit", "f-001", "--run", "o/r#1", "--from", "-", "--" + flag},
+			refusal.Usage, "--from cannot be combined with --" + flag})
+	}
+	checkRefusals(t, home, cases)
+}
+
+// --expect-version refuses a write against another version of the draft and leaves the file as it was, and accepts the
+// current one.
+func TestExpectVersionAtTheCommandLine(t *testing.T) {
+	home, dir := sendBackRun(t)
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := strconv.Itoa(d.Version + 7)
+	checkRefusals(t, home, []refusalCase{
+		{"add", "", []string{"add", "--run", "o/r#1", "--title", "t", "--body", "b", "--general", "--expect-version", stale}, refusal.Version, "draft is at version " + strconv.Itoa(d.Version)},
+		{"summary", "", []string{"summary", "--run", "o/r#1", "--body", "s", "--expect-findings", "2", "--expect-version", stale}, refusal.Version, "draft is at version " + strconv.Itoa(d.Version)},
+		{"edit", "", []string{"edit", "f-001", "--run", "o/r#1", "--title", "u", "--expect-version", stale}, refusal.Version, "draft is at version " + strconv.Itoa(d.Version)},
+	})
+	if after, err := os.ReadFile(filepath.Join(dir, "draft.json")); err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("a refused --expect-version changed draft.json (err %v)", err)
+	}
+	current := strconv.Itoa(d.Version)
+	if code, env, _ := execIn(t, home, "", "add", "--run", "o/r#1", "--title", "t", "--body", "b", "--general", "--expect-version", current); code != 0 {
+		t.Fatalf("add at the current version: exit %d envelope %v", code, env)
+	}
+	// The add moved the draft on, so the version just read is stale for the edit.
+	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--run", "o/r#1", "--title", "u", "--expect-version", current); code != 1 || errorOf(env)["code"] != "version" {
+		t.Fatalf("edit at the old version: exit %d envelope %v", code, env)
 	}
 }

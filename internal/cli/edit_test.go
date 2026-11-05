@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -382,5 +383,40 @@ func TestEditGeneralAndNotBlockingFlags(t *testing.T) {
 	}
 	if f := storedFinding(t, dir, "f-001"); !f.General || f.Location != nil || f.Blocking {
 		t.Fatalf("finding %+v, want it general and not blocking", f)
+	}
+}
+
+// The stored diff is checked against its fingerprint on every load. An edit that still parses can only be caught by
+// the fingerprint.
+func TestChangedDiffIsRefusedOnEveryLoad(t *testing.T) {
+	home, dir := sendBackRun(t)
+	diffPath := filepath.Join(dir, "pr.diff")
+	stored, err := os.ReadFile(diffPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := bytes.Replace(stored, []byte("+line three"), []byte("+line 3 edited"), 1)
+	if bytes.Equal(edited, stored) {
+		t.Fatal("the test diff has no line to edit")
+	}
+	if err := os.WriteFile(diffPath, edited, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"add", "--title", "t", "--body", "b", "--general"},
+		{"edit", "f-001", "--title", "u"},
+	} {
+		code, env, _ := execIn(t, home, "", args...)
+		errObj := errorOf(env)
+		msg, _ := errObj["message"].(string)
+		if code != 1 || errObj["code"] != "record" || !strings.Contains(msg, diffPath) || !strings.Contains(msg, "diffSha256") {
+			t.Fatalf("%s: exit %d error %v, want a record refusal naming the file and the fingerprint", args[0], code, errObj)
+		}
+	}
+	deps, st := terminalDeps(t, home)
+	code := Execute(deps, []string{"review", "o/r#1", "--json"})
+	errObj := errorOf(decodeOne(t, st.stdout.Bytes()))
+	if msg, _ := errObj["message"].(string); code != 1 || errObj["code"] != "record" || !strings.Contains(msg, diffPath) {
+		t.Fatalf("review: exit %d error %v, want a record refusal naming the file", code, errObj)
 	}
 }

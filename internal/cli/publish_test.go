@@ -305,3 +305,12 @@ func TestPublishReportsAStderrItCannotWriteAfterADecline(t *testing.T) {
 		t.Fatalf("exit %d, %d reviews sent", code, f.gh.CreateCount())
 	}
 }
+
+// Bad flags refuse before the run is resolved or GitHub is reached; testDeps fails the test if a client is built.
+func TestPublishRefusesBadFlagsFirst(t *testing.T) {
+	checkRefusals(t, t.TempDir(), []refusalCase{
+		{"no action", "", []string{"publish", "acme/widgets#99", "--inline", "all"}, refusal.Usage, "--action is required"},
+		{"an unknown action", "", []string{"publish", "acme/widgets#99", "--action", "merge"}, refusal.Usage, `--action must be one of comment, approve, request-changes, got "merge"`},
+		{"an unknown --inline", "", []string{"publish", "acme/widgets#99", "--action", "comment", "--inline", "some"}, refusal.Usage, `--inline must be one of none, blocking, all, got "some"`},
+	})
+}

@@ -419,26 +419,6 @@ func TestPublishRefusesEmptyDraft(t *testing.T) {
 	h.checkSends(0)
 }
 
-func TestPublishRefusesBadFlagsFirst(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	for _, args := range [][]string{
-		{"publish", "acme/widgets#99", "--inline", "all"},
-		{"publish", "acme/widgets#99", "--action", "merge"},
-		{"publish", "acme/widgets#99", "--action", "comment", "--inline", "some"},
-	} {
-		env, exit := h.RunJSON(args...)
-		errObj, _ := env["error"].(map[string]any)
-		if exit != 2 || errObj["code"] != "usage" {
-			t.Errorf("%v: exit %d envelope %v", args, exit, env)
-		}
-	}
-	h.checkSends(0)
-	if n := len(h.GH.Requests()); n != 0 {
-		t.Fatalf("requests %d", n)
-	}
-}
-
 func TestPublishJSONPrintsOneObject(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
