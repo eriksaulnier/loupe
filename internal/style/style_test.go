@@ -64,6 +64,11 @@ func TestTierSelection(t *testing.T) {
 		{map[string]string{"LC_ALL": "C", "LANG": "en_US.UTF-8"}, ASCII},
 		{map[string]string{"LC_ALL": "C", "LANG": "en_US.UTF-8", IconsEnv: "nerd"}, ASCII},
 		{map[string]string{"LC_CTYPE": "en_US.utf8", "LANG": "C"}, Unicode},
+		{map[string]string{"LC_CTYPE": "C.utf8"}, Unicode},
+		{map[string]string{"LC_ALL": "de_DE.Utf-8", "LC_CTYPE": "C"}, Unicode},
+		{map[string]string{"LC_CTYPE": "POSIX", "LANG": "en_US.UTF-8"}, ASCII},
+		{map[string]string{"LC_ALL": "", "LC_CTYPE": "en_US.UTF-8", "LANG": "C"}, Unicode},
+		{map[string]string{"LANG": "C"}, ASCII},
 		{map[string]string{}, ASCII},
 	}
 	for _, c := range cases {
