@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
@@ -40,10 +41,13 @@ func TestReviewRefusesATerminalItCannotDrawOn(t *testing.T) {
 	for _, c := range []struct {
 		name, term, reason string
 		screen             *tui.Screen
+		regularFile        bool
 	}{
-		{"TERM=dumb", "dumb", "TERM=dumb", &tui.Screen{Width: 100, Height: 30}},
+		{"TERM=dumb", "dumb", "TERM=dumb", &tui.Screen{Width: 100, Height: 30}, false},
 		// A reader that is not a terminal file fails the raw-mode probe, as a terminal that cannot enter raw mode does.
-		{"no raw mode", "", "cannot enter raw mode", nil},
+		{"no raw mode", "", "cannot enter raw mode", nil, false},
+		// A regular file is a file, but not a terminal, so making it raw fails.
+		{"stdin a regular file", "", "cannot enter raw mode: inappropriate ioctl for device", nil, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			home := filepath.Join(t.TempDir(), "loupe-home")
@@ -51,6 +55,14 @@ func TestReviewRefusesATerminalItCannotDrawOn(t *testing.T) {
 			deps.IsTerminal = func() bool { return true }
 			deps.StderrIsTerminal = func() bool { return true }
 			deps.Screen = c.screen
+			if c.regularFile {
+				f, err := os.Create(filepath.Join(t.TempDir(), "stdin"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = f.Close() })
+				deps.Stdin = f
+			}
 			if code := Execute(deps, []string{"review", "o/r#1", "--json"}); code != 1 {
 				t.Fatalf("exit %d stderr %q", code, s.stderr.String())
 			}
@@ -378,5 +390,54 @@ func TestUpdateNoticeIsEmptyWithoutADataRoot(t *testing.T) {
 	deps := Deps{Version: "0.19.0", Getenv: func(string) string { return "" }}
 	if got := updateNotice(deps); got != "" {
 		t.Errorf("updateNotice = %q, want nothing", got)
+	}
+}
+
+// terminalDeps are deps for review at a terminal of a fixed size that the test does not type into.
+func terminalDeps(t *testing.T, home string) (Deps, *streams) {
+	t.Helper()
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	deps.IsTerminal = func() bool { return true }
+	deps.StderrIsTerminal = func() bool { return true }
+	deps.Screen = &tui.Screen{Width: 100, Height: 30}
+	return deps, s
+}
+
+// A run directory review cannot write its session file into is reported before the interface opens.
+func TestReviewReportsASessionItCannotHold(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes into any directory")
+	}
+	home, dir := pendingRun(t)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	deps, s := terminalDeps(t, home)
+	code := Execute(deps, []string{"review", "o/r#1", "--json"})
+	if errObj := wantCode(t, code, s, refusal.Internal); !strings.Contains(errObj["message"].(string), "open review session") {
+		t.Fatalf("error %v", errObj)
+	}
+}
+
+// Input that fails ends the interface with an error, which review reports.
+func TestReviewReportsAnInterfaceThatFails(t *testing.T) {
+	home, _ := pendingRun(t)
+	deps, s := terminalDeps(t, home)
+	deps.Stdin = iotest.ErrReader(errors.New("input gone"))
+	code := Execute(deps, []string{"review", "o/r#1", "--json"})
+	if errObj := wantCode(t, code, s, refusal.Internal); !strings.HasPrefix(errObj["message"].(string), "review interface: ") ||
+		!strings.Contains(errObj["message"].(string), "input gone") {
+		t.Fatalf("error %v", errObj)
+	}
+}
+
+// The hand-back is recorded after a clean exit, so one that cannot be read is reported then.
+func TestReviewReportsAHandBackItCannotRecord(t *testing.T) {
+	home, dir := pendingRun(t)
+	mkdirAll(t, filepath.Join(dir, "handback.json"))
+	code, s := screenReview(t, home, true, "q", func(*screen.Screen) {})
+	if errObj := wantCode(t, code, s, refusal.Record); !strings.Contains(errObj["message"].(string), "handback.json") {
+		t.Fatalf("error %v", errObj)
 	}
 }

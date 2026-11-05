@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 func TestPublishUnattendedDefaultsActionToComment(t *testing.T) {
@@ -156,5 +160,28 @@ func TestPublishHelpDocumentsTheNote(t *testing.T) {
 		if !strings.Contains(s.stdout.String(), want) {
 			t.Errorf("publish help lacks %q", want)
 		}
+	}
+}
+
+// installationGitHub acts as an App installation token, which is all an unattended publish needs before it reads the
+// draft; it answers nothing else.
+type installationGitHub struct{ github.Client }
+
+func (installationGitHub) TokenKind() github.TokenKind { return github.Installation }
+
+// Publish rereads the previous round that assess read; a damaged receipt there is refused, not taken as a move.
+func TestPublishRefusesAPreviousRoundItCannotReread(t *testing.T) {
+	home := assessRun(t, "pub-1")
+	if code, s := runAssessIn(t, home, "", "e-1", "--status", "open"); code != 0 {
+		t.Fatalf("assess exit %d stderr %q", code, s.stderr.String())
+	}
+	if err := os.WriteFile(filepath.Join(run.RunDir(home, "o", "r", 1, 1), "receipt.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+	deps.GitHub = func() (github.Client, error) { return installationGitHub{}, nil }
+	code := Execute(deps, []string{"publish", "o/r#1@2", "--unattended", "--json"})
+	if errObj := wantCode(t, code, s, refusal.Record); !strings.Contains(errObj["message"].(string), "receipt.json") {
+		t.Fatalf("error %v", errObj)
 	}
 }
