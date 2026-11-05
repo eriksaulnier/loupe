@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,10 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eriksaulnier/loupe/internal/testutil/golden"
 	"github.com/eriksaulnier/loupe/internal/testutil/screen"
 )
-
-var update = flag.Bool("update", false, "rewrite the golden files under testdata/golden/apply")
 
 // applyRef is the first local run of the clone, whose origin names acme/widgets.
 const applyRef = owner + "/" + repo + ":local#1"
@@ -589,7 +587,7 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("feedback exit %d stderr %q", exit, stderr)
 	}
-	checkApplyGolden(t, "feedback.json", maskPaths(t, stdout, map[string]string{h.Repo.Dir: "<repo>", h.Home: "<home>"}))
+	golden.Check(t, "apply/feedback.json", maskPaths(t, stdout, map[string]string{h.Repo.Dir: "<repo>", h.Home: "<home>"}))
 	h.noGitHub()
 }
 
@@ -605,26 +603,6 @@ func maskPaths(t *testing.T, stdout string, dirs map[string]string) string {
 		t.Fatalf("feedback is not JSON: %v\n%s", err, stdout)
 	}
 	return strings.TrimRight(out.String(), "\n") + "\n"
-}
-
-func checkApplyGolden(t *testing.T, name, got string) {
-	t.Helper()
-	path := filepath.Join("..", "..", "testdata", "golden", "apply", name)
-	if *update {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != string(want) {
-		t.Fatalf("%s mismatch\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
 }
 
 // TestApplyListFindsLocalRuns is User Story 6: local runs from two worktrees of one repository share the prefix with

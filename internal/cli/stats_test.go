@@ -18,6 +18,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/stats"
 	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/eriksaulnier/loupe/internal/testutil/golden"
 )
 
 // statsFinding is an included general finding filed by the agent.
@@ -329,7 +330,7 @@ func TestStatsGoldens(t *testing.T) {
 				t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 			}
 			checkFiledInResult(t, s.stdout.Bytes())
-			checkCLIGolden(t, "stats-json-"+group+".json", s.stdout.String())
+			golden.Check(t, "cli/"+"stats-json-"+group+".json", s.stdout.String())
 		})
 	}
 	empty := t.TempDir()
@@ -352,7 +353,7 @@ func TestStatsGoldens(t *testing.T) {
 				if code := Execute(deps, c.args); code != 0 {
 					t.Fatalf("exit %d stderr %s", code, s.stderr.String())
 				}
-				checkCLIGolden(t, c.name+"."+strconv.Itoa(width)+".txt", s.stdout.String()+s.stderr.String())
+				golden.Check(t, "cli/"+c.name+"."+strconv.Itoa(width)+".txt", s.stdout.String()+s.stderr.String())
 				// Help text is not wrapped to the terminal, so only the list is held to the width.
 				for _, line := range strings.Split(s.stdout.String(), "\n") {
 					if c.name != "stats-help" && style.Width(line) > width {

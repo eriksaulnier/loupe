@@ -3,7 +3,6 @@ package render
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"flag"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,29 +11,17 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/severity"
+	"github.com/eriksaulnier/loupe/internal/testutil/golden"
 )
 
-var update = flag.Bool("update", false, "rewrite golden files from the renderer, except example.md, which comes from docs/comment-format.md")
-
-func goldenPath(name string) string {
-	return filepath.Join("..", "..", "testdata", "golden", name)
-}
-
+// checkGolden leaves example.md alone under -update: it comes from docs/comment-format.md, not from the renderer.
 func checkGolden(t *testing.T, name, got string) {
 	t.Helper()
-	path := goldenPath(name)
-	if *update && name != "example.md" {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if name == "example.md" {
+		golden.Compare(t, name, got)
+		return
 	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != string(want) {
-		t.Fatalf("%s mismatch\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
+	golden.Check(t, name, got)
 }
 
 func exampleInput() Input {
@@ -118,13 +105,13 @@ func TestExampleGoldenMatchesDoc(t *testing.T) {
 		return hex.EncodeToString(sum[:])
 	}
 	want := strings.NewReplacer("8f3c…", hash("internal/publish/publish.go"), "5610…", hash("internal/draft/store.go")).Replace(string(m[1]))
-	golden, err := os.ReadFile(goldenPath("example.md"))
+	pinned, err := os.ReadFile(golden.Path(t, "example.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// The record's data and checksum are pinned by the golden, and the doc shows where the line goes.
 	got := regexp.MustCompile(`(?m)^<!-- loupe-findings v=1 sha256=[0-9a-f]{64} \S+ -->$`).
-		ReplaceAllLiteralString(string(golden), "<!-- loupe-findings v=1 sha256=<sha256> <data> -->")
+		ReplaceAllLiteralString(string(pinned), "<!-- loupe-findings v=1 sha256=<sha256> <data> -->")
 	if got != want {
 		t.Fatalf("testdata/golden/example.md differs from the doc example\n--- golden ---\n%s\n--- doc ---\n%s", got, want)
 	}
