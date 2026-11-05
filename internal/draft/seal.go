@@ -37,6 +37,10 @@ const returnedFix = "loupe feedback --run <ref> to read the decisions, or loupe 
 // so a refused note writes nothing, then under the draft lock refuses a draft that moved past expectVersion, is not
 // ready, or holds no finding, and otherwise writes return.json.
 func Seal(dir string, expectVersion int, note string, getenv func(string) string, now time.Time) error {
+	// A note of only whitespace, such as a pasted line break, is no note, as an empty accept note is none.
+	if strings.TrimSpace(note) == "" {
+		note = ""
+	}
 	if err := ValidateReturnNote(note); err != nil {
 		return err
 	}

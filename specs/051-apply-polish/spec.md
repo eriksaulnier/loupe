@@ -126,7 +126,7 @@ The human wants to work through the findings of a local run one at a time, decid
 
 **Closing note**
 
-- **FR-001**: On a local run, the return step MUST offer an optional note before the confirming key. It is Markdown under the allowlist that the accept note uses, at most 4,096 characters, and it follows the finding-id rule.
+- **FR-001**: On a local run, the return step MUST offer an optional note before the confirming key. It is Markdown under the same allowlist as the accept note, checked as a closing note, at most 4,096 characters, and it follows the finding-id rule.
 - **FR-002**: An empty note MUST return the run with no note. The number of keys from the list to a returned run MUST stay at two when the human types nothing.
 - **FR-003**: `return.json` MUST record the note as `note`, only when the human gave one.
 - **FR-004**: `loupe feedback --json` and `loupe wait --json` on a returned run MUST carry `note` when `return.json` holds one, and MUST omit the key otherwise.

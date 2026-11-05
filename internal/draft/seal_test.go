@@ -109,6 +109,21 @@ func TestSealWritesTheClosingNote(t *testing.T) {
 	}
 }
 
+// A note of only whitespace, such as a pasted line break the input turned into a space, returns with no note.
+func TestSealDropsAWhitespaceNote(t *testing.T) {
+	dir := sealDir(t, readyDraft())
+	if err := Seal(dir, 0, " \t ", noEnv, sealNow); err != nil {
+		t.Fatal(err)
+	}
+	r, ok, err := LoadReturn(dir)
+	if err != nil || !ok {
+		t.Fatalf("LoadReturn: ok %v, %v", ok, err)
+	}
+	if r.Note != "" {
+		t.Fatalf("note %q, want none", r.Note)
+	}
+}
+
 // A refused note writes nothing, since it is checked before the lock is taken.
 func TestSealRefusesABadClosingNote(t *testing.T) {
 	for _, c := range []struct{ name, note, says string }{

@@ -18,7 +18,7 @@
 
 ## R3. `return.json` note
 
-**Decision**: `draft.Return` gains `Note string json:"note,omitempty"`, and `draft.Seal` takes the note. The note is checked with `markdown.Check(note, markdown.AcceptNote, …)`, under the finding-id rule and at most 4,096 characters, before the lock is taken, so a refused note writes nothing. Schema stays 1, because 049 never shipped. `docs/versioning.md`'s return row names the field.
+**Decision**: `draft.Return` gains `Note string json:"note,omitempty"`, and `draft.Seal` takes the note. The note is checked with `markdown.Check(note, markdown.ReturnNote, …)`, the closing note's own kind, under the finding-id rule and at most 4,096 characters, before the lock is taken, so a refused note writes nothing. Schema stays 1, because 049 never shipped. `docs/versioning.md`'s return row names the field.
 
 **Rationale**: the note belongs to the return act, not to a finding, so it lives with the record of that act. Amending an unreleased schema in place matches how spec 049 handled draft schema 5.
 
