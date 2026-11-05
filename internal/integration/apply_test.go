@@ -256,6 +256,11 @@ func (h *harness) userState(untracked ...string) string {
 func TestApplyLocalCodeReview(t *testing.T) {
 	t.Parallel()
 	h := newApplyHarness(t)
+	// --changed reports paths under git's toplevel, which has its symlinks resolved.
+	clone, err := filepath.EvalSymlinks(h.Repo.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	h.Repo.Git("checkout", "--quiet", "-b", "feat")
 	h.writeRepoFile("src/app.go", strings.Replace(lines(numberedLines("app line ", 1, 40)...), "app line 3\n", "app line 3 committed\n", 1))
 	h.Repo.Git("commit", "--quiet", "-am", "feat")
@@ -280,7 +285,7 @@ func TestApplyLocalCodeReview(t *testing.T) {
 		if entry["new"] == true {
 			fresh = append(fresh, entry["path"].(string))
 		}
-		if entry["abs"] != filepath.Join(h.Repo.Dir, entry["path"].(string)) {
+		if entry["abs"] != filepath.Join(clone, entry["path"].(string)) {
 			t.Errorf("file %v: abs is not under the clone", entry)
 		}
 	}
@@ -329,7 +334,7 @@ func TestApplyLocalCodeReview(t *testing.T) {
 	}
 	for _, entry := range []map[string]any{apply["f-001"], changes["f-002"], excluded["f-003"]} {
 		loc := entry["location"].(map[string]any)
-		if entry["path"] != filepath.Join(h.Repo.Dir, loc["path"].(string)) || loc["side"] != nil || entry["blocking"] != nil {
+		if entry["path"] != filepath.Join(clone, loc["path"].(string)) || loc["side"] != nil || entry["blocking"] != nil {
 			t.Fatalf("entry %v", entry)
 		}
 	}
