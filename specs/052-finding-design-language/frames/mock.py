@@ -101,7 +101,7 @@ elif mode=="pr-C":
 elif mode=="local-question":
     tone=NOTE
     qbody=wrap("Nothing in the plan clears an entry when the head moves. The choices are a webhook that deletes the entry, a shorter TTL, or comparing the head SHA on every read.",IW-4)
-    ask=[bold("A question for Claude",tone)]+[bar(t("Claude proposes no change. Your answer goes back as the decision."),tone)]
+    ask=[bold("A question for Claude",tone)]+[bar(t("No change is proposed. Your note tells Claude what to do."),tone)]
     header("local · returns to Claude",title="Cache plan",decided="0/4")
     finding("f-004","pending","Who invalidates an entry on a force-push?","general",SEC,"",[why(qbody), ask],"4 of 4")
     footer(lkeys)
