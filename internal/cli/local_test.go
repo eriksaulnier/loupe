@@ -41,7 +41,7 @@ func localRun(t *testing.T, capture string, findings ...draft.Finding) (string, 
 		DiffSHA256: run.DiffSHA256(diff),
 		Local:      &run.LocalTarget{Prefix: "acme/widgets", Repository: "acme/widgets", Capture: capture, Root: "/src", Files: files, Skipped: []run.LocalSkipped{}},
 	}
-	dir, _, err := run.NextLocal(home, "test", func(string) string { return "" }, target, diff, draftJSON)
+	dir, _, err := run.NextLocal(home, "test", func(string) string { return "" }, target, diff, draftJSON, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,6 +246,99 @@ func TestInputKeyChecksIgnoreCase(t *testing.T) {
 		if code != 1 {
 			t.Errorf("%s: exit %d stdout %q", input, code, s.stdout.String())
 		}
+	}
+}
+
+func TestListShowsLocalRuns(t *testing.T) {
+	home, dir := localRun(t, "changed", localFinding("f-001"))
+	// A pull request run captured a day later sorts first.
+	prTarget := run.Target{Owner: "o", Repo: "r", Number: 1, Round: 1, Title: "PR", URL: "https://github.com/o/r/pull/1",
+		CapturedAt: time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC), DiffSHA256: run.DiffSHA256(nil)}
+	draftJSON, err := json.Marshal(draft.NewEmpty())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run.CreateRun(run.RunDir(home, "o", "r", 1, 1), prTarget, nil, draftJSON, nil); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+	if code := Execute(deps, []string{"list", "--json"}); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	runs := decodeOne(t, s.stdout.Bytes())["runs"].([]any)
+	if len(runs) != 2 {
+		t.Fatalf("runs %v", runs)
+	}
+	pr, loc := runs[0].(map[string]any), runs[1].(map[string]any)
+	if _, ok := pr["kind"]; ok || pr["url"] == nil {
+		t.Errorf("PR row %v", pr)
+	}
+	want := []string{"capturedAt", "counts", "kind", "ref", "repository", "state", "title"}
+	var got []string
+	for k := range loc {
+		got = append(got, k)
+	}
+	slices.Sort(got)
+	if !slices.Equal(got, want) || loc["kind"] != "local" || loc["ref"] != "acme/widgets:local#1" || loc["state"] != "captured" {
+		t.Errorf("local row %v", loc)
+	}
+
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Decisions["f-001"] = draft.Decision{Decision: draft.DecisionAccepted, FindingRev: 1}
+	data, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "draft.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		write bool
+		state string
+	}{{false, "ready"}, {true, "returned"}} {
+		if step.write {
+			if err := os.WriteFile(filepath.Join(dir, "return.json"), []byte(`{"schema":1}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+		if code := Execute(deps, []string{"list"}); code != 0 {
+			t.Fatalf("exit %d", code)
+		}
+		if !strings.Contains(s.stdout.String(), "acme/widgets:local#1  "+step.state) {
+			t.Errorf("text list lacks state %s:\n%s", step.state, s.stdout.String())
+		}
+	}
+}
+
+func TestListLocalRunWithNoFindingsIsNotReady(t *testing.T) {
+	home, _ := localRun(t, "no-files")
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+	if code := Execute(deps, []string{"list", "--json"}); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	row := decodeOne(t, s.stdout.Bytes())["runs"].([]any)[0].(map[string]any)
+	if row["state"] != "captured" || row["title"] != "Local work" {
+		t.Fatalf("row %v", row)
+	}
+}
+
+func TestStatsIgnoresLocalRuns(t *testing.T) {
+	home, _ := localRun(t, "changed", localFinding("f-001"))
+	empty := t.TempDir()
+	outputs := []string{}
+	for _, h := range []string{home, empty} {
+		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": h})
+		if code := Execute(deps, []string{"stats", "--json"}); code != 0 {
+			t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+		}
+		outputs = append(outputs, s.stdout.String())
+	}
+	if outputs[0] != outputs[1] {
+		t.Fatalf("stats saw the local run:\n%s\nwant\n%s", outputs[0], outputs[1])
 	}
 }
 

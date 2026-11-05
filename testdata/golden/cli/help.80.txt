@@ -26,7 +26,7 @@ Workflow  capture → add → summary → review → publish
   An agent MAY block on loupe wait for the human's notes and MUST pass --run to it.
 
 Commands
-  agent   capture   Capture a pull request into a new review round
+  agent   capture   Capture a pull request, or local work, into a new run
           add       File findings into the draft
           summary   Set the summary the human reads while sorting findings
           assess    Mark earlier findings as still open or addressed
@@ -49,6 +49,7 @@ Send-back loop  when the human sends findings back from review with notes
 Run references
   owner/repo#123      the newest round of pull request 123
   owner/repo#123@2    round 2
+  local#7             local run 7; only --run or the <ref> argument selects it
   Run selection, in order: --run <ref> (or the <ref> argument of handoff, review and publish),
   then LOUPE_RUN, then the pull request of the current branch in the working directory at its
   newest round.

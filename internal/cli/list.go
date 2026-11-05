@@ -24,7 +24,11 @@ Result (--json):
    "runs": [{"ref": "owner/repo#123@1", "url": "https://github.com/owner/repo/pull/123",
              "title": "...", "round": 1, "state": "ready",
              "counts": {"accepted": 2, "pending": 0, "excluded": 1, "withdrawn": 0, "openNotes": 0},
-             "capturedAt": "2026-09-13T12:00:00Z"}]}`
+             "capturedAt": "2026-09-13T12:00:00Z"}]}
+  A local run's entry has kind "local", and repository when its origin is on GitHub, but no url or
+  round: {"ref": "owner/repo:local#7", "kind": "local", "repository": "owner/repo", "title": "...",
+  "state": "captured", "counts": {...}, "capturedAt": "..."}. Its state is returned once its
+  decisions went back to the agent, else ready when it holds a finding and none is pending.`
 
 func newListCmd(deps Deps) *cobra.Command {
 	return &cobra.Command{
@@ -47,11 +51,14 @@ type listCounts struct {
 	OpenNotes int `json:"openNotes"`
 }
 
+// listRow is a pull request run, or a local run, which has kind and maybe repository but no url or round.
 type listRow struct {
 	Ref        string     `json:"ref"`
-	URL        string     `json:"url"`
+	Kind       string     `json:"kind,omitempty"`
+	Repository string     `json:"repository,omitempty"`
+	URL        string     `json:"url,omitempty"`
 	Title      string     `json:"title"`
-	Round      int        `json:"round"`
+	Round      int        `json:"round,omitempty"`
 	State      string     `json:"state"`
 	Counts     listCounts `json:"counts"`
 	CapturedAt time.Time  `json:"capturedAt"`
@@ -100,6 +107,11 @@ func runList(cmd *cobra.Command, deps Deps) error {
 			CapturedAt: e.Target.CapturedAt,
 		})
 	}
+	locals, err := localRows(root)
+	if err != nil {
+		return err
+	}
+	rows = append(rows, locals...)
 	// Walk order is by reference, which makes the tie-break on equal capture times deterministic.
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].CapturedAt.After(rows[j].CapturedAt) })
 	if wantJSON(cmd) {
@@ -121,7 +133,11 @@ func printList(deps Deps, rows []listRow) error {
 	when := make([]string, len(rows))
 	columns := []int{0, len("published"), 0, len("captured")}
 	for i, r := range rows {
-		refs[i], counts[i], when[i] = strings.TrimSpace(s.Glyphs.PR+" "+oneLine(r.Ref)), listCountsCell(s, r.Counts), style.Relative(r.CapturedAt, deps.Now())
+		glyph := s.Glyphs.PR
+		if r.Kind != "" {
+			glyph = s.Glyphs.File
+		}
+		refs[i], counts[i], when[i] = strings.TrimSpace(glyph+" "+oneLine(r.Ref)), listCountsCell(s, r.Counts), style.Relative(r.CapturedAt, deps.Now())
 		columns[0] = max(columns[0], style.Width(refs[i]))
 		columns[2] = max(columns[2], style.Width(counts[i]))
 		columns[3] = max(columns[3], style.Width(when[i]))
@@ -137,7 +153,7 @@ func printList(deps Deps, rows []listRow) error {
 			style.Pad(s.Of(listStateKind(r.State)).Render(oneLine(r.State)), columns[1]),
 			style.Pad(counts[i], columns[2]),
 			style.Pad(s.Dim.Render(when[i]), columns[3]),
-			s.TruncRight(oneLine(r.Title), title))
+			s.TruncRight(oneLine(listTitle(r)), title))
 	}
 	fmt.Fprintf(&b, "\n%s\n", listFooter(s, width, rows))
 	_, err := io.WriteString(deps.Stdout, b.String())
@@ -158,7 +174,7 @@ func listStateKind(state string) style.Kind {
 	switch state {
 	case "ready":
 		return style.Accent
-	case "published":
+	case "published", "returned":
 		return style.Good
 	}
 	return style.Dim
@@ -208,4 +224,60 @@ func listFooter(s style.Style, width int, rows []listRow) string {
 	ref, _, _ := strings.Cut(waiting.Ref, "@")
 	return next(s, width, sentence+" ", "loupe review "+oneLine(ref)) +
 		s.Dim.Render(fmt.Sprintf(" has %d %s waiting for you.", waiting.Counts.Pending, plural(waiting.Counts.Pending, "finding")))
+}
+
+// localRows lists the local runs. A local run is returned once return.json exists, else ready when it holds a
+// finding and none is pending, else captured: a local run with no finding has nothing to return.
+func localRows(root string) ([]listRow, error) {
+	entries, err := run.WalkLocal(root)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]listRow, 0, len(entries))
+	for _, e := range entries {
+		target, err := run.LoadTarget(e.Dir)
+		if err != nil {
+			return nil, err
+		}
+		d, err := draft.Load(e.Dir)
+		if err != nil {
+			return nil, err
+		}
+		returned, err := run.HasReturn(e.Dir)
+		if err != nil {
+			return nil, err
+		}
+		readiness := draft.ReadinessOf(d)
+		state := "captured"
+		switch {
+		case returned:
+			state = "returned"
+		case readiness.Ready && len(d.Findings) > 0:
+			state = "ready"
+		}
+		ref := run.Ref{Local: e.N}
+		if target.Local != nil {
+			ref.Prefix = target.Local.Prefix
+		}
+		row := listRow{Ref: ref.String(), Kind: target.Kind, Title: target.Title, State: state, CapturedAt: target.CapturedAt,
+			Counts: listCounts{
+				Accepted:  len(readiness.Accepted),
+				Pending:   len(readiness.Pending),
+				Excluded:  len(readiness.Excluded),
+				Withdrawn: len(readiness.Withdrawn),
+				OpenNotes: len(readiness.OpenNotes),
+			}}
+		if target.Local != nil {
+			row.Repository = target.Local.Repository
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
+func listTitle(r listRow) string {
+	if r.Kind != "" && r.Title == "" {
+		return "(no title)"
+	}
+	return r.Title
 }

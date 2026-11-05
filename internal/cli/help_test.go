@@ -12,7 +12,7 @@ import (
 // contractResultKeys are the result payload keys in contracts/cli.md. A command missing here fails the test so its
 // contract keys get recorded when it is added; nil means contracts/cli.md names no payload keys for the command.
 var contractResultKeys = map[string][]string{
-	"capture":  {"target", "refs", "cleanup", "next"},
+	"capture":  {"target", "refs", "cleanup", "next", "headings"},
 	"add":      {"findings", "version"},
 	"edit":     {"finding", "version", "clearedDecision"},
 	"summary":  {"version", "includedCount"},
@@ -22,7 +22,7 @@ var contractResultKeys = map[string][]string{
 	"show":     {"summary", "findings", "decisions", "notes", "replies", "target", "dispositions", "readiness", "digest"},
 	"feedback": {"readiness", "notes", "findings"},
 	"reply":    {"reply", "version"},
-	"list":     {"ref", "url", "title", "round", "state", "counts", "capturedAt"},
+	"list":     {"ref", "kind", "repository", "url", "title", "round", "state", "counts", "capturedAt"},
 	"stats": {"filter", "repos", "since", "until", "states", "groupBy", "groups", "key", "runs", "unattended", "pullRequests",
 		"findings", "filed", "published", "excluded", "withdrawn", "pending", "reinstated", "regraded", "byLabel", "blocking",
 		"precision", "drifted", "medianCaptureToPublish", "total"},

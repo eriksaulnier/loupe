@@ -18,7 +18,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/gitx"
-	"github.com/eriksaulnier/loupe/internal/markdown"
+	"github.com/eriksaulnier/loupe/internal/local"
 	"github.com/eriksaulnier/loupe/internal/publish"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -61,7 +61,7 @@ that fails never refuses the capture. LOUPE_NO_UPDATE_CHECK=1 turns this off.
 Result (--json):
   {"loupe": 1, "ok": true, "command": "capture", "run": "owner/repo#123@1",
    "dir": "/path/to/run", "version": 0,
-   "target": {"schema": 2, "owner": "owner", "repo": "repo", "number": 123,
+   "target": {"schema": 3, "owner": "owner", "repo": "repo", "number": 123,
               "url": "https://github.com/owner/repo/pull/123", "title": "...", "author": "...",
               "viewer": "...", "baseSha": "...", "headSha": "...", "round": 1,
               "capturedAt": "2026-09-13T12:00:00Z", "clonePath": "/path/to/clone",
@@ -82,21 +82,61 @@ Result (--json):
   (with reason, and unreadable: true when a loupe review exists but cannot be read back, or the reviews could not be
   listed). Run loupe show --previous when it is receipt or github. comments is {read: true} with the three
   counts, or {read: false, reason}. Run loupe show --comments when read is true. warnings, an array of
-  warning codes, appears only when nonempty.`
+  warning codes, appears only when nonempty.
+
+Local work (apply mode) is captured instead into a local run, local#<n>, whose decisions go back
+to the agent rather than to GitHub. It makes no network call, and warns of a newer release only
+from what an earlier pull request capture found:
+  --changed [--base <ref>]    the worktree's staged, unstaged and untracked changes against HEAD,
+                              or against the merge base with --base, read through a temporary
+                              index so the user's index, refs and files stay untouched
+  --files <path>...           each file whole; repeat --files for more
+  --no-files --title <title>  no file, for findings that are all general
+Each takes --title and --applier, the name of who applies the decisions. Binary, empty, deleted,
+submodule and files over 1 MiB are listed under local.skipped instead of captured.
+
+Result for a local run (--json):
+  {"loupe": 1, "ok": true, "command": "capture", "run": "owner/repo:local#7",
+   "dir": "/path/to/run", "version": 0,
+   "target": {"schema": 3, "kind": "local", "title": "...", "applier": "Claude",
+              "capturedAt": "...", "diffSha256": "...",
+              "local": {"n": 7, "prefix": "owner/repo", "repository": "owner/repo",
+                        "capture": "changed", "root": "/path/to/worktree", "branch": "feat/x",
+                        "baseRef": "main", "mergeBase": "...",
+                        "files": [{"path": "docs/plan.md", "abs": "/path/to/worktree/docs/plan.md"},
+                                  {"path": "notes.txt", "abs": "...", "new": true}],
+                        "skipped": [{"path": "logo.png", "reason": "binary"}]}},
+   "headings": {"docs/plan.md": [{"heading": "Goals", "level": 2, "line": 3}]},
+   "next": ["loupe add --run owner/repo:local#7 --from <file> --json",
+            "loupe handoff --run owner/repo:local#7 --json"]}
+  Anchor findings to local.files[].path. headings lists each captured Markdown file's headings.`
 
 const prURLFix = "loupe capture https://github.com/<owner>/<repo>/pull/<number>"
 
 func newCaptureCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "capture <pr-url>",
-		Short:   "Capture a pull request into a new review round",
+		Use:     "capture [<pr-url> | --changed | --files <path>... | --no-files --title <title>]",
+		Short:   "Capture a pull request, or local work, into a new run",
 		Long:    captureHelp,
-		Example: "  loupe capture https://github.com/owner/repo/pull/123 --json\n  loupe capture https://github.com/owner/repo/pull/123 --repo ~/src/repo\n  loupe capture https://github.com/owner/repo/pull/123 --allow-closed --json",
-		Args:    cobra.ExactArgs(1),
+		Example: "  loupe capture https://github.com/owner/repo/pull/123 --json\n  loupe capture https://github.com/owner/repo/pull/123 --repo ~/src/repo\n  loupe capture https://github.com/owner/repo/pull/123 --allow-closed --json\n  loupe capture --changed --base main --json\n  loupe capture --files docs/plan.md --applier Claude --json",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			form, err := captureForm(cmd, args)
+			if err != nil {
+				return err
+			}
+			if form != "" {
+				return runLocalCapture(cmd, deps, form)
+			}
 			return runCapture(cmd, deps, args[0])
 		},
 	}
+	cmd.Flags().Bool("changed", false, "capture the changed files of the current Git worktree: staged, unstaged and untracked, against HEAD or --base")
+	cmd.Flags().String("base", "", "with --changed, diff against the merge base of HEAD and this ref instead of HEAD")
+	cmd.Flags().StringArray("files", nil, "capture this file whole; repeat for more files")
+	cmd.Flags().Bool("no-files", false, "capture no file, for findings that are all general; needs --title")
+	cmd.Flags().String("title", "", "a local run's title, one line of at most 120 characters")
+	cmd.Flags().String("applier", "", "who will apply a local run's decisions, as the human knows them, at most 64 characters")
 	cmd.Flags().String("repo", "", "path to a clone of the pull request's repository (default: the working directory)")
 	cmd.Flags().String("source", "", "the tool filing the findings, as name[@version]; shown in the published review's footer")
 	cmd.Flags().Bool("allow-closed", false, "accept a closed or merged pull request; without it capture refuses one with pr")
@@ -244,7 +284,11 @@ func runCapture(cmd *cobra.Command, deps Deps, rawURL string) (err error) {
 	if err != nil {
 		return leftRefs(fmt.Errorf("git diff of %s...%s does not parse: %w", baseRef, headRef, err))
 	}
-	outlineJSON, err := captureOutline(clone, headRef, parsed)
+	outline, err := local.Outline(parsed, func(path string) ([]byte, error) { return gitx.Blob(clone, headRef, path) })
+	if err != nil {
+		return leftRefs(err)
+	}
+	outlineJSON, err := run.EncodeOutline(outline)
 	if err != nil {
 		return leftRefs(err)
 	}
@@ -359,25 +403,6 @@ func checkForUpdate(ctx context.Context, deps Deps, client github.Client, root s
 		})
 	}
 	return updatecheck.Available(current, updatecheck.Cached(path))
-}
-
-// captureOutline reads the headings of each changed Markdown file at the head. A deleted or binary file has no head
-// text to outline, and a type change lists a path twice in the diff, so each path is read once.
-func captureOutline(clone, headRef string, d *diff.Diff) ([]byte, error) {
-	files := []run.OutlineEntry{}
-	seen := map[string]bool{}
-	for _, f := range d.Files {
-		if f.IsDelete || f.IsBinary || !markdown.IsMarkdownPath(f.NewName) || seen[f.NewName] {
-			continue
-		}
-		seen[f.NewName] = true
-		src, err := gitx.Blob(clone, headRef, f.NewName)
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, run.OutlineEntry{Path: f.NewName, Headings: markdown.Headings(src)})
-	}
-	return run.EncodeOutline(files)
 }
 
 // capturePrevious finds the round show --previous will list. A local receipt from the same publisher is the exact
