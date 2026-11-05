@@ -326,12 +326,6 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 		t.Fatal(err)
 	}
 	press(m, "f")
-	for range 200 {
-		if regexp.MustCompile(`big line 30\b`).MatchString(m.View().Content) {
-			break
-		}
-		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	}
 	if !regexp.MustCompile(`big line 30\b`).MatchString(m.View().Content) {
 		t.Errorf("f does not reach the last anchored line:\n%s", m.View().Content)
 	}
@@ -1492,5 +1486,22 @@ func TestLongLocationPaneIsCapped(t *testing.T) {
 	mustOpenFinding(t, short, "f-001")
 	if screen := screenText(short); strings.Contains(screen, "f shows all") || !strings.Contains(screen, "line 1") || !strings.Contains(screen, "line 6") {
 		t.Errorf("a short location is capped:\n%s", screen)
+	}
+}
+
+// The capped window keeps its size while a composer is open, since the composer closes without a refresh.
+func TestCappedLocationKeepsItsSizeUnderAComposer(t *testing.T) {
+	m := modelOf(t, bigHunkRun(t), testEnv, 80, 60)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	count := func() int { return strings.Count(m.body.GetContent(), "big line ") }
+	before := count()
+	press(m, "s")
+	if err := m.refreshDetail(); err != nil {
+		t.Fatal(err)
+	}
+	if after := count(); after != before {
+		t.Errorf("the window shows %d code rows with the composer open, %d without", after, before)
 	}
 }
