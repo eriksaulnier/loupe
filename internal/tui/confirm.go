@@ -390,7 +390,7 @@ func (c *confirmation) shortPosition(m *Model) string {
 // past the others; the inline choice does.
 func (c *confirmation) summary(m *Model) string {
 	sep := " " + m.glyphs.Sep + " "
-	parts := []string{m.styles.Emphasis(m.styles.Warn).Render(render.ForDisplay(c.title.action))}
+	parts := []string{m.styles.WarnTitle(render.ForDisplay(c.title.action), true)}
 	inner, _ := style.PaneInner(m.width, 0)
 	inline := fmt.Sprintf("inline %s (%d)", c.title.inline, c.title.comments)
 	var required []string
@@ -398,10 +398,10 @@ func (c *confirmation) summary(m *Model) string {
 		required = append(required, m.styles.Warn.Render("PR "+c.preview.Closed))
 	}
 	if moved := c.preview.HeadMoved; moved != nil {
-		required = append(required, m.styles.Warn.Render(fmt.Sprintf("head moved +%d", moved.AheadBy)))
+		required = append(required, m.styles.WarnTitle(fmt.Sprintf("head moved +%d", moved.AheadBy), false))
 	}
 	if c.preview.Edits != "" {
-		required = append(required, m.styles.Warn.Render(editsHeader))
+		required = append(required, m.styles.WarnTitle(editsHeader, false))
 	}
 	with := strings.Join(append(append(parts, m.styles.HintTitle(inline)), required...), sep)
 	if style.Width(with)+20 <= inner {

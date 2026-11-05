@@ -743,6 +743,9 @@ func TestPaneTitleHelpers(t *testing.T) {
 	if got := color.TitleTag("file diff"); got != color.Emphasis(color.Accent).Render("file diff") || plain.TitleTag("file diff") != "file diff" {
 		t.Errorf("title tag %q is not bold accent", got)
 	}
+	if got := color.WarnTitle("publish", true); got != color.Emphasis(color.Warn).Render("publish") || color.WarnTitle("edits", false) != color.Warn.Render("edits") || plain.WarnTitle("edits", false) != "edits" {
+		t.Errorf("warn title %q is not in the warn color", got)
+	}
 }
 
 func localHeading() ReviewHeading {

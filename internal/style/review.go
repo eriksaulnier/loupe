@@ -309,6 +309,14 @@ func (s Style) HintTitle(text string) string { return s.Text().Render(text) }
 // TitleTag is a word a pane title adds after its subject to name the view, bold in the accent.
 func (s Style) TitleTag(text string) string { return s.Emphasis(s.Accent).Render(text) }
 
+// WarnTitle is a pane title part that warns about what a step will do, in the warn color, bold when strong.
+func (s Style) WarnTitle(text string, strong bool) string {
+	if strong {
+		return s.Emphasis(s.Warn).Render(text)
+	}
+	return s.Warn.Render(text)
+}
+
 // ToneStyle is the foreground a tone draws in, and nothing where color is off.
 func (s Style) ToneStyle(t Tone) lipgloss.Style { return s.fg(s.toneColor(t)) }
 
