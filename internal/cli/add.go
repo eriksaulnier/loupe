@@ -10,6 +10,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -74,7 +75,7 @@ Result (--json):
    "dir": "/path/to/run", "version": 4,
    "findings": [{"id": "f-001", "rev": 1}]}`
 
-var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "heading", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix"}
+var addContentFlags = []string{"title", "body", "path", "line", "start-line", "side", "heading", "general", "label", "blocking", "confidence", "severity", "verified", "impact", "reference", "suggested-fix", "proposal"}
 
 func newAddCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
@@ -105,6 +106,7 @@ func newAddCmd(deps Deps) *cobra.Command {
 	f.String("impact", "", "Markdown: what goes wrong and under what input")
 	f.StringArray("reference", nil, "an http or https URL the finding rests on; repeatable, at most six")
 	f.String("suggested-fix", "", "the correction, as Markdown; fence any code")
+	f.String("proposal", "", "local runs only: the change the agent will make if accepted, as Markdown")
 	addMutationFlags(cmd)
 	return cmd
 }
@@ -140,7 +142,14 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	inputs, failures, err := addInputs(cmd, deps)
+	m, err := runMode(dir)
+	if err != nil {
+		return err
+	}
+	if err := checkModeFlags(cmd, m); err != nil {
+		return err
+	}
+	inputs, failures, err := addInputs(cmd, deps, m)
 	if err != nil {
 		return err
 	}
@@ -152,10 +161,10 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 	d, err := draft.Mutate(dir, "add", expectVersion, deps.Getenv, func(d *draft.Draft) error {
 		// Inside Mutate so a stale --expect-version is refused first, as it is for entries that fail validation.
 		if len(failures) > 0 {
-			return draft.CheckBatch(inputs, failures, dif, draft.Rules{})
+			return draft.CheckBatch(inputs, failures, dif, m.Rules())
 		}
 		var addErr error
-		added, addErr = draft.Add(d, inputs, dif, draft.Rules{}, by, deps.Now().UTC())
+		added, addErr = draft.Add(d, inputs, dif, m.Rules(), by, deps.Now().UTC())
 		return addErr
 	})
 	if err != nil {
@@ -176,12 +185,15 @@ func runAdd(cmd *cobra.Command, deps Deps) error {
 
 // addInputs returns the entries of a batch that could not be read as findings alongside the ones that could, so the
 // refusal can also name the entries that are invalid for other reasons.
-func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, []draft.EntryFailure, error) {
+func addInputs(cmd *cobra.Command, deps Deps, m mode.Mode) ([]draft.FindingInput, []draft.EntryFailure, error) {
 	f := cmd.Flags()
 	if f.Changed("from") {
 		from, _ := f.GetString("from")
 		raw, err := readInput("add", from, deps.Stdin)
 		if err != nil {
+			return nil, nil, err
+		}
+		if err := checkModeKeys(raw, m); err != nil {
 			return nil, nil, err
 		}
 		trimmed := bytes.TrimSpace(raw)
@@ -223,6 +235,7 @@ func addInputs(cmd *cobra.Command, deps Deps) ([]draft.FindingInput, []draft.Ent
 	in.Impact, _ = f.GetString("impact")
 	in.References, _ = f.GetStringArray("reference")
 	in.SuggestedFix, _ = f.GetString("suggested-fix")
+	in.Proposal, _ = f.GetString("proposal")
 	if f.Changed("path") || f.Changed("line") || f.Changed("start-line") || f.Changed("side") || f.Changed("heading") {
 		in.Location = locationFlags(cmd)
 	}

@@ -11,7 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/eriksaulnier/loupe/internal/mode"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 )
 
 // forbiddenInputKeys are decided only by the human in the review interface, so agent input must never carry them.
@@ -144,4 +146,100 @@ func ConflictsWithFrom(cmd *cobra.Command, flags ...string) error {
 		}
 	}
 	return nil
+}
+
+// checkModeKeys refuses the first input field the run's mode does not have, by raw key, so "blocking": false
+// refuses as well. raw is one object or an array of them; entry indexes are named as checkForbidden names them.
+func checkModeKeys(raw json.RawMessage, m mode.Mode) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	if trimmed[0] == '{' {
+		return modeKeysIn(trimmed, -1, m)
+	}
+	var entries []json.RawMessage
+	if json.Unmarshal(trimmed, &entries) != nil {
+		return nil
+	}
+	for i, entry := range entries {
+		if err := modeKeysIn(entry, i, m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// modeKeysIn checks one object; a malformed one is left for decoding to refuse.
+func modeKeysIn(object []byte, entry int, m mode.Mode) error {
+	var keys map[string]json.RawMessage
+	if json.Unmarshal(object, &keys) != nil {
+		return nil
+	}
+	refuse := func(code refusal.Code, field, message, fix string) error {
+		r := refusal.New(code, fmt.Sprintf("input field %q %s", field, message), fix)
+		r.Details = map[string]any{"field": field}
+		if entry >= 0 {
+			r.Message = fmt.Sprintf("input entry %d: %s", entry, r.Message)
+			r.Details["entry"] = entry
+		}
+		return r
+	}
+	has := func(key string) bool { _, ok := keys[key]; return ok }
+	ir := m.InputRules()
+	switch {
+	case has("proposal") && !m.Rules().AllowProposal:
+		return refuse(refusal.Input, "proposal", "applies only to local runs", `use "suggestedFix" instead`)
+	case has("blocking") && ir.RefuseBlocking:
+		return refuse(refusal.Input, "blocking", "does not apply to local runs", `drop "blocking" from the input`)
+	case has("suggestedFix") && ir.RefuseSuggestedFix:
+		return refuse(refusal.Input, "suggestedFix", "does not apply to local runs", `use "proposal" instead`)
+	}
+	if ir.RefuseSide {
+		var loc map[string]json.RawMessage
+		if json.Unmarshal(keys["location"], &loc) == nil {
+			if _, ok := loc["side"]; ok {
+				return refuse(refusal.Location, "location.side", "does not apply to local runs", `drop "side" from the location`)
+			}
+		}
+	}
+	return nil
+}
+
+// checkModeFlags refuses the first set flag the run's mode does not have.
+func checkModeFlags(cmd *cobra.Command, m mode.Mode) error {
+	f := cmd.Flags()
+	set := func(name string) bool { return f.Lookup(name) != nil && f.Changed(name) }
+	ir := m.InputRules()
+	refuse := func(code refusal.Code, name, message, fix string) error {
+		return refusal.New(code, fmt.Sprintf("--%s %s", name, message), fix)
+	}
+	for _, name := range []string{"proposal", "clear-proposal"} {
+		if set(name) && !m.Rules().AllowProposal {
+			return refuse(refusal.Input, name, "applies only to local runs", "use --suggested-fix instead")
+		}
+	}
+	for _, name := range []string{"blocking", "not-blocking"} {
+		if set(name) && ir.RefuseBlocking {
+			return refuse(refusal.Input, name, "does not apply to local runs", "drop --"+name)
+		}
+	}
+	for _, name := range []string{"suggested-fix", "clear-suggested-fix"} {
+		if set(name) && ir.RefuseSuggestedFix {
+			return refuse(refusal.Input, name, "does not apply to local runs", "use --proposal instead")
+		}
+	}
+	if set("side") && ir.RefuseSide {
+		return refuse(refusal.Location, "side", "does not apply to local runs", "drop --side")
+	}
+	return nil
+}
+
+// runMode loads the run's target once for the mode-dependent checks of add and edit.
+func runMode(dir string) (mode.Mode, error) {
+	target, err := run.LoadTarget(dir)
+	if err != nil {
+		return nil, err
+	}
+	return mode.Of(target), nil
 }
