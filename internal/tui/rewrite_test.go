@@ -333,18 +333,6 @@ func TestRewriteKeptTextTakesTheAgentsNewerUntouchedField(t *testing.T) {
 	}
 }
 
-func TestRewriteRefusesAWithdrawnFinding(t *testing.T) {
-	m, _ := editModel(t, "f-002", func(d *draft.Draft) error {
-		withdraw := false
-		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
-		return err
-	})
-	m.Update(runes("w"))
-	if m.rewriting || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "reinstate f-002 first") {
-		t.Fatalf("rewriting %v notice %q", m.rewriting, m.notice)
-	}
-}
-
 func TestRewritePollChangesNothingWhileTheEditorIsOpen(t *testing.T) {
 	m, dir := editModel(t, "f-001", unchanged)
 	m.Update(runes("w"))

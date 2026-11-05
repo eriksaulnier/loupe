@@ -76,25 +76,31 @@ func colorOf(t *testing.T, dir string) *Model {
 	return m
 }
 
-// The file diff of a --files run draws the file as plain text; a --changed run and a pull request keep the gutter.
-func TestFileDiffOfAFilesRunIsPlain(t *testing.T) {
+// A --files run draws its file as plain text in the code pane and in the file diff; a --changed run and a pull
+// request keep the gutter in both.
+func TestAFilesRunDrawsItsCodePlain(t *testing.T) {
 	for name, c := range codeRuns(t) {
-		t.Run(name, func(t *testing.T) {
-			m := modelOf(t, c.dir, utf8Env, 100, 40)
-			mustOpenFinding(t, m, "f-001")
-			press(m, "f")
-			if m.view != viewFileDiff {
-				t.Fatalf("f did not open the file diff; notice %q", m.notice)
-			}
-			checkCodeDrawing(t, screenText(m), c.plain)
+		for _, v := range []struct {
+			name string
+			keys []string
+		}{{"code pane", nil}, {"file diff", []string{"f"}}} {
+			t.Run(name+"/"+v.name, func(t *testing.T) {
+				m := modelOf(t, c.dir, utf8Env, 100, 40)
+				mustOpenFinding(t, m, "f-001")
+				press(m, v.keys...)
+				if v.keys != nil && m.view != viewFileDiff {
+					t.Fatalf("f did not open the file diff; notice %q", m.notice)
+				}
+				checkCodeDrawing(t, screenText(m), c.plain)
 
-			colored := colorOf(t, c.dir)
-			mustOpenFinding(t, colored, "f-001")
-			press(colored, "f")
-			if tinted := strings.Contains(colored.View().Content, addedTint(colored)); tinted == c.plain {
-				t.Errorf("plain %v, added tint %v", c.plain, tinted)
-			}
-		})
+				colored := colorOf(t, c.dir)
+				mustOpenFinding(t, colored, "f-001")
+				press(colored, v.keys...)
+				if tinted := strings.Contains(colored.View().Content, addedTint(colored)); tinted == c.plain {
+					t.Errorf("plain %v, added tint %v", c.plain, tinted)
+				}
+			})
+		}
 	}
 }
 

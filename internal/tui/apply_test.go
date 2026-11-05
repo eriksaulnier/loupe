@@ -232,19 +232,6 @@ func TestApplySendBackStillRestoresKeptText(t *testing.T) {
 	}
 }
 
-func TestApplySettleDropsItsDecisionKeys(t *testing.T) {
-	for _, k := range strings.Split("aAxXsurd", "") {
-		m, dir := applyModel(t, "Claude")
-		mustOpenFinding(t, m, "f-001")
-		before := loadDraft(t, dir).Version
-		m.settling = true
-		press(m, k)
-		if m.noting || m.rewriting || loadDraft(t, dir).Version != before {
-			t.Errorf("%s was acted on while settling", k)
-		}
-	}
-}
-
 // Reinstating on an apply run is checked against the run's rules, so a stored proposal never refuses it.
 func TestApplyReinstateKeepsTheProposal(t *testing.T) {
 	dir := applyFixture(t, "Claude", applyInputs...)

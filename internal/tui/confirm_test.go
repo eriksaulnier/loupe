@@ -180,23 +180,29 @@ func blanksAfter(rows []string, i int) int {
 	return n
 }
 
-// TestConfirmFocusedInputSwallowsY is FR-010: the key that confirms is not a key the human is typing with.
-func TestConfirmFocusedInputSwallowsY(t *testing.T) {
-	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	typeInto(m, "yes, y, and y again")
-	if _, cmd := m.Update(runes("y")); cmd != nil {
-		t.Fatal("a keystroke in the message ended the program")
-	}
-	if m.Confirmed() {
-		t.Fatal("typing y into the message confirmed the review")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if _, cmd := m.Update(runes("y")); cmd == nil {
-		t.Fatal("y did not confirm once the input was blurred")
-	}
-	if !m.Confirmed() || m.Message() != "yes, y, and y againy" {
-		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
+// TestConfirmFocusedInputSwallowsTheConfirmKeys is FR-010: the key that confirms is not a key the human is typing with.
+// The confirmation opens on the message, so a y or p pressed by reflex lands in it, and only one pressed after leaving
+// the message publishes.
+func TestConfirmFocusedInputSwallowsTheConfirmKeys(t *testing.T) {
+	for _, c := range []struct{ key, typed string }{{"y", "yes, y, and y again"}, {"p", ""}} {
+		t.Run(c.key, func(t *testing.T) {
+			m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+			m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+			typeInto(m, c.typed)
+			if _, cmd := m.Update(runes(c.key)); cmd != nil || m.Confirmed() {
+				t.Fatalf("%s typed into the message ended the program or confirmed the review", c.key)
+			}
+			m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+			if !strings.Contains(m.View().Content, "y/p publish this review") {
+				t.Errorf("the footer does not offer y and p:\n%s", m.View().Content)
+			}
+			if _, cmd := m.Update(runes(c.key)); cmd == nil {
+				t.Fatalf("%s did not confirm once the input was blurred", c.key)
+			}
+			if want := c.typed + c.key; !m.Confirmed() || m.Message() != want {
+				t.Fatalf("confirmed %v message %q, want %q", m.Confirmed(), m.Message(), want)
+			}
+		})
 	}
 }
 
@@ -211,26 +217,6 @@ func TestConfirmFooterFollowsTheInput(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if view := m.View().Content; !strings.Contains(view, "tab/esc your message") || !strings.Contains(view, "publish this review") {
 		t.Errorf("the footer does not offer the confirmation keys once the message is left:\n%s", view)
-	}
-}
-
-// TestConfirmFocusedInputSwallowsP: the confirmation opens on the message, so a p pressed by reflex lands in it, and
-// only a p pressed after leaving the message publishes.
-func TestConfirmFocusedInputSwallowsP(t *testing.T) {
-	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	if _, cmd := m.Update(runes("p")); cmd != nil || m.Confirmed() {
-		t.Fatal("p pressed as the confirmation opened published the review")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if !strings.Contains(m.View().Content, "y/p publish this review") {
-		t.Errorf("the footer does not offer p:\n%s", m.View().Content)
-	}
-	if _, cmd := m.Update(runes("p")); cmd == nil {
-		t.Fatal("p did not confirm once the input was blurred")
-	}
-	if !m.Confirmed() || m.Message() != "p" {
-		t.Fatalf("confirmed %v message %q", m.Confirmed(), m.Message())
 	}
 }
 

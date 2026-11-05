@@ -146,24 +146,30 @@ func TestHelpIsAnOverlayThatKeepsTheScreen(t *testing.T) {
 }
 
 // A refusal reserves its wrapped rows before the findings are sized, so at the minimum window it stays whole and the
-// selected finding still shows (layout contract, notices).
+// selected finding still shows (layout contract, notices). One taller than the findings pane stays whole too: the
+// finding rows give way, and then the summary pane (layout contract: no invisible refusal below a clipped viewport).
 func TestRefusalAtTheMinimumStaysWhole(t *testing.T) {
-	var ids []string
-	for i := 1; i <= 12; i++ {
-		ids = append(ids, fmt.Sprintf("f-%03d", i))
-	}
-	refusal := "the draft is not ready: pending findings " + strings.Join(ids, ", ") + "; loupe review"
-	m := modelOf(t, newFixture(t), utf8Env, 60, 12)
-	m.say(style.Warn, refusal)
-	view := m.View().Content
-	if lines := strings.Split(view, "\n"); len(lines) != 12 {
-		t.Fatalf("the list is %d rows at 60x12:\n%s", len(lines), view)
-	}
-	if !strings.Contains(paneText(view), refusal) {
-		t.Errorf("the refusal was cut at 60x12:\n%s", view)
-	}
-	if !strings.Contains(view, "Title one") {
-		t.Errorf("the selected finding is gone at 60x12:\n%s", view)
+	for _, c := range []struct {
+		count       int
+		findingStay bool
+	}{{12, true}, {24, false}, {40, false}} {
+		var ids []string
+		for i := 1; i <= c.count; i++ {
+			ids = append(ids, fmt.Sprintf("f-%03d", i))
+		}
+		refusal := "the draft is not ready: pending findings " + strings.Join(ids, ", ") + "; loupe review"
+		m := modelOf(t, newFixture(t), utf8Env, 60, 12)
+		m.say(style.Warn, refusal)
+		view := m.View().Content
+		if lines := strings.Split(view, "\n"); len(lines) != 12 {
+			t.Fatalf("the list is %d rows at 60x12:\n%s", len(lines), view)
+		}
+		if !strings.Contains(paneText(view), refusal) {
+			t.Errorf("a refusal naming %d findings was cut at 60x12:\n%s", c.count, view)
+		}
+		if c.findingStay && !strings.Contains(view, "Title one") {
+			t.Errorf("the selected finding is gone at 60x12:\n%s", view)
+		}
 	}
 }
 
@@ -202,27 +208,6 @@ func TestLongRefusalStaysWholeInEveryPane(t *testing.T) {
 	text := paneText(view)
 	if !strings.Contains(text, "this refusal runs on and on") || !strings.Contains(text, "and ends with loupe review") || !strings.Contains(text, "nothing is sent") {
 		t.Errorf("the confirmation lost an end of the refusal, the mark or the cancel sentence:\n%s", view)
-	}
-}
-
-// A refusal taller than the findings pane at the minimum size stays whole: the finding rows give way, and then the
-// summary pane (layout contract: no invisible refusal below a clipped viewport).
-func TestRefusalTallerThanTheFindingsPaneStaysWhole(t *testing.T) {
-	for _, count := range []int{24, 40} {
-		var ids []string
-		for i := 1; i <= count; i++ {
-			ids = append(ids, fmt.Sprintf("f-%03d", i))
-		}
-		refusal := "the draft is not ready: pending findings " + strings.Join(ids, ", ") + "; loupe review"
-		m := modelOf(t, newFixture(t), utf8Env, 60, 12)
-		m.say(style.Warn, refusal)
-		view := m.View().Content
-		if lines := strings.Split(view, "\n"); len(lines) != 12 {
-			t.Fatalf("the list is %d rows at 60x12:\n%s", len(lines), view)
-		}
-		if !strings.Contains(paneText(view), refusal) {
-			t.Errorf("a refusal naming %d findings was cut at 60x12:\n%s", count, view)
-		}
 	}
 }
 

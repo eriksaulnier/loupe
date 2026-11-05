@@ -41,37 +41,32 @@ func TestApplyStartEnterOpensTheFirstPendingFinding(t *testing.T) {
 	}
 }
 
-func TestApplyStartLOpensTheListAndQQuits(t *testing.T) {
-	m, _ := applyModel(t, "Claude")
-	press(m, "l")
-	if m.view != viewList {
-		t.Fatalf("l opened view %d, want the list", m.view)
+// l opens the list from the start screen and from the detail, as esc does there; q quits the start screen.
+func TestApplyLOpensTheList(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		keys []string
+	}{{"start screen", nil}, {"detail", []string{"enter"}}} {
+		m, _ := applyModel(t, "Claude")
+		press(m, c.keys...)
+		press(m, "l")
+		if m.view != viewList {
+			t.Fatalf("l in the %s opened view %d, want the list", c.name, m.view)
+		}
 	}
-	m, _ = applyModel(t, "Claude")
+	m, _ := applyModel(t, "Claude")
 	if _, cmd := m.update(runes("q")); !isQuit(cmd) {
 		t.Error("q did not quit the start screen")
 	}
 }
 
-// l in the detail opens the list, as esc does.
-func TestApplyDetailLOpensTheList(t *testing.T) {
-	m, _ := applyModel(t, "Claude")
-	press(m, "enter", "l")
-	if m.view != viewList {
-		t.Fatalf("l in the detail opened view %d, want the list", m.view)
-	}
-}
-
-func TestApplyWithNothingPendingOpensOnTheList(t *testing.T) {
-	_, dir := readyApplyModel(t, "Claude")
-	if m := modelOf(t, dir, utf8Env, 100, 40); m.view != viewList {
-		t.Fatalf("view %d, want the list", m.view)
-	}
-}
-
-func TestPullRequestRunOpensOnTheList(t *testing.T) {
-	if m := modelOf(t, newFixture(t), utf8Env, 100, 40); m.view != viewList {
-		t.Fatalf("view %d, want the list", m.view)
+// A run with nothing to start on opens on the list: a local run with nothing pending, and every pull request run.
+func TestRunsWithNothingToStartOpenOnTheList(t *testing.T) {
+	_, ready := readyApplyModel(t, "Claude")
+	for name, dir := range map[string]string{"local, nothing pending": ready, "pull request": newFixture(t)} {
+		if m := modelOf(t, dir, utf8Env, 100, 40); m.view != viewList {
+			t.Fatalf("%s: view %d, want the list", name, m.view)
+		}
 	}
 }
 

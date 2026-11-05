@@ -862,15 +862,20 @@ func TestEditOffersTheFindingsOwnLabel(t *testing.T) {
 	}
 }
 
-func TestEditRefusesAWithdrawnFinding(t *testing.T) {
-	m, _ := editModel(t, "f-002", func(d *draft.Draft) error {
-		withdraw := false
-		_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
-		return err
-	})
-	m.Update(runes("e"))
-	if m.editing || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "reinstate f-002 first") {
-		t.Fatalf("editing %v notice %q", m.editing, m.notice)
+// e and w both refuse a withdrawn finding, which has to be reinstated before its words or labels change.
+func TestEditorsRefuseAWithdrawnFinding(t *testing.T) {
+	for _, key := range []string{"e", "w"} {
+		t.Run(key, func(t *testing.T) {
+			m, _ := editModel(t, "f-002", func(d *draft.Draft) error {
+				withdraw := false
+				_, _, err := draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
+				return err
+			})
+			m.Update(runes(key))
+			if m.editing || m.rewriting || !strings.Contains(m.notice, "withdrawn") || !strings.Contains(m.notice, "reinstate f-002 first") {
+				t.Fatalf("editing %v rewriting %v notice %q", m.editing, m.rewriting, m.notice)
+			}
+		})
 	}
 }
 
@@ -1070,23 +1075,6 @@ func TestDetailPinsItsTitleAndMetadata(t *testing.T) {
 	mustOpenFinding(t, m, "f-001")
 	if m.detailHead != nil || !strings.Contains(ansi.Strip(m.View().Content), "A title long enough") {
 		t.Errorf("a short window pinned a head taller than a third of the pane, or lost the title:\n%s", ansi.Strip(m.View().Content))
-	}
-}
-
-// The code pane of a --files run draws the file as plain text; a --changed run and a pull request keep the gutter.
-func TestCodePaneOfAFilesRunIsPlain(t *testing.T) {
-	for name, c := range codeRuns(t) {
-		t.Run(name, func(t *testing.T) {
-			m := modelOf(t, c.dir, utf8Env, 100, 40)
-			mustOpenFinding(t, m, "f-001")
-			checkCodeDrawing(t, screenText(m), c.plain)
-
-			colored := colorOf(t, c.dir)
-			mustOpenFinding(t, colored, "f-001")
-			if tinted := strings.Contains(colored.View().Content, addedTint(colored)); tinted == c.plain {
-				t.Errorf("plain %v, added tint %v", c.plain, tinted)
-			}
-		})
 	}
 }
 
