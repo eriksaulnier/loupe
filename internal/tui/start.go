@@ -37,7 +37,7 @@ func (m *Model) startKeys() []string {
 }
 
 // startView is the start screen: the run's title, its summary in full as far as the pane holds it, and how many
-// findings wait.
+// findings wait. The pane fits its lines, so a short summary leaves no empty box.
 func (m *Model) startView() string {
 	footer := m.startKeys()
 	height := m.bodyRows(len(footer))
@@ -59,7 +59,7 @@ func (m *Model) startView() string {
 	if len(lines) > rows {
 		lines = append(lines[:max(0, rows-1)], count)
 	}
-	body := m.styles.Pane(style.Pane{Width: m.width, Height: height, Lines: lines,
+	body := m.styles.Pane(style.Pane{Width: m.width, Height: min(height, len(lines)+style.PaneRows), Lines: lines,
 		Titles: style.PaneTitles{TopLeft: "Start"}, Focus: true})
 	return m.shell(body, footer)
 }

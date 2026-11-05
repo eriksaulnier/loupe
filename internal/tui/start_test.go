@@ -97,3 +97,19 @@ func decideEach(m *Model, keys ...string) {
 		m.settling = false
 	}
 }
+
+// The start pane fits what it holds: its bottom border sits right under the count, not at the foot of the window.
+func TestApplyStartPaneFitsItsLines(t *testing.T) {
+	m, _ := applyModel(t, "Claude")
+	lines := strings.Split(screenText(m), "\n")
+	for i, l := range lines {
+		if !strings.Contains(l, "findings to decide") {
+			continue
+		}
+		if i+1 >= len(lines) || !strings.ContainsAny(lines[i+1], "╰└+") {
+			t.Fatalf("the row under the count is %q, want the pane's bottom border:\n%s", lines[min(i+1, len(lines)-1)], strings.Join(lines, "\n"))
+		}
+		return
+	}
+	t.Fatal("no count on the start screen")
+}
