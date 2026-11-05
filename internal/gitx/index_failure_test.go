@@ -143,18 +143,17 @@ func TestStageWorktreeReturnsEachGitFailure(t *testing.T) {
 	}
 }
 
-func TestStageWorktreeRefusesAPathItCannotStat(t *testing.T) {
+// A tracked directory replaced by a file makes lstat of the paths under it fail with ENOTDIR. Those paths are gone,
+// and the file is new, as git add -A stages it.
+func TestStageWorktreeStagesADirectoryReplacedByAFile(t *testing.T) {
 	w := newWorkTree(t)
-	ix := WithIndex(w.repo.Dir, filepath.Join(t.TempDir(), "index"))
-	if err := ix.ReadTree("HEAD"); err != nil {
-		t.Fatal(err)
-	}
-	// The index lists src/app.go, so a file named src makes its parent a non-directory and lstat fail with ENOTDIR.
 	if err := os.RemoveAll(filepath.Join(w.repo.Dir, "src")); err != nil {
 		t.Fatal(err)
 	}
 	writeFile(t, filepath.Join(w.repo.Dir, "src"), "not a directory\n", 0o644)
-	if err := ix.StageWorktree(); err == nil {
-		t.Fatal("StageWorktree accepted a path whose parent is a file")
+	tree, _ := captureTree(t, w.repo.Dir)
+	if want := addAllTree(t, w.repo.Dir); tree != want {
+		t.Fatalf("StageWorktree wrote %s, add -A writes %s:\n%s\n%s", tree, want,
+			runGit(t, w.repo.Dir, "ls-tree", "-r", tree), runGit(t, w.repo.Dir, "ls-tree", "-r", want))
 	}
 }

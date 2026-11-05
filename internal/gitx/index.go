@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // Index runs git against a temporary index file, so the user's .git/index is never read or written.
@@ -86,7 +87,8 @@ func (ix *Index) StageWorktree() error {
 		full := filepath.Join(ix.clone, filepath.FromSlash(p))
 		info, err := os.Lstat(full)
 		switch {
-		case errors.Is(err, fs.ErrNotExist):
+		// ENOTDIR means a parent became a file, so the path is gone, as git add -A reads it.
+		case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
 			removed = append(removed, p)
 		case err != nil:
 			return fmt.Errorf("stat %s: %w", full, err)
@@ -131,24 +133,42 @@ func (ix *Index) StageWorktree() error {
 	if err != nil {
 		return err
 	}
-	var info bytes.Buffer
 	var differ []string
 	next := 0
-	for _, e := range entries {
+	for i := range entries {
 		// Regular files were hashed in one batch, in the order they were listed.
-		if e.oid == "" {
-			e.oid = oids[next]
+		if entries[i].oid == "" {
+			entries[i].oid = oids[next]
 			next++
-			if was, ok := head[e.path]; ok && was.oid != e.oid {
-				differ = append(differ, e.path)
+			if was, ok := head[entries[i].path]; ok && was.oid != entries[i].oid {
+				differ = append(differ, entries[i].path)
 			}
 		}
-		fmt.Fprintf(&info, "%s %s\t%s\x00", e.mode, e.oid, e.path)
 	}
-	if converted, err := ix.converted(differ); err != nil {
+	converted, filtered, err := ix.converted(differ)
+	if err != nil {
 		return err
-	} else if len(converted) > 0 {
+	}
+	if len(filtered) > 0 {
+		// A filter's smudged file never matches HEAD's blob, so one the user's own index still records as untouched
+		// keeps HEAD's blob. Only an edited filtered file is refused.
+		clean, err := ix.untouched(filtered, head)
+		if err != nil {
+			return err
+		}
+		converted = slices.DeleteFunc(converted, func(p string) bool { return clean[p] })
+		for i := range entries {
+			if clean[entries[i].path] {
+				entries[i].oid = head[entries[i].path].oid
+			}
+		}
+	}
+	if len(converted) > 0 {
 		return &ConvertedError{Paths: converted}
+	}
+	var info bytes.Buffer
+	for _, e := range entries {
+		fmt.Fprintf(&info, "%s %s\t%s\x00", e.mode, e.oid, e.path)
 	}
 	if len(removed) > 0 {
 		if _, err := run(ix.clone, ix.env(), []byte(strings.Join(removed, "\x00")+"\x00"), "update-index", "-z", "--force-remove", "--stdin"); err != nil {
@@ -189,23 +209,23 @@ func (ix *Index) stagedEntries() (map[string]stagedEntry, error) {
 // converted is the paths Git would convert on checkout, following its attribute rules: a filter; ident on a file that
 // holds $Id; a working-tree encoding other than UTF-8; or CRLF line endings on a text file, from the eol or legacy crlf
 // attribute, core.autocrlf or core.eol. A text=auto file holding a NUL is binary to Git and is never converted.
-func (ix *Index) converted(paths []string) ([]string, error) {
+func (ix *Index) converted(paths []string) (converting, filtered []string, err error) {
 	if len(paths) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	// core.autocrlf is a bool or input, and Git reads yes, on and 1 as true, so a bool lookup settles anything else.
 	autocrlf, _, err := configLookup(ix.clone, "--get", "core.autocrlf")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if autocrlf = strings.ToLower(autocrlf); autocrlf != "" && autocrlf != "input" {
 		if autocrlf, _, err = configLookup(ix.clone, "--type=bool", "--get", "core.autocrlf"); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	eolConfig, _, err := configLookup(ix.clone, "--get", "core.eol")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// With text set or auto and no eol attribute, checkout writes CRLF under autocrlf=true, or under core.eol=crlf
 	// when autocrlf is neither true nor input.
@@ -213,11 +233,11 @@ func (ix *Index) converted(paths []string) ([]string, error) {
 	stdin := []byte(strings.Join(paths, "\x00") + "\x00")
 	out, err := run(ix.clone, ix.env(), stdin, "check-attr", "-z", "--stdin", "text", "crlf", "eol", "filter", "ident", "working-tree-encoding")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	fields := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
 	if len(fields)%3 != 0 {
-		return nil, fmt.Errorf("parse check-attr output: %d fields", len(fields))
+		return nil, nil, fmt.Errorf("parse check-attr output: %d fields", len(fields))
 	}
 	attrs := map[string]map[string]string{}
 	for i := 0; i+2 < len(fields); i += 3 {
@@ -227,7 +247,6 @@ func (ix *Index) converted(paths []string) ([]string, error) {
 		attrs[fields[i]][fields[i+1]] = fields[i+2]
 	}
 	given := func(v string) bool { return v != "" && v != "unspecified" && v != "unset" }
-	var converting []string
 	for _, p := range paths {
 		a := attrs[p]
 		var data []byte
@@ -241,7 +260,7 @@ func (ix *Index) converted(paths []string) ([]string, error) {
 			return data, nil
 		}
 		if given(a["filter"]) {
-			converting = append(converting, p)
+			converting, filtered = append(converting, p), append(filtered, p)
 			continue
 		}
 		if enc := strings.ToLower(strings.ReplaceAll(a["working-tree-encoding"], "-", "")); given(enc) && enc != "utf8" {
@@ -251,7 +270,7 @@ func (ix *Index) converted(paths []string) ([]string, error) {
 		if a["ident"] == "set" {
 			b, err := read()
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if bytes.Contains(b, []byte("$Id")) {
 				converting = append(converting, p)
@@ -287,7 +306,7 @@ func (ix *Index) converted(paths []string) ([]string, error) {
 			// Auto detection: a NUL makes the file binary to Git, which then converts nothing.
 			b, err := read()
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if bytes.IndexByte(b[:min(len(b), 8000)], 0) >= 0 {
 				continue
@@ -295,7 +314,70 @@ func (ix *Index) converted(paths []string) ([]string, error) {
 		}
 		converting = append(converting, p)
 	}
-	return converting, nil
+	return converting, filtered, nil
+}
+
+// untouched is the paths among paths that the user's own index still records as HEAD's blob with the same size and
+// mtime as the file on disk, read without refreshing the index or running a filter. A file modified no earlier than the
+// index was written may have changed since its stat was recorded, so it never counts as untouched, as Git treats a
+// racily clean entry.
+func (ix *Index) untouched(paths []string, head map[string]stagedEntry) (map[string]bool, error) {
+	indexPath, err := git(ix.clone, "rev-parse", "--path-format=absolute", "--git-path", "index")
+	if err != nil {
+		return nil, err
+	}
+	indexInfo, err := os.Stat(strings.TrimSpace(string(indexPath)))
+	if err != nil {
+		return nil, fmt.Errorf("stat the index: %w", err)
+	}
+	args := append([]string{"-c", "core.quotePath=false", "ls-files", "--stage", "--debug", "--"}, paths...)
+	out, err := git(ix.clone, args...)
+	if err != nil {
+		return nil, err
+	}
+	type recorded struct {
+		oid       string
+		sec, nsec int64
+		size      int64
+	}
+	byPath := map[string]*recorded{}
+	var cur *recorded
+	for _, line := range strings.Split(string(out), "\n") {
+		switch {
+		case strings.HasPrefix(line, "  mtime: ") && cur != nil:
+			sec, nsec, _ := strings.Cut(strings.TrimPrefix(line, "  mtime: "), ":")
+			cur.sec, _ = strconv.ParseInt(sec, 10, 64)
+			cur.nsec, _ = strconv.ParseInt(nsec, 10, 64)
+		case strings.HasPrefix(line, "  size: ") && cur != nil:
+			size, _, _ := strings.Cut(strings.TrimPrefix(line, "  size: "), "\t")
+			cur.size, _ = strconv.ParseInt(size, 10, 64)
+		case line != "" && !strings.HasPrefix(line, " "):
+			meta, path, ok := strings.Cut(line, "\t")
+			fields := strings.Fields(meta)
+			if !ok || len(fields) != 3 || fields[2] != "0" {
+				cur = nil
+				continue
+			}
+			cur = &recorded{oid: fields[1]}
+			byPath[path] = cur
+		}
+	}
+	clean := map[string]bool{}
+	for _, p := range paths {
+		r, ok := byPath[p]
+		if !ok || r.oid != head[p].oid {
+			continue
+		}
+		info, err := os.Lstat(filepath.Join(ix.clone, filepath.FromSlash(p)))
+		if err != nil {
+			return nil, fmt.Errorf("stat %s: %w", p, err)
+		}
+		mtime := info.ModTime()
+		if info.Size() == r.size && mtime.Unix() == r.sec && int64(mtime.Nanosecond()) == r.nsec && mtime.Before(indexInfo.ModTime()) {
+			clean[p] = true
+		}
+	}
+	return clean, nil
 }
 
 // hashPaths writes each file as a blob with no filter and returns the object ids in order. --stdin-paths reads one
