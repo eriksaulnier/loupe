@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -302,29 +301,76 @@ func TestReviewDoneNamesTheReturn(t *testing.T) {
 // The URL comes from GitHub by way of the receipt, so only a plain https link reaches the platform's handler.
 func TestOpenURLRefusesAnythingButAnHTTPSLink(t *testing.T) {
 	for _, url := range []string{"file:///tmp/x.command", "-a Calculator", "github.com/o/r", "https://github.com/o/r" + "\n-a"} {
-		if err := OpenURL(url); !errors.Is(err, errUnsafeURL) {
+		if err := OpenURL("linux")(url); !errors.Is(err, errUnsafeURL) {
 			t.Errorf("OpenURL(%q) = %v, want the URL refused before the handler runs", url, err)
 		}
 	}
 }
 
-// WSL often has wslview but not xdg-utils, so a missing xdg-open falls back to it. xdg-open wins where both exist.
-func TestURLOpenerFallsBackToWslview(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("macOS always opens with open")
+// fakeHandler writes a URL handler called name into dir. It records the argument it ran with in the returned file, or
+// exits 3 when fail is set.
+func fakeHandler(t *testing.T, dir, name string, fail bool) string {
+	t.Helper()
+	log := filepath.Join(t.TempDir(), name+".log")
+	script := "#!/bin/sh\nprintf '%s' \"$1\" > '" + log + "'\n"
+	if fail {
+		script = "#!/bin/sh\nexit 3\n"
 	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return log
+}
+
+// macOS opens with open whatever else is on PATH; elsewhere xdg-open wins, and wslview stands in where it is missing.
+func TestOpenURLRunsThePlatformsHandler(t *testing.T) {
+	const url = "https://github.com/o/r/pull/1#pullrequestreview-9"
+	for _, tc := range []struct {
+		goos, want string
+		onPath     []string
+	}{
+		{"darwin", "open", []string{"open", "xdg-open"}},
+		{"linux", "xdg-open", []string{"xdg-open", "wslview", "open"}},
+		{"linux", "wslview", []string{"wslview", "open"}},
+	} {
+		t.Run(tc.goos+"/"+tc.want, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("PATH", dir)
+			logs := map[string]string{}
+			for _, name := range tc.onPath {
+				logs[name] = fakeHandler(t, dir, name, false)
+			}
+			if err := OpenURL(tc.goos)(url); err != nil {
+				t.Fatal(err)
+			}
+			for name, log := range logs {
+				got, err := os.ReadFile(log)
+				switch {
+				case name == tc.want && string(got) != url:
+					t.Errorf("%s ran with %q, %v; want %q", name, got, err, url)
+				case name != tc.want && !errors.Is(err, fs.ErrNotExist):
+					t.Errorf("%s ran (%q, %v), want only %s to", name, got, err, tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestOpenURLNamesTheHandlerThatFailed(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	if name, err := urlOpener(); err == nil {
-		t.Fatalf("urlOpener() = %q with neither handler on PATH, want an error", name)
+	fakeHandler(t, dir, "xdg-open", true)
+	err := OpenURL("linux")("https://github.com/o/r/pull/1")
+	if err == nil || err.Error() != "xdg-open: exit status 3" {
+		t.Fatalf("OpenURL = %v, want xdg-open: exit status 3", err)
 	}
-	for _, name := range []string{"wslview", "xdg-open"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if got, err := urlOpener(); err != nil || got != name {
-			t.Fatalf("with %s on PATH, urlOpener() = %q, %v; want %q", name, got, err, name)
-		}
+}
+
+func TestOpenURLRefusesWithNoHandlerOnPATH(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	err := OpenURL("linux")("https://github.com/o/r/pull/1")
+	if err == nil || err.Error() != "found neither xdg-open nor wslview on PATH" {
+		t.Fatalf("OpenURL = %v, want found neither xdg-open nor wslview on PATH", err)
 	}
 }
 

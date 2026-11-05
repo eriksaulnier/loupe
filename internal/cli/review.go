@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -199,25 +198,27 @@ func publishedLine(s style.Style, url string) string {
 
 var errUnsafeURL = errors.New("the review link is not a plain https URL")
 
-// OpenURL opens url with the platform's own handler. Its output goes nowhere, so a browser it starts cannot hold a
-// pipe open and keep the wait from returning.
-func OpenURL(url string) error {
-	if !style.LinkableURL(url) {
-		return errUnsafeURL
+// OpenURL opens a URL with the handler of the platform goos names. Its output goes nowhere, so a browser it starts
+// cannot hold a pipe open and keep the wait from returning.
+func OpenURL(goos string) func(url string) error {
+	return func(url string) error {
+		if !style.LinkableURL(url) {
+			return errUnsafeURL
+		}
+		name, err := urlOpener(goos)
+		if err != nil {
+			return err
+		}
+		if err := exec.Command(name, url).Run(); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		return nil
 	}
-	name, err := urlOpener()
-	if err != nil {
-		return err
-	}
-	if err := exec.Command(name, url).Run(); err != nil {
-		return fmt.Errorf("%s: %w", name, err)
-	}
-	return nil
 }
 
 // urlOpener falls back to wslview because WSL often ships it without xdg-utils.
-func urlOpener() (string, error) {
-	if runtime.GOOS == "darwin" {
+func urlOpener(goos string) (string, error) {
+	if goos == "darwin" {
 		return "open", nil
 	}
 	for _, name := range []string{"xdg-open", "wslview"} {
