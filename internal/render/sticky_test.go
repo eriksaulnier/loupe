@@ -253,11 +253,8 @@ func TestReadStickyNumbersRoundsInTheReview(t *testing.T) {
 
 // A body written before the collapsed-round format changed still reads back, and its old rounds are renumbered.
 func TestReadStickyReadsTheEarlierFormat(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-before-025-format.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := strings.Replace(string(data), "<summary>Round 1 · ", "<summary>Round 3 · ", 1)
+	data := fixture(t, "sticky-before-025-format.md")
+	old := strings.Replace(data, "<summary>Round 1 · ", "<summary>Round 3 · ", 1)
 	earlier, rounds, err := ReadSticky(old)
 	if err != nil || rounds != 2 || len(earlier) != 2 {
 		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
@@ -528,11 +525,8 @@ func TestReadStickyRefusesARecordOutsideTheTail(t *testing.T) {
 // A body in the v0.11.0 layout, footer after the earlier rounds and collapsed rounds without one, reads back and the
 // next round writes the new layout. The round it showed keeps its footer, and the older round has none to recover.
 func TestStickyMovesAV0110BodyToTheNewLayout(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-v0.11.0-layout.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	earlier, rounds, err := ReadSticky(string(data))
+	data := fixture(t, "sticky-v0.11.0-layout.md")
+	earlier, rounds, err := ReadSticky(data)
 	if err != nil || rounds != 2 || len(earlier) != 2 {
 		t.Fatalf("blocks %d rounds %d err %v", len(earlier), rounds, err)
 	}
@@ -554,11 +548,8 @@ func TestStickyMovesAV0110BodyToTheNewLayout(t *testing.T) {
 // Authored prose can end with a divider and a footer-shaped line. In a v0.11.0 body the footer at the tail is the
 // round's own, so that prose is the round's text and reads back as it was written.
 func TestStickyV0110BodyKeepsFooterShapedProse(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-v0.11.0-layout.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, rest, _ := strings.Cut(string(data), "\n\n---\n\n<!-- loupe-earlier -->")
+	data := fixture(t, "sticky-v0.11.0-layout.md")
+	_, rest, _ := strings.Cut(data, "\n\n---\n\n<!-- loupe-earlier -->")
 	if rest == "" || !strings.Contains(rest, " questions=1 ") {
 		t.Fatalf("the fixture changed:\n%s", data)
 	}
@@ -580,11 +571,8 @@ func TestStickyV0110BodyKeepsFooterShapedProse(t *testing.T) {
 // with a footer added on GitHub. When its round's prose also ends in a footer-shaped line it is refused with sticky,
 // which the format allows, since only pre-release probe reviews carry that format.
 func TestStickyPre025BodyWithFooterShapedProseIsRefused(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "sticky-before-025-format.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, rest, _ := strings.Cut(string(data), "\n\n---\n\n<!-- loupe-earlier -->")
+	data := fixture(t, "sticky-before-025-format.md")
+	_, rest, _ := strings.Cut(data, "\n\n---\n\n<!-- loupe-earlier -->")
 	if rest == "" || !strings.Contains(rest, " questions=1 ") {
 		t.Fatalf("the fixture changed:\n%s", data)
 	}
@@ -592,7 +580,7 @@ func TestStickyPre025BodyWithFooterShapedProseIsRefused(t *testing.T) {
 	if _, _, err := ReadSticky(body); err == nil {
 		t.Fatalf("ReadSticky accepted:\n%s", body)
 	}
-	if _, _, err := ReadSticky(string(data)); err != nil {
+	if _, _, err := ReadSticky(data); err != nil {
 		t.Fatalf("the fixture itself no longer reads back: %v", err)
 	}
 }
