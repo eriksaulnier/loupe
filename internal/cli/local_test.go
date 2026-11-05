@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,8 @@ import (
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/screen"
+	"github.com/eriksaulnier/loupe/internal/tui"
 )
 
 // localRun writes local run 1 with the given capture form and findings under a new home, and returns the home and
@@ -72,7 +75,6 @@ func TestLocalRunRefusesPROnlyCommands(t *testing.T) {
 		{"show", "--run", "local#1", "--comments", "--json"},
 		{"publish", "local#1", "--action", "comment", "--json"},
 		{"assess", "--run", "local#1", "x/y#1@1/f-001", "--status", "open", "--json"},
-		{"handoff", "--run", "local#1", "--json"},
 	} {
 		deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
 		wantCode(t, Execute(deps, args), s, refusal.WrongMode)
@@ -424,5 +426,36 @@ func TestWaitSaysAReturnedRunIsReturned(t *testing.T) {
 	}
 	if out := s.stdout.String(); !strings.Contains(out, "returned; read the decisions with loupe feedback --run acme/widgets:local#1 --json") {
 		t.Errorf("wait output:\n%s", out)
+	}
+}
+
+// review opens a local run in apply mode: the human decides, returns with p and y, and the run is sealed.
+func TestReviewReturnsALocalRun(t *testing.T) {
+	home, dir := localRun(t, "changed", localFinding("f-001"))
+	sc := screen.Start(t, 100, 30, func(stdin io.Reader, stdout, stderr io.Writer) int {
+		deps, _ := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+		deps.Stdin, deps.Stdout, deps.Stderr = stdin, stdout, stderr
+		deps.IsTerminal = func() bool { return true }
+		deps.StderrIsTerminal = func() bool { return true }
+		deps.Screen = &tui.Screen{Width: 100, Height: 30}
+		return Execute(deps, []string{"review", "local#1"})
+	})
+	sc.WaitFor("acme/widgets:local#1", "p return")
+	sc.Press("enter", "a")
+	sc.WaitFor("1/1 decided")
+	sc.Press("p")
+	sc.WaitFor("y return to Claude")
+	sc.Press("y")
+	sc.WaitFor("Returned to Claude")
+	sc.Press("q")
+	stdout, stderr, code := sc.Wait()
+	if code != 0 {
+		t.Fatalf("exit %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	if strings.Contains(stdout, "Publish review") {
+		t.Errorf("review showed a publish step:\n%s", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(dir, draft.ReturnFile)); err != nil {
+		t.Fatalf("the run was not returned: %v", err)
 	}
 }

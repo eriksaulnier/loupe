@@ -35,9 +35,6 @@ func (apply) Refuses(command string, flags []string) error {
 				return refusal.New(refusal.WrongMode, fmt.Sprintf("loupe show --%s applies only to pull request runs", flag), "run loupe show without --"+flag)
 			}
 		}
-	// Until the review program learns apply mode, a local run must not open in the publish surface, where p reaches GitHub.
-	case "review", "handoff":
-		return refusal.New(refusal.WrongMode, fmt.Sprintf("loupe %s does not support local runs yet", command), "read the findings with loupe show")
 	}
 	return nil
 }

@@ -57,8 +57,6 @@ func TestApplyRefusesPRCommands(t *testing.T) {
 		{"assess", nil},
 		{"show", []string{"previous"}},
 		{"show", []string{"json", "comments"}},
-		{"review", nil},
-		{"handoff", nil},
 	} {
 		err := m.Refuses(c.command, c.flags)
 		r, ok := refusal.As(err)
@@ -70,7 +68,7 @@ func TestApplyRefusesPRCommands(t *testing.T) {
 			t.Errorf("%s: empty message or fix %+v", c.command, r)
 		}
 	}
-	for _, c := range []string{"show", "add", "edit", "wait", "feedback", "list", "reply", "summary"} {
+	for _, c := range []string{"show", "add", "edit", "wait", "feedback", "list", "reply", "summary", "review", "handoff"} {
 		if err := m.Refuses(c, []string{"json"}); err != nil {
 			t.Errorf("%s: %v", c, err)
 		}
