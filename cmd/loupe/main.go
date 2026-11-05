@@ -19,10 +19,15 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "error: cannot determine the working directory: %v\n", err)
 		os.Exit(1)
 	}
-	deps := cli.Deps{
-		Stdin:   os.Stdin,
-		Stdout:  os.Stdout,
-		Stderr:  os.Stderr,
+	os.Exit(cli.Execute(processDeps(wd, os.Stdin, os.Stdout, os.Stderr), os.Args[1:]))
+}
+
+// processDeps wires loupe to this process: its standard streams, environment, clock, terminal and GitHub token.
+func processDeps(wd string, stdin, stdout, stderr *os.File) cli.Deps {
+	return cli.Deps{
+		Stdin:   stdin,
+		Stdout:  stdout,
+		Stderr:  stderr,
 		Getenv:  os.Getenv,
 		Now:     time.Now,
 		WorkDir: wd,
@@ -34,19 +39,18 @@ func main() {
 			return c, nil
 		},
 		IsTerminal: func() bool {
-			return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+			return term.IsTerminal(int(stdin.Fd())) && term.IsTerminal(int(stdout.Fd()))
 		},
-		StderrIsTerminal: func() bool { return term.IsTerminal(int(os.Stderr.Fd())) },
+		StderrIsTerminal: func() bool { return term.IsTerminal(int(stderr.Fd())) },
 		TTYWidth:         pane.TTYWidth,
 		GOOS:             runtime.GOOS,
 		OpenURL:          cli.OpenURL(runtime.GOOS),
 		TermWidth: func() int {
-			w, _, err := term.GetSize(int(os.Stdout.Fd()))
+			w, _, err := term.GetSize(int(stdout.Fd()))
 			if err != nil {
 				return 80
 			}
 			return w
 		},
 	}
-	os.Exit(cli.Execute(deps, os.Args[1:]))
 }
