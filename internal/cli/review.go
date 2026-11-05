@@ -38,19 +38,26 @@ Every decision is saved immediately and is refused if the finding changed since 
 shown. After a review is sent, review shows its link: o opens it in the browser and any
 other key quits. The link is printed again once the interface closes.
 
-Review reads the pull request from GitHub as it opens and 60 seconds after each check. The
+On a pull request run, review reads the pull request from GitHub as it opens and 60 seconds after each check. The
 header tags a pull request that merged, closed or gained commits since capture (PR merged,
 PR closed, head moved), and the first time each shows, one notice says so. A failed check
 tags it state unknown and changes nothing else, so review works offline and without
 credentials. A run captured with --allow-closed is not tagged for being closed.
+
+A local run (local#7, from loupe capture) opens in apply mode: each finding leads with what the
+agent will do, and nothing reaches GitHub. a accepts, t accepts with a note, x excludes with an
+optional reason, s sends it back with a question, and w rewrites the title, body and proposal.
+Once every finding is decided, p returns the decisions to the agent that waits on loupe wait,
+and the run then takes no more changes.
 
 The interface draws full screen, so TERM=dumb or a terminal that cannot enter raw mode refuses
 with tty. A window smaller than 60x12 shows its size and the size it needs until it grows; q
 and ctrl+c quit there, or decline at the confirmation. For its first half second review drops
 every key but ctrl+c, so keys typed for another pane as it opens do nothing.
 
-The run is <ref> (owner/repo#123 or owner/repo#123@2), else LOUPE_RUN, else the pull request
-of the current branch in the working directory at its newest round.
+The run is <ref> (owner/repo#123, owner/repo#123@2 or local#7), else LOUPE_RUN, else the pull
+request of the current branch in the working directory at its newest round. A local run opens
+only when <ref> or LOUPE_RUN names it.
 
 Result (--json), alone on stdout while the interface draws on stderr:
   {"loupe": 1, "ok": true, "command": "review", "run": "owner/repo#123@1",
@@ -61,7 +68,7 @@ func newReviewCmd(deps Deps) *cobra.Command {
 		Use:     "review [<ref>]",
 		Short:   "Decide each finding in the review interface (human-only)",
 		Long:    reviewHelp,
-		Example: "  loupe review owner/repo#123\n  loupe review owner/repo#123@2",
+		Example: "  loupe review owner/repo#123\n  loupe review owner/repo#123@2\n  loupe review local#7",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runReview(cmd, deps, args)
