@@ -18,7 +18,7 @@ func TestNewEmptyEncoding(t *testing.T) {
 	}
 }
 
-func TestFieldNamesAndOptionals(t *testing.T) {
+func TestOptionalsAreOmittedAndRoundTrip(t *testing.T) {
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	d := NewEmpty()
 	d.Findings = append(d.Findings,
@@ -40,17 +40,10 @@ func TestFieldNamesAndOptionals(t *testing.T) {
 	if err := json.Unmarshal(data, &generic); err != nil {
 		t.Fatal(err)
 	}
-	findings := generic["findings"].([]any)
-	wantKeys(t, findings[0], "id", "rev", "title", "body", "location", "general", "label", "blocking", "confidence", "severity",
-		"suggestedFix", "by", "included", "createdAt", "updatedAt", "history")
-	wantKeys(t, findings[1], "id", "rev", "title", "body", "general", "blocking", "by", "included", "createdAt", "updatedAt", "history")
-	wantKeys(t, findings[0].(map[string]any)["location"], "path", "side", "line", "startLine")
-	wantKeys(t, findings[0].(map[string]any)["history"].([]any)[0], "at", "by", "changed")
-	wantKeys(t, generic["decisions"].(map[string]any)["f-001"], "findingId", "decision", "findingRev", "at")
-	notes := generic["notes"].([]any)
-	wantKeys(t, notes[0], "id", "findingId", "body", "at", "status", "closedAt")
-	wantKeys(t, notes[1], "id", "findingId", "body", "at", "status")
-	wantKeys(t, generic["replies"].([]any)[0], "id", "noteId", "body", "by", "at")
+	// publish/schema_test.go pins every tag. These are the values omitempty drops: a general finding has no location or
+	// optional field, and an open note has no closedAt.
+	wantKeys(t, generic["findings"].([]any)[1], "id", "rev", "title", "body", "general", "blocking", "by", "included", "createdAt", "updatedAt", "history")
+	wantKeys(t, generic["notes"].([]any)[1], "id", "findingId", "body", "at", "status")
 
 	var back Draft
 	if err := json.Unmarshal(data, &back); err != nil {

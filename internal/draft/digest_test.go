@@ -73,6 +73,13 @@ func TestDigestStable(t *testing.T) {
 				t.Fatal(err)
 			}
 		},
+		"accepting every pending finding": func(d *Draft) {
+			for _, id := range []string{"f-001", "f-002"} {
+				if _, err := Accept(d, id, digestNow); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
 		"changes to a withdrawn or excluded finding": func(d *Draft) {
 			d.Findings[2].Title = "still withdrawn"
 			d.Findings[3].Body = "still excluded"
@@ -86,19 +93,6 @@ func TestDigestStable(t *testing.T) {
 				t.Fatalf("Digest changed: %s, want %s", got, base)
 			}
 		})
-	}
-}
-
-func TestDigestAllPendingEqualsAllAccepted(t *testing.T) {
-	d := digestDraft()
-	pending := Digest(d)
-	for _, id := range []string{"f-001", "f-002"} {
-		if _, err := Accept(d, id, digestNow); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := Digest(d); got != pending {
-		t.Fatalf("all accepted %s, all pending %s", got, pending)
 	}
 }
 
