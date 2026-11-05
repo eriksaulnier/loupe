@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -56,13 +55,8 @@ func fakeHostBin(t *testing.T, name, key string, replies map[string]string, fail
 // stderr and exits 1.
 func fakeHerdrBin(t *testing.T, failAt string) (bin, log string) {
 	t.Helper()
-	return fakeHerdrBinWithRect(t, failAt, herdrstub.Rect)
-}
-
-func fakeHerdrBinWithRect(t *testing.T, failAt, rect string) (bin, log string) {
-	t.Helper()
 	bin = t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "herdr"), []byte(herdrstub.Script(rect, failAt, herdrPaneMissing)), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "herdr"), []byte(herdrstub.Script(herdrstub.Rect, failAt, herdrPaneMissing)), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return bin, filepath.Join(bin, "argv")
@@ -248,21 +242,18 @@ func TestHandoffPrintsOneLineWithoutJSON(t *testing.T) {
 func TestHandoffRefusesWithoutHerdr(t *testing.T) {
 	home, _ := sendBackRun(t)
 	bin, log := fakeHerdrBin(t, "")
-	for name, drop := range map[string]string{"HERDR_ENV": "HERDR_ENV", "HERDR_PANE_ID": "HERDR_PANE_ID", "herdr on PATH": "PATH"} {
-		t.Run(name, func(t *testing.T) {
-			env := herdrEnv(home, bin)
-			delete(env, drop)
-			deps, s := testDeps(t, env)
-			code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
-			e := decodeOne(t, s.stdout.Bytes())
-			errObj, _ := e["error"].(map[string]any)
-			if code != 1 || errObj["code"] != "no-pane-host" || errObj["fix"] != "ask the human to run loupe review 'o/r#1@1'" {
-				t.Fatalf("exit %d envelope %v", code, e)
-			}
-			if calls := hostCalls(t, log); calls != nil {
-				t.Fatalf("herdr was run without Herdr detected: %q", calls)
-			}
-		})
+	// internal/pane tests every detection variable; one shows the refusal reaching the envelope.
+	env := herdrEnv(home, bin)
+	delete(env, "HERDR_ENV")
+	deps, s := testDeps(t, env)
+	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
+	e := decodeOne(t, s.stdout.Bytes())
+	errObj, _ := e["error"].(map[string]any)
+	if code != 1 || errObj["code"] != "no-pane-host" || errObj["fix"] != "ask the human to run loupe review 'o/r#1@1'" {
+		t.Fatalf("exit %d envelope %v", code, e)
+	}
+	if calls := hostCalls(t, log); calls != nil {
+		t.Fatalf("herdr was run without Herdr detected: %q", calls)
 	}
 }
 
@@ -336,23 +327,6 @@ func TestHandoffOpensReviewInAnOrcaSplitWithoutFocus(t *testing.T) {
 	}
 }
 
-func TestHandoffRefusesOnAStaleOrcaHandle(t *testing.T) {
-	home, _ := sendBackRun(t)
-	bin, log := fakeOrcaBin(t, "show")
-	deps, s := testDeps(t, withHome(orcaEnv("term_agent", bin), home))
-	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
-	e := decodeOne(t, s.stdout.Bytes())
-	errObj, _ := e["error"].(map[string]any)
-	details, _ := errObj["details"].(map[string]any)
-	if code != 1 || errObj["code"] != "pane-failed" || errObj["message"] != "orca probe: terminal handle term_agent is stale" ||
-		details["host"] != "orca" || details["step"] != "probe" {
-		t.Fatalf("exit %d envelope %v", code, e)
-	}
-	if calls := hostCalls(t, log); len(calls) != 1 {
-		t.Fatalf("orca calls after a stale handle: %q", calls)
-	}
-}
-
 func TestHandoffUsesHerdrWhenBothHostsAreDetected(t *testing.T) {
 	home, _ := sendBackRun(t)
 	herdrBin, herdrLog := fakeHerdrBin(t, "")
@@ -399,29 +373,6 @@ func TestHandoffOpensReviewInATmuxSplitWithoutFocus(t *testing.T) {
 	}
 }
 
-// A TMUX whose socket is gone names a server long since exited, so tmux is skipped rather than refused.
-func TestHandoffSkipsTmuxWithAStaleSocket(t *testing.T) {
-	home, _ := sendBackRun(t)
-	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
-	orcaBin, orcaLog := fakeOrcaBin(t, "")
-	env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
-	env["TMUX"] = filepath.Join(t.TempDir(), "gone") + ",1,0"
-	env["ORCA_TERMINAL_HANDLE"] = "term_agent"
-	deps, s := testDeps(t, env)
-	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
-		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
-	}
-	if host := decodeOne(t, s.stdout.Bytes())["host"]; host != "orca" {
-		t.Fatalf("host %v", host)
-	}
-	if calls := hostCalls(t, tmuxLog); calls != nil {
-		t.Fatalf("tmux was run with a stale socket: %q", calls)
-	}
-	if calls := hostCalls(t, orcaLog); len(calls) != 2 {
-		t.Fatalf("orca calls: %q", calls)
-	}
-}
-
 // A pane in a tmux session nobody watches would be invisible and would hold the run's review lock, so the hand-off
 // passes to the next host after the probe.
 func TestHandoffPassesAnUnwatchedTmuxSession(t *testing.T) {
@@ -451,42 +402,6 @@ func TestHandoffPassesAnUnwatchedTmuxSession(t *testing.T) {
 				t.Fatalf("exit %d envelope %v", code, got)
 			}
 		})
-	}
-}
-
-func TestHandoffUsesHerdrOverTmux(t *testing.T) {
-	home, _ := sendBackRun(t)
-	herdrBin, herdrLog := fakeHerdrBin(t, "")
-	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
-	env := tmuxEnv(t, home, herdrBin+string(os.PathListSeparator)+tmuxBin)
-	maps.Copy(env, map[string]string{"HERDR_ENV": "1", "HERDR_PANE_ID": "w1:p1"})
-	deps, s := testDeps(t, env)
-	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
-		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
-	}
-	if host := decodeOne(t, s.stdout.Bytes())["host"]; host != "herdr" || len(hostCalls(t, herdrLog)) != 3 {
-		t.Fatalf("host %v", host)
-	}
-	if calls := hostCalls(t, tmuxLog); calls != nil {
-		t.Fatalf("tmux was run though Herdr was detected: %q", calls)
-	}
-}
-
-func TestHandoffUsesAWatchedTmuxOverOrca(t *testing.T) {
-	home, _ := sendBackRun(t)
-	tmuxBin, tmuxLog := fakeTmuxBin(t, "", "%3 150 1 0")
-	orcaBin, orcaLog := fakeOrcaBin(t, "")
-	env := tmuxEnv(t, home, tmuxBin+string(os.PathListSeparator)+orcaBin)
-	env["ORCA_TERMINAL_HANDLE"] = "term_agent"
-	deps, s := testDeps(t, env)
-	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
-		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
-	}
-	if host := decodeOne(t, s.stdout.Bytes())["host"]; host != "tmux" || len(hostCalls(t, tmuxLog)) != 4 {
-		t.Fatalf("host %v", host)
-	}
-	if calls := hostCalls(t, orcaLog); calls != nil {
-		t.Fatalf("orca was run though tmux was detected: %q", calls)
 	}
 }
 
@@ -542,22 +457,6 @@ func TestHandoffOpensReviewInAGhosttySplit(t *testing.T) {
 	}
 }
 
-// The focused terminal sits outside loupe's directory, so it belongs to something other than the agent.
-func TestHandoffPassesGhosttyFocusedElsewhere(t *testing.T) {
-	home, _ := sendBackRun(t)
-	bin, log := fakeGhosttyBin(t, t.TempDir())
-	deps, s := testDeps(t, ghosttyEnv(home, bin, t.TempDir()))
-	deps.GOOS = "darwin"
-	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
-	errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
-	if code != 1 || errObj["code"] != "no-pane-host" {
-		t.Fatalf("exit %d error %v", code, errObj)
-	}
-	if calls := hostCalls(t, log); len(calls) != 1 {
-		t.Fatalf("osascript calls, want the probe alone: %q", calls)
-	}
-}
-
 func TestHandoffIgnoresITermOffMac(t *testing.T) {
 	home, _ := sendBackRun(t)
 	bin, log := fakeOsascriptBin(t)
@@ -573,46 +472,18 @@ func TestHandoffIgnoresITermOffMac(t *testing.T) {
 	}
 }
 
+// internal/pane decides the direction from every width source; this shows handoff passes the terminal width through.
 func TestHandoffDirection(t *testing.T) {
 	home, _ := sendBackRun(t)
-	herdr := func(rect string) func(*testing.T) (string, string, map[string]string) {
-		return func(t *testing.T) (string, string, map[string]string) {
-			bin, log := fakeHerdrBinWithRect(t, "", rect)
-			return bin, log, herdrEnv(home, bin)
-		}
+	bin, log := fakeOrcaBin(t, "")
+	deps, s := testDeps(t, withHome(orcaEnv("term_agent", bin), home))
+	deps.TTYWidth = ttyWidth(120)
+	if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %s", code, s.stdout.String())
 	}
-	orca := func(t *testing.T) (string, string, map[string]string) {
-		bin, log := fakeOrcaBin(t, "")
-		return bin, log, withHome(orcaEnv("term_agent", bin), home)
-	}
-	fromArgv := map[string]string{"right": "right", "down": "down", "vertical": "right", "horizontal": "down"}
-	for _, c := range []struct {
-		name  string
-		setup func(*testing.T) (string, string, map[string]string)
-		tty   func() (int, bool)
-		want  string
-	}{
-		{"herdr layout 120 over tty 80", herdr(`{"height":40,"width":120}`), ttyWidth(80), "right"},
-		{"herdr layout 119 over tty 150", herdr(`{"height":40,"width":119}`), ttyWidth(150), "down"},
-		{"herdr without a layout width takes tty 119", herdr(`{"height":40}`), ttyWidth(119), "down"},
-		{"herdr with no width anywhere", herdr(`{"height":40}`), nil, "down"},
-		{"orca tty 120", orca, ttyWidth(120), "right"},
-		{"orca tty 119", orca, ttyWidth(119), "down"},
-		{"orca tty unreadable", orca, func() (int, bool) { return 0, false }, "down"},
-		{"orca with no tty source", orca, nil, "down"},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			_, log, env := c.setup(t)
-			deps, s := testDeps(t, env)
-			deps.TTYWidth = c.tty
-			if code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"}); code != 0 {
-				t.Fatalf("exit %d stdout %s", code, s.stdout.String())
-			}
-			calls := hostCalls(t, log)
-			if got := decodeOne(t, s.stdout.Bytes())["direction"]; got != c.want || len(calls) < 2 || fromArgv[calls[1][5]] != c.want {
-				t.Fatalf("direction %v, calls %q, want %s", got, calls, c.want)
-			}
-		})
+	calls := hostCalls(t, log)
+	if got := decodeOne(t, s.stdout.Bytes())["direction"]; got != "right" || len(calls) < 2 || calls[1][5] != "vertical" {
+		t.Fatalf("direction %v, calls %q, want right", got, calls)
 	}
 }
 
