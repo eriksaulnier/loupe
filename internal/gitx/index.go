@@ -35,13 +35,13 @@ func (ix *Index) git(args ...string) ([]byte, error) {
 }
 
 // run runs git on the temporary index with fsmonitor off, since a configured fsmonitor hook is a command from the
-// user's config, and capture runs none.
+// user's config, and capture runs none. An empty value turns it off on every Git, where "false" names a hook before 2.37.
 func (ix *Index) run(stdin []byte, args ...string) ([]byte, error) {
 	// Git resolves a relative GIT_INDEX_FILE against a directory it may have changed to.
 	if !filepath.IsAbs(ix.path) {
 		return nil, fmt.Errorf("temporary index path %q is not absolute", ix.path)
 	}
-	return run(ix.clone, ix.env(), stdin, append([]string{"-c", "core.fsmonitor=false"}, args...)...)
+	return run(ix.clone, ix.env(), stdin, append([]string{"-c", "core.fsmonitor="}, args...)...)
 }
 
 func (ix *Index) ReadTree(treeish string) error {
@@ -344,7 +344,7 @@ func (ix *Index) untouched(paths []string, head map[string]stagedEntry) (map[str
 		return nil, fmt.Errorf("stat the index: %w", err)
 	}
 	// No pathspec, so a repository with tens of thousands of filtered files never meets the argument limit.
-	out, err := git(ix.clone, "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.quotePath=false",
+	out, err := git(ix.clone, "-c", "core.fsmonitor=", "-c", "core.untrackedCache=false", "-c", "core.quotePath=false",
 		"ls-files", "--stage", "--debug")
 	if err != nil {
 		return nil, err
@@ -408,9 +408,9 @@ func (ix *Index) untouched(paths []string, head map[string]stagedEntry) (map[str
 		if !ok {
 			continue
 		}
-		// The index keeps 32 bits of each time and of the inode, so the disk's are cut to match.
+		// The index keeps 32 bits of the size, each time and the inode, so the disk's are cut to match.
 		mtime := info.ModTime()
-		if info.Size() == r.size && uint32(mtime.Unix()) == r.mSec && uint32(mtime.Nanosecond()) == r.mNsec &&
+		if uint32(info.Size()) == uint32(r.size) && uint32(mtime.Unix()) == r.mSec && uint32(mtime.Nanosecond()) == r.mNsec &&
 			uint32(id.ctimeSec) == r.cSec && uint32(id.ctimeNsec) == r.cNsec && uint32(id.ino) == r.ino &&
 			mtime.Before(indexInfo.ModTime()) {
 			clean[p] = true

@@ -598,8 +598,9 @@ func TestStageWorktreeKeepsAnUntouchedFilteredFile(t *testing.T) {
 	if err := os.Chtimes(big, past, past); err != nil {
 		t.Fatal(err)
 	}
-	if err := stageErr(t, repo.Dir); err == nil {
-		t.Fatal("a same-size edit with its mtime restored kept HEAD's blob")
+	var restored *ConvertedError
+	if err := stageErr(t, repo.Dir); !errors.As(err, &restored) {
+		t.Fatalf("a same-size edit with its mtime restored: %v, want a ConvertedError", err)
 	}
 	writeFile(t, big, "EDITED\n", 0o644)
 	var conv *ConvertedError
