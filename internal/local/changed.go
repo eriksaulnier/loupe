@@ -58,7 +58,7 @@ func captureChanged(c Captured, req Request, place Place) (Captured, error) {
 	if err := ix.ReadTree("HEAD"); err != nil {
 		return Captured{}, err
 	}
-	if err := ix.AddAll(); err != nil {
+	if err := ix.StageWorktree(); err != nil {
 		return Captured{}, err
 	}
 	tree, err := ix.WriteTree()

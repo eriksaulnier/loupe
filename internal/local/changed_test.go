@@ -179,3 +179,26 @@ func TestChangedRefuses(t *testing.T) {
 	_, err = Capture(Request{Form: FormChanged, WorkDir: unborn})
 	wantRefusal(t, err, "HEAD has none")
 }
+
+func TestChangedRunsNoFilter(t *testing.T) {
+	dir := plainRepo(t, "work")
+	marker := filepath.Join(t.TempDir(), "ran")
+	write(t, filepath.Join(dir, ".gitattributes"), []byte("*.md filter=evil\n"))
+	gitIn(t, dir, "config", "filter.evil.clean", "touch "+marker+"; echo FILTERED")
+	gitIn(t, dir, "config", "filter.evil.required", "true")
+	write(t, filepath.Join(dir, "plan.md"), []byte("# Plan\n"))
+	before := snapshot(t, dir)
+	c, err := Capture(Request{Form: FormChanged, WorkDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("capture ran the clean filter (stat %v)", err)
+	}
+	if !strings.Contains(string(c.Diff), "+# Plan") || strings.Contains(string(c.Diff), "FILTERED") {
+		t.Fatalf("diff %s", c.Diff)
+	}
+	if after := snapshot(t, dir); !reflect.DeepEqual(before, after) {
+		t.Fatalf("capture changed the repository")
+	}
+}

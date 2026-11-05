@@ -75,7 +75,7 @@ func captureTree(t *testing.T, clone string) (string, string) {
 	if err := ix.ReadTree("HEAD"); err != nil {
 		t.Fatal(err)
 	}
-	if err := ix.AddAll(); err != nil {
+	if err := ix.StageWorktree(); err != nil {
 		t.Fatal(err)
 	}
 	tree, err := ix.WriteTree()
@@ -369,5 +369,61 @@ func TestConfigBool(t *testing.T) {
 	setConfig(t, repo.Dir, "core.sparseCheckout", "maybe")
 	if _, err := ConfigBool(repo.Dir, "core.sparseCheckout"); err == nil {
 		t.Fatal("ConfigBool accepted a value that is not a bool")
+	}
+}
+
+// addAllTree is the tree git add -A writes into a fresh index, which StageWorktree matches without running filters.
+func addAllTree(t *testing.T, clone string) string {
+	t.Helper()
+	indexPath := filepath.Join(t.TempDir(), "index")
+	cmd := exec.Command("git", "-C", clone, "read-tree", "HEAD")
+	cmd.Env = append(cleanEnv(), "GIT_INDEX_FILE="+indexPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("read-tree: %v\n%s", err, out)
+	}
+	for _, args := range [][]string{{"add", "-A", "--", ":/"}, {"write-tree"}} {
+		cmd := exec.Command("git", append([]string{"-C", clone}, args...)...)
+		cmd.Env = append(cleanEnv(), "GIT_INDEX_FILE="+indexPath)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		if args[0] == "write-tree" {
+			return strings.TrimSpace(string(out))
+		}
+	}
+	return ""
+}
+
+func TestStageWorktreeWritesTheTreeAddAllWould(t *testing.T) {
+	w := newWorkTree(t)
+	if err := os.Symlink("run.sh", filepath.Join(w.repo.Dir, "link.sh")); err != nil {
+		t.Fatal(err)
+	}
+	tree, _ := captureTree(t, w.repo.Dir)
+	if want := addAllTree(t, w.repo.Dir); tree != want {
+		t.Fatalf("StageWorktree wrote %s, add -A writes %s:\n%s\n%s", tree, want,
+			runGit(t, w.repo.Dir, "ls-tree", "-r", tree), runGit(t, w.repo.Dir, "ls-tree", "-r", want))
+	}
+}
+
+// A clean or process filter is a command from the user's config. Capture must not run one, and must store the file's
+// bytes as they are on disk.
+func TestStageWorktreeRunsNoFilter(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	dir := repo.Dir
+	marker := filepath.Join(t.TempDir(), "ran")
+	writeFile(t, filepath.Join(dir, ".gitattributes"), "*.md filter=evil text eol=crlf\n", 0o644)
+	repo.Git("config", "filter.evil.clean", "touch "+marker+"; echo FILTERED")
+	repo.Git("config", "filter.evil.process", "sh -c 'touch "+marker+"; exit 1'")
+	repo.Git("config", "filter.evil.required", "true")
+	writeFile(t, filepath.Join(dir, "plan.md"), "# Plan\r\nraw\n", 0o644)
+	tree, _ := captureTree(t, dir)
+	if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("capture ran the filter (stat %v)", err)
+	}
+	got, err := Blob(dir, tree, "plan.md")
+	if err != nil || string(got) != "# Plan\r\nraw\n" {
+		t.Fatalf("Blob(plan.md) = %q, %v; want the bytes on disk", got, err)
 	}
 }

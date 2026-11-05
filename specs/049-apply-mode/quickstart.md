@@ -72,6 +72,8 @@ These are the by-eye checks for PR 5 and later. Integration tests automate secti
 
 The expected cost is close to `git add -A` into an empty index, because the temporary index starts with no stat cache.
 
+**Measured on 2026-11-03** (Linux under WSL2, Git 2.43, a synthetic repository of 30,000 tracked files and 121 MB, 10 files edited and 1 untracked file added). With `add -A`, `loupe capture --changed --json` took 1.42 s, 1.42 s and 1.45 s, at about 27 MB of peak memory. After the change that hashes each file with `hash-object --no-filters` instead (so capture runs no clean or process filter), six runs took between 2.1 s and 10.9 s, at about 40 MB. The machine was noisy: in the same session a bare `git add -A` into a fresh index took 2.7 s, and the `hash-object --stdin-paths` step alone took 1.5 s. `git status` on the warm index took 0.05 s, so nearly all of the cost is rehashing every file. A repository of 50,000 files was not measured; the cost grows with the bytes of tracked files.
+
 ## Automated
 
 `mise run check`. The integration tests cover sections 1 to 3 with injected input. They assert that the fake GitHub, which also serves the release endpoint, receives no request (SC-004).

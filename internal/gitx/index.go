@@ -2,7 +2,9 @@ package gitx
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,12 +41,129 @@ func (ix *Index) ReadTree(treeish string) error {
 	return err
 }
 
-// AddAll stages the whole working tree. A fresh index has none of the user's fsmonitor, untracked cache or split
-// index state, and these settings keep git from creating it.
-func (ix *Index) AddAll() error {
-	_, err := ix.git("-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.splitIndex=false",
-		"add", "-A", "--", ":/")
-	return err
+// StageWorktree stages the working tree as git add -A would, with each file's bytes exactly as they are on disk. It
+// hashes with --no-filters, so no clean or process filter from the user's config runs and no line ending changes:
+// a filter is a command, and capture runs none. It expects the index to hold HEAD, from ReadTree.
+func (ix *Index) StageWorktree() error {
+	out, err := ix.git("-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.splitIndex=false",
+		"ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ":/")
+	if err != nil {
+		return err
+	}
+	type entry struct{ mode, oid, path string }
+	var removed, hashed []string
+	var entries []entry
+	seen := map[string]bool{}
+	for _, p := range strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00") {
+		p = strings.TrimSuffix(p, "/")
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		full := filepath.Join(ix.clone, filepath.FromSlash(p))
+		info, err := os.Lstat(full)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			removed = append(removed, p)
+		case err != nil:
+			return fmt.Errorf("stat %s: %w", full, err)
+		case info.Mode()&fs.ModeSymlink != 0:
+			target, err := os.Readlink(full)
+			if err != nil {
+				return fmt.Errorf("read the link %s: %w", full, err)
+			}
+			oid, err := ix.hashStdin([]byte(target))
+			if err != nil {
+				return err
+			}
+			entries = append(entries, entry{"120000", oid, p})
+		case info.IsDir():
+			// git lists an embedded repository or a submodule as its directory, and add -A records its HEAD.
+			if head, err := git(full, "rev-parse", "--verify", "HEAD"); err == nil {
+				entries = append(entries, entry{"160000", strings.TrimSpace(string(head)), p})
+			}
+		case info.Mode().IsRegular():
+			mode := "100644"
+			if info.Mode()&0o111 != 0 {
+				mode = "100755"
+			}
+			hashed = append(hashed, p)
+			entries = append(entries, entry{mode: mode, path: p})
+		}
+	}
+	oids, err := ix.hashPaths(hashed)
+	if err != nil {
+		return err
+	}
+	var info bytes.Buffer
+	next := 0
+	for _, e := range entries {
+		// Regular files were hashed in one batch, in the order they were listed.
+		if e.oid == "" {
+			e.oid = oids[next]
+			next++
+		}
+		fmt.Fprintf(&info, "%s %s\t%s\x00", e.mode, e.oid, e.path)
+	}
+	if len(removed) > 0 {
+		if _, err := run(ix.clone, ix.env(), []byte(strings.Join(removed, "\x00")+"\x00"), "update-index", "-z", "--force-remove", "--stdin"); err != nil {
+			return err
+		}
+	}
+	if info.Len() > 0 {
+		if _, err := run(ix.clone, ix.env(), info.Bytes(), "update-index", "-z", "--index-info"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// hashPaths writes each file as a blob with no filter and returns the object ids in order. --stdin-paths reads one
+// path per line, so a path holding a newline is hashed on its own.
+func (ix *Index) hashPaths(paths []string) ([]string, error) {
+	oids := make([]string, len(paths))
+	var batch []int
+	for i, p := range paths {
+		if strings.ContainsAny(p, "\n\r") {
+			data, err := os.ReadFile(filepath.Join(ix.clone, filepath.FromSlash(p)))
+			if err != nil {
+				return nil, err
+			}
+			if oids[i], err = ix.hashStdin(data); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		batch = append(batch, i)
+	}
+	if len(batch) == 0 {
+		return oids, nil
+	}
+	var in bytes.Buffer
+	for _, i := range batch {
+		in.WriteString(paths[i])
+		in.WriteByte('\n')
+	}
+	out, err := run(ix.clone, ix.env(), in.Bytes(), "hash-object", "-w", "--no-filters", "--stdin-paths")
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Fields(string(out))
+	if len(lines) != len(batch) {
+		return nil, fmt.Errorf("git hash-object returned %d object ids for %d paths", len(lines), len(batch))
+	}
+	for j, i := range batch {
+		oids[i] = lines[j]
+	}
+	return oids, nil
+}
+
+func (ix *Index) hashStdin(data []byte) (string, error) {
+	out, err := run(ix.clone, ix.env(), data, "hash-object", "-w", "--no-filters", "--stdin")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func (ix *Index) WriteTree() (string, error) {
