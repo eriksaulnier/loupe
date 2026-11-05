@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -11,9 +12,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/github"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/screen"
+	"github.com/eriksaulnier/loupe/internal/tui"
 )
 
 func TestPublishUnattendedDefaultsActionToComment(t *testing.T) {
@@ -260,5 +264,44 @@ func TestPublishWarnsWhenItCannotCheckTheEarlierFindings(t *testing.T) {
 	}
 	if !strings.HasPrefix(stderr.String(), "warning: could not check for unassessed earlier findings: ") || !strings.Contains(stderr.String(), "receipt.json") {
 		t.Fatalf("stderr %q", stderr.String())
+	}
+}
+
+// A declined publish says it sent nothing on stderr; a stderr that fails then is reported, and nothing is sent.
+func TestPublishReportsAStderrItCannotWriteAfterADecline(t *testing.T) {
+	f := newPRFixture(t)
+	if code, s := f.capture(t, nil, "--json"); code != 0 {
+		t.Fatalf("capture exit %d stdout %q", code, s.stdout.String())
+	}
+	if code, s := runWithStdin(t, f.home, "", "add", "--run", "o/r#7", "--title", "T", "--body", "B", "--general", "--json"); code != 0 {
+		t.Fatalf("add exit %d stdout %q", code, s.stdout.String())
+	}
+	dir := run.RunDir(f.home, "o", "r", 7, 1)
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := draft.Accept(d, "f-001", sendBackAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
+		t.Fatal(err)
+	}
+	client := f.gh.Client(t)
+	sc := screen.Start(t, 100, 30, func(stdin io.Reader, stdout, _ io.Writer) int {
+		deps, _ := testDeps(t, map[string]string{"LOUPE_HOME": f.home, "NO_COLOR": "1"})
+		deps.Stdin, deps.Stdout, deps.Stderr = stdin, stdout, failWriter{}
+		deps.IsTerminal = func() bool { return true }
+		deps.StderrIsTerminal = func() bool { return true }
+		deps.Screen = &tui.Screen{Width: 100, Height: 30}
+		deps.GitHub = func() (github.Client, error) { return client, nil }
+		return Execute(deps, []string{"publish", "o/r#7", "--action", "comment"})
+	})
+	sc.WaitFor("new line")
+	sc.Press("tab")
+	sc.WaitFor("publish this review")
+	sc.Press("n")
+	if _, _, code := sc.Wait(); code != 1 || f.gh.CreateCount() != 0 {
+		t.Fatalf("exit %d, %d reviews sent", code, f.gh.CreateCount())
 	}
 }
