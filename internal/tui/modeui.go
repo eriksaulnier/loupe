@@ -192,7 +192,7 @@ func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote 
 // applyUI is a local run, which ends when the human returns the decisions to the agent that applies them.
 type applyUI struct{}
 
-func (applyUI) settleKeys() string { return "axsurdwt" }
+func (applyUI) settleKeys() string { return "aAxXsurd" }
 
 func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 	upDown, leftRight := g.Up+"/"+g.Down, g.Left+"/"+g.Right
@@ -210,10 +210,10 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{"PgUp/PgDn", "scroll one page", ""},
 			{"space", "scroll one page down", ""},
 			{"a", "accept; resolves its open notes", ""},
-			{"t", "accept with a note; enter accepts, esc cancels", ""},
-			{"x", "exclude with an optional reason; dismisses its open notes", ""},
+			{"A", "accept with a note; enter accepts, esc cancels", ""},
+			{"x", "exclude; dismisses its open notes", ""},
+			{"X", "exclude with a reason; enter excludes, esc cancels", ""},
 			{"s", "send back; enter sends, esc cancels", ""},
-			{"w", "rewrite title, body and proposal; ctrl+s saves", ""},
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
@@ -247,16 +247,14 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	}
 	switch draft.Dispositions(m.draft)[f.ID] {
 	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept"), decide("t", "accept with note"), decide("x", "exclude"), decide("s", "send back"))
+		hints = append(hints, decide("a", "accept"), decide("A", "accept with note"), decide("x", "exclude"), decide("X", "exclude with reason"),
+			decide("s", "send back"))
 	case draft.DispositionAccepted:
-		hints = append(hints, decide("t", "accept with note"), decide("x", "exclude"), decide("s", "send back"))
+		hints = append(hints, decide("A", "accept with note"), decide("x", "exclude"), decide("X", "exclude with reason"), decide("s", "send back"))
 	case draft.DispositionExcluded:
 		hints = append(hints, decide("u", "restore"))
 	case draft.DispositionWithdrawn:
 		hints = append(hints, decide("u", "reinstate"))
-	}
-	if f.Included {
-		hints = append(hints, decide("w", "rewrite"))
 	}
 	if hasOpenNote {
 		hints = append(hints, decide("r", "resolve"), decide("d", "dismiss"))
@@ -276,10 +274,13 @@ func (applyUI) listKey(m *Model, key string) (tea.Cmd, bool) {
 
 func (applyUI) detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool) {
 	switch key {
-	case "t":
+	case "A":
 		return m.openNote(noteAccept, heldNote(m.draft, f, draft.DispositionAccepted)), true
-	case "x":
+	case "X":
 		return m.openNote(noteExclude, heldNote(m.draft, f, draft.DispositionExcluded)), true
+	case "t", "w":
+		// Absent here, and swallowed so the shared handler cannot give them a pull request run's meaning.
+		return nil, true
 	}
 	return nil, false
 }

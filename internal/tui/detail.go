@@ -870,7 +870,7 @@ func (m *Model) noteView() []string {
 	case noteAccept:
 		title, enter = "Accept "+m.openID+" with a note", "enter accepts"
 	case noteExclude:
-		title, enter = "Exclude "+m.openID+", with a reason if you like", "enter excludes"
+		title, enter = "Reject "+m.openID+", with a reason if you like", "enter rejects"
 	}
 	way := m.styles.Text().Render(enter + " " + m.glyphs.Sep + " esc cancels")
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
@@ -883,7 +883,7 @@ func (m *Model) noteVerb() string {
 	case noteAccept:
 		return "accept"
 	case noteExclude:
-		return "exclude"
+		return "reject"
 	}
 	return "send"
 }

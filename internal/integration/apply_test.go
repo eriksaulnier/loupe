@@ -140,21 +140,23 @@ func accept(s *screen.Screen, id string) {
 	s.WaitFor(id + " accepted")
 }
 
-// acceptWithNote presses t on the open finding, types note and confirms it.
+// acceptWithNote presses A on the open finding, types note and confirms it.
 func acceptWithNote(s *screen.Screen, id, note string) {
-	s.Press("t")
+	s.Press("A")
 	s.Type(note)
 	s.Press("enter")
 	s.WaitFor(id + " accepted")
 }
 
-// exclude presses x on the open finding, types reason, which may be empty, and confirms it.
+// exclude rejects the open finding: x alone with no reason, or X with reason typed and confirmed.
 func exclude(s *screen.Screen, id, reason string) {
-	s.Press("x")
-	if reason != "" {
+	if reason == "" {
+		s.Press("x")
+	} else {
+		s.Press("X")
 		s.Type(reason)
+		s.Press("enter")
 	}
-	s.Press("enter")
 	s.WaitFor(id + " excluded")
 }
 
@@ -244,7 +246,7 @@ func (h *harness) userState(untracked ...string) string {
 }
 
 // TestApplyLocalCodeReview is User Story 1: a branch with committed, staged, unstaged and untracked changes is
-// captured without touching the user's state, decided with one key per accept and two per exclude, and returned with
+// captured without touching the user's state, decided with one key per accept and per reject, and returned with
 // two keys.
 func TestApplyLocalCodeReview(t *testing.T) {
 	t.Parallel()
@@ -336,7 +338,7 @@ Entries never expire.
 `
 
 // TestApplyPlanDecisions is User Story 2: a plan outside the repository and a code file inside it are captured whole,
-// the plan shows as plain text, and an accept with a note and a rewritten proposal both land in applyWithChanges.
+// the plan shows as plain text, and each accept with a note lands in applyWithChanges.
 func TestApplyPlanDecisions(t *testing.T) {
 	t.Parallel()
 	h := newApplyHarness(t)
@@ -375,13 +377,7 @@ func TestApplyPlanDecisions(t *testing.T) {
 	s.WaitFor("Who owns the cache?")
 	accept(s, "f-002")
 	s.WaitFor("Pick an expiry")
-	s.Press("w")
-	s.WaitFor("Rewrite f-003")
-	s.Press("tab", "tab")
-	s.Type(" Make the hour configurable.")
-	s.Press("ctrl+s")
-	s.WaitFor("f-003 rewritten")
-	accept(s, "f-003")
+	acceptWithNote(s, "f-003", "Make the hour configurable.")
 	h.returnRun(s, "Claude")
 
 	fb := h.mustOK("feedback", "--run", applyRef)
@@ -392,7 +388,7 @@ func TestApplyPlanDecisions(t *testing.T) {
 	if c := changes["f-001"]; c["suggestion"] != "Use disk instead." || c["path"] != plan || c["location"].(map[string]any)["heading"] != "Storage" {
 		t.Fatalf("f-001 %v", c)
 	}
-	if c := changes["f-003"]; c["proposal"] != "Expire entries after one hour. Make the hour configurable." || c["suggestion"] != nil {
+	if c := changes["f-003"]; c["proposal"] != "Expire entries after one hour." || c["suggestion"] != "Make the hour configurable." {
 		t.Fatalf("f-003 %v", c)
 	}
 	if a := apply["f-002"]; a["general"] != true || a["path"] != nil || a["proposal"] != nil {

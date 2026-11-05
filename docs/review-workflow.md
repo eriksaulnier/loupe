@@ -46,10 +46,10 @@ On a local run, which the agent captured with `loupe capture --changed`, `--file
 | Key | What it does |
 | :--- | :--- |
 | `a` | Accept the finding |
-| `t` | Accept the finding with a note for the agent; an empty note is a plain accept |
-| `x` | Exclude the finding, with an optional reason |
-| `s` | Send the finding back to the agent with a note |
-| `w` | Rewrite the finding's title, body and proposal; `ctrl+s` saves and keeps the decision |
+| `A` | Accept the finding with a note for the agent; an empty note is a plain accept |
+| `x` | Reject the finding, with no reason |
+| `X` | Reject the finding with a reason; an empty reason is a plain reject |
+| `s` | Ask: send the finding back to the agent with a question |
 | `u` | Restore an excluded finding to pending, or reinstate and accept a withdrawn one |
 | `r`, `d` | Resolve or dismiss the finding's open note |
 | `f` | Show the whole file's diff; a `--files` run shows the file as plain text |
@@ -57,7 +57,7 @@ On a local run, which the agent captured with `loupe capture --changed`, `--file
 | `p` | In the list, return the decisions to the agent after one `y` |
 | `?` | List the keys for the current view |
 
-`e` and `o` are absent, and there is no publish step.
+`t`, `w`, `e` and `o` are absent, and there is no publish step.
 
 Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
 
@@ -108,7 +108,7 @@ The same loop works on local work: uncommitted changes, a plan or a spec, with n
 
 1. The agent captures the work with `loupe capture --changed`, `--files <path>` or `--no-files --title <title>`. That makes a local run, such as `owner/repo:local#7`, and no network call. `--changed` reads your staged, unstaged and untracked changes through a temporary index, so your own index, branch and files stay as they were.
 2. It files each finding with a `proposal`, the change it will make if you accept. A finding with no proposal is a question.
-3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`t`), exclude with a reason (`x`) or send it back.
+3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`A`), reject (`x`, or `X` with a reason) or ask.
 4. You press `p`, then `y`, to return the run. Nothing posts anywhere.
 5. The agent reads your decisions with `loupe feedback` and applies the accepted ones, following your notes where they differ from its proposals.
 

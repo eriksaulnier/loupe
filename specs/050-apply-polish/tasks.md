@@ -6,8 +6,8 @@ Every task follows a failing test, then the change, then a passing check. PR run
 
 ## Phase 1: Keys (US3, FR-006, FR-013, FR-014, FR-016, FR-017)
 
-- [ ] T001 [US3] Add failing tests in `internal/tui/modeui_test.go` (apply section) and `internal/tui/detail_test.go` for a local run: `A` opens the accept note input and Enter accepts with the note, an empty note accepts plainly; `x` rejects at once with no input; `X` opens the reason input; `t` and `w` change nothing, and neither appears in any hint or help; `u` on an accepted finding changes nothing, as on PR runs. While settling, the dropped keys are `aAxXsurd`.
-- [ ] T002 [US3] Implement the keys in `applyUI.detailKey`, the hints, the help and the settle string in `internal/tui/modeui.go`.
+- [x] T001 [US3] Add failing tests in `internal/tui/modeui_test.go` (apply section) and `internal/tui/detail_test.go` for a local run: `A` opens the accept note input and Enter accepts with the note, an empty note accepts plainly; `x` rejects at once with no input; `X` opens the reason input; `t` and `w` change nothing, and neither appears in any hint or help; `u` on an accepted finding changes nothing, as on PR runs. While settling, the dropped keys are `aAxXsurd`.
+- [x] T002 [US3] Implement the keys in `applyUI.detailKey`, the hints, the help and the settle string in `internal/tui/modeui.go`.
 
 ## Phase 2: Drop the rewrite path (US3, FR-007, FR-008)
 

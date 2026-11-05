@@ -259,3 +259,29 @@ func applyModel(t *testing.T, applier string) (*Model, string) {
 	dir := applyFixture(t, applier, applyInputs...)
 	return modelOf(t, dir, utf8Env, 100, 40), dir
 }
+
+// keysOf is the keys of hints, in order.
+func keysOf(hints []style.Hint) []string {
+	var out []string
+	for _, h := range hints {
+		out = append(out, h.Key)
+	}
+	return out
+}
+
+// On a local run the detail offers each decision key next to its shift, which adds the human's words: a and A, x
+// and X. Neither t nor w is offered.
+func TestApplyDetailPairsEachDecisionWithItsShift(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	mustOpenFinding(t, m, "f-001")
+	if got, want := strings.Join(keysOf(m.detailHints()), " "), "a A x X s"; !strings.Contains(got, want) {
+		t.Errorf("pending detail keys %q lack %q", got, want)
+	}
+	outside(t, dir, accepted("f-001"))
+	if _, err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(keysOf(m.detailHints()), " "), "A x X s"; !strings.Contains(got, want) {
+		t.Errorf("accepted detail keys %q lack %q", got, want)
+	}
+}

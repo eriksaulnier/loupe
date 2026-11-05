@@ -140,7 +140,7 @@ func TestApplyReturnRefusesADraftChangedAfterThePrompt(t *testing.T) {
 	}
 }
 
-// SC-006: on a run of ten findings, each accept is one key, each exclude is x and enter, and return is p and y.
+// SC-006: on a run of ten findings, each accept and each reject is one key, and return is p and y.
 func TestApplyReturnTakesOneKeyPerDecision(t *testing.T) {
 	var inputs []draft.FindingInput
 	for i := range 10 {
@@ -163,7 +163,6 @@ func TestApplyReturnTakesOneKeyPerDecision(t *testing.T) {
 		waitFor(t, tm, fmt.Sprintf("%d/10 decided", i))
 		if i%3 == 2 {
 			send(runes("x"))
-			send(enterKey)
 			continue
 		}
 		send(runes("a"))
@@ -172,7 +171,7 @@ func TestApplyReturnTakesOneKeyPerDecision(t *testing.T) {
 	send(runes("p"))
 	send(runes("y"))
 	waitFor(t, tm, "Returned to Claude")
-	if want := 1 + 7 + 3*2 + 2; keys != want {
+	if want := 1 + 7 + 3 + 2; keys != want {
 		t.Errorf("the run took %d keys, want %d", keys, want)
 	}
 	d := loadDraft(t, dir)
