@@ -52,7 +52,7 @@ A finding's document has one order in both modes:
 
 ## The location pane
 
-The location pane has a maximum height. A hunk taller than that scrolls inside the pane, so the proposed change stays on screen under it. The pane MUST show which part of the hunk is visible, and the finding's own lines MUST be in view when the finding opens.
+The location pane has a maximum height: one third of the detail viewport, and at least eight code rows. A hunk taller than that shows a window of its code, so the proposed change stays near it. The window MUST open on the finding's first line with up to two lines of context above it. The anchored heading, when there is one, MUST stay whole above the window. The pane's bottom border MUST say how many lines are shown and that `f` shows all of them, and its scrollbar MUST mark where the window sits. The ordinary scroll keys move the document, never the window. The whole-file view is the way to the rest.
 
 ## The header
 

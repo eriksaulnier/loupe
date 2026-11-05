@@ -146,14 +146,14 @@ func (m *Model) metaLines(f draft.Finding, width int) []string {
 func (m *Model) codePane(location, heading string, lines []diff.ViewLine, width int) []string {
 	inner, _ := style.PaneInner(width, 0)
 	rows, added, removed := m.codeRows(location, lines, inner)
+	var head []string
 	if heading != "" {
 		// Every tier's separator is one cell wide, so the hanging indent lines the wrapped rows up under the text.
-		head := strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(heading)), inner, "  "), "\n")
+		head = strings.Split(m.styles.Wrap(render.ForDisplay(render.OneLine(heading)), inner, "  "), "\n")
 		head[0] = m.glyphs.Sep + " " + strings.TrimPrefix(head[0], "  ")
 		for i, line := range head {
 			head[i] = m.styles.Secondary().Render(line)
 		}
-		rows = append(head, rows...)
 	}
 	// A --files run adds each file whole only because nothing was there before, so a line count says nothing.
 	stat := ""
@@ -161,8 +161,25 @@ func (m *Model) codePane(location, heading string, lines []diff.ViewLine, width 
 		stat = m.styles.HintTitle(fmt.Sprintf("+%d %s%d", added, m.sign("\u2212", "-"), removed))
 	}
 	title := m.styles.LocationTitle(location, max(8, inner-style.Width(stat)-6), true)
-	return m.styles.Pane(style.Pane{Width: width, Height: len(rows) + style.PaneRows, Lines: rows,
-		Titles: style.PaneTitles{TopLeft: title, TopRight: stat}})
+	pane := style.Pane{Width: width, Titles: style.PaneTitles{TopLeft: title, TopRight: stat}}
+	// A tall location would push the proposed change off screen, so the pane shows a window of its code opened on the
+	// finding's first line, under the whole heading, and the whole-file view shows the rest.
+	if limit := max(8, m.detailRows()/3); len(rows) > limit {
+		anchor := 0
+		for i, l := range lines {
+			if l.Anchored {
+				anchor = i
+				break
+			}
+		}
+		top := min(max(0, anchor-2), len(rows)-limit)
+		rows = rows[top : top+limit]
+		pane.Scroll = style.Scroll{Offset: top, Visible: limit, Total: len(lines), Top: len(head)}
+		pane.Titles.BottomLeft = m.styles.HintTitle(fmt.Sprintf("%d of %d lines %s f shows all", limit, len(lines), m.glyphs.Sep))
+	}
+	pane.Lines = append(head, rows...)
+	pane.Height = len(pane.Lines) + style.PaneRows
+	return m.styles.Pane(pane)
 }
 
 // codeRows draws diff lines through the shared code primitive, highlighted by the file's language when it has one,

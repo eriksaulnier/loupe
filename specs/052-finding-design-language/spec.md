@@ -31,12 +31,14 @@ The goals:
 - Q: What does the local header show? → A: The repository, the branch and a capture summary. The ref is dropped from the header and stays in `loupe list` and `loupe show`.
 - Q: Which tone does a local finding with no proposal take in the proposed change's slot? → A: Amber, the conversation tone (frames checkpoint).
 - Q: Where does a withdrawn finding's reason go? → A: Under the title and meta, above the location pane. It is a state, not content (frames checkpoint).
+- Q: How is the rest of a capped location reached? → A: Through `f`, the whole-file view. The scroll keys still move only the document, and no key is added. This amends spec 038's rule that the scroll keys reach every code line.
 - Q: Does a section heading carry a glyph? → A: No. The `?` before the question heading looked bad, and the tone already carries the meaning.
 - The owner confirmed a blank row between the header and the body. The running program already draws it; the first mocks dropped it.
 
 ## Relationship to earlier specifications
 
 - **`specs/038-review-visual-design`** owned the review window's look. Its `contracts/layout.md` stays as history. `docs/tui-design.md` supersedes it for the finding document and the header.
+- **`specs/038-review-visual-design`, amended**: its layout contract required that the ordinary scroll keys reach every line of a tall nested code block. With the cap they reach every section but not every code line. The owner chose on 2026-11-04 to make `f`, the whole-file view, the way to the rest, over scroll keys that enter the pane or a dedicated key.
 - **`specs/049-apply-mode` and `specs/051-apply-polish`** added the proposal lead, the question line and the apply badge. This spec redraws them in the shared section shape and keeps their meaning.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -73,14 +75,15 @@ A human opens a local run. The header names the repository, the branch and what 
 
 ### User Story 3 - See the fix under a long hunk (Priority: P2)
 
-A finding points at a long hunk. The location pane stops at a maximum height and scrolls inside itself, so the proposed change is still on screen.
+A finding points at a long hunk. The location pane stops at a maximum height, so the proposed change stays near the code. `f` shows the whole file.
 
-**Independent Test**: Open a finding whose hunk is taller than the cap. The pane shows the finding's lines and the proposed change is visible without scrolling the document.
+**Independent Test**: Open a finding whose hunk is taller than the cap. The pane opens on the finding's first line, says how many lines it shows and that `f` shows all, and the proposed change is closer to the top than before.
 
 **Acceptance Scenarios**:
 
-1. **Given** a hunk taller than the cap, **When** the finding opens, **Then** the pane is capped, the finding's lines are in view and the pane shows that more lines exist.
-2. **Given** a hunk shorter than the cap, **When** the finding opens, **Then** the pane is as tall as the hunk, as today.
+1. **Given** a hunk taller than the cap, **When** the finding opens, **Then** the pane is capped, the finding's first line is in view, and the bottom border reads `N of M lines · f shows all`.
+2. **Given** the same finding, **When** the human presses `f`, **Then** the whole-file view reaches the last anchored line.
+3. **Given** a hunk shorter than the cap, **When** the finding opens, **Then** the pane is as tall as the hunk, as today.
 
 ### Edge Cases
 
@@ -98,7 +101,7 @@ A finding points at a long hunk. The location pane stops at a maximum height and
 - **FR-002**: `docs/tui-design.md` MUST be named in the `internal/style` package doc, in the AGENTS.md layout table, and in `.github/review-instructions.md` as a contract the reviewer checks.
 - **FR-003**: Every finding section MUST be drawn by one `internal/style` helper. The detail document MUST NOT style a heading or a bar inline.
 - **FR-004**: The suggested fix and the local proposal MUST be drawn by one renderer.
-- **FR-005**: The location pane MUST have a maximum height and MUST scroll inside itself when the hunk exceeds it.
+- **FR-005**: The location pane MUST have a maximum height. A taller hunk shows a window opened on the finding's first line, and `f` reaches the rest.
 - **FR-006**: Pane titles in the rewrite and confirmation screens MUST be drawn by `internal/style` helpers.
 - **FR-007**: The local header MUST show the repository, the branch and the capture summary, and MUST NOT show the run's ref. It MUST draw the richest of its three forms that leaves the title its room, as the contract says.
 - **FR-008**: The published review MUST NOT change. The `internal/render` goldens MUST NOT move.

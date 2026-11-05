@@ -29,7 +29,7 @@ Each task follows failing test, then implementation, then a passing check. `[P]`
 
 ## Phase 4: Capped location pane (US3)
 
-- [ ] T013 BLOCKED on the owner: a cap breaks `TestDetailScrollsAsOneDocument` (spec 038 keeps every anchored line reachable with the scroll keys), and in-pane scrolling needs a key decision. Test, then cap `codePane` at one third of the detail viewport, at least eight rows, scrolling inside the pane and opening on the finding's lines
+- [x] T013 Test, then cap `codePane` at one third of the detail viewport, at least eight rows, opening on the finding's first line under its heading, with `f shows all` in the border. Amend `TestDetailScrollsAsOneDocument` so `f` reaches the last anchored line
 
 ## Phase 5: Local header (US2)
 
