@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/textarea"
@@ -16,13 +17,14 @@ type rewriteField int
 const (
 	rewriteFocusTitle rewriteField = iota
 	rewriteFocusBody
+	rewriteFocusProposal
 )
 
 // keptRewrite is text the human left with esc, and the revision it was typed against, so reopening it on a finding
 // the agent has since changed can say so. Typed holds only the fields the human changed: a field left alone takes
 // the finding's text on reopening, so the agent's newer version is not saved back as the human's.
 type keptRewrite struct {
-	Typed [2]*string
+	Typed []*string
 	Rev   int
 }
 
@@ -57,9 +59,12 @@ func (m *Model) openRewrite(f draft.Finding) tea.Cmd {
 	}
 	m.rewriting, m.notice = true, ""
 	m.rewriteRev = f.Rev
-	setRewriteValue(&m.rewriteTitle, f.Title)
-	setRewriteValue(&m.rewriteBody, f.Body)
-	m.rewriteOpened = [2]openedText{{f.Title, m.rewriteTitle.Value()}, {f.Body, m.rewriteBody.Value()}}
+	inputs, source := m.rewriteInputs(), rewriteSource(f)
+	m.rewriteOpened = make([]openedText, len(inputs))
+	for i, input := range inputs {
+		setRewriteValue(input, source[i])
+		m.rewriteOpened[i] = openedText{source[i], input.Value()}
+	}
 	if kept, ok := m.keptRewrites[f.ID]; ok {
 		m.rewriteRev = kept.Rev
 		if kept.Rev != f.Rev {
@@ -75,13 +80,20 @@ func (m *Model) openRewrite(f draft.Finding) tea.Cmd {
 	return m.focusRewrite(rewriteFocusTitle)
 }
 
-func (m *Model) rewriteInputs() [2]*textarea.Model {
-	return [2]*textarea.Model{&m.rewriteTitle, &m.rewriteBody}
+// rewriteInputs are the inputs for the fields the mode edits, in tab order.
+func (m *Model) rewriteInputs() []*textarea.Model {
+	all := []*textarea.Model{&m.rewriteTitle, &m.rewriteBody, &m.rewriteProposal}
+	return all[:len(m.ui.rewriteFields())]
 }
 
+// rewriteSource is f's text in the order of the rewrite fields.
+func rewriteSource(f draft.Finding) []string { return []string{f.Title, f.Body, f.Proposal} }
+
 // rewriteTyped is the editor's text in each field the human changed, and nil in each they left alone.
-func (m *Model) rewriteTyped() (typed [2]*string) {
-	for i, input := range m.rewriteInputs() {
+func (m *Model) rewriteTyped() []*string {
+	inputs := m.rewriteInputs()
+	typed := make([]*string, len(inputs))
+	for i, input := range inputs {
 		if value := input.Value(); value != m.rewriteOpened[i].Shown {
 			typed[i] = &value
 		}
@@ -89,27 +101,28 @@ func (m *Model) rewriteTyped() (typed [2]*string) {
 	return typed
 }
 
-// rewriteText is the editor's title and body, with each field the human left alone as the finding has it.
-func (m *Model) rewriteText() (title, body string) {
-	text := [2]string{m.rewriteOpened[rewriteFocusTitle].Source, m.rewriteOpened[rewriteFocusBody].Source}
+// rewriteText is the editor's text per field, with each field the human left alone as the finding has it.
+func (m *Model) rewriteText() []string {
+	text := make([]string, len(m.rewriteOpened))
 	for i, typed := range m.rewriteTyped() {
+		text[i] = m.rewriteOpened[i].Source
 		if typed != nil {
 			text[i] = *typed
 		}
 	}
-	return text[rewriteFocusTitle], text[rewriteFocusBody]
+	return text
 }
 
 // rebaseRewrite stands the editor on f as the agent left it: each field the human left alone shows f's text, and
 // each they changed keeps their text and cursor. The text the human now has began at f's revision.
 func (m *Model) rebaseRewrite(f draft.Finding) {
 	m.rewriteRev = f.Rev
-	source := [2]string{f.Title, f.Body}
+	source := rewriteSource(f)
 	for i, input := range m.rewriteInputs() {
 		if input.Value() == m.rewriteOpened[i].Shown && source[i] != m.rewriteOpened[i].Source {
 			setRewriteValue(input, source[i])
 		}
-		shown := newRewriteInput(i == int(rewriteFocusBody))
+		shown := newRewriteInput(i != int(rewriteFocusTitle))
 		setRewriteValue(&shown, source[i])
 		m.rewriteOpened[i] = openedText{source[i], shown.Value()}
 	}
@@ -118,18 +131,22 @@ func (m *Model) rebaseRewrite(f draft.Finding) {
 
 func (m *Model) focusRewrite(field rewriteField) tea.Cmd {
 	m.rewriteFocus = field
-	if field == rewriteFocusTitle {
-		m.rewriteBody.Blur()
-		return m.rewriteTitle.Focus()
+	var cmd tea.Cmd
+	for i, input := range m.rewriteInputs() {
+		if i == int(field) {
+			cmd = input.Focus()
+		} else {
+			input.Blur()
+		}
 	}
-	m.rewriteTitle.Blur()
-	return m.rewriteBody.Focus()
+	return cmd
 }
 
 func (m *Model) closeRewrite() {
 	m.rewriting = false
-	m.rewriteTitle.Blur()
-	m.rewriteBody.Blur()
+	for _, input := range m.rewriteInputs() {
+		input.Blur()
+	}
 }
 
 // updateRewrite drives the editor. Every key it does not name goes into the input with the keys, so q, ? and the
@@ -142,8 +159,11 @@ func (m *Model) updateRewrite(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "ctrl+s":
 		return m.saveRewrite()
-	case "tab", "shift+tab":
-		return m.focusRewrite(1 - m.rewriteFocus)
+	case "tab":
+		return m.focusRewrite((m.rewriteFocus + 1) % rewriteField(len(m.rewriteInputs())))
+	case "shift+tab":
+		n := rewriteField(len(m.rewriteInputs()))
+		return m.focusRewrite((m.rewriteFocus + n - 1) % n)
 	case "enter":
 		if m.rewriteFocus == rewriteFocusTitle {
 			return m.focusRewrite(rewriteFocusBody)
@@ -155,14 +175,14 @@ func (m *Model) updateRewrite(msg tea.KeyPressMsg) tea.Cmd {
 // typeRewrite routes a keystroke or a paste into the input with the keys. A line break typed or pasted into the title
 // becomes a space, since a title is one line.
 func (m *Model) typeRewrite(msg tea.Msg) tea.Cmd {
-	var cmd tea.Cmd
+	breakAs := "\n"
 	if m.rewriteFocus == rewriteFocusTitle {
-		msg, _ = normalizeInput(msg, " ")
-		m.rewriteTitle, cmd = m.rewriteTitle.Update(msg)
-	} else {
-		msg, _ = normalizeInput(msg, "\n")
-		m.rewriteBody, cmd = m.rewriteBody.Update(msg)
+		breakAs = " "
 	}
+	msg, _ = normalizeInput(msg, breakAs)
+	input := m.rewriteInputs()[m.rewriteFocus]
+	var cmd tea.Cmd
+	*input, cmd = input.Update(msg)
 	m.sizeRewrite()
 	return cmd
 }
@@ -171,8 +191,7 @@ func (m *Model) typeRewrite(msg tea.Msg) tea.Cmd {
 // as the finding already reads.
 func (m *Model) keepRewrite() {
 	f, _ := m.openedFinding()
-	title, body := m.rewriteText()
-	if title == f.Title && body == f.Body {
+	if slices.Equal(m.rewriteText(), rewriteSource(f)[:len(m.rewriteOpened)]) {
 		delete(m.keptRewrites, f.ID)
 		return
 	}
@@ -183,10 +202,14 @@ func (m *Model) keepRewrite() {
 // since it was displayed, leaves the editor open with the text, so nothing the human typed is lost.
 func (m *Model) saveRewrite() tea.Cmd {
 	id := m.openID
-	title, body := m.rewriteText()
+	text := m.rewriteText()
+	var proposal *string
+	if len(text) > int(rewriteFocusProposal) {
+		proposal = &text[rewriteFocusProposal]
+	}
 	changed, disposition := false, ""
 	recorded, err := m.Decide(id, func(d *draft.Draft) error {
-		_, err := draft.Rewrite(d, id, title, body, nil, m.rules, m.diff, m.cfg.Now())
+		_, err := draft.Rewrite(d, id, text[rewriteFocusTitle], text[rewriteFocusBody], proposal, m.rules, m.diff, m.cfg.Now())
 		if err == nil {
 			changed, disposition = true, draft.Dispositions(d)[id]
 		}
@@ -215,31 +238,39 @@ func (m *Model) saveRewrite() tea.Cmd {
 	return m.fail(m.refreshDetail())
 }
 
-// sizeRewrite fits both inputs in the pane: together with the divider, at most a third of the window, as the note
-// is, with the title at most two rows and the body at least one.
+// sizeRewrite fits the inputs in the pane: together with the dividers, at most a third of the window, as the note
+// is, with the title at most two rows and every other field at least one. A proposal takes at most half of what the
+// title leaves, so the body keeps its share.
 func (m *Model) sizeRewrite() {
 	width, _ := style.PaneInner(m.width, 0)
-	limit := max(3, m.height/3)
-	m.rewriteTitle.MaxHeight = max(1, min(2, limit-2))
-	m.rewriteTitle.SetWidth(max(1, width))
-	m.rewriteBody.MaxHeight = max(1, limit-1-m.rewriteTitle.Height())
-	m.rewriteBody.SetWidth(max(1, width))
+	inputs := m.rewriteInputs()
+	limit := max(2*len(inputs)-1, m.height/3)
+	m.rewriteTitle.MaxHeight = max(1, min(2, limit-2*(len(inputs)-1)))
+	rest := limit - (len(inputs) - 1) - m.rewriteTitle.Height()
+	if len(inputs) > int(rewriteFocusProposal) {
+		m.rewriteProposal.MaxHeight = max(1, rest/2)
+		rest -= m.rewriteProposal.Height()
+	}
+	m.rewriteBody.MaxHeight = max(1, rest)
+	for _, input := range inputs {
+		input.SetWidth(max(1, width))
+	}
 }
 
 // rewriteView is the editor in its own pane under the finding: the title, a divider, the body. The top right names
 // the input with the keys, so focus reads without color.
 func (m *Model) rewriteView() []string {
 	width, _ := style.PaneInner(m.width, 0)
-	rows := strings.Split(m.styles.Render(m.rewriteTitle.View()), "\n")
-	markCaret(rows, m.rewriteTitle.Cursor())
-	rows = append(rows, m.styles.Dim.Render(strings.Repeat(m.glyphs.HRule, max(1, width))))
-	body := strings.Split(m.styles.Render(m.rewriteBody.View()), "\n")
-	markCaret(body, m.rewriteBody.Cursor())
-	rows = append(rows, body...)
-	field := "title"
-	if m.rewriteFocus == rewriteFocusBody {
-		field = "body"
+	var rows []string
+	for i, input := range m.rewriteInputs() {
+		if i > 0 {
+			rows = append(rows, m.styles.Dim.Render(strings.Repeat(m.glyphs.HRule, max(1, width))))
+		}
+		field := strings.Split(m.styles.Render(input.View()), "\n")
+		markCaret(field, input.Cursor())
+		rows = append(rows, field...)
 	}
+	field := m.ui.rewriteFields()[m.rewriteFocus]
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
 		Titles: style.PaneTitles{TopLeft: "Rewrite " + m.openID, TopRight: m.styles.Note.Render(field)}, Tone: style.ToneNote, Focus: true})
 }

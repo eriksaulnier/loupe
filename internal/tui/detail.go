@@ -1037,7 +1037,7 @@ func (m *Model) detailFooter() []string {
 		return m.keys(style.KeyGroup{{Key: "enter", Verb: "save"}, {Key: m.arrows(m.glyphs.Left, m.glyphs.Right), Verb: "label"},
 			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
 	case m.rewriting:
-		return m.keys(style.KeyGroup{{Key: "ctrl+s", Verb: "save"}, {Key: "tab", Verb: "title/body"}, {Key: "esc", Verb: "cancel"}})
+		return m.keys(style.KeyGroup{{Key: "ctrl+s", Verb: "save"}, {Key: "tab", Verb: strings.Join(m.ui.rewriteFields(), "/")}, {Key: "esc", Verb: "cancel"}})
 	}
 	return m.keys(groupHints(m.detailHints())...)
 }

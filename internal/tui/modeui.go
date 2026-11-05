@@ -27,6 +27,8 @@ type modeUI interface {
 	runRef(m *Model) string
 	// question reports whether the list marks f as a question.
 	question(f draft.Finding) bool
+	// rewriteFields names the fields w edits, in tab order: title and body, then the proposal where the mode has one.
+	rewriteFields() []string
 }
 
 func uiFor(t run.Target) modeUI {
@@ -139,6 +141,8 @@ func (publishUI) runRef(m *Model) string { return fmt.Sprintf("%s@%d", m.ref(), 
 
 func (publishUI) question(draft.Finding) bool { return false }
 
+func (publishUI) rewriteFields() []string { return []string{"title", "body"} }
+
 // detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An
 // action the finding cannot take is not advertised, though its key still answers with a notice.
 func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote bool) []style.Hint {
@@ -201,7 +205,7 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{"t", "accept with a note; enter accepts, esc cancels", ""},
 			{"x", "exclude with an optional reason; dismisses its open notes", ""},
 			{"s", "send back; enter sends, esc cancels", ""},
-			{"w", "rewrite title and body; ctrl+s saves, esc keeps the text", ""},
+			{"w", "rewrite title, body and proposal; ctrl+s saves", ""},
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
@@ -279,6 +283,8 @@ func (applyUI) heading(m *Model) style.ReviewHeading {
 func (applyUI) runRef(m *Model) string { return localRef(m.target) }
 
 func (applyUI) question(f draft.Finding) bool { return f.Proposal == "" }
+
+func (applyUI) rewriteFields() []string { return []string{"title", "body", "proposal"} }
 
 func localRef(t run.Target) string {
 	ref := run.Ref{Local: 1}
