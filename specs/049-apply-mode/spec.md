@@ -120,7 +120,7 @@ For a PR run, the keys, the publish steps, `docs/comment-format.md`, the publish
 - `--run` also accepts a local reference.
 - `loupe --help` and `loupe handoff --help` name the new forms.
 
-This spec amends three documents:
+This spec amends these documents:
 
 - `specs/001-loupe-v1/contracts/cli.md`: the local capture forms, `--applier`, the local run reference and its selection rule, the `returned` wait outcome, the feedback groups, the `list` shape of a local run, and the refusal codes `returned` and `wrong-mode`.
 - `docs/versioning.md`: draft schema 5 for `findings.proposal` and `decisions.note`, target schema 3 for `kind` and the `local` block, and the new record `return.json` at schema 1.
@@ -273,7 +273,7 @@ The human has local runs in two worktrees of one repository and a PR run of the 
 - **FR-002**: A local target MUST record its reference prefix and repository (`<owner>/<repo>` when `origin` names a GitHub repository, read from Git config with no network call), the worktree root, the branch, the base ref when one was given, the title when one was given, the applier when one was given, and the capture form.
 - **FR-003**: `loupe capture --changed [--base <ref>]` MUST capture committed, staged, unstaged and untracked changes, excluding ignored files, as a diff against the merge base of `HEAD` and the base, or against `HEAD` when no base is given.
 - **FR-004**: `--changed` MUST NOT read, write or lock the user's index. It MUST NOT change working files, the current branch, `HEAD` or any ref outside `refs/loupe/`. Whether capture writes Git objects into the user's repository is the plan's choice.
-- **FR-005**: `loupe capture --files <path>...` MUST capture each named file as a whole-file addition. A path MAY lie outside any repository. The run MUST store a path inside the root as relative to it, and any other path as absolute.
+- **FR-005**: `loupe capture --files <path>...` MUST capture each named file as a whole-file addition. A path MAY lie outside any repository. The run MUST store a path inside the root as relative to it. A path under the home directory MUST show as `~/<rel>`, and any other path as `ext/<i>/<base name>`, since a diff header cannot hold an absolute path (research R3). `local.files[].abs` MUST hold every file's absolute path.
 - **FR-005a**: `loupe capture --no-files --title <name>` MUST start a run with no files. Every finding on that run MUST be general.
 - **FR-005b**: Every local capture MUST accept `--title <name>`, `--applier <name>`, `--source` and `--model`. `--applier` MUST be one line of at most 64 characters, and `--title` one line of at most 120 characters. Each MUST NOT hold a control character, and both MUST pass the Markdown allowlist. Otherwise capture refuses with `usage`. `--source` and `--model` MUST follow their PR-run rules, and on a local run they record provenance only.
 - **FR-005c**: A local capture's result MUST list each captured file's path and, for Markdown, its headings. It MUST mark each file that `HEAD` does not hold, which covers untracked and newly staged files, and it MUST list skipped files under `skipped`, each with its reason (see Edge Cases). Telling the two apart would need the user's index (FR-004).
@@ -282,7 +282,7 @@ The human has local runs in two worktrees of one repository and a PR run of the 
 
 - **FR-006**: A local run's reference MUST be `<prefix>:local#<n>`, or `local#<n>` outside a Git repository. n MUST count local runs from 1 across the whole data root, under one lock. The prefix MUST be the repository from FR-002, or the sanitized directory name of the main worktree when `origin` is not on GitHub. Local runs MUST live in a directory of their own, so the layout of PR runs is unchanged.
 - **FR-006a**: Every command that takes `--run` MUST accept a local reference. A command MUST resolve a local reference by n alone and MUST NOT check its prefix, and `local#<n>` with no prefix MUST resolve. A malformed reference MUST refuse with `usage`, as today.
-- **FR-007**: loupe MUST NOT select a local run unless the command names it through `--run` or `LOUPE_RUN`. A command with neither MUST keep today's PR resolution. Every `next` hint of a local run, the pane command that `handoff` opens, and `human-decide` MUST pass `--run`.
+- **FR-007**: loupe MUST NOT select a local run unless the command names it through `--run`, `LOUPE_RUN` or a positional ref. A command with none of them MUST keep today's PR resolution. Every `next` hint of a local run and `human-decide` MUST pass `--run`. The pane that `handoff` opens runs `review '<ref>'` with the positional ref (research R10).
 - **FR-008**: A command on a local run MUST NOT contact GitHub. A local capture MUST NOT run the release lookup from `specs/048-update-warning`. It MAY warn `update-available` from the cached result, as `review` does. Review on a local run MUST NOT offer the key that opens a pull request.
 
 #### Findings
