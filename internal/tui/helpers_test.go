@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -328,3 +329,31 @@ var (
 	enterKey = tea.KeyPressMsg{Code: tea.KeyEnter}
 	escKey   = tea.KeyPressMsg{Code: tea.KeyEsc}
 )
+
+// readyFixture accepts every finding, so f-001 is an accepted blocking finding, and records viewer and author.
+func readyFixture(t *testing.T, viewer, author string) string {
+	t.Helper()
+	dir := newFixture(t)
+	target, err := run.LoadTarget(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target.Viewer, target.Author, target.URL, target.HeadSHA = viewer, author, "https://github.com/acme/widgets/pull/42", "1111111111111111111111111111111111111111"
+	if err := run.WriteJSONAtomic(filepath.Join(dir, "target.json"), target); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
+		for _, f := range d.Findings {
+			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// footerText is the detail footer as plain text.
+func footerText(m *Model) string { return ansi.Strip(strings.Join(m.detailFooter(), " ")) }
