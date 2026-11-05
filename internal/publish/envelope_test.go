@@ -214,11 +214,13 @@ func TestBuildEventAndInlineModes(t *testing.T) {
 	if len(env.Comments) != 1 || env.Comments[0].Line != 3 {
 		t.Fatalf("blocking comments %+v", env.Comments)
 	}
-	if _, err := Build(buildInput(fixtureTarget(), readyDraft(), "merge", "none", false)); err == nil {
-		t.Fatal("unknown action accepted")
+	_, err = Build(buildInput(fixtureTarget(), readyDraft(), "merge", "none", false))
+	if want := `unknown review action "merge"`; err == nil || err.Error() != want {
+		t.Fatalf("unknown action: got %v, want %q", err, want)
 	}
-	if _, err := Build(buildInput(fixtureTarget(), readyDraft(), "comment", "some", false)); err == nil {
-		t.Fatal("unknown inline mode accepted")
+	_, err = Build(buildInput(fixtureTarget(), readyDraft(), "comment", "some", false))
+	if want := `unknown inline mode "some"`; err == nil || err.Error() != want {
+		t.Fatalf("unknown inline mode: got %v, want %q", err, want)
 	}
 }
 
@@ -651,8 +653,8 @@ func TestBuildRechecksTheNote(t *testing.T) {
 		t.Fatalf("got %v, want a markdown refusal naming the note", err)
 	}
 	in.Note, in.Sticky = "A note.", nil
-	if _, err := Build(in); err == nil {
-		t.Fatal("a note composed into a review that is not sticky")
+	if _, err := Build(in); err == nil || err.Error() != "a note needs a sticky review" {
+		t.Fatalf("a note composed into a review that is not sticky: got %v", err)
 	}
 }
 

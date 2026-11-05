@@ -20,7 +20,7 @@ import (
 )
 
 func stickyMeta(rounds int) string {
-	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 inline=none sticky=" + string(rune('0'+rounds)) + " -->\n"
+	return "reviewed `x`\n\n" + render.MetaPrefix + "v=1 round=1 inline=none sticky=" + strconv.Itoa(rounds) + " -->\n"
 }
 
 // plainMeta is an ordinary loupe review's tail, from src when it is not empty.

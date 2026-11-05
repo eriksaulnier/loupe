@@ -2,6 +2,7 @@ package publish
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -275,12 +276,14 @@ func TestGatesReportTheLiveState(t *testing.T) {
 	}
 }
 
-func TestGatesPassOnGitHubFailures(t *testing.T) {
+func TestGatesReturnGitHubFailuresAsTheyCame(t *testing.T) {
 	for _, path := range []string{"/repos/acme/widgets/pulls/42", "/user"} {
 		gh, client := newFake(t)
 		gh.Fail("GET", path, 500)
 		in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
-		if gated, err := Gates(context.Background(), in); err == nil || gated != (Gated{}) {
+		gated, err := Gates(context.Background(), in)
+		var httpErr *github.HTTPError
+		if gated != (Gated{}) || !errors.As(err, &httpErr) || httpErr.Status != 500 {
 			t.Errorf("%s failing: %+v, %v", path, gated, err)
 		}
 	}

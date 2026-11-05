@@ -80,6 +80,16 @@ func (fx *fixture) confirmMessage(answer bool, message string, during func()) fu
 	}
 }
 
+// asInstallation makes the fixture's own client report an installation token, so fx.gh still counts every request.
+func (fx *fixture) asInstallation() {
+	fx.t.Helper()
+	client, err := fx.opts.GitHub()
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+}
+
 func (fx *fixture) readDraft() []byte {
 	fx.t.Helper()
 	data, err := os.ReadFile(filepath.Join(fx.dir, "draft.json"))
@@ -835,11 +845,7 @@ func newUnattendedRun(t *testing.T, d *draft.Draft) *fixture {
 	fx.opts.Unattended = true
 	// An installation-captured run.
 	fx.opts.Target.Viewer = ""
-	client, err := fx.opts.GitHub()
-	if err != nil {
-		t.Fatal(err)
-	}
-	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+	fx.asInstallation()
 	fx.opts.Confirm = func(Preview) (Confirmation, error) {
 		t.Fatal("Confirm must not be called when unattended")
 		return Confirmation{}, nil
@@ -1208,8 +1214,7 @@ func TestRunRetryUnknownRecheckListFailureKeepsAttempt(t *testing.T) {
 func TestRunRefusesInstallationTokenAheadOfTheTerminal(t *testing.T) {
 	fx := newRun(t, readyDraft())
 	fx.opts.IsTerminal = false
-	_, client := newFake(t)
-	fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+	fx.asInstallation()
 	_, err := fx.run()
 	wantRefusal(t, err, refusal.Token, "--unattended")
 	fx.check(0)
@@ -1233,8 +1238,7 @@ func TestRunRefusesUnattendedActionOtherThanComment(t *testing.T) {
 			fx.opts.IsTerminal = false
 			fx.opts.Unattended = true
 			fx.opts.Action = action
-			_, client := newFake(t)
-			fx.opts.GitHub = func() (github.Client, error) { return tokenKindClient{Client: client, kind: github.Installation}, nil }
+			fx.asInstallation()
 			_, err := fx.run()
 			wantRefusal(t, err, refusal.Usage, "--action comment")
 			fx.check(0)
