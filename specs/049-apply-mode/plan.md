@@ -99,7 +99,7 @@ internal/run/
   M ref.go            # Ref.Local, Ref.Prefix, the local pattern, invalidRef fix text
   M root.go           # LocalRoot, LocalDir
   C local.go          # NextLocal (MkdirAll, lock, next counter, CreateRun), WalkLocal, HasReturn
-  M target.go         # Kind, LocalTarget, localTargetFile, TargetSchema 3, CreateRun by kind, LoadTarget kind check
+  M target.go         # Kind, LocalTarget, LocalTargetFile, TargetSchema 3, CreateRun by kind, LoadTarget kind check
   M resolve.go        # local branch of ResolveRef (recorded prefix), local noRun fix
   M session.go        # local branch of OpenSession
 internal/draft/
@@ -202,5 +202,5 @@ These extend the research:
 | Departure | Why | Simpler option rejected because |
 | :--- | :--- | :--- |
 | `tui` switches once on `mode.Of(t).Kind()` to pick its `modeUI`, outside the mode implementations that FR-030 names | The review surface uses Bubble Tea types that `mode` must not import | Putting key tables in `mode` would pull the TUI into the command layer |
-| Local targets marshal through a second struct, `localTargetFile` | `Target`'s PR fields have no `omitempty`, and adding it is a retag that needs a migration | One struct with zero-valued PR fields would contradict the contract's local shape |
+| Local targets marshal through a second struct, `LocalTargetFile` | `Target`'s PR fields have no `omitempty`, and adding it is a retag that needs a migration | One struct with zero-valued PR fields would contradict the contract's local shape |
 | `review` and `handoff` refuse local runs during PRs 2 and 3 | The PR review surface would reach GitHub on a local run (owner, plan card 2) | Merging PRs 2 to 4 as one change would make a 3,500-line review |

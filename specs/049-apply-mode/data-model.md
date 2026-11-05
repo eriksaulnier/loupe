@@ -23,7 +23,7 @@ PR runs keep the `runs/<owner>/<repo>/<n>/<round>/` layout unchanged.
 
 **PR target**: today's schema-2 fields, unchanged. `schema` is 3, and `kind`, `applier` and `local` are absent. A missing `kind` reads as `pr`.
 
-**Local target**: written through `localTargetFile`. It holds exactly these fields:
+**Local target**: written through `LocalTargetFile`. It holds exactly these fields:
 
 | Field | Type | Rule |
 | :--- | :--- | :--- |

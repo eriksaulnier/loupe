@@ -75,7 +75,7 @@ Every implementation task follows a failing test, then the change, then a passin
   - `publish.Refuses` gives nil for every command.
 - [ ] T017 Create `internal/mode/mode.go`, `internal/mode/publish.go` and `internal/mode/apply.go` with `Mode{Kind, Rules, InputRules, Refuses}` and `Of`. Add `returned` and `wrong-mode` after `review-open` and before `internal` in `internal/refusal/refusal.go`, and update `refusal_test.go`'s contract order.
 - [ ] T018 [P] Add failing tests in `internal/cli/run_test.go`:
-  - `resolveRun` on a local run checks `run.HasReturn` first and refuses with `returned` before `Refuses` runs.
+  - On a returned local run, `review`, `handoff` and every command that changes the draft refuse with `returned`, checked before `Refuses` runs. `feedback`, `wait`, `show` and `list` MUST still read a returned run, since the agent applies the decisions from them.
   - It passes `commandName(cmd)` and the names of the flags set on the command.
   - `show --previous local#1` refuses with `wrong-mode`.
   - Plain `show local#1` succeeds.
