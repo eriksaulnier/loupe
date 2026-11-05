@@ -21,6 +21,66 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  # GITHUB_TOKEN opens the release pull request, and a pull request opened with that token starts no ci.yml run, so
+  # this is the build to try before merging. It builds main's head, not the pull request's: release-please refreshes
+  # its branch only when the changelog changes, and the merge releases main's code either way. Publishes nothing.
+  snapshot:
+    needs: release-please
+    if: needs.release-please.outputs.release_created != 'true'
+    permissions:
+      contents: read
+      pull-requests: read
+    # Only the newest push matters, and an older run finishing late would upload a snapshot that looks newest.
+    concurrency:
+      group: snapshot
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - id: next
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: release-please--branches--main
+        run: |
+          set -euo pipefail
+          open="$(gh pr list -R "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq length)"
+          if [ "$open" = 0 ]; then
+            echo "No open release pull request, so there is nothing to try."
+            exit 0
+          fi
+          version="$(gh api -H 'Accept: application/vnd.github.raw' "repos/$GITHUB_REPOSITORY/contents/.release-please-manifest.json?ref=$BRANCH" | jq -r '."."')"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::.release-please-manifest.json on $BRANCH holds '$version', not X.Y.Z."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - if: steps.next.outputs.version
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - if: steps.next.outputs.version
+        uses: jdx/mise-action@v5
+      # goreleaser takes the version from this tag, which does not exist yet, so the archives name the version the
+      # merge would release, as X.Y.Z-SNAPSHOT-<commit>.
+      - if: steps.next.outputs.version
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+        env:
+          GORELEASER_CURRENT_TAG: v${{ steps.next.outputs.version }}
+      # One name across versions, so docs/releasing.md can find the newest without knowing the version.
+      - if: steps.next.outputs.version
+        uses: actions/upload-artifact@v7
+        with:
+          name: loupe-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          if-no-files-found: error
+          # A re-run of all jobs builds the same commit again.
+          overwrite: true
+
   # release-please cuts the tag and a draft release with GITHUB_TOKEN, and a tag made with that token triggers no other
   # workflow, so goreleaser runs here, gated on it.
   goreleaser:

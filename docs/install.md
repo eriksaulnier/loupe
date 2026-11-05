@@ -81,6 +81,42 @@ At most once a day, `loupe capture` asks GitHub for the latest release. If yours
 
 To turn this off, set `LOUPE_NO_UPDATE_CHECK=1`. It is also off in CI, and for a build that is not a release.
 
+## Pre-releases
+
+A pre-release, such as `0.22.0-rc.1`, is a build of a branch that has not reached `main`. It is never the latest release, so every command above keeps installing the newest release. The release notes name the branch and the commit it was built from.
+
+Install the binary with the script and a pin:
+
+```sh
+curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.22.0-rc.1 sh
+```
+
+Install the plugin from the pre-release's tag, so the skills match the binary. A marketplace named `loupe` from another source blocks the add, so remove it first, then install the plugin again.
+
+```sh
+claude plugin marketplace remove loupe
+claude plugin marketplace add eriksaulnier/loupe@v0.22.0-rc.1
+claude plugin install loupe@loupe
+```
+
+```sh
+codex plugin marketplace remove loupe
+codex plugin marketplace add eriksaulnier/loupe@v0.22.0-rc.1
+codex plugin add loupe@loupe
+```
+
+```sh
+pi install git:github.com/eriksaulnier/loupe@v0.22.0-rc.1
+```
+
+A pre-release differs from a release in three ways:
+
+- The plugin shows the version in its branch's manifests, not the pre-release version. The pre-release does not change them.
+- The binary shows no update notice, because the update check reads only `X.Y.Z` versions.
+- The install action at the pre-release's tag still installs the last release unless you pass `version`, such as `version: v0.22.0-rc.1`.
+
+To return to the release, run the install script again with no pin. For Claude Code and Codex, repeat the plugin steps with `eriksaulnier/loupe` in place of `eriksaulnier/loupe@<tag>`. For Pi, run the `pi install` command in [Pi](#pi) with the release's tag.
+
 ## The agent plugin
 
 One plugin serves Claude Code, Codex and Pi. Its `human-review` skill is the workflow that a review skill or agent follows. The agent captures the pull request, files findings, hands the run to you and answers your send-back notes. Its `human-decide` skill is the same workflow for local work: the agent captures uncommitted changes, a plan or a spec, files findings with the change it proposes, hands the run to you, and applies what you return. The plugin brings no review method of its own.

@@ -1,0 +1,263 @@
+name: prerelease
+
+# Cuts X.Y.Z-rc.N from a branch, outside release-please, so a feature can be installed before it reaches main.
+# docs/releasing.md describes the flow and its rules.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The branch to release, such as 052-finding-design-language.
+        required: true
+        type: string
+      version:
+        description: The version without a leading v, as X.Y.Z-rc.N. X.Y.Z MUST be greater than the last release.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One run at a time, so two dispatches cannot race to one version. GitHub keeps one pending run per group, and a newer
+# dispatch cancels it before it has written anything.
+concurrency:
+  group: prerelease
+  cancel-in-progress: false
+
+jobs:
+  # Writes nothing, so every refusal here leaves GitHub as it was.
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.inputs.outputs.sha }}
+    steps:
+      - id: inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref }}
+          VERSION: ${{ inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # The build takes .goreleaser.yaml from the dispatched commit, and install-script takes install.sh from it. Both
+          # MUST be what main ships.
+          # Anyone with write access can dispatch, and a published pre-release can never be removed. A re-run keeps
+          # GITHUB_ACTOR from the dispatch, so the one who re-ran it is GITHUB_TRIGGERING_ACTOR.
+          for actor in "$GITHUB_ACTOR" "$GITHUB_TRIGGERING_ACTOR"; do
+            if [ "$actor" != "$GITHUB_REPOSITORY_OWNER" ]; then
+              echo "::error::$actor started this run. Only $GITHUB_REPOSITORY_OWNER, the repository's owner, may cut a pre-release."
+              exit 1
+            fi
+          done
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "::error::this workflow ran from $GITHUB_REF. Dispatch it from $DEFAULT_BRANCH, and name the branch to release in ref."
+            exit 1
+          fi
+          n='(0|[1-9][0-9]*)'
+          if ! [[ "$VERSION" =~ ^$n\.$n\.$n-rc\.$n$ ]]; then
+            echo "::error::version '$VERSION' is not X.Y.Z-rc.N. Give it without the leading v, such as 0.22.0-rc.1."
+            exit 1
+          fi
+          base="${VERSION%%-*}"
+
+          released="$(gh api -H 'Accept: application/vnd.github.raw' "repos/$GITHUB_REPOSITORY/contents/.release-please-manifest.json?ref=$DEFAULT_BRANCH" | jq -r '."."')"
+          if ! [[ "$released" =~ ^$n\.$n\.$n$ ]]; then
+            echo "::error::.release-please-manifest.json on $DEFAULT_BRANCH holds '$released', not X.Y.Z."
+            exit 1
+          fi
+          if [ "$base" = "$released" ] || [ "$(printf '%s\n' "$base" "$released" | sort -V | tail -n 1)" != "$base" ]; then
+            echo "::error::$VERSION is based on $base, which is not greater than the last release, $released. Use a base above $released."
+            exit 1
+          fi
+
+          # matching-refs matches by prefix, so only the exact ref counts. A missing ref is an empty list, not an error.
+          tag="$(TAG="refs/tags/v$VERSION" gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$VERSION" --jq '.[] | select(.ref == env.TAG) | .ref')"
+          if [ -n "$tag" ]; then
+            echo "::error::tag v$VERSION already exists. A tag cannot be reused, so pick the next rc number."
+            exit 1
+          fi
+          sha="$(BRANCH="refs/heads/$REF" gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/heads/$REF" --jq '.[] | select(.ref == env.BRANCH) | .object.sha')"
+          if [ -z "$sha" ]; then
+            echo "::error::'$REF' is not a branch of $GITHUB_REPOSITORY. Give the branch name without refs/heads/."
+            exit 1
+          fi
+          echo "Releasing $REF at $sha as v$VERSION"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  # check and build run the branch's code, so they get no write token and no cache: a run dispatched from main saves
+  # into main's cache scope, which release.yml restores from.
+  check:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+        with:
+          cache: false
+      - run: mise run check
+
+  build:
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      TAG: v${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+        with:
+          cache: false
+      # main's config, so the archive names match what main's install.sh expects. Outside the clone, because goreleaser
+      # refuses a dirty tree.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api -H 'Accept: application/vnd.github.raw' "repos/$GITHUB_REPOSITORY/contents/.goreleaser.yaml?ref=$GITHUB_SHA" > "$RUNNER_TEMP/goreleaser.yaml"
+      # goreleaser reads the version from a tag at HEAD. This one never leaves the runner: GitHub creates the real tag
+      # when the release job publishes the draft.
+      - run: git tag "$TAG"
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --skip=publish --config ${{ runner.temp }}/goreleaser.yaml
+        env:
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          if-no-files-found: error
+          # A re-run of all jobs builds the same commit again.
+          overwrite: true
+
+  # Holds the write token and runs no code from the branch: it only uploads what build made and publishes it.
+  # goreleaser cannot publish archives another job built without its paid edition, so gh does it.
+  release:
+    needs: [validate, check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REF: ${{ inputs.ref }}
+      SHA: ${{ needs.validate.outputs.sha }}
+      TAG: v${{ inputs.version }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      # Re-running failed jobs skips validate, so the job that publishes checks who started this attempt itself.
+      - run: |
+          set -euo pipefail
+          if [ "$GITHUB_TRIGGERING_ACTOR" != "$GITHUB_REPOSITORY_OWNER" ]; then
+            echo "::error::$GITHUB_TRIGGERING_ACTOR started this attempt. Only $GITHUB_REPOSITORY_OWNER, the repository's owner, may publish a pre-release."
+            exit 1
+          fi
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: assets
+      - run: |
+          set -euo pipefail
+          cd assets
+          want="$(for target in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do echo "loupe_${VERSION}_${target}.tar.gz"; done)"
+          got="$(awk '{ print $2 }' checksums.txt | sort)"
+          [ "$got" = "$want" ] || { echo "::error::checksums.txt names $(echo "$got" | tr '\n' ' '), want $(echo "$want" | tr '\n' ' ')"; exit 1; }
+          [ "$(find . -maxdepth 1 -name '*.tar.gz' | wc -l | tr -d ' ')" = 4 ] || { echo "::error::want exactly the 4 archives that checksums.txt names"; ls -l; exit 1; }
+          sha256sum -c checksums.txt
+      # Only an account with push access sees drafts, so this lookup cannot run in validate. A re-run of failed jobs
+      # finds the draft an earlier attempt created, and reuses it only when it targets the same commit.
+      - run: |
+          set -euo pipefail
+          found="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.name == env.TAG or .tag_name == env.TAG) | "\(.id) \(.draft) \(.target_commitish)"')"
+          if [ -z "$found" ]; then
+            printf -v notes '%s\n\n%s' \
+              "A pre-release of \`$REF\` at $SHA, cut by the prerelease workflow. It is not a supported release, and the next release supersedes it." \
+              "Install the binary with \`curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=$VERSION sh\`. [Install a pre-release]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/docs/install.md#pre-releases) covers the plugin and what differs from a release."
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --prerelease --target "$SHA" --title "$TAG" --notes "$notes"
+          elif [ "$(wc -l <<<"$found")" -eq 1 ] && [ "$found" = "${found%% *} true $SHA" ]; then
+            echo "Reusing the draft $TAG at $SHA"
+          else
+            echo "::error::a release named or tagged $TAG already exists and is not a draft at $SHA: $found. Delete that draft, or pick the next rc number."
+            exit 1
+          fi
+      # Every asset goes up before the draft is published, because an immutable release takes no new assets afterward.
+      # --clobber replaces what an earlier attempt uploaded.
+      - run: gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+      # A reused draft could carry an asset uploaded by hand, which publication would make permanent.
+      - run: |
+          set -euo pipefail
+          want="$(find assets -maxdepth 1 -type f -exec basename {} ';' | sort)"
+          got="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)"
+          [ "$got" = "$want" ] || { echo "::error::the draft holds $(echo "$got" | tr '\n' ' '), want $(echo "$want" | tr '\n' ' ')"; exit 1; }
+      - run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+
+  # A job of its own, so a re-run after a failure here does not re-run release, which refuses a published release.
+  verify:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          state="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')"
+          [ "$state" = "false true" ] || { echo "::error::$TAG has isDraft and isPrerelease '$state', want 'false true'"; exit 1; }
+          # A repository whose only releases are pre-releases has no latest release, and the API answers 404.
+          if ! latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>"$RUNNER_TEMP/latest.err")"; then
+            grep -q 'HTTP 404' "$RUNNER_TEMP/latest.err" || { cat "$RUNNER_TEMP/latest.err" >&2; exit 1; }
+            latest="none"
+          fi
+          [ "$latest" != "$TAG" ] || { echo "::error::$TAG is marked latest, so install.sh with no pin would install it"; exit 1; }
+          echo "Published $TAG as a pre-release. Latest is still $latest."
+
+  # At the pre-release's commit, which is the action that uses: eriksaulnier/loupe@<tag> runs.
+  install-action:
+    needs: [validate, verify]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          persist-credentials: false
+      - uses: ./
+        with:
+          version: v${{ inputs.version }}
+      - env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          want="loupe version $VERSION"
+          got="$(loupe --version)"
+          [ "$got" = "$want" ] || { echo "::error::loupe --version printed '$got', want '$want'"; exit 1; }
+
+  # From the default branch, because Pages serves install.sh from main, not from the pre-release.
+  install-script:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          LOUPE_VERSION="$VERSION" LOUPE_INSTALL_DIR="$RUNNER_TEMP/loupe-bin" sh install.sh
+          want="loupe version $VERSION"
+          got="$("$RUNNER_TEMP/loupe-bin/loupe" --version)"
+          [ "$got" = "$want" ] || { echo "::error::loupe --version printed '$got', want '$want'"; exit 1; }
