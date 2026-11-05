@@ -15,6 +15,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/publish"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/stats"
 	"github.com/eriksaulnier/loupe/internal/style"
@@ -492,5 +493,56 @@ func TestStatsIgnoresLocalRuns(t *testing.T) {
 	}
 	if outputs[0] != outputs[1] {
 		t.Fatalf("stats saw the local run:\n%s\nwant\n%s", outputs[0], outputs[1])
+	}
+}
+
+func TestCompactDurationKeepsTheTwoLargestUnits(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		26*time.Hour + 5*time.Minute:   "1d2h",
+		62 * time.Minute:               "1h2m",
+		14*time.Minute + 3*time.Second: "14m3s",
+		9 * time.Second:                "9s",
+		-90 * time.Second:              "-1m30s",
+	} {
+		if got := compactDuration(d); got != want {
+			t.Errorf("compactDuration(%s) = %q, want %q", d, got, want)
+		}
+	}
+}
+
+func TestStatsHeaderNamesEveryFilter(t *testing.T) {
+	published := []string{stats.StatePublished}
+	for _, c := range []struct {
+		q    statsQuery
+		want string
+	}{
+		{statsQuery{filter: stats.Filter{States: published}, sinceText: "2026-11-01"}, "Published runs in every repository, since 2026-11-01."},
+		{statsQuery{filter: stats.Filter{States: published, GroupBy: stats.GroupWeek}, untilText: "2026-11-30"}, "Published runs in every repository, until 2026-11-30, by ISO week."},
+	} {
+		if got := statsHeader(c.q); got != c.want {
+			t.Errorf("statsHeader = %q, want %q", got, c.want)
+		}
+	}
+}
+
+func TestStatsExclusionsCountTheUnattendedRuns(t *testing.T) {
+	for n, want := range map[int]string{
+		1: "and 1 unattended run. The median also leaves out the unattended run.",
+		3: "and 3 unattended runs. The median also leaves out the unattended runs.",
+	} {
+		if got := statsExclusions(n); !strings.HasSuffix(got, want) {
+			t.Errorf("statsExclusions(%d) = %q, want it to end %q", n, got, want)
+		}
+	}
+}
+
+func TestStatsRefusesARunsDirectoryThatIsAFile(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, "runs"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s := runWithStdin(t, home, "", "stats", "--json")
+	if errObj := wantCode(t, code, s, refusal.Internal); !strings.Contains(errObj["message"].(string), "runs: not a directory") {
+		t.Fatalf("error %v", errObj)
 	}
 }
