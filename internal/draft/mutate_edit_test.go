@@ -296,127 +296,142 @@ func TestEditUnknownIDsRefuseNotFound(t *testing.T) {
 	_ = refusaltest.Want(t, err, refusal.NotFound)
 }
 
-func TestRecalibrateKeepsTheDecision(t *testing.T) {
-	for _, c := range []struct {
-		name, disposition string
-		decide            func(d *Draft) error
-	}{
-		{"accepted", DispositionAccepted, func(*Draft) error { return nil }},
-		{"excluded", DispositionExcluded, func(d *Draft) error { _, err := Exclude(d, "f-001", addNow); return err }},
-		{"pending", DispositionPending, func(d *Draft) error { delete(d.Decisions, "f-001"); return nil }},
-	} {
-		t.Run(c.name, func(t *testing.T) {
+// humanEdits are the two changes the review interface makes in place. Each keeps the decision on a current revision,
+// leaves notes open and refuses a withdrawn or unknown finding.
+var humanEdits = []struct {
+	name string
+	// change makes the operation's example change to id, and current repeats f-001's stored values.
+	change, current func(t *testing.T, d *Draft, id string) (Finding, error)
+	changed         map[string]any
+	applied         func(f Finding) bool
+	withdrawn       func(r *refusal.Error) bool
+}{
+	{
+		name: "recalibrate",
+		change: func(t *testing.T, d *Draft, id string) (Finding, error) {
+			return Recalibrate(d, id, "suggestion", false, multiHunk(t), Rules{}, editNow)
+		},
+		current: func(t *testing.T, d *Draft, id string) (Finding, error) {
+			return Recalibrate(d, id, "issue", true, multiHunk(t), Rules{}, editNow)
+		},
+		changed:   map[string]any{"label": "issue", "blocking": true},
+		applied:   func(f Finding) bool { return f.Label == "suggestion" && !f.Blocking },
+		withdrawn: func(r *refusal.Error) bool { return strings.Contains(r.Fix, "reinstate f-002 first") },
+	},
+	{
+		name: "rewrite",
+		change: func(t *testing.T, d *Draft, id string) (Finding, error) {
+			return Rewrite(d, id, "One, said better", "Body one, said better.", Rules{}, multiHunk(t), editNow)
+		},
+		current: func(t *testing.T, d *Draft, id string) (Finding, error) {
+			return Rewrite(d, id, "One", "Body one.", Rules{}, multiHunk(t), editNow)
+		},
+		changed: map[string]any{"title": "One", "body": "Body one."},
+		applied: func(f Finding) bool { return f.Title == "One, said better" && f.Body == "Body one, said better." },
+		withdrawn: func(r *refusal.Error) bool {
+			return strings.Contains(r.Message, "rewritten") && r.Fix == "reinstate f-002 first"
+		},
+	},
+}
+
+func TestHumanEditKeepsTheDecision(t *testing.T) {
+	for _, op := range humanEdits {
+		for _, c := range []struct {
+			name, disposition string
+			decide            func(d *Draft) error
+		}{
+			{"accepted", DispositionAccepted, func(*Draft) error { return nil }},
+			{"excluded", DispositionExcluded, func(d *Draft) error { _, err := Exclude(d, "f-001", addNow); return err }},
+			{"pending", DispositionPending, func(d *Draft) error { delete(d.Decisions, "f-001"); return nil }},
+		} {
+			t.Run(op.name+" "+c.name, func(t *testing.T) {
+				d := editable()
+				if err := c.decide(d); err != nil {
+					t.Fatal(err)
+				}
+				before, hadDecision := d.Decisions["f-001"]
+				f, err := op.change(t, d, "f-001")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !op.applied(f) || f.Rev != 2 || !reflect.DeepEqual(f, d.Findings[0]) {
+					t.Fatalf("finding %+v", f)
+				}
+				want := []HistoryEntry{{At: editNow, By: ByHuman, Changed: op.changed}}
+				if !reflect.DeepEqual(f.History, want) {
+					t.Fatalf("history %#v", f.History)
+				}
+				if got := Dispositions(d)["f-001"]; got != c.disposition {
+					t.Fatalf("disposition %s, want %s", got, c.disposition)
+				}
+				after, hasDecision := d.Decisions["f-001"]
+				if hasDecision != hadDecision || (hadDecision && (after.Decision != before.Decision || !after.At.Equal(before.At) || after.FindingRev != 2)) {
+					t.Fatalf("decision before %+v after %+v", before, after)
+				}
+			})
+		}
+	}
+}
+
+func TestHumanEditLeavesNotesOpen(t *testing.T) {
+	for _, op := range humanEdits {
+		t.Run(op.name, func(t *testing.T) {
 			d := editable()
-			if err := c.decide(d); err != nil {
+			if _, err := SendBack(d, "f-002", "Is this right?", editNow); err != nil {
 				t.Fatal(err)
 			}
-			before, hadDecision := d.Decisions["f-001"]
-			f, err := Recalibrate(d, "f-001", "suggestion", false, multiHunk(t), Rules{}, editNow)
-			if err != nil {
+			if _, err := op.change(t, d, "f-002"); err != nil {
 				t.Fatal(err)
 			}
-			if f.Label != "suggestion" || f.Blocking || f.Rev != 2 || !reflect.DeepEqual(f, d.Findings[0]) {
-				t.Fatalf("finding %+v", f)
-			}
-			want := []HistoryEntry{{At: editNow, By: ByHuman, Changed: map[string]any{"label": "issue", "blocking": true}}}
-			if !reflect.DeepEqual(f.History, want) {
-				t.Fatalf("history %#v", f.History)
-			}
-			if got := Dispositions(d)["f-001"]; got != c.disposition {
-				t.Fatalf("disposition %s, want %s", got, c.disposition)
-			}
-			after, hasDecision := d.Decisions["f-001"]
-			if hasDecision != hadDecision || (hadDecision && (after.Decision != before.Decision || !after.At.Equal(before.At) || after.FindingRev != 2)) {
-				t.Fatalf("decision before %+v after %+v", before, after)
+			if d.Notes[0].Status != NoteOpen || d.Notes[0].ClosedAt != nil {
+				t.Fatalf("note %+v", d.Notes[0])
 			}
 		})
 	}
 }
 
-func TestRecalibrateLeavesNotesOpen(t *testing.T) {
-	d := editable()
-	if _, err := SendBack(d, "f-002", "Is this blocking?", editNow); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Recalibrate(d, "f-002", "question", true, multiHunk(t), Rules{}, editNow); err != nil {
-		t.Fatal(err)
-	}
-	if d.Notes[0].Status != NoteOpen || d.Notes[0].ClosedAt != nil {
-		t.Fatalf("note %+v", d.Notes[0])
-	}
-}
-
-func TestRecalibrateDoesNotReviveAStaleDecision(t *testing.T) {
-	d := editable()
-	d.Findings[0].Rev = 2
-	f, err := Recalibrate(d, "f-001", "suggestion", true, multiHunk(t), Rules{}, editNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := Dispositions(d)["f-001"]; got != DispositionPending || f.Rev != 3 {
-		t.Fatalf("disposition %s rev %d", got, f.Rev)
+func TestHumanEditDoesNotReviveAStaleDecision(t *testing.T) {
+	for _, op := range humanEdits {
+		t.Run(op.name, func(t *testing.T) {
+			d := editable()
+			d.Findings[0].Rev = 2
+			f, err := op.change(t, d, "f-001")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := Dispositions(d)["f-001"]; got != DispositionPending || f.Rev != 3 {
+				t.Fatalf("disposition %s rev %d", got, f.Rev)
+			}
+		})
 	}
 }
 
-func TestRecalibrateRefusals(t *testing.T) {
-	d := editable()
-	withdraw := false
-	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, Rules{}, editNow); err != nil {
-		t.Fatal(err)
+// Each operation refuses a withdrawn or unknown finding, and reports a change to the current values as no change.
+func TestHumanEditRefusals(t *testing.T) {
+	for _, op := range humanEdits {
+		t.Run(op.name, func(t *testing.T) {
+			d := editable()
+			withdraw := false
+			if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, Rules{}, editNow); err != nil {
+				t.Fatal(err)
+			}
+			_, err := op.change(t, d, "f-002")
+			if r := refusaltest.Want(t, err, refusal.Input); !op.withdrawn(r) {
+				t.Fatalf("refusal %+v", r)
+			}
+			_, err = op.change(t, d, "f-009")
+			_ = refusaltest.Want(t, err, refusal.NotFound)
+			f, err := op.current(t, d, "f-001")
+			if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
+				t.Fatalf("unchanged %s %+v err %v", op.name, f, err)
+			}
+		})
 	}
-	_, err := Recalibrate(d, "f-002", "issue", false, multiHunk(t), Rules{}, editNow)
-	r := refusaltest.Want(t, err, refusal.Input)
-	if !strings.Contains(r.Fix, "reinstate f-002 first") {
-		t.Fatalf("fix %q", r.Fix)
-	}
+}
 
-	_, err = Recalibrate(d, "f-001", "not a label!", true, multiHunk(t), Rules{}, editNow)
+func TestRecalibrateRefusesABadLabel(t *testing.T) {
+	_, err := Recalibrate(editable(), "f-001", "not a label!", true, multiHunk(t), Rules{}, editNow)
 	_ = refusaltest.Want(t, err, refusal.Input)
-
-	_, err = Recalibrate(d, "f-009", "issue", true, multiHunk(t), Rules{}, editNow)
-	_ = refusaltest.Want(t, err, refusal.NotFound)
-
-	f, err := Recalibrate(d, "f-001", "issue", true, multiHunk(t), Rules{}, editNow)
-	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
-		t.Fatalf("unchanged recalibration %+v err %v", f, err)
-	}
-}
-
-func TestRewriteKeepsTheDecision(t *testing.T) {
-	for _, c := range []struct {
-		name, disposition string
-		decide            func(d *Draft) error
-	}{
-		{"accepted", DispositionAccepted, func(*Draft) error { return nil }},
-		{"excluded", DispositionExcluded, func(d *Draft) error { _, err := Exclude(d, "f-001", addNow); return err }},
-		{"pending", DispositionPending, func(d *Draft) error { delete(d.Decisions, "f-001"); return nil }},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			d := editable()
-			if err := c.decide(d); err != nil {
-				t.Fatal(err)
-			}
-			before, hadDecision := d.Decisions["f-001"]
-			f, err := Rewrite(d, "f-001", "One, said better", "Body one, said better.", Rules{}, multiHunk(t), editNow)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if f.Title != "One, said better" || f.Body != "Body one, said better." || f.Rev != 2 || !reflect.DeepEqual(f, d.Findings[0]) {
-				t.Fatalf("finding %+v", f)
-			}
-			want := []HistoryEntry{{At: editNow, By: ByHuman, Changed: map[string]any{"title": "One", "body": "Body one."}}}
-			if !reflect.DeepEqual(f.History, want) {
-				t.Fatalf("history %#v", f.History)
-			}
-			if got := Dispositions(d)["f-001"]; got != c.disposition {
-				t.Fatalf("disposition %s, want %s", got, c.disposition)
-			}
-			after, hasDecision := d.Decisions["f-001"]
-			if hasDecision != hadDecision || (hadDecision && (after.Decision != before.Decision || !after.At.Equal(before.At) || after.FindingRev != 2)) {
-				t.Fatalf("decision before %+v after %+v", before, after)
-			}
-		})
-	}
 }
 
 func TestRewriteRecordsOnlyWhatChanged(t *testing.T) {
@@ -430,43 +445,8 @@ func TestRewriteRecordsOnlyWhatChanged(t *testing.T) {
 	}
 }
 
-func TestRewriteLeavesNotesOpen(t *testing.T) {
+func TestRewriteRefusesBadText(t *testing.T) {
 	d := editable()
-	if _, err := SendBack(d, "f-002", "Say it plainer.", editNow); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Rewrite(d, "f-002", "Two", "Body two, plainer.", Rules{}, multiHunk(t), editNow); err != nil {
-		t.Fatal(err)
-	}
-	if d.Notes[0].Status != NoteOpen || d.Notes[0].ClosedAt != nil {
-		t.Fatalf("note %+v", d.Notes[0])
-	}
-}
-
-func TestRewriteDoesNotReviveAStaleDecision(t *testing.T) {
-	d := editable()
-	d.Findings[0].Rev = 2
-	f, err := Rewrite(d, "f-001", "One", "Body one, again.", Rules{}, multiHunk(t), editNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := Dispositions(d)["f-001"]; got != DispositionPending || f.Rev != 3 {
-		t.Fatalf("disposition %s rev %d", got, f.Rev)
-	}
-}
-
-func TestRewriteRefusals(t *testing.T) {
-	d := editable()
-	withdraw := false
-	if _, _, err := Edit(d, "f-002", EditInput{}, &withdraw, nil, ByAgent, Rules{}, editNow); err != nil {
-		t.Fatal(err)
-	}
-	_, err := Rewrite(d, "f-002", "Two", "Body two, again.", Rules{}, multiHunk(t), editNow)
-	r := refusaltest.Want(t, err, refusal.Input)
-	if !strings.Contains(r.Message, "rewritten") || r.Fix != "reinstate f-002 first" {
-		t.Fatalf("refusal %+v", r)
-	}
-
 	for _, c := range []struct {
 		name, title, body, says string
 		code                    refusal.Code
@@ -496,14 +476,6 @@ func TestRewriteRefusals(t *testing.T) {
 		return err
 	}()); r.Details["line"] != 1 || r.Details["rule"] == nil {
 		t.Fatalf("details %v", r.Details)
-	}
-
-	_, err = Rewrite(d, "f-009", "One", "Body.", Rules{}, multiHunk(t), editNow)
-	_ = refusaltest.Want(t, err, refusal.NotFound)
-
-	f, err := Rewrite(d, "f-001", "One", "Body one.", Rules{}, multiHunk(t), editNow)
-	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
-		t.Fatalf("unchanged rewrite %+v err %v", f, err)
 	}
 }
 
