@@ -19,7 +19,7 @@ type LocalEntry struct {
 
 // NextLocal allocates the next local run number under a lock, writes n+1 to local/next, and creates the run
 // directory through CreateRun. target.Local must not be nil; NextLocal sets its N field before writing.
-func NextLocal(root, cmd string, getenv func(string) string, target Target, diff, draftJSON []byte) (string, Ref, error) {
+func NextLocal(root, cmd string, getenv func(string) string, target Target, diff, draftJSON []byte, optional map[string][]byte) (string, Ref, error) {
 	localRoot := LocalRoot(root)
 	if err := os.MkdirAll(localRoot, 0o755); err != nil {
 		return "", Ref{}, fmt.Errorf("create local runs directory %s: %w", localRoot, err)
@@ -40,7 +40,7 @@ func NextLocal(root, cmd string, getenv func(string) string, target Target, diff
 
 	target.Local.N = n
 	dir := LocalDir(root, n)
-	if err := CreateRun(dir, target, diff, draftJSON, nil); err != nil {
+	if err := CreateRun(dir, target, diff, draftJSON, optional); err != nil {
 		return "", Ref{}, err
 	}
 

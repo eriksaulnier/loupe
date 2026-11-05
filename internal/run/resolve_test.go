@@ -76,7 +76,7 @@ func TestResolveLocalRef(t *testing.T) {
 	root := t.TempDir()
 	target := sampleLocalTarget()
 	target.Local.Prefix = "myrepo"
-	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

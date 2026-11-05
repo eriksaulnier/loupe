@@ -105,7 +105,7 @@ func holdFor(t *testing.T, dir string) *Session {
 func TestOpenSessionLocalProbesOnlyItsDir(t *testing.T) {
 	root := t.TempDir()
 	target := sampleLocalTarget()
-	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON())
+	dir, ref, err := NextLocal(root, "test", os.Getenv, target, nil, sampleDraftJSON(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
