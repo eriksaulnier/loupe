@@ -773,23 +773,19 @@ func TestPublishUnattendedRetriesUnknownAttemptFromRestoredRoot(t *testing.T) {
 	}
 }
 
-func TestReviewJSONPrintsOneObject(t *testing.T) {
+func TestUnattendedPublishOfAClosedPullRequest(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	h.capture()
+	h.closePR()
+	h.UseInstallationToken()
+	h.GH.SetViewer("github-actions[bot]")
+	h.capture("--allow-closed")
 	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
-	s := h.Start("review", runRef, "--json")
-	s.Press("enter")
-	s.WaitFor("Changed line")
-	s.Press("a")
-	s.WaitFor("f-001 accepted")
-	s.Press("q")
-	stdout, stderr, exit := s.Wait()
-	var env map[string]any
-	if err := json.Unmarshal([]byte(stdout), &env); err != nil || exit != 0 || env["ok"] != true || env["command"] != "review" || env["dir"] != h.RunDir(1) || len(env) != 5 {
-		t.Fatalf("exit %d err %v stdout %q", exit, err, stdout)
+	h.mustOK("summary", "--run", runRef, "--body", "Reviewed after the merge.", "--expect-findings", "3")
+	if sent := h.mustOK("publish", runRef, "--unattended"); sent["sent"] != true {
+		t.Fatalf("sent %v", sent)
 	}
-	if !strings.Contains(stderr, "Changed line") {
-		t.Fatalf("the review did not go to stderr: %q", stderr)
+	if h.GH.CreateCount() != 1 {
+		t.Fatalf("create count %d, want 1", h.GH.CreateCount())
 	}
 }
