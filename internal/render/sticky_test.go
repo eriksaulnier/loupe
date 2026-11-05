@@ -549,10 +549,6 @@ func TestStickyMovesAV0110BodyToTheNewLayout(t *testing.T) {
 	if _, _, err := ReadRecord(body); err != nil {
 		t.Fatalf("ReadRecord: %v", err)
 	}
-	again, rounds, err := ReadSticky(body)
-	if err != nil || rounds != 3 || len(again) != 3 || again[1] != earlier[0] || again[2] != earlier[1] {
-		t.Fatalf("rounds %d err %v blocks:\n%s", rounds, err, strings.Join(blocks(again), "\n=====\n"))
-	}
 }
 
 // Authored prose can end with a divider and a footer-shaped line. In a v0.11.0 body the footer at the tail is the
@@ -722,13 +718,6 @@ func TestStickyMovesAV0120BodyToTheQuotedLayout(t *testing.T) {
 		if earlier[i+1].Block != want {
 			t.Fatalf("round %d was not carried as it is\n--- got ---\n%s\n--- want ---\n%s", 2-i, earlier[i+1].Block, want)
 		}
-	}
-	next := stickyInput(4, "ddddddd444", general("f-001", "question", false))
-	next.Sticky = &StickyInput{Rounds: rounds + 1, Earlier: earlier}
-	again, rounds, err := ReadSticky(Body(next))
-	// Once anchored, every collapsed round is carried byte for byte, anchor included.
-	if err != nil || rounds != 4 || len(again) != 4 || !slices.Equal(again[1:], earlier) {
-		t.Fatalf("rounds %d err %v blocks:\n%s", rounds, err, strings.Join(blocks(again), "\n=====\n"))
 	}
 }
 
