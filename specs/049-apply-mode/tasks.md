@@ -275,8 +275,8 @@ Every implementation task follows a failing test, then the change, then a passin
   5. Wait.
   6. Send-back notes.
   7. Apply: the groups, `suggestion` wins, the thread counts, locate by content or heading, and read the new-file list before handoff.
-- [ ] T070 [P] [US1] [US2] [US3] Add integration tests in a new `internal/integration/apply_test.go`, one per user story, US1 to US6. Each drives capture, add, handoff (a stub pane), review through `screen`, wait and feedback. Each asserts that `fakegh.Requests()` is empty, which includes the release endpoint. US1 runs the SC-005 helper. SC-001 compares `feedback --json` with a new golden at `testdata/golden/apply/feedback.json`.
-- [ ] T071 Add one seeded local run to `cmd/loupe-demo/seed.go`, with a code file and a plan, findings with proposals, and one question. Extend `cmd/loupe-demo/main_test.go`.
+- [x] T070 [P] [US1] [US2] [US3] Add integration tests in a new `internal/integration/apply_test.go`, one per user story, US1 to US6. Each drives capture, add, handoff (a stub pane), review through `screen`, wait and feedback. Each asserts that `fakegh.Requests()` is empty, which includes the release endpoint. US1 runs the SC-005 helper. SC-001 compares `feedback --json` with a new golden at `testdata/golden/apply/feedback.json`.
+- [x] T071 Add one seeded local run to `cmd/loupe-demo/seed.go`, with a code file and a plan, findings with proposals, and one question. Extend `cmd/loupe-demo/main_test.go`.
 - [ ] T072 [P] Update the opening line in `README.md` and `AGENTS.md`, the skill line in `docs/install.md`, the `pi` task in `mise.toml`, and the `plugin/` row in `AGENTS.md`'s layout table.
 - [ ] T073 Run `mise run check`. Run quickstart sections 1 to 4 by eye through `mise run demo` and tmux, and record what was seen.
 
