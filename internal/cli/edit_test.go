@@ -347,3 +347,40 @@ func TestEditFromEmptyStdinRefusesTheInput(t *testing.T) {
 	code, s := runWithStdin(t, home, "", "edit", "f-001", "--run", "local#1", "--from", "-", "--json")
 	wantCode(t, code, s, refusal.Input)
 }
+
+func TestEditFlagRefusals(t *testing.T) {
+	home, _ := sendBackRun(t)
+	checkRefusals(t, home, []refusalCase{
+		{"an unknown --by", "", []string{"edit", "f-001", "--run", "o/r#1", "--title", "T", "--by", "bot"}, refusal.Usage, `--by must be agent or human, not "bot"`},
+		{"nothing to edit", "", []string{"edit", "f-001", "--run", "o/r#1"}, refusal.Usage, "nothing to edit"},
+	})
+}
+
+// An agent's edit of an accepted finding clears the human's decision, and the human line says so.
+func TestEditSaysWhenItClearsTheDecision(t *testing.T) {
+	home, dir := sendBackRun(t)
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"edit", "f-001", "--run", "o/r#1", "--blocking"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if want := "+ Edited f-001 on o/r#1@1: rev 2, included; its decision was cleared  draft version 1\n"; s.stdout.String() != want {
+		t.Fatalf("stdout %q, want %q", s.stdout.String(), want)
+	}
+	if f := storedFinding(t, dir, "f-001"); !f.Blocking {
+		t.Fatalf("finding %+v, want it blocking", f)
+	}
+}
+
+// --general and --not-blocking set what the JSON keys set.
+func TestEditGeneralAndNotBlockingFlags(t *testing.T) {
+	home, dir := sendBackRun(t)
+	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--blocking"); code != 0 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--general", "--not-blocking"); code != 0 {
+		t.Fatalf("exit %d envelope %v", code, env)
+	}
+	if f := storedFinding(t, dir, "f-001"); !f.General || f.Location != nil || f.Blocking {
+		t.Fatalf("finding %+v, want it general and not blocking", f)
+	}
+}

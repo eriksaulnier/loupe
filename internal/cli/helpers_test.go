@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -90,4 +91,35 @@ func wantCode(t *testing.T, code int, s *streams, want refusal.Code) map[string]
 		t.Fatalf("error %v, want %s", env["error"], want)
 	}
 	return errObj
+}
+
+// refusalCase is one command line, run against a home with stdin, that loupe must refuse with code and a message
+// holding message.
+type refusalCase struct {
+	name, stdin string
+	args        []string
+	code        refusal.Code
+	message     string
+}
+
+// checkRefusals runs each case with --json and checks the exit code, which is 2 for a usage refusal and 1 otherwise,
+// the refusal code and the message.
+func checkRefusals(t *testing.T, home string, cases []refusalCase) {
+	t.Helper()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			code, s := runWithStdin(t, home, c.stdin, append(c.args, "--json")...)
+			want := 1
+			if c.code == refusal.Usage {
+				want = 2
+			}
+			if code != want {
+				t.Fatalf("exit %d, want %d; stdout %q stderr %q", code, want, s.stdout.String(), s.stderr.String())
+			}
+			errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
+			if errObj["code"] != string(c.code) || !strings.Contains(fmt.Sprint(errObj["message"]), c.message) {
+				t.Fatalf("error %v, want %s containing %q", errObj, c.code, c.message)
+			}
+		})
+	}
 }

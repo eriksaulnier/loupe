@@ -58,35 +58,15 @@ func runAssessIn(t *testing.T, home, stdin string, args ...string) (int, *stream
 
 func TestAssessFlagRefusals(t *testing.T) {
 	home := assessRun(t, "pub-1")
-	for _, c := range []struct {
-		name, stdin string
-		args        []string
-		code        refusal.Code
-		message     string
-	}{
-		{"--from with --status", "", []string{"--from", "-", "--status", "open"}, refusal.Usage, "--status"},
-		{"refs and --from", "", []string{"e-1", "--from", "-"}, refusal.Usage, "refs were given both as arguments and with --from"},
-		{"no refs", "", []string{"--status", "open"}, refusal.Usage, "no refs given"},
-		{"bad status", "", []string{"e-1", "--status", "done"}, refusal.Usage, `--status must be open or addressed, not "done"`},
-		{"malformed input", "{", []string{"--from", "-"}, refusal.Input, "input ends at byte 1"},
-		{"no assessments", "{}", []string{"--from", "-"}, refusal.Input, `input has no "assessments"`},
-		{"stale version", "", []string{"e-1", "--status", "open", "--expect-version", "5"}, refusal.Version, "draft is at version 0"},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			code, s := runAssessIn(t, home, c.stdin, append(c.args, "--json")...)
-			want := 1
-			if c.code == refusal.Usage {
-				want = 2
-			}
-			if code != want {
-				t.Fatalf("exit %d, want %d; stdout %q", code, want, s.stdout.String())
-			}
-			errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
-			if errObj["code"] != string(c.code) || !strings.Contains(errObj["message"].(string), c.message) {
-				t.Fatalf("error %v, want %s containing %q", errObj, c.code, c.message)
-			}
-		})
-	}
+	checkRefusals(t, home, []refusalCase{
+		{"--from with --status", "", []string{"assess", "--run", "o/r#1@2", "--from", "-", "--status", "open"}, refusal.Usage, "--status"},
+		{"refs and --from", "", []string{"assess", "--run", "o/r#1@2", "e-1", "--from", "-"}, refusal.Usage, "refs were given both as arguments and with --from"},
+		{"no refs", "", []string{"assess", "--run", "o/r#1@2", "--status", "open"}, refusal.Usage, "no refs given"},
+		{"bad status", "", []string{"assess", "--run", "o/r#1@2", "e-1", "--status", "done"}, refusal.Usage, `--status must be open or addressed, not "done"`},
+		{"malformed input", "{", []string{"assess", "--run", "o/r#1@2", "--from", "-"}, refusal.Input, "input ends at byte 1"},
+		{"no assessments", "{}", []string{"assess", "--run", "o/r#1@2", "--from", "-"}, refusal.Input, `input has no "assessments"`},
+		{"stale version", "", []string{"assess", "--run", "o/r#1@2", "e-1", "--status", "open", "--expect-version", "5"}, refusal.Version, "draft is at version 0"},
+	})
 }
 
 func TestAssessSaysWhatItAssessed(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/eriksaulnier/loupe/internal/refusal"
 )
 
 func refusedEntries(t *testing.T, env map[string]any) []int {
@@ -162,5 +163,24 @@ func TestWriteCommandsRefuseAFindingID(t *testing.T) {
 				t.Fatalf("version moved from %d to %d", before, after)
 			}
 		})
+	}
+}
+
+func TestAddFlagRefusals(t *testing.T) {
+	home, _ := sendBackRun(t)
+	checkRefusals(t, home, []refusalCase{
+		{"an unknown --by", "", []string{"add", "--run", "o/r#1", "--title", "T", "--body", "B", "--general", "--by", "bot"}, refusal.Usage, `--by must be agent or human, not "bot"`},
+		{"a malformed batch", `[{"title": }]`, []string{"add", "--run", "o/r#1", "--from", "-"}, refusal.Input, "input is not valid"},
+	})
+}
+
+func TestAddSaysWhatItAdded(t *testing.T) {
+	home, _ := sendBackRun(t)
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"add", "--run", "o/r#1", "--title", "T", "--body", "B", "--general"}); code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if want := "+ Added f-003 to o/r#1@1  draft version 1\n"; s.stdout.String() != want {
+		t.Fatalf("stdout %q, want %q", s.stdout.String(), want)
 	}
 }
