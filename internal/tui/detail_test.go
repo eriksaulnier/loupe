@@ -1100,7 +1100,7 @@ func TestApplyDetailLeadIsInTheGoodTone(t *testing.T) {
 // TestApplyVerbsAreAimedAtTheAgent pins the hints.
 func TestApplyRunHasNoEditOrOpenKey(t *testing.T) {
 	m, _ := applyModel(t, "Claude")
-	press(m, "o")
+	press(m, "l", "o")
 	if m.notice != "" {
 		t.Errorf("o in the list: notice %q", m.notice)
 	}
