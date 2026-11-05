@@ -332,6 +332,7 @@ func TestSavesStampTheCurrentSchema(t *testing.T) {
 	if _, err := sendBack(dir, "Why?"); err != nil {
 		t.Fatal(err)
 	}
+	// schemaVersion and handBackSchema are package globals, so this test MUST NOT run in parallel.
 	defer func(d, h int) { schemaVersion, handBackSchema = d, h }(schemaVersion, handBackSchema)
 	schemaVersion, handBackSchema = SchemaVersion+1, HandBackSchema+1
 	if _, err := sendBack(dir, "And this?"); err != nil {

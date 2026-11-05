@@ -244,6 +244,7 @@ func TestDiffLiteralJoinsChunksInPathOrder(t *testing.T) {
 		t.Fatalf("DiffLiteral differs from one diff over the same paths:\n%s\nwant:\n%s", whole, want)
 	}
 
+	// literalBatch is a package global, so this test MUST NOT run in parallel.
 	defer func(n int) { literalBatch = n }(literalBatch)
 	literalBatch = 2
 	chunked, err := DiffLiteral(w.repo.Dir, w.head, tree, paths)
@@ -261,6 +262,7 @@ func TestDiffLiteralRunsAThousandPathsPerCall(t *testing.T) {
 		paths[i] = fmt.Sprintf("f%04d", 2499-i)
 	}
 	var calls [][]string
+	// literalGit is a package global, so this test MUST NOT run in parallel.
 	defer func(g func(string, ...string) ([]byte, error)) { literalGit = g }(literalGit)
 	literalGit = func(_ string, args ...string) ([]byte, error) {
 		sep := slices.Index(args, "--")
