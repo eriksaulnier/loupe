@@ -9,7 +9,7 @@ import (
 func TestReplyRefusesStatusAndDecision(t *testing.T) {
 	for _, input := range []string{`{"body": "x", "status": "resolved"}`, `{"body": "x", "decision": "accepted"}`} {
 		home, _ := sendBackRun(t)
-		if code, env, _ := execIn(t, home, input, "reply", "n-001", "--from", "-"); code != 1 || errorCode(env) != "input" {
+		if code, env, _ := execIn(t, home, input, "reply", "n-001", "--from", "-"); code != 1 || errorOf(env)["code"] != "input" {
 			t.Errorf("%s: exit %d envelope %v", input, code, env)
 		}
 	}

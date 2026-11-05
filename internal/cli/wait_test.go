@@ -108,13 +108,13 @@ func TestWaitTimesOutOnOpenNoteWithoutHandBack(t *testing.T) {
 	home, _ := sendBackRun(t)
 	started := time.Now()
 	code, env, s := execIn(t, home, "", "wait", "--timeout", "50ms")
-	if code != 1 || errorCode(env) != "timeout" {
+	if code != 1 || errorOf(env)["code"] != "timeout" {
 		t.Fatalf("exit %d envelope %v stderr %s", code, env, s.stderr.String())
 	}
 	if time.Since(started) > time.Second {
 		t.Fatalf("wait took %s with a 50ms timeout", time.Since(started))
 	}
-	errObj, _ := env["error"].(map[string]any)
+	errObj := errorOf(env)
 	if errObj["fix"] != "run loupe wait again" || env["run"] != "o/r#1@1" {
 		t.Fatalf("envelope %v", env)
 	}
@@ -123,7 +123,7 @@ func TestWaitTimesOutOnOpenNoteWithoutHandBack(t *testing.T) {
 func TestWaitNegativeTimeoutIsUsage(t *testing.T) {
 	home, _ := sendBackRun(t)
 	code, env, _ := execIn(t, home, "", "wait", "--timeout", "-1s")
-	if code != 2 || errorCode(env) != "usage" {
+	if code != 2 || errorOf(env)["code"] != "usage" {
 		t.Fatalf("exit %d envelope %v", code, env)
 	}
 }
@@ -147,7 +147,7 @@ func TestWaitEndsWhenContextIsCanceled(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Cancellation is not a refusal, so it reports through the internal path; the message names the wait.
-	if errObj, _ := env["error"].(map[string]any); errObj["code"] != "internal" || !strings.Contains(errObj["message"].(string), "wait ended") {
+	if errObj := errorOf(env); errObj["code"] != "internal" || !strings.Contains(errObj["message"].(string), "wait ended") {
 		t.Fatalf("envelope %v", env)
 	}
 }

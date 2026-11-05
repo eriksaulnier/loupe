@@ -76,7 +76,7 @@ func TestCaptureGitHubReadFailures(t *testing.T) {
 			if code := Execute(deps, []string{"capture", "https://github.com/o/r/pull/7", "--json"}); code != 1 {
 				t.Fatalf("exit %d", code)
 			}
-			e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+			e := errorOf(decodeOne(t, s.stdout.Bytes()))
 			if e["code"] != c.code || !strings.Contains(e["message"].(string), c.message) || e["fix"] != c.fix {
 				t.Fatalf("got %v", e)
 			}

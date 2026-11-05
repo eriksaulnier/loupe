@@ -55,19 +55,6 @@ func localFinding(id string) draft.Finding {
 	return draft.Finding{ID: id, Rev: 1, Title: "T", Body: "B", General: true, By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}}
 }
 
-func wantCode(t *testing.T, code int, s *streams, want refusal.Code) map[string]any {
-	t.Helper()
-	if code != 1 {
-		t.Fatalf("exit %d, want 1; stdout %q stderr %q", code, s.stdout.String(), s.stderr.String())
-	}
-	env := decodeOne(t, s.stdout.Bytes())
-	errObj, _ := env["error"].(map[string]any)
-	if errObj["code"] != string(want) {
-		t.Fatalf("error %v, want %s", env["error"], want)
-	}
-	return errObj
-}
-
 func TestLocalRunRefusesPROnlyCommands(t *testing.T) {
 	home, _ := localRun(t, "changed", localFinding("f-001"))
 	for _, args := range [][]string{
@@ -108,13 +95,6 @@ func TestReturnedLocalRunRefusesReturnedBeforeWrongMode(t *testing.T) {
 	if code := Execute(deps, []string{"show", "--run", "local#1", "--json"}); code != 0 {
 		t.Fatalf("show of a returned run: exit %d stderr %q", code, s.stderr.String())
 	}
-}
-
-func runWithStdin(t *testing.T, home, stdin string, args ...string) (int, *streams) {
-	t.Helper()
-	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
-	deps.Stdin = strings.NewReader(stdin)
-	return Execute(deps, args), s
 }
 
 func TestLocalAddRefusesPRFields(t *testing.T) {

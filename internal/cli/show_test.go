@@ -351,7 +351,7 @@ func TestShowJSONPresentsARewrittenFinding(t *testing.T) {
 	deps, s = testDeps(t, map[string]string{"LOUPE_HOME": home})
 	deps.Stdin = strings.NewReader(`{"body": "Agent body, again."}`)
 	code := Execute(deps, []string{"edit", "f-001", "--run", "o/r#1", "--from", "-", "--expect-version", strconv.Itoa(before.Version), "--json"})
-	if env := decodeOne(t, s.stdout.Bytes()); code != 1 || env["error"].(map[string]any)["code"] != "version" {
+	if env := decodeOne(t, s.stdout.Bytes()); code != 1 || errorOf(env)["code"] != "version" {
 		t.Fatalf("exit %d result %v", code, env)
 	}
 }

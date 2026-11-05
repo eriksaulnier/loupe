@@ -45,20 +45,6 @@ func sendBackRun(t *testing.T) (home, dir string) {
 	return home, dir
 }
 
-// execIn runs loupe with stdin against home and returns the exit code and the decoded stdout object.
-func execIn(t *testing.T, home, stdin string, args ...string) (int, map[string]any, *streams) {
-	t.Helper()
-	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
-	deps.Stdin = strings.NewReader(stdin)
-	code := Execute(deps, append(args, "--run", "o/r#1", "--json"))
-	return code, decodeOne(t, s.stdout.Bytes()), s
-}
-
-func errorCode(env map[string]any) any {
-	errObj, _ := env["error"].(map[string]any)
-	return errObj["code"]
-}
-
 // Keeping a decision is only for an edit the human makes in review; --by is self-reported on the command line.
 func TestEditByHumanStillClearsAcceptance(t *testing.T) {
 	home, dir := sendBackRun(t)
@@ -124,7 +110,7 @@ func TestEditRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			code, env, _ := execIn(t, home, c.stdin, c.args...)
-			if code != c.exit || errorCode(env) != c.code {
+			if code != c.exit || errorOf(env)["code"] != c.code {
 				t.Fatalf("exit %d envelope %v", code, env)
 			}
 			if after, err := os.ReadFile(filepath.Join(dir, "draft.json")); err != nil || string(after) != string(before) {
@@ -320,7 +306,7 @@ func TestEditRefusesAMisplacedReason(t *testing.T) {
 				t.Fatal(err)
 			}
 			code, env, _ := execIn(t, home, c.stdin, c.args...)
-			if code != c.exit || errorCode(env) != c.code {
+			if code != c.exit || errorOf(env)["code"] != c.code {
 				t.Fatalf("exit %d envelope %v", code, env)
 			}
 			if after, err := os.ReadFile(filepath.Join(dir, "draft.json")); err != nil || string(after) != string(before) {

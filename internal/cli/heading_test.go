@@ -68,10 +68,10 @@ func TestAddHeadingFlagsStoreWhatJSONStores(t *testing.T) {
 
 func TestAddHeadingFlagRefusals(t *testing.T) {
 	home, _ := headingRun(t, []byte(planOutline))
-	if code, env, _ := execIn(t, home, "{}", "add", "--from", "-", "--heading", "Rollout"); code != 2 || errorCode(env) != "usage" {
+	if code, env, _ := execIn(t, home, "{}", "add", "--from", "-", "--heading", "Rollout"); code != 2 || errorOf(env)["code"] != "usage" {
 		t.Fatalf("--from with --heading: exit %d envelope %v", code, env)
 	}
-	if code, env, _ := execIn(t, home, "", "add", "--title", "t", "--body", "b", "--path", "plan.md", "--heading", "Rollout", "--line", "12"); code != 1 || errorCode(env) != "input" {
+	if code, env, _ := execIn(t, home, "", "add", "--title", "t", "--body", "b", "--path", "plan.md", "--heading", "Rollout", "--line", "12"); code != 1 || errorOf(env)["code"] != "input" {
 		t.Fatalf("--heading with --line: exit %d envelope %v", code, env)
 	}
 }
@@ -87,7 +87,7 @@ func TestEditHeadingFlag(t *testing.T) {
 	if got := storedLocation(t, dir); got != (draft.FindingLocation{Path: "plan.md", Side: draft.SideRight, Line: 17, StartLine: 11, Heading: "Rollout"}) {
 		t.Fatalf("stored %+v", got)
 	}
-	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--clear-location", "--heading", "Rollout"); code != 2 || errorCode(env) != "usage" {
+	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--clear-location", "--heading", "Rollout"); code != 2 || errorOf(env)["code"] != "usage" {
 		t.Fatalf("--clear-location with --heading: exit %d envelope %v", code, env)
 	}
 }
@@ -98,7 +98,7 @@ func TestAddReadsTheOutlineOnlyForAHeading(t *testing.T) {
 	if code, env, _ := execIn(t, home, "", "add", "--title", "t", "--body", "b", "--path", "plan.md", "--line", "14"); code != 0 {
 		t.Fatalf("line location: exit %d envelope %v", code, env)
 	}
-	if code, env, _ := execIn(t, home, "", "add", "--title", "t", "--body", "b", "--path", "plan.md", "--heading", "Rollout"); code != 1 || errorCode(env) != "record" {
+	if code, env, _ := execIn(t, home, "", "add", "--title", "t", "--body", "b", "--path", "plan.md", "--heading", "Rollout"); code != 1 || errorOf(env)["code"] != "record" {
 		t.Fatalf("heading: exit %d envelope %v", code, env)
 	}
 }
@@ -135,7 +135,7 @@ func TestEditOfAnotherFieldSkipsTheOutline(t *testing.T) {
 func TestAddHeadingOnARunWithoutAnOutline(t *testing.T) {
 	home, _ := headingRun(t, nil)
 	code, env, _ := execIn(t, home, `[{"title": "t", "body": "b", "location": {"path": "plan.md", "heading": "Rollout"}}]`, "add", "--from", "-")
-	errObj, _ := env["error"].(map[string]any)
+	errObj := errorOf(env)
 	if code != 1 || errObj["code"] != "location" || errObj["message"] != "entry 0: this run was captured before heading anchors, so it holds no heading outline" {
 		t.Fatalf("exit %d envelope %v", code, env)
 	}

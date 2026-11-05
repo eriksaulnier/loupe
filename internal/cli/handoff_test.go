@@ -248,7 +248,7 @@ func TestHandoffRefusesWithoutHerdr(t *testing.T) {
 	deps, s := testDeps(t, env)
 	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
 	e := decodeOne(t, s.stdout.Bytes())
-	errObj, _ := e["error"].(map[string]any)
+	errObj := errorOf(e)
 	if code != 1 || errObj["code"] != "no-pane-host" || errObj["fix"] != "ask the human to run loupe review 'o/r#1@1'" {
 		t.Fatalf("exit %d envelope %v", code, e)
 	}
@@ -279,7 +279,7 @@ func TestHandoffRefusesPaneFailedAndStops(t *testing.T) {
 			deps, s := testDeps(t, c.env(bin))
 			code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
 			e := decodeOne(t, s.stdout.Bytes())
-			errObj, _ := e["error"].(map[string]any)
+			errObj := errorOf(e)
 			details, _ := errObj["details"].(map[string]any)
 			if code != 1 || errObj["code"] != "pane-failed" || errObj["message"] != c.message ||
 				errObj["fix"] != "ask the human to run loupe review 'o/r#1@1'" || details["host"] != c.host || details["step"] != c.step {
@@ -397,7 +397,7 @@ func TestHandoffPassesAnUnwatchedTmuxSession(t *testing.T) {
 				}
 				return
 			}
-			errObj, _ := got["error"].(map[string]any)
+			errObj := errorOf(got)
 			if code != 1 || errObj["code"] != "no-pane-host" {
 				t.Fatalf("exit %d envelope %v", code, got)
 			}
@@ -463,7 +463,7 @@ func TestHandoffIgnoresITermOffMac(t *testing.T) {
 	deps, s := testDeps(t, itermEnv(home, bin))
 	deps.GOOS = "linux"
 	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
-	errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
 	if code != 1 || errObj["code"] != "no-pane-host" {
 		t.Fatalf("exit %d error %v", code, errObj)
 	}
@@ -507,7 +507,7 @@ func TestHandoffRefusesNoPaneHostNamingEveryHost(t *testing.T) {
 	orcaBin, orcaLog := fakeOrcaBin(t, "")
 	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "PATH": herdrBin + string(os.PathListSeparator) + orcaBin})
 	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
-	errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
 	message, _ := errObj["message"].(string)
 	if code != 1 || errObj["code"] != "no-pane-host" || !strings.Contains(message, "HERDR_ENV=1, HERDR_PANE_ID and herdr on PATH") ||
 		!strings.Contains(message, "TMUX, TMUX_PANE, tmux on PATH and a client attached to the agent's session") ||
@@ -562,7 +562,7 @@ func TestHandoffRefusesWhileReviewIsOpen(t *testing.T) {
 			deps, s := testDeps(t, env)
 			code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
 			e := decodeOne(t, s.stdout.Bytes())
-			errObj, _ := e["error"].(map[string]any)
+			errObj := errorOf(e)
 			if code != 1 || errObj["code"] != "review-open" ||
 				errObj["message"] != "loupe review is already open for o/r#1@1, so no pane was opened" ||
 				errObj["fix"] != "tell the human their review is already open, then run loupe wait --run 'o/r#1@1' --json" ||
@@ -589,7 +589,7 @@ func TestHandoffRefusesWhileReviewIsOpen(t *testing.T) {
 	}
 	deps, s = testDeps(t, withoutHerdr)
 	code := Execute(deps, []string{"handoff", "--run", "o/r#1", "--json"})
-	if errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); code != 1 || errObj["code"] != "no-pane-host" {
+	if errObj := errorOf(decodeOne(t, s.stdout.Bytes())); code != 1 || errObj["code"] != "no-pane-host" {
 		t.Fatalf("after review exited: exit %d %v", code, errObj)
 	}
 }
@@ -613,7 +613,7 @@ func TestHandoffRefusesWhileAnotherRoundIsOpen(t *testing.T) {
 	for _, ref := range []string{"o/r#1@2", "o/r#1"} {
 		deps, s := testDeps(t, env)
 		code := Execute(deps, []string{"handoff", "--run", ref, "--json"})
-		errObj, _ := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
 		if code != 1 || errObj["code"] != "review-open" ||
 			errObj["message"] != "loupe review is already open for o/r#1@1, so no pane was opened" ||
 			errObj["fix"] != "ask the human to finish or quit loupe review of o/r#1@1, then run loupe handoff --run 'o/r#1@2' --json again" ||

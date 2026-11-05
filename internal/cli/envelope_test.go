@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,19 +9,6 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
-
-func decodeOne(t *testing.T, out []byte) map[string]any {
-	t.Helper()
-	dec := json.NewDecoder(bytes.NewReader(out))
-	var m map[string]any
-	if err := dec.Decode(&m); err != nil {
-		t.Fatalf("stdout is not a JSON object: %q", out)
-	}
-	if dec.More() {
-		t.Fatalf("stdout holds more than one value: %q", out)
-	}
-	return m
-}
 
 func TestSuccessEnvelope(t *testing.T) {
 	var out bytes.Buffer
@@ -123,7 +109,7 @@ func TestReportInternalError(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	m := decodeOne(t, stdout.Bytes())
-	e := m["error"].(map[string]any)
+	e := errorOf(m)
 	if e["code"] != "internal" || e["message"] != "nil map write" || e["fix"] != "file an issue" {
 		t.Fatalf("got %v", m)
 	}

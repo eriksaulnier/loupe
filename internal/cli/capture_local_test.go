@@ -48,7 +48,7 @@ func TestCaptureFormRules(t *testing.T) {
 			t.Errorf("%v: captured", args)
 			continue
 		}
-		if env := decodeOne(t, s.stdout.Bytes()); env["error"].(map[string]any)["code"] != string(refusal.Usage) {
+		if env := decodeOne(t, s.stdout.Bytes()); errorOf(env)["code"] != string(refusal.Usage) {
 			t.Errorf("%v: %v", args, env["error"])
 		}
 	}
@@ -244,7 +244,7 @@ func TestCaptureLocalChecksItsTextFlags(t *testing.T) {
 			t.Errorf("%v: exit %d", c.args, code)
 			continue
 		}
-		errObj := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
 		if errObj["code"] != string(c.code) || !strings.Contains(errObj["message"].(string), c.word) {
 			t.Errorf("%v: %v", c.args, errObj)
 		}
@@ -261,7 +261,7 @@ func TestCaptureFilesRefusesWhenEveryFileIsSkipped(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
 	}
-	errObj := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	errObj := errorOf(decodeOne(t, s.stdout.Bytes()))
 	if errObj["code"] != string(refusal.Usage) || !strings.Contains(errObj["message"].(string), "every file given was skipped (1): empty.md") {
 		t.Fatalf("error %v", errObj)
 	}

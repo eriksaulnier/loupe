@@ -14,7 +14,7 @@ func TestPublishUnattendedDefaultsActionToComment(t *testing.T) {
 	if code := Execute(deps, []string{"publish", "--unattended", "--json"}); code != 1 {
 		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
 	}
-	e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	e := errorOf(decodeOne(t, s.stdout.Bytes()))
 	if e["code"] != "no-run" {
 		t.Fatalf("got %v, want past flag validation (action defaulted) to a no-run refusal", e)
 	}
@@ -32,7 +32,7 @@ func TestPublishUnattendedRefusesOtherActionBeforeResolving(t *testing.T) {
 			if code := Execute(deps, args); code != 2 {
 				t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
 			}
-			e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+			e := errorOf(decodeOne(t, s.stdout.Bytes()))
 			if e["code"] != "usage" {
 				t.Fatalf("%v: got %v", args, e)
 			}
@@ -49,7 +49,7 @@ func TestPublishUnattendedRefusesUsageWithNoRunNamed(t *testing.T) {
 	if code := Execute(deps, []string{"publish", "--unattended", "--json"}); code != 2 {
 		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
 	}
-	e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	e := errorOf(decodeOne(t, s.stdout.Bytes()))
 	msg, _ := e["message"].(string)
 	if e["code"] != "usage" || !strings.Contains(msg, "LOUPE_RUN") || !strings.Contains(msg, "<ref>") {
 		t.Fatalf("got %v, want both ways named", e)
@@ -89,7 +89,7 @@ func TestPublishStickyRefusesWhatItCannotEditBeforeResolving(t *testing.T) {
 			if code := Execute(deps, c.args); code != 2 {
 				t.Fatalf("exit %d stderr %q", code, s.stderr.String())
 			}
-			e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+			e := errorOf(decodeOne(t, s.stdout.Bytes()))
 			if fix, _ := e["fix"].(string); e["code"] != "usage" || !strings.Contains(fix, c.fix) {
 				t.Fatalf("got %v, want usage naming %q", e, c.fix)
 			}
@@ -111,7 +111,7 @@ func TestPublishStickyDefaultsActionAndInline(t *testing.T) {
 		if code := Execute(deps, args); code != 1 {
 			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
 		}
-		if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "no-run" {
+		if e := errorOf(decodeOne(t, s.stdout.Bytes())); e["code"] != "no-run" {
 			t.Fatalf("%v: got %v, want past flag validation to a no-run refusal", args, e)
 		}
 	}
@@ -130,7 +130,7 @@ func TestPublishNoteNeedsUnattendedSticky(t *testing.T) {
 		if code := Execute(deps, args); code != 2 {
 			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
 		}
-		e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		e := errorOf(decodeOne(t, s.stdout.Bytes()))
 		if fix, _ := e["fix"].(string); e["code"] != "usage" || !strings.Contains(fix, "--unattended --sticky") {
 			t.Fatalf("%v: got %v", args, e)
 		}
@@ -142,7 +142,7 @@ func TestPublishNoteNeedsUnattendedSticky(t *testing.T) {
 	if code := Execute(deps, []string{"publish", "o/r#1", "--unattended", "--sticky", "--note", "A note.", "--json"}); code != 1 {
 		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
 	}
-	if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "no-run" {
+	if e := errorOf(decodeOne(t, s.stdout.Bytes())); e["code"] != "no-run" {
 		t.Fatalf("got %v, want past flag validation to a no-run refusal", e)
 	}
 }

@@ -89,7 +89,7 @@ func TestShowCommentsRefusesWithoutFeedback(t *testing.T) {
 				t.Fatalf("exit %d stdout %q", code, s.stdout.String())
 			}
 			got := decodeOne(t, s.stdout.Bytes())
-			e, _ := got["error"].(map[string]any)
+			e := errorOf(got)
 			if e["code"] != "not-found" || !strings.Contains(e["message"].(string), c.want) ||
 				e["fix"] != "loupe capture https://github.com/o/r/pull/1 reads them again once the pull request's head moves" ||
 				strings.Contains(s.stdout.String(), `"reviews"`) {

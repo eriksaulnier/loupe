@@ -25,7 +25,7 @@ func TestReviewRefusesWithoutTerminalBeforeResolving(t *testing.T) {
 		if code := Execute(deps, args); code != 1 {
 			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
 		}
-		e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		e := errorOf(decodeOne(t, s.stdout.Bytes()))
 		if e["code"] != "tty" || e["fix"] != "run loupe review in an interactive terminal" {
 			t.Fatalf("%v: got %v", args, e)
 		}
@@ -54,7 +54,7 @@ func TestReviewRefusesATerminalItCannotDrawOn(t *testing.T) {
 			if code := Execute(deps, []string{"review", "o/r#1", "--json"}); code != 1 {
 				t.Fatalf("exit %d stderr %q", code, s.stderr.String())
 			}
-			e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+			e := errorOf(decodeOne(t, s.stdout.Bytes()))
 			if e["code"] != "tty" || e["fix"] != "run loupe review in a terminal that can draw full screen" || !strings.Contains(e["message"].(string), c.reason) {
 				t.Fatalf("got %v", e)
 			}
@@ -72,7 +72,7 @@ func TestPlainFlagIsAUsageError(t *testing.T) {
 		if code := Execute(deps, args); code != 2 {
 			t.Fatalf("%v: exit %d stderr %q", args, code, s.stderr.String())
 		}
-		if e := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any); e["code"] != "usage" {
+		if e := errorOf(decodeOne(t, s.stdout.Bytes())); e["code"] != "usage" {
 			t.Fatalf("%v: got %v", args, e)
 		}
 	}
