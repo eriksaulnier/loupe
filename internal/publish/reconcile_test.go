@@ -136,9 +136,7 @@ func TestRunPendingReviewRejection(t *testing.T) {
 	if !ok || r.Code != refusal.GitHub || r.Fix != "submit or discard your pending review on "+prLink+" first" {
 		t.Fatalf("got %#v", err)
 	}
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt remains")
-	}
+	fx.noRecords()
 	fx.check(1)
 }
 

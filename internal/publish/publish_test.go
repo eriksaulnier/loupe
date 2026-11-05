@@ -104,6 +104,16 @@ func (fx *fixture) run() (Receipt, error) {
 	return receipt, err
 }
 
+// noRecords fails if the run holds an attempt or a receipt.
+func (fx *fixture) noRecords() {
+	fx.t.Helper()
+	for _, name := range []string{"attempt.json", "receipt.json"} {
+		if fx.exists(name) {
+			fx.t.Errorf("%s exists, want no record", name)
+		}
+	}
+}
+
 func (fx *fixture) exists(name string) bool {
 	_, err := os.Stat(filepath.Join(fx.dir, name))
 	return err == nil
@@ -259,9 +269,7 @@ func TestRunRefusesAReviewWithNothingInIt(t *testing.T) {
 	fx := newRun(t, d)
 	_, err := fx.run()
 	wantRefusal(t, err, refusal.Empty, "write a message")
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt written")
-	}
+	fx.noRecords()
 	fx.check(0)
 
 	// The human's own words are enough to publish on: the review then says something the summary never did.
@@ -309,9 +317,7 @@ func TestRunRefusesDraftChangedDuringConfirmation(t *testing.T) {
 	})
 	_, err := fx.run()
 	wantRefusal(t, err, refusal.Changed, "loupe review", "loupe publish")
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt written")
-	}
+	fx.noRecords()
 	fx.draft = fx.readDraft()
 	fx.check(0)
 }
@@ -339,9 +345,7 @@ func TestRunRefusesDigestOrReadinessChangedDuringConfirmation(t *testing.T) {
 			})
 			_, err := fx.run()
 			wantRefusal(t, err, refusal.Changed, "loupe review")
-			if fx.exists("attempt.json") || fx.exists("receipt.json") {
-				t.Fatal("attempt or receipt written")
-			}
+			fx.noRecords()
 			fx.draft = fx.readDraft()
 			fx.check(0)
 		})
@@ -356,9 +360,7 @@ func TestRunRefusesViewerChangedDuringConfirmation(t *testing.T) {
 	if !strings.Contains(msg, "reviewer") || !strings.Contains(msg, "someone-else") {
 		t.Fatalf("viewer message %q", msg)
 	}
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt written")
-	}
+	fx.noRecords()
 	fx.check(0)
 }
 
@@ -910,9 +912,7 @@ func TestRunDefinite4xxRemovesAttempt(t *testing.T) {
 	if !strings.Contains(msg, "line must be part of the diff") {
 		t.Fatalf("message %q", msg)
 	}
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("attempt or receipt remains")
-	}
+	fx.noRecords()
 	fx.check(1)
 }
 

@@ -268,9 +268,7 @@ func TestRunStickyAttendedRefusesWhenTheReviewChangesDuringConfirmation(t *testi
 	_, err = second.run()
 	wantRefusal(t, err, refusal.Changed, "loupe publish")
 	second.checkWrites(1, 0)
-	if second.exists("receipt.json") || second.exists("attempt.json") {
-		t.Fatal("a refused round wrote a record")
-	}
+	second.noRecords()
 }
 
 func TestRunStickyAttendedRefusesWhenAStickyReviewAppearsDuringConfirmation(t *testing.T) {
@@ -327,9 +325,7 @@ func TestRunStickyRejectedEditRemovesAttempt(t *testing.T) {
 	if message := wantRefusal(t, err, refusal.GitHub); !strings.Contains(message, "Body is too long") {
 		t.Fatalf("message %q", message)
 	}
-	if fx.exists("attempt.json") || fx.exists("receipt.json") {
-		t.Fatal("a rejected edit left a record")
-	}
+	fx.noRecords()
 }
 
 // A round's reconciliation marker stays in its collapsed section, so its lost attempt still reconciles after a later
