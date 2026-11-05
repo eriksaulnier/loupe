@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -338,5 +339,63 @@ func TestRequestReadTellsQueriesFromWrites(t *testing.T) {
 		if got := c.r.Read(); got != c.want {
 			t.Errorf("%s %s %v: Read %v, want %v", c.r.Method, c.r.Path, c.r.Body, got, c.want)
 		}
+	}
+}
+
+func TestUnauthorizedAndIdentitylessOutcomes(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	s.SetPR("o", "r", samplePR())
+	s.SetViewer("bob")
+	req := github.ReviewRequest{CommitID: "h1", Body: "summary", Event: "COMMENT"}
+	mine, err := c.CreateReview(ctx, "o", "r", 3, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s.QueueCreate(Unauthorized(), OKWithoutIdentity())
+	s.QueueUpdate(Unauthorized(), OKWithoutIdentity())
+	wantAuth := func(label string, err error) {
+		t.Helper()
+		if r, ok := refusal.As(err); !ok || r.Code != refusal.Auth || !strings.Contains(r.Message, "Bad credentials") {
+			t.Errorf("%s: got %v, want an auth refusal carrying GitHub's message", label, err)
+		}
+	}
+	_, err = c.CreateReview(ctx, "o", "r", 3, req)
+	wantAuth("create", err)
+	_, err = c.UpdateReview(ctx, "o", "r", 3, mine.ID, "v2")
+	wantAuth("update", err)
+
+	if review, err := c.CreateReview(ctx, "o", "r", 3, req); err != nil || review.ID != 0 || review.HTMLURL != "" {
+		t.Errorf("create without identity: %+v, %v", review, err)
+	}
+	if review, err := c.UpdateReview(ctx, "o", "r", 3, mine.ID, "v2"); err != nil || review.ID != 0 || review.HTMLURL != "" {
+		t.Errorf("update without identity: %+v, %v", review, err)
+	}
+	reviews, err := c.ListReviews(ctx, "o", "r", 3)
+	if err != nil || len(reviews) != 1 || reviews[0].Body != "summary" {
+		t.Fatalf("reviews %+v err %v, want only the first, unchanged", reviews, err)
+	}
+}
+
+func TestOnUpdateRunsBeforeTheEditIsHandled(t *testing.T) {
+	s := New(t)
+	c := s.Client(t)
+	s.SetPR("o", "r", samplePR())
+	s.SetViewer("bob")
+	mine, err := c.CreateReview(ctx, "o", "r", 3, github.ReviewRequest{CommitID: "h1", Body: "summary", Event: "COMMENT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	s.OnUpdate(func(r *http.Request) { seen = append(seen, r.Method+" "+r.URL.Path) })
+	if _, err := c.UpdateReview(ctx, "o", "r", 3, mine.ID, "v2"); err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("PUT /repos/o/r/pulls/3/reviews/%d", mine.ID); len(seen) != 1 || seen[0] != want {
+		t.Fatalf("hook saw %v, want [%s]", seen, want)
+	}
+	if s.UpdateCount() != 1 {
+		t.Fatalf("update count %d", s.UpdateCount())
 	}
 }

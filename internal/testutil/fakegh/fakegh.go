@@ -46,6 +46,8 @@ const (
 	outcomeReject422
 	outcomeErrorAfterRecord
 	outcomeErrorDrop
+	outcomeUnauthorized
+	outcomeEmpty
 )
 
 type Outcome struct {
@@ -70,6 +72,12 @@ func ServerErrorAfterRecord() Outcome { return Outcome{kind: outcomeErrorAfterRe
 
 // ServerErrorDrop returns 500 without storing anything.
 func ServerErrorDrop() Outcome { return Outcome{kind: outcomeErrorDrop} }
+
+// Unauthorized stores nothing and returns 401, as when GitHub rejects the token.
+func Unauthorized() Outcome { return Outcome{kind: outcomeUnauthorized} }
+
+// OKWithoutIdentity stores nothing and returns 200 with an empty object, a success that names no review.
+func OKWithoutIdentity() Outcome { return Outcome{kind: outcomeEmpty} }
 
 type prKey struct {
 	owner, repo string
@@ -108,6 +116,7 @@ type Server struct {
 	updateCount   int
 	nextID        int64
 	onCreate      func(*http.Request)
+	onUpdate      func(*http.Request)
 }
 
 func New(t *testing.T) *Server {
@@ -391,6 +400,13 @@ func (s *Server) OnCreate(fn func(*http.Request)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onCreate = fn
+}
+
+// OnUpdate runs fn on every review edit request before the server stores or responds to anything.
+func (s *Server) OnUpdate(fn func(*http.Request)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onUpdate = fn
 }
 
 // QueueCreate sets the outcomes of the next review creations in order; once empty, creations succeed.
@@ -768,12 +784,22 @@ func (s *Server) createReview(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
 	case outcomeErrorDrop:
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
+	case outcomeUnauthorized:
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"message": "Bad credentials"})
+	case outcomeEmpty:
+		writeJSON(w, http.StatusOK, map[string]any{})
 	}
 }
 
 // updateReview refuses an edit to another author's review with 403. That GitHub refuses it, and with which status, is
 // assumed until specs/025-sticky-review's probe runs.
 func (s *Server) updateReview(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	hook := s.onUpdate
+	s.mu.Unlock()
+	if hook != nil {
+		hook(r)
+	}
 	key, ok := keyOf(r)
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	s.mu.Lock()
@@ -816,6 +842,10 @@ func (s *Server) updateReview(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
 	case outcomeErrorDrop:
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
+	case outcomeUnauthorized:
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"message": "Bad credentials"})
+	case outcomeEmpty:
+		writeJSON(w, http.StatusOK, map[string]any{})
 	}
 }
 
