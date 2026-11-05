@@ -38,8 +38,8 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          # The release job takes .goreleaser.yaml from the dispatched commit. A dispatch from another branch could run a
-          # config without prerelease: auto, and publish the rc as a full release that becomes latest.
+          # The build takes .goreleaser.yaml from the dispatched commit, and install-script takes install.sh from it. Both
+          # MUST be what main ships.
           if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
             echo "::error::this workflow ran from $GITHUB_REF. Dispatch it from $DEFAULT_BRANCH, and name the branch to release in ref."
             exit 1
@@ -75,7 +75,8 @@ jobs:
           echo "Releasing $REF at $sha as v$VERSION"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-  # Runs the branch's code, so it gets no write token.
+  # check and build run the branch's code, so they get no write token and no cache: a run dispatched from main saves
+  # into main's cache scope, which release.yml restores from.
   check:
     needs: validate
     runs-on: ubuntu-latest
@@ -85,18 +86,15 @@ jobs:
           ref: ${{ needs.validate.outputs.sha }}
           persist-credentials: false
       - uses: jdx/mise-action@v5
+        with:
+          cache: false
       - run: mise run check
 
-  release:
-    needs: [validate, check]
+  build:
+    needs: validate
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     env:
-      REF: ${{ inputs.ref }}
-      SHA: ${{ needs.validate.outputs.sha }}
       TAG: v${{ inputs.version }}
-      VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -104,23 +102,64 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: jdx/mise-action@v5
-      # The default branch's config, not the branch's: a branch cut before prerelease: auto would publish as a full
-      # release and become latest. Outside the clone, because goreleaser refuses a dirty tree.
+        with:
+          cache: false
+      # main's config, so the archive names match what main's install.sh expects. Outside the clone, because goreleaser
+      # refuses a dirty tree.
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh api -H 'Accept: application/vnd.github.raw' "repos/$GITHUB_REPOSITORY/contents/.goreleaser.yaml?ref=$GITHUB_SHA" > "$RUNNER_TEMP/goreleaser.yaml"
-          grep -Eq '^  prerelease: auto$' "$RUNNER_TEMP/goreleaser.yaml" ||
-            { echo "::error::.goreleaser.yaml at $GITHUB_SHA does not set release.prerelease: auto, so the rc would publish as a full release"; exit 1; }
-      # goreleaser needs the tag at HEAD, and GitHub creates it only when goreleaser publishes the draft. This one
-      # stays in the runner's clone. GORELEASER_CURRENT_TAG wins over a release tag on the same commit.
+      # goreleaser reads the version from a tag at HEAD. This one never leaves the runner: GitHub creates the real tag
+      # when the release job publishes the draft.
       - run: git tag "$TAG"
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --skip=publish --config ${{ runner.temp }}/goreleaser.yaml
+        env:
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          if-no-files-found: error
+          # A re-run of all jobs builds the same commit again.
+          overwrite: true
+
+  # Holds the write token and runs no code from the branch: it only uploads what build made and publishes it.
+  # goreleaser cannot publish archives another job built without its paid edition, so gh does it.
+  release:
+    needs: [validate, check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REF: ${{ inputs.ref }}
+      SHA: ${{ needs.validate.outputs.sha }}
+      TAG: v${{ inputs.version }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: assets
+      - run: |
+          set -euo pipefail
+          cd assets
+          want="$(for target in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do echo "loupe_${VERSION}_${target}.tar.gz"; done)"
+          got="$(awk '{ print $2 }' checksums.txt | sort)"
+          [ "$got" = "$want" ] || { echo "::error::checksums.txt names $(echo "$got" | tr '\n' ' '), want $(echo "$want" | tr '\n' ' ')"; exit 1; }
+          [ "$(find . -maxdepth 1 -name '*.tar.gz' | wc -l | tr -d ' ')" = 4 ] || { echo "::error::want exactly the 4 archives that checksums.txt names"; ls -l; exit 1; }
+          sha256sum -c checksums.txt
       # Only an account with push access sees drafts, so this lookup cannot run in validate. A re-run of failed jobs
       # finds the draft an earlier attempt created, and reuses it only when it targets the same commit.
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
+      - run: |
           set -euo pipefail
           found="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.name == env.TAG or .tag_name == env.TAG) | "\(.id) \(.draft) \(.target_commitish)"')"
           if [ -z "$found" ]; then
@@ -134,22 +173,16 @@ jobs:
             echo "::error::a release named or tagged $TAG already exists and is not a draft at $SHA: $found. Delete that draft, or pick the next rc number."
             exit 1
           fi
-      # The same guard as release.yml: goreleaser creates and publishes a release of its own when it finds no draft by
-      # this name, which an immutable release would make permanent.
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
+      # Every asset goes up before the draft is published, because an immutable release takes no new assets afterward.
+      # --clobber replaces what an earlier attempt uploaded.
+      - run: gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+      # A reused draft could carry an asset uploaded by hand, which publication would make permanent.
+      - run: |
           set -euo pipefail
-          drafts="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft and .name == env.TAG) | .id' | wc -l | tr -d ' ')"
-          [ "$drafts" = 1 ] || { echo "::error::want exactly one draft release named $TAG for goreleaser to publish, found $drafts"; exit 1; }
-      - uses: goreleaser/goreleaser-action@v7
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean --config ${{ runner.temp }}/goreleaser.yaml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+          want="$(find assets -maxdepth 1 -type f -exec basename {} ';' | sort)"
+          got="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)"
+          [ "$got" = "$want" ] || { echo "::error::the draft holds $(echo "$got" | tr '\n' ' '), want $(echo "$want" | tr '\n' ' ')"; exit 1; }
+      - run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
 
   # A job of its own, so a re-run after a failure here does not re-run release, which refuses a published release.
   verify:
