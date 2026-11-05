@@ -377,8 +377,10 @@ func TestAnchorsAsNotes(t *testing.T) {
 			t.Fatalf("round %s not shown:\n%s", n, shown)
 		}
 	}
-	if strings.Contains(shown, "sha256=") && !strings.Contains(shown, "loupe-findings") || strings.Contains(shown, "commit=") {
-		t.Fatalf("an anchor is left:\n%s", shown)
+	for _, line := range strings.Split(shown, "\n") {
+		if strings.Contains(line, anchorPrefix+"v=") {
+			t.Fatalf("an anchor is left: %q", line)
+		}
 	}
 	fenced := "```\n" + sealAnchor("v=1 n=9 commit=ab", "x") + "\n```"
 	if AnchorsAsNotes(fenced) != fenced {
