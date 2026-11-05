@@ -89,6 +89,7 @@ func TestPublishDefaultsToNoInlineComments(t *testing.T) {
 		{[]string{"--inline", "blocking"}, 1, "blocking"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
+			t.Parallel()
 			h := newHarness(t)
 			h.reviewed(decidedTwoOfThree)
 			if _, stderr, exit := h.Publish("", "y", append([]string{runRef, "--action", "comment"}, tc.flags...)...); exit != 0 {
@@ -295,6 +296,7 @@ func TestPublishRefusesATerminalItCannotDrawOn(t *testing.T) {
 		{"no raw mode", "cannot enter raw mode", func(h *harness) { h.Screen = nil }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := newHarness(t)
 			h.reviewed(decidedTwoOfThree)
 			c.setup(h)
@@ -368,6 +370,7 @@ func TestPublishGateRefusals(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := newHarness(t)
 			h.reviewed(c.steps)
 			if c.setup != nil {
@@ -570,20 +573,16 @@ func TestPublishUnattendedNumbersFromBotReviews(t *testing.T) {
 	}
 }
 
+// github/client_test.go TestTokenKind pins every user-token prefix, so one stands for them here.
 func TestPublishUnattendedRefusesUserTokens(t *testing.T) {
 	t.Parallel()
-	// github/client_test.go TestTokenKind pins every prefix, so one stands for them here.
-	for _, prefix := range []string{"ghu_"} {
-		t.Run(prefix, func(t *testing.T) {
-			h := newHarness(t)
-			h.capture()
-			h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
-			h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
-			h.UseToken(prefix + "user-token")
-			h.mustRefuse("token", "publish", runRef, "--unattended")
-			h.checkSends(0)
-		})
-	}
+	h := newHarness(t)
+	h.capture()
+	h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
+	h.mustOK("summary", "--run", runRef, "--body", "Summary.", "--expect-findings", "3")
+	h.UseToken("ghu_user-token")
+	h.mustRefuse("token", "publish", runRef, "--unattended")
+	h.checkSends(0)
 }
 
 func TestPublishTokenMismatchAttendedRefusesInstallationToken(t *testing.T) {
@@ -599,6 +598,7 @@ func TestPublishTokenMismatchAttendedRefusesInstallationToken(t *testing.T) {
 func TestPublishTokenMismatchRefusesViewer(t *testing.T) {
 	t.Parallel()
 	t.Run("user-captured published unattended", func(t *testing.T) {
+		t.Parallel()
 		h := newHarness(t)
 		h.capture()
 		h.mustOK("add", "--run", runRef, "--from", h.WriteFile("findings.json", threeFindings))
@@ -608,6 +608,7 @@ func TestPublishTokenMismatchRefusesViewer(t *testing.T) {
 		h.checkSends(0)
 	})
 	t.Run("installation-captured published attended", func(t *testing.T) {
+		t.Parallel()
 		h := newHarness(t)
 		h.UseInstallationToken()
 		h.capture()
