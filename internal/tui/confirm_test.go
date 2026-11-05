@@ -1428,3 +1428,104 @@ func runConfirm(t *testing.T, in io.Reader) (publish.Confirmation, error) {
 		return publish.Confirmation{}, nil
 	}
 }
+
+// The Action and Inline comments steps are a popup over the dimmed list: the list stays in view around it, the popup
+// is narrower than the window, and the steps sit under a blank row at its top (demo feedback).
+func TestPublishStepsArePopups(t *testing.T) {
+	for _, step := range []func(*Model){
+		func(m *Model) { m.view, m.pick = viewAction, 0 },
+		func(m *Model) { m.view, m.action, m.pick = viewInline, "comment", 0 },
+	} {
+		m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+		step(m)
+		view := m.View().Content
+		rows := strings.Split(view, "\n")
+		if len(rows) != 30 || !strings.Contains(view, "Title one") {
+			t.Fatalf("the list is not in view around the popup:\n%s", view)
+		}
+		top := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "─ Publish review ") })
+		if top < 0 || strings.HasPrefix(rows[top], "╭") || strings.Contains(rows[top+1], "Action") ||
+			!strings.Contains(rows[top+2], "Action") || !strings.Contains(rows[top+2], "Message") {
+			t.Errorf("no centered Publish review popup with the tabs as its first row:\n%s", view)
+		}
+	}
+}
+
+// At the minimum size the popup keeps the selected choice in view, dropping its spacing first and then the choices
+// furthest from the selection (review finding).
+func TestPopupKeepsTheSelectedChoice(t *testing.T) {
+	m := modelOf(t, readyFixture(t, "reviewer", "author"), utf8Env, 60, 12)
+	m.view, m.pick = viewAction, slices.Index(publish.Actions, "request-changes")
+	view := m.View().Content
+	if !strings.Contains(view, "> request-changes") {
+		t.Errorf("the selected choice is not in the popup at 60x12:\n%s", view)
+	}
+}
+
+// The Message step has no row of steps over its pane: the popup before it carried them, and here they added nothing
+// (demo feedback).
+func TestMessageStepHasNoStepsRow(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	showConfirmation(m)
+	rows := strings.Split(m.View().Content, "\n")
+	if top := rows[bodyTop(30)]; !strings.Contains(top, "─ Publish review ") || strings.Contains(m.View().Content, "Inline comments ›") {
+		t.Errorf("the Message step does not open on its pane:\n%s", m.View().Content)
+	}
+}
+
+// The message box opens two rows tall and grows as the message does (demo feedback).
+func TestMessageBoxOpensTwoRowsTall(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	showConfirmation(m)
+	m.confirm.typing = true
+	rows := strings.Split(m.View().Content, "\n")
+	top := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "─ your message ") })
+	bottom := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "esc when done") })
+	if top < 0 || bottom-top-1 != 2 {
+		t.Errorf("the empty box holds %d rows, want 2:\n%s", bottom-top-1, m.View().Content)
+	}
+}
+
+// While the message is typed, shift and an arrow scroll the findings a line at a time, for keyboards without page
+// keys; the plain arrows stay with the text (demo feedback).
+func TestShiftArrowsScrollTheFindingsWhileTyping(t *testing.T) {
+	rows := make([]string, 200)
+	for i := range rows {
+		rows[i] = fmt.Sprintf("row %03d", i+1)
+	}
+	p := publish.Preview{EnvelopeJSON: "{}"}
+	p.Compose = func(message string) (publish.Envelope, string, error) {
+		return publish.Envelope{Body: previewChips + "\n\n" + message + "\n\n---\n\n" + strings.Join(rows, "\n")}, "{}", nil
+	}
+	env, _, _ := p.Compose("")
+	p.Body = env.Body
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	m.confirm, m.view = newConfirmation(p, ConfirmTitle(m.ref(), "comment", "none", 0), ""), viewConfirm
+	m.confirm.sync(m)
+	if !m.confirm.typing {
+		t.Fatal("the confirmation did not open typing")
+	}
+	top := m.confirm.scroll.YOffset()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift})
+	if m.confirm.scroll.YOffset() != top+1 || m.confirm.value() != "" {
+		t.Errorf("shift+down moved the view from %d to %d and typed %q", top, m.confirm.scroll.YOffset(), m.confirm.value())
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModShift})
+	if m.confirm.scroll.YOffset() != top {
+		t.Errorf("shift+up left the view at %d, want %d", m.confirm.scroll.YOffset(), top)
+	}
+	if !strings.Contains(m.View().Content, "scroll") {
+		t.Errorf("the typing footer does not offer the line scroll:\n%s", m.View().Content)
+	}
+	// Once esc leaves the message, the gesture the footer taught still scrolls and does not cancel (review finding).
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	for _, c := range []struct {
+		code rune
+		want int
+	}{{tea.KeyDown, top + 1}, {tea.KeyUp, top}} {
+		key := tea.KeyPressMsg{Code: c.code, Mod: tea.ModShift}
+		if done, _ := m.confirm.key(m, key); done || m.confirm.scroll.YOffset() != c.want {
+			t.Errorf("blurred, %s answered %v and left the view at %d, want %d", key, done, m.confirm.scroll.YOffset(), c.want)
+		}
+	}
+}

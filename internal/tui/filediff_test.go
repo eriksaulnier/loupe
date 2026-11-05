@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
@@ -165,5 +166,32 @@ func TestFileDiffMarksTheOldSideAndSharedLines(t *testing.T) {
 	}
 	if active := ansi.Strip(m.fileActive()); active != "f-001 +1" {
 		t.Errorf("the border names %q", active)
+	}
+}
+
+// Tokenizing happens when the displayed lines change, not on every key in the file diff.
+func TestFileDiffTokenizesOnce(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	mustOpenFinding(t, m, "f-001")
+	f, _ := m.openedFinding()
+	// Counting the tokenizer's calls checks the cache itself, which a content-derived key alone does not (review finding).
+	calls := 0
+	t.Cleanup(func() { highlightCode = style.Highlight })
+	highlightCode = func(path string, lines []string) ([][]style.CodeToken, error) {
+		calls++
+		return style.Highlight(path, lines)
+	}
+	m.openFileDiff(f)
+	m.View()
+	if calls == 0 {
+		t.Fatal("the file diff was never tokenized, so the test checks nothing")
+	}
+	before := calls
+	for range 20 {
+		m.Update(arrow(tea.KeyDown))
+		m.View()
+	}
+	if calls != before {
+		t.Errorf("moving the cursor tokenized the file %d more times", calls-before)
 	}
 }

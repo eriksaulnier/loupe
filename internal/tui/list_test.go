@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"regexp"
 	"slices"
@@ -837,5 +839,234 @@ func TestSummaryCommandTakesItsOwnRowWhenTheLabelCrowdsIt(t *testing.T) {
 	_, below := m.summaryCommand()
 	if len(below) != 2 || ansi.Strip(below[1]) != "  "+command {
 		t.Fatalf("rows under the summary: %q", below)
+	}
+}
+
+// The list shows its position only when the findings overflow the pane; detail always shows it (demo feedback).
+func TestListPositionOnlyWhenTheFindingsScroll(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	if view := m.View().Content; strings.Contains(view, "1 of 3") {
+		t.Errorf("a list that fits shows its position:\n%s", view)
+	}
+	mustOpen(m, "f-001")
+	if view := m.View().Content; !strings.Contains(view, "1 of 3") {
+		t.Errorf("detail lost its position:\n%s", view)
+	}
+	m = modelOf(t, newFixture(t), utf8Env, 60, 12)
+	for i := 4; i <= 12; i++ {
+		f := m.order[2]
+		f.ID = fmt.Sprintf("f-%03d", i)
+		m.draft.Findings = append(m.draft.Findings, f)
+		m.order = append(m.order, f)
+	}
+	if view := m.View().Content; !strings.Contains(view, "1 of 12") {
+		t.Errorf("a list that scrolls hides its position:\n%s", view)
+	}
+}
+
+// A clipped summary offers the full-summary command whole on one row, in the border when it fits and under the pane
+// when it does not, so it can be copied at every width (layout contract, summary budget).
+func TestClippedSummaryCommandStaysWhole(t *testing.T) {
+	const command = "loupe show --run acme/widgets#42@1"
+	for _, width := range []int{60, 79, 100} {
+		m := modelOf(t, newFixture(t), utf8Env, width, 14)
+		m.draft.Summary = "- one\n- two\n- three\n- four\n- five\n- six"
+		l := m.layoutList(len(m.viewFooter()), 0)
+		if !l.summaryClipped {
+			t.Fatalf("at %d the summary is not clipped: %+v", width, l)
+		}
+		view := m.View().Content
+		lines := strings.Split(view, "\n")
+		if len(lines) != 14 {
+			t.Fatalf("at %d the list is %d rows:\n%s", width, len(lines), view)
+		}
+		found := false
+		for _, line := range lines {
+			if style.Width(line) > width {
+				t.Errorf("at %d a row is %d cells: %q", width, style.Width(line), line)
+			}
+			if strings.Contains(line, command) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("at %d the full-summary command is not whole on one row:\n%s", width, view)
+		}
+		if !strings.Contains(view, "Title one") {
+			t.Errorf("at %d the selected finding is gone:\n%s", width, view)
+		}
+	}
+}
+
+// A short window collapses the summary on its own without changing the human's choice, which comes back when the
+// window grows.
+func TestShortWindowCollapsesTheSummaryWithoutForgetting(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 80, 30)
+	m.draft.Summary = "- one\n- two\n- three\n- four"
+	if l := m.layoutList(len(m.viewFooter()), 0); l.collapsed || len(l.summary) != 4 {
+		t.Fatalf("a tall window collapsed the summary: %+v", l)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	if l := m.layoutList(len(m.viewFooter()), 0); !l.collapsed || l.gap != 0 || m.summaryCollapsed {
+		t.Fatalf("a short window: %+v, preference collapsed %v", l, m.summaryCollapsed)
+	}
+	if !strings.Contains(m.View().Content, "collapsed to fit") {
+		t.Errorf("an automatic collapse offers tab as if it could expand:\n%s", m.View().Content)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	if l := m.layoutList(len(m.viewFooter()), 0); l.collapsed {
+		t.Errorf("growing the window did not bring the expanded summary back")
+	}
+}
+
+// A full-summary command too wide for the window breaks into rows that paste back as the same command: each row but
+// the last ends in a backslash, which the shell joins with the next (review finding, long repository names).
+func TestSummaryCommandPastesWholeForLongNames(t *testing.T) {
+	for _, repo := range []string{"repository-with-a-perfectly-valid-but-long-name", strings.Repeat("r", 100)} {
+		m := modelOf(t, newFixture(t), utf8Env, 60, 16)
+		m.target.Repo = repo
+		_, below := m.summaryCommand()
+		if len(below) < 2 {
+			t.Fatalf("%s: the command did not move under the pane: %q", repo, below)
+		}
+		var rows []string
+		for _, r := range below[1:] {
+			r = ansi.Strip(r)
+			if style.Width(r) > m.width {
+				t.Errorf("%s: row %q is wider than %d", repo, r, m.width)
+			}
+			rows = append(rows, r)
+		}
+		pasted := strings.ReplaceAll(strings.Join(rows, "\n"), "\\\n", "")
+		want := []string{"loupe", "show", "--run", "acme/" + repo + "#42@1"}
+		if got := strings.Fields(pasted); !slices.Equal(got, want) {
+			t.Errorf("%s: pastes as %q, want %q", repo, got, want)
+		}
+	}
+}
+
+// reasonFixture withdraws f-003 with the given title and reason, and f-002 with no reason (specs/041-withdraw-reason).
+func reasonFixture(t *testing.T, title string, reason draft.Reason) string {
+	t.Helper()
+	dir := newFixture(t)
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[2].Title = title
+		raw, err := json.Marshal(reason)
+		if err != nil {
+			return err
+		}
+		withdraw := false
+		if _, _, err := draft.Edit(d, "f-003", draft.EditInput{WithdrawReason: raw}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow); err != nil {
+			return err
+		}
+		_, _, err = draft.Edit(d, "f-002", draft.EditInput{}, &withdraw, nil, draft.ByAgent, draft.Rules{}, testNow)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// listRow is the finding's row as the list draws it, without color.
+func listRow(t *testing.T, m *Model, id string) string {
+	t.Helper()
+	for _, row := range listRows(m.View().Content) {
+		if strings.Contains(row, " "+id+" ") {
+			return ansi.Strip(row)
+		}
+	}
+	t.Fatalf("no row for %s:\n%s", id, m.View().Content)
+	return ""
+}
+
+// The reason follows the title in the title column, and when both overflow they split it about evenly, each ending in
+// an ellipsis (FR-006).
+func TestTheRowSaysWhyAFindingWasWithdrawn(t *testing.T) {
+	longTitle := "The retry loop resets its counter on every scrape attempt"
+	longReason := "Test name only, the assertion is unchanged and nothing runs differently"
+	for _, c := range []struct{ width, height int }{{80, 24}, {100, 30}} {
+		t.Run(fmt.Sprint(c.width), func(t *testing.T) {
+			m := modelOf(t, reasonFixture(t, longTitle, draft.Reason{Text: longReason, Code: "no-runtime-effect"}), utf8Env, c.width, c.height)
+			row := listRow(t, m, "f-003")
+			rest := m.listColumns().title - 3
+			title, reason := rest-rest/2, rest/2
+			want := m.styles.TruncRight(longTitle, title) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(longReason, reason)
+			if !strings.Contains(row, want) || !strings.HasSuffix(m.styles.TruncRight(longReason, reason), m.styles.Glyphs.Ellipsis) {
+				t.Errorf("row %q lacks %q", row, want)
+			}
+			if style.Width(row) > c.width || strings.Contains(row, "no-runtime-effect") {
+				t.Errorf("row %q is %d cells or carries the code", row, style.Width(row))
+			}
+			if bare := listRow(t, m, "f-002"); strings.Contains(bare, " "+m.glyphs.Sep+" ") || !strings.Contains(bare, "Title two") {
+				t.Errorf("a withdrawal with no reason drew one: %q", bare)
+			}
+		})
+	}
+}
+
+// A short title gives the reason the slack, and a short reason gives it to the title.
+func TestTheRowGivesTheSlackToTheLongerPart(t *testing.T) {
+	long := "Test name only, the assertion is unchanged and nothing runs differently"
+	m := modelOf(t, reasonFixture(t, "Short", draft.Reason{Text: long}), utf8Env, 80, 24)
+	if want := "Short " + m.glyphs.Sep + " " + m.styles.TruncRight(long, m.listColumns().title-3-5); !strings.Contains(listRow(t, m, "f-003"), want) {
+		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
+	}
+	m = modelOf(t, reasonFixture(t, long, draft.Reason{Text: "Naming."}), utf8Env, 80, 24)
+	if want := m.styles.TruncRight(long, m.listColumns().title-3-7) + " " + m.glyphs.Sep + " Naming."; !strings.Contains(listRow(t, m, "f-003"), want) {
+		t.Errorf("row %q lacks %q", listRow(t, m, "f-003"), want)
+	}
+}
+
+// The blocking mark sits in the severity pill, so a blocking row splits the whole title cell.
+func TestABlockingRowSplitsTheWholeTitleCell(t *testing.T) {
+	long := "Test name only, the assertion is unchanged and nothing runs differently"
+	dir := reasonFixture(t, long, draft.Reason{Text: long})
+	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {
+		d.Findings[2].Blocking = true
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := modelOf(t, dir, utf8Env, 80, 24)
+	rest := m.listColumns().title - 3
+	want := m.styles.TruncRight(long, rest-rest/2) + " " + m.glyphs.Sep + " " + m.styles.TruncRight(long, rest/2)
+	if row := listRow(t, m, "f-003"); !strings.Contains(row, want) {
+		t.Errorf("row %q lacks %q", row, want)
+	}
+}
+
+// A withdrawn row's title recedes to the same color as dim, so the reason is also italic to read apart from it. Without
+// color the row carries no escape.
+func TestTheRowSetsTheReasonApartFromTheTitle(t *testing.T) {
+	rawRow := func(m *Model) string {
+		for _, row := range listRows(m.View().Content) {
+			if strings.Contains(ansi.Strip(row), " f-003 ") {
+				return row
+			}
+		}
+		t.Fatalf("no row for f-003:\n%s", m.View().Content)
+		return ""
+	}
+	dir := reasonFixture(t, "Title three", draft.Reason{Text: "Naming only."})
+	m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	if row, want := rawRow(m), m.styles.Dim.Italic(true).Render(" "+m.glyphs.Sep+" Naming only."); !strings.Contains(row, want) {
+		t.Errorf("row %q lacks the italic reason %q", row, want)
+	}
+	m = modelOf(t, dir, utf8Env, 100, 30)
+	if row := rawRow(m); strings.Contains(row, "\x1b") || !strings.Contains(row, "Title three "+m.glyphs.Sep+" Naming only.") {
+		t.Errorf("row without color %q", row)
+	}
+}
+
+// A reason passes the same one-line display rule as a title.
+func TestTheRowEscapesAReason(t *testing.T) {
+	m := modelOf(t, reasonFixture(t, "T", draft.Reason{Text: "a\x1b[31mb"}), utf8Env, 100, 30)
+	if row := listRow(t, m, "f-003"); strings.Contains(row, "\x1b") || !strings.Contains(row, `a\u001B[31mb`) {
+		t.Errorf("row %q", row)
+	}
+	mustOpen(m, "f-003")
+	if view := m.View().Content; strings.Contains(ansi.Strip(view), "\x1b") || !strings.Contains(ansi.Strip(view), `a\u001B[31mb`) {
+		t.Errorf("detail %q", ansi.Strip(view))
 	}
 }

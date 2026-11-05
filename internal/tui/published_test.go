@@ -264,3 +264,75 @@ func TestAURLTallerThanThePaneLinksTheRowsShown(t *testing.T) {
 		}
 	}
 }
+
+// openerFixture is a list whose target has a pull request URL.
+func openerModel(t *testing.T, open func(string) error) *Model {
+	t.Helper()
+	m := modelOf(t, newFixture(t), utf8Env, 100, 30)
+	m.target.URL = "https://github.com/acme/widgets/pull/42"
+	m.cfg.OpenURL = open
+	return m
+}
+
+// o in list and detail opens the captured pull request, keeps the review running, and on any failure leaves a
+// persistent explanation with the URL to copy (FR-013, owner decision 5).
+func TestOOpensThePullRequestAndKeepsReviewing(t *testing.T) {
+	var opened []string
+	m := openerModel(t, func(url string) error { opened = append(opened, url); return nil })
+	_, cmd := m.Update(runes("o"))
+	if cmd == nil {
+		t.Fatal("o started no opener")
+	}
+	if _, again := m.Update(runes("o")); again != nil || !strings.Contains(m.notice, "already opening") {
+		t.Errorf("a second o while opening launched again: notice %q", m.notice)
+	}
+	_, quit := m.Update(cmd())
+	if quit != nil {
+		if _, ok := quit().(tea.QuitMsg); ok {
+			t.Fatal("a successful open quit the review")
+		}
+	}
+	if len(opened) != 1 || opened[0] != m.target.URL || m.view != viewList || m.browsing {
+		t.Fatalf("opened %v, view %v, browsing %v", opened, m.view, m.browsing)
+	}
+
+	failing := openerModel(t, func(string) error { return errors.New("no browser") })
+	mustOpenFinding(t, failing, "f-001")
+	_, cmd = failing.Update(runes("o"))
+	failing.Update(cmd())
+	if failing.view != viewDetail || !strings.Contains(failing.notice, "Could not open the browser: no browser") ||
+		!strings.Contains(failing.notice, "Open this URL manually: https://github.com/acme/widgets/pull/42") {
+		t.Fatalf("a failed open: view %v notice %q", failing.view, failing.notice)
+	}
+	if !strings.Contains(paneConcat(failing.View().Content), "https://github.com/acme/widgets/pull/42") {
+		t.Errorf("the URL to copy is not on screen:\n%s", failing.View().Content)
+	}
+
+	none := openerModel(t, nil)
+	none.Update(runes("o"))
+	if !strings.Contains(none.notice, "No browser opener is available. Open this URL manually: https://github.com/acme/widgets/pull/42") {
+		t.Errorf("no opener: notice %q", none.notice)
+	}
+	if footer := strings.Join(none.viewFooter(), " "); !strings.Contains(footer, "o open PR (unavailable)") {
+		t.Errorf("no opener: footer %q", footer)
+	}
+
+	unsafe := openerModel(t, func(string) error { t.Fatal("an unsafe URL reached the opener"); return nil })
+	unsafe.target.URL = "file:///etc/passwd"
+	if _, cmd := unsafe.Update(runes("o")); cmd != nil || !strings.Contains(unsafe.notice, "not one loupe will open") {
+		t.Errorf("an unsafe URL: notice %q", unsafe.notice)
+	}
+}
+
+// A result that arrives after the human moved on reaches neither an editor nor the publish flow.
+func TestALateOpenerResultLeavesTheNewViewAlone(t *testing.T) {
+	m := openerModel(t, func(string) error { return errors.New("late") })
+	mustOpenFinding(t, m, "f-001")
+	_, cmd := m.Update(runes("o"))
+	m.Update(runes("s"))
+	m.Update(runes("half a note"))
+	m.Update(cmd())
+	if !m.noting || m.note.Value() != "half a note" || strings.Contains(m.notice, "late") {
+		t.Fatalf("a late result reached the note editor: noting %v value %q notice %q", m.noting, m.note.Value(), m.notice)
+	}
+}

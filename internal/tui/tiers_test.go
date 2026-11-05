@@ -223,3 +223,104 @@ func TestNerdTierDrawsIcons(t *testing.T) {
 		t.Errorf("NO_COLOR nerd tier must keep the icons and emit no escape:\n%q", view)
 	}
 }
+
+// The contract's boundaries: every screen fills the window exactly at each side of a width or height step, the list
+// keeps a finding row and every hint at the minimum, and below it the too-small screen takes over (FR-015).
+func TestLayoutBoundaries(t *testing.T) {
+	dir := newFixture(t)
+	withOpenNote(t, dir)
+	for _, size := range [][2]int{{59, 24}, {60, 12}, {60, 11}, {79, 24}, {80, 24}, {80, 23}, {99, 30}, {100, 30}, {100, 29}} {
+		for _, sc := range screens {
+			m := modelOf(t, dir, utf8Env, size[0], size[1])
+			sc.show(m)
+			lines := strings.Split(m.View().Content, "\n")
+			where := fmt.Sprintf("%dx%d %s", size[0], size[1], sc.name)
+			if len(lines) != size[1] {
+				t.Errorf("%s: %d rows", where, len(lines))
+			}
+			for _, l := range lines {
+				if style.Width(l) > size[0] {
+					t.Errorf("%s: a row is %d cells: %q", where, style.Width(l), l)
+				}
+			}
+			small := strings.Contains(m.View().Content, "Window too small")
+			if small != tooSmall(size[0], size[1]) {
+				t.Errorf("%s: too-small screen %v", where, small)
+			}
+		}
+	}
+	m := modelOf(t, dir, utf8Env, 60, 12)
+	view := m.View().Content
+	footer := m.viewFooter()
+	if len(listRows(view)) < 1 || len(footer) > 3 {
+		t.Errorf("60x12 list: %d finding rows, %d footer rows:\n%s", len(listRows(view)), len(footer), view)
+	}
+	for _, want := range []string{"move", "open", "summary", "open PR", "publish (not ready)", "help", "quit"} {
+		if !strings.Contains(strings.Join(footer, " "), want) {
+			t.Errorf("60x12 footer lacks %q: %q", want, footer)
+		}
+	}
+}
+
+// Every nonempty NO_COLOR value turns every escape off, the header link included; 16 colors and the light palette
+// still draw, and keep every state's glyph and word.
+func TestColorProfilesKeepEveryState(t *testing.T) {
+	dir := mixedFixture(t)
+	for _, value := range []string{"1", "anything"} {
+		m := modelOf(t, dir, map[string]string{"NO_COLOR": value, "LANG": "en_US.UTF-8", "COLORTERM": "truecolor"}, 100, 30)
+		m.target.URL = "https://github.com/acme/widgets/pull/42"
+		for name, view := range everyView(t, m) {
+			if strings.ContainsRune(view, '\x1b') {
+				t.Errorf("NO_COLOR=%s %s emits an escape", value, name)
+			}
+		}
+	}
+	for _, c := range []struct {
+		name    string
+		profile colorprofile.Profile
+		dark    bool
+	}{{"16 colors", colorprofile.ANSI, true}, {"light", colorprofile.TrueColor, false}, {"256 colors", colorprofile.ANSI256, true}} {
+		m := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+		m.styles.SetColorProfile(c.profile)
+		m.styles.SetDarkBackground(c.dark)
+		view := m.View().Content
+		plain := ansi.Strip(view)
+		for _, want := range []string{"✓ f-001", "· f-002", "× f-003", "● ", "✎ ", "2/3 decided"} {
+			if !strings.Contains(plain, want) {
+				t.Errorf("%s list lacks %q:\n%s", c.name, want, plain)
+			}
+		}
+		if !strings.ContainsRune(view, '\x1b') {
+			t.Errorf("%s list paints nothing", c.name)
+		}
+	}
+	dark := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	dark.styles.SetColorProfile(colorprofile.TrueColor)
+	light := modelOf(t, dir, map[string]string{"LANG": "en_US.UTF-8"}, 100, 30)
+	light.styles.SetColorProfile(colorprofile.TrueColor)
+	light.styles.SetDarkBackground(false)
+	accent := sgrOf(t, light.styles.ToneStyle(style.ToneAccent).Render("x"))
+	if dark.View().Content == light.View().Content || !strings.Contains(light.View().Content, accent) {
+		t.Errorf("the light palette does not use its own accent %q", accent)
+	}
+	if strings.Contains(dark.View().Content, accent) {
+		t.Errorf("the dark palette uses the light accent %q", accent)
+	}
+}
+
+// Long ids, graphemes and large counts fit by display cells in the list and the header.
+func TestLongTextFitsByCells(t *testing.T) {
+	m := modelOf(t, newFixture(t), utf8Env, 80, 24)
+	m.target.Title = strings.Repeat("審査", 30)
+	m.draft.Findings[0].Title = strings.Repeat("漢字", 40)
+	m.draft.Findings[0].ID = "f-100000"
+	m.setDraft(m.draft)
+	for _, l := range strings.Split(m.View().Content, "\n") {
+		if style.Width(l) > 80 {
+			t.Errorf("row is %d cells: %q", style.Width(l), l)
+		}
+	}
+	if !strings.Contains(m.View().Content, "f-100000") {
+		t.Errorf("a long id was cut:\n%s", m.View().Content)
+	}
+}
