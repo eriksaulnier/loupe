@@ -1,0 +1,373 @@
+package gitx
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
+)
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = cleanEnv()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func writeFile(t *testing.T, path, content string, mode os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type workTree struct {
+	repo    *gitrepo.Repo
+	head    string
+	subHead string
+}
+
+// newWorkTree leaves the clone with a staged, an unstaged, a deleted, an untracked, an executable, a binary, an
+// ignored file and an embedded repository, which add -A records as a submodule gitlink.
+func newWorkTree(t *testing.T) workTree {
+	t.Helper()
+	repo := gitrepo.New(t, "o", "r", 1)
+	dir := repo.Dir
+	writeFile(t, filepath.Join(dir, "src/app.go"), "staged\n", 0o644)
+	repo.Git("add", "src/app.go")
+	writeFile(t, filepath.Join(dir, "docs/old-name.md"), "unstaged\n", 0o644)
+	if err := os.Remove(filepath.Join(dir, "remove-me.txt")); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "notes/new.md"), "untracked\n", 0o644)
+	writeFile(t, filepath.Join(dir, "run.sh"), "#!/bin/sh\n", 0o755)
+	writeFile(t, filepath.Join(dir, "bin.dat"), "a\x00b\x00c", 0o644)
+	writeFile(t, filepath.Join(dir, "secret.log"), "ignored\n", 0o644)
+	writeFile(t, filepath.Join(dir, ".git/info/exclude"), "*.log\n", 0o644)
+
+	sub := filepath.Join(dir, "vendor/sub")
+	writeFile(t, filepath.Join(sub, "lib.txt"), "lib\n", 0o644)
+	runGit(t, sub, "init", "--quiet", "--initial-branch=main")
+	runGit(t, sub, "add", "lib.txt")
+	runGit(t, sub, "commit", "--quiet", "--message", "sub")
+	return workTree{repo: repo, head: repo.Git("rev-parse", "HEAD"), subHead: runGit(t, sub, "rev-parse", "HEAD")}
+}
+
+func captureTree(t *testing.T, clone string) (string, string) {
+	t.Helper()
+	indexPath := filepath.Join(t.TempDir(), "index")
+	ix := WithIndex(clone, indexPath)
+	if err := ix.ReadTree("HEAD"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ix.AddAll(); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := ix.WriteTree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tree, indexPath
+}
+
+func TestWithIndexOverridesTheParentIndexFile(t *testing.T) {
+	w := newWorkTree(t)
+	decoy := filepath.Join(t.TempDir(), "decoy-index")
+	t.Setenv("GIT_INDEX_FILE", decoy)
+
+	indexPath := filepath.Join(t.TempDir(), "index")
+	ix := WithIndex(w.repo.Dir, indexPath)
+	var found []string
+	for _, kv := range ix.env() {
+		if strings.HasPrefix(kv, "GIT_INDEX_FILE=") {
+			found = append(found, kv)
+		}
+	}
+	if !slices.Equal(found, []string{"GIT_INDEX_FILE=" + indexPath}) {
+		t.Fatalf("GIT_INDEX_FILE entries = %q", found)
+	}
+	if err := ix.ReadTree("HEAD"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(indexPath); err != nil {
+		t.Fatalf("temporary index not written: %v", err)
+	}
+	if _, err := os.Stat(decoy); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("parent GIT_INDEX_FILE was used or cannot be checked: %v", err)
+	}
+}
+
+func TestWithIndexRefusesARelativeIndexPath(t *testing.T) {
+	w := newWorkTree(t)
+	if err := WithIndex(w.repo.Dir, "index").ReadTree("HEAD"); err == nil {
+		t.Fatal("ReadTree accepted a relative index path")
+	}
+}
+
+func TestCaptureTreeHoldsTheWorkingFilesAndLeavesTheUserIndex(t *testing.T) {
+	w := newWorkTree(t)
+	userIndex := filepath.Join(w.repo.Dir, ".git", "index")
+	before, err := os.ReadFile(userIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tree, _ := captureTree(t, w.repo.Dir)
+
+	after, err := os.ReadFile(userIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("the user's .git/index changed")
+	}
+	if got := w.repo.Git("rev-parse", "HEAD"); got != w.head {
+		t.Fatalf("HEAD moved to %s", got)
+	}
+	names, err := LsTreeNames(w.repo.Dir, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"README.md", "bin.dat", "docs/old-name.md", "notes/new.md", "run.sh", "src/app.go", "vendor/sub"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("tree paths = %q, want %q", names, want)
+	}
+	for path, content := range map[string]string{
+		"src/app.go": "staged\n", "docs/old-name.md": "unstaged\n", "notes/new.md": "untracked\n",
+	} {
+		got, err := Blob(w.repo.Dir, tree, path)
+		if err != nil || string(got) != content {
+			t.Errorf("Blob(%s) = %q, %v; want %q", path, got, err, content)
+		}
+	}
+}
+
+func TestDiffRawZParsesStatusModeAndObjectID(t *testing.T) {
+	w := newWorkTree(t)
+	tree, _ := captureTree(t, w.repo.Dir)
+	entries, err := DiffRawZ(w.repo.Dir, w.head, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zero := strings.Repeat("0", len(w.head))
+	blob := func(rev, path string) string { return w.repo.Git("rev-parse", rev+":"+path) }
+	want := []RawEntry{
+		{SrcMode: "000000", DstMode: "100644", SrcOID: zero, DstOID: blob(tree, "bin.dat"), Status: "A", Path: "bin.dat"},
+		{SrcMode: "100644", DstMode: "100644", SrcOID: blob(w.head, "docs/old-name.md"), DstOID: blob(tree, "docs/old-name.md"), Status: "M", Path: "docs/old-name.md"},
+		{SrcMode: "000000", DstMode: "100644", SrcOID: zero, DstOID: blob(tree, "notes/new.md"), Status: "A", Path: "notes/new.md"},
+		{SrcMode: "100644", DstMode: "000000", SrcOID: blob(w.head, "remove-me.txt"), DstOID: zero, Status: "D", Path: "remove-me.txt"},
+		{SrcMode: "000000", DstMode: "100755", SrcOID: zero, DstOID: blob(tree, "run.sh"), Status: "A", Path: "run.sh"},
+		{SrcMode: "100644", DstMode: "100644", SrcOID: blob(w.head, "src/app.go"), DstOID: blob(tree, "src/app.go"), Status: "M", Path: "src/app.go"},
+		{SrcMode: "000000", DstMode: "160000", SrcOID: zero, DstOID: w.subHead, Status: "A", Path: "vendor/sub"},
+	}
+	if !slices.Equal(entries, want) {
+		t.Fatalf("DiffRawZ\n got %+v\nwant %+v", entries, want)
+	}
+}
+
+func TestNumstatZMarksBinaryFiles(t *testing.T) {
+	w := newWorkTree(t)
+	tree, _ := captureTree(t, w.repo.Dir)
+	stats, err := NumstatZ(w.repo.Dir, w.head, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := map[string]Numstat{}
+	for _, s := range stats {
+		byPath[s.Path] = s
+	}
+	cases := map[string]Numstat{
+		"bin.dat":       {Path: "bin.dat", Binary: true},
+		"notes/new.md":  {Path: "notes/new.md", Added: 1},
+		"src/app.go":    {Path: "src/app.go", Added: 1, Deleted: 40},
+		"remove-me.txt": {Path: "remove-me.txt", Deleted: 1},
+	}
+	for path, want := range cases {
+		if got := byPath[path]; got != want {
+			t.Errorf("NumstatZ %s = %+v, want %+v", path, got, want)
+		}
+	}
+	if len(stats) != 7 {
+		t.Errorf("NumstatZ returned %d entries, want 7: %+v", len(stats), stats)
+	}
+}
+
+func TestParseRawZRefusesMalformedOutput(t *testing.T) {
+	for _, in := range []string{":100644 100644 a b\x00x\x00", ":100644 100644 a b M\x00", "100644 100644 a b M\x00x\x00"} {
+		if _, err := parseRawZ([]byte(in)); err == nil {
+			t.Errorf("parseRawZ(%q) accepted malformed output", in)
+		}
+	}
+}
+
+func TestParseNumstatZRefusesMalformedOutput(t *testing.T) {
+	for _, in := range []string{"1\t2\x00", "x\t2\tp\x00", "1\t-\tp\x00"} {
+		if _, err := parseNumstatZ([]byte(in)); err == nil {
+			t.Errorf("parseNumstatZ(%q) accepted malformed output", in)
+		}
+	}
+}
+
+func TestDiffLiteralJoinsChunksInPathOrder(t *testing.T) {
+	w := newWorkTree(t)
+	writeFile(t, filepath.Join(w.repo.Dir, "glob[x].md"), "literal\n", 0o644)
+	writeFile(t, filepath.Join(w.repo.Dir, "globx.md"), "not asked for\n", 0o644)
+	tree, _ := captureTree(t, w.repo.Dir)
+	paths := []string{"src/app.go", "notes/new.md", "glob[x].md", "docs/old-name.md", "README.md", "run.sh"}
+
+	whole, err := DiffLiteral(w.repo.Dir, w.head, tree, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(whole, []byte("globx.md")) || !bytes.Contains(whole, []byte("glob[x].md")) {
+		t.Fatalf("a path was read as a glob:\n%s", whole)
+	}
+	want := runGit(t, w.repo.Dir, append(slices.Clone(diffFlags), "--no-renames", w.head, tree, "--",
+		"docs/old-name.md", ":(literal)glob[x].md", "notes/new.md", "run.sh", "src/app.go")...)
+	if strings.TrimSpace(string(whole)) != want {
+		t.Fatalf("DiffLiteral differs from one diff over the same paths:\n%s\nwant:\n%s", whole, want)
+	}
+
+	defer func(n int) { literalBatch = n }(literalBatch)
+	literalBatch = 2
+	chunked, err := DiffLiteral(w.repo.Dir, w.head, tree, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(chunked, whole) {
+		t.Fatalf("chunked output differs:\n%s\nwant:\n%s", chunked, whole)
+	}
+}
+
+func TestDiffLiteralRunsAThousandPathsPerCall(t *testing.T) {
+	paths := make([]string, 2500)
+	for i := range paths {
+		paths[i] = fmt.Sprintf("f%04d", 2499-i)
+	}
+	var calls [][]string
+	defer func(g func(string, ...string) ([]byte, error)) { literalGit = g }(literalGit)
+	literalGit = func(_ string, args ...string) ([]byte, error) {
+		sep := slices.Index(args, "--")
+		got := args[sep+1:]
+		calls = append(calls, got)
+		return []byte(strings.Join(got, ",") + ";"), nil
+	}
+	out, err := DiffLiteral("clone", "base", "tree", paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 3 || len(calls[0]) != 1000 || len(calls[1]) != 1000 || len(calls[2]) != 500 {
+		t.Fatalf("calls had %d, sizes %v", len(calls), lens(calls))
+	}
+	if calls[0][0] != ":(literal)f0000" || calls[2][499] != ":(literal)f2499" {
+		t.Fatalf("paths not sorted: first %q, last %q", calls[0][0], calls[2][499])
+	}
+	var want strings.Builder
+	for _, c := range calls {
+		want.WriteString(strings.Join(c, ",") + ";")
+	}
+	if string(out) != want.String() {
+		t.Fatal("outputs not joined in call order")
+	}
+	if !slices.Equal(paths[:2], []string{"f2499", "f2498"}) {
+		t.Fatal("DiffLiteral sorted the caller's slice")
+	}
+}
+
+func lens(calls [][]string) []int {
+	n := make([]int, len(calls))
+	for i, c := range calls {
+		n[i] = len(c)
+	}
+	return n
+}
+
+func TestLsTreeNamesListsTheRootFromASubdirectory(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	names, err := LsTreeNames(filepath.Join(repo.Dir, "src"), "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"README.md", "docs/old-name.md", "remove-me.txt", "src/app.go"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("LsTreeNames = %q, want %q", names, want)
+	}
+}
+
+func TestBatchCheckSizesReturnsBlobSizes(t *testing.T) {
+	w := newWorkTree(t)
+	tree, _ := captureTree(t, w.repo.Dir)
+	newMD := w.repo.Git("rev-parse", tree+":notes/new.md")
+	bin := w.repo.Git("rev-parse", tree+":bin.dat")
+	sizes, err := BatchCheckSizes(w.repo.Dir, []string{newMD, bin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sizes[newMD] != int64(len("untracked\n")) || sizes[bin] != 5 || len(sizes) != 2 {
+		t.Fatalf("sizes = %v", sizes)
+	}
+	if _, err := BatchCheckSizes(w.repo.Dir, []string{strings.Repeat("1", len(newMD))}); err == nil {
+		t.Fatal("BatchCheckSizes accepted a missing object")
+	}
+	if sizes, err := BatchCheckSizes(w.repo.Dir, nil); err != nil || len(sizes) != 0 {
+		t.Fatalf("BatchCheckSizes(nil) = %v, %v", sizes, err)
+	}
+}
+
+func TestToplevelAndCommonDirAreAbsolute(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	// Git resolves symlinks in the toplevel, as macOS has under its temporary directory.
+	resolved := func(p string) string {
+		t.Helper()
+		r, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	root := resolved(repo.Dir)
+	sub := filepath.Join(repo.Dir, "src")
+	top, err := Toplevel(sub)
+	if err != nil || !filepath.IsAbs(top) || resolved(top) != root {
+		t.Fatalf("Toplevel = %q, %v; want %s", top, err, root)
+	}
+	for _, dir := range []string{sub, repo.Dir} {
+		common, err := CommonDir(dir)
+		if err != nil || !filepath.IsAbs(common) || resolved(common) != filepath.Join(root, ".git") {
+			t.Fatalf("CommonDir(%s) = %q, %v; want %s", dir, common, err, filepath.Join(root, ".git"))
+		}
+	}
+	if _, err := Toplevel(t.TempDir()); err == nil {
+		t.Fatal("Toplevel accepted a directory outside Git")
+	}
+}
+
+func TestConfigBool(t *testing.T) {
+	repo := gitrepo.New(t, "o", "r", 1)
+	if on, err := ConfigBool(repo.Dir, "core.sparseCheckout"); err != nil || on {
+		t.Fatalf("unset core.sparseCheckout = %v, %v", on, err)
+	}
+	setConfig(t, repo.Dir, "core.sparseCheckout", "yes")
+	if on, err := ConfigBool(repo.Dir, "core.sparseCheckout"); err != nil || !on {
+		t.Fatalf("core.sparseCheckout=yes = %v, %v", on, err)
+	}
+	setConfig(t, repo.Dir, "core.sparseCheckout", "maybe")
+	if _, err := ConfigBool(repo.Dir, "core.sparseCheckout"); err == nil {
+		t.Fatal("ConfigBool accepted a value that is not a bool")
+	}
+}

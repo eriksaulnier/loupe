@@ -143,6 +143,17 @@ func TestFetchArgsCarryEveryGuard(t *testing.T) {
 	}
 }
 
+func TestDiffArgsAreUnchanged(t *testing.T) {
+	want := []string{
+		"-c", "diff.interHunkContext=0", "-c", "diff.indentHeuristic=true", "diff", "-U3",
+		"--diff-algorithm=myers", "--no-relative", "-O" + os.DevNull, "--no-ext-diff", "--no-color", "--no-textconv",
+		"--src-prefix=a/", "--dst-prefix=b/", "--find-renames", "base...head",
+	}
+	if got := diffArgs("base", "head"); !slices.Equal(got, want) {
+		t.Fatalf("diff argv\n got %q\nwant %q", got, want)
+	}
+}
+
 // The clone's own config asks for hooks, every tag and pruning; the fetch must honor none of them. With --refmap= there
 // is nothing for pruning to remove, so only the argv test notices a missing --no-prune.
 func TestFetchPRIgnoresHooksTagsAndPruneConfig(t *testing.T) {

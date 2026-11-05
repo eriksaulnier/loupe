@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/eriksaulnier/loupe/internal/gitenv"
@@ -20,8 +22,15 @@ func cleanEnv() []string {
 }
 
 func git(clone string, args ...string) ([]byte, error) {
+	return run(clone, cleanEnv(), nil, args...)
+}
+
+func run(clone string, env []string, stdin []byte, args ...string) ([]byte, error) {
 	cmd := exec.Command("git", append([]string{"-C", clone}, args...)...)
-	cmd.Env = cleanEnv()
+	cmd.Env = env
+	if stdin != nil {
+		cmd.Stdin = bytes.NewReader(stdin)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -157,8 +166,21 @@ func BranchUpstream(clone, branch string) (remote, merge string, err error) {
 	return remote, merge, nil
 }
 
+// ConfigBool reads key as Git reads a bool, so yes, on and 1 are true. An unset key is false.
+func ConfigBool(clone, key string) (bool, error) {
+	v, found, err := configLookup(clone, "--type=bool", "--get", key)
+	if err != nil || !found {
+		return false, err
+	}
+	return v == "true", nil
+}
+
 func configValue(clone, key string) (string, bool, error) {
-	out, err := git(clone, "config", "--get", key)
+	return configLookup(clone, "--get", key)
+}
+
+func configLookup(clone string, args ...string) (string, bool, error) {
+	out, err := git(clone, append([]string{"config"}, args...)...)
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return "", false, nil
@@ -177,6 +199,29 @@ func RevParse(clone, ref string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// Toplevel returns the root of the working tree that holds dir.
+func Toplevel(dir string) (string, error) {
+	out, err := git(dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// CommonDir returns the repository directory that every worktree of dir shares. Git prints it relative to dir, and
+// --path-format=absolute needs Git 2.31.
+func CommonDir(dir string) (string, error) {
+	out, err := git(dir, "rev-parse", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	common := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(common) {
+		common = filepath.Join(dir, common)
+	}
+	return filepath.Abs(common)
+}
+
 // MergeBase returns the commit Diff compares the head against.
 func MergeBase(clone, baseRef, headRef string) (string, error) {
 	out, err := git(clone, "merge-base", baseRef, headRef)
@@ -189,11 +234,19 @@ func MergeBase(clone, baseRef, headRef string) (string, error) {
 // Diff compares the head against its merge base with the base, as GitHub's pull request diff does, so lines the base
 // gained after the branch point are not offered for comments.
 func Diff(clone, baseRef, headRef string) ([]byte, error) {
-	// Explicit flags keep the user's diff config (context, hunk merging, algorithm, indent heuristic, file order,
-	// drivers, textconv, color, prefixes, renames) from changing the stored bytes.
-	return git(clone, "-c", "diff.interHunkContext=0", "-c", "diff.indentHeuristic=true", "diff", "-U3",
-		"--diff-algorithm=myers", "--no-relative", "-O"+os.DevNull, "--no-ext-diff", "--no-color", "--no-textconv",
-		"--src-prefix=a/", "--dst-prefix=b/", "--find-renames", baseRef+"..."+headRef)
+	return git(clone, diffArgs(baseRef, headRef)...)
+}
+
+func diffArgs(baseRef, headRef string) []string {
+	return append(slices.Clone(diffFlags), "--find-renames", baseRef+"..."+headRef)
+}
+
+// diffFlags keep the user's diff config (context, hunk merging, algorithm, indent heuristic, file order, drivers,
+// textconv, color, prefixes) from changing the stored bytes. Each caller adds its own rename flag.
+var diffFlags = []string{
+	"-c", "diff.interHunkContext=0", "-c", "diff.indentHeuristic=true", "diff", "-U3",
+	"--diff-algorithm=myers", "--no-relative", "-O" + os.DevNull, "--no-ext-diff", "--no-color", "--no-textconv",
+	"--src-prefix=a/", "--dst-prefix=b/",
 }
 
 // Blob returns path's bytes at ref. cat-file applies no textconv or filter, as Diff applies none.
