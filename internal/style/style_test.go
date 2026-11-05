@@ -159,7 +159,7 @@ func TestTruncateBothEnds(t *testing.T) {
 	if got := s.TruncRight("abcdefghij", 5); got != "abcd…" {
 		t.Errorf("TruncRight %q", got)
 	}
-	if got := s.TruncLeft("adapters/pi/skills/post-review/SKILL.md:10", 14); got != "…/SKILL.md:10" && Width(got) > 14 {
+	if got := s.TruncLeft("adapters/pi/skills/post-review/SKILL.md:10", 14); got != "…w/SKILL.md:10" || Width(got) != 14 {
 		t.Errorf("TruncLeft %q (width %d)", got, Width(got))
 	}
 	if got := s.TruncLeft("short", 14); got != "short" {
