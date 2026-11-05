@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func earlierPair() []EarlierFinding {
@@ -55,7 +56,7 @@ func TestAssessRefusesLeavingTheDraftUnchanged(t *testing.T) {
 			d := &Draft{}
 			// A good entry ahead of the bad one lands only if the whole batch does.
 			_, err := Assess(d, roundOne, earlierPair(), []AssessInput{{Ref: "e-2", Status: StatusOpen}, tc.in})
-			_ = wantRefusal(t, err, tc.code)
+			_ = refusaltest.Want(t, err, tc.code)
 			if d.Assessments != nil || d.AssessedAgainst != nil {
 				t.Fatalf("draft %+v after a refusal, want no assessments", d)
 			}
@@ -91,12 +92,12 @@ func TestAssessAgainstAnotherRoundDropsTheEarlierAssessments(t *testing.T) {
 func TestEmptyAssessOnlyDropsFromAMovedRound(t *testing.T) {
 	d := &Draft{}
 	_, err := Assess(d, roundOne, earlierPair(), []AssessInput{})
-	_ = wantRefusal(t, err, refusal.Input)
+	_ = refusaltest.Want(t, err, refusal.Input)
 	if _, err := Assess(d, roundOne, earlierPair(), []AssessInput{{Ref: "e-1", Status: StatusOpen}}); err != nil {
 		t.Fatal(err)
 	}
 	_, err = Assess(d, roundOne, earlierPair(), []AssessInput{})
-	_ = wantRefusal(t, err, refusal.Input)
+	_ = refusaltest.Want(t, err, refusal.Input)
 	dropped, err := Assess(d, AssessedAgainst{From: "receipt", Round: 2}, nil, []AssessInput{})
 	if err != nil || dropped != 1 || d.Assessments != nil || d.AssessedAgainst != nil {
 		t.Fatalf("dropped %d, %v, draft %+v, want 1 dropped and nothing recorded", dropped, err, d)

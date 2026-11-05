@@ -11,6 +11,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 var decideNow = time.Date(2026, 9, 13, 13, 0, 0, 0, time.UTC)
@@ -39,7 +40,7 @@ func TestAcceptStoresDecisionAtCurrentRev(t *testing.T) {
 
 func TestAcceptRefusesWithdrawnFinding(t *testing.T) {
 	d := threeFindings()
-	r := wantRefusal(t, errOf(Accept(d, "f-002", decideNow)), refusal.Input)
+	r := refusaltest.Want(t, errOf(Accept(d, "f-002", decideNow)), refusal.Input)
 	if r.Message != "accept is for included findings only" {
 		t.Fatalf("message %q", r.Message)
 	}
@@ -66,7 +67,7 @@ func TestExcludeAndRestore(t *testing.T) {
 	if _, ok := d.Decisions["f-001"]; ok || Dispositions(d)["f-001"] != DispositionPending {
 		t.Fatalf("decisions %v", d.Decisions)
 	}
-	_ = wantRefusal(t, Restore(d, "f-001"), refusal.Input)
+	_ = refusaltest.Want(t, Restore(d, "f-001"), refusal.Input)
 }
 
 func TestSendBackAddsOpenNoteAndClearsDecision(t *testing.T) {
@@ -93,9 +94,9 @@ func TestSendBackAddsOpenNoteAndClearsDecision(t *testing.T) {
 func TestSendBackRefusesEmptyOrUnsafeNote(t *testing.T) {
 	d := threeFindings()
 	_, err := SendBack(d, "f-001", "  ", decideNow)
-	_ = wantRefusal(t, err, refusal.Input)
+	_ = refusaltest.Want(t, err, refusal.Input)
 	_, err = SendBack(d, "f-001", "see <br> here", decideNow)
-	_ = wantRefusal(t, err, refusal.Markdown)
+	_ = refusaltest.Want(t, err, refusal.Markdown)
 	if len(d.Notes) != 0 {
 		t.Fatalf("notes %v", d.Notes)
 	}
@@ -119,8 +120,8 @@ func TestResolveAndDismissNote(t *testing.T) {
 		d.Notes[0].ClosedAt == nil || !d.Notes[0].ClosedAt.Equal(later) || d.Notes[1].ClosedAt == nil {
 		t.Fatalf("notes %+v", d.Notes)
 	}
-	_ = wantRefusal(t, ResolveNote(d, "n-002", later), refusal.Input)
-	_ = wantRefusal(t, DismissNote(d, "n-001", later), refusal.Input)
+	_ = refusaltest.Want(t, ResolveNote(d, "n-002", later), refusal.Input)
+	_ = refusaltest.Want(t, DismissNote(d, "n-001", later), refusal.Input)
 }
 
 func TestAcceptResolvesAndExcludeDismissesOpenNotes(t *testing.T) {
@@ -172,7 +173,7 @@ func TestAcceptRefusalClosesNoNotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	closed, err := Accept(d, "f-002", decideNow)
-	_ = wantRefusal(t, err, refusal.Input)
+	_ = refusaltest.Want(t, err, refusal.Input)
 	if closed != nil || d.Notes[0].Status != NoteOpen {
 		t.Fatalf("closed %v notes %+v", closed, d.Notes)
 	}
@@ -304,7 +305,7 @@ func TestReinstateRefusesFindingThatIsNotWithdrawn(t *testing.T) {
 			tc.setUp(d)
 			before := append([]Note{}, d.Notes...)
 			closed, err := Reinstate(d, "f-001", Rules{}, decideNow)
-			r := wantRefusal(t, err, refusal.Input)
+			r := refusaltest.Want(t, err, refusal.Input)
 			if r.Message != "reinstate is for withdrawn findings only; f-001 is "+tc.disposition {
 				t.Fatalf("message %q", r.Message)
 			}
@@ -325,7 +326,7 @@ func TestReinstateRefusesAnExcludedWithdrawnFindingWithAReachableFix(t *testing.
 	if got := Dispositions(d)["f-002"]; got != DispositionExcluded {
 		t.Fatalf("disposition %q", got)
 	}
-	r := wantRefusal(t, errOf(Reinstate(d, "f-002", Rules{}, decideNow)), refusal.Input)
+	r := refusaltest.Want(t, errOf(Reinstate(d, "f-002", Rules{}, decideNow)), refusal.Input)
 	if r.Fix != "restore f-002 first, then reinstate it" {
 		t.Fatalf("fix %q", r.Fix)
 	}
@@ -363,7 +364,7 @@ func TestAcceptWithAnEmptyNoteIsAPlainAccept(t *testing.T) {
 
 func TestAcceptWithNoteChecksTheMarkdown(t *testing.T) {
 	d := threeFindings()
-	r := wantRefusal(t, errOf(AcceptWithNote(d, "f-001", "<script>x</script>", decideNow)), refusal.Markdown)
+	r := refusaltest.Want(t, errOf(AcceptWithNote(d, "f-001", "<script>x</script>", decideNow)), refusal.Markdown)
 	if len(d.Decisions) != 0 || strings.Contains(r.Fix, "loupe edit") {
 		t.Fatalf("decisions %v, fix %q", d.Decisions, r.Fix)
 	}
@@ -371,7 +372,7 @@ func TestAcceptWithNoteChecksTheMarkdown(t *testing.T) {
 
 func TestAcceptWithNoteRefusesAWithdrawnFinding(t *testing.T) {
 	d := threeFindings()
-	_ = wantRefusal(t, errOf(AcceptWithNote(d, "f-002", "fine", decideNow)), refusal.Input)
+	_ = refusaltest.Want(t, errOf(AcceptWithNote(d, "f-002", "fine", decideNow)), refusal.Input)
 }
 
 func TestAcceptAndExcludeLeaveTheNoteEmpty(t *testing.T) {
@@ -428,13 +429,13 @@ func TestValidateExcludeReason(t *testing.T) {
 		{"one two", refusal.Input},
 		{"<b>x</b>", refusal.Markdown},
 	} {
-		r := wantRefusal(t, ValidateExcludeReason(c.reason), c.code)
+		r := refusaltest.Want(t, ValidateExcludeReason(c.reason), c.code)
 		if strings.Contains(r.Message+r.Fix, "loupe edit") || strings.Contains(r.Message+r.Fix, "--") {
 			t.Errorf("%q: the refusal names a loupe edit flag: %s; %s", c.reason, r.Message, r.Fix)
 		}
 	}
 	d := threeFindings()
-	_ = wantRefusal(t, errOf(ExcludeWithReason(d, "f-001", strings.Repeat("a", 201), decideNow)), refusal.Input)
+	_ = refusaltest.Want(t, errOf(ExcludeWithReason(d, "f-001", strings.Repeat("a", 201), decideNow)), refusal.Input)
 	if len(d.Decisions) != 0 {
 		t.Fatalf("decisions %v", d.Decisions)
 	}

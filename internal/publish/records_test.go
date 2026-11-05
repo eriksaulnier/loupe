@@ -13,6 +13,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func sampleEnvelope() Envelope {
@@ -94,15 +95,13 @@ func TestRecordsRefuseWrongSchema(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "receipt.json"), fmt.Appendf(nil, `{"schema": %d}`, RecordSchema+1), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := LoadReceipt(dir); !isRefusal(err, refusal.Record) {
-		t.Fatalf("err %v", err)
-	}
+	_, _, err := LoadReceipt(dir)
+	_ = refusaltest.Want(t, err, refusal.Record)
 	if err := os.WriteFile(filepath.Join(dir, "attempt.json"), []byte(`{"schema": 1, "state": "sent"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := LoadAttempt(dir); !isRefusal(err, refusal.Record) {
-		t.Fatalf("err %v", err)
-	}
+	_, _, err = LoadAttempt(dir)
+	_ = refusaltest.Want(t, err, refusal.Record)
 }
 
 func TestEnvelopeJSONKeys(t *testing.T) {
@@ -124,11 +123,6 @@ func TestNewPublicationID(t *testing.T) {
 	if !uuidV4.MatchString(a) || !uuidV4.MatchString(b) || a == b {
 		t.Fatalf("ids %q %q", a, b)
 	}
-}
-
-func isRefusal(err error, code refusal.Code) bool {
-	r, ok := refusal.As(err)
-	return ok && r.Code == code
 }
 
 func mustJSON(t *testing.T, v any) string {

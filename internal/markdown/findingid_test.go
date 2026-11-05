@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 const retry = "run loupe add again"
@@ -107,12 +108,9 @@ func TestTitleFindingIDs(t *testing.T) {
 
 func refusedID(t *testing.T, err error) *refusal.Error {
 	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok {
-		t.Fatalf("got %v, want a refusal", err)
-	}
-	if r.Code != refusal.Markdown || r.Details["rule"] != "finding-id" {
-		t.Fatalf("code %q details %v", r.Code, r.Details)
+	r := refusaltest.Want(t, err, refusal.Markdown)
+	if r.Details["rule"] != "finding-id" {
+		t.Fatalf("details %v, want rule finding-id", r.Details)
 	}
 	return r
 }

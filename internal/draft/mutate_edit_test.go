@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 var editNow = time.Date(2026, 9, 13, 14, 0, 0, 0, time.UTC)
@@ -136,7 +137,7 @@ func TestEditKeepsALegacySeverity(t *testing.T) {
 		t.Fatalf("finding %+v", f)
 	}
 	_, _, err = Edit(d, "f-001", editInput(t, `{"severity": "P1"}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
-	_ = wantRefusal(t, err, refusal.Input)
+	_ = refusaltest.Want(t, err, refusal.Input)
 }
 
 // A run stored before the suggested fix was allowlist-checked may hold raw HTML there; it publishes fenced, so an
@@ -152,7 +153,7 @@ func TestEditKeepsALegacySuggestedFix(t *testing.T) {
 		t.Fatalf("finding %+v", f)
 	}
 	_, _, err = Edit(d, "f-001", editInput(t, `{"suggestedFix": "three<br>four"}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
-	wantField(t, wantRefusal(t, err, refusal.Markdown), "suggestedFix")
+	wantField(t, refusaltest.Want(t, err, refusal.Markdown), "suggestedFix")
 }
 
 func TestEditNullLocationMakesFindingGeneral(t *testing.T) {
@@ -170,7 +171,7 @@ func TestEditRefusesNullForRequiredFields(t *testing.T) {
 	for _, field := range []string{"title", "body", "blocking", "general"} {
 		d := editable()
 		_, _, err := Edit(d, "f-001", editInput(t, `{"`+field+`": null}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
-		r := wantRefusal(t, err, refusal.Input)
+		r := refusaltest.Want(t, err, refusal.Input)
 		if !strings.Contains(r.Message, field) {
 			t.Errorf("%s: message %q", field, r.Message)
 		}
@@ -223,7 +224,7 @@ func TestEditValidatesNewValues(t *testing.T) {
 			id = "f-002"
 		}
 		_, _, err := Edit(d, id, editInput(t, input), nil, multiHunk(t), ByAgent, Rules{}, editNow)
-		_ = wantRefusal(t, err, code)
+		_ = refusaltest.Want(t, err, code)
 		if !reflect.DeepEqual(d, editable()) {
 			t.Errorf("%s: draft changed", input)
 		}
@@ -280,8 +281,8 @@ func TestReplyChangesNoStatusOrDecision(t *testing.T) {
 		t.Fatalf("second reply %+v err %v", r2, err)
 	}
 
-	_ = wantRefusal(t, func() error { _, err := AddReply(d, "n-001", " ", ByAgent, editNow); return err }(), refusal.Input)
-	r3 := wantRefusal(t, func() error { _, err := AddReply(d, "n-001", "<pre>x</pre>", ByAgent, editNow); return err }(), refusal.Markdown)
+	_ = refusaltest.Want(t, func() error { _, err := AddReply(d, "n-001", " ", ByAgent, editNow); return err }(), refusal.Input)
+	r3 := refusaltest.Want(t, func() error { _, err := AddReply(d, "n-001", "<pre>x</pre>", ByAgent, editNow); return err }(), refusal.Markdown)
 	if r3.Fix != "loupe reply n-001 --from -" {
 		t.Fatalf("fix %q", r3.Fix)
 	}
@@ -290,9 +291,9 @@ func TestReplyChangesNoStatusOrDecision(t *testing.T) {
 func TestEditUnknownIDsRefuseNotFound(t *testing.T) {
 	d := editable()
 	_, _, err := Edit(d, "f-009", editInput(t, `{"title": "x"}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)
-	_ = wantRefusal(t, err, refusal.NotFound)
+	_ = refusaltest.Want(t, err, refusal.NotFound)
 	_, err = AddReply(d, "n-009", "x", ByAgent, editNow)
-	_ = wantRefusal(t, err, refusal.NotFound)
+	_ = refusaltest.Want(t, err, refusal.NotFound)
 }
 
 func TestRecalibrateKeepsTheDecision(t *testing.T) {
@@ -364,16 +365,16 @@ func TestRecalibrateRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := Recalibrate(d, "f-002", "issue", false, multiHunk(t), Rules{}, editNow)
-	r := wantRefusal(t, err, refusal.Input)
+	r := refusaltest.Want(t, err, refusal.Input)
 	if !strings.Contains(r.Fix, "reinstate f-002 first") {
 		t.Fatalf("fix %q", r.Fix)
 	}
 
 	_, err = Recalibrate(d, "f-001", "not a label!", true, multiHunk(t), Rules{}, editNow)
-	_ = wantRefusal(t, err, refusal.Input)
+	_ = refusaltest.Want(t, err, refusal.Input)
 
 	_, err = Recalibrate(d, "f-009", "issue", true, multiHunk(t), Rules{}, editNow)
-	_ = wantRefusal(t, err, refusal.NotFound)
+	_ = refusaltest.Want(t, err, refusal.NotFound)
 
 	f, err := Recalibrate(d, "f-001", "issue", true, multiHunk(t), Rules{}, editNow)
 	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {
@@ -461,7 +462,7 @@ func TestRewriteRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := Rewrite(d, "f-002", "Two", "Body two, again.", Rules{}, multiHunk(t), editNow)
-	r := wantRefusal(t, err, refusal.Input)
+	r := refusaltest.Want(t, err, refusal.Input)
 	if !strings.Contains(r.Message, "rewritten") || r.Fix != "reinstate f-002 first" {
 		t.Fatalf("refusal %+v", r)
 	}
@@ -478,7 +479,7 @@ func TestRewriteRefusals(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := Rewrite(d, "f-001", c.title, c.body, Rules{}, multiHunk(t), editNow)
-			r := wantRefusal(t, err, c.code)
+			r := refusaltest.Want(t, err, c.code)
 			if !strings.Contains(r.Message, c.says) || !strings.Contains(r.Fix, "ctrl+s") || strings.Contains(r.Fix, "loupe") {
 				t.Fatalf("refusal %+v", r)
 			}
@@ -498,7 +499,7 @@ func TestRewriteRefusals(t *testing.T) {
 	}
 
 	_, err = Rewrite(d, "f-009", "One", "Body.", Rules{}, multiHunk(t), editNow)
-	_ = wantRefusal(t, err, refusal.NotFound)
+	_ = refusaltest.Want(t, err, refusal.NotFound)
 
 	f, err := Rewrite(d, "f-001", "One", "Body one.", Rules{}, multiHunk(t), editNow)
 	if !errors.Is(err, ErrNoChange) || f.Rev != 1 || Dispositions(d)["f-001"] != DispositionAccepted {

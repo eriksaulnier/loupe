@@ -13,6 +13,7 @@ import (
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 func openPR(number int, base string) github.PullRequest {
@@ -32,10 +33,7 @@ func branchSetup(t *testing.T) (*gitrepo.Repo, *fakegh.Server, func() (github.Cl
 
 func wantRefusal(t *testing.T, err error, code refusal.Code, message, fix string) map[string]any {
 	t.Helper()
-	r, ok := refusal.As(err)
-	if !ok || r.Code != code {
-		t.Fatalf("got %v, want refusal %s", err, code)
-	}
+	r := refusaltest.Want(t, err, code)
 	if message != "" && r.Message != message {
 		t.Errorf("message %q, want %q", r.Message, message)
 	}

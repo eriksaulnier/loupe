@@ -8,6 +8,7 @@ import (
 
 	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
 )
 
 // hunk is a hunk of plan.md by its starts and one op per line: ' ' context, '+' added, '-' deleted.
@@ -84,13 +85,13 @@ func TestResolveHeadingInOneHunk(t *testing.T) {
 func TestResolveHeadingDeletionsAttribution(t *testing.T) {
 	// The deletion follows line 9, the last line of Goals, so Rollout holds no change.
 	d := planDiff(t, hunk{7, 7, "   -   "})
-	r := locationRefusal(t, errOf(d.ResolveHeading("plan.md", "Rollout")))
+	r := refusaltest.Want(t, errOf(d.ResolveHeading("plan.md", "Rollout")), refusal.Location)
 	if !strings.Contains(r.Message, "has no changes in the diff") {
 		t.Fatalf("message %q", r.Message)
 	}
 	// A deletion before the file's first line belongs to no section.
 	d = planDiff(t, hunk{1, 1, "-   "})
-	r = locationRefusal(t, errOf(d.ResolveHeading("plan.md", "Plan")))
+	r = refusaltest.Want(t, errOf(d.ResolveHeading("plan.md", "Plan")), refusal.Location)
 	if !strings.Contains(r.Message, "has no changes in the diff") {
 		t.Fatalf("message %q", r.Message)
 	}
@@ -235,7 +236,7 @@ func TestResolveHeadingRefusals(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := locationRefusal(t, errOf(c.d(t).ResolveHeading(c.path, c.heading)))
+			r := refusaltest.Want(t, errOf(c.d(t).ResolveHeading(c.path, c.heading)), refusal.Location)
 			if r.Message != c.message || r.Fix != c.fix {
 				t.Fatalf("refusal\n message %q\n fix     %q\nwant\n message %q\n fix     %q", r.Message, r.Fix, c.message, c.fix)
 			}
@@ -256,12 +257,12 @@ func TestResolveHeadingRefusesDeletedAndBinaryFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.Outline = Outline{}
-	r := locationRefusal(t, errOf(d.ResolveHeading("gone.md", "Gone")))
+	r := refusaltest.Want(t, errOf(d.ResolveHeading("gone.md", "Gone")), refusal.Location)
 	if r.Message != "gone.md is deleted by the pull request and has no headings at the head" ||
 		r.Fix != `use a LEFT line location or a general finding with "general": true` {
 		t.Fatalf("deleted: %+v", r)
 	}
-	r = locationRefusal(t, errOf(d.ResolveHeading("pic.md", "Pic")))
+	r = refusaltest.Want(t, errOf(d.ResolveHeading("pic.md", "Pic")), refusal.Location)
 	if r.Message != "pic.md is a binary file and has no lines to comment on" {
 		t.Fatalf("binary: %+v", r)
 	}
