@@ -44,11 +44,6 @@ release:
   # A retried run finds the assets an earlier attempt uploaded to the draft, and GitHub refuses a second upload by the
   # same name.
   replace_existing_artifacts: true
-  # goreleaser writes this flag over the draft it finds, so without it a pre-release would publish as a full release.
-  prerelease: auto
-  # install.sh and release.yml resolve "latest" to the newest real release. Empty for a normal release, so goreleaser
-  # sends no make_latest field and GitHub's own default applies.
-  make_latest: "{{ if .Prerelease }}false{{ end }}"
   github:
     owner: eriksaulnier
     name: loupe
