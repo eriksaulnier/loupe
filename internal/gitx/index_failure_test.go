@@ -3,34 +3,13 @@ package gitx
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
 	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
 )
-
-// failingGit puts a git on PATH that fails, or prints nothing, when any argument equals failArg or emptyArg, and
-// otherwise runs the real git. It lets a test reach the error returns of calls that succeed on any real repository.
-func failingGit(t *testing.T, failArg, emptyArg string) {
-	t.Helper()
-	real, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := "#!/bin/sh\n" +
-		"for a in \"$@\"; do\n" +
-		"  if [ \"$a\" = \"" + failArg + "\" ]; then echo 'injected failure' >&2; exit 1; fi\n" +
-		"  if [ \"$a\" = \"" + emptyArg + "\" ]; then exit 0; fi\n" +
-		"done\n" +
-		"exec '" + real + "' \"$@\"\n"
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
 
 func TestGitFunctionsReturnTheGitFailure(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing")
@@ -86,7 +65,7 @@ func TestHashPathsRefusesAFailedHashOfANewlinePath(t *testing.T) {
 	ix := WithIndex(w.repo.Dir, filepath.Join(t.TempDir(), "index"))
 	name := "line\nbreak.txt"
 	writeFile(t, filepath.Join(w.repo.Dir, name), "x\n", 0o644)
-	failingGit(t, "hash-object", "")
+	gitfail.WhenArg(t, "hash-object", 1)
 	if _, err := ix.hashPaths([]string{name}); err == nil {
 		t.Fatal("hashPaths ignored a failed git hash-object")
 	}
@@ -95,7 +74,7 @@ func TestHashPathsRefusesAFailedHashOfANewlinePath(t *testing.T) {
 func TestHashPathsRefusesAnObjectCountThatDiffers(t *testing.T) {
 	w := newWorkTree(t)
 	ix := WithIndex(w.repo.Dir, filepath.Join(t.TempDir(), "index"))
-	failingGit(t, "", "hash-object")
+	gitfail.SilentWhenArg(t, "hash-object")
 	if _, err := ix.hashPaths([]string{"run.sh"}); err == nil {
 		t.Fatal("hashPaths accepted no object id for one path")
 	}
@@ -103,7 +82,7 @@ func TestHashPathsRefusesAnObjectCountThatDiffers(t *testing.T) {
 
 func TestBatchCheckSizesRefusesALineCountThatDiffers(t *testing.T) {
 	w := newWorkTree(t)
-	failingGit(t, "", "cat-file")
+	gitfail.SilentWhenArg(t, "cat-file")
 	if _, err := BatchCheckSizes(w.repo.Dir, []string{w.head}); err == nil {
 		t.Fatal("BatchCheckSizes accepted no output for one object")
 	}
@@ -139,7 +118,7 @@ func TestStageWorktreeReturnsEachGitFailure(t *testing.T) {
 			if err := ix.ReadTree("HEAD"); err != nil {
 				t.Fatal(err)
 			}
-			failingGit(t, tc.fail, "")
+			gitfail.WhenArg(t, tc.fail, 1)
 			if err := ix.StageWorktree(); err == nil {
 				t.Fatal("StageWorktree ignored a failed git call")
 			}
@@ -193,7 +172,7 @@ func TestStageWorktreeReturnsTheCheckFailures(t *testing.T) {
 	for _, failArg := range []string{"check-attr", "--git-path", "--debug"} {
 		t.Run(failArg, func(t *testing.T) {
 			dir, _ := filteredRepo(t)
-			failingGit(t, failArg, "no-such-argument")
+			gitfail.WhenArg(t, failArg, 1)
 			if err := stageErr(t, dir); err == nil {
 				t.Fatalf("no error when git %s fails", failArg)
 			}
@@ -245,29 +224,13 @@ func TestStageWorktreeRefusesAStagedFilteredEdit(t *testing.T) {
 	}
 }
 
-// erroringGit puts a git on PATH that exits 2 when any argument equals arg. A config lookup reads exit 1 as an unset
-// key, so only another code reaches its error return.
-func erroringGit(t *testing.T, arg string) {
-	t.Helper()
-	real, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"" + arg + "\" ]; then echo 'injected failure' >&2; exit 2; fi\ndone\nexec '" + real + "' \"$@\"\n"
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
-
 // A failed line ending config lookup comes back as an error, and so does an unreadable text=auto file Git would
 // otherwise inspect for a NUL.
 func TestConvertedReturnsConfigAndReadFailures(t *testing.T) {
 	for _, arg := range []string{"core.autocrlf", "core.eol"} {
 		t.Run(arg, func(t *testing.T) {
 			dir, _ := filteredRepo(t)
-			erroringGit(t, arg)
+			gitfail.WhenArg(t, arg, 2)
 			if err := stageErr(t, dir); err == nil {
 				t.Fatalf("no error when the %s lookup fails", arg)
 			}
@@ -276,7 +239,7 @@ func TestConvertedReturnsConfigAndReadFailures(t *testing.T) {
 	t.Run("autocrlf bool", func(t *testing.T) {
 		dir, _ := filteredRepo(t)
 		runGit(t, dir, "config", "core.autocrlf", "yes")
-		erroringGit(t, "--type=bool")
+		gitfail.WhenArg(t, "--type=bool", 2)
 		if err := stageErr(t, dir); err == nil {
 			t.Fatal("no error when the core.autocrlf bool lookup fails")
 		}
