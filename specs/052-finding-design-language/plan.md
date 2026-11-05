@@ -34,7 +34,7 @@ Write the rules down in `docs/tui-design.md`, then make the code follow them. `i
 
 - **`Section(tone Tone, heading string, chip string, body []string) []string`**: the bold heading in the tone, an optional chip after it (note status, withdraw code), then each body line behind the tone's `Quote` glyph. A blank body line keeps the bar. Without color the chip is set off by the separator, as `threadHead` does today. This is the only place a finding heading or bar is styled.
 - **Pane title helpers**: a `PaneTitle(text string)` and a `PaneTitleKey(text string)` (the top-right key name in the note tone), so `rewriteView` and `confirm.go` stop rendering titles inline.
-- **`ReviewHeading.Location`**: a struct with `Repo`, `Branch` and `Capture`. `ReviewHeader` draws it for a local run in place of the ref, plain, never underlined, never linked. The give-way order follows the contract: at under 100 columns the capture drops and the badge shortens, at under 80 the repo drops and the bar drops. A PR heading leaves `Location` empty and draws as today.
+- **`ReviewHeading.Local`**: a `*LocalPlace` with `Repo`, `Branch` and `Capture`. `ReviewHeader` draws it for a local run in place of the ref, plain, never underlined, never linked. It picks the richest of three forms (full, medium, short) that fits with up to 16 cells left for the title, and the short form drops the bar. A PR heading leaves `Local` nil and draws as today.
 
 ### `internal/tui`
 
@@ -43,7 +43,7 @@ Write the rules down in `docs/tui-design.md`, then make the code follow them. `i
 - **Question**: when `ui.question(f)`, the slot is `style.Section(ToneNote, "A question for <applier>", …)`. No glyph.
 - **Withdrawn**: the reason is a muted section with the code as its chip. While the finding is withdrawn, every other section takes `ToneMuted`.
 - **`codePane`** gains a cap of one third of the detail viewport, at least eight rows. A taller hunk scrolls inside the pane with its own offset, opened on the finding's lines. The pane's scrollbar uses the existing `Scroll` field. The key that scrolls it is the document scroll: the document scrolls first, and the pane scrolls only when the pane is the topmost block in view. If that interaction is unclear in use, stop and ask before adding a key.
-- **`applyUI.heading`** fills `Location` from the target: `Prefix`'s repo name or `filepath.Base(Root)`; `Branch`; the capture summary from `Capture`, `Files` and `BaseRef`.
+- **`applyUI.heading`** fills `Local` from the target: `Prefix`'s repo name or `filepath.Base(Root)`; `Branch`; the capture summary from `Capture`, `Files` and `BaseRef`.
 
 ### Research notes
 
