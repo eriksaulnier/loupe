@@ -125,7 +125,7 @@ func TestPluginSkillDirectories(t *testing.T) {
 		names = append(names, e.Name())
 		skillBody(t, e.Name())
 	}
-	if want := []string{"human-review"}; !slices.Equal(names, want) {
+	if want := []string{"human-decide", "human-review"}; !slices.Equal(names, want) {
 		t.Errorf("plugin/skills holds %q, want %q", names, want)
 	}
 }
@@ -144,10 +144,12 @@ func TestPluginShipsNoReviewCommand(t *testing.T) {
 // Every harness reads the same skill, so a pane host's command in it would be one an agent composes instead of
 // loupe handoff.
 func TestPluginSkillNamesNoHostCommand(t *testing.T) {
-	body := skillBody(t, "human-review")
-	for _, host := range []string{"herdr", "orca", "tmux", "osascript"} {
-		if strings.Contains(body, host) {
-			t.Errorf("human-review/SKILL.md names a %s command; use loupe handoff", host)
+	for _, name := range []string{"human-review", "human-decide"} {
+		body := skillBody(t, name)
+		for _, host := range []string{"herdr", "orca", "tmux", "osascript"} {
+			if strings.Contains(body, host) {
+				t.Errorf("%s/SKILL.md names a %s command; use loupe handoff", name, host)
+			}
 		}
 	}
 }
@@ -324,5 +326,78 @@ func TestReleasePleaseBumpsEveryPluginVersion(t *testing.T) {
 	pin := "<!-- x-release-please-start-version -->\n```sh\npi install git:github.com/eriksaulnier/loupe@v" + releaseVersion(t) + "\n```\n<!-- x-release-please-end -->"
 	if !generic || !strings.Contains(readRepoFile(t, "docs/install.md"), pin) {
 		t.Errorf("docs/install.md MUST be a generic release-please extra-file and carry %q", pin)
+	}
+}
+
+// sharedRules are the lines both skills carry. Each MUST read the same in both, so a fix to one reaches the other
+// (specs/049-apply-mode FR-031).
+var sharedRules = []string{
+	"- You MUST NOT pipe or script confirmation into any loupe command.",
+	"- When a command refuses, the result has `\"ok\": false` and an `error` object. You SHOULD read `error.code` and follow `error.fix`, which names the corrective command. You MUST NOT work around a refusal by editing loupe's files.",
+	"When `focused` is `false`, it opened without taking focus, which in Orca is every time, so tell the user it is waiting in the pane beside yours. Otherwise tell the user it is open.",
+	"On any other refusal, tell the user to run `loupe review '<ref>'` in their own terminal. When `error.code` is `pane-failed`, also tell them `error.message` in one line. Do not retry `loupe handoff` except as the sandbox rule allows, and do not open review by any other route.",
+	"A hand-off that opens a pane always opens a new one. You MUST NOT look for or reuse an earlier one.",
+	"- In Claude Code, when the Monitor tool is available, run `loupe wait` under a persistent Monitor so the session wakes when it prints.",
+	"- Otherwise run `loupe wait` in the foreground with `--timeout` under the shell's limit, and run it again on a `timeout` refusal.",
+	"- To withdraw a finding, run `loupe edit <finding-id> --exclude --reason \"<one line that sums up your reply>\" --reason-code conceded --run <ref> --json`. The human reads the reason beside the withdrawn finding and decides from it whether to reinstate it.",
+	"- Then answer the note with `loupe reply <note-id> --body \"<what changed and why>\" --run <ref> --json`.",
+	"While their review is still open it shows your replies, and `loupe handoff` refuses `review-open`, so no second pane opens and you go straight back to waiting.",
+	"You MUST NOT work around the sandbox by setting `LOUPE_HOME` or `XDG_DATA_HOME`.",
+}
+
+func TestPluginSkillsShareRulesVerbatim(t *testing.T) {
+	for _, name := range []string{"human-review", "human-decide"} {
+		body := skillBody(t, name)
+		for _, line := range sharedRules {
+			if !strings.Contains(body, line) {
+				t.Errorf("%s/SKILL.md lacks the shared line %q", name, line)
+			}
+		}
+	}
+}
+
+// human-review stays the pull request skill: its description is the one agents already match on.
+func TestHumanReviewDescriptionIsUnchanged(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(repoRoot(t), "plugin", "skills", "human-review", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "description: Use when a skill or agent reviews a GitHub pull request for a human to decide and publish through loupe, or when the human has sent loupe findings back with notes. Captures the pull request before the review, files the review's findings and a summary into a local draft, opens loupe review for the human in a new terminal pane where it can, and answers the human's send-back notes until they publish. Brings no review method of its own. Never publishes.\n"
+	if !strings.Contains(string(data), want) {
+		t.Error("human-review/SKILL.md description changed")
+	}
+}
+
+var loupeCommand = regexp.MustCompile("`loupe ([a-z]+)")
+
+func TestHumanDecideNamesOnlyApplyCommands(t *testing.T) {
+	body := skillBody(t, "human-decide")
+	allowed := map[string]bool{"capture": true, "add": true, "summary": true, "handoff": true, "wait": true, "reply": true, "edit": true,
+		"feedback": true, "review": true}
+	for _, m := range loupeCommand.FindAllStringSubmatch(body, -1) {
+		if !allowed[m[1]] {
+			t.Errorf("human-decide/SKILL.md names loupe %s", m[1])
+		}
+	}
+	for _, word := range []string{"previous", "assess", "blocking", "side", "sticky", "publish", "human-review"} {
+		if regexp.MustCompile(`\b` + word + `\b`).MatchString(strings.ToLower(body)) {
+			t.Errorf("human-decide/SKILL.md mentions %q", word)
+		}
+	}
+	for _, phrase := range []string{
+		// FR-032: read the new files, locate by content or heading, count the thread, and suggestion wins.
+		"Read the list of new files before you hand off",
+		"locate each change by its content or its heading",
+		"counts alongside its proposal",
+		"Where `suggestion` and `proposal` conflict, follow `suggestion`.",
+		// FR-010: every finding carries a proposal, and a question's proposal is the recommended answer.
+		"Give every finding a proposal. For a question, the proposal is the answer you recommend, and the body names the other choices.",
+		"loupe capture --changed", "--files <path>", "loupe capture --no-files --title", "--applier",
+		"loupe add --from <file> --run <ref> --json", "loupe handoff --run <ref> --json", "loupe wait --run <ref> --json",
+		"`\"reason\": \"returned\"`", "`applyWithChanges`", "`excluded`: change nothing",
+	} {
+		if !strings.Contains(body, phrase) {
+			t.Errorf("human-decide/SKILL.md body does not contain %q", phrase)
+		}
 	}
 }
