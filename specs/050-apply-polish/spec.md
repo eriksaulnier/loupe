@@ -35,7 +35,8 @@ The goals:
 
 - Q: Where does a local run open? → A: On the first pending finding, sift-style, with the list one key away (FR-012).
 - Q: Should `u` undo any decision on a local run? → A: No. "Unify the two flows; don't make it do something else in a different flow." `u` behaves the same in both modes, as it does today (FR-013). A key MUST NOT change meaning between modes unless the mode lacks the action (FR-016).
-- Q: Should a plain reject take one key? → A: Yes: `x` rejects at once and `X` rejects with a reason (FR-014). This also matches PR runs, where `x` excludes at once today. The owner asked whether the shift-for-more pattern fits elsewhere; FR-017 proposes it for accept.
+- Q: Should a plain reject take one key? → A: Yes: `x` rejects at once and `X` rejects with a reason (FR-014). This also matches PR runs, where `x` excludes at once today. The owner asked whether the shift-for-more pattern fits elsewhere.
+- Q: Should accept with a note move to `A`, so shift always adds the human's words? → A: Yes (FR-017). `t` is absent on local runs.
 - Owner, after seeing sift's review open: "it's nice how it auto-starts going through and auto-exits without pressing 'p'". Sift opens on a start screen with the summary and "N findings to decide", Enter starts the cards, and the review ends on its own once nothing is left. FR-018 to FR-020 take this.
 
 ## Relationship to earlier specifications
@@ -75,7 +76,7 @@ The human has a PR review and a local run open in two panes. They look at either
 1. **Given** a local run, **When** review opens, **Then** the header shows a badge that reads "local · returns to <applier>", or "local · returns to the agent" with no applier, in an accent that no PR-run screen uses. No pull request glyph and no URL appear.
 2. **Given** a local finding with a proposal, **When** its detail opens, **Then** the first block under the title reads "<applier> will:" followed by the proposal, and the agent's reasoning follows below it.
 3. **Given** a local finding with no proposal, **When** its detail opens, **Then** it is marked as a question for the applier, and no "will:" block appears.
-4. **Given** a local run, **When** the footer and help draw, **Then** the verbs read accept (`a`), tweak (`t`, or `A` under FR-017), reject (`x`, `X` with a reason), ask (`s`) and "return to <applier>" (`p`).
+4. **Given** a local run, **When** the footer and help draw, **Then** the verbs read accept (`a`), tweak (`A`), reject (`x`, `X` with a reason), ask (`s`) and "return to <applier>" (`p`).
 5. **Given** a PR run, **When** any screen draws, **Then** it is byte-identical to the spec 049 build.
 
 ---
@@ -141,7 +142,7 @@ The human wants to work through the findings of a local run one at a time, decid
 
 - **FR-009**: On a local run, the header MUST show a badge reading "local · returns to <applier>", or "local · returns to the agent" with no applier. It MUST be drawn in an accent token that no PR-run screen uses, and it MUST read as words at every icon tier and with NO_COLOR.
 - **FR-010**: On a local run, the detail view MUST lead with "<applier> will:" (or "The agent will:") and the proposal, directly under the title and the metadata row, before the body. A finding with no proposal MUST show a question marker instead of that block.
-- **FR-011**: On a local run, the footer, the help and the key table MUST name the actions accept (`a`), tweak (`t`, or `A` under FR-017), reject (`x`, with `X` for a reason), ask (`s`) and "return to <applier>" (`p`). The JSON contracts keep their spec 049 names (`excluded`, the send-back notes), and only the words on screen change.
+- **FR-011**: On a local run, the footer, the help and the key table MUST name the actions accept (`a`), tweak (`A`), reject (`x`, with `X` for a reason), ask (`s`) and "return to <applier>" (`p`). The JSON contracts keep their spec 049 names (`excluded`, the send-back notes), and only the words on screen change.
 
 **Navigation decisions**
 
@@ -152,7 +153,7 @@ The human wants to work through the findings of a local run one at a time, decid
 - **FR-019**: On a local run, when the human decides the last pending finding and no note is open, review MUST open the return step by itself: the note input of FR-001, where Enter returns the run and Esc goes back to the list. `p` still opens the return step from the list. Deciding the last finding and returning with no note then takes one more key, Enter.
 - **FR-020**: After a local run is returned, review MUST quit by itself and leave one line in the terminal, such as "Returned to Claude: 6 accepted, 2 rejected." It no longer waits on a returned screen for `q`.
 - **FR-016**: A key MUST mean the same action on both run kinds. A key MAY be absent on the kind that lacks its action, such as `e` and `o` on local runs and `w` after FR-006, but MUST NOT do something else there.
-- **FR-017** (proposed, to confirm at plan review): the shift of a decision key adds the human's words to it. `X` rejects with a reason (FR-014), and `A` accepts with a note, which takes over from `t` on local runs. `t` is then absent on local runs, and the footer shows `a`/`A` and `x`/`X` as pairs. PR runs keep `a` and gain nothing, because a PR accept carries no note.
+- **FR-017**: the shift of a decision key adds the human's words to it (owner, 2026-11-04). `X` rejects with a reason (FR-014), and `A` accepts with a note, which takes over from `t` on local runs. `t` is then absent on local runs, and the footer shows `a`/`A` and `x`/`X` as pairs. PR runs keep `a` and gain nothing, because a PR accept carries no note.
 
 **PR runs**
 
@@ -179,7 +180,7 @@ The human wants to work through the findings of a local run one at a time, decid
 - `return.json` schema 1 has never been released, so adding `note` amends schema 1 in place. If spec 049 ships before this spec, the field bumps the schema to 2 instead, with the usual `docs/versioning.md` row.
 - "Its own accent" means a new style token for apply mode, chosen to differ from every PR-run color in both light and dark palettes. The exact hue is a design choice for the plan.
 - The on-screen words "reject" and "ask" replace "exclude" and "send back" on local runs only. The JSON group `excluded` and the note mechanics do not change, so the agent-facing contract from spec 049 stands.
-- The note input reuses the review program's note textarea, as `t` and `x` do, with newlines allowed.
+- The note input reuses the review program's note textarea, as `A` and `X` do, with newlines allowed.
 - This specification authorizes no commit, push, pull request, release or live review.
 
 ## Out of scope
