@@ -743,6 +743,7 @@ func TestApplyListMarksAQuestion(t *testing.T) {
 		{"NO_COLOR": "1", "LANG": "C"},
 	} {
 		m := modelOf(t, dir, env, 100, 30)
+		press(m, "l")
 		if m.glyphs.Question == "" {
 			t.Fatalf("tier %v has no question glyph", m.glyphs.Tier)
 		}

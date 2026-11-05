@@ -271,7 +271,7 @@ const testReviewURL = "https://github.com/o/r/pull/1#pullrequestreview-7"
 func TestReviewDoneNamesThePublishedReview(t *testing.T) {
 	_, dir := sendBackRun(t)
 	deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
-	if err := reviewDone(nil, deps, dir, false, deps.Stdout, testReviewURL); err != nil {
+	if err := reviewDone(nil, deps, dir, false, deps.Stdout, testReviewURL, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := s.stdout.String(); !strings.HasPrefix(got, "+ Published "+testReviewURL+"\n") {
@@ -279,11 +279,23 @@ func TestReviewDoneNamesThePublishedReview(t *testing.T) {
 	}
 
 	deps, s = testDeps(t, map[string]string{"NO_COLOR": "1"})
-	if err := reviewDone(nil, deps, dir, false, deps.Stdout, ""); err != nil {
+	if err := reviewDone(nil, deps, dir, false, deps.Stdout, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(s.stdout.String(), "Published") {
 		t.Fatalf("a session that sent nothing names a review: %q", s.stdout.String())
+	}
+}
+
+// A return quits review, so the one line it leaves names the applier and the counts.
+func TestReviewDoneNamesTheReturn(t *testing.T) {
+	_, dir := sendBackRun(t)
+	deps, s := testDeps(t, map[string]string{"NO_COLOR": "1"})
+	if err := reviewDone(nil, deps, dir, false, deps.Stdout, "", &tui.Returned{Applier: "Claude", Accepted: 6, Rejected: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.stdout.String(); !strings.HasPrefix(got, "+ Returned to Claude: 6 accepted, 2 rejected.\n") {
+		t.Fatalf("stdout %q", got)
 	}
 }
 

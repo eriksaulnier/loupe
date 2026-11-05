@@ -21,10 +21,10 @@ Every task follows a failing test, then the change, then a passing check. PR run
 
 ## Phase 4: Flow (US1, US4, FR-012, FR-018 to FR-020)
 
-- [ ] T007 [US4] Add failing tests in a new `internal/tui/start_test.go`: a local run with pending findings opens on the start screen with the title, the summary and "N findings to decide"; Enter opens the first pending finding; `l` opens the list; `q` quits; with nothing pending it opens on the list. A PR run opens on the list as before.
-- [ ] T008 [US4] Implement `viewStart` in a new `internal/tui/start.go`, and the opening view chosen through the mode UI in `internal/tui/app.go`.
-- [ ] T009 [US1] Add failing tests in `internal/tui/returned_test.go`: `p` opens the note input; Enter seals with the typed note, or with none; Esc closes it and writes nothing; a refused note stays in the input with the notice; `changed` and `not-ready` keep the text; after the last pending decision the step opens on its own; a successful return quits the program, and `Model.Returned()` reports the applier and the counts. SC-002: from the list, `p` and Enter; after the last decision, Enter.
-- [ ] T010 [US1] Implement the step in `internal/tui/returned.go` (a `noteReturn` kind, no `viewReturned`), the trigger after the last decision in `internal/tui/detail.go`, and the one line in `reviewDone` (`internal/cli/review.go`), with a CLI test of the line.
+- [x] T007 [US4] Add failing tests in a new `internal/tui/start_test.go`: a local run with pending findings opens on the start screen with the title, the summary and "N findings to decide"; Enter opens the first pending finding; `l` opens the list; `q` quits; with nothing pending it opens on the list. A PR run opens on the list as before.
+- [x] T008 [US4] Implement `viewStart` in a new `internal/tui/start.go`, and the opening view chosen through the mode UI in `internal/tui/app.go`.
+- [x] T009 [US1] Add failing tests in `internal/tui/returned_test.go`: `p` opens the note input; Enter seals with the typed note, or with none; Esc closes it and writes nothing; a refused note stays in the input with the notice; `changed` and `not-ready` keep the text; after the last pending decision the step opens on its own; a successful return quits the program, and `Model.Returned()` reports the applier and the counts. SC-002: from the list, `p` and Enter; after the last decision, Enter.
+- [x] T010 [US1] Implement the step in `internal/tui/returned.go` (a `noteReturn` kind, no `viewReturned`), the trigger after the last decision in `internal/tui/detail.go`, and the one line in `reviewDone` (`internal/cli/review.go`), with a CLI test of the line.
 
 ## Phase 5: Look (US2, FR-009 to FR-011)
 

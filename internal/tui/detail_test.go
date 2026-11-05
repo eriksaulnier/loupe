@@ -1439,14 +1439,17 @@ func TestApplySendBackRoundTrip(t *testing.T) {
 	if _, decided := d.Decisions["f-001"]; decided || draft.Dispositions(d)["f-001"] != draft.DispositionPending {
 		t.Fatalf("the agent's edit left a decision: %+v", d.Decisions["f-001"])
 	}
-	// Send back moved the view on to the next finding; the poll names the change, and N goes back to it.
+	// Nothing else was pending, so send back returned to the list; the poll names the change, and enter opens it.
+	if m.view != viewList {
+		t.Fatalf("send back with nothing else pending left view %d", m.view)
+	}
 	update(t, m, pollMsg{})
 	if !strings.Contains(m.notice, "n-001 answered on f-001, f-001 changed") {
 		t.Errorf("the poll notice %q does not name the reply and the edit", m.notice)
 	}
-	pressKeys(t, m, "N")
+	pressKeys(t, m, "enter")
 	if m.openID != "f-001" {
-		t.Fatalf("N opened %s", m.openID)
+		t.Fatalf("enter opened %s", m.openID)
 	}
 	screen := screenText(m)
 	for _, want := range []string{"and its two callers.", "Two callers, both in a.go."} {
@@ -1463,8 +1466,11 @@ func TestApplySendBackRoundTrip(t *testing.T) {
 	if _, open := firstOpenNote(d, "f-001"); open {
 		t.Error("accepting left the note open")
 	}
-	pressKeys(t, m, "esc", "p", "y")
+	if !m.noting || m.noteKind != noteReturn {
+		t.Fatalf("accepting the last finding did not open the return step; view %d notice %q", m.view, m.notice)
+	}
+	pressKeys(t, m, "enter")
 	if !returned(t, dir) {
-		t.Fatalf("p then y did not return the run; view %d notice %q", m.view, m.notice)
+		t.Fatalf("enter did not return the run; view %d notice %q", m.view, m.notice)
 	}
 }

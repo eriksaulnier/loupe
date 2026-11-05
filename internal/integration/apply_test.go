@@ -103,34 +103,39 @@ func (h *harness) handoffToStub(ref string) {
 	}
 }
 
-// openReview starts loupe review on ref as the human in the handed-off pane, and waits for the list to show want.
+// openReview starts loupe review on ref as the human in the handed-off pane, and waits for the start screen to show
+// want.
 func (h *harness) openReview(ref string, want ...string) *screen.Screen {
 	h.t.Helper()
 	s := h.Start("review", ref)
-	s.WaitFor(append([]string{ref, "p return", "q quit"}, want...)...)
+	s.WaitFor(append([]string{ref, "to decide", "enter start", "q quit"}, want...)...)
 	return s
 }
 
-// returnRun returns the decisions from the list, with p and then y, and quits. It checks that the confirmation offers
-// no publish step and that the session printed none.
-func (h *harness) returnRun(s *screen.Screen, applier string) {
+// returnRun returns the decisions from the return step, which the last decision opened, with note typed when it is
+// not empty, then enter. It checks that the step offers no publish step, and that review quit on its own and left
+// the one line naming the return.
+func (h *harness) returnRun(s *screen.Screen, applier, note string) {
 	h.t.Helper()
-	s.Press("p")
-	shown := s.WaitFor("y return to " + applier)
+	shown := s.WaitFor("Return to "+applier, "enter return to "+applier)
 	for _, step := range []string{"Action", "Inline comments", "Message", "Publish"} {
 		if strings.Contains(shown, step) {
 			h.t.Fatalf("the return step shows %q:\n%s", step, shown)
 		}
 	}
-	s.Press("y")
-	s.WaitFor("Returned to " + applier)
-	s.Press("q")
+	if note != "" {
+		s.Type(note)
+	}
+	s.Press("enter")
 	stdout, stderr, exit := s.Wait()
 	if exit != 0 {
 		h.t.Fatalf("review exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
 	if strings.Contains(stdout, "Publish") {
 		h.t.Fatalf("review showed a publish step:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Returned to "+applier+": ") {
+		h.t.Fatalf("review left no return line:\n%s", stdout)
 	}
 }
 
@@ -301,7 +306,7 @@ func TestApplyLocalCodeReview(t *testing.T) {
 	acceptWithNote(s, "f-002", "Call it the digest line.")
 	s.WaitFor("Move the untracked note")
 	exclude(s, "f-003", "")
-	h.returnRun(s, "Claude")
+	h.returnRun(s, "Claude", "")
 
 	w := h.mustOK("wait", "--run", applyRef, "--timeout", "5s")
 	if w["reason"] != "returned" || awaitingOf(w) != "" || w["reviewUrl"] != nil || w["returned"] != true || w["groups"] == nil {
@@ -378,7 +383,7 @@ func TestApplyPlanDecisions(t *testing.T) {
 	accept(s, "f-002")
 	s.WaitFor("Pick an expiry")
 	acceptWithNote(s, "f-003", "Make the hour configurable.")
-	h.returnRun(s, "Claude")
+	h.returnRun(s, "Claude", "")
 
 	fb := h.mustOK("feedback", "--run", applyRef)
 	apply, changes := group(t, fb, "apply"), group(t, fb, "applyWithChanges")
@@ -421,13 +426,15 @@ func TestApplyQuestionsWithNoFiles(t *testing.T) {
 	h.handoffToStub(applyRef)
 
 	// The list marks the question, the finding with no proposal (FR-012).
-	s := h.openReview(applyRef, "Cache design", "? Who owns it?")
+	s := h.openReview(applyRef, "Cache design")
+	s.Press("l")
+	s.WaitFor("? Who owns it?")
 	s.Press("enter")
 	s.WaitFor("Which store?", "If you accept, Claude will", "Use memory.")
 	accept(s, "f-001")
 	s.WaitFor("Who owns it?")
 	accept(s, "f-002")
-	h.returnRun(s, "Claude")
+	h.returnRun(s, "Claude", "")
 
 	fb := h.mustOK("feedback", "--run", applyRef)
 	if apply := group(t, fb, "apply"); ids(apply) != "f-001,f-002" || apply["f-002"]["proposal"] != nil {
@@ -470,7 +477,7 @@ func TestApplySendBackWhileReviewStaysOpen(t *testing.T) {
 	s.Press("enter")
 	s.WaitFor("Keep entries in a map in memory.", "It was memory; the proposal says so now.")
 	accept(s, "f-001")
-	h.returnRun(s, "Claude")
+	h.returnRun(s, "Claude", "")
 
 	w = h.mustOK("wait", "--run", applyRef, "--timeout", "5s")
 	if w["reason"] != "returned" {
@@ -560,11 +567,8 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 	s.Press("enter")
 	s.WaitFor("Split the loop", "Reading and counting.")
 	accept(s, "f-004")
-	// The last decision opens the next finding, the withdrawn f-005, so the human goes back to the list to return.
-	s.WaitFor("f-005", "u reinstate")
-	s.Press("esc")
-	s.WaitFor("4/4 decided")
-	h.returnRun(s, "Claude")
+	// The withdrawn f-005 is not pending, so the last decision opens the return step.
+	h.returnRun(s, "Claude", "")
 
 	if w := h.agent("wait", "--run", applyRef, "--timeout", "5s"); w["reason"] != "returned" {
 		t.Fatalf("wait after return %v", w)
@@ -640,7 +644,7 @@ func TestApplyListFindsLocalRuns(t *testing.T) {
 	s := h.openReview(applyRef)
 	s.Press("enter")
 	accept(s, "f-001")
-	h.returnRun(s, "Claude")
+	h.returnRun(s, "Claude", "")
 
 	runs := listRuns(t, h.mustOK("list"))
 	byRef := map[string]map[string]any{}

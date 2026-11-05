@@ -29,6 +29,12 @@ type modeUI interface {
 	question(f draft.Finding) bool
 	// watchesPR reports whether review checks the live pull request; a local run has none and contacts no service.
 	watchesPR() bool
+	// opening is the view review opens on.
+	opening(m *Model) view
+	// nextAfter is the finding to open after a decision on the finding at index i, or -1 to return to the list.
+	nextAfter(m *Model, i int) int
+	// atList is what follows once a decision has returned the view to the list.
+	atList(m *Model) tea.Cmd
 	// plainCode reports whether the code pane and the file diff draw t's files as plain text, with no diff gutter.
 	plainCode(t run.Target) bool
 }
@@ -145,6 +151,17 @@ func (publishUI) question(draft.Finding) bool { return false }
 
 func (publishUI) watchesPR() bool { return true }
 
+func (publishUI) opening(*Model) view { return viewList }
+
+func (publishUI) nextAfter(m *Model, i int) int {
+	if i < 0 || i+1 >= len(m.order) {
+		return -1
+	}
+	return i + 1
+}
+
+func (publishUI) atList(*Model) tea.Cmd { return nil }
+
 func (publishUI) plainCode(run.Target) bool { return false }
 
 // detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An
@@ -197,7 +214,7 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{upDown, "move", "k/j"},
 			{"enter", "open the finding", ""},
 			{"tab", "expand or collapse the summary", ""},
-			{"p", "return the decisions once every finding is decided", ""},
+			{"p", "return the decisions, with a closing note if you like", ""},
 			{"ctrl+r", "reload the draft from disk", ""},
 		}},
 		viewDetail: {"Finding detail", "detail", []helpKey{
@@ -214,7 +231,7 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{"r / d", "resolve / dismiss its open note", ""},
 			{"f", "whole-file diff", ""},
 			{"ctrl+r", "reload the draft from disk", ""},
-			{"esc", "back to the list", ""},
+			{"l / esc", "back to the list", ""},
 		}},
 		viewFileDiff: fileDiffHelp(g),
 	}
@@ -225,7 +242,7 @@ func (applyUI) listHints(m *Model) []style.Hint {
 		{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "move", Role: style.RoleNav},
 		{Key: "enter", Verb: "open", Role: style.RoleNav},
 		{Key: "tab", Verb: "summary", Role: style.RoleNav},
-		m.endHint("return"),
+		m.endHint("return to " + m.applier()),
 		{Key: "?", Verb: "help", Role: style.RoleHelp},
 		{Key: "q", Verb: "quit", Role: style.RoleHelp},
 	}
@@ -277,6 +294,8 @@ func (applyUI) detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool) 
 	case "t", "w":
 		// Absent here, and swallowed so the shared handler cannot give them a pull request run's meaning.
 		return nil, true
+	case "l":
+		return m.backToList(), true
 	}
 	return nil, false
 }
@@ -299,6 +318,34 @@ func (applyUI) runRef(m *Model) string { return localRef(m.target) }
 func (applyUI) question(f draft.Finding) bool { return f.Proposal == "" }
 
 func (applyUI) watchesPR() bool { return false }
+
+// opening is the start screen while a finding waits, so the human starts the cards with one key.
+func (applyUI) opening(m *Model) view {
+	if len(draft.ReadinessOf(m.draft).Pending) > 0 {
+		return viewStart
+	}
+	return viewList
+}
+
+// nextAfter is the next pending finding, wrapping past the end, so the cards skip what is already decided.
+func (applyUI) nextAfter(m *Model, i int) int {
+	dispositions := draft.Dispositions(m.draft)
+	for step := 1; step < len(m.order); step++ {
+		j := (i + step) % len(m.order)
+		if dispositions[m.order[j].ID] == draft.DispositionPending {
+			return j
+		}
+	}
+	return -1
+}
+
+// atList opens the return step once nothing is left to decide.
+func (applyUI) atList(m *Model) tea.Cmd {
+	if !draft.ReadinessOf(m.draft).Ready {
+		return nil
+	}
+	return m.openReturn()
+}
 
 // plainCode is true on a --files run, whose diff adds each file whole only because it was captured from nothing.
 func (applyUI) plainCode(t run.Target) bool { return t.Local != nil && t.Local.Capture == "files" }

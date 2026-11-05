@@ -53,8 +53,9 @@ On a local run, which the agent captured with `loupe capture --changed`, `--file
 | `u` | Restore an excluded finding to pending, or reinstate and accept a withdrawn one |
 | `r`, `d` | Resolve or dismiss the finding's open note |
 | `f` | Show the whole file's diff; a `--files` run shows the file as plain text |
+| `l` | Back to the list, as `esc` is |
 | `j`, `k`, `n`, `N`, `space`, `PgUp`, `PgDn`, `ctrl+r`, `esc` | Move, scroll, reload and go back, as on a pull request run |
-| `p` | In the list, return the decisions to the agent after one `y` |
+| `p` | In the list, return the decisions to the agent, with an optional closing note; `enter` returns |
 | `?` | List the keys for the current view |
 
 `t`, `w`, `e` and `o` are absent, and there is no publish step.

@@ -100,7 +100,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if err != nil {
 		return err
 	}
-	published, err := reviewSession(deps, dir, jsonMode)
+	published, returned, err := reviewSession(deps, dir, jsonMode)
 	if err != nil {
 		_ = session.Release()
 		return err
@@ -108,7 +108,7 @@ func runReview(cmd *cobra.Command, deps Deps, args []string) error {
 	if err := session.Release(); err != nil {
 		return err
 	}
-	return reviewDone(cmd, deps, dir, jsonMode, interactiveOutput(deps, jsonMode), published)
+	return reviewDone(cmd, deps, dir, jsonMode, interactiveOutput(deps, jsonMode), published, returned)
 }
 
 // updateNotice reads only what capture cached, so that opening review never needs the network.
@@ -128,13 +128,13 @@ func updateNotice(deps Deps) string {
 	return available + ": see " + updatecheck.InstallDocs
 }
 
-// reviewSession runs the review interface and returns when the human leaves it, with the URL of the review they sent,
-// if any.
-func reviewSession(deps Deps, dir string, jsonMode bool) (string, error) {
+// reviewSession runs the review interface and returns when the human leaves it, with the URL of the review they sent
+// or the return they made, if any.
+func reviewSession(deps Deps, dir string, jsonMode bool) (string, *tui.Returned, error) {
 	ui := interactiveOutput(deps, jsonMode)
 	m, err := tui.New(tui.Config{Dir: dir, UpdateNotice: updateNotice(deps), Getenv: deps.Getenv, Now: deps.Now, Output: ui, GitHub: deps.GitHub, WatchPR: true, OpenURL: deps.OpenURL, Screen: deps.Screen})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	opts := []tea.ProgramOption{tea.WithInput(deps.Stdin), tea.WithOutput(ui)}
 	if deps.Screen != nil {
@@ -145,19 +145,23 @@ func reviewSession(deps Deps, dir string, jsonMode bool) (string, error) {
 	// A signal ends the program even while a confirmed review is being sent; the send still finishes and is recorded.
 	m.WaitForSend()
 	if err != nil {
-		return "", fmt.Errorf("review interface: %w", err)
+		return "", nil, fmt.Errorf("review interface: %w", err)
 	}
 	finalModel, ok := final.(*tui.Model)
 	if !ok {
-		return "", fmt.Errorf("review interface ended with an unexpected model %T", final)
+		return "", nil, fmt.Errorf("review interface ended with an unexpected model %T", final)
 	}
-	return finalModel.PublishedURL(), finalModel.Err()
+	var returned *tui.Returned
+	if r, ok := finalModel.Returned(); ok {
+		returned = &r
+	}
+	return finalModel.PublishedURL(), returned, finalModel.Err()
 }
 
 // reviewDone records the notes the human left open and unanswered so a blocked loupe wait picks them up. Only a
 // clean exit gets here; a crash mid-session records nothing until the next clean exit. A review sent in the session
-// is named once the full-screen view has closed, so its link stays in the terminal's scrollback.
-func reviewDone(cmd *cobra.Command, deps Deps, dir string, jsonMode bool, ui io.Writer, published string) error {
+// is named once the full-screen view has closed, so its link stays in the terminal's scrollback, and so is a return.
+func reviewDone(cmd *cobra.Command, deps Deps, dir string, jsonMode bool, ui io.Writer, published string, returned *tui.Returned) error {
 	handed, err := draft.RecordHandBack(dir, deps.Getenv)
 	if err != nil {
 		return err
@@ -168,6 +172,12 @@ func reviewDone(cmd *cobra.Command, deps Deps, dir string, jsonMode bool, ui io.
 	}
 	if published != "" {
 		if _, err := fmt.Fprintln(ui, publishedLine(s, published)); err != nil {
+			return err
+		}
+	}
+	if returned != nil {
+		line := fmt.Sprintf(" Returned to %s: %d accepted, %d rejected.", returned.Applier, returned.Accepted, returned.Rejected)
+		if _, err := fmt.Fprintln(ui, s.Emphasis(s.Good).Render(s.Glyphs.Accepted)+line); err != nil {
 			return err
 		}
 	}

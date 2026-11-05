@@ -623,20 +623,25 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	case "ctrl+r":
 		return m.checkDraft(true)
 	case "esc":
-		m.view, m.notice = viewList, ""
-		changed, err := m.reload()
-		if changed != "" {
-			m.say(style.Note, m.changedNotice(changed))
-		}
-		cmd := m.fail(err)
-		// The cursor is found again after the reload, not before it: a finding the agent filed meanwhile can sort
-		// above the open one, which would leave the cursor on its neighbor.
-		if j := orderedIndex(m.order, m.openID); j >= 0 {
-			m.cursor = j
-		}
-		return cmd
+		return m.backToList()
 	}
 	return nil
+}
+
+// backToList leaves the detail for the list, with the draft as it now is and the cursor on the finding left.
+func (m *Model) backToList() tea.Cmd {
+	m.view, m.notice = viewList, ""
+	changed, err := m.reload()
+	if changed != "" {
+		m.say(style.Note, m.changedNotice(changed))
+	}
+	cmd := m.fail(err)
+	// The cursor is found again after the reload, not before it: a finding the agent filed meanwhile can sort
+	// above the open one, which would leave the cursor on its neighbor.
+	if j := orderedIndex(m.order, m.openID); j >= 0 {
+		m.cursor = j
+	}
+	return cmd
 }
 
 // openEdit opens the label and blocking editor on f.
@@ -663,6 +668,12 @@ func (m *Model) openNote(kind noteKind, text string) tea.Cmd {
 }
 
 func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
+	if m.noteKind == noteReturn {
+		if cmd, ok := m.updateReturn(msg); ok {
+			return cmd
+		}
+		return m.typeNote(msg)
+	}
 	switch msg.Code {
 	case tea.KeyEsc:
 		m.noting = false
@@ -871,6 +882,8 @@ func (m *Model) noteView() []string {
 		title, enter = "Accept "+m.openID+" with a note", "enter accepts"
 	case noteExclude:
 		title, enter = "Reject "+m.openID+", with a reason if you like", "enter rejects"
+	case noteReturn:
+		title, enter = "Return to "+m.applier()+", with a closing note if you like", "enter returns"
 	}
 	way := m.styles.Text().Render(enter + " " + m.glyphs.Sep + " esc cancels")
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(rows) + style.PaneRows, Lines: rows,
@@ -884,6 +897,8 @@ func (m *Model) noteVerb() string {
 		return "accept"
 	case noteExclude:
 		return "reject"
+	case noteReturn:
+		return "return to " + m.applier()
 	}
 	return "send"
 }
@@ -941,12 +956,16 @@ func (m *Model) decideAndMove(fn func(*draft.Draft) error, success func() string
 	m.sayDecided(success())
 	flash := m.flash(findingTone(draft.Dispositions(m.draft)[m.openID]))
 	i := orderedIndex(m.order, m.openID)
-	if i < 0 || i+1 >= len(m.order) {
+	next := -1
+	if i >= 0 {
+		next = m.ui.nextAfter(m, i)
+	}
+	if next < 0 {
 		m.listAfterLast(i)
-		return flash, true
+		return tea.Batch(flash, m.ui.atList(m)), true
 	}
 	notice, kind := m.notice, m.noticeKind
-	cmd := m.fail(m.openFinding(m.order[i+1].ID))
+	cmd := m.fail(m.openFinding(m.order[next].ID))
 	// The notice names what was just recorded, so it survives the move to the finding after it.
 	m.notice, m.noticeKind = notice, kind
 	if m.cfg.Screen != nil {
