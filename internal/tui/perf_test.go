@@ -18,8 +18,9 @@ import (
 const openBudget = 100 * time.Millisecond
 
 func TestOpenUnder100ms(t *testing.T) {
-	if testing.Short() {
-		t.Skip("performance check")
+	// The bound is wall-clock time, which coverage counters and the race detector inflate several times over.
+	if testing.Short() || testing.CoverMode() != "" || raceDetector {
+		t.Skip("timing is not meaningful in short mode, under coverage or under the race detector")
 	}
 	const files = 500
 	var b strings.Builder
