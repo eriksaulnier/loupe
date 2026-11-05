@@ -505,10 +505,13 @@ var hyperlink = regexp.MustCompile("\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
 
 func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	f, i := m.openedFinding()
-	if m.settling && strings.Contains("axsurdew", msg.String()) && len(msg.String()) == 1 {
+	if m.settling && strings.Contains(m.ui.settleKeys(), msg.String()) && len(msg.String()) == 1 {
 		// The finding under this key was never on screen: it arrived through typeahead or key repeat right after a
 		// decision moved the view. Per-finding sign-off is the product, so the key is dropped, not applied.
 		return nil
+	}
+	if cmd, ok := m.ui.detailKey(m, f, msg.String()); ok {
+		return cmd
 	}
 	switch msg.String() {
 	case "a":
@@ -560,15 +563,6 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		cmd := m.note.Focus()
 		m.sizeNote(0)
 		return cmd
-	case "e":
-		if err := draft.Recalibratable(f); err != nil {
-			m.say(style.Warn, refusalNotice(err))
-			return nil
-		}
-		m.editing, m.notice = true, ""
-		m.editLabels, m.editBlocking = editLabels(f.Label), f.Blocking
-		m.editPick = slices.Index(m.editLabels, f.Label)
-		return nil
 	case "w":
 		return m.openRewrite(f)
 	case "f":
@@ -599,8 +593,6 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		m.body.PageUp()
 	case "ctrl+r":
 		return m.checkDraft(true)
-	case "o":
-		return m.openPR()
 	case "esc":
 		m.view, m.notice = viewList, ""
 		changed, err := m.reload()
@@ -616,6 +608,17 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		return cmd
 	}
 	return nil
+}
+
+// openEdit opens the label and blocking editor on f.
+func (m *Model) openEdit(f draft.Finding) {
+	if err := draft.Recalibratable(f); err != nil {
+		m.say(style.Warn, refusalNotice(err))
+		return
+	}
+	m.editing, m.notice = true, ""
+	m.editLabels, m.editBlocking = editLabels(f.Label), f.Blocking
+	m.editPick = slices.Index(m.editLabels, f.Label)
 }
 
 func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
@@ -953,46 +956,5 @@ func (m *Model) detailFooter() []string {
 
 func (m *Model) detailHints() []style.Hint {
 	f, _ := m.openedFinding()
-	_, hasOpenNote := firstOpenNote(m.draft, f.ID)
-	hints := detailActions(m.glyphs, f, draft.Dispositions(m.draft)[f.ID], hasOpenNote)
-	help := hints[len(hints)-1]
-	return append(hints[:len(hints)-1], style.Hint{Key: "esc", Verb: "list", Role: style.RoleNav}, m.openHint(), help)
-}
-
-// detailActions is the detail footer: navigation, the decisions that apply to the finding as it stands, and help. An
-// action the finding cannot take is not advertised, though its key still answers with a notice.
-func detailActions(g GlyphSet, f draft.Finding, disposition string, hasOpenNote bool) []style.Hint {
-	pair := func(a, b string) string {
-		if g.Tier == style.ASCII {
-			return a + "/" + b
-		}
-		return a + b
-	}
-	hints := []style.Hint{
-		{Key: pair(g.Left, g.Right), Verb: "finding", Role: style.RoleNav},
-		{Key: pair(g.Up, g.Down), Verb: "scroll", Role: style.RoleNav},
-	}
-	decide := func(key, verb string) style.Hint {
-		return style.Hint{Key: key, Verb: verb, Role: style.RoleDecision}
-	}
-	switch disposition {
-	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept"), decide("x", "exclude"), decide("s", "send back"))
-	case draft.DispositionAccepted:
-		hints = append(hints, decide("x", "exclude"), decide("s", "send back"))
-	case draft.DispositionExcluded:
-		hints = append(hints, decide("u", "restore"))
-	case draft.DispositionWithdrawn:
-		hints = append(hints, decide("u", "reinstate"))
-	}
-	if f.Included {
-		hints = append(hints, decide("e", "edit"), decide("w", "rewrite"))
-	}
-	if hasOpenNote {
-		hints = append(hints, decide("r", "resolve"), decide("d", "dismiss"))
-	}
-	if f.Location != nil {
-		hints = append(hints, style.Hint{Key: "f", Verb: "file", Role: style.RoleFile})
-	}
-	return append(hints, style.Hint{Key: "?", Verb: "help", Role: style.RoleHelp})
+	return m.ui.detailHints(m, f)
 }

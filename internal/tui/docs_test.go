@@ -11,7 +11,7 @@ import (
 
 var docsKey = regexp.MustCompile("`([^`]+)`")
 
-// TestKeyTableMatchesHelp pins the key table in docs/review-workflow.md to the finding detail's help: the table names
+// TestKeyTableMatchesHelp pins the key table in docs/review-workflow.md to the finding detail's help on a pull request run: the table names
 // only keys review binds, and every letter key of the detail view is in it.
 func TestKeyTableMatchesHelp(t *testing.T) {
 	data, err := os.ReadFile("../../docs/review-workflow.md")
@@ -42,7 +42,7 @@ func TestKeyTableMatchesHelp(t *testing.T) {
 	}
 
 	bound := map[string]bool{}
-	for _, k := range append((&Model{}).helpSections()[viewDetail].keys, everywhere.keys...) {
+	for _, k := range append((publishUI{}).helpSections(GlyphSet{})[viewDetail].keys, everywhere.keys...) {
 		for key := range strings.SplitSeq(k.Keys, " / ") {
 			bound[key] = true
 		}
@@ -52,7 +52,7 @@ func TestKeyTableMatchesHelp(t *testing.T) {
 			t.Errorf("docs/review-workflow.md names key %q, which the finding detail's help does not", key)
 		}
 	}
-	for _, k := range (&Model{}).helpSections()[viewDetail].keys {
+	for _, k := range (publishUI{}).helpSections(GlyphSet{})[viewDetail].keys {
 		for key := range strings.SplitSeq(k.Keys, " / ") {
 			if r, _ := utf8.DecodeRuneInString(key); utf8.RuneCountInString(key) == 1 && unicode.IsLetter(r) && !documented[key] {
 				t.Errorf("the finding detail binds %q (%s), which the key table in docs/review-workflow.md MUST list", key, k.Verb)

@@ -32,25 +32,29 @@ func (m *Model) updateList(msg tea.KeyPressMsg) tea.Cmd {
 		return m.fail(m.openFinding(m.order[m.cursor].ID))
 	case "ctrl+r":
 		return m.checkDraft(true)
-	case "o":
-		return m.openPR()
-	case "p":
-		changed, err := m.reload()
-		if err != nil {
-			return m.fail(err)
-		}
-		// The human sees what changed before they are asked to publish it.
-		if changed != "" {
-			m.say(style.Note, m.changedNotice(changed))
-			return nil
-		}
-		if err := publish.ReadinessRefusal(m.draft); err != nil {
-			m.say(style.Warn, refusalNotice(err))
-			return nil
-		}
-		m.view, m.pick = viewAction, 0
+	default:
+		cmd, _ := m.ui.listKey(m, msg.String())
+		return cmd
 	}
 	return nil
+}
+
+// readyToEnd reloads the draft and reports whether the run can end as it now stands. Otherwise the notice says what
+// changed, so the human sees it before being asked to end the run, or what is not ready.
+func (m *Model) readyToEnd() (bool, error) {
+	changed, err := m.reload()
+	if err != nil {
+		return false, err
+	}
+	if changed != "" {
+		m.say(style.Note, m.changedNotice(changed))
+		return false, nil
+	}
+	if err := draft.ReadinessRefusal(m.draft); err != nil {
+		m.say(style.Warn, refusalNotice(err))
+		return false, nil
+	}
+	return true, nil
 }
 
 func refusalNotice(err error) string {
@@ -545,22 +549,12 @@ func (m *Model) listView() string {
 // runRef is the run as loupe's commands name it.
 func (m *Model) runRef() string { return fmt.Sprintf("%s@%d", m.ref(), m.target.Round) }
 
-func (m *Model) listHints() []style.Hint {
-	return []style.Hint{
-		{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "move", Role: style.RoleNav},
-		{Key: "enter", Verb: "open", Role: style.RoleNav},
-		{Key: "tab", Verb: "summary", Role: style.RoleNav},
-		m.openHint(),
-		m.publishHint(),
-		{Key: "?", Verb: "help", Role: style.RoleHelp},
-		{Key: "q", Verb: "quit", Role: style.RoleHelp},
-	}
-}
+func (m *Model) listHints() []style.Hint { return m.ui.listHints(m) }
 
-// publishHint stays on the footer while the draft is not ready, so the human knows p exists. The counts already say
+// endHint stays on the footer while the draft is not ready, so the human knows p exists. The counts already say
 // what blocks it; under NO_COLOR, where the dim cannot show, the hint says not ready.
-func (m *Model) publishHint() style.Hint {
-	h := style.Hint{Key: "p", Verb: "publish", Role: style.RoleHelp}
+func (m *Model) endHint(verb string) style.Hint {
+	h := style.Hint{Key: "p", Verb: verb, Role: style.RoleHelp}
 	if !draft.ReadinessOf(m.draft).Ready {
 		h.Unavailable = "not ready"
 	}

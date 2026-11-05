@@ -76,6 +76,7 @@ const (
 type Model struct {
 	cfg     Config
 	target  run.Target
+	ui      modeUI
 	draft   *draft.Draft
 	diff    *diff.Diff
 	version int
@@ -214,6 +215,7 @@ func New(cfg Config) (*Model, error) {
 	m := &Model{
 		cfg:          cfg,
 		target:       target,
+		ui:           uiFor(target),
 		diff:         parsed,
 		glyphs:       st.Glyphs,
 		styles:       st,
@@ -731,48 +733,7 @@ type helpSection struct {
 	keys         []helpKey
 }
 
-func (m *Model) helpSections() map[view]helpSection {
-	g := m.glyphs
-	upDown, leftRight := g.Up+"/"+g.Down, g.Left+"/"+g.Right
-	return map[view]helpSection{
-		viewList: {"Finding list", "list", []helpKey{
-			{upDown, "move", "k/j"},
-			{"enter", "open the finding", ""},
-			{"tab", "expand or collapse the summary", ""},
-			{"o", "open the pull request in the browser", ""},
-			{"p", "publish once the review is ready", ""},
-			{"ctrl+r", "reload the draft from disk", ""},
-		}},
-		viewDetail: {"Finding detail", "detail", []helpKey{
-			{leftRight, "previous / next finding", "N/n"},
-			{upDown, "scroll the finding", "k/j"},
-			{"PgUp/PgDn", "scroll one page", ""},
-			{"space", "scroll one page down", ""},
-			{"a", "accept; resolves its open notes", ""},
-			{"x", "exclude; dismisses its open notes", ""},
-			{"s", "send back; enter sends, esc cancels", ""},
-			{"e", "edit label and blocking", ""},
-			{"w", "rewrite title and body; ctrl+s saves, esc keeps the text", ""},
-			{"u", "restore or reinstate the finding", ""},
-			{"r / d", "resolve / dismiss its open note", ""},
-			{"f", "whole-file diff", ""},
-			{"o", "open the pull request in the browser", ""},
-			{"ctrl+r", "reload the draft from disk", ""},
-			{"esc", "back to the list", ""},
-		}},
-		viewAction: {"Publish steps", "publish", []helpKey{
-			{upDown, "move", "k/j"},
-			{"enter", "choose and go on", ""},
-			{"esc", "back one step", ""},
-		}},
-		viewFileDiff: {"File diff", "file diff", []helpKey{
-			{upDown, "move one line", "k/j"},
-			{leftRight, "previous / next marker", "[/]"},
-			{"enter", "open the finding on this line", ""},
-			{"esc", "back to the finding", ""},
-		}},
-	}
-}
+func (m *Model) helpSections() map[view]helpSection { return m.ui.helpSections(m.glyphs) }
 
 var everywhere = helpSection{"Everywhere", "", []helpKey{
 	{"?", "toggle this help", ""},
