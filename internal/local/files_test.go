@@ -144,3 +144,27 @@ func TestReadFilesRefusesTwoFilesWithOneDisplayPath(t *testing.T) {
 	_, _, err := ReadFiles([]string{"ext/1/plan.md", outside}, root, root, filepath.Join(base, "home"))
 	wantUsage(t, err, outside)
 }
+
+// A path that cannot be resolved for a reason other than its absence, such as a symlink loop, refuses with the cause.
+func TestReadFilesRefusesASymlinkLoop(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Symlink("loop", filepath.Join(root, "loop")); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := ReadFiles([]string{"loop"}, root, root, t.TempDir())
+	wantUsage(t, err, "loop")
+}
+
+// Outside Git there is no root, so a file under the working directory keeps an ext/ path or a home path.
+func TestReadFilesWithoutARoot(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "home")
+	in := write(t, filepath.Join(home, "p.md"), []byte("p\n"))
+	files, _, err := ReadFiles([]string{in}, base, "", home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].Path != "~/p.md" {
+		t.Fatalf("files %+v", files)
+	}
+}

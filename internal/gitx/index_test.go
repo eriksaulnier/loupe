@@ -427,3 +427,14 @@ func TestStageWorktreeRunsNoFilter(t *testing.T) {
 		t.Fatalf("Blob(plan.md) = %q, %v; want the bytes on disk", got, err)
 	}
 }
+
+// A file name may hold a newline. StageWorktree hashes such a path on its own and still writes the tree add -A would.
+func TestStageWorktreeKeepsAPathWithANewline(t *testing.T) {
+	w := newWorkTree(t)
+	writeFile(t, filepath.Join(w.repo.Dir, "two\nlines.txt"), "x\n", 0o644)
+	tree, _ := captureTree(t, w.repo.Dir)
+	if want := addAllTree(t, w.repo.Dir); tree != want {
+		t.Fatalf("StageWorktree wrote %s, add -A writes %s:\n%s\n%s", tree, want,
+			runGit(t, w.repo.Dir, "ls-tree", "-r", tree), runGit(t, w.repo.Dir, "ls-tree", "-r", want))
+	}
+}

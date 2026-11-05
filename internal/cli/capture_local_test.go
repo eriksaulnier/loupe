@@ -200,3 +200,85 @@ func TestBareCommandNeverSelectsALocalRun(t *testing.T) {
 		t.Fatalf("bare feedback named a run: %v", env)
 	}
 }
+
+// The human result names the base a --changed run diffs against, and says a --no-files run holds no file.
+func TestCaptureLocalTextNamesTheBaseAndNoFiles(t *testing.T) {
+	repo := gitrepo.New(t, "acme", "widgets", 1)
+	if err := os.WriteFile(filepath.Join(repo.Dir, "notes.txt"), []byte("n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s, _ := localCapture(t, repo.Dir, map[string]string{"NO_COLOR": "1"}, "--changed", "--base", "HEAD")
+	if code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if out := s.stdout.String(); !strings.Contains(out, "against HEAD") {
+		t.Errorf("output lacks the base:\n%s", out)
+	}
+	code, s, _ = localCapture(t, t.TempDir(), map[string]string{"NO_COLOR": "1"}, "--no-files", "--title", "Plan")
+	if code != 0 {
+		t.Fatalf("exit %d stderr %q", code, s.stderr.String())
+	}
+	if out := s.stdout.String(); !strings.Contains(out, "no files; findings are general") {
+		t.Errorf("output lacks the no-files line:\n%s", out)
+	}
+}
+
+// --title and --applier are checked as Markdown and name their flag; --source and --model keep their PR rules.
+func TestCaptureLocalChecksItsTextFlags(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		args []string
+		code refusal.Code
+		word string
+	}{
+		{[]string{"--title", "a<br>b"}, refusal.Usage, "--title"},
+		{[]string{"--title", "x", "--applier", "a<br>b"}, refusal.Usage, "--applier"},
+		{[]string{"--title", "x", "--source", "bad source"}, refusal.Input, "source"},
+		{[]string{"--title", "x", "--model", "Bad Model"}, refusal.Input, "model"},
+	} {
+		code, s, _ := localCapture(t, dir, nil, append(append([]string{"--no-files"}, c.args...), "--json")...)
+		if want := map[refusal.Code]int{refusal.Usage: 2, refusal.Input: 1}[c.code]; code != want {
+			t.Errorf("%v: exit %d", c.args, code)
+			continue
+		}
+		errObj := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+		if errObj["code"] != string(c.code) || !strings.Contains(errObj["message"].(string), c.word) {
+			t.Errorf("%v: %v", c.args, errObj)
+		}
+	}
+}
+
+// --files refuses when every file given is skipped, and names why.
+func TestCaptureFilesRefusesWhenEveryFileIsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "empty.md"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s, _ := localCapture(t, dir, nil, "--files", "empty.md", "--json")
+	if code != 2 {
+		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+	}
+	errObj := decodeOne(t, s.stdout.Bytes())["error"].(map[string]any)
+	if errObj["code"] != string(refusal.Usage) || !strings.Contains(errObj["message"].(string), "every file given was skipped (1): empty.md") {
+		t.Fatalf("error %v", errObj)
+	}
+}
+
+// list names an untitled local run "(no title)".
+func TestListNamesAnUntitledLocalRun(t *testing.T) {
+	repo := gitrepo.New(t, "acme", "widgets", 1)
+	if err := os.WriteFile(filepath.Join(repo.Dir, "notes.txt"), []byte("n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, s, home := localCapture(t, repo.Dir, nil, "--changed", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+	}
+	deps, ls := testDeps(t, map[string]string{"LOUPE_HOME": home, "HOME": t.TempDir(), "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"list"}); code != 0 {
+		t.Fatalf("list exit %d stderr %q", code, ls.stderr.String())
+	}
+	if out := ls.stdout.String(); !strings.Contains(out, "(no title)") {
+		t.Errorf("list output lacks (no title):\n%s", out)
+	}
+}

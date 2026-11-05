@@ -202,3 +202,29 @@ func TestChangedRunsNoFilter(t *testing.T) {
 		t.Fatalf("capture changed the repository")
 	}
 }
+
+// --changed refuses outside Git, inside a repository's own directory, and against a base with no shared history.
+func TestChangedRefusesWithoutAWorktreeOrSharedHistory(t *testing.T) {
+	wantRefusal := func(t *testing.T, err error, words string) {
+		t.Helper()
+		r, ok := refusal.As(err)
+		if !ok || r.Code != refusal.Usage || !strings.Contains(r.Message, words) {
+			t.Fatalf("got %v, want a usage refusal saying %q", err, words)
+		}
+	}
+	_, err := Capture(Request{Form: FormChanged, WorkDir: t.TempDir()})
+	wantRefusal(t, err, "is not in one")
+
+	repo := plainRepo(t, "work")
+	_, err = Capture(Request{Form: FormChanged, WorkDir: filepath.Join(repo, ".git")})
+	wantRefusal(t, err, "has none")
+
+	gitIn(t, repo, "checkout", "--quiet", "--orphan", "other")
+	write(t, filepath.Join(repo, "o.txt"), []byte("o\n"))
+	gitIn(t, repo, "add", "o.txt")
+	gitIn(t, repo, "commit", "--quiet", "-m", "other")
+	gitIn(t, repo, "checkout", "--quiet", "main")
+	write(t, filepath.Join(repo, "a.txt"), []byte("b\n"))
+	_, err = Capture(Request{Form: FormChanged, WorkDir: repo, Base: "other"})
+	wantRefusal(t, err, "--base other shares no history with HEAD")
+}
