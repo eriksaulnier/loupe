@@ -62,10 +62,8 @@ func earlierRows(t *testing.T, shown map[string]any) []earlierRow {
 // A finding round 2 carried as open reaches round 3 with the round that filed it, and leaves once round 3 marks it
 // addressed: read back from GitHub by rounds that each start from an empty data root, and from receipts in one root.
 func TestOpenFindingsCarryAcrossThreeRounds(t *testing.T) {
-	t.Parallel()
 	for name, fresh := range map[string]bool{"from GitHub": true, "from receipts": false} {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			h := newHarness(t)
 			h.UseInstallationToken()
 			h.GH.SetViewer("github-actions[bot]")
@@ -123,14 +121,12 @@ func TestOpenFindingsCarryAcrossThreeRounds(t *testing.T) {
 }
 
 func TestAssessRefusesWithoutAPreviousRound(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	run := fmt.Sprint(h.capture()["run"])
 	h.mustRefuse("not-found", "assess", "e-1", "--status", "open", "--run", run)
 }
 
 func TestAssessRefusals(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -153,7 +149,6 @@ func TestAssessRefusals(t *testing.T) {
 
 // The draft is what show returns, so an assessment recorded a moment ago is readable the same way.
 func TestShowCarriesTheDraftsAssessments(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -185,7 +180,6 @@ func TestShowCarriesTheDraftsAssessments(t *testing.T) {
 // An attended round publishes its assessments under the human's name, so the confirmation names them, the receipt keeps
 // them, and the next local round carries the open one from that receipt.
 func TestAttendedRoundCarriesItsAssessmentsThroughItsReceipt(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	h.publishRound(1)
@@ -222,7 +216,6 @@ func TestAttendedRoundCarriesItsAssessmentsThroughItsReceipt(t *testing.T) {
 // A pipeline that never runs assess drops every earlier finding, so an unattended publish says so on stderr and
 // nowhere else.
 func TestUnattendedPublishWarnsOfUnassessedEarlierFindings(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -247,7 +240,6 @@ func TestUnattendedPublishWarnsOfUnassessedEarlierFindings(t *testing.T) {
 }
 
 func TestUnattendedPublishIsSilentWhenEveryEarlierFindingIsAssessed(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -278,7 +270,6 @@ func (h *harness) asHuman() {
 // A pipeline and a person sharing one data root never read each other's receipts, so the person's earlier list and
 // what assess copies into their record hold only findings that person accepted.
 func TestAttendedRoundSkipsAnUnattendedReceipt(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -316,7 +307,6 @@ func TestAttendedRoundSkipsAnUnattendedReceipt(t *testing.T) {
 
 // A pipeline round between two of a person's rounds is skipped, and the person's own older receipt still counts.
 func TestAttendedRoundReadsItsOwnOlderReceiptPastAPipelineRound(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.captureRound(1)
 	h.publishRound(1)
@@ -350,7 +340,6 @@ func TestAttendedRoundReadsItsOwnOlderReceiptPastAPipelineRound(t *testing.T) {
 // Round 3 assesses round 1 while round 2 is still unpublished. Once round 2 publishes, round 3's assessments name refs
 // in the wrong list, so publish refuses until round 3 assesses again, and that assess drops the stale ones.
 func TestPublishRefusesAssessmentsFromAMovedPreviousRound(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -404,7 +393,6 @@ func TestPublishRefusesAssessmentsFromAMovedPreviousRound(t *testing.T) {
 // A summary-only round 2 leaves an empty earlier list, so no ref can be assessed again. An explicit empty batch is how
 // round 3 clears what it read from round 1.
 func TestEmptyAssessClearsAssessmentsFromAMovedPreviousRound(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -444,7 +432,6 @@ func TestEmptyAssessClearsAssessmentsFromAMovedPreviousRound(t *testing.T) {
 // Round 2 publishes while the human confirms round 3, which assessed round 1: the check before the confirmation passed,
 // so the one before sending must refuse.
 func TestPublishRefusesWhenThePreviousRoundMovesDuringConfirmation(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.Env["NO_COLOR"] = "1"
 	h.captureRound(1)
@@ -485,7 +472,6 @@ func TestPublishRefusesWhenThePreviousRoundMovesDuringConfirmation(t *testing.T)
 // Two pipeline rounds from separate data roots overlap: X assesses review P, Y publishes on top of it, then X
 // publishes. X's stored previous round still names P, so only the review X is about to build on shows the move.
 func TestPublishRefusesWhenAnotherDataRootPublishedMeanwhile(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
@@ -530,7 +516,6 @@ func TestPublishRefusesWhenAnotherDataRootPublishedMeanwhile(t *testing.T) {
 // The attended form of the overlap: the same person publishes their next round from another data root while this
 // root's round is at its confirmation, after the check before the confirmation passed.
 func TestPublishRefusesWhenAnotherDataRootPublishesDuringConfirmation(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.Env["NO_COLOR"] = "1"
 	h.captureRound(1)
@@ -569,7 +554,6 @@ func TestPublishRefusesWhenAnotherDataRootPublishesDuringConfirmation(t *testing
 // A run captured by a loupe that did not record publication ids cannot be checked against GitHub at publish, so assess
 // refuses rather than record assessments no check can guard.
 func TestAssessRefusesAPreviousRoundWithoutAPublicationID(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.UseInstallationToken()
 	h.GH.SetViewer("github-actions[bot]")
