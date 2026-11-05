@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/eriksaulnier/loupe/internal/markdown"
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
 )
@@ -22,13 +24,22 @@ type Return struct {
 	Schema       int       `json:"schema"`
 	ReturnedAt   time.Time `json:"returnedAt"`
 	DraftVersion int       `json:"draftVersion"`
+	// Note is the human's closing note on the work as a whole, absent when they wrote none.
+	Note string `json:"note,omitempty"`
 }
+
+// MaxReturnNoteRunes caps the closing note.
+const MaxReturnNoteRunes = 4096
 
 const returnedFix = "loupe feedback --run <ref> to read the decisions, or loupe capture --changed|--files|--no-files to start a new run"
 
-// Seal returns a local run's decisions: under the draft lock it refuses a draft that moved past expectVersion, is
-// not ready, or holds no finding, and otherwise writes return.json.
-func Seal(dir string, expectVersion int, getenv func(string) string, now time.Time) error {
+// Seal returns a local run's decisions with the human's closing note, which may be empty. It checks the note first,
+// so a refused note writes nothing, then under the draft lock refuses a draft that moved past expectVersion, is not
+// ready, or holds no finding, and otherwise writes return.json.
+func Seal(dir string, expectVersion int, note string, getenv func(string) string, now time.Time) error {
+	if err := ValidateReturnNote(note); err != nil {
+		return err
+	}
 	return underLock(dir, "review", getenv, func(d *Draft) error {
 		if err := refuseReturned(dir); err != nil {
 			return err
@@ -43,8 +54,24 @@ func Seal(dir string, expectVersion int, getenv func(string) string, now time.Ti
 		if len(d.Findings) == 0 {
 			return refusal.New(refusal.Empty, "the draft holds no finding, so there is nothing to return", "ask the agent to file findings with loupe add")
 		}
-		return run.WriteJSONAtomic(filepath.Join(dir, ReturnFile), Return{Schema: ReturnSchema, ReturnedAt: now.UTC(), DraftVersion: d.Version})
+		return run.WriteJSONAtomic(filepath.Join(dir, ReturnFile), Return{Schema: ReturnSchema, ReturnedAt: now.UTC(), DraftVersion: d.Version, Note: note})
 	})
+}
+
+// ValidateReturnNote refuses a closing note over MaxReturnNoteRunes, outside the Markdown allowlist, or citing a
+// finding id. An empty note passes.
+func ValidateReturnNote(note string) error {
+	const fix = "edit the note, or clear it to return without one"
+	if note == "" {
+		return nil
+	}
+	if n := utf8.RuneCountInString(note); n > MaxReturnNoteRunes {
+		return refusal.New(refusal.Input, fmt.Sprintf("the closing note is %d characters; at most %d are allowed", n, MaxReturnNoteRunes), fix)
+	}
+	if err := markdown.Check(note, markdown.ReturnNote, fix); err != nil {
+		return err
+	}
+	return markdown.FindingIDs(note, markdown.ReturnNote, "return again")
 }
 
 func refuseReturned(dir string) error {

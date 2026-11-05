@@ -16,8 +16,8 @@ Every task follows a failing test, then the change, then a passing check. PR run
 
 ## Phase 3: Closing note (US1, FR-001 to FR-005)
 
-- [ ] T005 [US1] Add failing tests in `internal/draft/seal_test.go`: `Seal` with a note writes `note`; with none, the key is absent; a note over 4,096 characters, outside the allowlist or citing a finding id refuses and writes nothing. In `internal/mode/feedback_test.go`: `note` is in the payload when `return.json` has one and absent otherwise. Pin `return.note,omitempty` in `internal/publish/schema_test.go`.
-- [ ] T006 [US1] Implement `Return.Note` and the note parameter of `Seal` in `internal/draft/seal.go`, the payload key in `internal/mode/feedback.go`, and the `docs/versioning.md` return row.
+- [x] T005 [US1] Add failing tests in `internal/draft/seal_test.go`: `Seal` with a note writes `note`; with none, the key is absent; a note over 4,096 characters, outside the allowlist or citing a finding id refuses and writes nothing. In `internal/mode/feedback_test.go`: `note` is in the payload when `return.json` has one and absent otherwise. Pin `return.note,omitempty` in `internal/publish/schema_test.go`.
+- [x] T006 [US1] Implement `Return.Note` and the note parameter of `Seal` in `internal/draft/seal.go`, the payload key in `internal/mode/feedback.go`, and the `docs/versioning.md` return row.
 
 ## Phase 4: Flow (US1, US4, FR-012, FR-018 to FR-020)
 

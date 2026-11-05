@@ -75,7 +75,11 @@ func (a apply) Feedback(d *draft.Draft, dir string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	payload["returned"] = returned && sealed.DraftVersion == d.Version
+	returned = returned && sealed.DraftVersion == d.Version
+	payload["returned"] = returned
+	if returned && sealed.Note != "" {
+		payload["note"] = sealed.Note
+	}
 	groups := map[string][]map[string]any{"apply": {}, "applyWithChanges": {}, "excluded": {}, "withdrawn": {}}
 	for _, f := range d.Findings {
 		entry := a.entry(d, f)

@@ -192,3 +192,34 @@ func TestApplyFeedbackRefusesAnUnreadableReturn(t *testing.T) {
 		t.Fatal("feedback read a broken return.json")
 	}
 }
+
+// note is in the payload when return.json holds one, and absent otherwise.
+func TestApplyFeedbackCarriesTheClosingNote(t *testing.T) {
+	m := Of(run.Target{Kind: run.KindLocal, Local: &run.LocalTarget{}})
+	for _, c := range []struct {
+		name, record string
+		want         any
+	}{
+		{"not returned", "", nil},
+		{"returned with no note", `{"schema":1,"returnedAt":"2026-11-03T00:00:00Z","draftVersion":0}`, nil},
+		{"returned with a note", `{"schema":1,"returnedAt":"2026-11-03T00:00:00Z","draftVersion":0,"note":"Run the tests."}`, "Run the tests."},
+	} {
+		dir := t.TempDir()
+		if c.record != "" {
+			if err := os.WriteFile(filepath.Join(dir, draft.ReturnFile), []byte(c.record), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		payload, err := m.Feedback(draft.NewEmpty(), dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, present := payload["note"]
+		if c.want == nil && present {
+			t.Errorf("%s: note %v present", c.name, got)
+		}
+		if c.want != nil && got != c.want {
+			t.Errorf("%s: note %v, want %v", c.name, got, c.want)
+		}
+	}
+}

@@ -27,7 +27,7 @@ func (m *Model) confirmReturn(msg tea.KeyPressMsg) tea.Cmd {
 		m.say(style.Dim, "nothing was returned")
 		return nil
 	}
-	err := draft.Seal(m.cfg.Dir, m.returnVersion, m.cfg.Getenv, m.cfg.Now())
+	err := draft.Seal(m.cfg.Dir, m.returnVersion, "", m.cfg.Getenv, m.cfg.Now())
 	if err == nil {
 		m.view = viewReturned
 		return nil

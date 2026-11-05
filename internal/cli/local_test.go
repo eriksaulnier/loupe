@@ -355,7 +355,7 @@ func TestWaitAndFeedbackOnAReturnedRun(t *testing.T) {
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {
 		t.Fatal(err)
 	}
-	if err := draft.Seal(dir, 0, func(string) string { return "" }, time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)); err != nil {
+	if err := draft.Seal(dir, 0, "", func(string) string { return "" }, time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
