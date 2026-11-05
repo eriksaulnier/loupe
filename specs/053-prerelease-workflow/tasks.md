@@ -36,4 +36,4 @@ description: "Task list for loupe pre-releases and release snapshots"
 ## Phase 5: Verification (FR-012)
 
 - [X] T011 Run `mise run check` and record the output in the pull request.
-- [ ] T012 Dispatch `prerelease.yml` on a throwaway private repository and record the run.
+- [X] T012 Dispatch `prerelease.yml` on a throwaway private repository and record the run.

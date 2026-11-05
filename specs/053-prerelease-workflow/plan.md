@@ -63,7 +63,14 @@
 - goreleaser runs in scratch clones, as recorded under Research.
 - A trial dispatch of `prerelease.yml` on a throwaway private repository, with a commit that points `install.sh` and `action.yml` at it and a version above its manifest, such as `0.99.0-rc.1`. It MUST NOT run on `eriksaulnier/loupe`, where an immutable release cannot be removed.
 
-Not verifiable before merge: the `snapshot` job, which runs only on a push to `main` while a release pull request is open.
+Trial, 2026-11-04, on the public throwaway repository `eriksaulnier/loupe-prerelease-trial`:
+
+- `validate` refused `v0.99.0-rc.1`, `0.21.0-rc.1`, a missing branch, a dispatch from a branch other than `main`, and a reused `0.99.0-rc.1`, each with its own message and before any write.
+- `0.99.0-rc.1` published a pre-release with the four archives and `checksums.txt`, tagged at the branch's commit, but `verify` failed: `releases/latest` answers 404 when every release is a pre-release. `verify` now treats that 404 as no latest release.
+- `0.99.0-rc.2` passed every job: `validate`, `check`, `build`, `release`, `verify`, and `install-action` and `install-script` on all four targets.
+- The trial repository started no push-triggered run, for reasons not found, so `release.yml` was dispatched through a trial-only `workflow_dispatch`. release-please opened `chore(main): release 0.22.0`, the `snapshot` job uploaded `loupe-snapshot`, and the commands in `docs/releasing.md` downloaded it. The binary printed `loupe version 0.22.0-SNAPSHOT-<main's head>`.
+
+Not verified: the `snapshot` job on a real push to `main`.
 
 ## Complexity Tracking
 
