@@ -129,14 +129,16 @@ jobs:
           args: release --clean --skip=publish --config ${{ runner.temp }}/goreleaser.yaml
         env:
           GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+      # checksums.txt covers the branch's install.sh, which loupe update downloads from the release. It joins dist/
+      # because upload-artifact roots the artifact at the paths' common ancestor, and the release job reads it flat.
+      - run: cp install.sh dist/
       - uses: actions/upload-artifact@v7
         with:
           name: release-assets
-          # checksums.txt covers the branch's install.sh, which loupe update downloads from the release.
           path: |
             dist/*.tar.gz
             dist/checksums.txt
-            install.sh
+            dist/install.sh
           if-no-files-found: error
           # A re-run of all jobs builds the same commit again.
           overwrite: true
