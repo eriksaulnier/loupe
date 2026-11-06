@@ -97,7 +97,15 @@ func ReadinessRefusal(d *Draft) error {
 		parts = append(parts, "pending findings "+strings.Join(r.Pending, ", "))
 	}
 	if len(r.OpenNotes) > 0 {
-		parts = append(parts, "open notes "+strings.Join(r.OpenNotes, ", "))
+		// A note id alone does not say where to look, and a withdrawn finding's note is easy to miss in the list.
+		dispositions := Dispositions(d)
+		var notes []string
+		for _, n := range d.Notes {
+			if n.Status == NoteOpen {
+				notes = append(notes, fmt.Sprintf("%s (%s, %s)", n.ID, n.FindingID, dispositions[n.FindingID]))
+			}
+		}
+		parts = append(parts, "open notes "+strings.Join(notes, ", "))
 	}
 	return refusal.New(refusal.NotReady, "the draft is not ready: "+strings.Join(parts, "; "), "loupe review")
 }

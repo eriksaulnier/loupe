@@ -40,7 +40,7 @@ func (m *Model) updateList(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // readyToEnd reloads the draft and reports whether the run can end as it now stands. Otherwise the notice says what
-// changed, so the human sees it before being asked to end the run, or what is not ready.
+// changed, so the human sees it before being asked to end the run, or what is not ready, with the cursor moved to it.
 func (m *Model) readyToEnd() (bool, error) {
 	changed, err := m.reload()
 	if err != nil {
@@ -51,6 +51,7 @@ func (m *Model) readyToEnd() (bool, error) {
 		return false, nil
 	}
 	if err := draft.ReadinessRefusal(m.draft); err != nil {
+		m.cursor = initialCursor(m.draft, m.order)
 		m.say(style.Warn, refusalNotice(err))
 		return false, nil
 	}
