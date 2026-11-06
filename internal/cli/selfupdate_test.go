@@ -95,6 +95,14 @@ func newSelfUpdateFixture(t *testing.T, version string) *selfUpdateFixture {
 	return f
 }
 
+// skipAsRoot skips a test that relies on a directory being unwritable, which it never is for root.
+func skipAsRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root writes into any directory")
+	}
+}
+
 func (f *selfUpdateFixture) ranWith(t *testing.T) string {
 	t.Helper()
 	data, err := os.ReadFile(f.ran)
@@ -143,12 +151,13 @@ func TestUpdateRunsTheScriptWhenAlreadyCurrent(t *testing.T) {
 
 func TestUpdateRefusals(t *testing.T) {
 	cases := []struct {
-		name    string
-		version string
-		setup   func(f *selfUpdateFixture)
-		code    refusal.Code
-		message string
-		reason  string
+		name       string
+		version    string
+		setup      func(f *selfUpdateFixture)
+		code       refusal.Code
+		message    string
+		reason     string
+		unwritable bool
 	}{
 		{name: "dev build", version: "dev", code: refusal.UpdateUnsupported, message: "not a release", reason: "not-release"},
 		{name: "pre-release", version: "0.22.0-rc.1", code: refusal.UpdateUnsupported, message: "not a release", reason: "not-release"},
@@ -174,7 +183,7 @@ func TestUpdateRefusals(t *testing.T) {
 			}
 			f.deps.Executable = func() (string, error) { return path, nil }
 		}},
-		{name: "directory not writable", version: "0.21.0", code: refusal.UpdateUnsupported, message: "cannot write", reason: "not-writable", setup: func(f *selfUpdateFixture) {
+		{name: "directory not writable", version: "0.21.0", code: refusal.UpdateUnsupported, message: "cannot write", reason: "not-writable", unwritable: true, setup: func(f *selfUpdateFixture) {
 			f.releases.publish("0.22.0", stubScript(f.ran, 0))
 			if err := os.Chmod(f.dir, 0o555); err != nil {
 				panic(err)
@@ -200,6 +209,9 @@ func TestUpdateRefusals(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			if c.unwritable {
+				skipAsRoot(t)
+			}
 			f := newSelfUpdateFixture(t, c.version)
 			if c.setup != nil {
 				c.setup(f)
@@ -283,6 +295,7 @@ func TestUninstallRefusals(t *testing.T) {
 		}
 	})
 	t.Run("directory not writable", func(t *testing.T) {
+		skipAsRoot(t)
 		f := newSelfUpdateFixture(t, "0.21.0")
 		if err := os.Chmod(f.dir, 0o555); err != nil {
 			t.Fatal(err)
@@ -465,6 +478,7 @@ func mustSymlink(t *testing.T, target, link string) {
 
 // A dangling symlink loupe cannot remove is named, and the uninstall still succeeds, since the binary is gone.
 func TestUninstallWarnsWhenTheSymlinkCannotGo(t *testing.T) {
+	skipAsRoot(t)
 	f := newSelfUpdateFixture(t, "0.21.0")
 	link, err := f.deps.Executable()
 	if err != nil {
