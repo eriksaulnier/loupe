@@ -323,3 +323,32 @@ func TestApplyReturnThatCannotBeSealedEndsTheReview(t *testing.T) {
 		t.Fatalf("err %v quit %v returned %v", m.err, isQuit(cmd), returned(t, dir))
 	}
 }
+
+// A note on a withdrawn finding blocks the return, and the agent's withdrawal is easy to miss in the list, so the
+// refusal names the finding and the cursor moves to it.
+func TestApplyReturnRefusalSelectsTheFindingWithAnOpenNote(t *testing.T) {
+	m, dir := readyApplyModel(t, "Claude")
+	id := m.order[len(m.order)-1].ID
+	outside(t, dir, func(d *draft.Draft) error {
+		if _, err := draft.SendBack(d, id, "Is this real?", testNow); err != nil {
+			return err
+		}
+		for i := range d.Findings {
+			if d.Findings[i].ID == id {
+				d.Findings[i].Included = false
+			}
+		}
+		return nil
+	})
+	if _, err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	m.cursor = 0
+	press(m, "p")
+	if want := "open notes n-001 (" + id + ", withdrawn)"; m.noting || !strings.Contains(m.notice, want) {
+		t.Errorf("p with an open note on a withdrawn finding: noting %v notice %q, want %q", m.noting, m.notice, want)
+	}
+	if got := m.order[m.cursor].ID; got != id {
+		t.Errorf("cursor on %s, want %s", got, id)
+	}
+}

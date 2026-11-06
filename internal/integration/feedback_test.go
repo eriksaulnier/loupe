@@ -110,7 +110,7 @@ func TestSendBackLoop(t *testing.T) {
 	}
 	h.IsTerminal = true
 	errObj := h.mustRefuse("not-ready", "publish", runRef, "--action", "comment")
-	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "open notes n-002") {
+	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "open notes n-002 (f-002, withdrawn)") {
 		t.Fatalf("refusal %v", errObj)
 	}
 	h.checkSends(0)
