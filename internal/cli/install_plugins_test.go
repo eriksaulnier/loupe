@@ -384,9 +384,9 @@ func TestInstallScriptPluginsFailureIsContained(t *testing.T) {
 	cases := []struct {
 		name, agent, pattern, message, want string
 	}{
-		{"claude install", "claude", "plugin install*", "claude exploded", "fix: run claude plugin marketplace add eriksaulnier/loupe@v1.2.3 && claude plugin install loupe@loupe"},
-		{"claude list", "claude", "plugin marketplace list*", "unknown option --json", "fix: run claude plugin marketplace add eriksaulnier/loupe@v1.2.3 && claude plugin install loupe@loupe"},
-		{"codex add", "codex", "plugin add*", "codex exploded", "fix: run codex plugin marketplace add eriksaulnier/loupe@v1.2.3 && codex plugin add loupe@loupe"},
+		{"claude install", "claude", "plugin install*", "claude exploded", "fix: run claude plugin marketplace remove loupe; claude plugin marketplace add eriksaulnier/loupe@v1.2.3 && claude plugin install loupe@loupe"},
+		{"claude list", "claude", "plugin marketplace list*", "unknown option --json", "fix: run claude plugin marketplace remove loupe; claude plugin marketplace add eriksaulnier/loupe@v1.2.3 && claude plugin install loupe@loupe"},
+		{"codex add", "codex", "plugin add*", "codex exploded", "fix: run codex plugin marketplace remove loupe; codex plugin marketplace add eriksaulnier/loupe@v1.2.3 && codex plugin add loupe@loupe"},
 		{"pi install", "pi", "install*", "pi exploded", "fix: run pi install git:github.com/eriksaulnier/loupe@v1.2.3"},
 	}
 	names := map[string]string{"claude": "Claude Code", "codex": "Codex", "pi": "Pi"}
@@ -518,5 +518,22 @@ func TestInstallScriptUninstallFailureKeepsTheBinary(t *testing.T) {
 	}
 	if agents.installed(t, "codex") != "" || agents.installed(t, "pi") != "" {
 		t.Error("the other agents kept the plugin")
+	}
+}
+
+// Claude Code lists marketplaces as flat objects, so the object after loupe's is another marketplace, which MUST NOT
+// decide what happens to loupe's.
+func TestInstallScriptPluginsReadOnlyLoupesClaudeEntry(t *testing.T) {
+	f := newInstallFixture(t)
+	f.latest(t)
+	agents, env := f.withAgents(t, "claude")
+	agents.write(t, "claude.src", "eriksaulnier/loupe@v1.0.0")
+	agents.write(t, "claude.installed", "eriksaulnier/loupe@v1.0.0")
+	agents.write(t, "claude.json", "[\n  {\n    \"name\": \"loupe\",\n    \"source\": \"github\",\n    \"repo\": \"eriksaulnier/loupe\",\n    \"ref\": \"v1.0.0\"\n  },\n  {\n    \"name\": \"mine\",\n    \"source\": \"directory\",\n    \"path\": \"/work/mine\"\n  }\n]\n")
+	if _, stderr, err := f.run(t, env...); err != nil {
+		t.Fatalf("install failed: %v\n%s", err, stderr)
+	}
+	if got := agents.installed(t, "claude"); got != "eriksaulnier/loupe@v1.2.3" {
+		t.Errorf("plugin installed from %q, want the tag", got)
 	}
 }

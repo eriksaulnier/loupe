@@ -134,13 +134,14 @@ agent_failed() {
 }
 
 # Each agent prints JSON over many lines. Joined and split at each brace, an object's top-level fields share a line,
-# so plain case patterns can read it without jq.
+# so plain case patterns can read it without jq. The next line belongs to the entry only when this one ends in a
+# colon, which opens a nested object such as Codex's source. In Claude Code's flat list it is another marketplace.
 loupe_entry() {
-	printf '%s' "$1" | tr -d ' \t\r\n' | tr '{' '\n' | awk '/"name":"loupe"/ { print; getline; print; exit }'
+	printf '%s' "$1" | tr -d ' \t\r\n' | tr '{' '\n' | awk '/"name":"loupe"/ { print; if (/:$/ && getline > 0) print; exit }'
 }
 
 sync_claude() {
-	manual="claude plugin marketplace add $plugin_source && claude plugin install loupe@loupe"
+	manual="claude plugin marketplace remove loupe; claude plugin marketplace add $plugin_source && claude plugin install loupe@loupe"
 	out=$(claude plugin marketplace list --json 2>&1) || {
 		agent_failed "Claude Code" "$out" "$manual"
 		return 0
@@ -185,7 +186,7 @@ sync_claude() {
 # Codex lists no ref, so the add itself says whether the source differs. Only that answer removes anything: a message
 # this script does not know fails loudly instead of losing the plugin.
 sync_codex() {
-	manual="codex plugin marketplace add $plugin_source && codex plugin add loupe@loupe"
+	manual="codex plugin marketplace remove loupe; codex plugin marketplace add $plugin_source && codex plugin add loupe@loupe"
 	out=$(codex plugin marketplace list --json 2>&1) || {
 		agent_failed "Codex" "$out" "$manual"
 		return 0
