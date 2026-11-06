@@ -103,14 +103,13 @@ claude plugin marketplace add "{{config_root}}"
 claude plugin install loupe@loupe --scope user
 '''
 
-# install.sh replaces the symlink with the latest release rather than writing through it.
+# install.sh replaces the symlink with the latest release rather than writing through it. It skips a marketplace that
+# points at a directory, so link's marketplace is removed first, and install.sh adds it back at the release's tag.
 [tasks.unlink]
 run = '''
 set -eu
-sh "{{config_root}}/install.sh"
 claude plugin marketplace remove loupe || true
-claude plugin marketplace add eriksaulnier/loupe
-claude plugin install loupe@loupe --scope user
+sh "{{config_root}}/install.sh"
 '''
 
 # --skill loads each workflow skill from the working tree for one Pi session. Codex has no per-session equivalent.
