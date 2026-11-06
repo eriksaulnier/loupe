@@ -71,8 +71,14 @@ func runSelfUpdate(cmd *cobra.Command, deps Deps) error {
 		r.Details = map[string]any{"reason": "not-release"}
 		return r
 	}
-	dir, err := installDir(deps, "mise use -g github:eriksaulnier/loupe@latest", func(dir string) string {
-		return "run it as a user who can write " + dir + ", or reinstall with " + curlInstall + " into a directory you own"
+	dir, err := installDir(deps, installFixes{
+		mise: "mise use -g github:eriksaulnier/loupe@latest",
+		notWritable: func(dir string) string {
+			return "run it as a user who can write " + dir + ", or reinstall with " + curlInstall + " into a directory you own"
+		},
+		renamed: func(path string) string {
+			return "remove " + path + ", then reinstall with " + curlInstall + ", which names the binary loupe"
+		},
 	})
 	if err != nil {
 		return err
@@ -141,8 +147,14 @@ func runUninstall(cmd *cobra.Command, deps Deps) error {
 		r.Details = map[string]any{"reason": "not-release"}
 		return r
 	}
-	dir, err := installDir(deps, "mise unuse -g github:eriksaulnier/loupe, then remove the plugins as "+pluginRemoval+" shows", func(dir string) string {
-		return "remove " + filepath.Join(dir, "loupe") + " as a user who can write " + dir + ", then the plugins as " + pluginRemoval + " shows"
+	dir, err := installDir(deps, installFixes{
+		mise: "mise unuse -g github:eriksaulnier/loupe, then remove the plugins as " + pluginRemoval + " shows",
+		notWritable: func(dir string) string {
+			return "remove " + filepath.Join(dir, "loupe") + " as a user who can write " + dir + ", then the plugins as " + pluginRemoval + " shows"
+		},
+		renamed: func(path string) string {
+			return "remove " + path + " by hand, then the plugins as " + pluginRemoval + " shows"
+		},
 	})
 	if err != nil {
 		return err
@@ -199,8 +211,15 @@ func removeDangling(deps Deps, link string) {
 	_, _ = fmt.Fprintf(deps.Stderr, "Removed the symlink %s\n", link)
 }
 
+// installFixes are the fixes each command gives for an install it cannot act on.
+type installFixes struct {
+	mise        string
+	notWritable func(dir string) string
+	renamed     func(path string) string
+}
+
 // installDir is the directory of the file that runs, through any symlink, so the script replaces or removes that file.
-func installDir(deps Deps, miseFix string, notWritableFix func(dir string) string) (string, error) {
+func installDir(deps Deps, fixes installFixes) (string, error) {
 	executable := deps.Executable
 	if executable == nil {
 		executable = os.Executable
@@ -215,15 +234,21 @@ func installDir(deps Deps, miseFix string, notWritableFix func(dir string) strin
 	// mise keeps each version in its own directory and links the active one, so the script would act on a copy mise
 	// does not manage. MISE_DATA_DIR moves the root, so the tool's own directory name is checked too.
 	if strings.Contains(path, "/mise/installs/") || strings.Contains(path, "-eriksaulnier-loupe/") {
-		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe at %s was installed by mise", path), miseFix)
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe at %s was installed by mise", path), fixes.mise)
 		r.Details = map[string]any{"reason": "mise"}
+		return "", r
+	}
+	// The script replaces and removes <dir>/loupe, so a binary under any other name would stay as it is.
+	if filepath.Base(path) != "loupe" {
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("the running binary %s is not named loupe, so the install script would not touch it", path), fixes.renamed(path))
+		r.Details = map[string]any{"reason": "renamed"}
 		return "", r
 	}
 	dir := filepath.Dir(path)
 	// The script refuses an unwritable directory with a fix that names LOUPE_INSTALL_DIR, which update and uninstall
 	// set themselves, so the check runs here first.
 	if err := unix.Access(dir, unix.W_OK); err != nil {
-		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe cannot write %s, which holds the running binary: %v", dir, err), notWritableFix(dir))
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe cannot write %s, which holds the running binary: %v", dir, err), fixes.notWritable(dir))
 		r.Details = map[string]any{"reason": "not-writable"}
 		return "", r
 	}

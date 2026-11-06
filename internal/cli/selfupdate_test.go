@@ -384,7 +384,7 @@ func TestSelfUpdateFailures(t *testing.T) {
 		{name: "running binary gone", command: "update", message: "resolve the running loupe", setup: func(t *testing.T, f *selfUpdateFixture) {
 			f.deps.Executable = func() (string, error) { return filepath.Join(f.dir, "gone"), nil }
 		}},
-		{name: "the test binary by default", command: "update", message: "HTTP 404", setup: func(t *testing.T, f *selfUpdateFixture) {
+		{name: "the test binary by default", command: "update", message: "is not named loupe", setup: func(t *testing.T, f *selfUpdateFixture) {
 			f.deps.Executable = nil
 		}},
 		{name: "a release without its own checksums", command: "update", message: "v0.22.0/checksums.txt: HTTP 404", setup: func(t *testing.T, f *selfUpdateFixture) {
@@ -495,5 +495,28 @@ func TestUninstallWarnsWhenTheSymlinkCannotGo(t *testing.T) {
 	}
 	if !strings.Contains(f.streams.stderr.String(), "warning: could not remove the symlink "+link) {
 		t.Errorf("stderr does not warn about the symlink: %q", f.streams.stderr.String())
+	}
+}
+
+// The script replaces and removes <dir>/loupe, so a binary under another name would be left running or in place.
+func TestSelfUpdateRefusesARenamedBinary(t *testing.T) {
+	for command, wantFix := range map[string]string{"update": "curl", "uninstall": "by hand"} {
+		t.Run(command, func(t *testing.T) {
+			f := newSelfUpdateFixture(t, "0.21.0")
+			f.releases.publish("0.21.0", stubScript(f.ran, 0))
+			renamed := filepath.Join(f.dir, "loupe-0.21.0")
+			writeExecutable(t, renamed, standInBinary("0.21.0"))
+			f.deps.Executable = func() (string, error) { return renamed, nil }
+			errObj := wantCode(t, Execute(f.deps, []string{command, "--json"}), f.streams, refusal.UpdateUnsupported)
+			if details, _ := errObj["details"].(map[string]any); details["reason"] != "renamed" {
+				t.Errorf("details = %v, want reason renamed", details)
+			}
+			if fix, _ := errObj["fix"].(string); !strings.Contains(fix, wantFix) {
+				t.Errorf("fix = %q, want it to name %q", fix, wantFix)
+			}
+			if f.ranWith(t) != "" {
+				t.Error("the script ran")
+			}
+		})
 	}
 }

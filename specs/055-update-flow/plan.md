@@ -83,7 +83,7 @@ The check is against constitution 4.0.0, after the amendment that is the first c
   `Stdout` and `Stderr` are both `deps.Stderr`, and `Stdin` is empty. Tests run the real `sh` against a stand-in script, so the process needs no seam. Rationale: the release script sets `LOUPE_VERSION`, so the script and the archive come from the same release. Resolving the symlink replaces the file that actually runs.
 - **The executable.** Decision: `Deps.Executable` defaults to `os.Executable` and is resolved through `filepath.EvalSymlinks`. A path that contains `/mise/installs/` refuses. Rationale: tests need a chosen path, and mise's layout is `~/.local/share/mise/installs/<tool>/<version>/`.
 - **Refusals.** Decision: three new codes.
-  - `update-unsupported` with `details.reason` set to `not-release` or `mise`. The fix is the curl command, or `mise use -g github:eriksaulnier/loupe@latest`.
+  - `update-unsupported` with `details.reason` set to `not-release`, `mise`, `renamed` (the running binary is not named `loupe`, which is the only file the script replaces or removes) or `not-writable` (its directory cannot be written). The fix is the curl command, or `mise use -g github:eriksaulnier/loupe@latest`.
   - `download` for a failed fetch, a missing asset or a checksum mismatch. The fix is the network and the release URL.
   - `install-failed` with `details.exitStatus`. The fix is to read the script's output above, or to rerun the curl command.
 
