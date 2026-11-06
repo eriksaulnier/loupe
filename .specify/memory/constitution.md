@@ -6,7 +6,7 @@ loupe gives any shell-capable agent a standard way to file review findings into 
 
 ### I. A tool for agents, not a tool that uses agents
 
-loupe MUST NOT invoke, prompt, supervise, sandbox or authenticate a reviewer. Any agent with a shell is a first-class user, and every workflow MUST be completable from `loupe --help` alone. Host integrations (the plugin for Claude Code, Codex and Pi) MAY package instructions and commands, but MUST NOT add code paths that only one host can reach.
+loupe MUST NOT invoke, prompt, supervise, sandbox or authenticate a reviewer. Any agent with a shell is a first-class user, and every workflow MUST be completable from `loupe --help` alone. Host integrations (the plugin for Claude Code, Codex and Pi) MAY package instructions and commands, but MUST NOT add code paths that only one host can reach. Installing or updating loupe's own plugin through a host's plugin command is not invoking a reviewer. It MUST NOT prompt a model or start an agent session, and it MUST treat every host alike.
 
 ### II. Nothing posts unread under a human's name
 
@@ -14,7 +14,7 @@ Every finding that reaches GitHub under a human's identity MUST have been indivi
 
 ### III. Local files, no service
 
-Run state is plain files on disk, one directory per run. There MUST be no daemon, no database and no network access beyond Git and the GitHub API. loupe MUST NOT delete a run directory or publication evidence automatically.
+Run state is plain files on disk, one directory per run. There MUST be no daemon, no database and no network access beyond Git, the GitHub API and the downloads of loupe's own releases. A release download MUST be verified against that release's checksums before it is used. loupe MUST NOT delete a run directory or publication evidence automatically.
 
 ### IV. Never touch the user's checkout
 
@@ -50,7 +50,9 @@ A completion claim MUST rest on a check that ran after the last edit, with its o
 
 This constitution supersedes every other practice in the repository. An amendment MUST state what changed and why, bump the version below (MAJOR for a removed or redefined principle, MINOR for a new principle or section, PATCH for wording), and update the specification and plan when a principle they rely on changes. Plans MUST include a Constitution Check and justify each violation in Complexity Tracking.
 
-**Version**: 3.2.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-11-03
+**Version**: 4.0.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-11-06
+
+**4.0.0** (2026-11-06): Principle III allows the downloads of loupe's own releases, verified against their checksums. Principle I states that managing loupe's own plugin through a host's plugin command is not invoking a reviewer. This is MAJOR because it widens what Principle III permits, as 3.0.0 widened Principle II (owner, 2026-11-06). `specs/055-update-flow` makes the install script set up each agent's plugin at the binary's tag, and adds `loupe update`, which downloads and runs that script from the latest release. Before this, the plugin tracked `main` while the binary tracked a release. A person then had to remember the plugin, and a skill could name a flag that the binary lacked.
 
 **3.2.0** (2026-11-03): The preamble names a second ending for a run. loupe returns the human's decisions on local work to the agent that will apply them, and contacts no service. This is MINOR because it widens the scope that the principles govern, and it removes or redefines no principle (owner, 2026-11-03, decision D1 of spec 049). The preamble said loupe files pull-request findings and ends each run in one GitHub review, and `specs/049-apply-mode` adds apply mode for local plans, specs and code. Principle II still covers everything that reaches GitHub, and an apply run reaches nothing there.
 
