@@ -26,9 +26,10 @@ var contractResultKeys = map[string][]string{
 	"stats": {"filter", "repos", "since", "until", "states", "groupBy", "groups", "key", "runs", "unattended", "pullRequests",
 		"findings", "filed", "published", "excluded", "withdrawn", "pending", "reinstated", "regraded", "byLabel", "blocking",
 		"precision", "drifted", "medianCaptureToPublish", "total"},
-	"review":  nil,
-	"publish": nil,
-	"update":  {"from", "to"},
+	"review":    nil,
+	"publish":   nil,
+	"update":    {"from", "to"},
+	"uninstall": {"removed", "dataRoot"},
 }
 
 // contractInputKeys are fragments of each command's JSON input example in contracts/cli.md.

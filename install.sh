@@ -8,6 +8,8 @@
 # LOUPE_VERSION pins a release. LOUPE_INSTALL_DIR replaces the default directory, $HOME/.local/bin. LOUPE_NO_PLUGINS,
 # like CI, skips the plugins. docs/install.md describes all three.
 #
+# LOUPE_UNINSTALL, which loupe uninstall sets, removes the plugins and then the binary instead, and downloads nothing.
+#
 # All logic runs from main on the last line, so a download cut short runs nothing.
 
 set -eu
@@ -19,6 +21,7 @@ plugin_docs=https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#the-
 tmp=
 staged=
 failed_agents=0
+plugin_action='set up the loupe plugin for'
 
 fail() {
 	printf 'error: %s\nfix: %s\n' "$1" "$2" >&2
@@ -126,7 +129,7 @@ warn_about_path() {
 # The binary is already in place and the other agents still run, so this returns instead of exiting.
 agent_failed() {
 	[ -z "$2" ] || printf '%s\n' "$2" >&2
-	printf 'error: could not set up the loupe plugin for %s\nfix: run %s\n' "$1" "$3" >&2
+	printf 'error: could not %s %s\nfix: run %s\n' "$plugin_action" "$1" "$3" >&2
 	failed_agents=1
 }
 
@@ -252,7 +255,99 @@ sync_plugins() {
 	[ "$failed_agents" = 0 ] || exit 1
 }
 
+remove_claude() {
+	manual="claude plugin marketplace remove loupe"
+	out=$(claude plugin marketplace list --json 2>&1) || {
+		agent_failed "Claude Code" "$out" "$manual"
+		return 0
+	}
+	entry=$(loupe_entry "$out")
+	case "$entry" in
+	"")
+		printf 'Claude Code: no loupe plugin\n'
+		return 0
+		;;
+	*'"source":"directory"'*)
+		printf 'Claude Code: skipped, its loupe marketplace is a local directory\n'
+		return 0
+		;;
+	esac
+	out=$(claude plugin marketplace remove loupe 2>&1) || {
+		agent_failed "Claude Code" "$out" "$manual"
+		return 0
+	}
+	printf 'Claude Code: removed the loupe plugin\n'
+}
+
+remove_codex() {
+	manual="codex plugin marketplace remove loupe"
+	out=$(codex plugin marketplace list --json 2>&1) || {
+		agent_failed "Codex" "$out" "$manual"
+		return 0
+	}
+	entry=$(loupe_entry "$out")
+	case "$entry" in
+	"")
+		printf 'Codex: no loupe plugin\n'
+		return 0
+		;;
+	*'"sourceType":"local"'*)
+		printf 'Codex: skipped, its loupe marketplace is a local directory\n'
+		return 0
+		;;
+	esac
+	out=$(codex plugin marketplace remove loupe 2>&1) || {
+		agent_failed "Codex" "$out" "$manual"
+		return 0
+	}
+	printf 'Codex: removed the loupe plugin\n'
+}
+
+# pi remove matches the package whatever form its source took, and fails when there is none, so the list decides.
+remove_pi() {
+	manual="pi remove git:github.com/eriksaulnier/loupe"
+	out=$(pi list 2>&1) || {
+		agent_failed "Pi" "$out" "$manual"
+		return 0
+	}
+	case "$out" in
+	*github.com/eriksaulnier/loupe*) ;;
+	*)
+		printf 'Pi: no loupe plugin\n'
+		return 0
+		;;
+	esac
+	out=$(pi remove git:github.com/eriksaulnier/loupe 2>&1) || {
+		agent_failed "Pi" "$out" "$manual"
+		return 0
+	}
+	printf 'Pi: removed the loupe plugin\n'
+}
+
+# loupe uninstall runs this mode. The plugins go first, so a failure leaves the binary that can retry.
+uninstall() {
+	choose_dir
+	plugin_action='remove the loupe plugin from'
+	if [ -z "${CI:-}" ] && [ -z "${LOUPE_NO_PLUGINS:-}" ]; then
+		! command -v claude >/dev/null 2>&1 || remove_claude
+		! command -v codex >/dev/null 2>&1 || remove_codex
+		! command -v pi >/dev/null 2>&1 || remove_pi
+	fi
+	[ "$failed_agents" = 0 ] || exit 1
+	# -L too, because mise run link leaves a symlink whose target may be gone.
+	if [ -e "$dir/loupe" ] || [ -L "$dir/loupe" ]; then
+		rm -f "$dir/loupe" || fail "could not remove $dir/loupe" "Check the permissions of $dir."
+		printf 'Removed %s/loupe\n' "$dir"
+	else
+		printf 'No loupe binary at %s/loupe\n' "$dir"
+	fi
+}
+
 main() {
+	if [ -n "${LOUPE_UNINSTALL:-}" ]; then
+		uninstall
+		return
+	fi
 	detect_platform
 	choose_dir
 

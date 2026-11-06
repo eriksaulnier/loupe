@@ -81,6 +81,13 @@ esac
 
 const fakePi = fakeAgentPreamble + `case "$1" in
 install) printf '%s' "$2" > "$state.installed" ;;
+list)
+	if [ -f "$state.installed" ]; then printf 'User packages:\n  %s\n    /p\n' "$(cat "$state.installed")"; else echo 'No packages installed.'; fi
+	;;
+remove)
+	[ -f "$state.installed" ] || exit 1
+	rm -f "$state.installed"
+	;;
 *) exit 2 ;;
 esac
 `
@@ -423,5 +430,93 @@ func TestInstallScriptPluginsCodexUnknownFailureRemovesNothing(t *testing.T) {
 	assertCalls(t, agents.log(t), "codex plugin marketplace list --json", "codex plugin marketplace add eriksaulnier/loupe@v1.2.3")
 	if got := agents.installed(t, "codex"); got != "eriksaulnier/loupe@v1.0.0" {
 		t.Errorf("plugin installed from %q, want the old source kept", got)
+	}
+}
+
+func (f *installFixture) seedEveryAgent(t *testing.T, agents *fakeAgents) {
+	t.Helper()
+	agents.seedClaude(t, "eriksaulnier/loupe@v1.2.3", `    "source": "github",`+"\n"+`    "repo": "eriksaulnier/loupe",`+"\n"+`    "ref": "v1.2.3"`)
+	agents.seedCodex(t, "eriksaulnier/loupe@v1.2.3", "git", "https://github.com/eriksaulnier/loupe.git")
+	agents.write(t, "pi.installed", "git:github.com/eriksaulnier/loupe@v1.2.3")
+}
+
+// The uninstall mode removes each plugin and then the binary, and downloads nothing.
+func TestInstallScriptUninstall(t *testing.T) {
+	f := newInstallFixture(t)
+	f.placeExisting(t)
+	agents, env := f.withAgents(t, "claude", "codex", "pi")
+	f.seedEveryAgent(t, agents)
+
+	stdout, stderr, err := f.run(t, append(env, "LOUPE_UNINSTALL=1")...)
+	if err != nil {
+		t.Fatalf("uninstall failed: %v\n%s", err, stderr)
+	}
+	assertCalls(t, agents.log(t),
+		"claude plugin marketplace list --json",
+		"claude plugin marketplace remove loupe",
+		"codex plugin marketplace list --json",
+		"codex plugin marketplace remove loupe",
+		"pi list",
+		"pi remove git:github.com/eriksaulnier/loupe",
+	)
+	for _, agent := range []string{"claude", "codex", "pi"} {
+		if got := agents.installed(t, agent); got != "" {
+			t.Errorf("%s still holds the plugin from %q", agent, got)
+		}
+	}
+	if got := listDir(t, f.target); got != "" {
+		t.Errorf("target still holds %s", got)
+	}
+	if got := f.requests(t); got != nil {
+		t.Errorf("uninstall downloaded %v", got)
+	}
+	for _, want := range []string{"Claude Code: removed", "Codex: removed", "Pi: removed", "Removed " + f.target + "/loupe"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout does not say %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestInstallScriptUninstallLeavesWhatIsNotLoupes(t *testing.T) {
+	f := newInstallFixture(t)
+	f.placeExisting(t)
+	agents, env := f.withAgents(t, "claude", "codex", "pi")
+	agents.seedClaude(t, "/work/loupe", `    "source": "directory",`+"\n"+`    "path": "/work/loupe"`)
+	stdout, stderr, err := f.run(t, append(env, "LOUPE_UNINSTALL=1")...)
+	if err != nil {
+		t.Fatalf("uninstall failed: %v\n%s", err, stderr)
+	}
+	assertCalls(t, agents.log(t), "claude plugin marketplace list --json", "codex plugin marketplace list --json", "pi list")
+	for _, want := range []string{"Claude Code: skipped", "Codex: no loupe plugin", "Pi: no loupe plugin"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout does not say %q:\n%s", want, stdout)
+		}
+	}
+	if agents.installed(t, "claude") != "/work/loupe" {
+		t.Error("the local marketplace changed")
+	}
+}
+
+// A failed removal keeps the binary, so loupe uninstall can run again, and still tries every agent.
+func TestInstallScriptUninstallFailureKeepsTheBinary(t *testing.T) {
+	f := newInstallFixture(t)
+	existing := f.placeExisting(t)
+	agents, env := f.withAgents(t, "claude", "codex", "pi")
+	f.seedEveryAgent(t, agents)
+	agents.fail(t, "claude", "plugin marketplace remove*", "claude exploded")
+	_, stderr, err := f.run(t, append(env, "LOUPE_UNINSTALL=1")...)
+	if err == nil {
+		t.Fatalf("the script exited 0, want 1. stderr:\n%s", stderr)
+	}
+	for _, want := range []string{"claude exploded", "error: could not remove the loupe plugin from Claude Code", "fix: run claude plugin marketplace remove loupe"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr does not say %q:\n%s", want, stderr)
+		}
+	}
+	if got := mustRead(t, filepath.Join(f.target, "loupe")); got != existing {
+		t.Errorf("binary = %q, want it kept", got)
+	}
+	if agents.installed(t, "codex") != "" || agents.installed(t, "pi") != "" {
+		t.Error("the other agents kept the plugin")
 	}
 }

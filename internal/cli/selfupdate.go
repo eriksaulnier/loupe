@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/eriksaulnier/loupe/internal/run"
 	"github.com/eriksaulnier/loupe/internal/updatecheck"
 )
 
@@ -29,6 +30,7 @@ const (
 	downloadLimit  = 60 * time.Second
 	releaseIssues  = "https://github.com/eriksaulnier/loupe/issues"
 	installAsset   = "install.sh"
+	pluginDocs     = "https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#the-agent-plugin"
 	checksumsAsset = "checksums.txt"
 )
 
@@ -66,24 +68,21 @@ func runSelfUpdate(cmd *cobra.Command, deps Deps) error {
 		r.Details = map[string]any{"reason": "not-release"}
 		return r
 	}
-	dir, err := installDir(deps)
+	dir, err := installDir(deps, "mise use -g github:eriksaulnier/loupe@latest")
 	if err != nil {
 		return err
 	}
-	releases := deps.Releases
-	if releases == "" {
-		releases = DefaultReleases
-	}
+	releases := deps.releases()
 	ctx := cmd.Context()
 	latest, err := latestRelease(ctx, releases)
 	if err != nil {
 		return err
 	}
-	script, err := verifiedScript(ctx, releases, latest)
+	script, err := verifiedScript(ctx, releases, latest, "loupe update")
 	if err != nil {
 		return err
 	}
-	if err := runInstallScript(ctx, deps, script, latest, dir); err != nil {
+	if err := runInstallScript(ctx, deps, script, latest, "loupe update", "LOUPE_VERSION="+latest, "LOUPE_INSTALL_DIR="+dir); err != nil {
 		return err
 	}
 	if wantJSON(cmd) {
@@ -93,8 +92,73 @@ func runSelfUpdate(cmd *cobra.Command, deps Deps) error {
 	return err
 }
 
-// installDir is the directory of the file that runs, through any symlink, so the script replaces that file.
-func installDir(deps Deps) (string, error) {
+func (d Deps) releases() string {
+	if d.Releases != "" {
+		return d.Releases
+	}
+	return DefaultReleases
+}
+
+const uninstallHelp = `Remove loupe, and the loupe plugin from each of Claude Code, Codex and Pi on PATH. Review runs
+stay in the data root, and uninstall prints where it is.
+
+uninstall downloads the install.sh of this release, checks it against the release's checksums.txt,
+and runs it in its uninstall mode for the directory that holds this binary. That mode downloads
+nothing. A marketplace that points at a local directory is left alone. When a plugin cannot be
+removed, the binary stays, so uninstall can run again. The script's output goes to stderr.
+
+A build that is not a release, and a binary that mise installed, are refused with the command
+that removes them.
+
+Result (--json):
+  {"loupe": 1, "ok": true, "command": "uninstall", "removed": "0.21.0", "dataRoot": "/home/me/.local/share/loupe"}`
+
+func newUninstallCmd(deps Deps) *cobra.Command {
+	return &cobra.Command{
+		Use:     "uninstall",
+		Short:   "Remove loupe and its agent plugins, and keep the runs",
+		Long:    uninstallHelp,
+		Example: "  loupe uninstall",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runUninstall(cmd, deps)
+		},
+	}
+}
+
+// runUninstall runs this release's script, not the latest one, so it removes what this release installed.
+func runUninstall(cmd *cobra.Command, deps Deps) error {
+	current := deps.loupeVersion()
+	if !updatecheck.IsRelease(current) {
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe %s is not a release, so uninstall cannot tell what to remove", current), "remove the binary by hand, and see "+pluginDocs+" for the plugins")
+		r.Details = map[string]any{"reason": "not-release"}
+		return r
+	}
+	dir, err := installDir(deps, "mise unuse -g github:eriksaulnier/loupe")
+	if err != nil {
+		return err
+	}
+	root, err := run.DataRoot(deps.Getenv)
+	if err != nil {
+		return err
+	}
+	ctx := cmd.Context()
+	script, err := verifiedScript(ctx, deps.releases(), current, "loupe uninstall")
+	if err != nil {
+		return err
+	}
+	if err := runInstallScript(ctx, deps, script, current, "loupe uninstall", "LOUPE_UNINSTALL=1", "LOUPE_INSTALL_DIR="+dir); err != nil {
+		return err
+	}
+	if wantJSON(cmd) {
+		return writeSuccess(deps.Stdout, commandName(cmd), invocation{}, nil, map[string]any{"removed": current, "dataRoot": root})
+	}
+	_, err = fmt.Fprintf(deps.Stdout, "Removed loupe %s. Your review runs stay in %s\n", current, root)
+	return err
+}
+
+// installDir is the directory of the file that runs, through any symlink, so the script replaces or removes that file.
+func installDir(deps Deps, miseFix string) (string, error) {
 	executable := deps.Executable
 	if executable == nil {
 		executable = os.Executable
@@ -106,10 +170,10 @@ func installDir(deps Deps) (string, error) {
 	if path, err = filepath.EvalSymlinks(path); err != nil {
 		return "", fmt.Errorf("resolve the running loupe: %w", err)
 	}
-	// mise keeps each version in its own directory and links the active one, so the script would add a copy mise
-	// never runs.
+	// mise keeps each version in its own directory and links the active one, so the script would act on a copy mise
+	// does not manage.
 	if strings.Contains(path, string(filepath.Separator)+filepath.Join("mise", "installs")+string(filepath.Separator)) {
-		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe at %s was installed by mise", path), "mise use -g github:eriksaulnier/loupe@latest")
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe at %s was installed by mise", path), miseFix)
 		r.Details = map[string]any{"reason": "mise"}
 		return "", r
 	}
@@ -133,7 +197,8 @@ func latestRelease(ctx context.Context, releases string) (string, error) {
 	return "", refusal.New(refusal.Download, fmt.Sprintf("the latest release's %s names no archive for %s_%s", checksumsAsset, runtime.GOOS, runtime.GOARCH), "check the release's files at "+releases)
 }
 
-func verifiedScript(ctx context.Context, releases, version string) ([]byte, error) {
+// retry is the command to run again after a refusal.
+func verifiedScript(ctx context.Context, releases, version, retry string) ([]byte, error) {
 	base := releases + "/download/v" + version + "/"
 	sums, err := download(ctx, base+checksumsAsset, releases)
 	if err != nil {
@@ -146,7 +211,7 @@ func verifiedScript(ctx context.Context, releases, version string) ([]byte, erro
 		}
 	}
 	if want == "" {
-		return nil, refusal.New(refusal.Download, fmt.Sprintf("the %s of loupe %s does not cover %s", checksumsAsset, version, installAsset), curlInstall)
+		return nil, refusal.New(refusal.Download, fmt.Sprintf("the %s of loupe %s does not cover %s", checksumsAsset, version, installAsset), "check the release's files at "+releases+"/tag/v"+version)
 	}
 	script, err := download(ctx, base+installAsset, releases)
 	if err != nil {
@@ -154,7 +219,7 @@ func verifiedScript(ctx context.Context, releases, version string) ([]byte, erro
 	}
 	got := sha256.Sum256(script)
 	if hex.EncodeToString(got[:]) != want {
-		return nil, refusal.New(refusal.Download, fmt.Sprintf("%s of loupe %s does not match its %s", installAsset, version, checksumsAsset), "run loupe update again. If it fails again, report it at "+releaseIssues)
+		return nil, refusal.New(refusal.Download, fmt.Sprintf("%s of loupe %s does not match its %s", installAsset, version, checksumsAsset), "run "+retry+" again. If it fails again, report it at "+releaseIssues)
 	}
 	return script, nil
 }
@@ -182,8 +247,7 @@ func download(ctx context.Context, url, releases string) ([]byte, error) {
 	return body, nil
 }
 
-// runInstallScript pins the release, so the script installs the version whose script this is.
-func runInstallScript(ctx context.Context, deps Deps, script []byte, version, dir string) error {
+func runInstallScript(ctx context.Context, deps Deps, script []byte, version, retry string, env ...string) error {
 	tmp, err := os.MkdirTemp("", "loupe-update-")
 	if err != nil {
 		return fmt.Errorf("create a temporary directory: %w", err)
@@ -194,14 +258,14 @@ func runInstallScript(ctx context.Context, deps Deps, script []byte, version, di
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	c := exec.CommandContext(ctx, "sh", path)
-	c.Env = append(os.Environ(), "LOUPE_VERSION="+version, "LOUPE_INSTALL_DIR="+dir)
+	c.Env = append(os.Environ(), env...)
 	c.Stdout, c.Stderr = deps.Stderr, deps.Stderr
 	if err := c.Run(); err != nil {
 		var exit *exec.ExitError
 		if !errors.As(err, &exit) {
 			return fmt.Errorf("run the install script: %w", err)
 		}
-		r := refusal.New(refusal.InstallFailed, fmt.Sprintf("the install script for loupe %s exited %d", version, exit.ExitCode()), "read the script's output above, or run "+curlInstall)
+		r := refusal.New(refusal.InstallFailed, fmt.Sprintf("the install script for loupe %s exited %d", version, exit.ExitCode()), "read the script's output above, then run "+retry+" again")
 		r.Details = map[string]any{"exitStatus": exit.ExitCode()}
 		return r
 	}

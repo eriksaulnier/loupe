@@ -134,7 +134,7 @@ A person runs `loupe uninstall`. The binary and each agent's loupe plugin go awa
 - **FR-012**: The script's output MUST go to stderr. With `--json`, stdout MUST carry one result object that names the old and new versions.
 - **FR-013**: The update warning MUST name the running version, the latest version and `loupe update`.
 - **FR-015**: `loupe uninstall` MUST run the verified script of its own release in uninstall mode, for the directory of the resolved running binary, and MUST refuse a build that is not a release and a binary under a mise install, as `update` does.
-- **FR-016**: The uninstall mode MUST remove the binary and the loupe plugin from each of Claude Code, Codex and Pi that holds it, and MUST NOT change a local-directory marketplace.
+- **FR-016**: The uninstall mode MUST remove the binary and the loupe plugin from each of Claude Code, Codex and Pi that holds it, and MUST NOT change a local-directory marketplace. When a plugin cannot be removed, it MUST try the other agents, keep the binary so that `loupe uninstall` can run again, and exit 1.
 - **FR-017**: The uninstall MUST NOT delete the data root or any run, and MUST print the data root's path.
 - **FR-014**: loupe MUST NOT update itself or a plugin without a person or an agent running `loupe update` or the script.
 

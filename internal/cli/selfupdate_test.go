@@ -203,3 +203,64 @@ func TestUpdateRefusals(t *testing.T) {
 		})
 	}
 }
+
+func TestUninstallRunsItsOwnReleasesScript(t *testing.T) {
+	f := newSelfUpdateFixture(t, "0.21.0")
+	f.releases.publish("0.21.0", stubScript(f.ran, 0))
+	f.releases.publish("0.22.0", "#!/bin/sh\necho 'the latest script MUST NOT run'\nexit 9\n")
+
+	code := Execute(f.deps, []string{"uninstall", "--json"})
+	if code != 0 {
+		t.Fatalf("exit %d; stdout %q stderr %q", code, f.streams.stdout.String(), f.streams.stderr.String())
+	}
+	if got, want := f.ranWith(t), "|"+f.dir+"|1"; got != want {
+		t.Errorf("script ran with %q, want %q", got, want)
+	}
+	env := decodeOne(t, f.streams.stdout.Bytes())
+	if env["command"] != "uninstall" || env["version"] != nil {
+		t.Errorf("result = %v", env)
+	}
+	if env["removed"] != "0.21.0" || env["dataRoot"] != f.deps.Getenv("LOUPE_HOME") {
+		t.Errorf("result = %v, want removed 0.21.0 and the data root", env)
+	}
+}
+
+func TestUninstallSaysWhereTheRunsStay(t *testing.T) {
+	f := newSelfUpdateFixture(t, "0.21.0")
+	f.releases.publish("0.21.0", stubScript(f.ran, 0))
+	if code := Execute(f.deps, []string{"uninstall"}); code != 0 {
+		t.Fatalf("exit %d; stderr %q", code, f.streams.stderr.String())
+	}
+	if out := f.streams.stdout.String(); !strings.Contains(out, f.deps.Getenv("LOUPE_HOME")) {
+		t.Errorf("stdout does not name the data root: %q", out)
+	}
+}
+
+func TestUninstallRefusals(t *testing.T) {
+	t.Run("dev build", func(t *testing.T) {
+		f := newSelfUpdateFixture(t, "dev")
+		errObj := wantCode(t, Execute(f.deps, []string{"uninstall", "--json"}), f.streams, refusal.UpdateUnsupported)
+		if details, _ := errObj["details"].(map[string]any); details["reason"] != "not-release" {
+			t.Errorf("details = %v", details)
+		}
+	})
+	t.Run("mise install", func(t *testing.T) {
+		f := newSelfUpdateFixture(t, "0.21.0")
+		dir := filepath.Join(f.dir, "mise", "installs", "loupe", "0.21.0")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(dir, "loupe")
+		writeExecutable(t, path, "")
+		f.deps.Executable = func() (string, error) { return path, nil }
+		errObj := wantCode(t, Execute(f.deps, []string{"uninstall", "--json"}), f.streams, refusal.UpdateUnsupported)
+		if fix, _ := errObj["fix"].(string); !strings.Contains(fix, "mise unuse") {
+			t.Errorf("fix = %q, want mise unuse", fix)
+		}
+	})
+	t.Run("script fails", func(t *testing.T) {
+		f := newSelfUpdateFixture(t, "0.21.0")
+		f.releases.publish("0.21.0", stubScript(f.ran, 1))
+		wantCode(t, Execute(f.deps, []string{"uninstall", "--json"}), f.streams, refusal.InstallFailed)
+	})
+}

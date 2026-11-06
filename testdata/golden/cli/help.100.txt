@@ -41,6 +41,7 @@ Commands
   human   review    Decide each finding in the review interface (human-only)
           publish   Confirm and post the review to GitHub (human-only)
           update    Install the latest release and its agent plugins
+          uninstall  Remove loupe and its agent plugins, and keep the runs
 
 Send-back loop  when the human sends findings back from review with notes
   loupe feedback --run owner/repo#123 --json              read notes, dispositions and readiness

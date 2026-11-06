@@ -83,8 +83,8 @@ Refusal or error (exit 1 or 2):
 | `returned` | A local run was returned, and it accepts no change, no review and no handoff (`specs/049-apply-mode`) | `loupe feedback --run <ref>` to read the decisions, or `loupe capture --changed\|--files\|--no-files` to start a new run |
 | `wrong-mode` | The command or flag applies only to PR runs (`specs/049-apply-mode`) | on a local run, the return action in `loupe review`, or `loupe feedback` |
 | `update-unsupported` | `update` or `uninstall` from a build that is not an `X.Y.Z` release (`details.reason` `not-release`), or from a binary under a mise install (`mise`) (`specs/055-update-flow`) | the install script's curl command; for mise, `mise use -g github:eriksaulnier/loupe@latest`, or for `uninstall`, `mise unuse -g github:eriksaulnier/loupe` |
-| `download` | `update` or `uninstall` could not download a release file, the release's `checksums.txt` names no archive for this platform or does not cover `install.sh`, or `install.sh` does not match it | network access to github.com and the release URL, or the curl command |
-| `install-failed` | The release's `install.sh` exited non-zero; `details.exitStatus` holds its status. The binary MAY already be replaced, since the script installs it before the plugins | read the script's output on stderr, or the curl command |
+| `download` | `update` or `uninstall` could not download a release file, the release's `checksums.txt` names no archive for this platform or does not cover `install.sh`, or `install.sh` does not match it | network access to github.com and the release URL; the release's files; or the same command again |
+| `install-failed` | The release's `install.sh` exited non-zero; `details.exitStatus` holds its status. The binary MAY already be replaced, since the script installs it before the plugins | read the script's output on stderr, then the same command again |
 | `internal` | A defect | file an issue; stack on stderr |
 
 ## Warning codes
@@ -251,6 +251,12 @@ The confirmation is where the human writes the review's opening prose, in the bo
 Installs the latest release, and the loupe plugin at that release for each of Claude Code, Codex and Pi on `PATH` (`specs/055-update-flow`). It reads the version from the archive name for this platform in `<releases>/latest/download/checksums.txt`. Then it downloads that release's `checksums.txt` and `install.sh`, and refuses `download` unless the checksums cover `install.sh` and match it. It runs the script with `LOUPE_VERSION` set to that version and `LOUPE_INSTALL_DIR` set to the directory of the running binary, resolved through any symlink. The script's stdout and stderr both go to loupe's stderr. It runs the script even when the running version is the latest, so a missing plugin or a plugin on another release is set up again. It needs no GitHub token and reads no run state. It does not require a terminal, but the plugin's skills MUST NOT tell an agent to run it.
 
 Refuses `update-unsupported` for a version that is not `X.Y.Z` and for a binary under a mise install, before any download. A script that exits non-zero refuses `install-failed`. Under `--json`, the payload is `from` (the running version) and `to` (the version installed). Without `--json`, it prints one line on stdout.
+
+### `loupe uninstall [--json]` (human only)
+
+Removes loupe, and the loupe plugin from each of Claude Code, Codex and Pi on `PATH` (`specs/055-update-flow`). It downloads `install.sh` and `checksums.txt` of its own release, not the latest, refuses `download` unless they match, and runs the script with `LOUPE_UNINSTALL=1` and `LOUPE_INSTALL_DIR` set to the directory of the running binary, resolved through any symlink. The script's output goes to stderr. The script removes the Claude Code and Codex marketplace named `loupe` unless it points at a local directory, and the Pi package from `github.com/eriksaulnier/loupe`, then the binary. When a plugin cannot be removed, the script keeps the binary and exits 1, so `uninstall` refuses `install-failed` and can run again. It MUST NOT delete the data root or any run. `CI` and `LOUPE_NO_PLUGINS` leave the plugins in place.
+
+Refuses `update-unsupported` for a version that is not `X.Y.Z` and for a binary under a mise install, with `mise unuse -g github:eriksaulnier/loupe`. Under `--json`, the payload is `removed` (the version removed) and `dataRoot` (where the runs stay). Without `--json`, it prints one line on stdout that names the data root.
 
 ## Environment
 
