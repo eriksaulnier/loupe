@@ -164,7 +164,7 @@ func TestDetailEscapesFindings(t *testing.T) {
 		`Heading \u202Eeno \u001B[31mred`)
 }
 
-// ← and → move between findings exactly as N and n do, stopping at both ends.
+// ← and → move between findings exactly as [ and ] do, and n as →, stopping at both ends.
 func TestDetailArrowsMatchTheirAliases(t *testing.T) {
 	dir := newFixture(t)
 	for _, pair := range []struct {
@@ -172,7 +172,8 @@ func TestDetailArrowsMatchTheirAliases(t *testing.T) {
 		prev, next tea.KeyPressMsg
 	}{
 		{"arrows", arrow(tea.KeyLeft), arrow(tea.KeyRight)},
-		{"aliases", runes("N"), runes("n")},
+		{"brackets", runes("["), runes("]")},
+		{"n", arrow(tea.KeyLeft), runes("n")},
 	} {
 		m := newModel(t, dir)
 		if err := m.openFinding("f-001"); err != nil {

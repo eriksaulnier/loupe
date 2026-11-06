@@ -246,13 +246,13 @@ func (h *harness) decide(ref string, steps ...string) {
 }
 
 // confirm answers loupe publish's confirmation, once the screen shows it, as the human at it would: message typed as
-// the review's opening, then tab to leave the message and answer, which is y to publish and anything else to cancel.
+// the review's opening, then tab to leave the message and answer, which is y to publish and n to cancel.
 func confirm(s *screen.Screen, message, answer string) {
 	if message != "" {
 		s.Type(message)
 	}
 	s.Press("tab")
-	s.WaitFor("publish this review")
+	s.WaitFor("n cancel")
 	s.Press(answer)
 }
 

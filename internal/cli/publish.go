@@ -48,8 +48,9 @@ cancel and a refusal, in memory and no further: the next confirmation of that se
 it, and quitting ends it. Outside it, j/k, up/down, pgup/pgdown
 and home/end scroll and v switches to the exact JSON payload. y sends, and so does p when the
 review has room for a message; neither sends from inside the message, so a y or p you typed
-cannot publish. Where there is no room, p does nothing. Any other key, Ctrl-C or end of input
-cancels and nothing is sent or written. Once the review is being sent, keys, Ctrl-C and SIGTERM
+cannot publish. Where there is no room, p does nothing. n, q, Ctrl-C or end of input cancels
+and nothing is sent or written. Any other key does nothing but say which keys answer, and a
+letter means the same in either case. Once the review is being sent, keys, Ctrl-C and SIGTERM
 do not stop loupe until the outcome is recorded.
 
 Once the review is posted, receipt.json records it and publish prints the review URL; every later

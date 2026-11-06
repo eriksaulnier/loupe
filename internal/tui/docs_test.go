@@ -77,9 +77,12 @@ func TestApplyKeyTableMatchesHelp(t *testing.T) {
 	bound := map[string]bool{}
 	var letters []helpKey
 	for _, k := range slices.Concat(sections[viewDetail].keys, sections[viewList].keys, everywhere.keys) {
+		// An alias such as "[/], n for next" names keys between its slashes and commas, each before its words.
 		for _, keys := range []string{k.Keys, k.Alias} {
-			for key := range strings.SplitSeq(strings.ReplaceAll(keys, " / ", "/"), "/") {
-				bound[key] = true
+			for part := range strings.SplitSeq(strings.ReplaceAll(strings.ReplaceAll(keys, " / ", "/"), ", ", "/"), "/") {
+				if fields := strings.Fields(part); len(fields) > 0 {
+					bound[fields[0]] = true
+				}
 			}
 		}
 	}

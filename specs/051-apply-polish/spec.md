@@ -76,7 +76,7 @@ The human has a PR review and a local run open in two panes. They look at either
 1. **Given** a local run, **When** review opens, **Then** the header shows a badge that reads "local · returns to <applier>", or "local · returns to the agent" with no applier, in an accent that no PR-run screen uses. No pull request glyph and no URL appear.
 2. **Given** a local finding with a proposal, **When** its detail opens, **Then** the first block under the title reads "<applier> will:" followed by the proposal, and the agent's reasoning follows below it.
 3. **Given** a local finding with no proposal, **When** its detail opens, **Then** it is marked as a question for the applier, and no "will:" block appears.
-4. **Given** a local run, **When** the footer and help draw, **Then** the verbs read accept (`a`), tweak (`A`), reject (`x`, `X` with a reason), ask (`s`) and "return to <applier>" (`p`).
+4. **Given** a local run, **When** the footer and help draw, **Then** the verbs read accept (`a`), tweak (`t`), reject (`x`), ask (`s`) and "return to <applier>" (`p`). Amended by specs/054-forgiving-keys, which replaces `A` with `t` and `X` with `c`.
 5. **Given** a PR run, **When** any screen draws, **Then** it is byte-identical to the spec 049 build.
 
 ---
@@ -109,7 +109,7 @@ The human wants to work through the findings of a local run one at a time, decid
 1. **Given** a local run with pending findings, **When** review opens, **Then** a start screen shows the summary and the count, Enter shows the first pending finding, and deciding it shows the next.
 4. **Given** the last pending finding, **When** the human decides it, **Then** the return step opens on its own, and Enter returns the run and quits review.
 2. **Given** an accepted finding on either run kind, **When** the human presses `u`, **Then** nothing changes, as on a PR run today.
-3. **Given** a pending finding on a local run, **When** the human presses `x`, **Then** it is rejected with no reason in one key; **When** they press `X`, **Then** the reason input opens.
+3. **Given** a pending finding on a local run, **When** the human presses `x`, **Then** it is rejected with no reason in one key; **When** they press `c`, **Then** the reason input opens (specs/054-forgiving-keys).
 
 ### Edge Cases
 
@@ -142,18 +142,18 @@ The human wants to work through the findings of a local run one at a time, decid
 
 - **FR-009**: On a local run, the header MUST show a badge reading "local · returns to <applier>", or "local · returns to the agent" with no applier. It MUST be drawn in an accent token that no PR-run screen uses, and it MUST read as words at every icon tier and with NO_COLOR.
 - **FR-010**: On a local run, the detail view MUST lead with "<applier> will:" (or "The agent will:") and the proposal, directly under the title and the metadata row, before the body. A finding with no proposal MUST show a question marker instead of that block.
-- **FR-011**: On a local run, the footer, the help and the key table MUST name the actions accept (`a`), tweak (`A`), reject (`x`, with `X` for a reason), ask (`s`) and "return to <applier>" (`p`). The JSON contracts keep their spec 049 names (`excluded`, the send-back notes), and only the words on screen change.
+- **FR-011**: On a local run, the footer, the help and the key table MUST name the actions accept (`a`), tweak (`t`), reject (`x`, with `c` for a reason; specs/054-forgiving-keys), ask (`s`) and "return to <applier>" (`p`). The JSON contracts keep their spec 049 names (`excluded`, the send-back notes), and only the words on screen change.
 
 **Navigation decisions**
 
 - **FR-012**: On a local run, after Enter on the start screen (FR-018), review MUST show the first pending finding's detail. After a decision, the view MUST move to the next pending finding. Left and right MUST move between findings, and `l` MUST open the list. With nothing pending, review MUST open on the list. PR runs keep opening on the list.
 - **FR-013**: `u` MUST behave the same on both run kinds: it restores an excluded or withdrawn finding, as today, and an accept is changed by pressing another decision key.
-- **FR-014**: On a local run, `x` MUST reject at once with no reason, as `x` excludes on a PR run, and `X` MUST open the reason input. Rejecting with no reason takes one key.
+- **FR-014**: On a local run, `x` MUST reject at once with no reason, as `x` excludes on a PR run. Rejecting with no reason takes one key. Amended by specs/054-forgiving-keys: `X` no longer opens the reason input, since letters no longer differ by case. `c` opens it instead.
 - **FR-018**: On a local run with pending findings, review MUST open on a start screen that shows the run's title, the summary, and how many findings wait, with Enter to start the cards (FR-012), `l` for the list and `q` to quit. With nothing pending, it opens on the list.
 - **FR-019**: On a local run, when the human decides the last pending finding and no note is open, review MUST open the return step by itself: the note input of FR-001, where Enter returns the run and Esc goes back to the list. `p` still opens the return step from the list. Deciding the last finding and returning with no note then takes one more key, Enter.
 - **FR-020**: After a local run is returned, review MUST quit by itself and leave one line in the terminal, such as "Returned to Claude: 6 accepted, 2 rejected." It no longer waits on a returned screen for `q`.
 - **FR-016**: A key MUST mean the same action on both run kinds. A key MAY be absent on the kind that lacks its action, such as `e` and `o` on local runs and `w` after FR-006, but MUST NOT do something else there.
-- **FR-017**: the shift of a decision key adds the human's words to it (owner, 2026-11-04). `X` rejects with a reason (FR-014), and `A` accepts with a note, which takes over from `t` on local runs. `t` is then absent on local runs, and the footer shows `a`/`A` and `x`/`X` as pairs. PR runs keep `a` and gain nothing, because a PR accept carries no note.
+- **FR-017**: Superseded by specs/054-forgiving-keys. It made the shift of a decision key add the human's words (`A`, `X`). Caps lock then turned every decision into its note-taking variant, and the owner wanted fewer keys to learn. On local runs `t` now accepts with a note and `c` rejects with a reason. PR runs keep `a` and gain nothing, because a PR accept carries no note.
 
 **PR runs**
 
@@ -180,7 +180,7 @@ The human wants to work through the findings of a local run one at a time, decid
 - `return.json` schema 1 has never been released, so adding `note` amends schema 1 in place. If spec 049 ships before this spec, the field bumps the schema to 2 instead, with the usual `docs/versioning.md` row.
 - "Its own accent" means a new style token for apply mode, chosen to differ from every PR-run color in both light and dark palettes. The exact hue is a design choice for the plan.
 - The on-screen words "reject" and "ask" replace "exclude" and "send back" on local runs only. The JSON group `excluded` and the note mechanics do not change, so the agent-facing contract from spec 049 stands.
-- The note input reuses the review program's note textarea, as `A` and `X` do. It holds one line, since Enter returns the run, and a pasted line break joins the lines.
+- The note input reuses the review program's note textarea, as `t` and `c` do. It holds one line, since Enter returns the run, and a pasted line break joins the lines.
 - This specification authorizes no commit, push, pull request, release or live review.
 
 ## Out of scope

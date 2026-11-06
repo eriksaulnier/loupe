@@ -512,13 +512,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.opening && msg.String() != "ctrl+c" {
 			return m, nil
 		}
+		// The label picker behind e takes no text, so it folds like any other screen.
+		if !m.noting && !m.rewriting && !m.confirmTyping() {
+			msg = foldLetter(msg)
+		}
 		if tooSmall(m.width, m.height) {
 			var ok bool
 			if msg, ok = smallKey(msg); !ok {
 				return m, nil
 			}
 		}
-		// The confirmation comes first so that ctrl+c, like every key but y, p and the toggles, declines.
+		// The confirmation comes first so that ctrl+c declines there as well as n and q.
 		if m.view == viewConfirm {
 			return m, m.updateConfirm(msg)
 		}

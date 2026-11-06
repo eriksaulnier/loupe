@@ -625,12 +625,12 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		m.notice = ""
 		m.openFileDiff(f)
 		return nil
-	case "right", "n":
+	case "right", "]", "n":
 		if i+1 < len(m.order) {
 			m.notice = ""
 			return m.fail(m.openFinding(m.order[i+1].ID))
 		}
-	case "left", "N":
+	case "left", "[":
 		if i > 0 {
 			m.notice = ""
 			return m.fail(m.openFinding(m.order[i-1].ID))

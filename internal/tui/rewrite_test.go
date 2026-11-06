@@ -266,7 +266,7 @@ func TestRewriteEscKeepsTheTextForThatFinding(t *testing.T) {
 		t.Fatalf("another finding opened on %q", got)
 	}
 	m.Update(escKey)
-	m.Update(runes("N"))
+	m.Update(runes("["))
 	m.Update(runes("w"))
 	if got := m.rewriteTitle.Value(); got != "Title one kept" {
 		t.Fatalf("reopened on %q", got)

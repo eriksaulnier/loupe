@@ -35,7 +35,7 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	m.Update(runes("v"))
 	view := m.View().Content
 	for _, want := range []string{"<details open>", "Summary \\u202Eevil", "Body \\u001B[31m", "a.go:10-12", "**Inline** \\u2066body",
-		" loupe   acme/widgets#42", "+- Publish review -", " comment - inline blocking (1) -+", "inline comments (1)", "y/p publish this review"} {
+		" loupe   acme/widgets#42", "+- Publish review -", " comment - inline blocking (1) -+", "inline comments (1)", "y/p publish"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("review view lacks %q:\n%s", want, view)
 		}
@@ -193,7 +193,7 @@ func TestConfirmFocusedInputSwallowsTheConfirmKeys(t *testing.T) {
 				t.Fatalf("%s typed into the message ended the program or confirmed the review", c.key)
 			}
 			m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-			if !strings.Contains(m.View().Content, "y/p publish this review") {
+			if !strings.Contains(m.View().Content, "y/p publish") {
 				t.Errorf("the footer does not offer y and p:\n%s", m.View().Content)
 			}
 			if _, cmd := m.Update(runes(c.key)); cmd == nil {
@@ -211,11 +211,11 @@ func TestConfirmFocusedInputSwallowsTheConfirmKeys(t *testing.T) {
 func TestConfirmFooterFollowsTheInput(t *testing.T) {
 	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	if view := m.View().Content; !strings.Contains(view, "esc done") || strings.Contains(view, "publish this review") {
+	if view := m.View().Content; !strings.Contains(view, "esc done") || strings.Contains(view, "n cancel") {
 		t.Errorf("the footer does not say the message has the keyboard:\n%s", view)
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if view := m.View().Content; !strings.Contains(view, "tab/esc your message") || !strings.Contains(view, "publish this review") {
+	if view := m.View().Content; !strings.Contains(view, "tab/esc your message") || !strings.Contains(view, "n cancel") {
 		t.Errorf("the footer does not offer the confirmation keys once the message is left:\n%s", view)
 	}
 }
@@ -636,17 +636,16 @@ func TestConfirmScrollsLongReview(t *testing.T) {
 	}
 }
 
-// At the narrowest window the cancel sentence keeps every word, on the notice line when the footer has no room.
-func TestConfirmCancelSentenceSurvivesSixtyColumns(t *testing.T) {
+// At the narrowest window the footer still names the key that cancels beside the one that publishes.
+func TestConfirmCancelKeySurvivesSixtyColumns(t *testing.T) {
 	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "request-changes", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
-	// The message input opens focused; the cancel sentence belongs to the confirmation's own keys.
+	// The message input opens focused; the cancel key belongs to the confirmation's own keys.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	lines := strings.Split(m.View().Content, "\n")
-	// At this width the footer has no room for it, and the cancel sentence moves into the pane just above.
-	tail := strings.Join(lines[len(lines)-4:], "\n")
-	if !strings.Contains(tail, confirmCancel) || !strings.Contains(tail, "y/p publish this review") {
-		t.Errorf("60-column confirmation lost the cancel sentence or y/p:\n%s", strings.Join(lines, "\n"))
+	tail := strings.Join(lines[len(lines)-3:], "\n")
+	if !strings.Contains(tail, "n cancel") || !strings.Contains(tail, "y/p publish") {
+		t.Errorf("60-column confirmation lost n or y/p:\n%s", strings.Join(lines, "\n"))
 	}
 }
 
@@ -686,7 +685,8 @@ func TestConfirmHeaderKeepsTheClosedState(t *testing.T) {
 	}
 }
 
-func TestConfirmOnlyYAndPConfirm(t *testing.T) {
+// y and p publish, n, q and ctrl+c cancel, and caps lock changes none of them.
+func TestConfirmAnswers(t *testing.T) {
 	cases := []struct {
 		name string
 		key  tea.KeyPressMsg
@@ -694,11 +694,12 @@ func TestConfirmOnlyYAndPConfirm(t *testing.T) {
 	}{
 		{"y", runes("y"), true},
 		{"p", runes("p"), true},
-		{"P", runes("P"), false},
+		{"Y", runes("Y"), true},
+		{"P", runes("P"), true},
 		{"n", runes("n"), false},
-		{"Y", runes("Y"), false},
+		{"N", runes("N"), false},
 		{"q", runes("q"), false},
-		{"enter", tea.KeyPressMsg{Code: tea.KeyEnter}, false},
+		{"Q", runes("Q"), false},
 		{"ctrl+c", tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}, false},
 	}
 	for _, c := range cases {
@@ -716,6 +717,43 @@ func TestConfirmOnlyYAndPConfirm(t *testing.T) {
 				t.Fatalf("confirmed %v, want %v", ok && final.Confirmed(), c.want)
 			}
 		})
+	}
+}
+
+// A key the confirmation does not know neither publishes nor cancels: the screen stays and says which keys answer,
+// until the next key.
+func TestConfirmStrayKeyAnswersNothing(t *testing.T) {
+	for _, key := range []tea.KeyPressMsg{runes("z"), runes("Z"), {Code: tea.KeyEnter}, {Code: tea.KeySpace, Text: " "}} {
+		m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+		if _, cmd := m.Update(key); cmd != nil {
+			t.Fatalf("%q ended the confirmation", key.String())
+		}
+		if view := m.View().Content; !strings.Contains(view, confirmStray) {
+			t.Errorf("%q did not say which keys answer:\n%s", key.String(), view)
+		}
+		m.Update(runes("j"))
+		if strings.Contains(m.View().Content, confirmStray) {
+			t.Errorf("after %q the notice outlived the next key", key.String())
+		}
+		if _, cmd := m.Update(runes("n")); cmd == nil || m.Confirmed() {
+			t.Errorf("n after %q did not cancel", key.String())
+		}
+	}
+}
+
+// In the message input every letter is text, in the case it was typed: Y and N neither publish nor cancel.
+func TestConfirmMessageKeepsUppercase(t *testing.T) {
+	m := NewConfirmModel(confirmPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	for _, k := range []string{"Y", "N", "Q"} {
+		if _, cmd := m.Update(runes(k)); cmd != nil && m.Confirmed() {
+			t.Fatalf("%s answered from the message input", k)
+		}
+	}
+	if got := m.Message(); got != "YNQ" {
+		t.Errorf("message %q, want YNQ", got)
 	}
 }
 
@@ -999,11 +1037,11 @@ func TestConfirmShortensATallRefusal(t *testing.T) {
 	m := NewConfirmModel(preview, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
 	typeInto(m, "<b>")
-	whole := m.confirm.noticeLines(m.shell, "", 100)
+	whole := m.confirm.noticeLines(m.shell, 100)
 	if len(whole) < 3 {
 		t.Fatalf("the refusal is %d rows, too short to shorten: %q", len(whole), whole)
 	}
-	if lines := m.confirm.noticeLines(m.shell, "", 2); !slices.Equal(lines, []string{whole[0], whole[len(whole)-1]}) {
+	if lines := m.confirm.noticeLines(m.shell, 2); !slices.Equal(lines, []string{whole[0], whole[len(whole)-1]}) {
 		t.Fatalf("notice in 2 rows: %q, whole %q", lines, whole)
 	}
 }

@@ -50,14 +50,14 @@ func TestApplyRunHasNoEditOrOpenKey(t *testing.T) {
 	}
 }
 
-// A opens an empty input whose enter accepts with what was typed, and with nothing typed accepts plainly.
-func TestApplyShiftAAcceptsWithANote(t *testing.T) {
+// t opens an empty input whose enter accepts with what was typed, and with nothing typed accepts plainly.
+func TestApplyTAcceptsWithANote(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	m.keptNotes["f-001"] = "kept send-back text"
 	mustOpenFinding(t, m, "f-001")
-	press(m, "A")
+	press(m, "t")
 	if !m.noting || m.note.Value() != "" {
-		t.Fatalf("A did not open an empty input: noting %v value %q", m.noting, m.note.Value())
+		t.Fatalf("t did not open an empty input: noting %v value %q", m.noting, m.note.Value())
 	}
 	if footer := footerText(m); !strings.Contains(footer, "enter accept") {
 		t.Errorf("footer %q does not say accept", footer)
@@ -69,24 +69,24 @@ func TestApplyShiftAAcceptsWithANote(t *testing.T) {
 		t.Fatalf("f-001 decision %+v", got)
 	}
 	if m.keptNotes["f-001"] != "kept send-back text" {
-		t.Errorf("A touched the kept send-back text: %q", m.keptNotes["f-001"])
+		t.Errorf("t touched the kept send-back text: %q", m.keptNotes["f-001"])
 	}
 
 	mustOpenFinding(t, m, "f-003")
-	press(m, "A")
+	press(m, "t")
 	m.Update(enterKey)
 	if got := loadDraft(t, dir).Decisions["f-003"]; got.Decision != draft.DecisionAccepted || got.Note != "" {
 		t.Fatalf("an empty note did not accept plainly: %+v", got)
 	}
 }
 
-// Reopening A or X on a finding already decided that way starts from the stored note, so enter keeps it rather than
+// Reopening t or c on a finding already decided that way starts from the stored note, so enter keeps it rather than
 // saving a plain decision over it.
 func TestApplyNoteKeysStartFromTheStoredNote(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	for _, c := range []struct{ id, key, note, decision string }{
-		{"f-001", "A", "Use the second store.", draft.DecisionAccepted},
-		{"f-003", "X", "Out of scope.", draft.DecisionExcluded},
+		{"f-001", "t", "Use the second store.", draft.DecisionAccepted},
+		{"f-003", "c", "Out of scope.", draft.DecisionExcluded},
 	} {
 		mustOpenFinding(t, m, c.id)
 		press(m, c.key)
@@ -103,16 +103,16 @@ func TestApplyNoteKeysStartFromTheStoredNote(t *testing.T) {
 		}
 	}
 	mustOpenFinding(t, m, "f-001")
-	press(m, "X")
+	press(m, "c")
 	if got := m.note.Value(); got != "" {
-		t.Errorf("X on an accepted finding opened with %q, want an empty reason", got)
+		t.Errorf("c on an accepted finding opened with %q, want an empty reason", got)
 	}
 }
 
-func TestApplyShiftAEscDiscardsTheNote(t *testing.T) {
+func TestApplyTEscDiscardsTheNote(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	mustOpenFinding(t, m, "f-001")
-	press(m, "A")
+	press(m, "t")
 	m.Update(runes("half a thought"))
 	m.Update(escKey)
 	if m.noting || len(m.keptNotes) != 0 {
@@ -121,9 +121,9 @@ func TestApplyShiftAEscDiscardsTheNote(t *testing.T) {
 	if got := draft.Dispositions(loadDraft(t, dir))["f-001"]; got != draft.DispositionPending {
 		t.Fatalf("esc decided f-001: %s", got)
 	}
-	press(m, "A")
+	press(m, "t")
 	if got := m.note.Value(); got != "" {
-		t.Fatalf("A reopened with %q", got)
+		t.Fatalf("t reopened with %q", got)
 	}
 	m.Update(escKey)
 	press(m, "s")
@@ -145,13 +145,22 @@ func TestApplyXRejectsAtOnce(t *testing.T) {
 	}
 }
 
-// X opens the reason input; an empty reason excludes plainly, and one too long refuses in review's own words.
-func TestApplyShiftXRejectsWithAnOptionalReason(t *testing.T) {
+// X is x, so it rejects at once. c opens the reason input; an empty reason rejects plainly, and one too long refuses
+// in review's own words.
+func TestApplyCRejectsWithAnOptionalReason(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
-	mustOpenFinding(t, m, "f-001")
+	mustOpenFinding(t, m, "f-003")
 	press(m, "X")
+	if m.noting {
+		t.Fatal("X opened an input")
+	}
+	if got := loadDraft(t, dir).Decisions["f-003"]; got.Decision != draft.DecisionExcluded || got.Note != "" {
+		t.Fatalf("X: f-003 decision %+v, want excluded with no reason", got)
+	}
+	mustOpenFinding(t, m, "f-001")
+	press(m, "c")
 	if !m.noting || m.note.Value() != "" {
-		t.Fatalf("X did not open an empty input: noting %v value %q", m.noting, m.note.Value())
+		t.Fatalf("c did not open an empty reason: noting %v value %q", m.noting, m.note.Value())
 	}
 	if footer := footerText(m); !strings.Contains(footer, "enter reject") {
 		t.Errorf("footer %q does not say reject", footer)
@@ -170,34 +179,54 @@ func TestApplyShiftXRejectsWithAnOptionalReason(t *testing.T) {
 	}
 	m.Update(escKey)
 
-	press(m, "X")
+	press(m, "c")
 	m.Update(runes("Out of scope."))
 	m.Update(enterKey)
 	if got := loadDraft(t, dir).Decisions["f-001"]; got.Decision != draft.DecisionExcluded || got.Note != "Out of scope." {
 		t.Fatalf("f-001 decision %+v", got)
 	}
 	mustOpenFinding(t, m, "f-002")
-	press(m, "X")
+	press(m, "c")
 	m.Update(enterKey)
 	if got := loadDraft(t, dir).Decisions["f-002"]; got.Decision != draft.DecisionExcluded || got.Note != "" {
 		t.Fatalf("an empty reason did not exclude plainly: %+v", got)
 	}
 }
 
-// t and w have no job on a local run: they change nothing in the list or the detail, and no help names them.
+// t and c on a withdrawn finding have no decision to record, so they say how to bring it back and open nothing.
+func TestApplyNotesOnAWithdrawnFindingSaySo(t *testing.T) {
+	m, dir := applyModel(t, "Claude")
+	outside(t, dir, func(d *draft.Draft) error {
+		withdrawn := false
+		_, _, err := draft.Edit(d, "f-001", draft.EditInput{}, &withdrawn, nil, draft.ByAgent, draft.Rules{}, testNow)
+		return err
+	})
+	if _, err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"t", "c"} {
+		mustOpenFinding(t, m, "f-001")
+		press(m, k)
+		if m.noting || !strings.Contains(m.notice, "f-001 is withdrawn; u reinstates it") {
+			t.Errorf("%s on a withdrawn finding: noting %v notice %q", k, m.noting, m.notice)
+		}
+	}
+}
+
+// w has no job on a local run: it changes nothing in the list or the detail, and no help names it.
 // TestApplyVerbsAreAimedAtTheAgent pins the hints.
-func TestApplyTAndWDoNothing(t *testing.T) {
+func TestApplyWDoesNothing(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	before := loadDraft(t, dir).Version
-	press(m, "t", "w")
+	press(m, "w")
 	mustOpenFinding(t, m, "f-001")
-	press(m, "t", "w")
+	press(m, "w")
 	if m.noting || m.rewriting || m.editing || m.notice != "" || loadDraft(t, dir).Version != before {
-		t.Errorf("t or w acted: noting %v rewriting %v notice %q", m.noting, m.rewriting, m.notice)
+		t.Errorf("w acted: noting %v rewriting %v notice %q", m.noting, m.rewriting, m.notice)
 	}
 	for v, section := range m.helpSections() {
 		for _, k := range section.keys {
-			if k.Keys == "t" || k.Keys == "w" {
+			if k.Keys == "w" {
 				t.Errorf("help for view %d names %s (%s)", v, k.Keys, k.Verb)
 			}
 		}

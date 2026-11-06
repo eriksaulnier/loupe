@@ -56,7 +56,7 @@ var screens = []screen{
 		showConfirmation(m)
 		// The message input opens focused; the confirmation's own keys are live once it is blurred.
 		m.confirm.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
-	}, []string{"y/p", "publish", "this", "review"}},
+	}, []string{"y/p", "publish", "n", "cancel"}},
 	{"confirmation message", showConfirmation, []string{"esc", "done", "enter", "new", "line", "ctrl+u", "clear"}},
 	{"help", func(m *Model) { mustOpen(m, "f-001"); m.help = true }, []string{"esc/?/q", "close", "help"}},
 	{"edit row", func(m *Model) {
@@ -128,8 +128,8 @@ func TestEveryTierFitsTheWindow(t *testing.T) {
 						t.Errorf("%s: footer lacks %q: %q", where, k, last)
 					}
 				}
-				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(strings.Join(lines[len(lines)-4:], "\n")), confirmCancel) {
-					t.Errorf("%s: the cancel sentence is not on screen:\n%s", where, strings.Join(lines, "\n"))
+				if sc.name == "confirmation" && !strings.Contains(ansi.Strip(last), "n cancel") {
+					t.Errorf("%s: the cancel key is not in the footer:\n%s", where, strings.Join(lines, "\n"))
 				}
 				// A titled pane opens directly under the header and its gap.
 				top := bodyTop(m.height)

@@ -62,6 +62,8 @@ type confirmation struct {
 	// follow pulls the input back into view on the next layout. It is set by a keystroke that changed the message
 	// and cleared once that is done, so paging away to read the findings is not undone until the human types again.
 	follow bool
+	// stray is set by a key that neither answers nor moves, and says which keys do. The next key clears it.
+	stray bool
 }
 
 // newConfirmation opens the confirmation on message, which is what the human last typed in this session and is
@@ -134,10 +136,11 @@ func ConfirmTitle(ref, action, inline string, comments int) ConfirmHeading {
 }
 
 // key reports whether the human answered, and the command the message input asked for. y confirms, and so does p when
-// there is a message input. Every key other than scrolling, the toggles, the input and a p with no input is an answer,
-// so a stray key can never send.
+// there is a message input. n, q and ctrl+c decline. Any other key answers nothing, so a stray key neither sends nor
+// throws the review away.
 func (c *confirmation) key(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	c.sync(m)
+	c.stray = false
 	if c.typing {
 		switch msg.String() {
 		// ctrl+c cancels from the input too; the review program hands the confirmation every key for that reason.
@@ -213,8 +216,10 @@ func (c *confirmation) key(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 		c.yes = true
 		return true, nil
-	default:
+	case "n", "q", "ctrl+c":
 		return true, nil
+	default:
+		c.stray = true
 	}
 	return false, nil
 }
@@ -368,9 +373,8 @@ func (c *confirmation) sync(m *Model) {
 
 // confirmRows is the rows the preview scrolls in: the pane, less the notice rows kept below it.
 func (m *Model) confirmRows() int {
-	footer, notice := m.confirmFooter()
-	pane := m.bodyRows(len(footer)) - style.PaneRows
-	return pane - len(m.confirm.noticeLines(m, notice, pane))
+	pane := m.bodyRows(len(m.confirmKeys())) - style.PaneRows
+	return pane - len(m.confirm.noticeLines(m, pane))
 }
 
 func (c *confirmation) position(m *Model) string {
@@ -519,13 +523,12 @@ func (c *confirmation) content(m *Model) string {
 	return strings.Join(parts, "\n")
 }
 
-// confirmCancel is said whole: when the footer has no room for it on one row, it moves into the pane rather than
-// shrink.
-const confirmCancel = "any other key cancels, nothing is sent"
+// confirmStray is what a key the confirmation does not know draws, in place of acting on it.
+const confirmStray = "y publishes, n cancels"
 
 // noticeLines are the rows kept under the preview: what the allowlist made of the typed message, why there is
-// nowhere to type one, the caller's notice, and the cancel sentence when the footer had no room for it.
-func (c *confirmation) noticeLines(m *Model, extra string, rows int) []string {
+// nowhere to type one, and which keys answer when the last one did not.
+func (c *confirmation) noticeLines(m *Model, rows int) []string {
 	width, _ := style.PaneInner(m.width, 0)
 	said := ""
 	switch {
@@ -540,10 +543,10 @@ func (c *confirmation) noticeLines(m *Model, extra string, rows int) []string {
 			out = append(out, m.styles.Warn.Render(l))
 		}
 	}
-	if extra != "" {
-		tail = append(tail, m.styles.Dim.Render(extra))
+	if c.stray {
+		tail = append(tail, m.styles.Of(style.Note).Render(confirmStray))
 	}
-	// Past rows, the refusal's middle gives way, so its fix and the cancel sentence both stay.
+	// Past rows, the refusal's middle gives way, so its fix and the keys that answer both stay.
 	if len(out)+len(tail) > rows {
 		out = m.shortenNotice(out, max(1, rows-len(tail)))
 	}
@@ -552,7 +555,7 @@ func (c *confirmation) noticeLines(m *Model, extra string, rows int) []string {
 
 func (m *Model) confirmView(c *confirmation) string {
 	c.sync(m)
-	footer, extra := m.confirmFooter()
+	footer := m.confirmKeys()
 	position := c.position(m)
 	if style.Width(position)+style.Width(c.summary(m))+12 > m.width {
 		position = c.shortPosition(m)
@@ -561,7 +564,7 @@ func (m *Model) confirmView(c *confirmation) string {
 	height := m.bodyRows(len(footer))
 	lines := strings.Split(c.scroll.View(), "\n")
 	_, inner := style.PaneInner(0, height)
-	lines = m.withNotice(lines[:min(len(lines), c.scroll.Height())], c.noticeLines(m, extra, inner), inner)
+	lines = m.withNotice(lines[:min(len(lines), c.scroll.Height())], c.noticeLines(m, inner), inner)
 	body = append(body, m.styles.Pane(style.Pane{Width: m.width, Height: height, Lines: lines,
 		Titles: style.PaneTitles{TopLeft: "Publish review", TopRight: c.summary(m), BottomRight: m.styles.HintTitle(position)},
 		Scroll: style.Scroll{Offset: c.scroll.YOffset(), Visible: c.scroll.Height(), Total: c.scroll.TotalLineCount()}, Focus: !c.typing})...)
@@ -570,30 +573,20 @@ func (m *Model) confirmView(c *confirmation) string {
 
 // confirmKeys is the confirmation footer.
 func (m *Model) confirmKeys() []string {
-	keys, _ := m.confirmFooter()
-	return keys
-}
-
-// confirmFooter is the confirmation footer and the cancel sentence when the footer could not hold it on one row: the
-// sentence then goes under the preview rather than cost the review a second footer row.
-func (m *Model) confirmFooter() (keys []string, extra string) {
 	if m.confirmTyping() {
 		return m.keys(style.KeyGroup{{Key: "esc", Verb: "done"}, {Key: "enter", Verb: "new line"}, {Key: "ctrl+u", Verb: "clear"}},
-			style.KeyGroup{{Key: "shift+" + m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}, {Key: "pgup/pgdn", Verb: "read the findings"}}), ""
+			style.KeyGroup{{Key: "shift+" + m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}, {Key: "pgup/pgdn", Verb: "read the findings"}})
 	}
-	decide := style.KeyGroup{{Key: "y", Verb: "publish this review"}}
+	decide := style.KeyGroup{{Key: "y", Verb: "publish"}}
 	// A review with no room for a message has no input to offer the key for.
 	if m.view == viewConfirm && m.confirm.inline() {
 		decide[0].Key = "y/p"
 		decide = append(decide, style.Hint{Key: "tab/esc", Verb: "your message"})
 	}
+	decide = append(decide, style.Hint{Key: "n", Verb: "cancel"})
 	next := [showCount]string{showReview: "markdown", showMarkdown: "payload", showPayload: "review"}[m.confirm.shows]
 	move := style.KeyGroup{{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "scroll"}, {Key: "v", Verb: next}}
-	keys = m.keys(decide, move, style.KeyGroup{{Verb: confirmCancel}})
-	if len(keys) > 1 {
-		keys, extra = m.keys(decide, move), confirmCancel
-	}
-	return keys, extra
+	return m.keys(decide, move)
 }
 
 // ConfirmModel is the confirmation view as a program of its own, for loupe publish.
@@ -636,6 +629,9 @@ func (c *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		c.shell.width, c.shell.height = msg.Width, msg.Height
 	case tea.KeyPressMsg:
+		if !c.confirm.typing {
+			msg = foldLetter(msg)
+		}
 		if tooSmall(c.shell.width, c.shell.height) {
 			var ok bool
 			if msg, ok = smallKey(msg); !ok {

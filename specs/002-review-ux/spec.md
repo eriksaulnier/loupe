@@ -158,8 +158,8 @@ On initial open or reload, the selected row SHOULD be the first pending finding,
 
 | Primary key | Compatibility alias | Action |
 | :--- | :--- | :--- |
-| `←` | `N` | Open the previous finding |
-| `→` | `n` | Open the next finding |
+| `←` | `[` | Open the previous finding |
+| `→` | `]`, `n` | Open the next finding |
 | `↑` | `k` | Scroll the finding document up |
 | `↓` | `j` | Scroll the finding document down |
 | `Page Up` | none | Scroll one page up |
@@ -207,7 +207,7 @@ The list footer MUST show `p publish` at all times; while the draft is not ready
 
 Compatibility aliases MUST appear in help but SHOULD NOT consume space in the persistent footer.
 
-When all hints do not fit on one line, the footer MUST drop the `+ next` suffixes and tighten its gaps, then wrap onto a second line between hints, before it gives up any hint. Only when two lines cannot hold every hint does it give way, and then it MUST preserve currently available decision actions and `? help` before optional navigation prose. Every body MUST be sized against its own view's footer, so a wrapped footer takes a row from the body rather than hiding the body's last row; help and the note and edit rows, which open and close without a layout, MUST NOT change that size. The confirmation keeps a one-line footer and moves its cancel sentence to the notice line instead, since that line is reserved anyway. Plain mode's answer legend wraps the same way. (Amended 2026-09-15: a review split beside an agent pane is about 71 columns wide, where a one-line footer dropped `q quit` and arrow navigation.)
+When all hints do not fit on one line, the footer MUST drop the `+ next` suffixes and tighten its gaps, then wrap onto a second line between hints, before it gives up any hint. Only when two lines cannot hold every hint does it give way, and then it MUST preserve currently available decision actions and `? help` before optional navigation prose. Every body MUST be sized against its own view's footer, so a wrapped footer takes a row from the body rather than hiding the body's last row; help and the note and edit rows, which open and close without a layout, MUST NOT change that size. The confirmation's footer names `n cancel` beside the publish key, and fits one line from 69 columns with Unicode glyphs and from 74 with ASCII ones (specs/054-forgiving-keys). Plain mode's answer legend wraps the same way. (Amended 2026-09-15: a review split beside an agent pane is about 71 columns wide, where a one-line footer dropped `q quit` and arrow navigation.)
 
 Representative pending-finding footer:
 
@@ -281,7 +281,7 @@ The choice screens MUST use `↑` and `↓` as their advertised controls and ret
 
 The final confirmation MUST remain visually distinct because it is the only screen that can publish.
 
-Only `y` and `p` MUST publish, and neither MAY publish while the message input holds the keyboard. `p` MUST publish only when the confirmation has a message input, because that screen opens with the input focused, so a `p` pressed by reflex is typed, not sent. Without an input the screen opens on its own keys, where a reflexive `p` would publish before anything was read, so there `p` MUST do nothing, neither publishing nor canceling. The footer MUST name the key as `y/p` where `p` publishes and as `y` where it does not. Scrolling and payload-toggle keys MUST retain their current behavior, and every other answer MUST continue to cancel without sending.
+Only `y` and `p` MUST publish, and neither MAY publish while the message input holds the keyboard. `p` MUST publish only when the confirmation has a message input, because that screen opens with the input focused, so a `p` pressed by reflex is typed, not sent. Without an input the screen opens on its own keys, where a reflexive `p` would publish before anything was read, so there `p` MUST do nothing, neither publishing nor canceling. The footer MUST name the key as `y/p` where `p` publishes and as `y` where it does not. Scrolling and payload-toggle keys MUST retain their current behavior. `n`, `q`, Ctrl-C and end of input MUST cancel without sending, and every other key MUST do nothing but say which keys answer (amended by specs/054-forgiving-keys, which replaced "every other answer cancels").
 
 The confirmation MUST continue to show the review as it will read, inline comments, moved-head information when applicable, and the exact request payload through the existing toggle.
 
@@ -308,7 +308,6 @@ These follow the agreed mockup and stay within the intent of the sections above.
 - The file diff marks a line carrying a finding with a one-cell glyph (`◆`, ASCII `*`) instead of the identifier, and its header names the finding under the cursor, with `+N` when the line carries more.
 - The list's counts line keeps three-space gaps when it fits; narrower, zero counts drop and the gaps shrink to two; if it still does not fit, it splits over two lines and the header grows with it.
 - Help taller than the window scrolls with `↑`, `↓`, `Page Up` and `Page Down`; its header then shows `lines a–b of n` and its footer adds `↑/↓ scroll`.
-- When `y/p publish this review` (or `y publish this review` without a message input) and `any other key cancels, nothing is sent` do not fit the confirmation footer together, the cancel sentence moves, word for word, to the line above it.
 - A disabled publish action wraps its reason under the description column rather than clipping it.
 - The final confirmation reads `Publish · Step 3 of 3` inside the review program's publish flow. Opened by `loupe publish`, whose flags replace the two choice steps, it reads `Publish` with no step count.
 
@@ -337,7 +336,7 @@ A future Herdr integration MUST be able to launch the unchanged command `loupe r
 - **UX-003**: Every full-screen view MUST use a flat, non-segmented header.
 - **UX-004**: Arrow keys MUST be the advertised navigation controls in lists, finding detail, file diff, and publish choices.
 - **UX-005**: Existing `j` and `k` movement MUST remain available as aliases outside text input.
-- **UX-006**: Existing `n` and `N` finding movement and `]` and `[` marker movement MUST remain available as aliases.
+- **UX-006**: `[` and `]` finding movement, `n` for the next finding, and `]` and `[` marker movement MUST remain available as aliases. `N` was dropped by specs/054-forgiving-keys, since letters no longer differ by case.
 - **UX-007**: Finding detail MUST use one viewport and MUST remove independent `J` and `K` hunk scrolling.
 - **UX-008**: The finding footer MUST show only actions valid for the current finding and note state.
 - **UX-009**: Successful settling decisions MUST continue to advance while preventing typeahead from deciding an unseen finding.
@@ -354,7 +353,7 @@ A future Herdr integration MUST be able to launch the unchanged command `loupe r
 4. **Given** an excluded general finding with no open note, **When** its detail renders, **Then** the footer shows restore and help but does not show accept, file, resolve, or dismiss.
 5. **Given** an open note, **When** its finding renders, **Then** resolve and dismiss are advertised.
 6. **Given** a long finding body and a long anchored range, **When** the human uses `↑`, `↓`, `Page Up`, and `Page Down`, **Then** every part of the body, hunk, suggested fix, and note thread is reachable through one viewport.
-7. **Given** a finding detail, **When** the human presses `←` or `→`, **Then** the preceding or following finding opens with the same boundary behavior as `N` or `n`.
+7. **Given** a finding detail, **When** the human presses `←` or `→`, **Then** the preceding or following finding opens with the same boundary behavior as `[` or `]`.
 8. **Given** a file diff, **When** the human presses `←` or `→`, **Then** the cursor jumps to the preceding or following finding marker with the same boundary behavior as `[` or `]`.
 9. **Given** a successful decision followed immediately by repeated decision input, **When** the next finding has not had time to be displayed, **Then** the repeated decision is dropped and no unseen finding is decided.
 10. **Given** a ready review, **When** the human enters publication, **Then** action and inline choices appear as steps without decorative boxes and final confirmation publishes only on the keys §5.5 names.

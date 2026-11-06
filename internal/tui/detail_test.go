@@ -327,12 +327,15 @@ func TestDetailScrollsAsOneDocument(t *testing.T) {
 		t.Errorf("f does not reach the last anchored line:\n%s", m.View().Content)
 	}
 	press(m, "esc")
-	for _, k := range []string{"J", "K"} {
-		before := m.View().Content
-		m.Update(runes(k))
-		if m.View().Content != before {
-			t.Errorf("%s still scrolls something", k)
-		}
+	// Caps lock or shift reads as the lowercase key, so J and K scroll as j and k do.
+	before := m.View().Content
+	m.Update(runes("J"))
+	if m.View().Content == before {
+		t.Error("J did not scroll")
+	}
+	m.Update(runes("K"))
+	if m.View().Content != before {
+		t.Error("K did not scroll back")
 	}
 }
 

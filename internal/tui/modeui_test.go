@@ -93,7 +93,7 @@ o | open the pull request in the browser |
 p | publish once the review is ready |
 ctrl+r | reload the draft from disk |`,
 		viewDetail: `Finding detail [detail]
-←/→ | previous / next finding | N/n
+←/→ | previous / next finding | [/], n for next
 ↑/↓ | scroll the finding | k/j
 PgUp/PgDn | scroll one page |
 space | scroll one page down |
@@ -269,26 +269,22 @@ func applyModel(t *testing.T, applier string) (*Model, string) {
 	return modelOf(t, dir, utf8Env, 100, 40), dir
 }
 
-// keysOf is the keys of hints, in order.
-func keysOf(hints []style.Hint) []string {
-	var out []string
-	for _, h := range hints {
-		out = append(out, h.Key)
-	}
-	return out
-}
-
-// On a local run the detail offers each decision key next to its shift, which adds the human's words: on an accepted
-// finding A, x and X stay. TestApplyVerbsAreAimedAtTheAgent pins the pending finding's hints.
-func TestApplyDetailPairsEachDecisionWithItsShift(t *testing.T) {
+// On a local run the detail offers each decision with its words: tweak beside accept, a reason beside reject, and on a
+// rejected finding its reason. TestApplyVerbsAreAimedAtTheAgent pins the pending finding's hints.
+func TestApplyDetailOffersTheWordedDecisions(t *testing.T) {
 	m, dir := applyModel(t, "Claude")
 	mustOpenFinding(t, m, "f-001")
 	outside(t, dir, accepted("f-001"))
 	if _, err := m.reload(); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.Join(keysOf(m.detailHints()), " "), "A x X s"; !strings.Contains(got, want) {
-		t.Errorf("accepted detail keys %q lack %q", got, want)
+	if got, want := hintText(m.detailHints()), "t:tweak x:reject c:reject with reason s:ask"; !strings.Contains(got, want) {
+		t.Errorf("accepted detail hints %q lack %q", got, want)
+	}
+	press(m, "x")
+	mustOpenFinding(t, m, "f-001")
+	if got, want := hintText(m.detailHints()), "u:restore c:reason"; !strings.Contains(got, want) {
+		t.Errorf("rejected detail hints %q lack %q", got, want)
 	}
 }
 
@@ -341,18 +337,18 @@ func TestApplyVerbsAreAimedAtTheAgent(t *testing.T) {
 		t.Errorf("list hints\n got %s\nwant %s", got, want)
 	}
 	mustOpenFinding(t, m, "f-001")
-	if got, want := hintText(m.detailHints()), "←→:finding ↑↓:scroll a:accept A:tweak x:reject X:reject with reason s:ask f:file l:list ?:help"; got != want {
+	if got, want := hintText(m.detailHints()), "←→:finding ↑↓:scroll a:accept t:tweak x:reject c:reject with reason s:ask f:file l:list ?:help"; got != want {
 		t.Errorf("detail hints\n got %s\nwant %s", got, want)
 	}
 	want := `Finding detail [detail]
-←/→ | previous / next finding | N/n
+←/→ | previous / next finding | [/], n for next
 ↑/↓ | scroll the finding | k/j
 PgUp/PgDn | scroll one page |
 space | scroll one page down |
 a | accept; resolves its open notes |
-A | tweak: accept with a note; enter accepts, esc cancels |
+t | tweak: accept with a note; enter accepts, esc cancels |
 x | reject; dismisses its open notes |
-X | reject with a reason; enter rejects, esc cancels |
+c | reject with a reason; enter rejects, esc cancels |
 s | ask: send back with a question; enter sends, esc cancels |
 u | restore or reinstate the finding |
 r / d | resolve / dismiss its open note |
@@ -406,9 +402,9 @@ func TestApplyNoticesUseTheAgentVerbs(t *testing.T) {
 		t.Errorf("x notice %q", m.notice)
 	}
 	mustOpenFinding(t, m, "f-002")
-	press(m, "A")
+	press(m, "t")
 	if view := screenText(m); !strings.Contains(view, "Tweak f-002") {
-		t.Errorf("A pane title:\n%s", view)
+		t.Errorf("t pane title:\n%s", view)
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	press(m, "s")

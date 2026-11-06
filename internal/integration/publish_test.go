@@ -128,7 +128,7 @@ func TestPublishEndToEnd(t *testing.T) {
 	s.WaitFor("new line")
 	s.Type(humanMessage)
 	s.Press("tab")
-	s.WaitFor("publish this review")
+	s.WaitFor("n cancel")
 	// The confirmation opens on the review as it reads; v shows the Markdown, which is what is compared byte for byte.
 	s.Press("v")
 	s.WaitFor("v payload")
@@ -431,7 +431,7 @@ func TestPublishJSONPrintsOneObject(t *testing.T) {
 	h.checkSends(0)
 
 	stdout, stderr, exit := h.Publish("", "y", runRef, "--action", "comment", "--json")
-	if exit != 0 || !strings.Contains(stderr, "publish this review") || strings.Contains(stdout, "publish this review") {
+	if exit != 0 || !strings.Contains(stderr, "n cancel") || strings.Contains(stdout, "n cancel") {
 		t.Fatalf("the confirmation did not go to stderr: exit %d stdout %q stderr %q", exit, stdout, stderr)
 	}
 	h.GitHubErr = errors.New("no GitHub credentials")
