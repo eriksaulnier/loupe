@@ -1042,13 +1042,15 @@ func TestConfirmInputThatFailsIsAnError(t *testing.T) {
 	if answer.Publish || err == nil || err.Error() != "read confirmation input: tty gone" {
 		t.Fatalf("answer %+v err %v", answer, err)
 	}
-	file, err := os.CreateTemp(t.TempDir(), "answers")
+	// A closed file is no terminal, so it is read as piped input that fails: epoll refuses it when the reader is made,
+	// and kqueue, which accepts it there, fails its first read. A regular file would not do on macOS, where kqueue
+	// never reports one readable at its end and the read waits forever.
+	closed, err := os.CreateTemp(t.TempDir(), "closed")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = file.Close() })
-	// A regular file is no terminal, so it is read as piped input, and epoll refuses a regular file.
-	if answer, err = runConfirm(t, file); answer.Publish || err == nil || !strings.HasPrefix(err.Error(), "read confirmation input: ") {
+	_ = closed.Close()
+	if answer, err = runConfirm(t, closed); answer.Publish || err == nil || !strings.HasPrefix(err.Error(), "read confirmation input: ") {
 		t.Fatalf("answer %+v err %v", answer, err)
 	}
 }
