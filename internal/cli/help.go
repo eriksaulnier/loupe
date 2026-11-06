@@ -115,6 +115,10 @@ func rootHelpText(s style.Style, root *cobra.Command) string {
 	fmt.Fprintf(&b, "\n%s\n\n", indent(paint(s.Bad, rootRule), "  "))
 
 	fmt.Fprintf(&b, "%s\n", s.Heading("commands"))
+	nameWidth := 0
+	for _, c := range root.Commands() {
+		nameWidth = max(nameWidth, len(c.Name()))
+	}
 	for _, group := range []string{groupAgent, groupAnyone, groupHuman} {
 		label := s.Dim.Render(group)
 		if group == groupHuman {
@@ -125,7 +129,7 @@ func rootHelpText(s style.Style, root *cobra.Command) string {
 			if i > 0 {
 				lead = strings.Repeat(" ", 6)
 			}
-			fmt.Fprintf(&b, "  %s  %s  %s\n", lead, style.Pad(s.Bold.Render(c.Name()), 8), c.Short)
+			fmt.Fprintf(&b, "  %s  %s  %s\n", lead, style.Pad(s.Bold.Render(c.Name()), nameWidth), c.Short)
 		}
 	}
 
