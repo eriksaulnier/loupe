@@ -85,6 +85,8 @@ list)
 	if [ -f "$state.installed" ]; then printf 'User packages:\n  %s\n    /p\n' "$(cat "$state.installed")"; else echo 'No packages installed.'; fi
 	;;
 remove)
+	# Real pi matches the package, not the source string, so any form of loupe's repository removes it.
+	case "$2" in *github.com/eriksaulnier/loupe | *github.com/eriksaulnier/loupe@*) ;; *) exit 1 ;; esac
 	[ -f "$state.installed" ] || exit 1
 	rm -f "$state.installed"
 	;;

@@ -48,7 +48,7 @@ The check is against constitution 4.0.0, after the amendment that is the first c
 | List the source | `claude plugin marketplace list --json` returns `[{name, source: "github"\|"directory", repo, ref, path}]` | `codex plugin marketplace list --json` returns `{marketplaces: [{name, marketplaceSource: {sourceType: "git"\|"local", source}}]}`, with no ref | Not needed |
 | Add at the same ref while present | exit 0, "already on disk" | exit 0, "already added from …#v0.21.0" | `pi install` at any tag exits 0 |
 | Add at another ref while present | exit 1, "source doesn't match its extraKnownMarketplaces entry" | exit 1, "already added from a different source; remove it before adding" | Replaces the earlier entry, whatever its URL form |
-| Remove the marketplace | Also uninstalls `loupe@loupe`. Exit 1 when absent | Also uninstalls `loupe@loupe`. Exit 1 when absent | Not needed |
+| Remove the marketplace | Also uninstalls `loupe@loupe`. Exit 1 when absent | Also uninstalls `loupe@loupe`. Exit 1 when absent | `pi remove` with any form of the repository, tagged or not, removes the package. Exit 1 when absent |
 | Install when already installed | `claude plugin install loupe@loupe` exits 0 | `codex plugin add loupe@loupe` exits 0 | Not needed |
 | Pinned form | `claude plugin marketplace add eriksaulnier/loupe@v0.21.0` | `codex plugin marketplace add eriksaulnier/loupe@v0.21.0` | `pi install git:github.com/eriksaulnier/loupe@v0.21.0` |
 
@@ -93,7 +93,7 @@ The check is against constitution 4.0.0, after the amendment that is the first c
 - **Help group.** Decision: `human`, beside `review` and `publish`. It does not require a terminal. Rationale: updating is a person's choice (spec assumption). A refusal without a terminal would break a script that a person writes on purpose.
 - **Uninstall.** Decision: `install.sh` gains `LOUPE_UNINSTALL=1`, an internal mode that `loupe uninstall` sets.
   - It removes the Claude Code and Codex marketplace named `loupe` unless its source is a local directory. Removing the marketplace also uninstalls the plugin.
-  - For Pi, it runs `pi remove` with each source that `pi list` shows for `github.com/eriksaulnier/loupe`.
+  - For Pi, when `pi list` shows `github.com/eriksaulnier/loupe`, it runs `pi remove git:github.com/eriksaulnier/loupe`, with no tag.
   - Then it removes `$LOUPE_INSTALL_DIR/loupe` and prints the data root. It downloads nothing.
   - `loupe uninstall` fetches the verified script of its own version, `download/v<current>/install.sh`, rather than the latest one. It shares `verifiedScript`, `installDir` and `runInstallScript` with `update`.
 
