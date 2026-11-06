@@ -280,6 +280,18 @@ func TestUninstallRefusals(t *testing.T) {
 			t.Errorf("fix = %q, want mise unuse", fix)
 		}
 	})
+	t.Run("directory not writable", func(t *testing.T) {
+		f := newSelfUpdateFixture(t, "0.21.0")
+		if err := os.Chmod(f.dir, 0o555); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(f.dir, 0o755) })
+		errObj := wantCode(t, Execute(f.deps, []string{"uninstall", "--json"}), f.streams, refusal.UpdateUnsupported)
+		fix, _ := errObj["fix"].(string)
+		if !strings.Contains(fix, "remove "+filepath.Join(f.dir, "loupe")) || strings.Contains(fix, "reinstall") {
+			t.Errorf("fix = %q, want removing the binary, not reinstalling", fix)
+		}
+	})
 	t.Run("script fails", func(t *testing.T) {
 		f := newSelfUpdateFixture(t, "0.21.0")
 		f.releases.publish("0.21.0", stubScript(f.ran, 1))

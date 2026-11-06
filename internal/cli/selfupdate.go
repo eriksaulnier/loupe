@@ -68,7 +68,9 @@ func runSelfUpdate(cmd *cobra.Command, deps Deps) error {
 		r.Details = map[string]any{"reason": "not-release"}
 		return r
 	}
-	dir, err := installDir(deps, "mise use -g github:eriksaulnier/loupe@latest")
+	dir, err := installDir(deps, "mise use -g github:eriksaulnier/loupe@latest", func(dir string) string {
+		return "run it as a user who can write " + dir + ", or reinstall with " + curlInstall + " into a directory you own"
+	})
 	if err != nil {
 		return err
 	}
@@ -134,7 +136,9 @@ func runUninstall(cmd *cobra.Command, deps Deps) error {
 		r.Details = map[string]any{"reason": "not-release"}
 		return r
 	}
-	dir, err := installDir(deps, "mise unuse -g github:eriksaulnier/loupe, then remove the plugins as "+pluginRemoval+" shows")
+	dir, err := installDir(deps, "mise unuse -g github:eriksaulnier/loupe, then remove the plugins as "+pluginRemoval+" shows", func(dir string) string {
+		return "remove " + filepath.Join(dir, "loupe") + " as a user who can write " + dir + ", then the plugins as " + pluginRemoval + " shows"
+	})
 	if err != nil {
 		return err
 	}
@@ -158,7 +162,7 @@ func runUninstall(cmd *cobra.Command, deps Deps) error {
 }
 
 // installDir is the directory of the file that runs, through any symlink, so the script replaces or removes that file.
-func installDir(deps Deps, miseFix string) (string, error) {
+func installDir(deps Deps, miseFix string, notWritableFix func(dir string) string) (string, error) {
 	executable := deps.Executable
 	if executable == nil {
 		executable = os.Executable
@@ -182,7 +186,7 @@ func installDir(deps Deps, miseFix string) (string, error) {
 	// set themselves, so the check runs here first.
 	probe, err := os.CreateTemp(dir, ".loupe-probe-")
 	if err != nil {
-		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe cannot write %s, which holds the running binary", dir), "run it as a user who can write "+dir+", or reinstall with "+curlInstall+" into a directory you own")
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe cannot write %s, which holds the running binary", dir), notWritableFix(dir))
 		r.Details = map[string]any{"reason": "not-writable"}
 		return "", r
 	}
