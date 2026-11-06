@@ -70,8 +70,11 @@ func (m *Model) updateReturn(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 		// Only a changed-draft refusal tells the human the draft moved, so only then does the next enter seal the
 		// version now on screen. After any other refusal a change still has to be refused and shown first.
-		if r.Code == refusal.Changed {
+		switch r.Code {
+		case refusal.Changed:
 			m.returnVersion = m.version
+		case refusal.NotReady:
+			m.cursor = initialCursor(m.draft, m.order)
 		}
 		m.say(style.Warn, refusalNotice(err))
 		m.sizeNote(0)

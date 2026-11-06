@@ -352,3 +352,34 @@ func TestApplyReturnRefusalSelectsTheFindingWithAnOpenNote(t *testing.T) {
 		t.Errorf("cursor on %s, want %s", got, id)
 	}
 }
+
+// The return step seals on enter, so a draft that stops being ready while it is open is refused there rather than by
+// p, and the cursor moves to the finding that blocks it all the same.
+func TestApplyReturnStepRefusalSelectsTheFindingWithAnOpenNote(t *testing.T) {
+	m, dir := readyApplyModel(t, "Claude")
+	id := m.order[len(m.order)-1].ID
+	m.cursor = 0
+	press(m, "p")
+	if !m.noting {
+		t.Fatal("p on a ready draft did not open the return step")
+	}
+	outside(t, dir, func(d *draft.Draft) error {
+		if _, err := draft.SendBack(d, id, "Is this real?", testNow); err != nil {
+			return err
+		}
+		for i := range d.Findings {
+			if d.Findings[i].ID == id {
+				d.Findings[i].Included = false
+			}
+		}
+		return nil
+	})
+	m.Update(enterKey)
+	m.Update(enterKey)
+	if want := "open notes n-001 (" + id + ", withdrawn)"; returned(t, dir) || !strings.Contains(m.notice, want) {
+		t.Fatalf("enter with an open note on a withdrawn finding: returned %v notice %q, want %q", returned(t, dir), m.notice, want)
+	}
+	if got := m.order[m.cursor].ID; got != id {
+		t.Errorf("cursor on %s, want %s", got, id)
+	}
+}
