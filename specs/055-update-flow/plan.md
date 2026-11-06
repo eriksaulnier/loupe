@@ -91,6 +91,13 @@ The check is against constitution 4.0.0, after the amendment that is the first c
 - **Version check.** Decision: export `updatecheck.IsRelease(version string) bool`, a thin wrapper over `parse`. `Enabled` keeps its own environment rules. Rationale: `update` needs the version rule without the `CI` rule, because a person may run `loupe update` in a CI shell on purpose.
 - **Warning text.** Decision: the text becomes `loupe 0.23.0 is available, you have 0.22.0. Run loupe update`, in capture's `warning:` line and in the review notice. `InstallDocs` stays for the refusal fixes. This amends spec 048 FR-006. Rationale: the warning should name a command the person can run, and `update` itself refuses with the right fix for a mise install.
 - **Help group.** Decision: `human`, beside `review` and `publish`. It does not require a terminal. Rationale: updating is a person's choice (spec assumption). A refusal without a terminal would break a script that a person writes on purpose.
+- **Uninstall.** Decision: `install.sh` gains `LOUPE_UNINSTALL=1`, an internal mode that `loupe uninstall` sets.
+  - It removes the Claude Code and Codex marketplace named `loupe` unless its source is a local directory. Removing the marketplace also uninstalls the plugin.
+  - For Pi, it runs `pi remove` with each source that `pi list` shows for `github.com/eriksaulnier/loupe`.
+  - Then it removes `$LOUPE_INSTALL_DIR/loupe` and prints the data root. It downloads nothing.
+  - `loupe uninstall` fetches the verified script of its own version, `download/v<current>/install.sh`, rather than the latest one. It shares `verifiedScript`, `installDir` and `runInstallScript` with `update`.
+
+  Rationale: the script stays the one place that knows what an install adds. The cost is that an uninstall needs the network.
 - **Identifier names.** Decision: `newSelfUpdateCmd`, `selfupdate.go`. Rationale: `internal/cli` already declares `update` as the golden flag.
 
 ## Files

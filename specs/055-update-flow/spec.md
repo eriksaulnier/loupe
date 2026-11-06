@@ -26,6 +26,7 @@
 - Q: Auto-update, an update command, or rerunning the script? → A: Owner: an explicit `loupe update` command, plus the existing warning. No silent auto-update. Capture runs inside an agent session, and an update there would swap the skill under a running agent and run downloaded code with no human present.
 - Q: How does this square with the constitution? → A: Owner: an amendment to Principles I and III, rather than a per-feature exception. It is MAJOR, because widening Principle III redefines it, as 3.0.0 did for Principle II.
 - Q: How does `loupe update` find the latest release? → A: From the latest release's `checksums.txt`, as the script does. This needs no token and meets no rate limit.
+- Q: Is there an uninstall? → A: Owner: yes, a `loupe uninstall` command (2026-11-06). It runs the verified script of its own release in an uninstall mode, so the knowledge of what an install adds stays in one file. It needs the network for that reason.
 - Q: Which script does `loupe update` run? → A: The one attached to the release it installs, verified against that release's checksums. A copy built into the binary would freeze the update path, so a fix to the script would never reach a person who updates.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -89,6 +90,22 @@ One agent's plugin step fails. The binary stays installed, the other agents stil
 1. **Given** one agent whose plugin command fails, **When** the script runs, **Then** the binary is installed, the other agents are handled, the error names the failing agent with its manual commands, and the script exits 1.
 2. **Given** a checksum that does not match, **When** `loupe update` runs, **Then** it refuses before it runs anything, and the installed binary is unchanged.
 
+---
+
+### User Story 5 - Removing loupe removes what the install added (Priority: P3)
+
+A person runs `loupe uninstall`. The binary and each agent's loupe plugin go away. The review runs stay, and the output says where they are.
+
+**Why this priority**: The install now changes three agents' plugin setups, so a person cannot easily undo it by hand.
+
+**Independent Test**: A test runs the script's uninstall mode with stand-in agents that hold a plugin, and checks the calls and the removed binary. A second test runs `loupe uninstall` against a fake release.
+
+**Acceptance Scenarios**:
+
+1. **Given** the binary and the plugin in all three agents, **When** `loupe uninstall` runs, **Then** the binary and each plugin are removed, and the output names the data root that still holds the runs.
+2. **Given** an agent without the loupe plugin, **When** the uninstall runs, **Then** that agent is left alone and the uninstall succeeds.
+3. **Given** a Claude Code or Codex marketplace that points at a local directory, **When** the uninstall runs, **Then** it is left alone and the output says so.
+
 ### Edge Cases
 
 - A Claude Code marketplace named `loupe` with a local directory source comes from `mise run link`. The script leaves it alone and says so, and `mise run unlink` removes it before it runs the script.
@@ -116,6 +133,9 @@ One agent's plugin step fails. The binary stays installed, the other agents stil
 - **FR-011**: `loupe update` MUST refuse, naming the reason and the fix, for a build that is not a release, for a binary under a mise install, for a lookup or download that fails, and for a script that exits non-zero.
 - **FR-012**: The script's output MUST go to stderr. With `--json`, stdout MUST carry one result object that names the old and new versions.
 - **FR-013**: The update warning MUST name the running version, the latest version and `loupe update`.
+- **FR-015**: `loupe uninstall` MUST run the verified script of its own release in uninstall mode, for the directory of the resolved running binary, and MUST refuse a build that is not a release and a binary under a mise install, as `update` does.
+- **FR-016**: The uninstall mode MUST remove the binary and the loupe plugin from each of Claude Code, Codex and Pi that holds it, and MUST NOT change a local-directory marketplace.
+- **FR-017**: The uninstall MUST NOT delete the data root or any run, and MUST print the data root's path.
 - **FR-014**: loupe MUST NOT update itself or a plugin without a person or an agent running `loupe update` or the script.
 
 ## Success Criteria *(mandatory)*

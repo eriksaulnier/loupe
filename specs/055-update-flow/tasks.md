@@ -70,6 +70,21 @@
   - `LOUPE_NO_PLUGINS` in the environment table, as an install script variable
 - [ ] T017 Run `mise run check`. Then commit as `feat(update): add loupe update`.
 
+## Phase 4b: User Story 5 (P3)
+
+**Goal**: `loupe uninstall` removes the binary and the plugins, and leaves the runs in place.
+
+- [ ] T023 [US5] Write failing tests in `internal/cli/install_plugins_test.go` for `LOUPE_UNINSTALL=1`. Cover these cases:
+  - each agent that holds the plugin is removed, through Claude Code and Codex `marketplace remove loupe` and Pi `remove <its source>`
+  - an agent without the plugin is not changed
+  - a local-directory marketplace is skipped
+  - the binary is removed
+  - the data root is printed
+  - nothing is downloaded
+- [ ] T024 [US5] Implement the uninstall mode in `install.sh`. Verify that `pi remove` works with real Pi.
+- [ ] T025 [US5] Write failing tests in `internal/cli/selfupdate_test.go` for `loupe uninstall`. It runs its own version's verified script with `LOUPE_UNINSTALL=1`, and the refusals match those of `update`. Then implement it in `internal/cli/selfupdate.go`.
+- [ ] T026 [US5] Add `loupe uninstall` to `specs/001-loupe-v1/contracts/cli.md`, then commit as `feat(uninstall): add loupe uninstall`.
+
 ## Phase 5: Docs and verification
 
 - [ ] T018 [P] `README.md` Install: one curl command installs the binary and the plugin for each agent found. Updating is `loupe update`. Drop the manual Claude Code block.
