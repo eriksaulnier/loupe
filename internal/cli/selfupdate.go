@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 	"github.com/eriksaulnier/loupe/internal/run"
@@ -84,7 +87,7 @@ func runSelfUpdate(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	if err := runInstallScript(ctx, deps, script, latest, "loupe update", "LOUPE_VERSION="+latest, "LOUPE_INSTALL_DIR="+dir); err != nil {
+	if err := runInstallScript(ctx, deps, script, latest, "loupe update", "LOUPE_VERSION="+latest, "LOUPE_INSTALL_DIR="+dir, "LOUPE_UNINSTALL="); err != nil {
 		return err
 	}
 	if wantJSON(cmd) {
@@ -107,7 +110,8 @@ stay in the data root, and uninstall prints where it is.
 uninstall downloads the install.sh of this release, checks it against the release's checksums.txt,
 and runs it in its uninstall mode for the directory that holds this binary. That mode downloads
 nothing. A marketplace that points at a local directory is left alone. When a plugin cannot be
-removed, the binary stays, so uninstall can run again. The script's output goes to stderr.
+removed, the binary stays, so uninstall can run again. A loupe on PATH that is a symlink to the
+removed binary is removed too. The script's output goes to stderr.
 
 A build that is not a release, and a binary that mise installed, are refused with the command
 that removes them.
@@ -151,14 +155,47 @@ func runUninstall(cmd *cobra.Command, deps Deps) error {
 	if err != nil {
 		return err
 	}
+	link := linkOnPath(filepath.Join(dir, "loupe"))
 	if err := runInstallScript(ctx, deps, script, current, "loupe uninstall", "LOUPE_UNINSTALL=1", "LOUPE_INSTALL_DIR="+dir); err != nil {
 		return err
 	}
+	removeDangling(deps, link)
 	if wantJSON(cmd) {
 		return writeSuccess(deps.Stdout, commandName(cmd), invocation{}, nil, map[string]any{"removed": current, "dataRoot": root})
 	}
 	_, err = fmt.Fprintf(deps.Stdout, "Removed loupe %s. Your review runs stay in %s\n", current, root)
 	return err
+}
+
+// linkOnPath is the loupe that PATH finds when it is a symlink to target, or nothing.
+func linkOnPath(target string) string {
+	found, err := exec.LookPath("loupe")
+	if err != nil {
+		return ""
+	}
+	if info, err := os.Lstat(found); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(found); err != nil || resolved != target {
+		return ""
+	}
+	return found
+}
+
+// removeDangling removes link once the binary it reached is gone, so the person's shell finds no loupe at all.
+func removeDangling(deps Deps, link string) {
+	if link == "" {
+		return
+	}
+	if _, err := os.Stat(link); !errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+	es := deps.errStyle()
+	if err := os.Remove(link); err != nil {
+		_, _ = fmt.Fprintf(deps.Stderr, "%s could not remove the symlink %s: %v\n", es.Emphasis(es.Warn).Render("warning:"), link, err)
+		return
+	}
+	_, _ = fmt.Fprintf(deps.Stderr, "Removed the symlink %s\n", link)
 }
 
 // installDir is the directory of the file that runs, through any symlink, so the script replaces or removes that file.
@@ -184,15 +221,10 @@ func installDir(deps Deps, miseFix string, notWritableFix func(dir string) strin
 	dir := filepath.Dir(path)
 	// The script refuses an unwritable directory with a fix that names LOUPE_INSTALL_DIR, which update and uninstall
 	// set themselves, so the check runs here first.
-	probe, err := os.CreateTemp(dir, ".loupe-probe-")
-	if err != nil {
-		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe cannot write %s, which holds the running binary", dir), notWritableFix(dir))
+	if err := unix.Access(dir, unix.W_OK); err != nil {
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe cannot write %s, which holds the running binary: %v", dir, err), notWritableFix(dir))
 		r.Details = map[string]any{"reason": "not-writable"}
 		return "", r
-	}
-	_ = probe.Close()
-	if err := os.Remove(probe.Name()); err != nil {
-		return "", fmt.Errorf("remove %s: %w", probe.Name(), err)
 	}
 	return dir, nil
 }
@@ -265,17 +297,11 @@ func download(ctx context.Context, url, releases string) ([]byte, error) {
 }
 
 func runInstallScript(ctx context.Context, deps Deps, script []byte, version, retry string, env ...string) error {
-	tmp, err := os.MkdirTemp("", "loupe-update-")
-	if err != nil {
-		return fmt.Errorf("create a temporary directory: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(tmp) }()
-	path := filepath.Join(tmp, installAsset)
-	if err := os.WriteFile(path, script, 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	c := exec.CommandContext(ctx, "sh", path)
+	// sh reads the script from stdin, as under curl | sh. The script calls main on its last line, so sh has read all
+	// of it before any command that could read stdin starts.
+	c := exec.CommandContext(ctx, "sh", "-s")
 	c.Env = append(os.Environ(), env...)
+	c.Stdin = bytes.NewReader(script)
 	c.Stdout, c.Stderr = deps.Stderr, deps.Stderr
 	if err := c.Run(); err != nil {
 		var exit *exec.ExitError

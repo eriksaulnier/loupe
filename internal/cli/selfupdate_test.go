@@ -85,6 +85,8 @@ func newSelfUpdateFixture(t *testing.T, version string) *selfUpdateFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// uninstall looks for loupe on PATH, so a developer's own install MUST NOT reach the test.
+	t.Setenv("PATH", "/usr/bin:/bin")
 	f := &selfUpdateFixture{releases: newReleaseServer(t), dir: resolved, ran: filepath.Join(root, "ran")}
 	f.deps, f.streams = testDeps(t, map[string]string{"LOUPE_HOME": filepath.Join(root, "home")})
 	f.deps.Version = version
@@ -297,4 +299,187 @@ func TestUninstallRefusals(t *testing.T) {
 		f.releases.publish("0.21.0", stubScript(f.ran, 1))
 		wantCode(t, Execute(f.deps, []string{"uninstall", "--json"}), f.streams, refusal.InstallFailed)
 	})
+}
+
+// An exported LOUPE_UNINSTALL MUST NOT turn an update into an uninstall.
+func TestUpdateClearsAnInheritedUninstall(t *testing.T) {
+	t.Setenv("LOUPE_UNINSTALL", "1")
+	f := newSelfUpdateFixture(t, "0.21.0")
+	f.releases.publish("0.22.0", stubScript(f.ran, 0))
+	if code := Execute(f.deps, []string{"update"}); code != 0 {
+		t.Fatalf("exit %d; stderr %q", code, f.streams.stderr.String())
+	}
+	if got, want := f.ranWith(t), "0.22.0|"+f.dir+"|"; got != want {
+		t.Errorf("script ran with %q, want %q", got, want)
+	}
+}
+
+// A symlink on PATH to the removed binary would be left dangling, so uninstall removes it too.
+func TestUninstallRemovesASymlinkLeftDangling(t *testing.T) {
+	f := newSelfUpdateFixture(t, "0.21.0")
+	link, err := f.deps.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", filepath.Dir(link)+":/usr/bin:/bin")
+	f.releases.publish("0.21.0", "#!/bin/sh\nrm -f \"$LOUPE_INSTALL_DIR/loupe\"\n")
+	if code := Execute(f.deps, []string{"uninstall"}); code != 0 {
+		t.Fatalf("exit %d; stderr %q", code, f.streams.stderr.String())
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Errorf("the symlink %s is still there: %v", link, err)
+	}
+	if !strings.Contains(f.streams.stderr.String(), "Removed the symlink "+link) {
+		t.Errorf("stderr does not name the symlink: %q", f.streams.stderr.String())
+	}
+}
+
+// A symlink that still reaches a file is not loupe's to remove.
+func TestUninstallKeepsASymlinkThatStillResolves(t *testing.T) {
+	f := newSelfUpdateFixture(t, "0.21.0")
+	link, err := f.deps.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", filepath.Dir(link)+":/usr/bin:/bin")
+	f.releases.publish("0.21.0", stubScript(f.ran, 0))
+	if code := Execute(f.deps, []string{"uninstall"}); code != 0 {
+		t.Fatalf("exit %d; stderr %q", code, f.streams.stderr.String())
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Errorf("the symlink was removed: %v", err)
+	}
+}
+
+func TestReleasesDefaultsToGitHub(t *testing.T) {
+	if got := (Deps{}).releases(); got != DefaultReleases {
+		t.Errorf("releases = %q", got)
+	}
+}
+
+// Each case reaches one failure of finding, downloading or running the script, and names where it stopped.
+func TestSelfUpdateFailures(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		setup   func(t *testing.T, f *selfUpdateFixture)
+		message string
+	}{
+		{name: "no running binary", command: "update", message: "find the running loupe", setup: func(t *testing.T, f *selfUpdateFixture) {
+			f.deps.Executable = func() (string, error) { return "", fmt.Errorf("no such process") }
+		}},
+		{name: "running binary gone", command: "update", message: "resolve the running loupe", setup: func(t *testing.T, f *selfUpdateFixture) {
+			f.deps.Executable = func() (string, error) { return filepath.Join(f.dir, "gone"), nil }
+		}},
+		{name: "the test binary by default", command: "update", message: "HTTP 404", setup: func(t *testing.T, f *selfUpdateFixture) {
+			f.deps.Executable = nil
+		}},
+		{name: "a release without its own checksums", command: "update", message: "v0.22.0/checksums.txt: HTTP 404", setup: func(t *testing.T, f *selfUpdateFixture) {
+			f.releases.publish("0.22.0", stubScript(f.ran, 0))
+			delete(f.releases.files, "download/v0.22.0/checksums.txt")
+		}},
+		{name: "a script the checksums name but the release lacks", command: "update", message: "install.sh: HTTP 404", setup: func(t *testing.T, f *selfUpdateFixture) {
+			f.releases.publish("0.22.0", stubScript(f.ran, 0))
+			delete(f.releases.files, "download/v0.22.0/install.sh")
+		}},
+		{name: "an address that does not parse", command: "update", message: "build the request", setup: func(t *testing.T, f *selfUpdateFixture) {
+			f.deps.Releases = "%zz"
+		}},
+		{name: "a server that is not there", command: "update", message: "could not download", setup: func(t *testing.T, f *selfUpdateFixture) {
+			srv := httptest.NewServer(http.NotFoundHandler())
+			srv.Close()
+			f.deps.Releases = srv.URL + "/releases"
+		}},
+		{name: "a body cut short", command: "update", message: "could not download", setup: func(t *testing.T, f *selfUpdateFixture) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Length", "100")
+				_, _ = w.Write([]byte("short"))
+			}))
+			t.Cleanup(srv.Close)
+			f.deps.Releases = srv.URL + "/releases"
+		}},
+		{name: "no sh", command: "update", message: "run the install script", setup: func(t *testing.T, f *selfUpdateFixture) {
+			f.releases.publish("0.22.0", stubScript(f.ran, 0))
+			t.Setenv("PATH", "")
+		}},
+		{name: "uninstall with no data root", command: "uninstall", message: "data root", setup: func(t *testing.T, f *selfUpdateFixture) {
+			f.deps.Getenv = func(string) string { return "" }
+		}},
+		{name: "uninstall with no release", command: "uninstall", message: "HTTP 404"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newSelfUpdateFixture(t, "0.21.0")
+			if c.setup != nil {
+				c.setup(t, f)
+			}
+			if code := Execute(f.deps, []string{c.command, "--json"}); code == 0 {
+				t.Fatalf("exit 0, want a failure; stdout %q", f.streams.stdout.String())
+			}
+			if out := f.streams.stdout.String() + f.streams.stderr.String(); !strings.Contains(out, c.message) {
+				t.Errorf("output does not say %q:\n%s", c.message, out)
+			}
+		})
+	}
+}
+
+// A loupe on PATH that is not a symlink to the target is someone else's.
+func TestLinkOnPathOnlyNamesASymlinkToTheTarget(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target", "loupe")
+	other := filepath.Join(root, "other", "loupe")
+	for _, path := range []string{target, other} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeExecutable(t, path, standInBinary("0.21.0"))
+	}
+	resolvedTarget, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, setup := range map[string]func(dir string) (want bool){
+		"no loupe":         func(string) bool { return false },
+		"a regular file":   func(dir string) bool { writeExecutable(t, filepath.Join(dir, "loupe"), ""); return false },
+		"a link elsewhere": func(dir string) bool { mustSymlink(t, other, filepath.Join(dir, "loupe")); return false },
+		"a link to target": func(dir string) bool { mustSymlink(t, target, filepath.Join(dir, "loupe")); return true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			want := setup(dir)
+			t.Setenv("PATH", dir)
+			got := linkOnPath(resolvedTarget)
+			if want && got != filepath.Join(dir, "loupe") || !want && got != "" {
+				t.Errorf("linkOnPath = %q, want a link: %v", got, want)
+			}
+		})
+	}
+}
+
+func mustSymlink(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A dangling symlink loupe cannot remove is named, and the uninstall still succeeds, since the binary is gone.
+func TestUninstallWarnsWhenTheSymlinkCannotGo(t *testing.T) {
+	f := newSelfUpdateFixture(t, "0.21.0")
+	link, err := f.deps.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", filepath.Dir(link)+":/usr/bin:/bin")
+	if err := os.Chmod(filepath.Dir(link), 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(link), 0o755) })
+	f.releases.publish("0.21.0", "#!/bin/sh\nrm -f \"$LOUPE_INSTALL_DIR/loupe\"\n")
+	if code := Execute(f.deps, []string{"uninstall"}); code != 0 {
+		t.Fatalf("exit %d; stderr %q", code, f.streams.stderr.String())
+	}
+	if !strings.Contains(f.streams.stderr.String(), "warning: could not remove the symlink "+link) {
+		t.Errorf("stderr does not warn about the symlink: %q", f.streams.stderr.String())
+	}
 }

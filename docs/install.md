@@ -36,7 +36,7 @@ sh install.sh
 
 To update the binary and the plugins together, run `loupe update`. It downloads the latest release's `install.sh`, checks it against that release's `checksums.txt`, and runs it for the directory that holds `loupe`. It needs no GitHub token. Running the curl command again does the same.
 
-To remove loupe, run `loupe uninstall`. It removes the binary and the loupe plugin from each agent, and leaves your review runs in the data root, whose path it prints.
+To remove loupe, run `loupe uninstall`. It removes the binary, a symlink on your `PATH` that pointed at it, and the loupe plugin from each agent. It leaves your review runs in the data root, whose path it prints.
 
 > [!NOTE]
 > The checksum comes from the same release as the archive, so it detects a corrupt download, not a compromised release.
