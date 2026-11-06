@@ -43,6 +43,9 @@ const (
 	ReviewOpen         Code = "review-open"
 	Returned           Code = "returned"
 	WrongMode          Code = "wrong-mode"
+	UpdateUnsupported  Code = "update-unsupported"
+	Download           Code = "download"
+	InstallFailed      Code = "install-failed"
 	Internal           Code = "internal"
 )
 

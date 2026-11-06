@@ -158,3 +158,11 @@ func TestRefreshIgnoresAnUnwritableCache(t *testing.T) {
 		t.Errorf("Cached = %q, want nothing", got)
 	}
 }
+
+func TestIsRelease(t *testing.T) {
+	for version, want := range map[string]bool{"0.19.0": true, "dev": false, "0.22.0-rc.1": false, "v0.19.0-3-gabc1234": false} {
+		if got := IsRelease(version); got != want {
+			t.Errorf("IsRelease(%q) = %v, want %v", version, got, want)
+		}
+	}
+}

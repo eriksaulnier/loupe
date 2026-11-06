@@ -80,7 +80,7 @@ The check is against constitution 4.0.0, after the amendment that is the first c
   - `LOUPE_VERSION=<v>`
   - `LOUPE_INSTALL_DIR=<dir of filepath.EvalSymlinks(os.Executable())>`
 
-  `Stdout` and `Stderr` are both `deps.Stderr`, and `Stdin` is empty. The process runs through a `Deps.Exec` seam that defaults to `os/exec`. Rationale: the release script sets `LOUPE_VERSION`, so the script and the archive come from the same release. Resolving the symlink replaces the file that actually runs.
+  `Stdout` and `Stderr` are both `deps.Stderr`, and `Stdin` is empty. Tests run the real `sh` against a stand-in script, so the process needs no seam. Rationale: the release script sets `LOUPE_VERSION`, so the script and the archive come from the same release. Resolving the symlink replaces the file that actually runs.
 - **The executable.** Decision: `Deps.Executable` defaults to `os.Executable` and is resolved through `filepath.EvalSymlinks`. A path that contains `/mise/installs/` refuses. Rationale: tests need a chosen path, and mise's layout is `~/.local/share/mise/installs/<tool>/<version>/`.
 - **Refusals.** Decision: three new codes.
   - `update-unsupported` with `details.reason` set to `not-release` or `mise`. The fix is the curl command, or `mise use -g github:eriksaulnier/loupe@latest`.
@@ -89,7 +89,7 @@ The check is against constitution 4.0.0, after the amendment that is the first c
 
   Rationale: each code needs a different fix.
 - **Version check.** Decision: export `updatecheck.IsRelease(version string) bool`, a thin wrapper over `parse`. `Enabled` keeps its own environment rules. Rationale: `update` needs the version rule without the `CI` rule, because a person may run `loupe update` in a CI shell on purpose.
-- **Warning text.** Decision: the text becomes `loupe 0.23.0 is available, you have 0.22.0. Run loupe update`, in capture's `warning:` line and in the review notice. `InstallDocs` stays for the refusal fixes. This amends spec 048 FR-006. Rationale: the warning should name a command the person can run, and `update` itself refuses with the right fix for a mise install.
+- **Warning text.** Decision: the text becomes `loupe 0.23.0 is available, you have 0.22.0. Run loupe update`, in capture's `warning:` line and in the review notice. `InstallDocs` gives way to `Command`, since the refusal fixes name the curl command. This amends spec 048 FR-006. Rationale: the warning should name a command the person can run, and `update` itself refuses with the right fix for a mise install.
 - **Help group.** Decision: `human`, beside `review` and `publish`. It does not require a terminal. Rationale: updating is a person's choice (spec assumption). A refusal without a terminal would break a script that a person writes on purpose.
 - **Uninstall.** Decision: `install.sh` gains `LOUPE_UNINSTALL=1`, an internal mode that `loupe uninstall` sets.
   - It removes the Claude Code and Codex marketplace named `loupe` unless its source is a local directory. Removing the marketplace also uninstalls the plugin.
@@ -110,7 +110,7 @@ The check is against constitution 4.0.0, after the amendment that is the first c
 | `.goreleaser.yaml` | `install.sh` in `release.extra_files` and `checksum.extra_files` |
 | `internal/updatecheck/update.go` | `IsRelease`, and the warning text |
 | `internal/cli/selfupdate.go` | The `update` command |
-| `internal/cli/root.go` | `Deps.Releases`, `Deps.Executable`, `Deps.Exec`, and the command in the `human` group |
+| `internal/cli/root.go` | `Deps.Releases`, `Deps.Executable`, and the command in the `human` group |
 | `internal/refusal/refusal.go` | `update-unsupported`, `download`, `install-failed` |
 | `internal/cli/capture.go`, `capture_local.go`, `review.go` | The new warning text |
 | `specs/001-loupe-v1/contracts/cli.md` | The `update` command, its three codes, `LOUPE_NO_PLUGINS`, and the amended `update-available` text |

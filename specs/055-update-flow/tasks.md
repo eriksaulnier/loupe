@@ -54,7 +54,7 @@
   - a script that exits 3, refused as `install-failed` with `exitStatus` 3
   - `--json`, which prints one object with `from` and `to` while the script's output goes to stderr
   - `--help` without a data root
-- [ ] T012 [US2] Implement `internal/cli/selfupdate.go`. Add `Deps.Releases`, `Deps.Executable` and `Deps.Exec` to `internal/cli/root.go`, with their defaults, and register `newSelfUpdateCmd` in the `human` group. Make T011 pass.
+- [ ] T012 [US2] Implement `internal/cli/selfupdate.go`. Add `Deps.Releases` and `Deps.Executable` to `internal/cli/root.go`, with their defaults, and register `newSelfUpdateCmd` in the `human` group. Make T011 pass.
 - [ ] T013 [US2] Regenerate the goldens with `go test ./internal/cli/ -update` and read the diff. Only the help listing and the new command's goldens may change.
 
 ## Phase 4: User Story 3 (P2)

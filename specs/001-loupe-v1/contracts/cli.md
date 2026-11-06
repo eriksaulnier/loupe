@@ -82,6 +82,9 @@ Refusal or error (exit 1 or 2):
 | `review-open` | `handoff` while a `review` of any round of the pull request is running; `details.run` names that run (`specs/036-review-pane-guards`) | when `details.run` is the resolved run, tell the human their review is already open, then `loupe wait`; otherwise ask the human to finish or quit that review, then `loupe handoff` again |
 | `returned` | A local run was returned, and it accepts no change, no review and no handoff (`specs/049-apply-mode`) | `loupe feedback --run <ref>` to read the decisions, or `loupe capture --changed\|--files\|--no-files` to start a new run |
 | `wrong-mode` | The command or flag applies only to PR runs (`specs/049-apply-mode`) | on a local run, the return action in `loupe review`, or `loupe feedback` |
+| `update-unsupported` | `update` or `uninstall` from a build that is not an `X.Y.Z` release (`details.reason` `not-release`), or from a binary under a mise install (`mise`) (`specs/055-update-flow`) | the install script's curl command; for mise, `mise use -g github:eriksaulnier/loupe@latest`, or for `uninstall`, `mise unuse -g github:eriksaulnier/loupe` |
+| `download` | `update` or `uninstall` could not download a release file, the release's `checksums.txt` names no archive for this platform or does not cover `install.sh`, or `install.sh` does not match it | network access to github.com and the release URL, or the curl command |
+| `install-failed` | The release's `install.sh` exited non-zero; `details.exitStatus` holds its status. The binary MAY already be replaced, since the script installs it before the plugins | read the script's output on stderr, or the curl command |
 | `internal` | A defect | file an issue; stack on stderr |
 
 ## Warning codes
@@ -91,7 +94,7 @@ A warning names a problem that did not stop the command. It goes to stderr as `w
 | Code | Command | Meaning |
 | :--- | :--- | :--- |
 | `withdraw-reason-missing` | `edit` | A call with `--by agent` withdrew an included finding without `--reason` or `withdrawReason`. The message names `--reason`. A later release MAY refuse it |
-| `update-available` | `capture` | A newer loupe release exists. The message names both versions and the install docs. Added by `specs/048-update-warning` |
+| `update-available` | `capture` | A newer loupe release exists. The message names both versions and `loupe update`. Added by `specs/048-update-warning`, and amended by `specs/055-update-flow`, which replaced the install docs link with the command |
 
 ## Commands
 
@@ -243,6 +246,12 @@ The confirmation is where the human writes the review's opening prose, in the bo
 
 `--note <markdown>` puts a note under the newest round's footer that shows only while that round is on top (specs/032-sticky-round-note). When a later round collapses the round, the note is dropped with its delimiters, and the round keeps its summary, findings and footer. A pipeline passes it again on each round that should carry one. It requires `--unattended --sticky` and refuses `usage` before the run is resolved otherwise, fix `--unattended --sticky --note <markdown>`, because no flag MAY set words under a human's name and a review no later round edits never collapses. It MUST pass the allowlist at the summary's depth, or publish refuses `markdown` naming the note. After that check, and before any attempt is recorded or any review request is sent, it refuses a finding id as the summary does, fix: reword `--note` and run `loupe publish` again. Publish checks no other text for finding ids (specs/043-no-finding-ids). It is not a finding: the digest, the findings that publish and the `--json` result do not change. An empty or whitespace-only note is no note.
 
+### `loupe update [--json]` (human only)
+
+Installs the latest release, and the loupe plugin at that release for each of Claude Code, Codex and Pi on `PATH` (`specs/055-update-flow`). It reads the version from the archive name for this platform in `<releases>/latest/download/checksums.txt`. Then it downloads that release's `checksums.txt` and `install.sh`, and refuses `download` unless the checksums cover `install.sh` and match it. It runs the script with `LOUPE_VERSION` set to that version and `LOUPE_INSTALL_DIR` set to the directory of the running binary, resolved through any symlink. The script's stdout and stderr both go to loupe's stderr. It runs the script even when the running version is the latest, so a missing plugin or a plugin on another release is set up again. It needs no GitHub token and reads no run state. It does not require a terminal, but the plugin's skills MUST NOT tell an agent to run it.
+
+Refuses `update-unsupported` for a version that is not `X.Y.Z` and for a binary under a mise install, before any download. A script that exits non-zero refuses `install-failed`. Under `--json`, the payload is `from` (the running version) and `to` (the version installed). Without `--json`, it prints one line on stdout.
+
 ## Environment
 
 | Variable | Effect |
@@ -252,6 +261,7 @@ The confirmation is where the human writes the review's opening prose, in the bo
 | `LOUPE_LOCK_TIMEOUT_MS` | How long to wait for the lock, default 3000, max 60000; a value that is not an integer from 0 to 60000 refuses with `usage` (exit 2) (ruled 2026-09-13) |
 | `NO_COLOR`, `TERM`, `LANG`/`LC_ALL` | Honored for color and glyph selection; `TERM=dumb` refuses `review` and `publish` with `tty`, but not `publish --unattended` |
 | `LOUPE_NO_UPDATE_CHECK` | Any non-empty value stops `capture` looking up the latest release, and stops the warning and the notice in `review` that follow from it. `CI` has the same effect. Added by `specs/048-update-warning` |
+| `LOUPE_NO_PLUGINS` | Any non-empty value makes the install script, and so `update`, skip the agent plugins. `CI` has the same effect. Added by `specs/055-update-flow` |
 | `LOUPE_ICONS` | `ascii`, `unicode` or `nerd`; default `unicode` under a UTF-8 locale; `nerd` is opt-in and needs a Nerd Font in the terminal; a non-UTF-8 locale forces `ascii` whatever is set; any other value refuses with `usage` (exit 2) |
 
 Human output wraps to the terminal width (80 columns when stdout is not a terminal), and `--version` prints loupe's own version, as `loupeVersion` under `--json`.

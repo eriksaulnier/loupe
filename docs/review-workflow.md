@@ -173,6 +173,7 @@ In a clone, `mise run demo` opens `loupe review` on seeded runs against an in-me
 | anyone | `stats` | Roll up what your decisions did across runs |
 | human | `review` | Decide each finding in the review interface |
 | human | `publish` | Confirm and post the review to GitHub |
+| human | `update` | Install the latest release and its agent plugins |
 
 ## Environment
 

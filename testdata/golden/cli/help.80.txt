@@ -40,6 +40,7 @@ Commands
           stats     Roll up what the human gate did across runs
   human   review    Decide each finding in the review interface (human-only)
           publish   Confirm and post the review to GitHub (human-only)
+          update    Install the latest release and its agent plugins
 
 Send-back loop  when the human sends findings back from review with notes
   loupe feedback --run owner/repo#123 --json              read notes, dispositions and readiness

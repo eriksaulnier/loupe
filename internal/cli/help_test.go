@@ -28,6 +28,7 @@ var contractResultKeys = map[string][]string{
 		"precision", "drifted", "medianCaptureToPublish", "total"},
 	"review":  nil,
 	"publish": nil,
+	"update":  {"from", "to"},
 }
 
 // contractInputKeys are fragments of each command's JSON input example in contracts/cli.md.
