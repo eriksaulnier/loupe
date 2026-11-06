@@ -2,7 +2,9 @@ package tui
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -187,36 +189,38 @@ func TestPollHoldsWhileTheHumanWrites(t *testing.T) {
 }
 
 // A pane host can turn the cursor back on behind loupe's back when it repaints a pane it had hidden.
-// Each poll hides it again while no editor shows a caret, and leaves it alone while one does.
-func TestPollHidesTheCursorAgainWhileNoEditorHasACaret(t *testing.T) {
+// Each poll hides it again while no editor shows a caret, and shows it again while one does.
+func TestPollSetsTheCursorToMatchTheCaret(t *testing.T) {
 	interval := pollInterval
 	pollInterval = time.Millisecond
 	t.Cleanup(func() { pollInterval = interval })
-	hides := func(m *Model) bool {
+	sent := func(m *Model) []string {
 		m.polling = false
 		_, cmd := m.Update(pollMsg{})
+		var modes []string
 		for _, msg := range drain(cmd) {
-			if raw, ok := msg.(tea.RawMsg); ok && raw.Msg == ansi.ResetModeTextCursorEnable {
-				return true
+			if raw, ok := msg.(tea.RawMsg); ok {
+				modes = append(modes, fmt.Sprint(raw.Msg))
 			}
 		}
-		return false
+		return modes
 	}
+	hide, show := []string{ansi.ResetModeTextCursorEnable}, []string{ansi.SetModeTextCursorEnable}
 
 	m, _ := newAwaitingModel(t, 40)
-	if !hides(m) {
-		t.Fatal("a poll in the list did not hide the cursor")
+	if got := sent(m); !slices.Equal(got, hide) {
+		t.Fatalf("a poll in the list sent %q, want the hide", got)
 	}
 	pressKeys(t, m, "enter")
-	if !hides(m) {
-		t.Fatal("a poll on a finding did not hide the cursor")
+	if got := sent(m); !slices.Equal(got, hide) {
+		t.Fatalf("a poll on a finding sent %q, want the hide", got)
 	}
 	pressKeys(t, m, "s", "half a thought")
 	if m.View().Cursor == nil {
 		t.Fatal("the send-back note shows no caret")
 	}
-	if hides(m) {
-		t.Fatal("a poll hid the caret of the send-back note")
+	if got := sent(m); !slices.Equal(got, show) {
+		t.Fatalf("a poll in the send-back note sent %q, want the show", got)
 	}
 }
 

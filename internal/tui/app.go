@@ -324,10 +324,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	m.flushPRNotice(gen)
 	cmd = tea.Batch(cmd, m.schedulePoll(), m.expireNotice(gen))
-	// A pane host can turn the cursor back on when it repaints a pane it had hidden, and the renderer writes the hide
-	// only when its own cursor state changes, so without this the cursor stays on below the frame.
-	if _, ok := msg.(pollMsg); ok && m.err == nil && m.View().Cursor == nil {
-		cmd = tea.Batch(cmd, tea.Raw(ansi.ResetModeTextCursorEnable))
+	// A pane host can turn the cursor back on when it repaints a pane it had hidden, and the renderer writes the
+	// cursor's visibility only when its own state changes, so each poll restates it. The raw write lands after this
+	// check, so a key that opens or closes an editor in between leaves the cursor wrong until the next poll.
+	if _, ok := msg.(pollMsg); ok && m.err == nil {
+		mode := ansi.ResetModeTextCursorEnable
+		if m.View().Cursor != nil {
+			mode = ansi.SetModeTextCursorEnable
+		}
+		cmd = tea.Batch(cmd, tea.Raw(mode))
 	}
 	return m, cmd
 }
