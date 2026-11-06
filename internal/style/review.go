@@ -736,8 +736,9 @@ func (s Style) SeverityCell(word string, blocking bool, width int) string {
 // KeyGroup is one semantic group of the footer: decide, move, or app.
 type KeyGroup []Hint
 
-// KeyGroups lays out the footer: each key in the accent and its verb in text, the groups in order with a dim bar
-// between them, empty groups left out. It wraps between whole groups where that costs no extra row, and otherwise
+// KeyGroups lays out the footer: each key in the accent and its verb in secondary, the groups in order with a dim bar
+// between them, empty groups left out. The verb steps back so the key leads, but only to secondary: the overlay gray
+// is an unavailable hint's, and a live verb in it would read as disabled. It wraps between whole groups where that costs no extra row, and otherwise
 // between hints; a bar that would end or start a row is dropped, since the row break separates the groups there.
 func (s Style) KeyGroups(groups []KeyGroup, width int) []string {
 	// Whole groups read better, but never at the cost of a row: the footer's height is budgeted.
@@ -793,7 +794,7 @@ func (s Style) keyRows(groups []KeyGroup, width int, whole bool) []string {
 }
 
 func (s Style) keyHint(h Hint) string {
-	key, verb := s.Emphasis(s.fg(s.rv.accent)), s.fg(s.rv.text)
+	key, verb := s.Emphasis(s.fg(s.rv.accent)), s.fg(s.rv.secondary)
 	text := h.Verb
 	if h.Unavailable != "" {
 		key, verb = s.fg(s.rv.overlay1), s.fg(s.rv.overlay1)
