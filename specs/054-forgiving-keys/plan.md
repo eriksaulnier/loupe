@@ -23,5 +23,6 @@
 ## Verification
 
 - `mise run check`.
-- By eye through `mise run demo` in tmux: a PR run published with uppercase keys only, a stray key on the confirmation, and `t` and `c` on a local run.
-- Unverified: `mise run screenshots` and `mise run review-screenshot`, which are not rerun, and caps lock in a physical terminal.
+- By eye through `mise run demo` in tmux: a PR run published with uppercase keys only, a stray key on the confirmation, and `t` on a local run. `c` came later and is covered by tests only.
+- `mise run screenshots` re-recorded `docs/assets/walkthrough.gif` and `sendback.gif`.
+- Unverified: `mise run review-screenshot`, since the published format does not change, and caps lock in a physical terminal.
