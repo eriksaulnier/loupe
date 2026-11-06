@@ -2,6 +2,7 @@ package tui
 
 import (
 	"io"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -42,5 +43,27 @@ func TestConfirmFooterIsOneLineInASplitPane(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if keys := m.shell.confirmKeys(); len(keys) != 1 {
 		t.Errorf("the confirmation footer is %d rows at 71 columns: %q", len(keys), keys)
+	}
+}
+
+// Capitals typed one key at a time reach the send-back note and the rewrite as typed (specs/054-forgiving-keys
+// User Story 1). A pasted run of text is one press and never folds, so these type each letter on its own.
+func TestInputsKeepUppercase(t *testing.T) {
+	m := modelOf(t, newFixture(t), testEnv, 100, 30)
+	if err := m.openFinding("f-001"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(runes("s"))
+	typeText(m, "NQY")
+	if !m.noting || m.note.Value() != "NQY" {
+		t.Errorf("noting %v, note %q, want NQY", m.noting, m.note.Value())
+	}
+
+	m, _ = editModel(t, "f-001", unchanged)
+	m.Update(runes("w"))
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
+	typeText(m, "NQY")
+	if title := m.rewriteTitle.Value(); !m.rewriting || !strings.HasSuffix(title, "NQY") {
+		t.Errorf("rewriting %v, title %q, want it to end in NQY", m.rewriting, title)
 	}
 }
