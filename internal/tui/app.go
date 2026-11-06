@@ -13,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/diff"
 	"github.com/eriksaulnier/loupe/internal/draft"
@@ -323,6 +324,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	m.flushPRNotice(gen)
 	cmd = tea.Batch(cmd, m.schedulePoll(), m.expireNotice(gen))
+	// A pane host can turn the cursor back on when it repaints a pane it had hidden, and the renderer writes the hide
+	// only when its own cursor state changes, so without this the cursor stays on below the frame.
+	if _, ok := msg.(pollMsg); ok && m.err == nil && m.View().Cursor == nil {
+		cmd = tea.Batch(cmd, tea.Raw(ansi.ResetModeTextCursorEnable))
+	}
 	return m, cmd
 }
 
