@@ -539,3 +539,26 @@ func TestInstallScriptPluginsReadOnlyLoupesClaudeEntry(t *testing.T) {
 		t.Errorf("plugin installed from %q, want the tag", got)
 	}
 }
+
+// With the plugins skipped, the binary still goes, so the output MUST say the plugins stay and how to remove them.
+func TestInstallScriptUninstallSaysWhenItSkipsThePlugins(t *testing.T) {
+	for _, variable := range []string{"CI=true", "LOUPE_NO_PLUGINS=1"} {
+		t.Run(variable, func(t *testing.T) {
+			f := newInstallFixture(t)
+			f.placeExisting(t)
+			agents, env := f.withAgents(t, "claude", "codex", "pi")
+			f.seedEveryAgent(t, agents)
+			stdout, stderr, err := f.run(t, append(env, "LOUPE_UNINSTALL=1", variable)...)
+			if err != nil {
+				t.Fatalf("uninstall failed: %v\n%s", err, stderr)
+			}
+			assertCalls(t, agents.log(t))
+			if !strings.Contains(stdout, "Skipped the agent plugins") || !strings.Contains(stdout, "#removing-the-plugin-by-hand") {
+				t.Errorf("stdout does not say the plugins stay and how to remove them:\n%s", stdout)
+			}
+			if got := listDir(t, f.target); got != "" {
+				t.Errorf("target still holds %s", got)
+			}
+		})
+	}
+}

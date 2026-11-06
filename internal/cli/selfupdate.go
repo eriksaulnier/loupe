@@ -111,7 +111,8 @@ uninstall downloads the install.sh of this release, checks it against the releas
 and runs it in its uninstall mode for the directory that holds this binary. That mode downloads
 nothing. A marketplace that points at a local directory is left alone. When a plugin cannot be
 removed, the binary stays, so uninstall can run again. A loupe on PATH that is a symlink to the
-removed binary is removed too. The script's output goes to stderr.
+removed binary is removed too. CI and LOUPE_NO_PLUGINS leave the plugins installed, and the
+output says so. The script's output goes to stderr.
 
 A build that is not a release, and a binary that mise installed, are refused with the command
 that removes them.

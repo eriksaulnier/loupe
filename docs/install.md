@@ -20,7 +20,7 @@ Then it installs or updates [the agent plugin](#the-agent-plugin) for each of Cl
 | :--- | :--- |
 | `LOUPE_VERSION` | Installs this release instead of the latest, with or without the leading `v`. |
 | `LOUPE_INSTALL_DIR` | Installs into this directory instead of `~/.local/bin`. |
-| `LOUPE_NO_PLUGINS` | Any non-empty value skips the agent plugins. `CI` has the same effect. |
+| `LOUPE_NO_PLUGINS` | Any non-empty value skips the agent plugins, on install and on `loupe uninstall`, which then leaves them installed. `CI` has the same effect. |
 
 ```sh
 curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.19.0 LOUPE_INSTALL_DIR="$HOME/bin" sh

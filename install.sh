@@ -17,6 +17,7 @@ set -eu
 releases=https://github.com/eriksaulnier/loupe/releases
 issues=https://github.com/eriksaulnier/loupe/issues
 plugin_docs=https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#the-agent-plugin
+removal_docs=https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#removing-the-plugin-by-hand
 
 tmp=
 staged=
@@ -339,6 +340,8 @@ uninstall() {
 		! command -v claude >/dev/null 2>&1 || remove_claude
 		! command -v codex >/dev/null 2>&1 || remove_codex
 		! command -v pi >/dev/null 2>&1 || remove_pi
+	else
+		printf 'Skipped the agent plugins, which stay installed. To remove them, see %s\n' "$removal_docs"
 	fi
 	[ "$failed_agents" = 0 ] || exit 1
 	# -L too, because mise run link leaves a symlink whose target may be gone.
