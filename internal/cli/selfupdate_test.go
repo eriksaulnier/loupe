@@ -62,7 +62,8 @@ type selfUpdateFixture struct {
 	// dir is the resolved directory of the running binary.
 	dir string
 	// ran is where the stub script records its variables.
-	ran string
+	ran     string
+	cleanup func()
 }
 
 // newSelfUpdateFixture runs loupe as version from a symlink, so a test sees the symlink resolved.
@@ -160,6 +161,24 @@ func TestUpdateRefusals(t *testing.T) {
 			}
 			f.deps.Executable = func() (string, error) { return path, nil }
 		}},
+		{name: "mise data dir elsewhere", version: "0.21.0", code: refusal.UpdateUnsupported, message: "installed by mise", reason: "mise", setup: func(f *selfUpdateFixture) {
+			dir := filepath.Join(f.dir, ".mise", "installs", "github-eriksaulnier-loupe", "0.21.0")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				panic(err)
+			}
+			path := filepath.Join(dir, "loupe")
+			if err := os.WriteFile(path, nil, 0o755); err != nil {
+				panic(err)
+			}
+			f.deps.Executable = func() (string, error) { return path, nil }
+		}},
+		{name: "directory not writable", version: "0.21.0", code: refusal.UpdateUnsupported, message: "cannot write", reason: "not-writable", setup: func(f *selfUpdateFixture) {
+			f.releases.publish("0.22.0", stubScript(f.ran, 0))
+			if err := os.Chmod(f.dir, 0o555); err != nil {
+				panic(err)
+			}
+			f.cleanup = func() { _ = os.Chmod(f.dir, 0o755) }
+		}},
 		{name: "no release", version: "0.21.0", code: refusal.Download, message: "HTTP 404"},
 		{name: "no archive for this platform", version: "0.21.0", code: refusal.Download, message: "names no archive", setup: func(f *selfUpdateFixture) {
 			f.releases.files["latest/download/checksums.txt"] = []byte(strings.Repeat("0", 64) + "  loupe_0.22.0_plan9_mips.tar.gz\n")
@@ -182,6 +201,9 @@ func TestUpdateRefusals(t *testing.T) {
 			f := newSelfUpdateFixture(t, c.version)
 			if c.setup != nil {
 				c.setup(f)
+			}
+			if f.cleanup != nil {
+				t.Cleanup(f.cleanup)
 			}
 			errObj := wantCode(t, Execute(f.deps, []string{"update", "--json"}), f.streams, c.code)
 			if msg, _ := errObj["message"].(string); !strings.Contains(msg, c.message) {

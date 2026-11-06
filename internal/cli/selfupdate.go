@@ -30,7 +30,7 @@ const (
 	downloadLimit  = 60 * time.Second
 	releaseIssues  = "https://github.com/eriksaulnier/loupe/issues"
 	installAsset   = "install.sh"
-	pluginDocs     = "https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#the-agent-plugin"
+	pluginRemoval  = "https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#removing-the-plugin-by-hand"
 	checksumsAsset = "checksums.txt"
 )
 
@@ -130,11 +130,11 @@ func newUninstallCmd(deps Deps) *cobra.Command {
 func runUninstall(cmd *cobra.Command, deps Deps) error {
 	current := deps.loupeVersion()
 	if !updatecheck.IsRelease(current) {
-		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe %s is not a release, so uninstall cannot tell what to remove", current), "remove the binary by hand, and see "+pluginDocs+" for the plugins")
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe %s is not a release, so uninstall cannot tell what to remove", current), "remove the binary by hand, then the plugins as "+pluginRemoval+" shows")
 		r.Details = map[string]any{"reason": "not-release"}
 		return r
 	}
-	dir, err := installDir(deps, "mise unuse -g github:eriksaulnier/loupe")
+	dir, err := installDir(deps, "mise unuse -g github:eriksaulnier/loupe, then remove the plugins as "+pluginRemoval+" shows")
 	if err != nil {
 		return err
 	}
@@ -171,13 +171,26 @@ func installDir(deps Deps, miseFix string) (string, error) {
 		return "", fmt.Errorf("resolve the running loupe: %w", err)
 	}
 	// mise keeps each version in its own directory and links the active one, so the script would act on a copy mise
-	// does not manage.
-	if strings.Contains(path, string(filepath.Separator)+filepath.Join("mise", "installs")+string(filepath.Separator)) {
+	// does not manage. MISE_DATA_DIR moves the root, so the tool's own directory name is checked too.
+	if strings.Contains(path, "/mise/installs/") || strings.Contains(path, "-eriksaulnier-loupe/") {
 		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe at %s was installed by mise", path), miseFix)
 		r.Details = map[string]any{"reason": "mise"}
 		return "", r
 	}
-	return filepath.Dir(path), nil
+	dir := filepath.Dir(path)
+	// The script refuses an unwritable directory with a fix that names LOUPE_INSTALL_DIR, which update and uninstall
+	// set themselves, so the check runs here first.
+	probe, err := os.CreateTemp(dir, ".loupe-probe-")
+	if err != nil {
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe cannot write %s, which holds the running binary", dir), "run it as a user who can write "+dir+", or reinstall with "+curlInstall+" into a directory you own")
+		r.Details = map[string]any{"reason": "not-writable"}
+		return "", r
+	}
+	_ = probe.Close()
+	if err := os.Remove(probe.Name()); err != nil {
+		return "", fmt.Errorf("remove %s: %w", probe.Name(), err)
+	}
+	return dir, nil
 }
 
 // latestRelease reads the version from the archive name in the latest release's checksums, as install.sh does, so

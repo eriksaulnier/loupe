@@ -141,3 +141,13 @@ Pi has no sandbox. `pi install` at a new tag replaces the earlier one.
 pi install git:github.com/eriksaulnier/loupe@v0.21.0
 ```
 <!-- x-release-please-end -->
+
+### Removing the plugin by hand
+
+`loupe uninstall` removes the plugin for you. For a binary from mise or a release archive, remove it from each agent with these commands:
+
+```sh
+claude plugin marketplace remove loupe
+codex plugin marketplace remove loupe
+pi remove git:github.com/eriksaulnier/loupe
+```
