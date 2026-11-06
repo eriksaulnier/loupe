@@ -2,12 +2,15 @@ package tui
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/eriksaulnier/loupe/internal/draft"
 )
@@ -182,6 +185,42 @@ func TestPollHoldsWhileTheHumanWrites(t *testing.T) {
 				t.Fatalf("leaving %s did not apply the held change: notice %q", name, m.notice)
 			}
 		})
+	}
+}
+
+// A pane host can turn the cursor back on behind loupe's back when it repaints a pane it had hidden.
+// Each poll hides it again while no editor shows a caret, and shows it again while one does.
+func TestPollSetsTheCursorToMatchTheCaret(t *testing.T) {
+	interval := pollInterval
+	pollInterval = time.Millisecond
+	t.Cleanup(func() { pollInterval = interval })
+	sent := func(m *Model) []string {
+		m.polling = false
+		_, cmd := m.Update(pollMsg{})
+		var modes []string
+		for _, msg := range drain(cmd) {
+			if raw, ok := msg.(tea.RawMsg); ok {
+				modes = append(modes, fmt.Sprint(raw.Msg))
+			}
+		}
+		return modes
+	}
+	hide, show := []string{ansi.ResetModeTextCursorEnable}, []string{ansi.SetModeTextCursorEnable}
+
+	m, _ := newAwaitingModel(t, 40)
+	if got := sent(m); !slices.Equal(got, hide) {
+		t.Fatalf("a poll in the list sent %q, want the hide", got)
+	}
+	pressKeys(t, m, "enter")
+	if got := sent(m); !slices.Equal(got, hide) {
+		t.Fatalf("a poll on a finding sent %q, want the hide", got)
+	}
+	pressKeys(t, m, "s", "half a thought")
+	if m.View().Cursor == nil {
+		t.Fatal("the send-back note shows no caret")
+	}
+	if got := sent(m); !slices.Equal(got, show) {
+		t.Fatalf("a poll in the send-back note sent %q, want the show", got)
 	}
 }
 
