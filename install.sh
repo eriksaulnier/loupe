@@ -113,12 +113,18 @@ install_binary() {
 }
 
 warn_about_path() {
+	found=$(command -v loupe || true)
+	# loupe update installs into the directory that a symlink on PATH resolves to, and then the new binary runs. -ef
+	# is not POSIX, but dash, bash and zsh all compare the two files with it.
+	if [ -n "$found" ] && [ "$found" -ef "$dir/loupe" ]; then
+		return 0
+	fi
+
 	case ":$PATH:" in
 	*":$dir:"* | *":$dir/:"*) ;;
 	*) warn "$dir is not on your PATH. Add this line to your shell profile: export PATH=\"$dir:\$PATH\"" ;;
 	esac
 
-	found=$(command -v loupe || true)
 	# command -v in dash and zsh prints a double slash for a PATH entry with a trailing slash.
 	case "$found" in
 	"" | "$dir/loupe" | "$dir//loupe") ;;
