@@ -56,13 +56,16 @@ func publishedModel(t *testing.T, tm *teatest.TestModel) *Model {
 	return m
 }
 
+// O opens the review too: caps lock must not turn the one key that opens it into one that quits.
 func TestPublishEndsOnThePublishedScreenAndOOpensTheReview(t *testing.T) {
-	o := &opener{}
-	tm := publishThrough(t, o, "o open in browser", "any other key quits")
-	tm.Type("o")
-	m := publishedModel(t, tm)
-	if len(o.urls) != 1 || !strings.HasPrefix(o.urls[0], reviewURLPrefix) || m.PublishedURL() != o.urls[0] {
-		t.Fatalf("opened %q, published %q", o.urls, m.PublishedURL())
+	for _, k := range []string{"o", "O"} {
+		o := &opener{}
+		tm := publishThrough(t, o, "o open in browser", "any other key quits")
+		tm.Type(k)
+		m := publishedModel(t, tm)
+		if len(o.urls) != 1 || !strings.HasPrefix(o.urls[0], reviewURLPrefix) || m.PublishedURL() != o.urls[0] {
+			t.Fatalf("%s: opened %q, published %q", k, o.urls, m.PublishedURL())
+		}
 	}
 }
 

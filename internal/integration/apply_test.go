@@ -133,20 +133,20 @@ func accept(s *screen.Screen, id string) {
 	s.WaitFor(id + " accepted")
 }
 
-// acceptWithNote presses A on the open finding, types note and confirms it.
+// acceptWithNote presses t on the open finding, types note and confirms it.
 func acceptWithNote(s *screen.Screen, id, note string) {
-	s.Press("A")
+	s.Press("t")
 	s.Type(note)
 	s.Press("enter")
 	s.WaitFor(id + " accepted")
 }
 
-// exclude rejects the open finding: x alone with no reason, or X with reason typed and confirmed.
+// exclude rejects the open finding: x alone with no reason, or c with reason typed and confirmed.
 func exclude(s *screen.Screen, id, reason string) {
 	if reason == "" {
 		s.Press("x")
 	} else {
-		s.Press("X")
+		s.Press("c")
 		s.Type(reason)
 		s.Press("enter")
 	}

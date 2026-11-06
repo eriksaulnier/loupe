@@ -73,7 +73,7 @@ func (publishUI) helpSections(g GlyphSet) map[view]helpSection {
 			{"ctrl+r", "reload the draft from disk", ""},
 		}},
 		viewDetail: {"Finding detail", "detail", []helpKey{
-			{leftRight, "previous / next finding", "N/n"},
+			{leftRight, "previous / next finding", "[/], n for next"},
 			{upDown, "scroll the finding", "k/j"},
 			{"PgUp/PgDn", "scroll one page", ""},
 			{"space", "scroll one page down", ""},
@@ -229,7 +229,7 @@ func (applyUI) word(m *Model, w string) string {
 	return w
 }
 
-func (applyUI) settleKeys() string { return "aAxXsurd" }
+func (applyUI) settleKeys() string { return "atxcsurd" }
 
 func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 	upDown, leftRight := g.Up+"/"+g.Down, g.Left+"/"+g.Right
@@ -242,14 +242,14 @@ func (applyUI) helpSections(g GlyphSet) map[view]helpSection {
 			{"ctrl+r", "reload the draft from disk", ""},
 		}},
 		viewDetail: {"Finding detail", "detail", []helpKey{
-			{leftRight, "previous / next finding", "N/n"},
+			{leftRight, "previous / next finding", "[/], n for next"},
 			{upDown, "scroll the finding", "k/j"},
 			{"PgUp/PgDn", "scroll one page", ""},
 			{"space", "scroll one page down", ""},
 			{"a", "accept; resolves its open notes", ""},
-			{"A", "tweak: accept with a note; enter accepts, esc cancels", ""},
+			{"t", "tweak: accept with a note; enter accepts, esc cancels", ""},
 			{"x", "reject; dismisses its open notes", ""},
-			{"X", "reject with a reason; enter rejects, esc cancels", ""},
+			{"c", "reject with a reason; enter rejects, esc cancels", ""},
 			{"s", "ask: send back with a question; enter sends, esc cancels", ""},
 			{"u", "restore or reinstate the finding", ""},
 			{"r / d", "resolve / dismiss its open note", ""},
@@ -284,11 +284,11 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	}
 	switch draft.Dispositions(m.draft)[f.ID] {
 	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept"), decide("A", "tweak"), decide("x", "reject"), decide("X", "reject with reason"), decide("s", "ask"))
+		hints = append(hints, decide("a", "accept"), decide("t", "tweak"), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionAccepted:
-		hints = append(hints, decide("A", "tweak"), decide("x", "reject"), decide("X", "reject with reason"), decide("s", "ask"))
+		hints = append(hints, decide("t", "tweak"), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionExcluded:
-		hints = append(hints, decide("u", "restore"))
+		hints = append(hints, decide("u", "restore"), decide("c", "reason"))
 	case draft.DispositionWithdrawn:
 		hints = append(hints, decide("u", "reinstate"))
 	}
@@ -310,12 +310,18 @@ func (applyUI) listKey(m *Model, key string) (tea.Cmd, bool) {
 
 func (applyUI) detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool) {
 	switch key {
-	case "A":
+	case "t", "c":
+		// Said before the input opens, since the draft would refuse the decision only after the words were typed.
+		if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
+			m.say(style.Warn, fmt.Sprintf("%s is withdrawn; u reinstates it", f.ID))
+			return nil, true
+		}
+		if key == "c" {
+			return m.openNote(noteExclude, heldNote(m.draft, f, draft.DispositionExcluded)), true
+		}
 		return m.openNote(noteAccept, heldNote(m.draft, f, draft.DispositionAccepted)), true
-	case "X":
-		return m.openNote(noteExclude, heldNote(m.draft, f, draft.DispositionExcluded)), true
-	case "t", "w":
-		// Absent here, and swallowed so the shared handler cannot give them a pull request run's meaning.
+	case "w":
+		// Absent here, and swallowed so the shared handler cannot give it a pull request run's meaning.
 		return nil, true
 	case "l":
 		return m.backToList(), true

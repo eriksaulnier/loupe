@@ -199,15 +199,16 @@ func TestLongRefusalStaysWholeInEveryPane(t *testing.T) {
 			t.Errorf("%s cut the refusal at 60x12:\n%s", sc.name, view)
 		}
 	}
-	// The confirmation's pane also holds the cancel sentence, and both the refusal's ends and that sentence stay.
+	// The confirmation's pane also holds which keys answer after a stray key, and the refusal's ends and that line stay.
 	m := modelOf(t, newFixture(t), utf8Env, 60, 12)
 	showConfirmation(m)
 	m.confirm.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	m.confirm.key(m, runes("z"))
 	m.confirm.composeErr = errors.New(refusal)
 	view := m.View().Content
 	text := paneText(view)
-	if !strings.Contains(text, "this refusal runs on and on") || !strings.Contains(text, "and ends with loupe review") || !strings.Contains(text, "nothing is sent") {
-		t.Errorf("the confirmation lost an end of the refusal, the mark or the cancel sentence:\n%s", view)
+	if !strings.Contains(text, "this refusal runs on and on") || !strings.Contains(text, "and ends with loupe review") || !strings.Contains(text, confirmStray) {
+		t.Errorf("the confirmation lost an end of the refusal or the keys that answer:\n%s", view)
 	}
 }
 

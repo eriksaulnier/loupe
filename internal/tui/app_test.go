@@ -216,7 +216,7 @@ func TestAppDecidesAndPersists(t *testing.T) {
 		t.Fatalf("f-002 decision %+v", dec)
 	}
 
-	tm.Type("NN")
+	tm.Type("[[")
 	waitFor(t, tm, "Body one explains the rename.")
 	tm.Type("a")
 	waitFor(t, tm, "f-001 accepted")

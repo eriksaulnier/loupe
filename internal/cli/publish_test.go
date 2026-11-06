@@ -299,7 +299,7 @@ func TestPublishReportsAStderrItCannotWriteAfterADecline(t *testing.T) {
 	})
 	sc.WaitFor("new line")
 	sc.Press("tab")
-	sc.WaitFor("publish this review")
+	sc.WaitFor("n cancel")
 	sc.Press("n")
 	if _, _, code := sc.Wait(); code != 1 || f.gh.CreateCount() != 0 {
 		t.Fatalf("exit %d, %d reviews sent", code, f.gh.CreateCount())

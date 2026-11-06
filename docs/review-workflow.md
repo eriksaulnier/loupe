@@ -41,25 +41,27 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 | `o` | Open the pull request in the browser |
 | `?` | List the keys for the current view |
 
+`←` and `→` open the previous and next finding, as do `[` and `]`, and `n` opens the next. A letter works in either case outside a text input, so caps lock changes nothing.
+
 On a local run, which the agent captured with `loupe capture --changed`, `--files` or `--no-files`, a finding can carry a proposal: the change the agent makes if you accept it. A finding with no proposal is a question. The header carries a `local · returns to <applier>` badge, so the run never reads as a pull request review. Review opens on a start screen with the summary and the number of findings to decide, `enter` starts at the first pending one, and each decision opens the next pending one. The keys there are these:
 
 | Key | What it does |
 | :--- | :--- |
 | `a` | Accept the finding |
-| `A` | Tweak: accept the finding with a note for the agent; an empty note is a plain accept |
+| `t` | Tweak: accept the finding with a note for the agent; an empty note is a plain accept |
 | `x` | Reject the finding, with no reason |
-| `X` | Reject the finding with a reason; an empty reason is a plain reject |
+| `c` | Reject the finding with a reason; an empty reason is a plain reject |
 | `s` | Ask: send the finding back to the agent with a question |
 | `u` | Restore an excluded finding to pending, or reinstate and accept a withdrawn one |
 | `r`, `d` | Resolve or dismiss the finding's open note |
 | `f` | Show the whole file's diff; a `--files` run shows the file as plain text |
 | `enter` | On the start screen, start at the first pending finding; in the list, open the finding |
 | `l` | Back to the list, as `esc` is, and from the start screen |
-| `j`, `k`, `n`, `N`, `space`, `PgUp`, `PgDn`, `ctrl+r`, `esc` | Move, scroll, reload and go back, as on a pull request run |
+| `j`, `k`, `n`, `[`, `]`, `space`, `PgUp`, `PgDn`, `ctrl+r`, `esc` | Move, scroll, reload and go back, as on a pull request run |
 | `p` | In the list, return the decisions to the agent, with an optional closing note; `enter` returns |
 | `?` | List the keys for the current view |
 
-`t`, `w`, `e` and `o` are absent, and there is no publish step.
+`w`, `e` and `o` are absent, and there is no publish step.
 
 Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
 
@@ -75,7 +77,7 @@ A note asks the agent about one finding. The agent revises the finding or withdr
 
 When no finding is pending and no note is open, press `p` in `loupe review`, or run `loupe publish`. The confirmation opens on the review as it reads, with every section open and each inline comment. `v` steps to its exact Markdown, then to the request payload.
 
-The cursor starts in the review's opening. Type it in your own words and press Esc to leave it. Then `y` or `p` sends. Keys that scroll or switch views do nothing else. Any other key cancels, and nothing is sent.
+The cursor starts in the review's opening. Type it in your own words and press Esc to leave it. Then `y` or `p` sends. `n`, `q` or `ctrl+c` cancels, and nothing is sent. Keys that scroll or switch views do nothing else, and any other key only says which keys answer.
 
 Only accepted findings are published. One confirmation sends exactly one GitHub request. `--action` picks `comment`, `approve` or `request-changes`. `--inline` also turns located findings into inline comments.
 
@@ -110,7 +112,7 @@ The same loop works on local work: uncommitted changes, a plan or a spec, with n
 
 1. The agent captures the work with `loupe capture --changed`, `--files <path>` or `--no-files --title <title>`. That makes a local run, such as `owner/repo:local#7`, and no network call. `--changed` reads your staged, unstaged and untracked changes through a temporary index, so your own index, branch and files stay as they were. It runs none of your Git filters. So when you edit a file that Git converts on checkout, through CRLF line endings, a filter such as git-lfs, or `ident`, `--changed` cannot tell your edit from the conversion. It refuses, and `--files` captures those files instead. An untouched git-lfs or git-crypt file does not stop it.
 2. It files each finding with a `proposal`, the change it will make if you accept. A finding with no proposal is a question.
-3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`A`), reject (`x`, or `X` with a reason) or ask.
+3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`t`), reject (`x`, or `c` with a reason) or ask.
 4. Once the last finding is decided, the return step opens on its own. You type an optional closing note for the agent and press `enter`, or press `p` in the list, then `enter`. Review quits and prints one line, such as `Returned to Claude: 6 accepted, 2 rejected.` Nothing posts anywhere.
 5. The agent reads your decisions with `loupe feedback` and applies the accepted ones, following your notes where they differ from its proposals.
 
