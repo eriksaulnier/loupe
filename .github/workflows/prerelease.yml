@@ -132,9 +132,11 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release-assets
+          # checksums.txt covers the branch's install.sh, which loupe update downloads from the release.
           path: |
             dist/*.tar.gz
             dist/checksums.txt
+            install.sh
           if-no-files-found: error
           # A re-run of all jobs builds the same commit again.
           overwrite: true
@@ -167,7 +169,7 @@ jobs:
       - run: |
           set -euo pipefail
           cd assets
-          want="$(for target in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do echo "loupe_${VERSION}_${target}.tar.gz"; done)"
+          want="$( (echo install.sh; for target in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do echo "loupe_${VERSION}_${target}.tar.gz"; done) | sort)"
           got="$(awk '{ print $2 }' checksums.txt | sort)"
           [ "$got" = "$want" ] || { echo "::error::checksums.txt names $(echo "$got" | tr '\n' ' '), want $(echo "$want" | tr '\n' ' ')"; exit 1; }
           [ "$(find . -maxdepth 1 -name '*.tar.gz' | wc -l | tr -d ' ')" = 4 ] || { echo "::error::want exactly the 4 archives that checksums.txt names"; ls -l; exit 1; }
