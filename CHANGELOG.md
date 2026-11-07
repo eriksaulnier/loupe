@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.22.0](https://github.com/eriksaulnier/loupe/compare/v0.21.0...v0.22.0) (2026-11-07)
+
+
+### Features
+
+* **cli:** capture local work with --changed, --files and --no-files ([#112](https://github.com/eriksaulnier/loupe/issues/112)) ([66f8e82](https://github.com/eriksaulnier/loupe/commit/66f8e82eb2882475b2c041247e167ef26e3dd603))
+* **cli:** return a local run's decisions to the agent ([#113](https://github.com/eriksaulnier/loupe/issues/113)) ([13ba359](https://github.com/eriksaulnier/loupe/commit/13ba359fc9f0b99f7adb5d864f3036cdd77989a2))
+* **install:** manage agent plugins and add update and uninstall ([#127](https://github.com/eriksaulnier/loupe/issues/127)) ([1f64a22](https://github.com/eriksaulnier/loupe/commit/1f64a22451fcb6b96d8e27a4b5e7e6a2cd83efcc))
+* **mode:** add local runs, draft schema 5 and the mode package ([#111](https://github.com/eriksaulnier/loupe/issues/111)) ([1d53efb](https://github.com/eriksaulnier/loupe/commit/1d53efbe5b8b7d51614573d909257e4f270680f3))
+* **plugin:** add the human-decide skill for local runs ([#115](https://github.com/eriksaulnier/loupe/issues/115)) ([abd3587](https://github.com/eriksaulnier/loupe/commit/abd358785c69ade691ef6bd5fedfc9f284cc5b18))
+* **tui:** decide local runs in apply mode ([#114](https://github.com/eriksaulnier/loupe/issues/114)) ([5be002b](https://github.com/eriksaulnier/loupe/commit/5be002b7d0722ad1234ed3e32d2bc2324b6899f9))
+* **tui:** make keys case-insensitive and cancel only on purpose ([#125](https://github.com/eriksaulnier/loupe/issues/125)) ([16c13ba](https://github.com/eriksaulnier/loupe/commit/16c13ba397ffe2a2d1f458a82d08e4f3139019f2))
+* **tui:** one design language for findings and a local header ([#119](https://github.com/eriksaulnier/loupe/issues/119)) ([684bd5f](https://github.com/eriksaulnier/loupe/commit/684bd5fae5cd314e707465ba264531fccf451768))
+* **tui:** polish apply mode with a start screen and closing note ([#116](https://github.com/eriksaulnier/loupe/issues/116)) ([b40af61](https://github.com/eriksaulnier/loupe/commit/b40af618ec884cc869d879615acf4cbb4a331e97))
+
+
+### Bug Fixes
+
+* **capture:** keep untouched LFS files in --changed ([#122](https://github.com/eriksaulnier/loupe/issues/122)) ([86182bf](https://github.com/eriksaulnier/loupe/commit/86182bfaff81be8a77b7d1040871aba877329c99))
+* name the finding behind an open note that blocks readiness ([#126](https://github.com/eriksaulnier/loupe/issues/126)) ([472bcdb](https://github.com/eriksaulnier/loupe/commit/472bcdb5ff0e9b9e4ecfbbadcf1fae800eb105ad))
+* **tui:** hide the cursor again on each poll ([#124](https://github.com/eriksaulnier/loupe/issues/124)) ([0ebbe4a](https://github.com/eriksaulnier/loupe/commit/0ebbe4aad4ab98a2cd7c284b92f0d2c2f4b4185a))
+
 ## [0.21.0](https://github.com/eriksaulnier/loupe/compare/v0.20.0...v0.21.0) (2026-11-04)
 
 
