@@ -1,6 +1,8 @@
 package draft
 
 import (
+	"bytes"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -145,5 +147,24 @@ func TestLoadStampsAnOlderDraftAtItsVersion(t *testing.T) {
 	}
 	if _, err := retitle(dir, "f-001", 4); err != nil {
 		t.Fatalf("edit at the draft's version: %v", err)
+	}
+}
+
+// A finding state that does not encode is not stamped, but the draft write refuses the same value, so the mutation
+// fails and the stored draft stays as it was.
+func TestMutateRefusesAFindingThatDoesNotEncode(t *testing.T) {
+	dir := newRunWithTwoFindings(t)
+	before, err := os.ReadFile(filepath.Join(dir, "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Mutate(dir, "edit", nil, noEnv, func(d *Draft) error {
+		d.Findings[0].History = append(d.Findings[0].History, HistoryEntry{By: ByAgent, Changed: map[string]any{"x": math.NaN()}})
+		return nil
+	}); err == nil {
+		t.Fatal("a draft holding NaN was written")
+	}
+	if after, err := os.ReadFile(filepath.Join(dir, "draft.json")); err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("draft.json changed (err %v)", err)
 	}
 }

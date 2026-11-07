@@ -96,10 +96,7 @@ func mutate(dir, command string, check func(*Draft) error, getenv func(string) s
 		if err := check(loaded); err != nil {
 			return err
 		}
-		states, err := findingStates(loaded)
-		if err != nil {
-			return err
-		}
+		states := findingStates(loaded)
 		before := len(loaded.Notes)
 		if err := fn(loaded); errors.Is(err, ErrNoChange) {
 			d = loaded
@@ -115,9 +112,7 @@ func mutate(dir, command string, check func(*Draft) error, getenv func(string) s
 			}
 		}
 		loaded.Version++
-		if err := stampChanged(loaded, states); err != nil {
-			return err
-		}
+		stampChanged(loaded, states)
 		loaded.Schema = schemaVersion
 		if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), loaded); err != nil {
 			return err
@@ -141,8 +136,10 @@ type findingState struct {
 	HumanReplies []Reply   `json:"humanReplies"`
 }
 
-// findingStates encodes each finding's state, so a mutation can tell afterwards which findings it changed.
-func findingStates(d *Draft) (map[string]string, error) {
+// findingStates encodes each finding's state, so a mutation can tell afterwards which findings it changed. A state
+// that does not encode is left empty: it holds only draft values, so the draft write that follows refuses the same
+// value and the mutation fails.
+func findingStates(d *Draft) map[string]string {
 	noteFinding := map[string]string{}
 	notes := map[string][]Note{}
 	for _, n := range d.Notes {
@@ -162,22 +159,15 @@ func findingStates(d *Draft) (map[string]string, error) {
 		if dec, ok := d.Decisions[f.ID]; ok {
 			st.Decision = &dec
 		}
-		data, err := json.Marshal(st)
-		if err != nil {
-			return nil, err
-		}
+		data, _ := json.Marshal(st)
 		out[f.ID] = string(data)
 	}
-	return out, nil
+	return out
 }
 
 // stampChanged records d.Version against every finding whose state differs from before, or that is new.
-func stampChanged(d *Draft, before map[string]string) error {
-	after, err := findingStates(d)
-	if err != nil {
-		return err
-	}
-	for id, state := range after {
+func stampChanged(d *Draft, before map[string]string) {
+	for id, state := range findingStates(d) {
 		if was, ok := before[id]; !ok || was != state {
 			if d.ChangedIn == nil {
 				d.ChangedIn = map[string]int{}
@@ -185,7 +175,6 @@ func stampChanged(d *Draft, before map[string]string) error {
 			d.ChangedIn[id] = d.Version
 		}
 	}
-	return nil
 }
 
 // underLock loads the draft under the run lock and holds the lock until fn returns.
