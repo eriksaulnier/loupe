@@ -45,6 +45,10 @@ type Deps struct {
 	LockBusy func()
 	// Version, when set, replaces the version stamped into the build, so that a test can act as a release.
 	Version string
+	// Releases, when set, replaces DefaultReleases, so that update and uninstall download from a test's server.
+	Releases string
+	// Executable finds the running binary for update and uninstall; nil means os.Executable.
+	Executable func() (string, error)
 	// Screen, when set, is a test's stand-in for the terminal review and publish draw on; see tui.Screen.
 	Screen *tui.Screen
 	// palettes is built once per invocation so color is detected once; a Deps built by a test has none and each
@@ -117,7 +121,7 @@ func NewRoot(deps Deps) *cobra.Command {
 	}{
 		{groupAgent, []*cobra.Command{newCaptureCmd(deps), newAddCmd(deps), newSummaryCmd(deps), newAssessCmd(deps), newHandoffCmd(deps), newWaitCmd(deps), newEditCmd(deps), newReplyCmd(deps), newFeedbackCmd(deps)}},
 		{groupAnyone, []*cobra.Command{newShowCmd(deps), newListCmd(deps), newStatsCmd(deps)}},
-		{groupHuman, []*cobra.Command{newReviewCmd(deps), newPublishCmd(deps)}},
+		{groupHuman, []*cobra.Command{newReviewCmd(deps), newPublishCmd(deps), newSelfUpdateCmd(deps), newUninstallCmd(deps)}},
 	} {
 		for _, c := range g.commands {
 			c.GroupID = g.id

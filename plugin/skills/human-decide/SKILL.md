@@ -38,7 +38,7 @@ Add `--title "<one line>"` to name the run for the human, and `--applier "<your 
 
 Read the list of new files before you hand off in section 3. `--changed` takes every untracked file that `.gitignore` does not exclude, so a stray file, such as one holding a credential, can land in the run. When one should not be there, tell the human and stop instead of handing off.
 
-A `warnings` entry of `update-available` means a newer loupe release exists. Continue. If a later command then refuses a flag that this skill names, the binary is probably too old, so tell the user to update it. The steps are at https://github.com/eriksaulnier/loupe/blob/main/docs/install.md.
+A `warnings` entry of `update-available` means a newer loupe release exists. Continue. If a later command then refuses a flag that this skill names, the binary is probably too old, so tell the user to update it. The steps are at https://github.com/eriksaulnier/loupe/blob/main/docs/install.md. You MUST NOT update it yourself, because that replaces the binary and this skill under the running session.
 
 ## 2. File findings
 

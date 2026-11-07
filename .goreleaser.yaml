@@ -29,6 +29,9 @@ archives:
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+  # loupe update runs the latest release's install.sh, and refuses one these checksums do not cover.
+  extra_files:
+    - glob: ./install.sh
 
 # release-please owns the changelog and creates the release as a draft. goreleaser attaches the archives to it, then
 # publishes it. An immutable release takes no new assets once published, so the order is load-bearing.
@@ -44,6 +47,8 @@ release:
   # A retried run finds the assets an earlier attempt uploaded to the draft, and GitHub refuses a second upload by the
   # same name.
   replace_existing_artifacts: true
+  extra_files:
+    - glob: ./install.sh
   github:
     owner: eriksaulnier
     name: loupe

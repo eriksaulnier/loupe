@@ -7,7 +7,7 @@ release-please and goreleaser cut every release from `main`, in `.github/workflo
 1. Each push to `main` runs release-please. It opens or updates the release pull request, which bumps `.release-please-manifest.json`, the changelog and every file that `release-please-config.json` lists under `extra-files`, such as the version default in `action.yml`. While that pull request is open, the `snapshot` job builds each push, as described in [Trying a release before the merge](#trying-a-release-before-the-merge).
 2. Merging the release pull request runs release-please again. It creates the tag and a draft release named after the tag, with the changelog section as its notes. `"draft": true` makes the release a draft. `"force-tag-creation": true` creates the tag at once, because GitHub creates no tag for a draft until it is published, and release-please needs the tag to find the previous release.
 3. The `goreleaser` job runs only when release-please reports a release. It runs `mise run check`, then checks that exactly one draft release carries the tag's name, and fails if not.
-4. goreleaser builds the archives and `checksums.txt`, finds the draft by name (`use_existing_draft` in `.goreleaser.yaml`), uploads every asset to it and then publishes it. `mode: keep-existing` keeps release-please's notes.
+4. goreleaser builds the archives and `checksums.txt`, which also covers `install.sh` for `loupe update`, finds the draft by name (`use_existing_draft` in `.goreleaser.yaml`), uploads every asset to it and then publishes it. `mode: keep-existing` keeps release-please's notes.
 5. The `install-action` job runs `action.yml` on each target against the new release, and checks that `loupe --version` prints the tag.
 
 The release is public only after step 4. Until then its download URLs return 404, and only accounts with push access can see it, so the install action and mise do not find it.
@@ -22,7 +22,7 @@ The `install-script` job then runs `install.sh` with no pin on each target, and 
 
 ## Trying a release before the merge
 
-GITHUB_TOKEN opens the release pull request, so no `ci.yml` run builds it. Instead, while a release pull request is open, `release.yml`'s `snapshot` job builds `main`'s head after each push with `goreleaser release --snapshot`, versioned from that pull request's manifest. It builds `main`, not the pull request's branch, because release-please refreshes the branch only when the changelog changes, and the merge releases `main`'s code either way. It uploads the four archives and `checksums.txt` as the run's artifact `loupe-snapshot`, and publishes nothing. The binary prints `loupe version <version>-SNAPSHOT-<commit>`.
+GITHUB_TOKEN opens the release pull request, so no `ci.yml` run builds it. Instead, while a release pull request is open, `release.yml`'s `snapshot` job builds `main`'s head after each push with `goreleaser release --snapshot`, versioned from that pull request's manifest. It builds `main`, not the pull request's branch, because release-please refreshes the branch only when the changelog changes, and the merge releases `main`'s code either way. It uploads the four archives, `install.sh` and `checksums.txt` as the run's artifact `loupe-snapshot`, and publishes nothing. The binary prints `loupe version <version>-SNAPSHOT-<commit>`.
 
 The release SHOULD be tried this way before its pull request is merged. Take the newest snapshot, and pick the archive for your platform:
 

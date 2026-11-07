@@ -35,20 +35,13 @@ This is what a published review looks like. A CI review uses the same format.
 
 ## Install
 
-Install the binary into `~/.local/bin`. The script checks the download against the release's checksum.
+One command installs the binary into `~/.local/bin`, checked against the release's checksum. It also installs the agent plugin, at the same release, into each of Claude Code, Codex and Pi that it finds.
 
 ```sh
 curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
 ```
 
-Then add the agent plugin. For Claude Code:
-
-```sh
-claude plugin marketplace add eriksaulnier/loupe
-claude plugin install loupe@loupe
-```
-
-[Install](docs/install.md) covers Codex, Pi, mise, release archives and GitHub Actions.
+`loupe update` updates the binary and the plugins together, and `loupe uninstall` removes both and keeps your review runs. [Install](docs/install.md) covers the options, mise, release archives and GitHub Actions.
 
 loupe runs on Linux and macOS, on amd64 and arm64, and needs `git`. It reaches GitHub with the token in `GH_TOKEN` or `GITHUB_TOKEN`, or else the one `gh auth login` stored, so a signed-in `gh` needs no setup.
 
@@ -56,7 +49,7 @@ To try the interface without a pull request, run `mise run demo` in a clone. It 
 
 ## Documentation
 
-- [Install](docs/install.md): the binary, the agent plugin for each host, and updating the two together.
+- [Install](docs/install.md): the binary, the agent plugin for each host, and updating or removing the two together.
 - [Comment format](docs/comment-format.md): the full reference for a published review, for anyone building on it.
 - [The review workflow](docs/review-workflow.md): the attended loop, local work, the pane hand-off, adapting a review skill you already have, and the command and environment reference.
 - [Unattended reviews in CI](docs/ci-action.md): the GitHub Action, the pipeline steps, sticky rounds and the rules an unattended review follows.

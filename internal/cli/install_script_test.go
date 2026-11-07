@@ -831,3 +831,50 @@ func TestInstallScriptURL(t *testing.T) {
 		}
 	}
 }
+
+// loupe update installs into the directory a symlink on PATH resolves to. The binary that runs is then the new one,
+// so the script MUST NOT warn that the directory is off PATH or that another copy comes first.
+func TestInstallScriptAcceptsASymlinkOnPathToTheTarget(t *testing.T) {
+	f := newInstallFixture(t)
+	f.latest(t)
+	f.placeExisting(t)
+	onPath := filepath.Join(f.home, "bin")
+	if err := os.MkdirAll(onPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(f.target, "loupe"), filepath.Join(onPath, "loupe")); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, err := f.run(t, "PATH="+f.bin+":"+onPath+":/usr/bin:/bin")
+	if err != nil {
+		t.Fatalf("install failed: %v\n%s", err, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q, want no warning", stderr)
+	}
+}
+
+// A symlink to some other file is still another copy.
+func TestInstallScriptWarnsAboutASymlinkToAnotherFile(t *testing.T) {
+	f := newInstallFixture(t)
+	f.latest(t)
+	other := filepath.Join(f.home, "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeExecutable(t, filepath.Join(other, "loupe"), standInBinary("0.0.1"))
+	onPath := filepath.Join(f.home, "bin")
+	if err := os.MkdirAll(onPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(other, "loupe"), filepath.Join(onPath, "loupe")); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, err := f.run(t, "PATH="+f.bin+":"+onPath+":"+f.target+":/usr/bin:/bin")
+	if err != nil {
+		t.Fatalf("install failed: %v\n%s", err, stderr)
+	}
+	if !strings.Contains(stderr, "loupe resolves to "+filepath.Join(onPath, "loupe")) {
+		t.Errorf("stderr = %q, want the other-copy warning", stderr)
+	}
+}

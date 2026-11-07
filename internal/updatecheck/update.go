@@ -19,8 +19,8 @@ const (
 	// Owner and Repo name the repository whose latest release is checked.
 	Owner = "eriksaulnier"
 	Repo  = "loupe"
-	// InstallDocs is where a warning sends a person, since loupe cannot know how it was installed.
-	InstallDocs = "https://github.com/eriksaulnier/loupe/blob/main/docs/install.md"
+	// Command is what a warning tells a person to run. It refuses an install it cannot update, with that install's fix.
+	Command = "loupe update"
 	// CheckInterval is the least time between lookups.
 	CheckInterval = 24 * time.Hour
 	// LookupTimeout is the most a lookup may add to a command.
@@ -48,6 +48,12 @@ func Enabled(current string, getenv func(string) string) bool {
 		return false
 	}
 	return getenv("CI") == "" && getenv(DisableEnv) == ""
+}
+
+// IsRelease says that version is X.Y.Z, which only a release build carries.
+func IsRelease(version string) bool {
+	_, ok := parse(version)
+	return ok
 }
 
 // Cached returns the latest version from the last check, or nothing.

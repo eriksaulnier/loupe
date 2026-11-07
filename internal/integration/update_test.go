@@ -59,8 +59,7 @@ func TestCaptureWarnsWhenANewerReleaseExists(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("exit %d: %s", exit, stderr)
 	}
-	want := "warning: loupe 0.20.0 is available, you have 0.19.0. To update, see "
-	if !strings.Contains(stderr, want) || !strings.Contains(stderr, "docs/install.md") {
+	if want := "warning: loupe 0.20.0 is available, you have 0.19.0. Ask the human to run loupe update\n"; !strings.Contains(stderr, want) {
 		t.Errorf("stderr = %q", stderr)
 	}
 	warnings, _ := decodeResult(t, stdout)["warnings"].([]any)
@@ -247,7 +246,7 @@ func TestReviewShowsTheCachedUpdate(t *testing.T) {
 	before := h.releaseLookups()
 
 	s := h.Start("review", runRef)
-	s.WaitFor("↑ loupe 0.20.0 is available, you have 0.19.0: see", "docs/install.md")
+	s.WaitFor("↑ loupe 0.20.0 is available, you have 0.19.0: run loupe update")
 	s.Press("q")
 	if _, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("exit %d: %s", exit, stderr)

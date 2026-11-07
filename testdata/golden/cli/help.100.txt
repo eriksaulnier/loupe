@@ -26,20 +26,22 @@ Workflow  capture → add → summary → review → publish
   An agent MAY block on loupe wait for the human's notes and MUST pass --run to it.
 
 Commands
-  agent   capture   Capture a pull request, or local work, into a new run
-          add       File findings into the draft
-          summary   Set the summary the human reads while sorting findings
-          assess    Mark earlier findings as still open or addressed
-          handoff   Open review for the human in a new pane
-          wait      Block until the human sends a finding back or publishes
-          edit      Change, withdraw or restore a finding
-          reply     Answer a send-back note
-          feedback  Read the human's notes, dispositions and readiness
-  anyone  show      Show the draft, dispositions and readiness
-          list      List every run with its state and counts
-          stats     Roll up what the human gate did across runs
-  human   review    Decide each finding in the review interface (human-only)
-          publish   Confirm and post the review to GitHub (human-only)
+  agent   capture    Capture a pull request, or local work, into a new run
+          add        File findings into the draft
+          summary    Set the summary the human reads while sorting findings
+          assess     Mark earlier findings as still open or addressed
+          handoff    Open review for the human in a new pane
+          wait       Block until the human sends a finding back or publishes
+          edit       Change, withdraw or restore a finding
+          reply      Answer a send-back note
+          feedback   Read the human's notes, dispositions and readiness
+  anyone  show       Show the draft, dispositions and readiness
+          list       List every run with its state and counts
+          stats      Roll up what the human gate did across runs
+  human   review     Decide each finding in the review interface (human-only)
+          publish    Confirm and post the review to GitHub (human-only)
+          update     Install the latest release and its agent plugins
+          uninstall  Remove loupe and its agent plugins, and keep the runs
 
 Send-back loop  when the human sends findings back from review with notes
   loupe feedback --run owner/repo#123 --json              read notes, dispositions and readiness

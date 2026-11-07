@@ -69,6 +69,9 @@ jobs:
           args: release --snapshot --clean
         env:
           GORELEASER_CURRENT_TAG: v${{ steps.next.outputs.version }}
+      # In dist/, so the artifact keeps one flat root: upload-artifact roots it at the paths' common ancestor.
+      - if: steps.next.outputs.version
+        run: cp install.sh dist/
       # One name across versions, so docs/releasing.md can find the newest without knowing the version.
       - if: steps.next.outputs.version
         uses: actions/upload-artifact@v7
@@ -77,6 +80,7 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/checksums.txt
+            dist/install.sh
           if-no-files-found: error
           # A re-run of all jobs builds the same commit again.
           overwrite: true
