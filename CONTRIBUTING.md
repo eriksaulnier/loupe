@@ -107,6 +107,8 @@ Dependabot is the standing exception, since it prefixes `build` but capitalizes 
 
 CI runs `mise run check` on every pull request and reports coverage to Codecov. The description MUST show the checks that ran, with their output, and MUST name what was not verified (Principle VII). A change to a contract names the spec amendment that allows it.
 
+`codecov.yml` sets no patch target, so the `codecov/patch` check uses Codecov's default: the lines a pull request changes MUST be covered at least as well as the base commit's total, which is close to 100%. Check it before you push. Run `LOUPE_TEST_FLAGS='-coverprofile=coverage.out -coverpkg=./...' mise run check`, then read each changed function in `go tool cover -func=coverage.out`. A branch that no input can reach, such as an error from encoding a value just decoded, SHOULD be removed rather than left uncovered.
+
 ## Releases
 
 release-please opens the release pull request from `main`, and merging it tags a draft release. goreleaser attaches the archives and then publishes the draft. The owner MAY cut an `X.Y.Z-rc.N` pre-release of a branch with `.github/workflows/prerelease.yml`. Nothing is tagged, released or written into the release manifest by hand. [`docs/releasing.md`](docs/releasing.md) describes the flow, its rules and how to enable immutable releases.
