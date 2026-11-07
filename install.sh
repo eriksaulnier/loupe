@@ -140,11 +140,33 @@ agent_failed() {
 	failed_agents=1
 }
 
-# Each agent prints JSON over many lines. Joined and split at each brace, an object's top-level fields share a line,
-# so plain case patterns can read it without jq. The next line belongs to the entry only when this one ends in a
-# colon, which opens a nested object such as Codex's source. In Claude Code's flat list it is another marketplace.
+# Prints the whole JSON object that holds "name":"loupe", nested objects included, so the checks below hold whatever
+# order an agent prints its fields in. jq is not assumed, so braces are counted outside strings, skipping escapes.
 loupe_entry() {
-	printf '%s' "$1" | tr -d ' \t\r\n' | tr '{' '\n' | awk '/"name":"loupe"/ { print; if (/:$/ && getline > 0) print; exit }'
+	printf '%s' "$1" | tr -d ' \t\r\n' | awk -v key='"name":"loupe"' '{
+		n = length($0); top = 0; found = 0; instr = 0
+		for (i = 1; i <= n; i++) {
+			c = substr($0, i, 1)
+			if (instr) {
+				if (c == "\\") i++
+				else if (c == "\"") instr = 0
+			} else if (c == "{") {
+				stack[++top] = i
+			} else if (c == "}") {
+				if (found && top == want) {
+					print substr($0, stack[top], i - stack[top] + 1)
+					exit
+				}
+				top--
+			} else if (c == "\"") {
+				if (!found && substr($0, i, length(key)) == key) {
+					found = 1
+					want = top
+				}
+				instr = 1
+			}
+		}
+	}'
 }
 
 sync_claude() {

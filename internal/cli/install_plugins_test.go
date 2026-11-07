@@ -562,3 +562,44 @@ func TestInstallScriptUninstallSaysWhenItSkipsThePlugins(t *testing.T) {
 		})
 	}
 }
+
+// The JSON field order is the agent's to choose, so the local-directory skip MUST NOT depend on name coming first.
+func TestInstallScriptPluginsSkipLocalMarketplaceInAnyFieldOrder(t *testing.T) {
+	f := newInstallFixture(t)
+	f.latest(t)
+	agents, env := f.withAgents(t, "claude", "codex")
+	agents.write(t, "claude.src", "/work/loupe")
+	agents.write(t, "claude.installed", "/work/loupe")
+	agents.write(t, "claude.json", "[\n  {\n    \"source\": \"directory\",\n    \"path\": \"/work/loupe\",\n    \"name\": \"loupe\"\n  }\n]\n")
+	agents.write(t, "codex.src", "/work/loupe")
+	agents.write(t, "codex.installed", "/work/loupe")
+	agents.write(t, "codex.json", "{\n  \"marketplaces\": [\n    {\n      \"name\": \"loupe\",\n      \"interface\": {\n        \"displayName\": \"loupe\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/work/loupe\"\n      }\n    }\n  ]\n}\n")
+	stdout, stderr, err := f.run(t, env...)
+	if err != nil {
+		t.Fatalf("install failed: %v\n%s", err, stderr)
+	}
+	assertCalls(t, agents.log(t), "claude plugin marketplace list --json", "codex plugin marketplace list --json")
+	for _, want := range []string{"Claude Code: skipped", "Codex: skipped"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout does not say %q:\n%s", want, stdout)
+		}
+	}
+}
+
+// A brace or quote inside another marketplace's strings MUST NOT shift where loupe's entry starts or ends.
+func TestInstallScriptPluginsReadPastBracesInStrings(t *testing.T) {
+	f := newInstallFixture(t)
+	f.latest(t)
+	agents, env := f.withAgents(t, "claude")
+	agents.write(t, "claude.src", "/work/loupe")
+	agents.write(t, "claude.installed", "/work/loupe")
+	agents.write(t, "claude.json", "[\n  {\n    \"name\": \"odd\",\n    \"source\": \"directory\",\n    \"path\": \"/work/a}b\\\"c\"\n  },\n  {\n    \"name\": \"loupe\",\n    \"source\": \"directory\",\n    \"path\": \"/work/loupe\"\n  }\n]\n")
+	stdout, stderr, err := f.run(t, env...)
+	if err != nil {
+		t.Fatalf("install failed: %v\n%s", err, stderr)
+	}
+	assertCalls(t, agents.log(t), "claude plugin marketplace list --json")
+	if !strings.Contains(stdout, "Claude Code: skipped") {
+		t.Errorf("stdout does not say the local marketplace was skipped:\n%s", stdout)
+	}
+}
