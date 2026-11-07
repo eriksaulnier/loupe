@@ -59,7 +59,7 @@ Run references
 Conventions
   --json                  print exactly one JSON result object on stdout; diagnostics go to stderr
   --from <file>|-         read JSON input from a file, or from stdin with -
-  --expect-version <n>    refuse unless the draft is at version n (add, edit, summary, assess, reply)
+  --expect-version <n>    refuse unless the draft is at version n (add, summary, assess, reply); on edit, unless the finding is unchanged since n
   --by agent|human        who makes the change (default agent)
   --version               print loupe's own version
   Exit 0 on success, 1 on refusal, 2 on usage error. Every refusal names a code and a fix.
