@@ -63,8 +63,9 @@ type Draft struct {
 	// AssessedAgainst is the previous round the assessments were read from. Their refs name only that round's earlier
 	// list, so publish refuses once a lower round publishes and becomes the previous one.
 	AssessedAgainst *AssessedAgainst `json:"assessedAgainst,omitempty"`
-	// ChangedIn maps each finding id to the draft version of the last mutation that changed the finding or its
-	// decision, so loupe edit --expect-version refuses only when the edited finding moved. Mutate keeps it.
+	// ChangedIn maps each finding id to the draft version of the last mutation that changed the finding, its
+	// decision, its notes or the human's replies to them, so loupe edit --expect-version refuses only when the edited
+	// finding moved. Mutate keeps it.
 	ChangedIn map[string]int `json:"changedIn,omitempty"`
 }
 

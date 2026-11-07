@@ -69,27 +69,58 @@ func TestMutateFindingRefusesAfterItsOwnDecision(t *testing.T) {
 	}
 }
 
-// Clearing a decision, as send-back does, moves the finding too. A note on a finding with no decision does not: the
-// agent's edit answers notes, and the human decides the revised finding afresh.
+func reviewMutate(t *testing.T, dir string, fn func(*Draft) error) {
+	t.Helper()
+	if _, err := Mutate(dir, "review", nil, noEnv, fn); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func sendBackOn(t *testing.T, dir, id, body string) {
+	t.Helper()
+	reviewMutate(t, dir, func(d *Draft) error { _, err := SendBack(d, id, body, stampAt); return err })
+}
+
+// Clearing a decision, as send-back does, moves the finding too.
 func TestMutateFindingRefusesAfterItsDecisionIsCleared(t *testing.T) {
 	dir := newRunWithTwoFindings(t)
 	accept(t, dir, "f-002")
-	sendBack := func() {
-		t.Helper()
-		if _, err := Mutate(dir, "review", nil, noEnv, func(d *Draft) error {
-			_, err := SendBack(d, "f-002", "Why?", stampAt)
-			return err
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	sendBack()
+	sendBackOn(t, dir, "f-002", "Why?")
 	if _, err := retitle(dir, "f-002", 2); err == nil {
 		t.Fatal("edit after a send-back cleared the decision read at version 2 was not refused")
 	}
-	sendBack()
-	if _, err := retitle(dir, "f-002", 3); err != nil {
-		t.Fatalf("a second note on the undecided finding refused the edit: %v", err)
+}
+
+// The human changing their mind on a finding with no decision: a second note, or dismissing the note the agent is
+// answering, refuses an edit read before it.
+func TestMutateFindingRefusesAfterTheHumanChangesItsNotes(t *testing.T) {
+	for name, change := range map[string]func(t *testing.T, dir string){
+		"second note": func(t *testing.T, dir string) { sendBackOn(t, dir, "f-002", "Actually, also this.") },
+		"dismissed": func(t *testing.T, dir string) {
+			reviewMutate(t, dir, func(d *Draft) error { return DismissNote(d, "n-001", stampAt) })
+		},
+		"human reply": func(t *testing.T, dir string) {
+			reviewMutate(t, dir, func(d *Draft) error { _, err := AddReply(d, "n-001", "Never mind.", ByHuman, stampAt); return err })
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := newRunWithTwoFindings(t)
+			sendBackOn(t, dir, "f-002", "Why?")
+			change(t, dir)
+			if _, err := retitle(dir, "f-002", 2); err == nil {
+				t.Fatal("edit read before the human's change was not refused")
+			}
+		})
+	}
+}
+
+// The agent answering the note first does not refuse its own edit of the finding.
+func TestMutateFindingIgnoresTheAgentsReply(t *testing.T) {
+	dir := newRunWithTwoFindings(t)
+	sendBackOn(t, dir, "f-002", "Why?")
+	reviewMutate(t, dir, func(d *Draft) error { _, err := AddReply(d, "n-001", "Revising.", ByAgent, stampAt); return err })
+	if _, err := retitle(dir, "f-002", 2); err != nil {
+		t.Fatalf("the agent's own reply refused its edit: %v", err)
 	}
 }
 

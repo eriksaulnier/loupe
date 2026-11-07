@@ -131,17 +131,34 @@ func mutate(dir, command string, check func(*Draft) error, getenv func(string) s
 	return d, nil
 }
 
-// findingState is what a per-finding check guards: the finding as stored, and its decision.
+// findingState is what a per-finding check guards: the finding as stored, its decision, its notes and the human's
+// replies to them. A note the human adds, resolves or dismisses changes what the agent's edit answers, so it moves
+// the finding. The agent's own replies do not, so replying before an edit does not refuse it.
 type findingState struct {
-	Finding  Finding   `json:"finding"`
-	Decision *Decision `json:"decision"`
+	Finding      Finding   `json:"finding"`
+	Decision     *Decision `json:"decision"`
+	Notes        []Note    `json:"notes"`
+	HumanReplies []Reply   `json:"humanReplies"`
 }
 
 // findingStates encodes each finding's state, so a mutation can tell afterwards which findings it changed.
 func findingStates(d *Draft) (map[string]string, error) {
+	noteFinding := map[string]string{}
+	notes := map[string][]Note{}
+	for _, n := range d.Notes {
+		noteFinding[n.ID] = n.FindingID
+		notes[n.FindingID] = append(notes[n.FindingID], n)
+	}
+	replies := map[string][]Reply{}
+	for _, r := range d.Replies {
+		if r.By == ByHuman {
+			id := noteFinding[r.NoteID]
+			replies[id] = append(replies[id], r)
+		}
+	}
 	out := make(map[string]string, len(d.Findings))
 	for _, f := range d.Findings {
-		st := findingState{Finding: f}
+		st := findingState{Finding: f, Notes: notes[f.ID], HumanReplies: replies[f.ID]}
 		if dec, ok := d.Decisions[f.ID]; ok {
 			st.Decision = &dec
 		}
