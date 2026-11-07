@@ -149,7 +149,7 @@ func runLocalCapture(cmd *cobra.Command, deps Deps, form string) error {
 		if available := updatecheck.Available(current, updatecheck.Cached(updatecheck.CachePath(root))); available != "" {
 			warnings = append(warnings, WarnUpdateAvailable)
 			es := deps.errStyle()
-			_, _ = fmt.Fprintf(deps.Stderr, "%s %s. Run %s\n", es.Emphasis(es.Warn).Render("warning:"), available, updatecheck.Command)
+			_, _ = fmt.Fprintf(deps.Stderr, "%s %s. Ask the human to run %s\n", es.Emphasis(es.Warn).Render("warning:"), available, updatecheck.Command)
 		}
 	}
 	next := []string{

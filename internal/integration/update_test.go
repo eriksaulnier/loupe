@@ -59,7 +59,7 @@ func TestCaptureWarnsWhenANewerReleaseExists(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("exit %d: %s", exit, stderr)
 	}
-	if want := "warning: loupe 0.20.0 is available, you have 0.19.0. Run loupe update\n"; !strings.Contains(stderr, want) {
+	if want := "warning: loupe 0.20.0 is available, you have 0.19.0. Ask the human to run loupe update\n"; !strings.Contains(stderr, want) {
 		t.Errorf("stderr = %q", stderr)
 	}
 	warnings, _ := decodeResult(t, stdout)["warnings"].([]any)
