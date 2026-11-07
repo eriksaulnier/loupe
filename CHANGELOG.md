@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/eriksaulnier/loupe/compare/v0.22.0...v0.22.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **edit:** check --expect-version against the edited finding only ([#129](https://github.com/eriksaulnier/loupe/issues/129)) ([c006b45](https://github.com/eriksaulnier/loupe/commit/c006b45d3de09bc846f62ec12974589794dae4a5))
+
 ## [0.22.0](https://github.com/eriksaulnier/loupe/compare/v0.21.0...v0.22.0) (2026-11-07)
 
 

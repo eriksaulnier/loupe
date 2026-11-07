@@ -59,7 +59,7 @@ Each [release](https://github.com/eriksaulnier/loupe/releases) attaches one arch
 
 <!-- x-release-please-start-version -->
 ```sh
-version=0.22.0
+version=0.22.1
 os=darwin arch=arm64
 archive="loupe_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/eriksaulnier/loupe/releases/download/v$version"
@@ -117,14 +117,14 @@ The install script and `loupe update` set the plugin up for you. The commands be
 ### Claude Code
 
 ```sh
-claude plugin marketplace add eriksaulnier/loupe@v0.22.0
+claude plugin marketplace add eriksaulnier/loupe@v0.22.1
 claude plugin install loupe@loupe
 ```
 
 ### Codex
 
 ```sh
-codex plugin marketplace add eriksaulnier/loupe@v0.22.0
+codex plugin marketplace add eriksaulnier/loupe@v0.22.1
 codex plugin add loupe@loupe
 ```
 <!-- x-release-please-end -->
@@ -138,7 +138,7 @@ Pi has no sandbox. `pi install` at a new tag replaces the earlier one.
 
 <!-- x-release-please-start-version -->
 ```sh
-pi install git:github.com/eriksaulnier/loupe@v0.22.0
+pi install git:github.com/eriksaulnier/loupe@v0.22.1
 ```
 <!-- x-release-please-end -->
 
