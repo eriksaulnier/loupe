@@ -1,6 +1,7 @@
 package draft
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -39,21 +40,65 @@ func Load(dir string) (*Draft, error) {
 	if problem != "" {
 		return nil, run.RecordRefusal(path, errors.New(problem))
 	}
+	// A draft from before schema 6 holds no stamps. Each finding reads as changed at the draft's version, so the
+	// per-finding check is as strict as the draft-wide one until a mutation stamps it.
+	if d.Schema < 6 {
+		d.ChangedIn = map[string]int{}
+		for _, f := range d.Findings {
+			d.ChangedIn[f.ID] = d.Version
+		}
+	}
 	return &d, nil
 }
+
+const versionFix = "re-read with loupe show --json and retry"
 
 // Mutate is the only way a draft changes: read, check the expected version and apply fn all under the run lock, so
 // concurrent writers serialize and a failed fn leaves the file untouched.
 func Mutate(dir, command string, expectVersion *int, getenv func(string) string, fn func(*Draft) error) (*Draft, error) {
+	return mutate(dir, command, func(loaded *Draft) error {
+		if expectVersion != nil && *expectVersion != loaded.Version {
+			return staleDraft(loaded, *expectVersion)
+		}
+		return nil
+	}, getenv, fn)
+}
+
+// MutateFinding is Mutate for a change to one finding: expectVersion is the draft version the caller read the
+// finding at, and it refuses only when that finding or its decision changed since. A change to another finding
+// passes, so an agent editing one finding does not race the human deciding the rest. A finding that does not exist
+// passes the check, so fn reports it.
+func MutateFinding(dir, command, findingID string, expectVersion *int, getenv func(string) string, fn func(*Draft) error) (*Draft, error) {
+	return mutate(dir, command, func(loaded *Draft) error {
+		if expectVersion == nil {
+			return nil
+		}
+		if *expectVersion > loaded.Version {
+			return staleDraft(loaded, *expectVersion)
+		}
+		if at := loaded.ChangedIn[findingID]; at > *expectVersion {
+			return refusal.New(refusal.Version, fmt.Sprintf("%s changed at draft version %d, after version %d", findingID, at, *expectVersion), versionFix)
+		}
+		return nil
+	}, getenv, fn)
+}
+
+func staleDraft(d *Draft, expected int) error {
+	return refusal.New(refusal.Version, fmt.Sprintf("draft is at version %d, expected %d", d.Version, expected), versionFix)
+}
+
+func mutate(dir, command string, check func(*Draft) error, getenv func(string) string, fn func(*Draft) error) (*Draft, error) {
 	var d *Draft
 	err := underLock(dir, command, getenv, func(loaded *Draft) error {
 		if err := refuseReturned(dir); err != nil {
 			return err
 		}
-		if expectVersion != nil && *expectVersion != loaded.Version {
-			return refusal.New(refusal.Version,
-				fmt.Sprintf("draft is at version %d, expected %d", loaded.Version, *expectVersion),
-				"re-read with loupe show --json and retry")
+		if err := check(loaded); err != nil {
+			return err
+		}
+		states, err := findingStates(loaded)
+		if err != nil {
+			return err
 		}
 		before := len(loaded.Notes)
 		if err := fn(loaded); errors.Is(err, ErrNoChange) {
@@ -70,6 +115,9 @@ func Mutate(dir, command string, expectVersion *int, getenv func(string) string,
 			}
 		}
 		loaded.Version++
+		if err := stampChanged(loaded, states); err != nil {
+			return err
+		}
 		loaded.Schema = schemaVersion
 		if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), loaded); err != nil {
 			return err
@@ -81,6 +129,46 @@ func Mutate(dir, command string, expectVersion *int, getenv func(string) string,
 		return nil, err
 	}
 	return d, nil
+}
+
+// findingState is what a per-finding check guards: the finding as stored, and its decision.
+type findingState struct {
+	Finding  Finding   `json:"finding"`
+	Decision *Decision `json:"decision"`
+}
+
+// findingStates encodes each finding's state, so a mutation can tell afterwards which findings it changed.
+func findingStates(d *Draft) (map[string]string, error) {
+	out := make(map[string]string, len(d.Findings))
+	for _, f := range d.Findings {
+		st := findingState{Finding: f}
+		if dec, ok := d.Decisions[f.ID]; ok {
+			st.Decision = &dec
+		}
+		data, err := json.Marshal(st)
+		if err != nil {
+			return nil, err
+		}
+		out[f.ID] = string(data)
+	}
+	return out, nil
+}
+
+// stampChanged records d.Version against every finding whose state differs from before, or that is new.
+func stampChanged(d *Draft, before map[string]string) error {
+	after, err := findingStates(d)
+	if err != nil {
+		return err
+	}
+	for id, state := range after {
+		if was, ok := before[id]; !ok || was != state {
+			if d.ChangedIn == nil {
+				d.ChangedIn = map[string]int{}
+			}
+			d.ChangedIn[id] = d.Version
+		}
+	}
+	return nil
 }
 
 // underLock loads the draft under the run lock and holds the lock until fn returns.

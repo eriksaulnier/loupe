@@ -420,3 +420,36 @@ func TestChangedDiffIsRefusedOnEveryLoad(t *testing.T) {
 		t.Fatalf("review: exit %d error %v, want a record refusal naming the file", code, errObj)
 	}
 }
+
+// decideInReview accepts a finding as the review interface does, which moves the draft version.
+func decideInReview(t *testing.T, dir, id string) {
+	t.Helper()
+	if _, err := draft.Mutate(dir, "review", nil, func(string) string { return "" }, func(d *draft.Draft) error {
+		_, err := draft.Accept(d, id, sendBackAt)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The race from a live local run: the agent read version 0, the human decided another finding, the agent revises f-002.
+func TestEditPassesWhileTheHumanDecidesAnotherFinding(t *testing.T) {
+	home, dir := sendBackRun(t)
+	decideInReview(t, dir, "f-001")
+	code, env, s := execIn(t, home, "", "edit", "f-002", "--title", "Revised", "--expect-version", "0")
+	if code != 0 || env["version"] != float64(2) {
+		t.Fatalf("exit %d envelope %v stderr %s", code, env, s.stderr.String())
+	}
+}
+
+func TestEditRefusesWhenTheHumanDecidedThatFinding(t *testing.T) {
+	home, dir := sendBackRun(t)
+	decideInReview(t, dir, "f-002")
+	code, s := runWithStdin(t, home, "", "edit", "f-002", "--title", "Revised", "--expect-version", "0", "--run", "o/r#1", "--json")
+	if errObj := wantCode(t, code, s, refusal.Version); errObj["message"] != "f-002 changed at draft version 1, after version 0" {
+		t.Fatalf("error %v", errObj)
+	}
+	if f := storedFinding(t, dir, "f-002"); f.Title != "Two" {
+		t.Fatalf("refused edit wrote %+v", f)
+	}
+}

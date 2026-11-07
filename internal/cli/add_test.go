@@ -243,8 +243,12 @@ func TestExpectVersionAtTheCommandLine(t *testing.T) {
 	if code, env, _ := execIn(t, home, "", "add", "--run", "o/r#1", "--title", "t", "--body", "b", "--general", "--expect-version", current); code != 0 {
 		t.Fatalf("add at the current version: exit %d envelope %v", code, env)
 	}
-	// The add moved the draft on, so the version just read is stale for the edit.
-	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--run", "o/r#1", "--title", "u", "--expect-version", current); code != 1 || errorOf(env)["code"] != "version" {
-		t.Fatalf("edit at the old version: exit %d envelope %v", code, env)
+	// The add moved the draft on but left f-001 alone, so the version just read still holds for an edit of f-001. It
+	// is stale for f-003, which did not exist at that version.
+	if code, env, _ := execIn(t, home, "", "edit", "f-003", "--run", "o/r#1", "--title", "u", "--expect-version", current); code != 1 || errorOf(env)["code"] != "version" {
+		t.Fatalf("edit of the new finding at the old version: exit %d envelope %v", code, env)
+	}
+	if code, env, _ := execIn(t, home, "", "edit", "f-001", "--run", "o/r#1", "--title", "u", "--expect-version", current); code != 0 {
+		t.Fatalf("edit of an untouched finding at the old version: exit %d envelope %v", code, env)
 	}
 }

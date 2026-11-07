@@ -7,7 +7,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const SchemaVersion = 5
+const SchemaVersion = 6
 
 // Rules configures which fields and input forms a mutator accepts. The zero value is today's PR behavior.
 type Rules struct {
@@ -63,6 +63,9 @@ type Draft struct {
 	// AssessedAgainst is the previous round the assessments were read from. Their refs name only that round's earlier
 	// list, so publish refuses once a lower round publishes and becomes the previous one.
 	AssessedAgainst *AssessedAgainst `json:"assessedAgainst,omitempty"`
+	// ChangedIn maps each finding id to the draft version of the last mutation that changed the finding or its
+	// decision, so loupe edit --expect-version refuses only when the edited finding moved. Mutate keeps it.
+	ChangedIn map[string]int `json:"changedIn,omitempty"`
 }
 
 // AssessedAgainst names a previous round as show --previous does.

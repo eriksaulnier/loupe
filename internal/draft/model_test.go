@@ -12,7 +12,7 @@ func TestNewEmptyEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"schema":5,"version":0,"summary":"","findings":[],"decisions":{},"notes":[],"replies":[]}`
+	want := `{"schema":6,"version":0,"summary":"","findings":[],"decisions":{},"notes":[],"replies":[]}`
 	if string(got) != want {
 		t.Fatalf("got %s\nwant %s", got, want)
 	}

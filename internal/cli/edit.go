@@ -48,6 +48,11 @@ human decision. Any change to a published field or to inclusion increments rev a
 finding's decision, so the human decides it again. Setting a field to its current value
 changes nothing.
 
+--expect-version <n> is the draft version you read the finding at. edit refuses with version
+only when this finding, its inclusion or its decision changed after version n, or when n is
+past the draft's version. A decision the human makes on another finding meanwhile does not
+refuse the edit, so pass the version you read rather than re-reading after each decision.
+
 The flags edit a single finding instead of --from: the add flags, which replace the whole
 location when any location flag is given, plus the --clear-* flags and --not-blocking.
 
@@ -204,7 +209,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 	}
 	var edited draft.Finding
 	var cleared, wasIncluded bool
-	d, err := draft.Mutate(dir, "edit", expectVersion, deps.Getenv, func(d *draft.Draft) error {
+	d, err := draft.MutateFinding(dir, "edit", findingID, expectVersion, deps.Getenv, func(d *draft.Draft) error {
 		for _, f := range d.Findings {
 			if f.ID == findingID {
 				wasIncluded = f.Included

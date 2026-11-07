@@ -85,7 +85,7 @@ Block on `loupe wait --run <ref> --json`. It returns as soon as the human sends 
 When the user asks you to handle feedback on a run, run `loupe feedback --run <ref> --json`; after `loupe wait` returns, read its result instead. Each open note in `notes` names the `findingId` the human sent back and what they asked for.
 
 - To revise a finding, write the changed fields to a file and run `loupe edit <finding-id> --from <file> --run <ref> --json`. An absent key leaves a field unchanged, and `null` clears `proposal`, `location`, `label` and the other optional fields. Any change clears the human's decision, so they decide the finding again.
-- When you edit a finding, pass the `version` of your last `loupe feedback` result as `--expect-version`, so a decision the human makes meanwhile refuses your edit instead of being overwritten.
+- When you edit a finding, pass the `version` of the `loupe feedback` result you read the finding in as `--expect-version`. The edit refuses with `version` only when the human decided or changed that finding since. Decisions on other findings do not refuse it, so you need not re-read after each one. On a `version` refusal, re-read with `loupe feedback --run <ref> --json`. If the human has now decided that finding, leave it as they decided it and skip the edit.
 - To withdraw a finding, run `loupe edit <finding-id> --exclude --reason "<one line that sums up your reply>" --reason-code conceded --run <ref> --json`. The human reads the reason beside the withdrawn finding and decides from it whether to reinstate it.
 - Then answer the note with `loupe reply <note-id> --body "<what changed and why>" --run <ref> --json`.
 
