@@ -436,16 +436,28 @@ func editedIn(preview publish.Preview, body string) []int {
 	return preview.EditedIn(body)
 }
 
-// headMovedLines escapes every line for display because commit text is untrusted.
-func headMovedLines(moved *publish.HeadMoved) []string {
+// headMovedLines escapes every line for display because commit text is untrusted. The size leads, since it is what
+// a human weighs before approving commits unread; an approve then says so, and that branch protection may not count
+// an approval pinned to an older commit, which GitHub's behavior loupe has not observed (specs/056-approve-moved-head).
+func headMovedLines(moved *publish.HeadMoved, action string) []string {
+	size := fmt.Sprintf("Since capture: %d %s changed, +%d -%d.", moved.Files, plural(moved.Files, "file"), moved.Additions, moved.Deletions)
+	if moved.FilesTruncated {
+		size = fmt.Sprintf("Since capture: at least %d files changed, +%d -%d (GitHub lists at most 300 changed files, so these counts can be low).",
+			moved.Files, moved.Additions, moved.Deletions)
+	}
 	lines := []string{
 		fmt.Sprintf("Head moved %d %s since capture (%s to %s).", moved.AheadBy, plural(moved.AheadBy, "commit"), shortSHA(moved.Captured), shortSHA(moved.Live)),
+		size,
 		fmt.Sprintf("This review posts pinned to the captured commit %s.", shortSHA(moved.Captured)),
 		"GitHub will not mark its comments outdated for these commits.",
 		"A comment on a line they changed shows beside the new code.",
-		"",
-		"Commits since capture:",
 	}
+	if action == "approve" {
+		lines = append(lines,
+			fmt.Sprintf("Approving also covers the %d %s since capture, which this review did not read.", moved.AheadBy, plural(moved.AheadBy, "commit")),
+			fmt.Sprintf("A branch that dismisses stale approvals or requires approval of the latest push may not count an approval pinned to %s.", shortSHA(moved.Captured)))
+	}
+	lines = append(lines, "", "Commits since capture:")
 	if earlier := moved.AheadBy - len(moved.Commits); earlier > 0 {
 		lines = append(lines, fmt.Sprintf("  and %d earlier", earlier))
 	}
@@ -490,7 +502,7 @@ func (c *confirmation) content(m *Model) string {
 	}
 	if moved := c.preview.HeadMoved; moved != nil {
 		parts = append(parts, m.styles.Rule(width, "head moved since capture", ""))
-		for _, line := range headMovedLines(moved) {
+		for _, line := range headMovedLines(moved, c.title.action) {
 			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(line, width, "")))
 		}
 		parts = append(parts, "")

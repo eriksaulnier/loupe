@@ -52,7 +52,7 @@ The check is against constitution 4.0.0.
 - **Size totals.** Decision: `HeadMoved` gains `Files`, `Additions` and `Deletions`. `Files` is `len(cmp.Files)`, and the other two are sums over `cmp.Files`. Rationale: the confirmation needs the totals and not the per-file rows. The unattended path builds `HeadMoved` from the commit list with no files, and no one sees it there, so its zeros do no harm.
 - **Size line text.** Decision: `Since capture: 3 files changed, +42 -7.` One file reads `1 file changed`. With `FilesTruncated` set: `Since capture: at least 300 files changed, +X -Y (GitHub lists at most 300 changed files, so these counts can be low).` The line goes right after the `Head moved …` line, so that the size appears before the explanation of pinning.
 - **Approve lines.** Decision: after `A comment on a line they changed shows beside the new code.`, an approve adds:
-  - `Approving also covers these N commits, which this review did not read.`
+  - `Approving also covers the N commits since capture, which this review did not read.` (singular for one commit)
   - `A branch that dismisses stale approvals or requires approval of the latest push may not count an approval pinned to 1111111.`
 
   Rationale: the first line is FR-006, and the second is FR-007. Both come after the pinning lines that they depend on.

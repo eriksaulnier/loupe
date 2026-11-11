@@ -569,13 +569,54 @@ func TestConfirmViewShowsMovedHead(t *testing.T) {
 	if strings.Index(view, "and 21 earlier") > strings.Index(view, "0100000") {
 		t.Errorf("the earlier-commit count comes after the listed commits:\n%s", view)
 	}
+	if strings.Index(view, "Since capture:") > strings.Index(view, "pinned to the captured commit") {
+		t.Errorf("the size comes after the pinning lines:\n%s", view)
+	}
+	for _, line := range approveLines {
+		if strings.Contains(view, line) {
+			t.Errorf("a comment shows the approve line %q:\n%s", line, view)
+		}
+	}
 
 	truncated := movedPreview()
 	truncated.HeadMoved.Touched, truncated.HeadMoved.FilesTruncated = []string{}, true
 	m = NewConfirmModel(truncated, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
-	if view := m.View().Content; !strings.Contains(view, "Findings on changed files: none") || !strings.Contains(view, "can be incomplete") {
+	if view := m.View().Content; !strings.Contains(view, "Findings on changed files: none") || !strings.Contains(view, "can be incomplete") ||
+		!strings.Contains(view, "Since capture: at least 4 files changed, +120 -35 (GitHub lists at most 300 changed files, so these counts can be low).") {
 		t.Errorf("truncated file list:\n%s", view)
+	}
+
+	one := movedPreview()
+	one.HeadMoved.AheadBy, one.HeadMoved.Files, one.HeadMoved.Additions, one.HeadMoved.Deletions = 1, 1, 0, 0
+	m = NewConfirmModel(one, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
+	if view := m.View().Content; !strings.Contains(view, "Since capture: 1 file changed, +0 -0.") {
+		t.Errorf("one file:\n%s", view)
+	}
+}
+
+// specs/056-approve-moved-head FR-006, FR-007: an approve says what it covers and that branch protection may not count it.
+func TestConfirmViewShowsApproveAtMovedHead(t *testing.T) {
+	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "approve", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	view := m.View().Content
+	for _, want := range append(append([]string{"head moved +23"}, movedHeadLines...), approveLines...) {
+		if !strings.Contains(view, want) {
+			t.Errorf("view lacks %q:\n%s", want, view)
+		}
+	}
+	if strings.Index(view, approveLines[0]) < strings.Index(view, "shows beside the new code") ||
+		strings.Index(view, approveLines[1]) > strings.Index(view, "Commits since capture:") {
+		t.Errorf("the approve lines are not between the pinning lines and the commits:\n%s", view)
+	}
+
+	one := movedPreview()
+	one.HeadMoved.AheadBy = 1
+	m = NewConfirmModel(one, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "approve", "blocking", 1))
+	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	if view := m.View().Content; !strings.Contains(view, "Approving also covers the 1 commit since capture,") {
+		t.Errorf("one commit:\n%s", view)
 	}
 }
 
