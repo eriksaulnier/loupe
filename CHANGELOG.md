@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.23.0](https://github.com/eriksaulnier/loupe/compare/v0.22.1...v0.23.0) (2026-11-11)
+
+
+### Features
+
+* **publish:** approve a pull request whose head moved after capture ([#133](https://github.com/eriksaulnier/loupe/issues/133)) ([8012d17](https://github.com/eriksaulnier/loupe/commit/8012d17c3f9b8332bcd62f7ad6207df096c36ede))
+
+
+### Bug Fixes
+
+* **deps:** build with go 1.26.11 ([#134](https://github.com/eriksaulnier/loupe/issues/134)) ([de56807](https://github.com/eriksaulnier/loupe/commit/de568075ffb68246517f0f9ffa2cf8fb7c2c4c61))
+
 ## [0.22.1](https://github.com/eriksaulnier/loupe/compare/v0.22.0...v0.22.1) (2026-11-07)
 
 
