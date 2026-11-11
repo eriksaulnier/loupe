@@ -24,8 +24,8 @@ exception, for a CI step holding a GitHub App installation token, and it is desc
 Only accepted findings are published. Receipt replay and unknown-attempt recovery (below) run first,
 with or without a terminal. Then, before anything is shown, publish refuses, in this order:
   tty          stdin or stdout, or stderr under --json, is not an interactive terminal
-  head-moved   the captured commit left the pull request's history, or approve at a moved head;
-               loupe capture <url> starts a new round
+  head-moved   the captured commit left the pull request's history; loupe capture <url> starts
+               a new round
   own-pr       approve or request-changes on your own pull request; use --action comment
   blocking     approve while a publishable (accepted or pending) finding is blocking
   empty        no summary and no publishable findings; and, after you confirm, no message and

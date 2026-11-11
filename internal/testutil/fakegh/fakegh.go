@@ -581,7 +581,7 @@ func (s *Server) getComparison(w http.ResponseWriter, r *http.Request) {
 	}
 	files := make([]any, 0, len(c.Files))
 	for _, f := range c.Files {
-		file := map[string]any{"filename": f.Filename}
+		file := map[string]any{"filename": f.Filename, "additions": f.Additions, "deletions": f.Deletions}
 		if f.PreviousFilename != "" {
 			file["previous_filename"] = f.PreviousFilename
 		}

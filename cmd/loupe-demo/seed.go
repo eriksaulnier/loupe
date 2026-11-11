@@ -220,7 +220,8 @@ func seed(home string, gh *fakegh.Server, now time.Time, writeRuns bool, prState
 		Status:  "ahead",
 		AheadBy: 3,
 		Commits: gained,
-		Files:   []github.ComparedFile{{Filename: "internal/cache/store.go"}, {Filename: "README.md"}},
+		Files: []github.ComparedFile{{Filename: "internal/cache/store.go", Additions: 6, Deletions: 2},
+			{Filename: "internal/cache/store_test.go", Additions: 24}, {Filename: "README.md", Additions: 2}},
 	})
 	return nil
 }

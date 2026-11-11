@@ -94,7 +94,7 @@ Publish refuses rather than send something wrong. Each refusal names the command
 - when the captured commit has left the pull request's history.
 - to approve or request changes on your own pull request.
 
-A head that only gained commits since capture is not refused for a comment or a request for changes. The confirmation lists the new commits and the findings on files they changed. An approval is still refused, because it would cover the new commits unreviewed. A pull request that merged or closed after capture is named in the confirmation, and `y` still sends the review.
+A head that only gained commits since capture is not refused, for any action. The confirmation lists the new commits, how many files and lines they change, and the findings on files they changed. For an approval, a red line says that it covers the new commits unreviewed and that branch rules may not count it. A pull request that merged or closed after capture is named in the confirmation, and `y` still sends the review.
 
 Once the review is posted, the run keeps a receipt. Running `loupe publish` again prints the review's URL without contacting GitHub.
 

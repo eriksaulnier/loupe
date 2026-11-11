@@ -48,14 +48,16 @@ func movedPreview() publish.Preview {
 	p := confirmPreview()
 	p.HeadMoved = &publish.HeadMoved{Captured: "1111111111111111111111111111111111111111", Live: "4444444444444444444444444444444444444444", AheadBy: 23,
 		Commits: []publish.MovedCommit{{SHA: "0100000", Subject: "fix \x1b[31mred"}, {SHA: "0200000", Subject: "second"}},
-		Touched: []string{"f-001", "f-002"}}
+		Touched: []string{"f-001", "f-002"}, Files: 4, Additions: 120, Deletions: 35}
 	return p
 }
 
-// movedHeadLines is what the confirmation must show for movedPreview.
-var movedHeadLines = []string{"Head moved 23 commits since capture (1111111 to 4444444)", "pinned to the captured commit 1111111",
-	"GitHub will not mark its comments outdated for these commits.", "A comment on a line they changed shows beside the new code.", "0100000 fix \\u001B[31mred", "0200000 second", "and 21 earlier",
-	"Findings on changed files: f-001, f-002"}
+// movedHeadLines is what the confirmation must show for movedPreview, in order (specs/056-approve-moved-head).
+var movedHeadLines = []string{"23 new commits since you started", "and 21 earlier", "0100000 fix \\u001B[31mred", "0200000 second",
+	"4 files, +120 -35", "touches f-001, f-002", "Comments stay on the code you reviewed."}
+
+// approveLine is the red line an approve adds on movedPreview (specs/056-approve-moved-head FR-006, FR-007).
+const approveLine = "Approves these unreviewed. Branch rules may not count it."
 
 // pillPreview is a confirmation fixture whose body row and inline comment each carry a real severity pill, and whose
 // Compose puts a message above the row as render.Body does.

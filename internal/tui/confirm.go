@@ -436,38 +436,44 @@ func editedIn(preview publish.Preview, body string) []int {
 	return preview.EditedIn(body)
 }
 
-// headMovedLines escapes every line for display because commit text is untrusted.
-func headMovedLines(moved *publish.HeadMoved) []string {
-	lines := []string{
-		fmt.Sprintf("Head moved %d %s since capture (%s to %s).", moved.AheadBy, plural(moved.AheadBy, "commit"), shortSHA(moved.Captured), shortSHA(moved.Live)),
-		fmt.Sprintf("This review posts pinned to the captured commit %s.", shortSHA(moved.Captured)),
-		"GitHub will not mark its comments outdated for these commits.",
-		"A comment on a line they changed shows beside the new code.",
-		"",
-		"Commits since capture:",
-	}
+// headMovedTitle heads the moved-head block. The count is also in the header tag, which stays on screen when a long
+// commit list scrolls this title away.
+func headMovedTitle(moved *publish.HeadMoved) string {
+	return fmt.Sprintf("%d new %s since you started", moved.AheadBy, plural(moved.AheadBy, "commit"))
+}
+
+// headMovedLines escapes every line for display because commit text is untrusted. The size and the lines after it come
+// last, and alert, which only an approve has, goes after them: the confirmation opens scrolled to the message input, so
+// the lines right above it stay on screen however many commits are listed (specs/056-approve-moved-head).
+func headMovedLines(moved *publish.HeadMoved, action, sep string) (lines []string, alert string) {
 	if earlier := moved.AheadBy - len(moved.Commits); earlier > 0 {
 		lines = append(lines, fmt.Sprintf("  and %d earlier", earlier))
 	}
 	for _, commit := range moved.Commits {
 		lines = append(lines, "  "+commit.SHA+" "+commit.Subject)
 	}
-	touched := "none"
-	if len(moved.Touched) > 0 {
-		touched = strings.Join(moved.Touched, ", ")
-	}
+	size := fmt.Sprintf("%d %s, +%d -%d", moved.Files, plural(moved.Files, "file"), moved.Additions, moved.Deletions)
 	if moved.FilesTruncated {
-		touched += " (GitHub lists at most 300 changed files, so this can be incomplete)"
+		size = fmt.Sprintf("%d+ files, +%d -%d", moved.Files, moved.Additions, moved.Deletions)
 	}
-	lines = append(lines, "", "Findings on changed files: "+touched)
+	touches := "touches no findings"
+	if len(moved.Touched) > 0 {
+		touches = "touches " + strings.Join(moved.Touched, ", ")
+	}
+	summary := size + " " + sep + " " + touches
+	if moved.FilesTruncated {
+		summary += " (GitHub lists only 300 files, so these can be low)"
+	}
+	// The review's commit_id pins its comments to the captured commit, and GitHub does not mark them outdated for the
+	// new commits (docs/github-facts.md, observed 2026-09-14), so one on a changed line sits beside code it never saw.
+	lines = append(lines, summary, "Comments stay on the code you reviewed.")
 	for i, line := range lines {
 		lines[i] = render.ForDisplay(line)
 	}
-	return lines
-}
-
-func shortSHA(sha string) string {
-	return sha[:min(len(sha), 7)]
+	if action == "approve" {
+		alert = "Approves these unreviewed. Branch rules may not count it."
+	}
+	return lines, alert
 }
 
 func (c *confirmation) content(m *Model) string {
@@ -489,9 +495,13 @@ func (c *confirmation) content(m *Model) string {
 			m.styles.Warn.Render(m.styles.Wrap(closedLine(c.preview.Closed), width, "")), "")
 	}
 	if moved := c.preview.HeadMoved; moved != nil {
-		parts = append(parts, m.styles.Rule(width, "head moved since capture", ""))
-		for _, line := range headMovedLines(moved) {
+		parts = append(parts, m.styles.Rule(width, headMovedTitle(moved), ""))
+		lines, alert := headMovedLines(moved, c.title.action, m.glyphs.Sep)
+		for _, line := range lines {
 			parts = append(parts, m.styles.Warn.Render(m.styles.Wrap(line, width, "")))
+		}
+		if alert != "" {
+			parts = append(parts, m.styles.Bad.Render(m.styles.Wrap(alert, width, "")))
 		}
 		parts = append(parts, "")
 	}
