@@ -30,7 +30,7 @@ The owner decided the first ten points in loupe run `eriksaulnier/loupe:local#2`
 
 ### Session 2026-11-11
 
-The plan found three facts in this spec that did not match the code. They are corrected in place, and none of them changes an owner decision. The draft schema bump is 6 to 7, not 5 to 6 (FR-016). `loupe feedback --json` has no record schema to bump, so FR-018 now follows the precedent of `warnings` and `withdrawReason`. A finding `title` has no length limit, so FR-002 states the 120-character limit on `label` as its own rule.
+The plan found three facts in this spec that did not match the code. They are corrected in place, and none of them changes an owner decision. The draft schema bump is 6 to 7, not 5 to 6 (FR-016). `loupe feedback --json` has no record schema to bump, so FR-018 now follows the precedent of `warnings` and `withdrawReason`. A finding `title` has no length limit, so FR-002 states the 120-character limit on `label` as its own rule. The tasks pass found a fourth: the edge case for `u` on an accepted finding described the PR-run behavior, and it now matches FR-015.
 
 
 - Q: What does a mouse click on a picker option do? → A: It picks that option, as its digit does. The picker opens only after the human presses `a`, `t` or `u`, so the key is the decision and the click only says which option. Claude Code's own option pickers work this way. Rejected: a click that only moves the selection, which `specs/040-mouse-input` FR-004 asks of every other popup. Also rejected: a double click to pick (owner).
@@ -116,7 +116,7 @@ The `human-decide` skill tells an agent with 2–3 real choices to file them as 
 - The agent edits a choice finding while the human's picker is open. The pick is refused as a change made on a finding that changed since it was displayed, as `specs/017-live-review` refuses any decision on a stale finding. The human sees the new options before picking again.
 - A key arrives through typeahead or key repeat right after the picker opens. The picker drops it under the same settle rule that already guards the finding view, so a digit typed before the picker was on screen never accepts an option.
 - `u` on a withdrawn choice finding reinstates and accepts it today. On a choice finding, `u` opens the picker, and the reinstatement is recorded only with a pick. Esc leaves the finding withdrawn.
-- `u` on an accepted choice finding restores it to pending, and the pick clears with the decision.
+- `u` on an accepted choice finding behaves as on any accepted finding on a local run. Today that changes nothing (`TestApplyUOnAnAcceptedFindingChangesNothing`). Any path that clears the decision clears the pick with it.
 - `x` or `c` excludes a choice finding with no pick, as it excludes any finding. The hand-back's `excluded` entry carries no `choice`.
 - A finding is accepted with a pick, and the human then sends it back. The send-back rules stay as they are. Any agent edit to the options clears the decision and the pick.
 - An option's label or proposal cites a finding id. `loupe add` and `loupe edit` refuse it under the existing `finding-id` rule, as they refuse it in `proposal`.
