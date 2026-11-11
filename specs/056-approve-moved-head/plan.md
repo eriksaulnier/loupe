@@ -50,12 +50,12 @@ The check is against constitution 4.0.0.
 
 - **Where the refusal goes.** Decision: delete the `if action == "approve"` block at `gates.go:193`. Then `checkHead` no longer needs `action`, so drop that parameter. Rationale: approve becomes the same case as the other attended actions. Alternative: keep the block for the unattended path. Rejected, because the unattended action is already forced to comment in `publish.Run` (`publish.go:98`) before the gates run.
 - **Size totals.** Decision: `HeadMoved` gains `Files`, `Additions` and `Deletions`. `Files` is `len(cmp.Files)`, and the other two are sums over `cmp.Files`. Rationale: the confirmation needs the totals and not the per-file rows. The unattended path builds `HeadMoved` from the commit list with no files, and no one sees it there, so its zeros do no harm.
-- **Size line text.** Decision: `Since capture: 3 files changed, +42 -7.` One file reads `1 file changed`. With `FilesTruncated` set: `Since capture: at least 300 files changed, +X -Y (GitHub lists at most 300 changed files, so these counts can be low).` The line goes right after the `Head moved …` line, so that the size appears before the explanation of pinning.
-- **Approve lines.** Decision: after `A comment on a line they changed shows beside the new code.`, an approve adds:
+- **Size line text.** Decision: `Since capture: 3 files changed, +42 -7.` One file reads `1 file changed`. With `FilesTruncated` set: `Since capture: at least 300 files changed, +X -Y (GitHub lists at most 300 changed files, so these counts can be low).` The line goes at the end of the block, after `Findings on changed files`. The confirmation opens scrolled to the message input, so the lines right above that input stay on screen however many commits are listed. The owner chose this on 2026-11-10 over a size in the header tag, after seeing both at 80×40.
+- **Approve lines.** Decision: after the size line, an approve adds:
   - `Approving also covers the N commits since capture, which this review did not read.` (singular for one commit)
   - `A branch that dismisses stale approvals or requires approval of the latest push may not count an approval pinned to 1111111.`
 
-  Rationale: the first line is FR-006, and the second is FR-007. Both come after the pinning lines that they depend on.
+  Rationale: the first line is FR-006, and the second is FR-007. Both sit with the size, above the message input, for the same reason.
 - **Passing the action.** Decision: `headMovedLines(moved, action string)`. Both callers already hold `c.title.action` (`confirm.go:397`). Alternative: put the action in `publish.Preview`. Rejected, because the confirmation title already carries it.
 - **Header tag.** Decision: no change. `head moved +N` already shows in the summary line for every action.
 

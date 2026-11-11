@@ -569,8 +569,9 @@ func TestConfirmViewShowsMovedHead(t *testing.T) {
 	if strings.Index(view, "and 21 earlier") > strings.Index(view, "0100000") {
 		t.Errorf("the earlier-commit count comes after the listed commits:\n%s", view)
 	}
-	if strings.Index(view, "Since capture:") > strings.Index(view, "pinned to the captured commit") {
-		t.Errorf("the size comes after the pinning lines:\n%s", view)
+	// The confirmation opens scrolled to the message input, so the size sits right above it to stay on screen.
+	if strings.Index(view, "Since capture:") < strings.Index(view, "Findings on changed files") || strings.Index(view, "Since capture:") > strings.Index(view, messageTitle) {
+		t.Errorf("the size is not between the changed-file findings and the message:\n%s", view)
 	}
 	for _, line := range approveLines {
 		if strings.Contains(view, line) {
@@ -606,9 +607,9 @@ func TestConfirmViewShowsApproveAtMovedHead(t *testing.T) {
 			t.Errorf("view lacks %q:\n%s", want, view)
 		}
 	}
-	if strings.Index(view, approveLines[0]) < strings.Index(view, "shows beside the new code") ||
-		strings.Index(view, approveLines[1]) > strings.Index(view, "Commits since capture:") {
-		t.Errorf("the approve lines are not between the pinning lines and the commits:\n%s", view)
+	if strings.Index(view, approveLines[0]) < strings.Index(view, "Since capture:") ||
+		strings.Index(view, approveLines[1]) > strings.Index(view, messageTitle) {
+		t.Errorf("the approve lines are not between the size and the message:\n%s", view)
 	}
 
 	one := movedPreview()
