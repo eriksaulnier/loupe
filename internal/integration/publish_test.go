@@ -407,6 +407,33 @@ func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
 	}
 }
 
+// specs/056-approve-moved-head: approve at a moved head confirms, shows what it covers and is sent at the captured head.
+func TestPublishApprovesAtCapturedHeadAfterForwardPush(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	// f-001 blocks, so it is excluded for approve to pass the blocking gate.
+	h.reviewed([]string{"x f-001", "a f-002", "x f-003"})
+	captured := h.Repo.HeadSHA()
+	live := h.pushHead("src/app.go")
+	qualifier := owner + ":" + repo + ":"
+	h.GH.SetComparison(owner, repo, qualifier+captured, qualifier+live, github.Comparison{Status: "ahead", AheadBy: 1,
+		Commits: []github.Commit{{SHA: live, Message: "move head"}}, Files: []github.ComparedFile{{Filename: "src/app.go", Additions: 1}}})
+	h.GH.SetCommits(owner, repo, number, github.Commit{SHA: captured, Message: "capture"}, github.Commit{SHA: live, Message: "move head"})
+
+	s := h.Start("publish", runRef, "--action", "approve")
+	s.WaitFor("Head moved 1 commit since capture")
+	confirm(s, "", "y")
+	if stdout, stderr, exit := s.Wait(); exit != 0 {
+		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
+	}
+	h.checkSends(1)
+	for _, r := range h.GH.Requests() {
+		if post, ok := r.Body.(map[string]any); !r.Read() && (!ok || post["commit_id"] != captured || post["event"] != "APPROVE") {
+			t.Fatalf("review sent %v, want APPROVE at the captured head %s", r.Body, captured)
+		}
+	}
+}
+
 func TestPublishRefusesEmptyDraft(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)

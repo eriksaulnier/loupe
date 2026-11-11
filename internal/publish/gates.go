@@ -49,7 +49,7 @@ func Gates(ctx context.Context, in GateInput) (Gated, error) {
 	if err != nil {
 		return Gated{}, err
 	}
-	moved, err := checkHead(ctx, in.GitHub, in.Target, pr, in.Action, in.Draft, in.Unattended)
+	moved, err := checkHead(ctx, in.GitHub, in.Target, pr, in.Draft, in.Unattended)
 	if err != nil {
 		return Gated{}, err
 	}
@@ -156,9 +156,9 @@ const (
 )
 
 // checkHead lets a review go out at the captured head when the pull request only gained commits on top of it, because
-// the review's commit_id pins its comments there. A captured commit that left the history has nothing to pin to, and
-// an approval would cover commits nobody reviewed.
-func checkHead(ctx context.Context, client github.Client, target run.Target, pr github.PullRequest, action string, d *draft.Draft, unattended bool) (*HeadMoved, error) {
+// the review's commit_id pins its comments there. A captured commit that left the history has nothing to pin to. An
+// approval goes out too, since the confirmation says it also covers the new commits (specs/056-approve-moved-head).
+func checkHead(ctx context.Context, client github.Client, target run.Target, pr github.PullRequest, d *draft.Draft, unattended bool) (*HeadMoved, error) {
 	if pr.HeadSHA == target.HeadSHA {
 		return nil, nil
 	}
@@ -193,11 +193,6 @@ func checkHead(ctx context.Context, client github.Client, target run.Target, pr 
 	aheadBy := len(commits) - at - 1
 	if cmp != nil {
 		aheadBy = cmp.AheadBy
-	}
-	if action == "approve" {
-		return nil, refusal.New(refusal.HeadMoved,
-			fmt.Sprintf("cannot approve: the pull request head moved %d %s past the captured head, and an approval would cover them unreviewed", aheadBy, commitsWord(aheadBy)),
-			"use --action comment or --action request-changes, or loupe capture "+target.URL+" to review the new head")
 	}
 	if cmp == nil && unattended {
 		// No one confirms an unattended round, so the files the head changed are not read.
@@ -274,13 +269,6 @@ func headMoved(captured, live string, cmp github.Comparison, d *draft.Draft) *He
 		}
 	}
 	return moved
-}
-
-func commitsWord(n int) string {
-	if n == 1 {
-		return "commit"
-	}
-	return "commits"
 }
 
 // ActionRefusal is the part of the gates that depends on the chosen action, so a picker can disable an action with

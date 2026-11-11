@@ -562,7 +562,7 @@ func TestRunPublishesWhenBaseTookCapturedCommitIn(t *testing.T) {
 }
 
 // The list does not hold the captured commit, so only compare can count what an approval would cover.
-func TestRunRefusesApproveWhenBaseTookCapturedCommitIn(t *testing.T) {
+func TestRunPublishesApproveWhenBaseTookCapturedCommitIn(t *testing.T) {
 	d := readyDraft()
 	d.Findings[0].Blocking = false
 	fx := newRun(t, d)
@@ -571,15 +571,14 @@ func TestRunRefusesApproveWhenBaseTookCapturedCommitIn(t *testing.T) {
 	// Three listed commits, so a count from the list would say 3.
 	fx.gh.SetCommits("acme", "widgets", 42, github.Commit{SHA: "3333333333333333333333333333333333333333"}, github.Commit{SHA: laterSHA}, github.Commit{SHA: movedSHA})
 	fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: "ahead", AheadBy: 2})
-	_, err := fx.run()
-	msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment")
-	if !strings.Contains(msg, "2 commits") {
-		t.Errorf("message %q", msg)
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
 	}
-	if len(fx.previews) != 0 {
-		t.Error("confirmation shown")
+	if len(fx.previews) != 1 || fx.previews[0].HeadMoved == nil || fx.previews[0].HeadMoved.AheadBy != 2 {
+		t.Fatalf("previews %+v", fx.previews)
 	}
-	fx.check(0)
+	fx.check(1)
+	wantApprovedAtCapturedHead(t, fx)
 }
 
 // At GitHub's cap the list may have stopped before the captured commit, so compare decides.
@@ -624,12 +623,13 @@ func TestRunCountsFromCompareWhenCapturedCommitIsListedAtCap(t *testing.T) {
 	commits[200] = github.Commit{SHA: headSHA}
 	fx.gh.SetCommits("acme", "widgets", 42, commits...)
 	fx.gh.SetComparison("acme", "widgets", "acme:widgets:"+headSHA, "acme:widgets:"+movedSHA, github.Comparison{Status: "ahead", AheadBy: 99})
-	_, err := fx.run()
-	msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment")
-	if !strings.Contains(msg, "99 commits") {
-		t.Errorf("message %q", msg)
+	if _, err := fx.run(); err != nil {
+		t.Fatal(err)
 	}
-	fx.check(0)
+	if moved := fx.previews[0].HeadMoved; moved == nil || moved.AheadBy != 99 {
+		t.Fatalf("moved %+v", moved)
+	}
+	fx.check(1)
 }
 
 // The list and compare disagree only if GitHub does, and a compare that is not ahead refuses as a left history.
@@ -704,27 +704,54 @@ func TestRunNamesContentsPermissionWhenCompareIsForbidden(t *testing.T) {
 	}
 }
 
-func TestRunRefusesApproveAtMovedHead(t *testing.T) {
-	for commits, want := range map[int]string{1: "moved 1 commit past the captured head", 2: "moved 2 commits past the captured head"} {
-		t.Run(want, func(t *testing.T) {
+// specs/056-approve-moved-head FR-001, FR-004: an attended approve at a moved head confirms and is sent at the
+// captured commit, as comment and request-changes are.
+func TestRunPublishesApproveAtMovedHead(t *testing.T) {
+	for _, commits := range []int{1, 2} {
+		t.Run(fmt.Sprint(commits), func(t *testing.T) {
 			d := readyDraft()
 			d.Findings[0].Blocking = false
 			fx := newRun(t, d)
 			fx.opts.Action = "approve"
-			fx.moveHead(movedSHA, commits, github.ComparedFile{Filename: "a.go"})
-			_, err := fx.run()
-			msg := wantRefusal(t, err, refusal.HeadMoved, "--action comment", "--action request-changes", "loupe capture "+prLink)
-			if !strings.Contains(msg, want) {
-				t.Errorf("message %q lacks %q", msg, want)
+			fx.moveHead(movedSHA, commits, github.ComparedFile{Filename: "a.go", Additions: 3, Deletions: 1})
+			if _, err := fx.run(); err != nil {
+				t.Fatal(err)
 			}
-			if fx.compared() {
-				t.Error("the commit list counts the commits without compare")
+			if len(fx.previews) != 1 || fx.previews[0].HeadMoved == nil || fx.previews[0].HeadMoved.AheadBy != commits {
+				t.Fatalf("previews %+v", fx.previews)
 			}
-			if len(fx.previews) != 0 {
-				t.Error("confirmation shown")
+			if !fx.compared() {
+				t.Error("the attended confirmation reads the files the commits changed")
 			}
-			fx.check(0)
+			fx.check(1)
+			wantApprovedAtCapturedHead(t, fx)
 		})
+	}
+}
+
+// specs/056-approve-moved-head FR-003: a moved head no longer refuses approve first, so the blocking gate must still.
+func TestRunRefusesBlockingApproveAtMovedHead(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.opts.Action = "approve"
+	fx.moveHead(movedSHA, 1, github.ComparedFile{Filename: "a.go"})
+	_, err := fx.run()
+	wantRefusal(t, err, refusal.Blocking, "--action comment")
+	if len(fx.previews) != 0 {
+		t.Error("confirmation shown")
+	}
+	fx.check(0)
+}
+
+// wantApprovedAtCapturedHead checks that the one review sent is an approval pinned to the captured commit.
+func wantApprovedAtCapturedHead(t *testing.T, fx *fixture) {
+	t.Helper()
+	for _, r := range fx.gh.Requests() {
+		if r.Method != "POST" {
+			continue
+		}
+		if body, ok := r.Body.(map[string]any); !ok || body["event"] != "APPROVE" || body["commit_id"] != headSHA {
+			t.Errorf("review sent %v, want APPROVE at the captured head", r.Body)
+		}
 	}
 }
 

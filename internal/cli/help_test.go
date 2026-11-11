@@ -182,7 +182,7 @@ func TestSubcommandHelpIsHeadedAndKeepsItsSentences(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"head-moved   the captured commit left the pull request's history, or approve at a moved head",
+		"head-moved   the captured commit left the pull request's history; loupe capture <url> starts",
 		"the review is sent at the captured commit",
 		"GitHub does not mark its comments outdated for those commits",
 		"This command is human-only. An agent MUST NOT run it",
