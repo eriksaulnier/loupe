@@ -21,7 +21,7 @@ The owner decided the first ten points in loupe run `eriksaulnier/loupe:local#2`
 - Q: Is the recommendation required? → A: Exactly one option MUST be marked recommended. Rejected: an optional marker, and the first option as an implied recommendation (owner).
 - Q: How does the human pick? → A: Accept on a finding with options opens a picker with the recommended option selected. Up and down move, enter accepts, a digit picks and accepts at once, and esc cancels. Rejected: digit keys on the finding itself with no picker, and a picker with nothing preselected (owner).
 - Q: How does accept with a note work? → A: The same picker opens first, then the note composer. The agent gets the picked option plus the note. Rejected: a note that replaces the pick, and a note with an optional pick (owner).
-- Q: How is the pick stored? → A: As a new field on the decision, the picked option's key, with a draft schema bump from 5 to 6. Any edit to the options clears the decision. Rejected: an index with no key, and an additive field with no bump. An older binary would then show a choice finding as a question (owner).
+- Q: How is the pick stored? → A: As a new field on the decision, the picked option's key, with a draft schema bump. The answer said 5 to 6. At plan time the draft was already at 6, so the bump is 6 to 7. Any edit to the options clears the decision. Rejected: an index with no key, and an additive field with no bump. An older binary would then show a choice finding as a question (owner).
 - Q: What does the agent get back? → A: In `apply` and `applyWithChanges`, the entry carries the picked option's proposal as `proposal`, plus `choice` with the key and the label. It leaves the other options out, and the hand-back schema bumps. Rejected: returning every option with the chosen key, and a new `chosen` group (owner).
 - Q: Pull request runs too? → A: No. Options are for local runs only, gated as `proposal` is. Rejected: rendering the pick or every option into the published comment, which would change `docs/comment-format.md` (owner).
 - Q: How does review show the options? → A: One block per option in place of the single proposal block: a key and label heading, marked when recommended, then that option's proposal. `docs/tui-design.md` is amended to match. Rejected: labels only, with each proposal shown while the picker moves. Also rejected: the recommended option in full and the others as labels (owner).
@@ -29,6 +29,9 @@ The owner decided the first ten points in loupe run `eriksaulnier/loupe:local#2`
 - Q: What does the skill tell agents? → A: When there are 2–3 real choices, the agent MUST use `options` with one recommended. It keeps `proposal` for a finding with one answer. Rejected: options only on findings labeled `question`, and no rule (owner).
 
 ### Session 2026-11-11
+
+The plan found three facts in this spec that did not match the code. They are corrected in place, and none of them changes an owner decision. The draft schema bump is 6 to 7, not 5 to 6 (FR-016). `loupe feedback --json` has no record schema to bump, so FR-018 now follows the precedent of `warnings` and `withdrawReason`. A finding `title` has no length limit, so FR-002 states the 120-character limit on `label` as its own rule.
+
 
 - Q: What does a mouse click on a picker option do? → A: It picks that option, as its digit does. The picker opens only after the human presses `a`, `t` or `u`, so the key is the decision and the click only says which option. Claude Code's own option pickers work this way. Rejected: a click that only moves the selection, which `specs/040-mouse-input` FR-004 asks of every other popup. Also rejected: a double click to pick (owner).
 
@@ -38,7 +41,7 @@ This spec extends `specs/049-apply-mode`. A finding on a local run keeps `propos
 
 Mouse input comes from `specs/040-mouse-input`, which is not built yet. FR-013a applies once review reads the mouse. It is the one exception to that spec's FR-005, under which no mouse action may accept a finding. When 040 is planned, its FR-005 MUST name this exception.
 
-The constitution, the publication state machine and `docs/comment-format.md` stay unchanged, because nothing in this spec reaches GitHub. `specs/001-loupe-v1/contracts/cli.md` gains the `options` input on `loupe add` and `loupe edit`, the refusals below, and the `choice` field in the hand-back. `docs/tui-design.md` gains the option blocks and the picker. `docs/versioning.md` records the two schema bumps.
+The constitution, the publication state machine and `docs/comment-format.md` stay unchanged, because nothing in this spec reaches GitHub. `specs/001-loupe-v1/contracts/cli.md` gains the `options` input on `loupe add` and `loupe edit`, the refusals below, and the `choice` field in the hand-back. `docs/tui-design.md` gains the option blocks and the picker. `docs/versioning.md` records the draft schema bump.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -128,7 +131,7 @@ The `human-decide` skill tells an agent with 2–3 real choices to file them as 
 **Filing**
 
 - **FR-001**: A finding on a local run MAY carry `options`, a list of 2 or 3 entries. Each entry MUST have `label` and `proposal`, and MAY have `recommended: true`.
-- **FR-002**: `label` MUST follow the rules for `title`: plain text, at most 120 characters, with backtick code spans and backslash escapes as the only Markdown kept. `proposal` MUST follow the rules for a finding's `proposal`, including the 64 KiB limit and the `finding-id` rule.
+- **FR-002**: `label` MUST follow the Markdown rules for `title`: plain text, with backtick code spans and backslash escapes as the only Markdown kept, and the `finding-id` rule. It MUST also be at most 120 characters, so that each picker row fits on one line. A finding `title` has no such limit. `proposal` MUST follow the rules for a finding's `proposal`, including the 64 KiB limit and the `finding-id` rule.
 - **FR-003**: Exactly one entry MUST have `recommended: true`. `loupe add` and `loupe edit` MUST refuse a finding with zero or several recommended entries.
 - **FR-004**: `loupe add` and `loupe edit` MUST refuse `options` with fewer than 2 or more than 3 entries, and MUST refuse a finding that holds both `options` and `proposal`. Each refusal MUST use the `input` code, name the rule, and, in a batch, name the failing entry in `error.details.entry`.
 - **FR-005**: loupe MUST assign each option a key of `1`, `2` or `3`, in the order that the agent listed the options. Review headings, the picker, the stored pick and `choice.key` in the hand-back MUST all use the same digit. The input MUST NOT carry a key, and `loupe add` MUST refuse one, as it refuses `decision` today.
@@ -149,9 +152,9 @@ The `human-decide` skill tells an agent with 2–3 real choices to file them as 
 
 **Storage and hand-back**
 
-- **FR-016**: The decision MUST store the picked option's key. The draft schema MUST bump from 5 to 6, following `docs/versioning.md`, so that an older loupe refuses the draft with a fix to update.
+- **FR-016**: The decision MUST store the picked option's key. The draft schema MUST bump from 6 to 7, following `docs/versioning.md`, so that an older loupe refuses the draft with a fix to update.
 - **FR-017**: In `apply` and `applyWithChanges`, an entry for a choice finding MUST carry the picked option's proposal as `proposal`, and `choice` with the picked key and label. It MUST NOT carry the other options. An `excluded` entry for a choice finding MUST carry neither `options` nor `choice`.
-- **FR-018**: The hand-back schema MUST bump, following `docs/versioning.md`.
+- **FR-018**: `choice` MUST be added to the `feedback` payload as a new payload key. The envelope MUST stay `"loupe": 1`, as it did when `warnings` and `withdrawReason` were added. `handback.json` MUST NOT change, because it holds notes only.
 - **FR-019**: `loupe stats` and the human gate counts MUST count an accepted choice finding as accepted, the same as any other accepted finding.
 
 **Contracts and guidance**
