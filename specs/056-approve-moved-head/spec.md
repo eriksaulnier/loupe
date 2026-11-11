@@ -27,6 +27,12 @@
 - Q: An agent-written summary of the new commits, or a new review round on the new head? → A: Neither for now. Both are future work.
 - Q: Probe whether GitHub counts an approval pinned to an older commit under branch protection? → A: Skip the probe. No second identity is available to approve, and the private probe repository cannot use branch protection on the owner's plan. The confirmation warns, and `specs/001-loupe-v1/validation.md` lists the behavior as unverified.
 
+### Settled by the owner after seeing the demo, 2026-11-10
+
+- Q: Where does the size go, given that the confirmation opens scrolled to the message input? → A: At the end of the block, right above the input, so it stays on screen however many commits are listed. The owner saw it at 80×40 next to a size in the header tag.
+- Q: How does the approve warning look? → A: One short line in red, apart from the block's warn color. The owner compared red with bold warn in the demo.
+- Q: Is the block too wordy? → A: Yes. It is cut to a title with the count, the commits, one line with the size and the findings on changed files, one line on where comments stay, and the red line for approve. This rewords what `specs/001-loupe-v1` FR-043 shows. The facts do not change.
+
 ### Settled in this specification
 
 - Q: An extra confirmation step for approve at a moved head? → A: No. The confirmation already flags the moved head in its header and in its own block, and `y` stays the one step that sends. A second prompt would add the same extra step this feature removes.
@@ -46,8 +52,8 @@ The human decides every finding and chooses approve. The author pushed one small
 
 1. **Given** a run whose pull request gained commits on top of the captured commit, **When** the human publishes with approve, **Then** loupe shows the confirmation and does not refuse.
 2. **Given** that confirmation, **When** the human presses `y`, **Then** loupe sends exactly one review request with event APPROVE and `commit_id` set to the captured commit.
-3. **Given** that confirmation, **When** the human reads the head-moved block, **Then** it says that the approval also covers the commits since capture, which this review did not read.
-4. **Given** that confirmation, **When** the human reads the head-moved block, **Then** it warns that the approval is pinned to the captured commit, so a branch that dismisses stale approvals or requires approval of the latest push may not count it.
+3. **Given** that confirmation, **When** it opens, **Then** one red line right above the message input says that the approval covers the new commits unreviewed and that branch rules may not count it.
+4. **Given** that confirmation with more commits than fit on screen, **When** it opens, **Then** the size line and the red line are still on screen, and the header still shows the commit count.
 5. **Given** approve chosen inside `loupe review`, **When** the head moved, **Then** the same confirmation shows as for `loupe publish`.
 
 ---
@@ -100,9 +106,9 @@ The change opens one path and no other. A captured commit that left the history,
 - **FR-002**: Publish MUST still refuse `head-moved` when the captured commit left the history, when GitHub refused a comparison the history check needs, and when the head moves while the human confirms (`specs/001-loupe-v1` FR-028).
 - **FR-003**: The `own-pr` and `blocking` refusals for approve MUST NOT change. An unattended publication MUST still send only COMMENT.
 - **FR-004**: The review MUST be sent with `commit_id` set to the captured commit for every action, approve included. Findings MUST NOT be remapped.
-- **FR-005**: When the head moved, the confirmation MUST show, for every action, the number of files changed between the captured commit and the live head, and the lines added and removed. When GitHub cut off its list of changed files, it MUST say that the counts can be low.
-- **FR-006**: When the head moved and the action is approve, the confirmation MUST say that the approval also covers the commits since capture, with their count, and that this review did not read them.
-- **FR-007**: When the head moved and the action is approve, the confirmation MUST warn that the approval is pinned to the captured commit, so a branch that dismisses stale approvals or requires approval of the latest push may not count it.
+- **FR-005**: When the head moved, the confirmation MUST show, for every action, the number of files changed between the captured commit and the live head and the lines added and removed, on one line with the findings on changed files, at the end of the block, right above the message input. When GitHub cut off its list of changed files, it MUST say that the counts can be low.
+- **FR-006**: When the head moved and the action is approve, the confirmation MUST say, in one line in the bad color (red) after the size line, that the approval covers the new commits unreviewed.
+- **FR-007**: That same line MUST warn that branch rules may not count the approval. The exact wording is `Approves these unreviewed. Branch rules may not count it.`
 - **FR-008**: Publish MUST NOT add a confirmation step, a prompt or a flag for approve at a moved head. `y` MUST stay the one key that sends.
 - **FR-009**: The size MUST come from the comparison that the attended confirmation already requests. Publish MUST NOT add a GitHub request.
 - **FR-010**: Every line the head-moved block shows MUST stay escaped for display, as it is today, because commit text is untrusted.

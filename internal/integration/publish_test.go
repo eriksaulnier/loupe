@@ -394,7 +394,7 @@ func TestPublishAtCapturedHeadAfterForwardPush(t *testing.T) {
 	h.GH.SetCommits(owner, repo, number, github.Commit{SHA: captured, Message: "capture"}, github.Commit{SHA: live, Message: "move head"})
 
 	s := h.Start("publish", runRef, "--action", "comment")
-	s.WaitFor("new line", "Head moved 1 commit since capture", live[:7]+" move head", "Findings on changed files: f-001, f-002")
+	s.WaitFor("new line", "1 new commit since you started", live[:7]+" move head", "touches f-001, f-002")
 	confirm(s, "", "y")
 	if stdout, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)
@@ -421,7 +421,7 @@ func TestPublishApprovesAtCapturedHeadAfterForwardPush(t *testing.T) {
 	h.GH.SetCommits(owner, repo, number, github.Commit{SHA: captured, Message: "capture"}, github.Commit{SHA: live, Message: "move head"})
 
 	s := h.Start("publish", runRef, "--action", "approve")
-	s.WaitFor("Head moved 1 commit since capture", "Since capture: 1 file changed, +1 -0.", "Approving also covers the 1 commit since capture,")
+	s.WaitFor("1 new commit since you started", "1 file, +1 -0", "Approves these unreviewed.")
 	confirm(s, "", "y")
 	if stdout, stderr, exit := s.Wait(); exit != 0 {
 		t.Fatalf("publish exit %d stderr %q stdout %q", exit, stderr, stdout)

@@ -47,7 +47,7 @@ func TestConfirmViewShowsReviewAndTogglesJSON(t *testing.T) {
 	if strings.Contains(view, "<details>") || strings.ContainsAny(view, "\u202e\u2066\x1b") || strings.Contains(view, `"event"`) {
 		t.Errorf("review view has a closed <details>, a raw hidden character or the JSON:\n%q", view)
 	}
-	if strings.Contains(view, "since capture") {
+	if strings.Contains(view, "since you started") {
 		t.Errorf("an unmoved head shows the moved-head block:\n%s", view)
 	}
 	if !strings.Contains(view, "v payload") {
@@ -555,69 +555,65 @@ func TestConfirmViewShowsMovedHead(t *testing.T) {
 	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
 	view := m.View().Content
-	for _, want := range append([]string{"head moved +23"}, movedHeadLines...) {
-		if !strings.Contains(view, want) {
-			t.Errorf("view lacks %q:\n%s", want, view)
-		}
-	}
+	wantInOrder(t, view, append(append([]string{"head moved +23"}, movedHeadLines...), messageTitle)...)
 	if strings.ContainsRune(view, '\x1b') {
 		t.Errorf("view has a raw escape:\n%q", view)
 	}
-	if strings.Index(view, "Head moved") > strings.Index(view, messageTitle) {
-		t.Errorf("the moved-head block comes after the body:\n%s", view)
-	}
-	if strings.Index(view, "and 21 earlier") > strings.Index(view, "0100000") {
-		t.Errorf("the earlier-commit count comes after the listed commits:\n%s", view)
-	}
-	// The confirmation opens scrolled to the message input, so the size sits right above it to stay on screen.
-	if strings.Index(view, "Since capture:") < strings.Index(view, "Findings on changed files") || strings.Index(view, "Since capture:") > strings.Index(view, messageTitle) {
-		t.Errorf("the size is not between the changed-file findings and the message:\n%s", view)
-	}
-	for _, line := range approveLines {
-		if strings.Contains(view, line) {
-			t.Errorf("a comment shows the approve line %q:\n%s", line, view)
-		}
+	if strings.Contains(view, approveLine) {
+		t.Errorf("a comment shows the approve line:\n%s", view)
 	}
 
 	truncated := movedPreview()
-	truncated.HeadMoved.Touched, truncated.HeadMoved.FilesTruncated = []string{}, true
+	truncated.HeadMoved.Touched, truncated.HeadMoved.FilesTruncated, truncated.HeadMoved.Files = []string{}, true, 300
 	m = NewConfirmModel(truncated, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
-	if view := m.View().Content; !strings.Contains(view, "Findings on changed files: none") || !strings.Contains(view, "can be incomplete") ||
-		!strings.Contains(view, "Since capture: at least 4 files changed, +120 -35 (GitHub lists at most 300 changed files, so these counts can be low).") {
+	if view := m.View().Content; !strings.Contains(view, "300+ files, +120 -35") || !strings.Contains(view, "touches no findings") ||
+		!strings.Contains(view, "(GitHub lists only 300 files, so these can be low)") {
 		t.Errorf("truncated file list:\n%s", view)
 	}
 
 	one := movedPreview()
-	one.HeadMoved.AheadBy, one.HeadMoved.Files, one.HeadMoved.Additions, one.HeadMoved.Deletions = 1, 1, 0, 0
+	one.HeadMoved.AheadBy, one.HeadMoved.Commits, one.HeadMoved.Files, one.HeadMoved.Additions, one.HeadMoved.Deletions = 1, one.HeadMoved.Commits[:1], 1, 0, 0
 	m = NewConfirmModel(one, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "comment", "blocking", 1))
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
-	if view := m.View().Content; !strings.Contains(view, "Since capture: 1 file changed, +0 -0.") {
-		t.Errorf("one file:\n%s", view)
+	if view := m.View().Content; !strings.Contains(view, "1 new commit since you started") || !strings.Contains(view, "1 file, +0 -0") || strings.Contains(view, "earlier") {
+		t.Errorf("one commit and one file:\n%s", view)
 	}
 }
 
-// specs/056-approve-moved-head FR-006, FR-007: an approve says what it covers and that branch protection may not count it.
+// wantInOrder checks that view holds each of want, each after the one before it.
+func wantInOrder(t *testing.T, view string, want ...string) {
+	t.Helper()
+	at := 0
+	for _, w := range want {
+		i := strings.Index(view[at:], w)
+		if i < 0 {
+			t.Errorf("view lacks %q after offset %d:\n%s", w, at, view)
+			return
+		}
+		at += i + len(w)
+	}
+}
+
+// specs/056-approve-moved-head FR-006, FR-007: an approve adds one red line, right above the message, saying it covers
+// the new commits unreviewed and that branch protection may not count it.
 func TestConfirmViewShowsApproveAtMovedHead(t *testing.T) {
 	m := NewConfirmModel(movedPreview(), envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "approve", "blocking", 1))
-	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
-	view := m.View().Content
-	for _, want := range append(append([]string{"head moved +23"}, movedHeadLines...), approveLines...) {
-		if !strings.Contains(view, want) {
-			t.Errorf("view lacks %q:\n%s", want, view)
-		}
-	}
-	if strings.Index(view, approveLines[0]) < strings.Index(view, "Since capture:") ||
-		strings.Index(view, approveLines[1]) > strings.Index(view, messageTitle) {
-		t.Errorf("the approve lines are not between the size and the message:\n%s", view)
-	}
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
+	wantInOrder(t, m.View().Content, append(append([]string{"head moved +23"}, movedHeadLines...), approveLine, messageTitle)...)
 
-	one := movedPreview()
-	one.HeadMoved.AheadBy = 1
-	m = NewConfirmModel(one, envOf(testEnv), io.Discard, ConfirmTitle("acme/widgets#42", "approve", "blocking", 1))
-	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
-	if view := m.View().Content; !strings.Contains(view, "Approving also covers the 1 commit since capture,") {
-		t.Errorf("one commit:\n%s", view)
+	colored := NewConfirmModel(movedPreview(), envOf(map[string]string{"LANG": "en_US.UTF-8"}), io.Discard, ConfirmTitle("acme/widgets#42", "approve", "blocking", 1))
+	colored.shell.styles.SetColorProfile(colorprofile.TrueColor)
+	colored.shell.styles.Color = true
+	colored.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
+	red, _, _ := strings.Cut(colored.shell.styles.Bad.Render("x"), "x")
+	warn, _, _ := strings.Cut(colored.shell.styles.Warn.Render("x"), "x")
+	view := colored.View().Content
+	if red == "" || !strings.Contains(view, red+approveLine) {
+		t.Errorf("the approve line is not red:\n%q", view)
+	}
+	if !strings.Contains(view, warn+"Comments stay on the code you reviewed.") {
+		t.Errorf("the rest of the block is not in the warn color:\n%q", view)
 	}
 }
 
@@ -637,7 +633,7 @@ func TestConfirmViewNamesAClosedPullRequest(t *testing.T) {
 				t.Errorf("%s: view lacks %q:\n%s", tc.closed, want, view)
 			}
 		}
-		if strings.Index(view, tc.line) > strings.Index(view, "Head moved") {
+		if strings.Index(view, tc.line) > strings.Index(view, "new commits since you started") {
 			t.Errorf("%s: the state comes after the moved head:\n%s", tc.closed, view)
 		}
 	}
