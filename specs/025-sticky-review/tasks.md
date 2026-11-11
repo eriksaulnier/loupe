@@ -90,7 +90,7 @@ description: "Task list for sticky review"
 - [X] T024 [P] Update `specs/001-loupe-v1/contracts/cli.md`: the `publish` synopsis and paragraph for `--sticky`, the `sticky` code in the refusal table, `changed` widened to the edited review's body, and `edited` in the result payload.
 - [X] T025 [P] Add a `## Sticky reviews` section to `docs/comment-format.md`: the body layout, the two delimiters and why authored text cannot forge them, the collapsed round's contents and summary, the drop-oldest note, `sticky=K` as the last key only on a sticky body, the numbering rule for both paths, the `commit_id` staying the first round's, the silent edits, the depth caveat, and a note in Markers and Inline modes pointing to it.
 - [X] T026 [P] Add a `## Review edits` section to `docs/github-facts.md` recording `PUT …/reviews/{id}` as used by loupe and unverified, with each probe from the plan's table. No sentence may state an edit's behavior as observed.
-- [ ] T027 Run `mise run check` and show its result.
+- [x] T027 Run `mise run check` and show its result.
 
 ## Dependencies
 
