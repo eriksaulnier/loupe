@@ -157,7 +157,7 @@ func TestCompare(t *testing.T) {
 	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, `{"status": "ahead", "ahead_by": 2, "behind_by": 0, "total_commits": 2,
 			"commits": [{"sha": "c1", "commit": {"message": "first\n\nbody"}}, {"sha": "c2", "commit": {"message": "second"}}],
-			"files": [{"filename": "a.go", "status": "modified"}, {"filename": "new.go", "previous_filename": "old.go", "status": "renamed"}]}`)
+			"files": [{"filename": "a.go", "status": "modified", "additions": 7, "deletions": 2}, {"filename": "new.go", "previous_filename": "old.go", "status": "renamed"}]}`)
 	})
 	got, err := c.Compare(context.Background(), "o", "r", "f:r2:b1", "f:r2:h1")
 	if err != nil {
@@ -165,7 +165,7 @@ func TestCompare(t *testing.T) {
 	}
 	want := Comparison{Status: "ahead", AheadBy: 2,
 		Commits: []Commit{{SHA: "c1", Message: "first\n\nbody"}, {SHA: "c2", Message: "second"}},
-		Files:   []ComparedFile{{Filename: "a.go"}, {Filename: "new.go", PreviousFilename: "old.go"}}}
+		Files:   []ComparedFile{{Filename: "a.go", Additions: 7, Deletions: 2}, {Filename: "new.go", PreviousFilename: "old.go"}}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
 	}

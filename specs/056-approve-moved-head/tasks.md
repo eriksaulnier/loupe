@@ -8,9 +8,9 @@
 
 **Goal**: loupe keeps the per-file additions and deletions that GitHub's compare response already carries. US1 and US2 both read them.
 
-- [ ] T001 [P] In `internal/github/client_test.go` `TestCompare`, serve `additions` and `deletions` on each file and assert them on `ComparedFile`. Then add `Additions` and `Deletions int` to `ComparedFile` and decode them in `wireComparison` and `Compare` in `internal/github/client.go`.
-- [ ] T002 [P] In `internal/testutil/fakegh/fakegh_test.go` `TestCompare`, set `Additions` and `Deletions` on a stored comparison and assert them in the response. Then write them in `getComparison` in `internal/testutil/fakegh/fakegh.go`.
-- [ ] T003 Write a test in `internal/publish/publish_test.go` that moves the head with files of known sizes and asserts `Files`, `Additions` and `Deletions` on the preview's `HeadMoved`, and `FilesTruncated` at the cap. Then add the three ints to `HeadMoved` and fill them in `headMoved` in `internal/publish/gates.go`. Commit T001 to T003 as `feat(publish): read the size of the commits since capture`.
+- [x] T001 [P] In `internal/github/client_test.go` `TestCompare`, serve `additions` and `deletions` on each file and assert them on `ComparedFile`. Then add `Additions` and `Deletions int` to `ComparedFile` and decode them in `wireComparison` and `Compare` in `internal/github/client.go`.
+- [x] T002 [P] In `internal/testutil/fakegh/fakegh_test.go` `TestCompare`, set `Additions` and `Deletions` on a stored comparison and assert them in the response. Then write them in `getComparison` in `internal/testutil/fakegh/fakegh.go`.
+- [x] T003 Write a test in `internal/publish/publish_test.go` that moves the head with files of known sizes and asserts `Files`, `Additions` and `Deletions` on the preview's `HeadMoved`, and `FilesTruncated` at the cap. Then add the three ints to `HeadMoved` and fill them in `headMoved` in `internal/publish/gates.go`. Commit T001 to T003 as `feat(publish): read the size of the commits since capture`.
 
 ## Phase 2: User Story 1 and User Story 3 — approve at a moved head (P1)
 

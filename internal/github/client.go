@@ -68,6 +68,8 @@ type Commit struct {
 type ComparedFile struct {
 	Filename         string
 	PreviousFilename string
+	Additions        int
+	Deletions        int
 }
 
 type PullRequest struct {
@@ -562,6 +564,8 @@ type wireComparison struct {
 	Files   []struct {
 		Filename         string `json:"filename"`
 		PreviousFilename string `json:"previous_filename"`
+		Additions        int    `json:"additions"`
+		Deletions        int    `json:"deletions"`
 	} `json:"files"`
 }
 
@@ -586,7 +590,7 @@ func (c *REST) Compare(ctx context.Context, owner, repo, base, head string) (Com
 		out.Commits = append(out.Commits, Commit{SHA: commit.SHA, Message: commit.Commit.Message})
 	}
 	for _, f := range w.Files {
-		out.Files = append(out.Files, ComparedFile{Filename: f.Filename, PreviousFilename: f.PreviousFilename})
+		out.Files = append(out.Files, ComparedFile{Filename: f.Filename, PreviousFilename: f.PreviousFilename, Additions: f.Additions, Deletions: f.Deletions})
 	}
 	return out, nil
 }

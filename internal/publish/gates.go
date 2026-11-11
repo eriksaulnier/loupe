@@ -129,8 +129,12 @@ type HeadMoved struct {
 	Commits []MovedCommit
 	// Touched is the ids of publishable located findings on a file the commits changed.
 	Touched []string
-	// FilesTruncated means GitHub stopped listing changed files at its cap, so Touched can miss findings.
+	// FilesTruncated means GitHub stopped listing changed files at its cap, so Touched can miss findings and the sizes
+	// below can be low.
 	FilesTruncated bool
+	// Files, Additions and Deletions are the push's size, summed over the files GitHub listed, so a human can tell a
+	// one-line fix from a rewrite before approving it.
+	Files, Additions, Deletions int
 }
 
 type MovedCommit struct {
@@ -255,7 +259,10 @@ func headMoved(captured, live string, cmp github.Comparison, d *draft.Draft) *He
 		moved.Commits = append(moved.Commits, MovedCommit{SHA: c.SHA[:min(len(c.SHA), 7)], Subject: subject})
 	}
 	changed := map[string]bool{}
+	moved.Files = len(cmp.Files)
 	for _, f := range cmp.Files {
+		moved.Additions += f.Additions
+		moved.Deletions += f.Deletions
 		changed[f.Filename] = true
 		if f.PreviousFilename != "" {
 			changed[f.PreviousFilename] = true

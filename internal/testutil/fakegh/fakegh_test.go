@@ -25,7 +25,7 @@ func TestCompare(t *testing.T) {
 	s := New(t)
 	c := s.Client(t)
 	want := github.Comparison{Status: "ahead", AheadBy: 1, Commits: []github.Commit{{SHA: "h2", Message: "move"}},
-		Files: []github.ComparedFile{{Filename: "b.go", PreviousFilename: "a.go"}}}
+		Files: []github.ComparedFile{{Filename: "b.go", PreviousFilename: "a.go", Additions: 4, Deletions: 1}}}
 	s.SetComparison("o", "r", "h1", "h2", want)
 
 	got, err := c.Compare(ctx, "o", "r", "h1", "h2")

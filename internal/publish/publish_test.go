@@ -475,7 +475,22 @@ func TestRunHeadMovedMarksTruncatedFileList(t *testing.T) {
 	if _, err := fx.run(); !errors.Is(err, ErrDeclined) {
 		t.Fatalf("got %v", err)
 	}
-	if moved := fx.previews[0].HeadMoved; moved == nil || !moved.FilesTruncated || len(moved.Touched) != 0 {
+	if moved := fx.previews[0].HeadMoved; moved == nil || !moved.FilesTruncated || len(moved.Touched) != 0 || moved.Files != 300 {
+		t.Fatalf("moved %+v", moved)
+	}
+}
+
+// specs/056-approve-moved-head FR-005: the confirmation shows the push's size, summed over the compared files.
+func TestRunHeadMovedSumsTheComparedFiles(t *testing.T) {
+	fx := newRun(t, readyDraft())
+	fx.moveHead(movedSHA, 2, github.ComparedFile{Filename: "a.go", Additions: 40, Deletions: 5},
+		github.ComparedFile{Filename: "new.go", PreviousFilename: "old.go"}, github.ComparedFile{Filename: "z.go", Additions: 2, Deletions: 2})
+	fx.opts.Confirm = fx.confirmWith(false, nil)
+	if _, err := fx.run(); !errors.Is(err, ErrDeclined) {
+		t.Fatalf("got %v", err)
+	}
+	moved := fx.previews[0].HeadMoved
+	if moved == nil || moved.Files != 3 || moved.Additions != 42 || moved.Deletions != 7 || moved.FilesTruncated {
 		t.Fatalf("moved %+v", moved)
 	}
 }
