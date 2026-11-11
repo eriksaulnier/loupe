@@ -41,4 +41,4 @@ Each task follows failing test, then implementation, then a passing check. `[P]`
 - [x] T016 `go test ./internal/render/` passes with no golden regenerated
 - [x] T017 `mise run screenshots`, then read the image diff
 - [x] T018 Capture `mise run demo` through tmux at 124, 100, 80 and 60 columns for review #42 and the local run, and compare with `frames/`
-- [ ] T019 `mise run check`
+- [x] T019 `mise run check`
