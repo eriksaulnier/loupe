@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.1](https://github.com/secondshift-labs/loupe/compare/v0.24.0...v0.24.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* move loupe to secondshift-labs ([#142](https://github.com/secondshift-labs/loupe/issues/142)) ([74b1b11](https://github.com/secondshift-labs/loupe/commit/74b1b11239ad79b32e150ea8f69a43ef98f46342))
+
 ## [0.24.0](https://github.com/eriksaulnier/loupe/compare/v0.23.0...v0.24.0) (2026-11-12)
 
 
