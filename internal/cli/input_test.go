@@ -160,3 +160,28 @@ func TestInputCheckersRefuseWhatIsNotJSON(t *testing.T) {
 		t.Errorf("malformed = %+v", r)
 	}
 }
+
+func TestAddRefusesAKeyInAnOption(t *testing.T) {
+	options := `"options": [{"label": "a", "proposal": "p"}, {"label": "b", "proposal": "p", "key": "9"}]`
+	var one sampleInput
+	r := refusalOf(t, DecodeInput("add", "-", strings.NewReader(`{"title": "t", `+options+`}`), &one))
+	if r.Code != refusal.Input || r.Details["field"] != "options[1].key" || !strings.Contains(r.Message, `input field "options[1].key" is not allowed`) {
+		t.Fatalf("got %+v", r)
+	}
+	if _, ok := r.Details["entry"]; ok {
+		t.Fatal("entry must be absent for a single object")
+	}
+	var many []sampleInput
+	r = refusalOf(t, DecodeInput("add", "-", strings.NewReader(`[{"title": "a"}, {"title": "b", `+options+`}]`), &many))
+	if r.Code != refusal.Input || r.Details["field"] != "options[1].key" || r.Details["entry"] != 1 {
+		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestAddRefusesOptionsOnAPullRequestRun(t *testing.T) {
+	r := refusalOf(t, checkModeKeys([]byte(`[{"title": "t", "options": []}]`), mode.Of(run.Target{})))
+	if r.Code != refusal.Input || r.Details["field"] != "options" || r.Details["entry"] != 0 ||
+		!strings.Contains(r.Message, "applies only to local runs") || r.Fix != `use "suggestedFix" instead` {
+		t.Fatalf("got %+v", r)
+	}
+}

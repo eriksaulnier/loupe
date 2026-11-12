@@ -35,6 +35,14 @@ type FindingInput struct {
 	References   []string       `json:"references,omitempty"`
 	SuggestedFix string         `json:"suggestedFix,omitempty"`
 	Proposal     string         `json:"proposal,omitempty"`
+	Options      []OptionInput  `json:"options,omitempty"`
+}
+
+// OptionInput is one option as add and edit read it. Loupe assigns the key.
+type OptionInput struct {
+	Label       string `json:"label"`
+	Proposal    string `json:"proposal"`
+	Recommended bool   `json:"recommended,omitempty"`
 }
 
 // LocationInput is a location as add and edit read it: a line form, or a heading anchor that resolves to one.
@@ -148,6 +156,9 @@ func Add(d *Draft, inputs []FindingInput, dif *diff.Diff, rules Rules, by string
 		if len(in.References) > 0 {
 			f.References = slices.Clone(in.References)
 		}
+		for k, o := range in.Options {
+			f.Options = append(f.Options, Option{Key: strconv.Itoa(k + 1), Label: o.Label, Proposal: o.Proposal, Recommended: o.Recommended})
+		}
 		f.Location = locations[i]
 		d.Findings = append(d.Findings, f)
 		added = append(added, f)
@@ -188,6 +199,14 @@ func validateFields(in FindingInput, rules Rules) error {
 			return err
 		}
 	}
+	if in.Options != nil {
+		if !rules.AllowProposal {
+			return refusal.New(refusal.Input, "options apply only to local runs", `use "suggestedFix" instead`)
+		}
+		if err := checkOptions(in.Options, in.Proposal != ""); err != nil {
+			return err
+		}
+	}
 	if err := ValidateLabel(in.Label); err != nil {
 		return err
 	}
@@ -219,6 +238,38 @@ func validateFields(in FindingInput, rules Rules) error {
 		if err := markdown.Check(in.SuggestedFix, markdown.SuggestedFix, "loupe edit <id> --from -"); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+const maxOptionLabelRunes = 120
+
+// checkOptions holds options to the shape rules: 2 or 3 entries, exactly one recommended, never beside a proposal,
+// and each with a label of at most 120 characters and a proposal that passes the proposal Markdown check.
+func checkOptions(options []OptionInput, hasProposal bool) error {
+	if hasProposal {
+		return refusal.New(refusal.Input, "a finding has options or a proposal, not both", `drop "proposal", or send "proposal": null when editing`)
+	}
+	if len(options) < 2 || len(options) > 3 {
+		return refusal.New(refusal.Input, "options needs 2 or 3 entries", inputFix)
+	}
+	recommended := 0
+	for i, o := range options {
+		if o.Recommended {
+			recommended++
+		}
+		if strings.TrimSpace(o.Label) == "" || strings.TrimSpace(o.Proposal) == "" {
+			return refusal.New(refusal.Input, fmt.Sprintf("option %d needs a label and a proposal", i+1), inputFix)
+		}
+		if utf8.RuneCountInString(o.Label) > maxOptionLabelRunes {
+			return refusal.New(refusal.Input, "option label is longer than 120 characters", "shorten the label so a picker row fits on one line")
+		}
+		if err := markdown.Check(o.Proposal, markdown.Proposal, "loupe edit <id> --from -"); err != nil {
+			return err
+		}
+	}
+	if recommended != 1 {
+		return refusal.New(refusal.Input, "exactly one option must be recommended", `set "recommended": true on one option`)
 	}
 	return nil
 }
@@ -257,7 +308,7 @@ func resolveLocation(in LocationInput, dif *diff.Diff) (*FindingLocation, error)
 
 // checkFindingIDs refuses a finding id in the title, body, impact, suggested fix or proposal, in that order. Edit
 // passes "" for a field it leaves unchanged, so a finding stored before the check stays editable.
-func checkFindingIDs(title, body, impact, fix, proposal, retry string) error {
+func checkFindingIDs(title, body, impact, fix, proposal string, options []OptionInput, retry string) error {
 	if err := markdown.TitleFindingIDs(title, retry); err != nil {
 		return err
 	}
@@ -270,7 +321,18 @@ func checkFindingIDs(title, body, impact, fix, proposal, retry string) error {
 	if err := markdown.FindingIDs(fix, markdown.SuggestedFix, retry); err != nil {
 		return err
 	}
-	return markdown.FindingIDs(proposal, markdown.Proposal, retry)
+	if err := markdown.FindingIDs(proposal, markdown.Proposal, retry); err != nil {
+		return err
+	}
+	for _, o := range options {
+		if err := markdown.TitleFindingIDs(o.Label, retry); err != nil {
+			return err
+		}
+		if err := markdown.FindingIDs(o.Proposal, markdown.Proposal, retry); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EntryFailure is one batch entry that was refused before or during validation.
@@ -302,7 +364,7 @@ func checkBatch(inputs []FindingInput, failed []EntryFailure, dif *diff.Diff, ru
 		}
 		loc, err := validateInput(in, dif, rules)
 		if err == nil {
-			err = checkFindingIDs(in.Title, in.Body, in.Impact, in.SuggestedFix, in.Proposal, "run loupe add again")
+			err = checkFindingIDs(in.Title, in.Body, in.Impact, in.SuggestedFix, in.Proposal, in.Options, "run loupe add again")
 		}
 		if err != nil {
 			failures = append(failures, EntryFailure{Entry: i, Err: err})
@@ -612,6 +674,7 @@ type EditInput struct {
 	References   json.RawMessage `json:"references"`
 	SuggestedFix json.RawMessage `json:"suggestedFix"`
 	Proposal     json.RawMessage `json:"proposal"`
+	Options      json.RawMessage `json:"options"`
 	// WithdrawReason is not a finding field: it goes on the history entry, and only with --exclude.
 	WithdrawReason json.RawMessage `json:"withdrawReason"`
 }
@@ -713,6 +776,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 	note("references", !slices.Equal(next.References, stored.References), stored.References)
 	note("suggestedFix", next.SuggestedFix != stored.SuggestedFix, stored.SuggestedFix)
 	note("proposal", next.Proposal != stored.Proposal, stored.Proposal)
+	note("options", !slices.Equal(next.Options, stored.Options), stored.Options)
 	publishable := len(changed) > 0
 	note("included", next.Included != stored.Included, stored.Included)
 	if len(changed) == 0 {
@@ -738,6 +802,15 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		if proposal == stored.Proposal {
 			proposal = ""
 		}
+		var changedOptions []OptionInput
+		if !slices.Equal(next.Options, stored.Options) {
+			for _, o := range next.Options {
+				changedOptions = append(changedOptions, OptionInput{Label: o.Label, Proposal: o.Proposal, Recommended: o.Recommended})
+			}
+		}
+		if len(next.Options) > 0 && next.Proposal != "" {
+			return Finding{}, false, checkOptions(changedOptions, true)
+		}
 		// The stored location is checked as the range it is; its heading was resolved when it was set.
 		var loc *LocationInput
 		if next.Location != nil {
@@ -745,7 +818,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		}
 		_, err := validateInput(FindingInput{Title: next.Title, Body: next.Body, Location: loc, General: next.General, Label: next.Label,
 			Blocking: next.Blocking, Confidence: next.Confidence, Severity: severity, Verified: next.Verified, Impact: next.Impact,
-			References: next.References, SuggestedFix: fix, Proposal: proposal}, dif, rules)
+			References: next.References, SuggestedFix: fix, Proposal: proposal, Options: changedOptions}, dif, rules)
 		if err != nil {
 			return Finding{}, false, err
 		}
@@ -759,7 +832,7 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 		if impact == stored.Impact {
 			impact = ""
 		}
-		if err := checkFindingIDs(title, body, impact, fix, proposal, fmt.Sprintf("run loupe edit %s --from - again", next.ID)); err != nil {
+		if err := checkFindingIDs(title, body, impact, fix, proposal, changedOptions, fmt.Sprintf("run loupe edit %s --from - again", next.ID)); err != nil {
 			return Finding{}, false, err
 		}
 	}
@@ -861,7 +934,7 @@ func Rewrite(d *Draft, findingID, title, body string, rules Rules, dif *diff.Dif
 	if changedBody == stored.Body {
 		changedBody = ""
 	}
-	if err := checkFindingIDs(changedTitle, changedBody, "", "", "", rewriteIDRetry); err != nil {
+	if err := checkFindingIDs(changedTitle, changedBody, "", "", "", nil, rewriteIDRetry); err != nil {
 		return Finding{}, err
 	}
 	titleJSON, err := json.Marshal(title)
@@ -954,6 +1027,23 @@ func applyEdit(f *Finding, in EditInput) (anchor *LocationInput, err error) {
 	if err := decodeOptional("proposal", in.Proposal, &f.Proposal); err != nil {
 		return nil, err
 	}
+	switch {
+	case in.Options == nil:
+	case isNull(in.Options):
+		f.Options = nil
+	default:
+		var inputs []OptionInput
+		if err := decodeValue("options", in.Options, &inputs); err != nil {
+			return nil, err
+		}
+		if len(inputs) < 2 || len(inputs) > 3 {
+			return nil, refusal.New(refusal.Input, "options needs 2 or 3 entries", editFix)
+		}
+		f.Options = nil
+		for k, o := range inputs {
+			f.Options = append(f.Options, Option{Key: strconv.Itoa(k + 1), Label: o.Label, Proposal: o.Proposal, Recommended: o.Recommended})
+		}
+	}
 	return anchor, nil
 }
 
@@ -964,7 +1054,7 @@ func decodeRequired(field string, raw json.RawMessage, dst any) error {
 		return nil
 	}
 	if isNull(raw) {
-		return refusal.New(refusal.Input, fmt.Sprintf("%s cannot be null; only location, label, confidence, severity, verified, impact, references, suggestedFix and proposal can be cleared", field), editFix)
+		return refusal.New(refusal.Input, fmt.Sprintf("%s cannot be null; only location, label, confidence, severity, verified, impact, references, suggestedFix, proposal and options can be cleared", field), editFix)
 	}
 	return decodeValue(field, raw, dst)
 }

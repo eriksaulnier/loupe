@@ -706,3 +706,87 @@ func TestEditReValidatesStoredFindingWithProposalAndSideRight(t *testing.T) {
 		t.Fatalf("finding %+v", f)
 	}
 }
+
+const twoOptionsJSON = `[{"label": "New one", "proposal": "p1"}, {"label": "New two", "proposal": "p2", "recommended": true}]`
+
+var localRules = Rules{AllowProposal: true}
+
+func choiceEditable() *Draft {
+	d := editable()
+	d.Findings[0].Options = []Option{
+		{Key: "1", Label: "Old one", Proposal: "o1", Recommended: true},
+		{Key: "2", Label: "Old two", Proposal: "o2"},
+		{Key: "3", Label: "Old three", Proposal: "o3"},
+	}
+	return d
+}
+
+func TestEditReplacesOptionsAndClearsTheDecision(t *testing.T) {
+	d := choiceEditable()
+	d.Decisions["f-001"] = Decision{FindingID: "f-001", Decision: DecisionAccepted, FindingRev: 1, At: addNow, Choice: "3"}
+	f, cleared, err := Edit(d, "f-001", editInput(t, `{"options": `+twoOptionsJSON+`}`), nil, multiHunk(t), ByAgent, localRules, editNow)
+	if err != nil || !cleared {
+		t.Fatalf("cleared %v, %v", cleared, err)
+	}
+	want := []Option{{Key: "1", Label: "New one", Proposal: "p1"}, {Key: "2", Label: "New two", Proposal: "p2", Recommended: true}}
+	if !reflect.DeepEqual(f.Options, want) || f.Rev != 2 {
+		t.Fatalf("finding %+v", f)
+	}
+	if _, ok := d.Decisions["f-001"]; ok {
+		t.Fatal("decision kept")
+	}
+	if _, ok := f.History[0].Changed["options"]; !ok {
+		t.Fatalf("history %+v", f.History)
+	}
+}
+
+func TestEditClearsOptionsWithNull(t *testing.T) {
+	d := choiceEditable()
+	f, _, err := Edit(d, "f-001", editInput(t, `{"options": null}`), nil, multiHunk(t), ByAgent, localRules, editNow)
+	if err != nil || f.Options != nil || f.Rev != 2 {
+		t.Fatalf("finding %+v, %v", f, err)
+	}
+}
+
+func TestEditTurnsOptionsIntoAProposal(t *testing.T) {
+	d := choiceEditable()
+	f, _, err := Edit(d, "f-001", editInput(t, `{"options": null, "proposal": "Just do this."}`), nil, multiHunk(t), ByAgent, localRules, editNow)
+	if err != nil || f.Options != nil || f.Proposal != "Just do this." {
+		t.Fatalf("finding %+v, %v", f, err)
+	}
+}
+
+func TestEditTurnsAProposalIntoOptions(t *testing.T) {
+	d := editable()
+	d.Findings[0].Proposal = "Old proposal."
+	f, _, err := Edit(d, "f-001", editInput(t, `{"proposal": null, "options": `+twoOptionsJSON+`}`), nil, multiHunk(t), ByAgent, localRules, editNow)
+	if err != nil || f.Proposal != "" || len(f.Options) != 2 {
+		t.Fatalf("finding %+v, %v", f, err)
+	}
+}
+
+func TestEditRefusesOptionsBesideAKeptProposal(t *testing.T) {
+	d := editable()
+	d.Findings[0].Proposal = "Old proposal."
+	r := refusaltest.Want(t, errOf3(Edit(d, "f-001", editInput(t, `{"options": `+twoOptionsJSON+`}`), nil, multiHunk(t), ByAgent, localRules, editNow)), refusal.Input)
+	if !strings.Contains(r.Message, "a finding has options or a proposal, not both") {
+		t.Fatalf("message %q", r.Message)
+	}
+	if d.Findings[0].Rev != 1 || len(d.Findings[0].Options) != 0 {
+		t.Fatalf("a refused edit wrote %+v", d.Findings[0])
+	}
+}
+
+func TestEditRefusesABadOptionShape(t *testing.T) {
+	d := choiceEditable()
+	r := refusaltest.Want(t, errOf3(Edit(d, "f-001", editInput(t, `{"options": [{"label": "a", "proposal": "p"}, {"label": "b", "proposal": "p"}]}`), nil, multiHunk(t), ByAgent, localRules, editNow)), refusal.Input)
+	if !strings.Contains(r.Message, "exactly one option must be recommended") {
+		t.Fatalf("message %q", r.Message)
+	}
+	r = refusaltest.Want(t, errOf3(Edit(d, "f-001", editInput(t, `{"options": `+twoOptionsJSON+`}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)), refusal.Input)
+	if r.Message != "options apply only to local runs" {
+		t.Fatalf("message %q", r.Message)
+	}
+}
+
+func errOf3(_ Finding, _ bool, err error) error { return err }
