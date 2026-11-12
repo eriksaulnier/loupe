@@ -20,7 +20,7 @@ Each entry gives the decision, why, and what else was weighed. Paths are relativ
 
 ## R3. Label limit
 
-**Decision**: `label` is treated as `title` is. It gets the `finding-id` check (`TitleFindingIDs`), and it is drawn through `titleHTML`, which keeps only code spans and backslash escapes. `title` has no Markdown allowlist check, so `label` gets none either. A separate 120-character check in `validateFields` refuses with code `input`. The plan first named a `Title` Markdown kind. No such kind exists, and implementation corrected this.
+**Decision**: `label` is checked as `title` is. It gets the `finding-id` check (`TitleFindingIDs`) and no Markdown allowlist check, since `title` has none. Review draws it as plain text on one line (`render.ForDisplay(render.OneLine(...))`), and it is never published. A separate 120-character check in `validateFields` refuses with code `input`. The plan first named a `Title` Markdown kind. No such kind exists, and implementation corrected this.
 
 **Rationale**: A finding `title` has no length limit. The 120 limit is `maxRunTitle` for `capture --title` (`internal/cli/capture_local.go:22`). The owner chose 120 for labels so that each picker row fits on one line.
 

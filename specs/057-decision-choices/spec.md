@@ -120,7 +120,7 @@ The `human-decide` skill tells an agent with 2–3 real choices to file them as 
 - `x` or `c` excludes a choice finding with no pick, as it excludes any finding. The hand-back's `excluded` entry carries no `choice`.
 - A finding is accepted with a pick, and the human then sends it back. The send-back rules stay as they are. Any agent edit to the options clears the decision and the pick.
 - An option's label or proposal cites a finding id. `loupe add` and `loupe edit` refuse it under the existing `finding-id` rule, as they refuse it in `proposal`.
-- An option's label is longer than 120 characters. `loupe add` refuses it with `input`. A label gets no Markdown allowlist check, as a finding `title` gets none. It is drawn as `title` is, which keeps only code spans and backslash escapes.
+- An option's label is longer than 120 characters. `loupe add` refuses it with `input`. A label gets no Markdown allowlist check, as a finding `title` gets none. Review draws it as plain text on one line, and it is never published.
 - A terminal is too narrow or short to show all three options. The option blocks scroll with the rest of the finding body, and the picker shows every option label, each truncated to its own line.
 - A draft written by this version is opened by an older loupe. The older binary refuses the newer draft schema, and the fix tells the human to update. It never shows a choice finding as a question.
 
@@ -131,7 +131,7 @@ The `human-decide` skill tells an agent with 2–3 real choices to file them as 
 **Filing**
 
 - **FR-001**: A finding on a local run MAY carry `options`, a list of 2 or 3 entries. Each entry MUST have `label` and `proposal`, and MAY have `recommended: true`.
-- **FR-002**: `label` MUST be treated as `title` is: it gets the `finding-id` rule and no Markdown allowlist check, and it is drawn as plain text with backtick code spans and backslash escapes as the only Markdown kept. It MUST also be at most 120 characters, so that each picker row fits on one line. A finding `title` has no such limit. `proposal` MUST follow the rules for a finding's `proposal`, including the 64 KiB limit and the `finding-id` rule.
+- **FR-002**: `label` MUST be checked as `title` is: it gets the `finding-id` rule and no Markdown allowlist check. Review draws it as plain text on one line, and it is never published. It MUST also be at most 120 characters, so that each picker row fits on one line. A finding `title` has no such limit. `proposal` MUST follow the rules for a finding's `proposal`, including the 64 KiB limit and the `finding-id` rule.
 - **FR-003**: Exactly one entry MUST have `recommended: true`. `loupe add` and `loupe edit` MUST refuse a finding with zero or several recommended entries.
 - **FR-004**: `loupe add` and `loupe edit` MUST refuse `options` with fewer than 2 or more than 3 entries, and MUST refuse a finding that holds both `options` and `proposal`. Each refusal MUST use the `input` code, name the rule, and, in a batch, name the failing entry in `error.details.entry`.
 - **FR-005**: loupe MUST assign each option a key of `1`, `2` or `3`, in the order that the agent listed the options. Review headings, the picker, the stored pick and `choice.key` in the hand-back MUST all use the same digit. The input MUST NOT carry a key, and `loupe add` MUST refuse one, as it refuses `decision` today.
