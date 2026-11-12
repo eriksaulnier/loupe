@@ -436,7 +436,7 @@ func seedLocal(home string, now time.Time) error {
 	if _, err := draft.Add(d, localFindings, parsed, mode.Of(target).Rules(), draft.ByAgent, now); err != nil {
 		return fmt.Errorf("add the demo local findings: %w", err)
 	}
-	d.Summary = "Four decisions on the cache plan before I change the store. The force-push question has no proposal: pick one of the choices or name another."
+	d.Summary = "Four decisions on the cache plan before I change the store. The force-push question has three options to pick from."
 	draftJSON, err := json.Marshal(d)
 	if err != nil {
 		return err

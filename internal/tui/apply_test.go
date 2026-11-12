@@ -509,6 +509,9 @@ func TestApplyTPicksThenOpensTheNote(t *testing.T) {
 	if loadDraft(t, dir).Version != before {
 		t.Error("the pick alone recorded a decision")
 	}
+	if screen := screenText(m); !strings.Contains(screen, "Tweak f-001: accept 3 with a note") {
+		t.Errorf("the note composer does not name the pick:\n%s", screen)
+	}
 }
 
 func TestApplyTPickThenEnterAcceptsWithPickAndNote(t *testing.T) {
@@ -520,6 +523,9 @@ func TestApplyTPickThenEnterAcceptsWithPickAndNote(t *testing.T) {
 	got := loadDraft(t, dir).Decisions["f-001"]
 	if got.Decision != draft.DecisionAccepted || got.Choice != "3" || got.Note != "Mind the cache." {
 		t.Fatalf("decision %+v", got)
+	}
+	if !strings.Contains(m.notice, "f-001 accepted with 3") {
+		t.Errorf("notice %q does not name the pick", m.notice)
 	}
 }
 

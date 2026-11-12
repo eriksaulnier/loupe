@@ -99,9 +99,9 @@ PR runs MUST stay byte-identical. No task runs `-update` on a PR golden.
 - [x] T028 [P] In `docs/tui-design.md`, describe the option sections under `## Sections` and `## Order`, in place of the proposed change at item 6. Describe the picker under `## Boxes` (FR-021).
 - [x] T029 [P] In `docs/versioning.md`, extend the draft row to `schema` 7: "7 added `findings.options` and `decisions.choice` (`specs/057-decision-choices`)".
 - [x] T030 In `cmd/loupe-demo/seed.go` `localFindings` (`:363`), turn the general finding "Who invalidates an entry on a force-push?" (`:387`) into a choice finding. Move the three choices in its body into options, recommend the second, and trim the body to the question. Run `go test ./cmd/loupe-demo/` (FR-023). Commit T026 to T030 as `docs: record decision choices`.
-- [ ] T031 Run `mise run check` and the patch coverage check from `CONTRIBUTING.md`. Show the output.
-- [ ] T032 Run the quickstart's older-binary check (SC-005) with the installed release, outside the repository. Show the refusal.
-- [ ] T033 By eye, through tmux: run the quickstart's review steps against `mise run demo -- review 'acme/widgets:local#1'` at 80×24 and 100×40, and with `NO_COLOR=1`. Capture the option sections, the picker, and the header after a pick.
+- [x] T031 Run `mise run check` and the patch coverage check from `CONTRIBUTING.md`. Show the output.
+- [x] T032 Run the quickstart's older-binary check (SC-005) with the installed release, outside the repository. Show the refusal.
+- [x] T033 By eye, through tmux: run the quickstart's review steps against `mise run demo -- review 'acme/widgets:local#1'` at 80×24 and 100×40, and with `NO_COLOR=1`. Capture the option sections, the picker, and the header after a pick.
 
 ## Dependencies
 

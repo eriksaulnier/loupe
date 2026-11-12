@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"fmt"
 	"slices"
 	"strconv"
@@ -122,7 +124,7 @@ func (m *Model) pickView() []string {
 		if o.Recommended {
 			label += " " + m.glyphs.Sep + " recommended"
 		}
-		lines = append(lines, m.pickerRow(i == m.pickSel, false, o.Key, label, inner)...)
+		lines = append(lines, m.optionRow(i == m.pickSel, o.Key, label, inner)...)
 	}
 	verb := "accepts"
 	switch m.pickFor {
@@ -152,4 +154,23 @@ func (m *Model) pickFooter() []string {
 	}
 	return m.keys(style.KeyGroup{{Key: "enter", Verb: verb}, {Key: digits, Verb: "pick"},
 		{Key: m.arrows(m.glyphs.Up, m.glyphs.Down), Verb: "move"}, {Key: "esc", Verb: "cancel"}})
+}
+
+// optionIndent is where an option's label starts: the cursor, a space, the one-digit key and two spaces.
+const optionIndent = 5
+
+// optionRow is one picker row: the cursor, the option's key and its label, which wraps under itself. The publish
+// popup's pickerRow pads its name column for action names, which leaves a one-digit key far from its label.
+func (m *Model) optionRow(selected bool, key, label string, inner int) []string {
+	cursor, keyStyle := " ", m.styles.Text()
+	if selected {
+		cursor, keyStyle = m.styles.Emphasis(m.styles.Cursor).Render(m.styles.PickerCursor()), m.styles.Emphasis(m.styles.Accent)
+	}
+	indent := strings.Repeat(" ", optionIndent)
+	lines := strings.Split(m.styles.Wrap(label, inner, indent), "\n")
+	for i, l := range lines {
+		lines[i] = indent + m.styles.Text().Render(strings.TrimPrefix(l, indent))
+	}
+	lines[0] = cursor + " " + keyStyle.Render(key) + "  " + strings.TrimPrefix(lines[0], indent)
+	return lines
 }

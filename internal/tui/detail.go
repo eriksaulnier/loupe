@@ -763,14 +763,18 @@ func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
 // decideWithNote accepts or excludes the open finding with text as its note or reason. A refusal hands the text back
 // in the input, since nothing else keeps it.
 func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
-	id := m.openID
+	id, key := m.openID, m.pickHeld
 	var closed []string
 	decide := func(d *draft.Draft) (err error) {
-		closed, err = draft.AcceptWithNote(d, id, m.pickHeld, text, m.cfg.Now())
+		closed, err = draft.AcceptWithNote(d, id, key, text, m.cfg.Now())
 		return err
 	}
 	notice := func() string {
-		return decidedNotice(m.glyphs.Sep, m.glyphs.Accepted, id, "accepted", closed, draft.NoteResolved)
+		word := "accepted"
+		if key != "" {
+			word += " with " + key
+		}
+		return decidedNotice(m.glyphs.Sep, m.glyphs.Accepted, id, word, closed, draft.NoteResolved)
 	}
 	if kind == noteExclude {
 		decide = func(d *draft.Draft) (err error) {
@@ -939,6 +943,9 @@ func (m *Model) noteView() []string {
 	switch m.noteKind {
 	case noteAccept:
 		title, enter = "Tweak "+m.openID+": accept with a note", "enter accepts"
+		if m.pickHeld != "" {
+			title = "Tweak " + m.openID + ": accept " + m.pickHeld + " with a note"
+		}
 	case noteExclude:
 		title, enter = "Reject "+m.openID+", with a reason if you like", "enter rejects"
 	case noteReturn:
