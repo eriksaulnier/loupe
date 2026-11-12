@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/github"
 )
 
 // Round 1 of the live case in specs/031-open-findings: two findings a later commit fixes.

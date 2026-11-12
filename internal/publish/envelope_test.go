@@ -11,11 +11,11 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/render"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/render"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 // buildInput is the Build call these tests share: round 1, the reviewer, a fresh publication id and no message.

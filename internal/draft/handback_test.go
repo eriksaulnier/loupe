@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/testutil/refusaltest"
 )
 
 // handBackRun stores a draft with n-001 open on f-001, n-002 open with a reply on f-002 and n-003 resolved on f-003.

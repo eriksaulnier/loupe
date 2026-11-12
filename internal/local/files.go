@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 // File is one captured file: the display path the diff and anchors use, the absolute path the agent edits, and the

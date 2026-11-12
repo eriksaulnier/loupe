@@ -12,10 +12,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/eriksaulnier/loupe/internal/findingid"
-	"github.com/eriksaulnier/loupe/internal/markdown"
-	"github.com/eriksaulnier/loupe/internal/section"
-	"github.com/eriksaulnier/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/findingid"
+	"github.com/secondshift-labs/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/section"
+	"github.com/secondshift-labs/loupe/internal/severity"
 )
 
 type Input struct {

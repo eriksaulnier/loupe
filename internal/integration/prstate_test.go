@@ -3,7 +3,7 @@ package integration
 import (
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/github"
 )
 
 // US1 and US2 (specs/050-pr-state-awareness): a pull request that merged after capture is tagged as review opens,

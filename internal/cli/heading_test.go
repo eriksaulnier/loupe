@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 // headingRun stores a run whose diff changes plan.md in one hunk, lines 11 to 17, inside Rollout. outline is the

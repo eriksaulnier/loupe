@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/github"
 )
 
 type Request struct {

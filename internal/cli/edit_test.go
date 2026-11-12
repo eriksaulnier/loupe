@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 var sendBackAt = time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC)

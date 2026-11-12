@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/markdown"
 )
 
 func TestAnchorRoundTrips(t *testing.T) {

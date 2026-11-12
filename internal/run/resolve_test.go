@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 func mkdirs(t *testing.T, paths ...string) {

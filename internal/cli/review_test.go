@@ -11,12 +11,12 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/testutil/screen"
-	"github.com/eriksaulnier/loupe/internal/tui"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/testutil/screen"
+	"github.com/secondshift-labs/loupe/internal/tui"
 )
 
 func TestReviewRefusesWithoutTerminalBeforeResolving(t *testing.T) {

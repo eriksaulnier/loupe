@@ -12,7 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/draft"
 )
 
 // newAwaitingModel opens review on the fixture after the human sent f-001 back as n-001, which is handed to the agent

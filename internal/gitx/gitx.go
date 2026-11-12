@@ -12,8 +12,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/gitenv"
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/gitenv"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // GIT_DIFF_OPTS outranks -U on the command line, and GIT_NAMESPACE hides refs/pull from an upload-pack that inherits it.

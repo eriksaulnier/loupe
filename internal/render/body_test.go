@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/severity"
-	"github.com/eriksaulnier/loupe/internal/testutil/golden"
+	"github.com/secondshift-labs/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/testutil/golden"
 )
 
 // checkGolden leaves example.md alone under -update: it comes from docs/comment-format.md, not from the renderer.

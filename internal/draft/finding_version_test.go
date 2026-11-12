@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 var stampAt = time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)

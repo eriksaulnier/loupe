@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/eriksaulnier/loupe/internal/findingid"
+	"github.com/secondshift-labs/loupe/internal/findingid"
 )
 
 // PublishableSet is what the human could still publish: included findings that are not excluded.

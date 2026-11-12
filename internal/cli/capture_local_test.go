@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
-	"github.com/eriksaulnier/loupe/internal/updatecheck"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitrepo"
+	"github.com/secondshift-labs/loupe/internal/updatecheck"
 )
 
 // localCapture runs capture in workdir with a fresh home and returns the exit code, the streams and the home.

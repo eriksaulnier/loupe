@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/testutil/golden"
-	"github.com/eriksaulnier/loupe/internal/testutil/herdrstub"
-	"github.com/eriksaulnier/loupe/internal/testutil/screen"
+	"github.com/secondshift-labs/loupe/internal/testutil/golden"
+	"github.com/secondshift-labs/loupe/internal/testutil/herdrstub"
+	"github.com/secondshift-labs/loupe/internal/testutil/screen"
 )
 
 // applyRef is the first local run of the clone, whose origin names acme/widgets.

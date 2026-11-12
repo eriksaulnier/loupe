@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 const (

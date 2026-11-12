@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/publish"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/publish"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 // With the clip on, as outside tests, a line wider than the window is cut to it and a line that fits is kept.

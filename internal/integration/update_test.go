@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/updatecheck"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/updatecheck"
 )
 
 const releasePath = "/repos/" + updatecheck.Owner + "/" + updatecheck.Repo + "/releases/latest"

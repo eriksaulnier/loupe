@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/cli"
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
-	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
-	"github.com/eriksaulnier/loupe/internal/testutil/screen"
-	"github.com/eriksaulnier/loupe/internal/tui"
+	"github.com/secondshift-labs/loupe/internal/cli"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/testutil/fakegh"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitrepo"
+	"github.com/secondshift-labs/loupe/internal/testutil/screen"
+	"github.com/secondshift-labs/loupe/internal/tui"
 )
 
 const (

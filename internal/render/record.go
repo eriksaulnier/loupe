@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/findingid"
-	"github.com/eriksaulnier/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/findingid"
+	"github.com/secondshift-labs/loupe/internal/markdown"
 )
 
 // RecordFinding is one published finding as the record holds it. Its JSON is publish.EnvelopeFinding's, so a round

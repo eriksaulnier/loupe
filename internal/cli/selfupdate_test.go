@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // releaseServer serves release files by their path under /releases/, as github.com does.

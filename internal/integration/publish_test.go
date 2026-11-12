@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/render"
-	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
-	"github.com/eriksaulnier/loupe/internal/testutil/screen"
-	"github.com/eriksaulnier/loupe/internal/tui"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/render"
+	"github.com/secondshift-labs/loupe/internal/testutil/fakegh"
+	"github.com/secondshift-labs/loupe/internal/testutil/screen"
+	"github.com/secondshift-labs/loupe/internal/tui"
 )
 
 const threeFindings = `[

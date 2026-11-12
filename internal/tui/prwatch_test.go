@@ -10,8 +10,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/testutil/fakegh"
 )
 
 // newWatchModel opens review on the fixture with the pull request watch on. The model is driven by calling Update,
