@@ -253,6 +253,12 @@ sync_codex() {
 	printf 'Codex: loupe plugin %s. Restart running sessions to load it.\n' "$tag"
 }
 
+# pi install and pi remove without -l act on user settings only, so a package pi list shows for the project is not
+# this script's to touch.
+pi_user_packages() {
+	printf '%s' "${1%%Project packages:*}"
+}
+
 # pi install replaces an earlier loupe package from the same repository at any ref, but not one from old_repo.
 sync_pi() {
 	manual="pi install git:github.com/$plugin_source"
@@ -260,7 +266,7 @@ sync_pi() {
 		agent_failed "Pi" "$out" "$manual"
 		return 0
 	}
-	case "$out" in
+	case "$(pi_user_packages "$out")" in
 	*"$old_repo"*)
 		manual="pi remove git:$old_repo; $manual"
 		out=$(pi remove "git:$old_repo" 2>&1) || {
@@ -356,7 +362,7 @@ remove_pi() {
 		agent_failed "Pi" "$out" "$manual"
 		return 0
 	}
-	listed=$out
+	listed=$(pi_user_packages "$out")
 	removed=
 	for src in "$repo" "$old_repo"; do
 		case "$listed" in

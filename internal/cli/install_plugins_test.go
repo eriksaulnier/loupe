@@ -80,7 +80,8 @@ esac
 `
 
 // Real pi keys a package by its repository without the ref: an install replaces the same repository at any ref and
-// sits beside another repository, and a remove matches the repository whatever ref was installed.
+// sits beside another repository, and a remove matches the repository whatever ref was installed. list also prints
+// project packages, from pi.project here, which install and remove without -l never touch.
 const fakePi = fakeAgentPreamble + `others() {
 	[ -f "$state.installed" ] || return 0
 	awk -v id="$1" '{ s = $0; sub(/@.*/, "", s) } s != id' "$state.installed"
@@ -92,11 +93,17 @@ install)
 	mv "$state.new" "$state.installed"
 	;;
 list)
+	if [ ! -f "$state.installed" ] && [ ! -f "$state.project" ]; then
+		echo 'No packages installed.'
+		exit 0
+	fi
 	if [ -f "$state.installed" ]; then
 		echo 'User packages:'
 		while IFS= read -r p || [ -n "$p" ]; do printf '  %s\n    /p\n' "$p"; done < "$state.installed"
-	else
-		echo 'No packages installed.'
+	fi
+	if [ -f "$state.project" ]; then
+		echo 'Project packages:'
+		printf '  %s\n    /p\n' "$(cat "$state.project")"
 	fi
 	;;
 remove)
@@ -515,6 +522,36 @@ func TestInstallScriptUninstallRemovesThePluginFromBeforeTheMove(t *testing.T) {
 	}
 	if !slices.Contains(agents.log(t), "pi remove git:github.com/eriksaulnier/loupe") {
 		t.Errorf("pi was not asked to remove the old package: %v", agents.log(t))
+	}
+}
+
+// pi remove without -l acts on user settings only, so an old-owner package a project lists MUST NOT stop the install.
+func TestInstallScriptPluginsIgnoreAProjectPiPackage(t *testing.T) {
+	f := newInstallFixture(t)
+	f.latest(t)
+	agents, env := f.withAgents(t, "pi")
+	agents.write(t, "pi.project", "git:github.com/eriksaulnier/loupe@v1.0.0")
+	if _, stderr, err := f.run(t, env...); err != nil {
+		t.Fatalf("install failed: %v\n%s", err, stderr)
+	}
+	assertCalls(t, agents.log(t), piFresh...)
+	if got := agents.installed(t, "pi"); got != "git:github.com/secondshift-labs/loupe@v1.2.3" {
+		t.Errorf("pi holds %q", got)
+	}
+}
+
+func TestInstallScriptUninstallIgnoresAProjectPiPackage(t *testing.T) {
+	f := newInstallFixture(t)
+	f.placeExisting(t)
+	agents, env := f.withAgents(t, "pi")
+	agents.write(t, "pi.project", "git:github.com/secondshift-labs/loupe@v1.0.0")
+	stdout, stderr, err := f.run(t, append(env, "LOUPE_UNINSTALL=1")...)
+	if err != nil {
+		t.Fatalf("uninstall failed: %v\n%s", err, stderr)
+	}
+	assertCalls(t, agents.log(t), "pi list")
+	if !strings.Contains(stdout, "Pi: no loupe plugin") {
+		t.Errorf("stdout does not say there is no user plugin:\n%s", stdout)
 	}
 }
 
