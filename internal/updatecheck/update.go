@@ -17,7 +17,7 @@ import (
 
 const (
 	// Owner and Repo name the repository whose latest release is checked.
-	Owner = "eriksaulnier"
+	Owner = "secondshift-labs"
 	Repo  = "loupe"
 	// Command is what a warning tells a person to run. It refuses an install it cannot update, with that install's fix.
 	Command = "loupe update"

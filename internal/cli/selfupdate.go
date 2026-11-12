@@ -26,15 +26,18 @@ import (
 )
 
 // DefaultReleases is where loupe's releases download from.
-const DefaultReleases = "https://github.com/eriksaulnier/loupe/releases"
+const DefaultReleases = "https://github.com/secondshift-labs/loupe/releases"
 
 const (
-	curlInstall    = "curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh"
+	curlInstall    = "curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | sh"
 	downloadLimit  = 60 * time.Second
-	releaseIssues  = "https://github.com/eriksaulnier/loupe/issues"
+	releaseIssues  = "https://github.com/secondshift-labs/loupe/issues"
 	installAsset   = "install.sh"
-	pluginRemoval  = "https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#removing-the-plugin-by-hand"
+	pluginRemoval  = "https://github.com/secondshift-labs/loupe/blob/main/docs/install.md#removing-the-plugin-by-hand"
 	checksumsAsset = "checksums.txt"
+	miseTool       = "github:secondshift-labs/loupe"
+	// A mise install made before the repository moved to secondshift-labs keeps the old tool name.
+	oldMiseTool = "github:eriksaulnier/loupe"
 )
 
 const selfUpdateHelp = `Install the latest loupe release, and the loupe plugin at that release for each of Claude Code,
@@ -72,7 +75,12 @@ func runSelfUpdate(cmd *cobra.Command, deps Deps) error {
 		return r
 	}
 	dir, err := installDir(deps, installFixes{
-		mise: "mise use -g github:eriksaulnier/loupe@latest",
+		mise: func(tool string) string {
+			if tool == oldMiseTool {
+				return "mise unuse -g " + oldMiseTool + ", then mise use -g " + miseTool + "@latest"
+			}
+			return "mise use -g " + miseTool + "@latest"
+		},
 		notWritable: func(dir string) string {
 			return "run it as a user who can write " + dir + ", or reinstall with " + curlInstall + " into a directory you own"
 		},
@@ -148,7 +156,9 @@ func runUninstall(cmd *cobra.Command, deps Deps) error {
 		return r
 	}
 	dir, err := installDir(deps, installFixes{
-		mise: "mise unuse -g github:eriksaulnier/loupe, then remove the plugins as " + pluginRemoval + " shows",
+		mise: func(tool string) string {
+			return "mise unuse -g " + tool + ", then remove the plugins as " + pluginRemoval + " shows"
+		},
 		notWritable: func(dir string) string {
 			return "remove " + filepath.Join(dir, "loupe") + " as a user who can write " + dir + ", then the plugins as " + pluginRemoval + " shows"
 		},
@@ -213,7 +223,7 @@ func removeDangling(deps Deps, link string) {
 
 // installFixes are the fixes each command gives for an install it cannot act on.
 type installFixes struct {
-	mise        string
+	mise        func(tool string) string
 	notWritable func(dir string) string
 	renamed     func(path string) string
 }
@@ -233,8 +243,13 @@ func installDir(deps Deps, fixes installFixes) (string, error) {
 	}
 	// mise keeps each version in its own directory and links the active one, so the script would act on a copy mise
 	// does not manage. MISE_DATA_DIR moves the root, so the tool's own directory name is checked too.
-	if strings.Contains(path, "/mise/installs/") || strings.Contains(path, "-eriksaulnier-loupe/") {
-		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe at %s was installed by mise", path), fixes.mise)
+	oldTool := strings.Contains(path, "-eriksaulnier-loupe/")
+	if strings.Contains(path, "/mise/installs/") || strings.Contains(path, "-secondshift-labs-loupe/") || oldTool {
+		tool := miseTool
+		if oldTool {
+			tool = oldMiseTool
+		}
+		r := refusal.New(refusal.UpdateUnsupported, fmt.Sprintf("loupe at %s was installed by mise", path), fixes.mise(tool))
 		r.Details = map[string]any{"reason": "mise"}
 		return "", r
 	}
