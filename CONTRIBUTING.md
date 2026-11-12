@@ -29,10 +29,10 @@ New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory,
 Write the spec with whatever tool you like. All of these work:
 
 - [spec-kit](https://github.com/github/spec-kit). The `.claude/skills/speckit-*` skills drive it in Claude Code, from the templates in `.specify/templates/`.
-- EGM. Its design doc goes in as `spec.md`.
+- [EGM](https://github.com/google/elephant-goldfish-model) (Elephant-Goldfish Model), which drafts and reviews a single design doc. That doc goes in as `spec.md`.
 - Plain Markdown by hand.
 
-A feature MAY add `plan.md` (how, checked against the constitution), `tasks.md` (ordered, test-first steps), or any other file its tool writes. With no `plan.md`, a How section in `spec.md` is the plan that the rules below and the constitution mean.
+A feature MAY add `plan.md` (how, checked against the constitution), `tasks.md` (ordered, test-first steps), or any other file its tool writes. With no `plan.md`, `spec.md` MUST have a How section, and that section is the plan that the rules below and the constitution mean.
 
 Take the next free `NNN` across the local `specs/`, the `NNN-*` branch names on `origin`, and `specs/` on every branch of `origin`, `main` included, so parallel branches do not share a number. spec-kit's create script does this for you.
 
@@ -45,7 +45,7 @@ A spec that is drafted but not scheduled belongs in an issue titled `Draft spec:
 When the work is picked up:
 
 1. Assign the issue to yourself.
-2. Run the flow and paste the issue body in as the spec's **Input**.
+2. Write the spec with your tool, starting from the issue body. With spec-kit, paste the body in as the spec's **Input**.
 3. Put `Closes #<issue>` in the pull request body, so the merge closes the issue.
 
 Finished specs stay in the repository. `docs/comment-format.md`, `specs/001-loupe-v1/validation.md`, the README, `AGENTS.md` and two code comments cite them by path, and a spec is reviewed as a diff like anything else.
