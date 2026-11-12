@@ -620,6 +620,17 @@ func TestPillsAsWords(t *testing.T) {
 	}
 }
 
+// A sticky review published before the repository moved carries its earlier rounds verbatim, pills on the old base.
+func TestPillsAsWordsReadsAPillFromBeforeTheMove(t *testing.T) {
+	old := pillAt(oldPillBase, "major")
+	if got, want := PillsAsWords("<summary>⛔ <b>issue</b> "+old+": T</summary>"), "<summary>⛔ <b>issue</b> MAJOR: T</summary>"; got != want {
+		t.Errorf("body\n got %q\nwant %q", got, want)
+	}
+	if got, want := CommentPillsAsWords("🟡 <b>issue</b> "+old+": U"), "🟡 <b>issue</b> MAJOR: U"; got != want {
+		t.Errorf("comment\n got %q\nwant %q", got, want)
+	}
+}
+
 // A value holding a lone carriage return is several lines to CommonMark, so it goes below its label.
 func TestLabeledTreatsCarriageReturnAsALineBreak(t *testing.T) {
 	if got := labeled("Impact", "a\rb"); got != "**Impact**\n\na\rb" {
