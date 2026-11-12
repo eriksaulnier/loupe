@@ -271,6 +271,6 @@ func headingOf(line string) (label, detail, rest string) {
 	return label, detail, strings.Trim(remainder, " ,")
 }
 
-// version is the build's version, set with -ldflags "-X github.com/secondshift-labs/loupe/internal/cli.version=…"; a build
-// that sets nothing says so rather than claiming a release.
+// version is the build's version, set with -ldflags "-X github.com/secondshift-labs/loupe/internal/cli.version=…";
+// a build that sets nothing says so rather than claiming a release.
 var version = "dev"
