@@ -56,7 +56,7 @@ release-please is not affected. It finds the last release by the exact version i
 
 ## macOS signing
 
-The `notarize` block in `.goreleaser.yaml` signs each darwin binary with a Developer ID Application certificate and notarizes it, before the binary is archived. It runs on the Linux runner and is enabled only when `MACOS_SIGN_P12` is set and not empty, because goreleaser's `isEnvSet` reads an empty value as unset. Only the `goreleaser` job in `release.yml` receives these five repository secrets, so snapshots and pre-releases are unsigned. That job fails before goreleaser runs when `MACOS_SIGN_P12` is empty, so a release never ships unsigned by accident:
+The `notarize` block in `.goreleaser.yaml` signs each darwin binary with a Developer ID Application certificate and notarizes it, before the binary is archived. It runs on the Linux runner and is enabled only when `MACOS_SIGN_P12` is set and not empty, because goreleaser's `isEnvSet` reads an empty value as unset. Only the `goreleaser` job in `release.yml` receives these five repository secrets, so snapshots and pre-releases are unsigned. That job fails before goreleaser runs when any of the five is empty, so a release never ships unsigned by accident:
 
 | Secret | What it holds |
 | :--- | :--- |
@@ -69,7 +69,7 @@ The `notarize` block in `.goreleaser.yaml` signs each darwin binary with a Devel
 - The `.p12` MUST include Apple Root CA. Without it the signature's designated requirement names no Apple root, `codesign --verify` rejects the binary and macOS kills it on launch. Export it with `openssl pkcs12 -export -legacy` from OpenSSL 3. The `openssl` that macOS ships is LibreSSL and rejects `-legacy`.
 - The notary key SHOULD be one created for loupe alone, so it can be revoked without touching another project.
 - `prerelease.yml` MUST NOT receive these secrets: its `build` job compiles a branch's code.
-- A release with `MACOS_SIGN_P12` missing or empty fails in the `goreleaser` job before anything is uploaded, and the draft release stays a draft. Restore the secret and re-run the failed jobs. The certificate expires, so renew it and replace `MACOS_SIGN_P12` before it lapses.
+- A release with any of these secrets missing or empty fails in the `goreleaser` job before anything is uploaded, and the draft release stays a draft. Restore the secret and re-run the failed jobs. The certificate expires, so renew it and replace `MACOS_SIGN_P12` before it lapses.
 
 ## Why the release starts as a draft
 

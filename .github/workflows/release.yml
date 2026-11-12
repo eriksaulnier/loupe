@@ -107,12 +107,19 @@ jobs:
           drafts="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft and .name == env.TAG) | .id' | wc -l | tr -d ' ')"
           [ "$drafts" = 1 ] || { echo "::error::want exactly one draft release named $TAG for goreleaser to publish, found $drafts"; exit 1; }
       # A secret that does not exist expands to the empty string, which goreleaser's isEnvSet reads as unset. Without this
-      # step the job would sign nothing, publish, and leave an immutable release that docs/install.md calls signed.
+      # step the job would sign nothing, publish, and leave an immutable release that docs/install.md calls signed. All
+      # five are checked because goreleaser's behavior on an empty notary field after a valid certificate is not known.
       - env:
           MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
         run: |
           set -euo pipefail
-          [ -n "$MACOS_SIGN_P12" ] || { echo "::error::MACOS_SIGN_P12 is empty, so this release would ship unsigned"; exit 1; }
+          for name in MACOS_SIGN_P12 MACOS_SIGN_PASSWORD MACOS_NOTARY_ISSUER_ID MACOS_NOTARY_KEY_ID MACOS_NOTARY_KEY; do
+            [ -n "${!name}" ] || { echo "::error::$name is empty, so this release would not ship signed and notarized"; exit 1; }
+          done
       # Pinned by commit, unlike the other actions here: this step holds the signing and notary keys, which outlive the
       # run. Dependabot keeps the pin current.
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
