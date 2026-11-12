@@ -74,7 +74,7 @@ install loupe ~/.local/bin/
 Where `shasum` is missing, pipe the same line to `sha256sum -c`.
 
 > [!NOTE]
-> macOS builds are unsigned. `curl` and mise set no quarantine flag, but a browser does. If you download the archive in a browser, run `xattr -d com.apple.quarantine loupe` before you start the binary.
+> Release builds for macOS are signed with a Developer ID and notarized by Apple. Pre-releases and releases from before signing are unsigned: `curl` and mise set no quarantine flag, but a browser does, so after downloading one of those in a browser, run `xattr -d com.apple.quarantine loupe` before you start the binary.
 
 ### In GitHub Actions
 

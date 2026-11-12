@@ -54,6 +54,23 @@ release-please is not affected. It finds the last release by the exact version i
 - A failed run SHOULD be recovered by re-running its failed jobs. The `release` job reuses the draft an earlier attempt created when that draft targets the same commit, and refuses a draft on another commit. Delete such a draft by hand before the next dispatch, since `validate` cannot see drafts. Once the draft is published, `release` refuses to run again, so a failure in a later job is re-run there.
 - `install.sh` and `action.yml` name `eriksaulnier/loupe`, so the install jobs of a dispatch on a fork fail unless a fork-only commit points them at the fork.
 
+## macOS signing
+
+The `notarize` block in `.goreleaser.yaml` signs each darwin binary with a Developer ID Application certificate and notarizes it, before the binary is archived. It runs on the Linux runner and is enabled only when `MACOS_SIGN_P12` is set. Only the `goreleaser` job in `release.yml` receives these five repository secrets, so snapshots and pre-releases are unsigned:
+
+| Secret | What it holds |
+| :--- | :--- |
+| `MACOS_SIGN_P12` | The base64 of a `.p12` holding the certificate, its private key and the full chain up to Apple Root CA |
+| `MACOS_SIGN_PASSWORD` | The `.p12` password |
+| `MACOS_NOTARY_KEY` | The base64 of an App Store Connect API key (`.p8`) |
+| `MACOS_NOTARY_KEY_ID` | That key's id |
+| `MACOS_NOTARY_ISSUER_ID` | The issuer id shown on the App Store Connect keys page |
+
+- The `.p12` MUST include Apple Root CA. Without it the signature's designated requirement names no Apple root, `codesign --verify` rejects the binary and macOS kills it on launch. Export it with `openssl pkcs12 -export -legacy`.
+- The notary key SHOULD be one created for loupe alone, so it can be revoked without touching another project.
+- `prerelease.yml` MUST NOT receive these secrets: its `build` job compiles a branch's code.
+- A release built with `MACOS_SIGN_P12` unset ships unsigned without failing. The certificate expires, so renew it and replace `MACOS_SIGN_P12` before it lapses.
+
 ## Why the release starts as a draft
 
 With immutable releases on, a published release takes no new assets and its tag cannot move. A release that release-please published before goreleaser uploaded would stay without archives for good. The draft keeps the release open until every asset is attached.
