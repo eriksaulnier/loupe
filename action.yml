@@ -40,7 +40,7 @@ runs:
 
         # goreleaser names the archive after the tag with its leading v stripped.
         archive="loupe_${tag#v}_${os}_${arch}.tar.gz"
-        base="https://github.com/eriksaulnier/loupe/releases/download/$tag"
+        base="https://github.com/secondshift-labs/loupe/releases/download/$tag"
         # Directories of their own, so a second install in the same job does not overwrite the first.
         dl="$(mktemp -d "$RUNNER_TEMP/loupe.XXXXXX")"
         bin="$(mktemp -d "$RUNNER_TEMP/loupe.XXXXXX")"
