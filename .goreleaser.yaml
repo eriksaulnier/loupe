@@ -50,5 +50,5 @@ release:
   extra_files:
     - glob: ./install.sh
   github:
-    owner: eriksaulnier
+    owner: secondshift-labs
     name: loupe
