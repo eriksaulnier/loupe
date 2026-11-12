@@ -799,13 +799,16 @@ func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
 	}
 	refused, refusedKind := m.notice, m.noticeKind
 	var open tea.Cmd
-	if f, _ := m.openedFinding(); key != "" && len(f.Options) > 0 {
+	if f, _ := m.openedFinding(); key != "" && len(f.Options) > 0 && strings.Contains(refused, staleNotice) {
 		// The held pick named an option as it was shown, so the human picks again from the options as they are now.
+		// Any other refusal is about the note's words, so the note opens again with its pick.
 		m.noting, m.pickHeld, m.pickNote = false, "", text
 		m.note.Blur()
 		open = m.openPick(pickAcceptNote)
 	} else {
-		m.pickHeld = ""
+		if len(f.Options) == 0 {
+			m.pickHeld = ""
+		}
 		open = m.openNote(kind, text)
 	}
 	m.notice, m.noticeKind = refused, refusedKind

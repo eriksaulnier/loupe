@@ -693,3 +693,18 @@ func TestApplyAOnAWithdrawnChoiceFindingSaysUReinstates(t *testing.T) {
 		t.Fatalf("picking %v notice %q", m.picking, m.notice)
 	}
 }
+
+// A note the draft refuses for its own words keeps the pick: only a stale finding sends the human back to the picker.
+func TestApplyRefusedNoteKeepsThePick(t *testing.T) {
+	m, dir := choiceModel(t, utf8Env)
+	openPicker(t, m, "t")
+	press(m, "3")
+	m.Update(runes("<script>x</script>"))
+	m.Update(enterKey)
+	if _, decided := loadDraft(t, dir).Decisions["f-001"]; decided {
+		t.Fatal("a refused note recorded a decision")
+	}
+	if m.picking || !m.noting || m.pickHeld != "3" || m.notice == "" || strings.Contains(m.notice, staleNotice) {
+		t.Fatalf("picking %v noting %v held %q notice %q", m.picking, m.noting, m.pickHeld, m.notice)
+	}
+}
