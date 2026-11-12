@@ -123,7 +123,9 @@ type Model struct {
 	// indexes the finding's options.
 	picking bool
 	pickFor pickFor
-	pickSel int
+	// pickHeld is the option picked before the accept note opened, which accepts with it. Esc clears it.
+	pickHeld string
+	pickSel  int
 	// keptNotes holds, per finding, text the human typed into a note and then left without it being recorded, so the
 	// next send-back on that finding starts from it. It lives only as long as the program.
 	keptNotes map[string]string

@@ -319,6 +319,9 @@ func (applyUI) detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool) 
 		if key == "c" {
 			return m.openNote(noteExclude, heldNote(m.draft, f, draft.DispositionExcluded)), true
 		}
+		if len(f.Options) > 0 {
+			return m.openPick(pickAcceptNote), true
+		}
 		return m.openNote(noteAccept, heldNote(m.draft, f, draft.DispositionAccepted)), true
 	case "w":
 		// Absent here, and swallowed so the shared handler cannot give it a pull request run's meaning.

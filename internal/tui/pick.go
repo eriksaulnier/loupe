@@ -21,6 +21,8 @@ const (
 	pickAccept pickFor = iota
 	// pickReinstate reinstates a withdrawn finding and accepts it with the picked option.
 	pickReinstate
+	// pickAcceptNote holds the picked option and opens the note composer, which accepts with both.
+	pickAcceptNote
 )
 
 // pickedKey is the key of the option f's current decision picked, or "" when f is not accepted with a pick.
@@ -89,6 +91,11 @@ func (m *Model) pickOption(key string) tea.Cmd {
 	m.picking = false
 	now := m.cfg.Now()
 	var closed []string
+	if m.pickFor == pickAcceptNote {
+		f, _ := m.openedFinding()
+		m.pickHeld = key
+		return m.openNote(noteAccept, heldNote(m.draft, f, draft.DispositionAccepted))
+	}
 	if m.pickFor == pickReinstate {
 		return m.decideAndShow(func(d *draft.Draft) (err error) {
 			closed, err = draft.Reinstate(d, id, key, m.rules, now)
@@ -118,8 +125,11 @@ func (m *Model) pickView() []string {
 		lines = append(lines, m.pickerRow(i == m.pickSel, false, o.Key, label, inner)...)
 	}
 	verb := "accepts"
-	if m.pickFor == pickReinstate {
+	switch m.pickFor {
+	case pickReinstate:
 		verb = "reinstates"
+	case pickAcceptNote:
+		verb = "picks"
 	}
 	way := m.styles.HintTitle("enter " + verb + " " + m.glyphs.Sep + " esc cancels")
 	return m.styles.Pane(style.Pane{Width: m.width, Height: len(lines) + style.PaneRows, Lines: lines,
@@ -130,8 +140,11 @@ func (m *Model) pickView() []string {
 func (m *Model) pickFooter() []string {
 	f, _ := m.openedFinding()
 	verb := "accept"
-	if m.pickFor == pickReinstate {
+	switch m.pickFor {
+	case pickReinstate:
 		verb = "reinstate"
+	case pickAcceptNote:
+		verb = "pick"
 	}
 	digits := "1"
 	if n := len(f.Options); n > 1 {

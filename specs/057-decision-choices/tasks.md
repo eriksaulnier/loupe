@@ -77,14 +77,14 @@ PR runs MUST stay byte-identical. No task runs `-update` on a PR golden.
 
 **Independent test**: `go test ./internal/tui/ ./internal/mode/ -run 'TPick|NoteAndChoice'`.
 
-- [ ] T023 [P] [US3] In `internal/tui/apply_test.go`, add these tests and see them fail:
+- [x] T023 [P] [US3] In `internal/tui/apply_test.go`, add these tests and see them fail:
   - `TestApplyTPicksThenOpensTheNote`.
   - `TestApplyTPickThenEnterAcceptsWithPickAndNote`.
   - `TestApplyTEscInThePickerRecordsNothing`.
   - `TestApplyTEscInTheNoteRecordsNothing`: the decision stays as it was before `t`.
 
   In `internal/mode/feedback_test.go`, add `TestApplyFeedbackNoteAndChoiceInApplyWithChanges`.
-- [ ] T024 [US3] In `internal/tui/modeui.go` `applyUI.detailKey` (`:311`), route `t` on a choice finding to `openPick(acceptNote)`. In `pick.go`, a pick with `pickFor == acceptNote` holds the key and calls `openNote(noteAccept, …)`. `decideWithNote` (`detail.go:731`) passes the held key to `AcceptWithNote`, and esc clears it. Run T023 and see it pass. Commit T023 and T024 as `feat(tui): accept a picked option with a note`.
+- [x] T024 [US3] In `internal/tui/modeui.go` `applyUI.detailKey` (`:311`), route `t` on a choice finding to `openPick(acceptNote)`. In `pick.go`, a pick with `pickFor == acceptNote` holds the key and calls `openNote(noteAccept, …)`. `decideWithNote` (`detail.go:731`) passes the held key to `AcceptWithNote`, and esc clears it. Run T023 and see it pass. Commit T023 and T024 as `feat(tui): accept a picked option with a note`.
 
 ## Phase 5: User Story 4 — agents use options (P3)
 

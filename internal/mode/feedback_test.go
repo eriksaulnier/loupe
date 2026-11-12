@@ -288,3 +288,24 @@ func TestApplyFeedbackExcludedChoiceFindingHasNoChoice(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyFeedbackNoteAndChoiceInApplyWithChanges(t *testing.T) {
+	d := draft.NewEmpty()
+	d.Findings = []draft.Finding{choiceFinding("f-001")}
+	d.Decisions["f-001"] = draft.Decision{FindingID: "f-001", Decision: draft.DecisionAccepted, FindingRev: 1, At: at, Choice: "3", Note: "Mind the cache."}
+	payload, err := Of(run.Target{Kind: run.KindLocal, Local: &run.LocalTarget{Root: "/src", Capture: "files"}}).Feedback(d, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups := payload["groups"].(map[string][]map[string]any)
+	if len(groups["apply"]) != 0 || len(groups["applyWithChanges"]) != 1 {
+		t.Fatalf("groups %v", groups)
+	}
+	e := groups["applyWithChanges"][0]
+	if e["suggestion"] != "Mind the cache." || e["proposal"] != "Use the first store." {
+		t.Errorf("entry %v", e)
+	}
+	if got, want := e["choice"], (map[string]any{"key": "3", "label": "Use the first"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("choice %v, want %v", got, want)
+	}
+}

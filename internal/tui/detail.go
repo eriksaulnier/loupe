@@ -22,7 +22,7 @@ import (
 
 func (m *Model) openFinding(id string) error {
 	m.view, m.openID, m.noting, m.editing, m.rewriting, m.settling = viewDetail, id, false, false, false, false
-	m.picking = false
+	m.picking, m.pickHeld = false, ""
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -733,6 +733,7 @@ func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
 	case tea.KeyEsc:
 		m.noting = false
 		m.note.Blur()
+		m.pickHeld = ""
 		if m.noteKind == noteSend {
 			m.keepNote(m.openID, m.note.Value())
 		}
@@ -765,7 +766,7 @@ func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
 	id := m.openID
 	var closed []string
 	decide := func(d *draft.Draft) (err error) {
-		closed, err = draft.AcceptWithNote(d, id, "", text, m.cfg.Now())
+		closed, err = draft.AcceptWithNote(d, id, m.pickHeld, text, m.cfg.Now())
 		return err
 	}
 	notice := func() string {
@@ -781,6 +782,9 @@ func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
 		}
 	}
 	cmd, recorded := m.decideAndMove(decide, notice)
+	if recorded {
+		m.pickHeld = ""
+	}
 	if recorded || m.err != nil || m.openID != id {
 		return cmd
 	}

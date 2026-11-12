@@ -495,6 +495,71 @@ func TestApplyUOnAWithdrawnChoiceFindingOpensThePicker(t *testing.T) {
 	}
 }
 
+func TestApplyTPicksThenOpensTheNote(t *testing.T) {
+	m, dir := choiceModel(t, utf8Env)
+	before := loadDraft(t, dir).Version
+	openPicker(t, m, "t")
+	if m.noting || m.pickSel != 1 {
+		t.Fatalf("t: noting %v, picker row %d", m.noting, m.pickSel)
+	}
+	press(m, "3")
+	if !m.noting || m.noteKind != noteAccept || m.picking {
+		t.Fatalf("picking 3 did not open the note: noting %v kind %d picking %v", m.noting, m.noteKind, m.picking)
+	}
+	if loadDraft(t, dir).Version != before {
+		t.Error("the pick alone recorded a decision")
+	}
+}
+
+func TestApplyTPickThenEnterAcceptsWithPickAndNote(t *testing.T) {
+	m, dir := choiceModel(t, utf8Env)
+	openPicker(t, m, "t")
+	press(m, "j", "enter")
+	m.Update(runes("Mind the cache."))
+	m.Update(enterKey)
+	got := loadDraft(t, dir).Decisions["f-001"]
+	if got.Decision != draft.DecisionAccepted || got.Choice != "3" || got.Note != "Mind the cache." {
+		t.Fatalf("decision %+v", got)
+	}
+}
+
+func TestApplyTEscInThePickerRecordsNothing(t *testing.T) {
+	m, dir := choiceModel(t, utf8Env)
+	before := loadDraft(t, dir).Version
+	openPicker(t, m, "t")
+	press(m, "esc")
+	if m.picking || m.noting || loadDraft(t, dir).Version != before {
+		t.Fatalf("picking %v noting %v", m.picking, m.noting)
+	}
+}
+
+func TestApplyTEscInTheNoteRecordsNothing(t *testing.T) {
+	m, dir := choiceModel(t, utf8Env)
+	outside(t, dir, func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", "3", testNow); return err })
+	if _, err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	mustOpenFinding(t, m, "f-001")
+	before := loadDraft(t, dir)
+	openPicker(t, m, "t")
+	press(m, "1")
+	m.Update(runes("x"))
+	press(m, "esc")
+	got := loadDraft(t, dir)
+	if m.noting || got.Version != before.Version || got.Decisions["f-001"].Choice != "3" {
+		t.Fatalf("noting %v decision %+v", m.noting, got.Decisions["f-001"])
+	}
+	press(m, "t")
+	if m.picking {
+		m.Update(settledMsg{})
+	}
+	press(m, "enter")
+	m.Update(enterKey)
+	if got := loadDraft(t, dir).Decisions["f-001"].Choice; got != "3" {
+		t.Errorf("a held pick leaked past esc: choice %q", got)
+	}
+}
+
 func TestApplyChoiceHeaderAndRowShowThePick(t *testing.T) {
 	m, _ := choiceModel(t, utf8Env)
 	openPicker(t, m, "a")
