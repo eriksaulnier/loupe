@@ -10,6 +10,8 @@ A section is a bold heading in its tone, over a `┃` bar in the same tone. The 
 
 Every block in a finding below the title and meta is a section, except the location pane. The body is the section `Why`. A blank row separates two sections.
 
+A choice finding (`specs/057-decision-choices`) draws one section per option in the good tone, in place of the proposed change. A bold `<applier> will do one of these` line in the good tone leads the first option. Each heading is the key as a good chip, the label, then a good `recommended` chip on the recommended option and an accent `picked` chip on the option the human picked. The key chip is the cue that its digit picks the option. Without color the chips are bare words joined by the separator glyph, as in `2 · Use the second · recommended`. The body is the option's proposal.
+
 Without color, the heading is plain text and the bar stays, so the structure survives `NO_COLOR`.
 
 ## Tone says whose words they are
@@ -30,6 +32,8 @@ Without color, the heading is plain text and the bar stays, so the structure sur
 
 A box is for code and for anything the human is editing. That is the location pane, the send-back and edit composers, the local start screen and the publish confirmation. Prose that the human reads but does not edit MUST NOT be boxed. It is a section.
 
+The option picker is a box, since the human chooses in it (`specs/057-decision-choices`). It opens under a choice finding when the human accepts, tweaks or reinstates it. It holds one row per option: a cursor, the key, and the label cut to the row with the ellipsis, since the option section above shows it whole. It draws its own rows, because the other pickers pad a name column for action names that would leave a one-digit key far from its label. The recommended option is marked and the selection on the current pick or else the recommended option. `enter` picks the selected row and a digit picks that option at once. `esc` closes the picker and records nothing. Keys that pick are dropped for the settle window after the picker opens, so a repeated key cannot choose by accident. `t` opens the picker and then the note composer, and the decision records only when the note is saved.
+
 A pane title MUST be drawn by a `style` helper. A screen MUST NOT style a pane title inline.
 
 ## Order
@@ -41,7 +45,7 @@ A finding's document has one order in both modes:
 3. The notice that the agent changed text the human wrote, when it did. It is one line in the note color with the note glyph, not a section, because it reports an event rather than holding anyone's words.
 4. The location pane.
 5. `Why`.
-6. The proposed change: `Suggested fix`, `<applier> will`, or `A question for <applier>`. A suggested fix that sits beside a proposal or a question follows it as its own `Suggested fix` section.
+6. The proposed change: `Suggested fix`, `<applier> will`, or `A question for <applier>`. A choice finding shows its `<applier> will do one of these` lead and one section per option here instead, in key order. A suggested fix that sits beside a proposal, a question or options follows it as its own `Suggested fix` section.
 7. `Impact`.
 8. `References`.
 9. Notes.

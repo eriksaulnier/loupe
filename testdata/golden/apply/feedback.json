@@ -4,7 +4,7 @@
   "command": "feedback",
   "run": "acme/widgets:local#1",
   "dir": "<home>/local/1",
-  "version": 9,
+  "version": 10,
   "findings": [
     {
       "disposition": "accepted",
@@ -38,6 +38,12 @@
       "withdrawReason": {
         "text": "Logging is out of scope."
       }
+    },
+    {
+      "disposition": "accepted",
+      "id": "f-006",
+      "rev": 1,
+      "title": "Pick the eviction"
     }
   ],
   "groups": {
@@ -87,6 +93,19 @@
           }
         ],
         "title": "Split the loop"
+      },
+      {
+        "body": "Three policies would do.",
+        "choice": {
+          "key": "3",
+          "label": "Never evict"
+        },
+        "general": true,
+        "id": "f-006",
+        "proposal": "Never evict an entry.",
+        "severity": "trivial",
+        "thread": [],
+        "title": "Pick the eviction"
       }
     ],
     "applyWithChanges": [
@@ -162,7 +181,8 @@
     "accepted": [
       "f-001",
       "f-002",
-      "f-004"
+      "f-004",
+      "f-006"
     ],
     "pending": [],
     "excluded": [

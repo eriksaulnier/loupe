@@ -36,10 +36,11 @@ Result (--json):
 On a local run the result adds "returned", true once the human returned the decisions, and
 "groups", the decided findings sorted by what the agent does with each:
   "groups": {"apply": [...], "applyWithChanges": [...], "excluded": [...], "withdrawn": [...]}
-Each entry is {"id", "title", "body", "proposal"?, "label"?, "severity"?, "general", "path"?,
+Each entry is {"id", "title", "body", "proposal"?, "choice"?: {"key", "label"}, "label"?, "severity"?, "general", "path"?,
 "location"?: {"path", "line", "startLine"?, "heading"?}, "thread": [{"id", "body", "at", "status",
 "replies": [{"id", "body", "by", "at"}]}]}, where path is the absolute file to edit. apply holds
-accepted findings to apply as proposed. applyWithChanges holds accepted findings the human
+accepted findings to apply as proposed. For a finding with options, "proposal" is the option
+the human picked and "choice" names it. applyWithChanges holds accepted findings the human
 rewrote, or accepted with a note, carried as "suggestion", which wins over the proposal.
 excluded holds what the human rejected, with "reason" when one was given: change nothing.
 withdrawn holds what the agent withdrew, with "withdrawReason": nothing to do.`

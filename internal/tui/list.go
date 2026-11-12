@@ -638,7 +638,19 @@ func (m *Model) row(f draft.Finding, disposition string, notes map[string]bool, 
 		b.WriteString(mark + " ")
 		titleWidth -= style.Width(m.glyphs.Question) + 1
 	}
+	tag := ""
+	if key := m.pickedKey(f); key != "" {
+		tag = "accepted " + m.glyphs.Sep + " " + key
+		if room := titleWidth - style.Width(tag) - 1; room >= reasonFloor {
+			titleWidth = room
+		} else {
+			tag = ""
+		}
+	}
 	b.WriteString(m.titleCell(f, text.Render, max(0, titleWidth)))
+	if tag != "" {
+		b.WriteString(" " + s.Overlay().Render(tag))
+	}
 	if cols.location > 0 {
 		b.WriteString(" " + m.locationColumn(f, cols))
 	}

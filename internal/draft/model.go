@@ -7,7 +7,7 @@ import (
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 // Rules configures which fields and input forms a mutator accepts. The zero value is today's PR behavior.
 type Rules struct {
@@ -119,6 +119,8 @@ type Finding struct {
 	General  bool             `json:"general"`
 	// Proposal is the code change the agent suggests, Markdown, at most 64 KiB. Local runs only.
 	Proposal string `json:"proposal,omitempty"`
+	// Options are the 2 or 3 alternatives the human picks from, in place of a Proposal. Local runs only.
+	Options []Option `json:"options,omitempty"`
 	// Label is issue, suggestion, question or any other word kept verbatim; empty means none.
 	Label    string `json:"label,omitempty"`
 	Blocking bool   `json:"blocking"`
@@ -139,6 +141,14 @@ type Finding struct {
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
 	History   []HistoryEntry `json:"history"`
+}
+
+// Option is one alternative of a choice finding. Key is "1", "2" or "3", assigned by loupe in input order.
+type Option struct {
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Proposal    string `json:"proposal"`
+	Recommended bool   `json:"recommended,omitempty"`
 }
 
 type Location struct {
@@ -173,6 +183,8 @@ type Decision struct {
 	At         time.Time `json:"at"`
 	// Note holds the human's accept note or exclude reason. It clears with the decision.
 	Note string `json:"note,omitempty"`
+	// Choice is the key of the picked option on a finding with options. It clears with the decision.
+	Choice string `json:"choice,omitempty"`
 }
 
 type Note struct {

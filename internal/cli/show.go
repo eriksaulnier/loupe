@@ -476,6 +476,8 @@ type findingBlock struct {
 	meta     []metaCell
 	body     string
 	proposal string
+	options  []draft.Option
+	picked   string
 	impact   string
 	fix      string
 	refs     []string
@@ -575,6 +577,17 @@ func writeFinding(b *strings.Builder, s style.Style, width int, f findingBlock) 
 		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render("Proposal"))
 		writeProse(b, s, width, proposal)
 	}
+	for _, o := range f.options {
+		head := o.Key + " " + s.Glyphs.Sep + " " + oneLine(o.Label)
+		if o.Recommended {
+			head += " " + s.Glyphs.Sep + " recommended"
+		}
+		if o.Key == f.picked {
+			head += " " + s.Glyphs.Sep + " picked"
+		}
+		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render(head))
+		writeProse(b, s, width, text(o.Proposal))
+	}
 	if impact := text(f.impact); impact != "" {
 		fmt.Fprintf(b, "%s%s\n", findingIndent, s.Head.Render("Impact"))
 		fmt.Fprintf(b, "%s\n", s.Wrap(impact, width, findingIndent))
@@ -670,7 +683,7 @@ func printShow(deps Deps, ref run.Ref, target run.Target, d *draft.Draft, dispos
 		meta = append(meta, dimCell(locationCell(s, published(f.Location))))
 		writeFinding(&b, s, width, findingBlock{
 			glyph: glyph, kind: kind, id: f.ID, blocking: f.Blocking,
-			title: f.Title, meta: meta, body: f.Body, proposal: f.Proposal, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,
+			title: f.Title, meta: meta, body: f.Body, proposal: f.Proposal, options: f.Options, picked: d.Decisions[f.ID].Choice, impact: f.Impact, fix: f.SuggestedFix, refs: f.References,
 			reason: draft.CurrentReason(f),
 		})
 	}

@@ -82,9 +82,14 @@ func (a apply) Feedback(d *draft.Draft, dir string) (map[string]any, error) {
 	}
 	groups := map[string][]map[string]any{"apply": {}, "applyWithChanges": {}, "excluded": {}, "withdrawn": {}}
 	for _, f := range d.Findings {
-		entry := a.entry(d, f)
 		decision := d.Decisions[f.ID]
-		switch draft.GateOf(d, f).Disposition {
+		disposition := draft.GateOf(d, f).Disposition
+		picked := ""
+		if disposition == draft.DispositionAccepted {
+			picked = decision.Choice
+		}
+		entry := a.entry(d, f, picked)
+		switch disposition {
 		case draft.DispositionAccepted:
 			if decision.Note != "" {
 				entry["suggestion"] = decision.Note
@@ -110,12 +115,19 @@ func (a apply) Feedback(d *draft.Draft, dir string) (map[string]any, error) {
 	return payload, nil
 }
 
-// entry is one finding as the agent applies it: no blocking or side, the absolute path to edit, and its notes.
-func (a apply) entry(d *draft.Draft, f draft.Finding) map[string]any {
+// entry is one finding as the agent applies it: no blocking or side, the absolute path to edit, and its notes. A choice
+// finding carries the picked option's proposal and a choice naming it, never the options.
+func (a apply) entry(d *draft.Draft, f draft.Finding, picked string) map[string]any {
 	e := map[string]any{"id": f.ID, "title": f.Title, "body": f.Body, "general": f.General, "thread": thread(d, f.ID)}
 	for k, v := range map[string]string{"proposal": f.Proposal, "label": f.Label, "severity": f.Severity} {
 		if v != "" {
 			e[k] = v
+		}
+	}
+	for _, o := range f.Options {
+		if o.Key == picked {
+			e["proposal"] = o.Proposal
+			e["choice"] = map[string]any{"key": o.Key, "label": o.Label}
 		}
 	}
 	if f.Location != nil {

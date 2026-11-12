@@ -131,6 +131,33 @@ func forbiddenIn(object []byte, entry int, fix string) error {
 		}
 		return r
 	}
+	return optionKeyIn(keys, entry, fix)
+}
+
+// optionKeyIn refuses a key in an option entry, since loupe assigns the keys. Decoding would otherwise read it as an
+// unknown field.
+func optionKeyIn(keys map[string]json.RawMessage, entry int, fix string) error {
+	var options []json.RawMessage
+	if json.Unmarshal(keys[foldKey("options")], &options) != nil {
+		return nil
+	}
+	for i, option := range options {
+		fields, err := foldedKeys(option)
+		if err != nil {
+			continue
+		}
+		if _, ok := fields[foldKey("key")]; !ok {
+			continue
+		}
+		field := fmt.Sprintf("options[%d].key", i)
+		r := refusal.New(refusal.Input, fmt.Sprintf("input field %q is not allowed; loupe numbers the options", field), fix)
+		r.Details = map[string]any{"field": field}
+		if entry >= 0 {
+			r.Message = fmt.Sprintf("input entry %d: %s", entry, r.Message)
+			r.Details["entry"] = entry
+		}
+		return r
+	}
 	return nil
 }
 
@@ -191,6 +218,8 @@ func modeKeysIn(object []byte, entry int, m mode.Mode) error {
 	switch {
 	case has("proposal") && !m.Rules().AllowProposal:
 		return refuse(refusal.Input, "proposal", "applies only to local runs", `use "suggestedFix" instead`)
+	case has("options") && !m.Rules().AllowProposal:
+		return refuse(refusal.Input, "options", "applies only to local runs", `use "suggestedFix" instead`)
 	case has("blocking") && ir.RefuseBlocking:
 		return refuse(refusal.Input, "blocking", "does not apply to local runs", `drop "blocking" from the input`)
 	case has("suggestedFix") && ir.RefuseSuggestedFix:

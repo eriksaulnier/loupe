@@ -137,7 +137,7 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 		_, err := Add(d, []FindingInput{{Title: "Three", Body: "Body.", General: true, Label: "question"}}, nil, Rules{}, ByAgent, time.Now())
 		return err
 	})
-	mutate(func(d *Draft) error { _, err := Accept(d, "f-002", time.Now()); return err })
+	mutate(func(d *Draft) error { _, err := Accept(d, "f-002", "", time.Now()); return err })
 	if state(loadStored(t, dir)) != shown {
 		t.Fatal("a new finding or a decision on another finding changed the state")
 	}
@@ -148,7 +148,7 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 		name string
 		fn   func(*Draft) error
 	}{
-		{"accept", func(d *Draft) error { _, err := Accept(d, "f-001", time.Now()); return err }},
+		{"accept", func(d *Draft) error { _, err := Accept(d, "f-001", "", time.Now()); return err }},
 		{"send back", func(d *Draft) error { _, err := SendBack(d, "f-001", "Why?", time.Now()); return err }},
 		{"reply", func(d *Draft) error { _, err := AddReply(d, "n-001", "Because.", ByAgent, time.Now()); return err }},
 		{"resolve", func(d *Draft) error { return ResolveNote(d, "n-001", time.Now()) }},
@@ -517,4 +517,20 @@ func TestAnAmendMovesNoGateCount(t *testing.T) {
 func TestFindingStateRefusesAnUnknownFinding(t *testing.T) {
 	_, err := FindingState(NewEmpty(), "f-001")
 	_ = refusaltest.Want(t, err, refusal.NotFound)
+}
+
+// FR-019: the pick is not part of the gate, so a finding accepted with a pick counts as one accepted unchanged.
+func TestGateCountsTreatAPickedChoiceAsAccepted(t *testing.T) {
+	f := finding("f-001", 1, true, ByAgent)
+	f.Options = []Option{{Key: "1", Label: "A", Proposal: "a"}, {Key: "2", Label: "B", Proposal: "b", Recommended: true}}
+	d := NewEmpty()
+	d.Findings = append(d.Findings, f)
+	d.Decisions["f-001"] = Decision{FindingID: "f-001", Decision: DecisionAccepted, FindingRev: 1, Choice: "1"}
+	d = roundTrip(t, d)
+	if got := GateCountsOf(d); got != (GateCounts{}) {
+		t.Fatalf("got %+v, want no counts", got)
+	}
+	if got := GateOf(d, d.Findings[0]).Disposition; got != DispositionAccepted {
+		t.Fatalf("disposition %s", got)
+	}
 }

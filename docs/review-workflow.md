@@ -43,7 +43,7 @@ The agent then sets a summary with `loupe summary`. The summary is for you. It s
 
 `←` and `→` open the previous and next finding, as do `[` and `]`, and `n` opens the next. A letter works in either case outside a text input, so caps lock changes nothing.
 
-On a local run, which the agent captured with `loupe capture --changed`, `--files` or `--no-files`, a finding can carry a proposal: the change the agent makes if you accept it. A finding with no proposal is a question. The header carries a `local · returns to <applier>` badge, so the run never reads as a pull request review. Review opens on a start screen with the summary and the number of findings to decide, `enter` starts at the first pending one, and each decision opens the next pending one. The keys there are these:
+On a local run, which the agent captured with `loupe capture --changed`, `--files` or `--no-files`, a finding can carry a proposal: the change the agent makes if you accept it. A finding can instead carry two or three options, each with its own proposal and one marked recommended. A finding with neither is a question. The header carries a `local · returns to <applier>` badge, so the run never reads as a pull request review. Review opens on a start screen with the summary and the number of findings to decide, `enter` starts at the first pending one, and each decision opens the next pending one. The keys there are these:
 
 | Key | What it does |
 | :--- | :--- |
@@ -62,6 +62,8 @@ On a local run, which the agent captured with `loupe capture --changed`, `--file
 | `?` | List the keys for the current view |
 
 `w`, `e` and `o` are absent, and there is no publish step.
+
+On a finding with options, `a`, `t`, and `u` on a withdrawn finding open a picker under the finding, with the recommended option selected or the current pick when there is one. In the picker, a digit picks its option at once, `j` and `k` or the arrows move, `enter` picks the selected option, and `esc` closes the picker and records nothing. After `t`, the note opens once you pick. The agent gets only the option you picked.
 
 Every decision is saved at once. The interface draws full screen, so `TERM=dumb` or a terminal that cannot enter raw mode refuses with `tty`. A window smaller than 60 by 12 shows its size until it grows.
 
@@ -111,7 +113,7 @@ The `p` key in `loupe review` always posts a new review, so a sticky round goes 
 The same loop works on local work: uncommitted changes, a plan or a spec, with no pull request and no GitHub. The agent follows the plugin's `human-decide` skill instead of `human-review`.
 
 1. The agent captures the work with `loupe capture --changed`, `--files <path>` or `--no-files --title <title>`. That makes a local run, such as `owner/repo:local#7`, and no network call. `--changed` reads your staged, unstaged and untracked changes through a temporary index, so your own index, branch and files stay as they were. It runs none of your Git filters. So when you edit a file that Git converts on checkout, through CRLF line endings, a filter such as git-lfs, or `ident`, `--changed` cannot tell your edit from the conversion. It refuses, and `--files` captures those files instead. An untouched git-lfs or git-crypt file does not stop it.
-2. It files each finding with a `proposal`, the change it will make if you accept. A finding with no proposal is a question.
+2. It files each finding with a `proposal`, the change it will make if you accept, or with two or three `options` when there are real alternatives, one of them recommended. A finding with neither is a question.
 3. It hands the run to you. You decide each finding with the keys in section 4: accept, accept with a note (`t`), reject (`x`, or `c` with a reason) or ask.
 4. Once the last finding is decided, the return step opens on its own. You type an optional closing note for the agent and press `enter`, or press `p` in the list, then `enter`. Review quits and prints one line, such as `Returned to Claude: 6 accepted, 2 rejected.` Nothing posts anywhere.
 5. The agent reads your decisions with `loupe feedback` and applies the accepted ones, following your notes where they differ from its proposals.

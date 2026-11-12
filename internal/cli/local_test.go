@@ -434,7 +434,7 @@ func TestApplyRunShowNamesTheLocalSteps(t *testing.T) {
 		t.Fatalf("the fenced proposal line was wrapped:\n%s", out)
 	}
 	if _, err := draft.Mutate(dir, "test", nil, func(string) string { return "" }, func(d *draft.Draft) error {
-		_, err := draft.Accept(d, "f-001", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
+		_, err := draft.Accept(d, "f-001", "", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -462,5 +462,39 @@ func TestApplyRunWithACorruptTargetRefusesEveryCommand(t *testing.T) {
 	} {
 		code, s := runWithStdin(t, home, "", args...)
 		wantCode(t, code, s, refusal.Record)
+	}
+}
+
+// Options reach the draft through add and edit --from, and null clears them, as FR-007 says.
+func TestApplyAddEditAndClearOptions(t *testing.T) {
+	home, dir := localRun(t, "changed")
+	two := `[{"label": "A", "proposal": "Do A."}, {"label": "B", "proposal": "Do B.", "recommended": true}]`
+	three := `[{"label": "X", "proposal": "Do X."}, {"label": "Y", "proposal": "Do Y."}, {"label": "Z", "proposal": "Do Z.", "recommended": true}]`
+	if code, s := runWithStdin(t, home, `{"title": "T", "body": "B", "general": true, "options": `+two+`}`, "add", "--run", "local#1", "--from", "-", "--json"); code != 0 {
+		t.Fatalf("add: exit %d stdout %q", code, s.stdout.String())
+	}
+	options := func() []draft.Option {
+		t.Helper()
+		d, err := draft.Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d.Findings[0].Options
+	}
+	if code, s := runWithStdin(t, home, `{"options": `+three+`}`, "edit", "f-001", "--run", "local#1", "--from", "-", "--json"); code != 0 {
+		t.Fatalf("edit options: exit %d stdout %q", code, s.stdout.String())
+	}
+	if got := options(); len(got) != 3 || got[2].Key != "3" || got[2].Label != "Z" || !got[2].Recommended {
+		t.Fatalf("options after edit %+v", got)
+	}
+	if code, s := runWithStdin(t, home, `{"options": null, "proposal": "Do W."}`, "edit", "f-001", "--run", "local#1", "--from", "-", "--json"); code != 0 {
+		t.Fatalf("clear options: exit %d stdout %q", code, s.stdout.String())
+	}
+	d, err := draft.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := d.Findings[0]; len(f.Options) != 0 || f.Proposal != "Do W." {
+		t.Fatalf("finding after null %+v", f)
 	}
 }

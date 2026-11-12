@@ -78,7 +78,7 @@ func TestDecidingAFindingClosesItsNotes(t *testing.T) {
 			dir := newFixture(t)
 			if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
 				for _, id := range []string{"f-001", "f-003"} {
-					if _, err := draft.Accept(d, id, testNow); err != nil {
+					if _, err := draft.Accept(d, id, "", testNow); err != nil {
 						return err
 					}
 				}

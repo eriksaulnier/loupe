@@ -34,6 +34,12 @@ Input (--from <file>, or --from - for stdin): one finding object or an array of 
     "suggestedFix": "Return the original error."
   }
 
+On a local run, "options" takes the place of "proposal" when the human has to pick one of 2 or 3
+real choices: [{"label": "Key the cache by head SHA", "proposal": "Markdown.", "recommended": true}, ...].
+Exactly one entry is recommended, a label is at most 120 characters, and a key in an entry is
+refused, since loupe numbers the entries. A finding has options or a proposal, not both. A pull
+request run refuses options with input.
+
 title and body are required. Exactly one of location or "general": true is required.
 location must be in the captured diff: side RIGHT (the default) is the new file, LEFT the old
 file, and startLine and line must be in the same hunk.

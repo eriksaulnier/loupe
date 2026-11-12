@@ -282,11 +282,19 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	decide := func(key, verb string) style.Hint {
 		return style.Hint{Key: key, Verb: verb, Role: style.RoleDecision}
 	}
+	// On a finding with options, a and t open the picker, so they say pick.
+	accept, tweak := "accept", "tweak"
+	if len(f.Options) > 0 {
+		accept, tweak = "pick", "pick + note"
+	}
 	switch draft.Dispositions(m.draft)[f.ID] {
 	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept"), decide("t", "tweak"), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
+		hints = append(hints, decide("a", accept), decide("t", tweak), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionAccepted:
-		hints = append(hints, decide("t", "tweak"), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
+		if len(f.Options) > 0 {
+			hints = append(hints, decide("a", "pick again"))
+		}
+		hints = append(hints, decide("t", tweak), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionExcluded:
 		hints = append(hints, decide("u", "restore"), decide("c", "reason"))
 	case draft.DispositionWithdrawn:
@@ -319,6 +327,9 @@ func (applyUI) detailKey(m *Model, f draft.Finding, key string) (tea.Cmd, bool) 
 		if key == "c" {
 			return m.openNote(noteExclude, heldNote(m.draft, f, draft.DispositionExcluded)), true
 		}
+		if len(f.Options) > 0 {
+			return m.openPick(pickAcceptNote), true
+		}
 		return m.openNote(noteAccept, heldNote(m.draft, f, draft.DispositionAccepted)), true
 	case "w":
 		// Absent here, and swallowed so the shared handler cannot give it a pull request run's meaning.
@@ -350,7 +361,7 @@ func (applyUI) heading(m *Model) style.ReviewHeading {
 
 func (applyUI) runRef(m *Model) string { return localRef(m.target) }
 
-func (applyUI) question(f draft.Finding) bool { return f.Proposal == "" }
+func (applyUI) question(f draft.Finding) bool { return f.Proposal == "" && len(f.Options) == 0 }
 
 func (applyUI) watchesPR() bool { return false }
 

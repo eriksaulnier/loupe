@@ -290,7 +290,7 @@ func TestMutateHandsBackTheNoteASendBackAdds(t *testing.T) {
 func TestMutateWithoutANewNoteLeavesNoHandBack(t *testing.T) {
 	dir := newRunWithFinding(t)
 	if _, err := Mutate(dir, "review", nil, noEnv, func(d *Draft) error {
-		_, err := Accept(d, "f-001", time.Time{})
+		_, err := Accept(d, "f-001", "", time.Time{})
 		return err
 	}); err != nil {
 		t.Fatal(err)

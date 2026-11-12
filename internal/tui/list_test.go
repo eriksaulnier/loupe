@@ -152,12 +152,12 @@ func TestInitialSelectionIsWhatNeedsTheHuman(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	decideAll(func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
+	decideAll(func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", "", testNow); return err })
 	if m := modelOf(t, dir, env, 100, 24); m.cursor != 1 {
 		t.Errorf("f-001 accepted: cursor %d, want f-002", m.cursor)
 	}
 	decideAll(func(d *draft.Draft) error {
-		if _, err := draft.Accept(d, "f-003", testNow); err != nil {
+		if _, err := draft.Accept(d, "f-003", "", testNow); err != nil {
 			return err
 		}
 		if _, err := draft.SendBack(d, "f-002", "Why?", testNow); err != nil {
@@ -659,7 +659,7 @@ func TestInitialCursorIndexesTheOrderedView(t *testing.T) {
 	// Everything decided but f-002, which is unrated and therefore last in the order though second to arrive.
 	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
 		for _, id := range []string{"f-001", "f-003", "f-004"} {
-			if _, err := draft.Accept(d, id, testNow); err != nil {
+			if _, err := draft.Accept(d, id, "", testNow); err != nil {
 				return err
 			}
 		}

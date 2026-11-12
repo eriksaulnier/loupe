@@ -119,6 +119,15 @@ type Model struct {
 	noting     bool
 	noteKind   noteKind
 	note       textarea.Model
+	// picking is true while the option picker is open on a choice finding. pickFor is what a pick does, and pickSel
+	// indexes the finding's options.
+	picking bool
+	pickFor pickFor
+	// pickHeld is the option picked before the accept note opened, which accepts with it. Esc clears it.
+	pickHeld string
+	// pickNote is a note typed for a pick that went stale, kept for the note that opens after the new pick.
+	pickNote string
+	pickSel  int
 	// keptNotes holds, per finding, text the human typed into a note and then left without it being recorded, so the
 	// next send-back on that finding starts from it. It lives only as long as the program.
 	keptNotes map[string]string
@@ -339,7 +348,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // pollHeld is true while redrawing would move something the human is writing or confirming.
 func (m *Model) pollHeld() bool {
-	return m.noting || m.editing || m.rewriting || m.sending || (m.view != viewList && m.view != viewDetail && m.view != viewStart)
+	return m.noting || m.picking || m.editing || m.rewriting || m.sending || (m.view != viewList && m.view != viewDetail && m.view != viewStart)
 }
 
 func (m *Model) schedulePoll() tea.Cmd {
@@ -551,6 +560,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.noting {
 			return m, m.updateNote(msg)
+		}
+		if m.picking {
+			return m, m.updatePick(msg)
 		}
 		if m.editing {
 			return m, m.updateEdit(msg)

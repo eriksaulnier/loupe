@@ -472,3 +472,61 @@ func TestShowPreviousRefusesADamagedEarlierReceipt(t *testing.T) {
 		t.Fatalf("error %v", errObj)
 	}
 }
+
+func TestShowJSONCarriesOptionsAndTheChoice(t *testing.T) {
+	f := localFinding("f-001")
+	f.Options = []draft.Option{
+		{Key: "1", Label: "Drop it", Proposal: "Drop the cache."},
+		{Key: "2", Label: "Key it", Proposal: "Key by head SHA.", Recommended: true},
+	}
+	home, dir := localRun(t, "changed", f)
+	if _, err := draft.Mutate(dir, "test", nil, func(string) string { return "" }, func(d *draft.Draft) error {
+		_, err := draft.Accept(d, "f-001", "2", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home})
+	if code := Execute(deps, []string{"show", "--run", "local#1", "--json"}); code != 0 {
+		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+	}
+	env := decodeOne(t, s.stdout.Bytes())
+	shown := env["findings"].([]any)[0].(map[string]any)
+	options, _ := shown["options"].([]any)
+	if len(options) != 2 {
+		t.Fatalf("finding %v", shown)
+	}
+	second := options[1].(map[string]any)
+	if second["key"] != "2" || second["label"] != "Key it" || second["proposal"] != "Key by head SHA." || second["recommended"] != true {
+		t.Fatalf("option %v", second)
+	}
+	decisions, _ := env["decisions"].(map[string]any)
+	if decision, _ := decisions["f-001"].(map[string]any); decision["choice"] != "2" {
+		t.Fatalf("decisions %v", env["decisions"])
+	}
+}
+
+// Text show draws a choice finding's options, so it does not read as an unanswered question.
+func TestShowTextDrawsOptionsAndThePick(t *testing.T) {
+	f := localFinding("f-001")
+	f.Options = []draft.Option{
+		{Key: "1", Label: "Drop it", Proposal: "Drop the cache."},
+		{Key: "2", Label: "Key it", Proposal: "Key by head SHA.", Recommended: true},
+	}
+	home, dir := localRun(t, "changed", f)
+	if _, err := draft.Mutate(dir, "test", nil, func(string) string { return "" }, func(d *draft.Draft) error {
+		_, err := draft.Accept(d, "f-001", "1", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"show", "--run", "local#1"}); code != 0 {
+		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+	}
+	for _, want := range []string{"1 - Drop it - picked", "Drop the cache.", "2 - Key it - recommended", "Key by head SHA."} {
+		if !strings.Contains(s.stdout.String(), want) {
+			t.Errorf("show lacks %q:\n%s", want, s.stdout.String())
+		}
+	}
+}

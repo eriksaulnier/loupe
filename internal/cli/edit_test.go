@@ -26,7 +26,7 @@ func sendBackRun(t *testing.T) (home, dir string) {
 			Label: "issue", By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}},
 		{ID: "f-002", Rev: 1, Title: "Two", Body: "Body.", General: true, By: draft.ByAgent, Included: true, History: []draft.HistoryEntry{}},
 	}
-	if _, err := draft.Accept(d, "f-001", sendBackAt); err != nil {
+	if _, err := draft.Accept(d, "f-001", "", sendBackAt); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := draft.SendBack(d, "f-002", "Needs evidence.", sendBackAt); err != nil {
@@ -425,7 +425,7 @@ func TestChangedDiffIsRefusedOnEveryLoad(t *testing.T) {
 func decideInReview(t *testing.T, dir, id string) {
 	t.Helper()
 	if _, err := draft.Mutate(dir, "review", nil, func(string) string { return "" }, func(d *draft.Draft) error {
-		_, err := draft.Accept(d, id, sendBackAt)
+		_, err := draft.Accept(d, id, "", sendBackAt)
 		return err
 	}); err != nil {
 		t.Fatal(err)

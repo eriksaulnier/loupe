@@ -36,7 +36,7 @@ func TestDigestKnownValue(t *testing.T) {
 
 func TestPublishableSet(t *testing.T) {
 	d := digestDraft()
-	if _, err := Accept(d, "f-002", digestNow); err != nil {
+	if _, err := Accept(d, "f-002", "", digestNow); err != nil {
 		t.Fatal(err)
 	}
 	var ids []string
@@ -69,13 +69,13 @@ func TestDigestStable(t *testing.T) {
 			d.Version = 9
 		},
 		"accepting a pending finding": func(d *Draft) {
-			if _, err := Accept(d, "f-001", digestNow); err != nil {
+			if _, err := Accept(d, "f-001", "", digestNow); err != nil {
 				t.Fatal(err)
 			}
 		},
 		"accepting every pending finding": func(d *Draft) {
 			for _, id := range []string{"f-001", "f-002"} {
-				if _, err := Accept(d, id, digestNow); err != nil {
+				if _, err := Accept(d, id, "", digestNow); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -98,7 +98,7 @@ func TestDigestStable(t *testing.T) {
 
 func TestDigestChanges(t *testing.T) {
 	accepted := func(d *Draft) {
-		if _, err := Accept(d, "f-002", digestNow); err != nil {
+		if _, err := Accept(d, "f-002", "", digestNow); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -238,6 +238,44 @@ func (h *harness) userState(untracked ...string) string {
 	return b.String()
 }
 
+// A choice finding goes from add to feedback with the human's pick as its proposal and a choice that names it (spec
+// 057).
+func TestApplyChoiceFindingRoundTrip(t *testing.T) {
+	t.Parallel()
+	h := newApplyHarness(t)
+	h.writeRepoFile("docs/plan.md", planDoc)
+	h.agent("capture", "--files", "docs/plan.md", "--applier", "Claude")
+	h.agent("add", "--run", applyRef, "--from", h.WriteFile("findings.json", `[
+		{"title": "Pick the eviction", "body": "Three policies would do.", "general": true,
+		 "options": [{"label": "Evict the oldest", "proposal": "Evict the oldest entry first."},
+		             {"label": "Evict the least used", "proposal": "Evict the least used entry first.", "recommended": true},
+		             {"label": "Never evict", "proposal": "Never evict an entry."}]}]`))
+	h.agent("handoff", "--run", applyRef)
+
+	s := h.openReview(applyRef)
+	s.Press("enter")
+	s.WaitFor("Pick the eviction", "1 - Evict the oldest", "2 - Evict the least used - recommended", "3 - Never evict")
+	s.Press("a")
+	s.WaitFor("Pick for f-001")
+	s.Press("3")
+	s.WaitFor("f-001 accepted with 3")
+	h.returnRun(s, "Claude", "Done.")
+
+	fb := h.mustOK("feedback", "--run", applyRef)
+	apply := group(t, fb, "apply")
+	if ids(apply) != "f-001" {
+		t.Fatalf("groups %v", fb["groups"])
+	}
+	e := apply["f-001"]
+	choice, _ := e["choice"].(map[string]any)
+	if e["proposal"] != "Never evict an entry." || choice["key"] != "3" || choice["label"] != "Never evict" {
+		t.Fatalf("entry %v", e)
+	}
+	if _, ok := e["options"]; ok {
+		t.Fatalf("entry carries options: %v", e)
+	}
+}
+
 // TestApplyLocalCodeReview is User Story 1: a branch with committed, staged, unstaged and untracked changes is
 // captured without touching the user's state, decided with one key per accept and per reject, and returned from
 // the return step that opens on its own, with a closing note that reaches wait and feedback.
@@ -462,8 +500,12 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 		 "proposal": "Rename it to hits.", "severity": "minor"},
 		{"title": "Split the loop", "body": "Lines 10 to 12 do two things.", "location": {"path": "src/app.go", "line": 12, "startLine": 10},
 		 "proposal": "Split the loop in two.", "severity": "minor"},
-		{"title": "Log each miss", "body": "Misses are silent.", "general": true, "proposal": "Log each miss at debug.", "severity": "trivial"}]`))
-	h.agent("summary", "--run", applyRef, "--body", "Five decisions on the cache plan.", "--expect-findings", "5")
+		{"title": "Log each miss", "body": "Misses are silent.", "general": true, "proposal": "Log each miss at debug.", "severity": "trivial"},
+		{"title": "Pick the eviction", "body": "Three policies would do.", "general": true, "severity": "trivial",
+		 "options": [{"label": "Evict the oldest", "proposal": "Evict the oldest entry first."},
+		             {"label": "Evict the least used", "proposal": "Evict the least used entry first.", "recommended": true},
+		             {"label": "Never evict", "proposal": "Never evict an entry."}]}]`))
+	h.agent("summary", "--run", applyRef, "--body", "Six decisions on the cache plan.", "--expect-findings", "6")
 	h.agent("edit", "f-005", "--run", applyRef, "--exclude", "--reason", "Logging is out of scope.")
 	h.agent("handoff", "--run", applyRef)
 
@@ -498,6 +540,11 @@ func TestApplyWithOnlyTheDecideCommands(t *testing.T) {
 	s.Press("enter")
 	s.WaitFor("Split the loop", "Reading and counting.")
 	accept(s, "f-004")
+	s.WaitFor("Pick the eviction", "2 - Evict the least used - recommended")
+	s.Press("a")
+	s.WaitFor("Pick for f-006")
+	s.Press("3")
+	s.WaitFor("f-006 accepted with 3")
 	// The withdrawn f-005 is not pending, so the last decision opens the return step.
 	h.returnRun(s, "Claude", "Run the tests before you commit.")
 

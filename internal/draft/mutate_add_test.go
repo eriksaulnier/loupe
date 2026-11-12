@@ -2,6 +2,7 @@ package draft
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -454,5 +455,139 @@ func TestCheckBatchReturnsAFailureThatIsNotARefusal(t *testing.T) {
 	boom := errors.New("boom")
 	if err := CheckBatch([]FindingInput{located("Good", 3)}, []EntryFailure{{Entry: 0, Err: boom}}, multiHunk(t), Rules{}); err != boom {
 		t.Fatalf("got %v, want the caller's error", err)
+	}
+}
+
+func optionInputs(n int) []OptionInput {
+	all := []OptionInput{
+		{Label: "First", Proposal: "Do the first thing."},
+		{Label: "Second", Proposal: "Do the second thing.", Recommended: true},
+		{Label: "Third", Proposal: "Do the third thing."},
+	}
+	return all[:n]
+}
+
+func choice(title string, options []OptionInput) FindingInput {
+	in := general(title)
+	in.Options = options
+	return in
+}
+
+func addOptions(t *testing.T, in FindingInput) error {
+	t.Helper()
+	_, err := Add(NewEmpty(), []FindingInput{in}, multiHunk(t), Rules{AllowProposal: true}, "", addNow)
+	return err
+}
+
+func TestAddWithOptionsAssignsKeysInOrder(t *testing.T) {
+	for _, n := range []int{2, 3} {
+		d := NewEmpty()
+		in := choice("Pick", optionInputs(n))
+		added, err := Add(d, []FindingInput{in}, multiHunk(t), Rules{AllowProposal: true}, "", addNow)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []Option{
+			{Key: "1", Label: "First", Proposal: "Do the first thing."},
+			{Key: "2", Label: "Second", Proposal: "Do the second thing.", Recommended: true},
+			{Key: "3", Label: "Third", Proposal: "Do the third thing."},
+		}[:n]
+		if !reflect.DeepEqual(added[0].Options, want) || !reflect.DeepEqual(d.Findings[0].Options, want) {
+			t.Fatalf("%d options: %+v", n, added[0].Options)
+		}
+		if added[0].Proposal != "" {
+			t.Fatalf("proposal %q", added[0].Proposal)
+		}
+	}
+}
+
+func TestAddWithOptionsRefusesTheWrongCount(t *testing.T) {
+	for _, opts := range [][]OptionInput{
+		{},
+		{{Label: "Only", Proposal: "p", Recommended: true}},
+		append(optionInputs(3), OptionInput{Label: "Fourth", Proposal: "p"}),
+	} {
+		r := refusaltest.Want(t, addOptions(t, choice("Pick", opts)), refusal.Input)
+		if !strings.Contains(r.Message, "options needs 2 or 3 entries") {
+			t.Fatalf("%d options: message %q", len(opts), r.Message)
+		}
+	}
+}
+
+func TestAddWithOptionsRefusesNoRecommendedOrSeveral(t *testing.T) {
+	none := optionInputs(3)
+	none[1].Recommended = false
+	two := optionInputs(3)
+	two[0].Recommended = true
+	for _, opts := range [][]OptionInput{none, two} {
+		r := refusaltest.Want(t, addOptions(t, choice("Pick", opts)), refusal.Input)
+		if !strings.Contains(r.Message, "exactly one option must be recommended") {
+			t.Fatalf("message %q", r.Message)
+		}
+	}
+}
+
+func TestAddWithOptionsRefusesOptionsBesideAProposal(t *testing.T) {
+	in := choice("Pick", optionInputs(2))
+	in.Proposal = "Change X to Y."
+	r := refusaltest.Want(t, addOptions(t, in), refusal.Input)
+	if !strings.Contains(r.Message, "a finding has options or a proposal, not both") {
+		t.Fatalf("message %q", r.Message)
+	}
+}
+
+func TestAddWithOptionsRefusesALongLabel(t *testing.T) {
+	opts := optionInputs(2)
+	opts[0].Label = strings.Repeat("x", 121)
+	r := refusaltest.Want(t, addOptions(t, choice("Pick", opts)), refusal.Input)
+	if !strings.Contains(r.Message, "option label is longer than 120 characters") {
+		t.Fatalf("message %q", r.Message)
+	}
+	opts[0].Label = strings.Repeat("x", 120)
+	if err := addOptions(t, choice("Pick", opts)); err != nil {
+		t.Fatalf("120 characters: %v", err)
+	}
+}
+
+func TestAddWithOptionsRefusesAnEmptyLabelOrProposal(t *testing.T) {
+	for i, mutate := range []func(o []OptionInput){
+		func(o []OptionInput) { o[0].Label = "  " },
+		func(o []OptionInput) { o[1].Proposal = "" },
+	} {
+		opts := optionInputs(2)
+		mutate(opts)
+		r := refusaltest.Want(t, addOptions(t, choice("Pick", opts)), refusal.Input)
+		want := fmt.Sprintf("option %d needs a label and a proposal", i+1)
+		if !strings.Contains(r.Message, want) {
+			t.Fatalf("message %q, want %q", r.Message, want)
+		}
+	}
+}
+
+func TestAddWithOptionsChecksLabelAndProposalMarkdown(t *testing.T) {
+	opts := optionInputs(2)
+	opts[1].Proposal = strings.Repeat("x", 64*1024+1)
+	r := refusaltest.Want(t, addOptions(t, choice("Pick", opts)), refusal.Markdown)
+	wantField(t, r, "proposal")
+	opts = optionInputs(2)
+	opts[0].Proposal = "one<br>two"
+	r = refusaltest.Want(t, addOptions(t, choice("Pick", opts)), refusal.Markdown)
+	wantField(t, r, "proposal")
+}
+
+func TestAddWithOptionsRefusesAFindingIDInAnOption(t *testing.T) {
+	label := optionInputs(2)
+	label[0].Label = "Fix f-002 first"
+	_ = refusaltest.Want(t, addOptions(t, choice("Pick", label)), refusal.Markdown)
+	proposal := optionInputs(2)
+	proposal[1].Proposal = "See f-002 for context."
+	_ = refusaltest.Want(t, addOptions(t, choice("Pick", proposal)), refusal.Markdown)
+}
+
+func TestAddWithDefaultRulesRefusesOptions(t *testing.T) {
+	_, err := Add(NewEmpty(), []FindingInput{choice("Pick", optionInputs(2))}, multiHunk(t), Rules{}, "", addNow)
+	r := refusaltest.Want(t, err, refusal.Input)
+	if !strings.Contains(r.Message, "options apply only to local runs") || r.Fix != `use "suggestedFix" instead` {
+		t.Fatalf("message %q fix %q", r.Message, r.Fix)
 	}
 }

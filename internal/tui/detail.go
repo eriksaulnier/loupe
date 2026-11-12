@@ -22,6 +22,7 @@ import (
 
 func (m *Model) openFinding(id string) error {
 	m.view, m.openID, m.noting, m.editing, m.rewriting, m.settling = viewDetail, id, false, false, false, false
+	m.picking, m.pickHeld, m.pickNote = false, "", ""
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -74,7 +75,12 @@ func (m *Model) refreshDetail() error {
 	if f.Location != nil {
 		block(m.codePane(locationText(f), f.Location.Heading, lines, width))
 	}
-	for _, s := range [][]string{sections.why, sections.change, sections.fix, sections.impact, sections.references} {
+	block(sections.why)
+	block(sections.change)
+	for _, option := range sections.options {
+		block(option)
+	}
+	for _, s := range [][]string{sections.fix, sections.impact, sections.references} {
 		block(s)
 	}
 	for _, note := range sections.notes {
@@ -301,7 +307,9 @@ func (m *Model) partLines(parts []string, gap, width int) []string {
 // finding does not have.
 type detailSections struct {
 	withdrawn, why, change, fix, impact, references []string
-	notes                                           [][]string
+	// options are a choice finding's sections, one per option, in place of change.
+	options [][]string
+	notes   [][]string
 }
 
 // findingSections draws each of f's blocks in its tone. A withdrawn finding's blocks all recede to muted, so the human
@@ -338,12 +346,45 @@ func (m *Model) findingSections(f draft.Finding, width int) (detailSections, err
 	if body != nil {
 		out.why = section(style.ToneAccent, "Why", body)
 	}
-	change, err := m.proposedChange(f, width)
-	if err != nil {
-		return out, err
-	}
-	if change.heading != "" {
-		out.change = section(change.tone, change.heading, change.body)
+	if len(f.Options) > 0 {
+		picked := m.pickedKey(f)
+		good := tone(style.ToneGood)
+		for i, o := range f.Options {
+			lines, err := m.markdownLines(o.Proposal)
+			if err != nil {
+				return out, err
+			}
+			var tags []string
+			if o.Recommended {
+				tags = append(tags, m.styles.Chip("recommended", good))
+			}
+			if o.Key == picked {
+				tags = append(tags, m.styles.Chip("picked", tone(style.ToneAccent)))
+			}
+			join := " "
+			if !m.styles.Color {
+				join = " " + m.glyphs.Sep + " "
+			}
+			option := m.styles.Section(good, render.ForDisplay(render.OneLine(o.Label)), strings.Join(tags, join), lines)
+			// The key is a chip, the cue that its digit picks it. Without color it is the bare digit and a separator.
+			key := o.Key + " " + m.glyphs.Sep + " "
+			if m.styles.Color {
+				key = m.styles.Chip(o.Key, good) + " "
+			}
+			option[0] = key + option[0]
+			if i == 0 {
+				option = append([]string{m.styles.Emphasis(m.styles.ToneStyle(good)).Render(m.applierTitle() + " will do one of these")}, option...)
+			}
+			out.options = append(out.options, option)
+		}
+	} else {
+		change, err := m.proposedChange(f, width)
+		if err != nil {
+			return out, err
+		}
+		if change.heading != "" {
+			out.change = section(change.tone, change.heading, change.body)
+		}
 	}
 	// A fix beside a proposal or a question cannot take the slot, and is still the agent's to show.
 	if f.SuggestedFix != "" && (f.Proposal != "" || m.ui.question(f)) {
@@ -401,10 +442,7 @@ func (m *Model) proposedChange(f draft.Finding, width int) (proposal, error) {
 		if err != nil {
 			return proposal{}, err
 		}
-		if who == "the agent" {
-			who = "The agent"
-		}
-		return proposal{style.ToneGood, who + " will", body}, nil
+		return proposal{style.ToneGood, m.applierTitle() + " will", body}, nil
 	case m.ui.question(f):
 		return proposal{style.ToneNote, "A question for " + who, []string{m.styles.Text().Render("No change is proposed. Your note tells " + who + " what to do.")}}, nil
 	case f.SuggestedFix != "":
@@ -574,9 +612,17 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	switch msg.String() {
 	case "a":
+		if len(f.Options) > 0 {
+			// Said before the picker opens, since the draft would refuse the accept only after the pick.
+			if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
+				m.say(style.Warn, fmt.Sprintf("%s is withdrawn; u reinstates it", f.ID))
+				return nil
+			}
+			return m.openPick(pickAccept)
+		}
 		var closed []string
 		decide := func(d *draft.Draft) (err error) {
-			closed, err = draft.Accept(d, f.ID, m.cfg.Now())
+			closed, err = draft.Accept(d, f.ID, "", m.cfg.Now())
 			return err
 		}
 		return m.decideAndShow(decide, func() string {
@@ -593,9 +639,12 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		})
 	case "u":
 		if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
+			if len(f.Options) > 0 {
+				return m.openPick(pickReinstate)
+			}
 			var closed []string
 			decide := func(d *draft.Draft) (err error) {
-				closed, err = draft.Reinstate(d, f.ID, m.rules, m.cfg.Now())
+				closed, err = draft.Reinstate(d, f.ID, "", m.rules, m.cfg.Now())
 				return err
 			}
 			return m.decideAndShow(decide, func() string {
@@ -701,6 +750,7 @@ func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
 	case tea.KeyEsc:
 		m.noting = false
 		m.note.Blur()
+		m.pickHeld = ""
 		if m.noteKind == noteSend {
 			m.keepNote(m.openID, m.note.Value())
 		}
@@ -730,14 +780,18 @@ func (m *Model) updateNote(msg tea.KeyPressMsg) tea.Cmd {
 // decideWithNote accepts or excludes the open finding with text as its note or reason. A refusal hands the text back
 // in the input, since nothing else keeps it.
 func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
-	id := m.openID
+	id, key := m.openID, m.pickHeld
 	var closed []string
 	decide := func(d *draft.Draft) (err error) {
-		closed, err = draft.AcceptWithNote(d, id, text, m.cfg.Now())
+		closed, err = draft.AcceptWithNote(d, id, key, text, m.cfg.Now())
 		return err
 	}
 	notice := func() string {
-		return decidedNotice(m.glyphs.Sep, m.glyphs.Accepted, id, "accepted", closed, draft.NoteResolved)
+		word := "accepted"
+		if key != "" {
+			word += " with " + key
+		}
+		return decidedNotice(m.glyphs.Sep, m.glyphs.Accepted, id, word, closed, draft.NoteResolved)
 	}
 	if kind == noteExclude {
 		decide = func(d *draft.Draft) (err error) {
@@ -749,11 +803,27 @@ func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
 		}
 	}
 	cmd, recorded := m.decideAndMove(decide, notice)
+	if recorded {
+		m.pickHeld = ""
+	}
 	if recorded || m.err != nil || m.openID != id {
 		return cmd
 	}
 	refused, refusedKind := m.notice, m.noticeKind
-	open := m.openNote(kind, text)
+	var open tea.Cmd
+	if f, _ := m.openedFinding(); kind == noteAccept && len(f.Options) > 0 && strings.Contains(refused, staleNotice) {
+		// The finding changed while the note was typed: a held pick named an option as it was shown, and a finding that
+		// gained options needs a pick, so the human picks from the options as they are now. Any other refusal is about
+		// the note's words, so the note opens again with its pick.
+		m.noting, m.pickHeld, m.pickNote = false, "", text
+		m.note.Blur()
+		open = m.openPick(pickAcceptNote)
+	} else {
+		if len(f.Options) == 0 {
+			m.pickHeld = ""
+		}
+		open = m.openNote(kind, text)
+	}
 	m.notice, m.noticeKind = refused, refusedKind
 	return tea.Batch(cmd, open)
 }
@@ -903,6 +973,9 @@ func (m *Model) noteView() []string {
 	switch m.noteKind {
 	case noteAccept:
 		title, enter = "Tweak "+m.openID+": accept with a note", "enter accepts"
+		if m.pickHeld != "" {
+			title = "Tweak " + m.openID + ": accept " + m.pickHeld + " with a note"
+		}
 	case noteExclude:
 		title, enter = "Reject "+m.openID+", with a reason if you like", "enter rejects"
 	case noteReturn:
@@ -931,6 +1004,8 @@ func (m *Model) editorRows() int {
 	switch {
 	case m.noting:
 		return len(m.noteRowsShown()) + style.PaneRows
+	case m.picking:
+		return len(m.pickView())
 	case m.editing:
 		return len(m.editView())
 	case m.rewriting:
@@ -1045,6 +1120,8 @@ func (m *Model) detailView() string {
 	switch {
 	case m.noting:
 		body = append(body, m.noteView()...)
+	case m.picking:
+		body = append(body, m.pickView()...)
 	case m.editing:
 		body = append(body, m.editView()...)
 	case m.rewriting:
@@ -1068,10 +1145,14 @@ func (m *Model) detailTitle(f draft.Finding) (string, style.Tone) {
 	}
 	// The finding's id is the pane's name, a solid tab while the finding has the keys rather than a composer.
 	id := m.styles.Emphasis(edge).Render(render.ForDisplay(f.ID))
-	if !m.noting && !m.editing && !m.rewriting && m.styles.Color {
+	if !m.noting && !m.picking && !m.editing && !m.rewriting && m.styles.Color {
 		id = m.styles.TitleTab(render.ForDisplay(f.ID), tone)
 	}
-	title := mark.Render(glyph) + " " + id + sep + m.styles.Chip(disposition, tone)
+	status := disposition
+	if key := m.pickedKey(f); key != "" {
+		status += " " + m.glyphs.Sep + " " + key
+	}
+	title := mark.Render(glyph) + " " + id + sep + m.styles.Chip(status, tone)
 	if open {
 		title += sep + m.styles.Chip("open note", style.ToneNote)
 	}
@@ -1088,6 +1169,8 @@ func (m *Model) detailFooter() []string {
 	switch {
 	case m.noting:
 		return m.keys(style.KeyGroup{{Key: "enter", Verb: m.noteVerb()}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
+	case m.picking:
+		return m.pickFooter()
 	case m.editing:
 		return m.keys(style.KeyGroup{{Key: "enter", Verb: "save"}, {Key: m.arrows(m.glyphs.Left, m.glyphs.Right), Verb: "label"},
 			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})
@@ -1100,4 +1183,12 @@ func (m *Model) detailFooter() []string {
 func (m *Model) detailHints() []style.Hint {
 	f, _ := m.openedFinding()
 	return m.ui.detailHints(m, f)
+}
+
+// applierTitle is the applier as the subject that starts a heading.
+func (m *Model) applierTitle() string {
+	if who := m.applier(); who != "the agent" {
+		return who
+	}
+	return "The agent"
 }
