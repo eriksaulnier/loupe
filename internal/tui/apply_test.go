@@ -771,3 +771,38 @@ func TestApplyPickerRowTruncatesALongLabel(t *testing.T) {
 		t.Fatalf("rows %q", rows)
 	}
 }
+
+// A tweak note on a plain finding that gains options while the human types goes to the picker on the stale refusal,
+// keeping the note, as a held pick does. A reject reason does not, since rejecting needs no pick.
+func TestApplyStaleNoteOnAFindingThatGainedOptionsOpensThePicker(t *testing.T) {
+	for _, tc := range []struct {
+		key         string
+		wantPicking bool
+	}{{"t", true}, {"c", false}} {
+		t.Run(tc.key, func(t *testing.T) {
+			m, dir := applyModel(t, "Claude")
+			mustOpenFinding(t, m, "f-003")
+			press(m, tc.key)
+			m.Update(runes("Mind the cache."))
+			outside(t, dir, func(d *draft.Draft) error {
+				in := draft.EditInput{Proposal: json.RawMessage(`null`), Options: json.RawMessage(`[{"label":"Only","proposal":"One.","recommended":true},{"label":"Other","proposal":"Two."}]`)}
+				_, _, err := draft.Edit(d, "f-003", in, nil, nil, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow)
+				return err
+			})
+			m.Update(enterKey)
+			if _, decided := loadDraft(t, dir).Decisions["f-003"]; decided {
+				t.Fatal("a stale note recorded a decision")
+			}
+			if m.picking != tc.wantPicking || m.noting == tc.wantPicking {
+				t.Fatalf("picking %v noting %v notice %q", m.picking, m.noting, m.notice)
+			}
+			if tc.wantPicking {
+				m.settling = false
+				press(m, "2")
+				if !m.noting || m.note.Value() != "Mind the cache." {
+					t.Fatalf("noting %v note %q", m.noting, m.note.Value())
+				}
+			}
+		})
+	}
+}
