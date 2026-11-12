@@ -5,7 +5,7 @@
   "author": {
     "name": "Erik Saulnier"
   },
-  "repository": "https://github.com/eriksaulnier/loupe",
+  "repository": "https://github.com/secondshift-labs/loupe",
   "license": "MIT",
   "skills": "./skills/"
 }
