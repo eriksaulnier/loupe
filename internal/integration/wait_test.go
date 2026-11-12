@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/testutil/screen"
+	"github.com/secondshift-labs/loupe/internal/testutil/screen"
 )
 
 func awaitingOf(env map[string]any) string {

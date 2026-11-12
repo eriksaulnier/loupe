@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // noCredentials leaves the process no way to find a GitHub token: no token variable, an empty gh config, and no gh

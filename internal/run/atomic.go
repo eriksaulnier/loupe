@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // WriteFileAtomic leaves either the old or the new content at path, never a partial file, even across a crash.

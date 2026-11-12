@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/style"
-	"github.com/eriksaulnier/loupe/internal/testutil/golden"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/testutil/golden"
 )
 
 // goldenRuns is one home with two runs: one mid-review with a send-back, a reply and a blocking finding, and one that

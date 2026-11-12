@@ -8,12 +8,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/publish"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/render"
-	"github.com/eriksaulnier/loupe/internal/severity"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/publish"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/render"
+	"github.com/secondshift-labs/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 func (m *Model) updateList(msg tea.KeyPressMsg) tea.Cmd {

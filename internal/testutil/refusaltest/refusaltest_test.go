@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // recorder stands in for the test Want runs in, so a failure can be seen rather than failing this test.

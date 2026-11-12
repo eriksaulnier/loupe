@@ -9,7 +9,7 @@ Builds exist for Linux and macOS, on amd64 and arm64.
 ### With the install script
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
+curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | sh
 ```
 
 The script downloads the latest release for your platform, checks it against the release's `checksums.txt` and puts `loupe` in `~/.local/bin`. It uses no sudo and edits no shell profile. It warns if that directory is not on your `PATH`, or if another `loupe`, such as a mise shim, comes first. A failed install leaves any existing binary in place.
@@ -23,13 +23,13 @@ Then it installs or updates [the agent plugin](#the-agent-plugin) for each of Cl
 | `LOUPE_NO_PLUGINS` | Any non-empty value skips the agent plugins, on install and on `loupe uninstall`, which then leaves them installed. `CI` has the same effect. |
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.19.0 LOUPE_INSTALL_DIR="$HOME/bin" sh
+curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | LOUPE_VERSION=0.19.0 LOUPE_INSTALL_DIR="$HOME/bin" sh
 ```
 
 To read the script first, download it, then run the copy you read:
 
 ```sh
-curl -fsSLo install.sh https://eriksaulnier.github.io/loupe/install.sh
+curl -fsSLo install.sh https://secondshift-labs.github.io/loupe/install.sh
 less install.sh
 sh install.sh
 ```
@@ -44,25 +44,25 @@ To remove loupe, run `loupe uninstall`. It removes the binary, a symlink on your
 ### With mise
 
 ```sh
-mise use -g github:eriksaulnier/loupe@latest
+mise use -g github:secondshift-labs/loupe@latest
 loupe --version
 ```
 
 > [!NOTE]
-> mise hides releases younger than its `minimum_release_age`. Right after a release, the install fails with `no versions found for github:eriksaulnier/loupe matching date filter`. Wait, or run `mise settings add minimum_release_age_excludes "github:eriksaulnier/loupe"`.
+> mise hides releases younger than its `minimum_release_age`. Right after a release, the install fails with `no versions found for github:secondshift-labs/loupe matching date filter`. Wait, or run `mise settings add minimum_release_age_excludes "github:secondshift-labs/loupe"`.
 
-To update, run the same `mise use` command again. mise does not install the plugin, so add [the agent plugin](#the-agent-plugin) by hand, and update it with the binary. `loupe update` and `loupe uninstall` refuse a binary that mise installed, and name the mise command instead.
+To update, run the same `mise use` command again. An install made before loupe moved to secondshift-labs keeps the tool name `github:eriksaulnier/loupe`, which a command naming the new owner does not touch. Run `mise unuse -g github:eriksaulnier/loupe` first, then the `mise use` command above. mise does not install the plugin, so add [the agent plugin](#the-agent-plugin) by hand, and update it with the binary. `loupe update` and `loupe uninstall` refuse a binary that mise installed, and name the mise command instead.
 
 ### From a release archive
 
-Each [release](https://github.com/eriksaulnier/loupe/releases) attaches one archive per platform and a `checksums.txt`. Download the archive for your platform, verify it and put `loupe` on your `PATH`. Set `os` to `darwin` or `linux` and `arch` to `arm64` or `amd64`. The last line MAY name any directory on your `PATH`.
+Each [release](https://github.com/secondshift-labs/loupe/releases) attaches one archive per platform and a `checksums.txt`. Download the archive for your platform, verify it and put `loupe` on your `PATH`. Set `os` to `darwin` or `linux` and `arch` to `arm64` or `amd64`. The last line MAY name any directory on your `PATH`.
 
 <!-- x-release-please-start-version -->
 ```sh
 version=0.24.0
 os=darwin arch=arm64
 archive="loupe_${version}_${os}_${arch}.tar.gz"
-base="https://github.com/eriksaulnier/loupe/releases/download/v$version"
+base="https://github.com/secondshift-labs/loupe/releases/download/v$version"
 curl -fsSLO "$base/$archive"
 curl -fsSLO "$base/checksums.txt"
 grep -F "  $archive" checksums.txt | shasum -a 256 -c
@@ -93,7 +93,7 @@ A pre-release, such as `0.22.0-rc.1`, is a build of a branch that has not reache
 Install it with the script and a pin. The script pins each agent's plugin to the same tag:
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.22.0-rc.1 sh
+curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | LOUPE_VERSION=0.22.0-rc.1 sh
 ```
 
 A pre-release differs from a release in four ways:
@@ -117,14 +117,14 @@ The install script and `loupe update` set the plugin up for you. The commands be
 ### Claude Code
 
 ```sh
-claude plugin marketplace add eriksaulnier/loupe@v0.24.0
+claude plugin marketplace add secondshift-labs/loupe@v0.24.0
 claude plugin install loupe@loupe
 ```
 
 ### Codex
 
 ```sh
-codex plugin marketplace add eriksaulnier/loupe@v0.24.0
+codex plugin marketplace add secondshift-labs/loupe@v0.24.0
 codex plugin add loupe@loupe
 ```
 <!-- x-release-please-end -->
@@ -138,7 +138,7 @@ Pi has no sandbox. `pi install` at a new tag replaces the earlier one.
 
 <!-- x-release-please-start-version -->
 ```sh
-pi install git:github.com/eriksaulnier/loupe@v0.24.0
+pi install git:github.com/secondshift-labs/loupe@v0.24.0
 ```
 <!-- x-release-please-end -->
 
@@ -149,5 +149,7 @@ pi install git:github.com/eriksaulnier/loupe@v0.24.0
 ```sh
 claude plugin marketplace remove loupe
 codex plugin marketplace remove loupe
-pi remove git:github.com/eriksaulnier/loupe
+pi remove git:github.com/secondshift-labs/loupe
 ```
+
+Pi keys a plugin by its repository. A Pi plugin installed before loupe moved to secondshift-labs MUST be removed with `pi remove git:github.com/eriksaulnier/loupe` instead.

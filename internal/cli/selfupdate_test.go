@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // releaseServer serves release files by their path under /releases/, as github.com does.
@@ -157,11 +157,12 @@ func TestUpdateRefusals(t *testing.T) {
 		code       refusal.Code
 		message    string
 		reason     string
+		fix        string
 		unwritable bool
 	}{
 		{name: "dev build", version: "dev", code: refusal.UpdateUnsupported, message: "not a release", reason: "not-release"},
 		{name: "pre-release", version: "0.22.0-rc.1", code: refusal.UpdateUnsupported, message: "not a release", reason: "not-release"},
-		{name: "mise install", version: "0.21.0", code: refusal.UpdateUnsupported, message: "installed by mise", reason: "mise", setup: func(f *selfUpdateFixture) {
+		{name: "mise install", version: "0.21.0", code: refusal.UpdateUnsupported, message: "installed by mise", reason: "mise", fix: "mise use -g github:secondshift-labs/loupe@latest", setup: func(f *selfUpdateFixture) {
 			dir := filepath.Join(f.dir, ".local", "share", "mise", "installs", "loupe", "0.21.0")
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				panic(err)
@@ -172,7 +173,18 @@ func TestUpdateRefusals(t *testing.T) {
 			}
 			f.deps.Executable = func() (string, error) { return path, nil }
 		}},
-		{name: "mise data dir elsewhere", version: "0.21.0", code: refusal.UpdateUnsupported, message: "installed by mise", reason: "mise", setup: func(f *selfUpdateFixture) {
+		{name: "mise data dir elsewhere", version: "0.21.0", code: refusal.UpdateUnsupported, message: "installed by mise", reason: "mise", fix: "mise use -g github:secondshift-labs/loupe@latest", setup: func(f *selfUpdateFixture) {
+			dir := filepath.Join(f.dir, ".mise", "installs", "github-secondshift-labs-loupe", "0.21.0")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				panic(err)
+			}
+			path := filepath.Join(dir, "loupe")
+			if err := os.WriteFile(path, nil, 0o755); err != nil {
+				panic(err)
+			}
+			f.deps.Executable = func() (string, error) { return path, nil }
+		}},
+		{name: "mise install from before the move", version: "0.21.0", code: refusal.UpdateUnsupported, message: "installed by mise", reason: "mise", fix: "mise unuse -g github:eriksaulnier/loupe, then mise use -g github:secondshift-labs/loupe@latest", setup: func(f *selfUpdateFixture) {
 			dir := filepath.Join(f.dir, ".mise", "installs", "github-eriksaulnier-loupe", "0.21.0")
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				panic(err)
@@ -225,6 +237,8 @@ func TestUpdateRefusals(t *testing.T) {
 			}
 			if fix, _ := errObj["fix"].(string); fix == "" {
 				t.Error("the refusal names no fix")
+			} else if c.fix != "" && fix != c.fix {
+				t.Errorf("fix = %q, want %q", fix, c.fix)
 			}
 			details, _ := errObj["details"].(map[string]any)
 			if c.reason != "" && details["reason"] != c.reason {

@@ -10,7 +10,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 const fix = "ask the human to run loupe review 'o/r#1@1'"

@@ -7,9 +7,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/publish"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/publish"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 // The pull request watch re-reads the live pull request while review is open, so a merge, a close or a moved head

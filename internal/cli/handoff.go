@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eriksaulnier/loupe/internal/pane"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/pane"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 const handoffHelp = `Open loupe review for the human in a new terminal pane beside the agent's, then return.

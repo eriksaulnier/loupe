@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
+	"github.com/secondshift-labs/loupe/internal/diff"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/testutil/refusaltest"
 )
 
 // changedRepo is a repository whose worktree holds every kind of change --changed sorts.

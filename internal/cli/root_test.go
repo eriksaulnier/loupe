@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 // paletteEnv are the variables the palette reads on every invocation to decide color and the glyph set.

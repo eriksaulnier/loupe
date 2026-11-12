@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/render"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/render"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 // Every human view opens with the same header and closes with the sentence that names the next command, so a reader

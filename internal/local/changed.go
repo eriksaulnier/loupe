@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/gitx"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/gitx"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 const submoduleMode = "160000"

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/gitenv"
+	"github.com/secondshift-labs/loupe/internal/gitenv"
 )
 
 var wholeFileCases = []struct {

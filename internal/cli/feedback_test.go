@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/draft"
 )
 
 func TestFeedbackJSON(t *testing.T) {

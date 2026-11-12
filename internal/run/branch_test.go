@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
-	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
-	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
-	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/testutil/fakegh"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitfail"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitrepo"
+	"github.com/secondshift-labs/loupe/internal/testutil/refusaltest"
 )
 
 func openPR(number int, base string) github.PullRequest {

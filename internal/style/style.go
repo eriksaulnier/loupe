@@ -20,7 +20,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/severity"
 )
 
 // Kind is a semantic role; the palette maps it to a color so callers never name colors.

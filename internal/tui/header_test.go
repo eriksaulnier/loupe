@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 // Counts come from the domain derivation: accepted and excluded are decided, a current exclusion on an unincluded

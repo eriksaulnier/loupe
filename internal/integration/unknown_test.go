@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
+	"github.com/secondshift-labs/loupe/internal/testutil/fakegh"
 )
 
 const reviewsPath = "/repos/acme/widgets/pulls/42/reviews"

@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // wideEnough keeps both halves of a right split at the 60 columns review needs (spec 002).

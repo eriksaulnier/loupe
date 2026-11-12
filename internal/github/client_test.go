@@ -17,7 +17,7 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/api"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 type recorded struct {

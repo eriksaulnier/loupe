@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
-	"github.com/eriksaulnier/loupe/internal/markdown"
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/diff"
+	"github.com/secondshift-labs/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 func TestLoadOutlineOfARunWithoutOneIsNil(t *testing.T) {

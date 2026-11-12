@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
-	"github.com/eriksaulnier/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/diff"
+	"github.com/secondshift-labs/loupe/internal/markdown"
 )
 
 // OutlineFile holds the headings of each Markdown file the diff changes, read at the head, so add resolves a heading

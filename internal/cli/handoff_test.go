@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/testutil/herdrstub"
+	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/testutil/herdrstub"
 )
 
 const (

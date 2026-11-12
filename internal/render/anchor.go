@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/markdown"
 )
 
 // anchorPrefix opens the line before each round of a sticky body (specs/033-round-anchors). Every value is a decimal

@@ -10,7 +10,7 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"github.com/eriksaulnier/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/severity"
 )
 
 func env(m map[string]string) func(string) string {

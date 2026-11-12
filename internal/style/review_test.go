@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/testutil/sgrtest"
+	"github.com/secondshift-labs/loupe/internal/testutil/sgrtest"
 )
 
 // reviewStyle is the interactive theme on a true-color output, or with no color at all.

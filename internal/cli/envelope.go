@@ -8,7 +8,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 const envelopeVersion = 1

@@ -9,10 +9,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/pane"
-	"github.com/eriksaulnier/loupe/internal/render"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/pane"
+	"github.com/secondshift-labs/loupe/internal/render"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 // noticeExpiry is how long a success notice stays in its pane's border. Refusals and errors do not expire.

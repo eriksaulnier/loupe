@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/diff"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // Bump on any field change, so an older loupe refuses the file instead of dropping fields (docs/versioning.md).

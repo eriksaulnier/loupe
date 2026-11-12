@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/gitx"
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/gitx"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 const branchFix = "loupe capture <url> or --run <ref>"

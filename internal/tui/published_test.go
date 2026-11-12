@@ -12,9 +12,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/style"
-	"github.com/eriksaulnier/loupe/internal/testutil/fakegh"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/testutil/fakegh"
 )
 
 const reviewURLPrefix = "https://github.com/acme/widgets/pull/42#pullrequestreview-"

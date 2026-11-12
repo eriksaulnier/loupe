@@ -12,9 +12,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eriksaulnier/loupe/internal/mode"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/mode"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 // forbiddenInputKeys are decided only by the human in the review interface, so agent input must never carry them.

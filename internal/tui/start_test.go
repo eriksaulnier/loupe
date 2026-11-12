@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/draft"
 )
 
 // A local run with pending findings opens on the start screen: the title, the summary and how many wait.

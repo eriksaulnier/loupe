@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/run"
-	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/testutil/refusaltest"
 )
 
 var at = time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)

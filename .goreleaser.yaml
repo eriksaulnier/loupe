@@ -10,7 +10,7 @@ builds:
       - CGO_ENABLED=0
     # The tag is the version loupe --version prints; a build without it says "dev".
     ldflags:
-      - -s -w -X github.com/eriksaulnier/loupe/internal/cli.version={{.Version}}
+      - -s -w -X github.com/secondshift-labs/loupe/internal/cli.version={{.Version}}
     goos:
       - linux
       - darwin
@@ -50,5 +50,5 @@ release:
   extra_files:
     - glob: ./install.sh
   github:
-    owner: eriksaulnier
+    owner: secondshift-labs
     name: loupe

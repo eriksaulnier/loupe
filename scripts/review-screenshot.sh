@@ -34,8 +34,8 @@ if [[ -z $review ]]; then
 		echo "review-screenshot: assets/review has changes not in HEAD, and the pills load from HEAD; commit and push them" >&2
 		exit 1
 	fi
-	if ! out=$(gh api "repos/eriksaulnier/loupe/commits/$ref" --silent 2>&1); then
-		echo "review-screenshot: cannot find $ref on github.com/eriksaulnier/loupe, which must have it pushed: $out" >&2
+	if ! out=$(gh api "repos/secondshift-labs/loupe/commits/$ref" --silent 2>&1); then
+		echo "review-screenshot: cannot find $ref on github.com/secondshift-labs/loupe, which must have it pushed: $out" >&2
 		exit 1
 	fi
 fi
@@ -53,7 +53,7 @@ if [[ -z $review ]]; then
 	go run ./cmd/loupe-demo "${body_args[@]}" >"$tmp/body.md"
 	# Every finding stays collapsed: the rows are what the picture is for, and the terminal pictures show a finding's
 	# contents. That also keeps it near the other README images' proportions.
-	REF="$ref" perl -0pi -e 's{raw\.githubusercontent\.com/eriksaulnier/loupe/main/}{raw.githubusercontent.com/eriksaulnier/loupe/$ENV{REF}/}g' "$tmp/body.md"
+	REF="$ref" perl -0pi -e 's{raw\.githubusercontent\.com/secondshift-labs/loupe/main/}{raw.githubusercontent.com/secondshift-labs/loupe/$ENV{REF}/}g' "$tmp/body.md"
 	head=$(gh api "repos/$scratch_repo/pulls/$scratch_pr" --jq .head.sha)
 	review=$(jq -n --rawfile body "$tmp/body.md" --arg sha "$head" '{commit_id: $sha, event: "COMMENT", body: $body}' |
 		gh api "repos/$scratch_repo/pulls/$scratch_pr/reviews" --input - --jq .id)

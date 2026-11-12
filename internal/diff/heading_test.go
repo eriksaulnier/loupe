@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/markdown"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
+	"github.com/secondshift-labs/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/testutil/refusaltest"
 )
 
 // hunk is a hunk of plan.md by its starts and one op per line: ' ' context, '+' added, '-' deleted.
