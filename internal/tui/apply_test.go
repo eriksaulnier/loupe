@@ -736,3 +736,28 @@ func TestApplyChoiceFooterSaysPick(t *testing.T) {
 		t.Errorf("accepted footer %q", footer)
 	}
 }
+
+// In color, each option's key and its recommended and picked marks are chips, under a lead in the good tone.
+func TestApplyChoiceOptionsUseChipsInColor(t *testing.T) {
+	m, _ := choiceModel(t, utf8Env)
+	openPicker(t, m, "a")
+	press(m, "3")
+	m.styles.SetColorProfile(colorprofile.TrueColor)
+	m.glamour = nil
+	mustOpenFinding(t, m, "f-001")
+	good := m.styles.ToneStyle(style.ToneGood)
+	view := m.View().Content
+	for _, want := range []string{
+		m.styles.Emphasis(good).Render("Claude will do one of these"),
+		m.styles.Chip("2", style.ToneGood),
+		m.styles.Chip("recommended", style.ToneGood),
+		m.styles.Chip("picked", style.ToneAccent),
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view lacks %q", want)
+		}
+	}
+	if strings.Contains(ansi.Strip(view), "2 · Use the second") {
+		t.Error("the colored key kept the monochrome separator")
+	}
+}
