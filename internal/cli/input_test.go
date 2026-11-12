@@ -165,7 +165,7 @@ func TestAddRefusesAKeyInAnOption(t *testing.T) {
 	options := `"options": [{"label": "a", "proposal": "p"}, {"label": "b", "proposal": "p", "key": "9"}]`
 	var one sampleInput
 	r := refusalOf(t, DecodeInput("add", "-", strings.NewReader(`{"title": "t", `+options+`}`), &one))
-	if r.Code != refusal.Input || r.Details["field"] != "options[1].key" || !strings.Contains(r.Message, `input field "options[1].key" is not allowed`) {
+	if r.Code != refusal.Input || r.Details["field"] != "options[1].key" || !strings.Contains(r.Message, `input field "options[1].key" is not allowed; loupe numbers the options`) {
 		t.Fatalf("got %+v", r)
 	}
 	if _, ok := r.Details["entry"]; ok {

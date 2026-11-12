@@ -150,7 +150,7 @@ func optionKeyIn(keys map[string]json.RawMessage, entry int, fix string) error {
 			continue
 		}
 		field := fmt.Sprintf("options[%d].key", i)
-		r := refusal.New(refusal.Input, fmt.Sprintf("input field %q is not allowed; only the human sets it in loupe review", field), fix)
+		r := refusal.New(refusal.Input, fmt.Sprintf("input field %q is not allowed; loupe numbers the options", field), fix)
 		r.Details = map[string]any{"field": field}
 		if entry >= 0 {
 			r.Message = fmt.Sprintf("input entry %d: %s", entry, r.Message)

@@ -808,3 +808,12 @@ func TestEditRefusesOptionsOfTheWrongShape(t *testing.T) {
 		})
 	}
 }
+
+// A proposal set on a choice finding whose options stay is refused with the fix that works: clear the options.
+func TestEditRefusesAProposalBesideKeptOptionsWithTheOptionsFix(t *testing.T) {
+	d := choiceEditable()
+	r := refusaltest.Want(t, errOf3(Edit(d, "f-001", editInput(t, `{"proposal": "Do W."}`), nil, multiHunk(t), ByAgent, localRules, editNow)), refusal.Input)
+	if !strings.Contains(r.Message, "a finding has options or a proposal, not both") || !strings.Contains(r.Fix, `"options": null`) {
+		t.Fatalf("message %q fix %q", r.Message, r.Fix)
+	}
+}

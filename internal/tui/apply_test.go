@@ -708,3 +708,17 @@ func TestApplyRefusedNoteKeepsThePick(t *testing.T) {
 		t.Fatalf("picking %v noting %v held %q notice %q", m.picking, m.noting, m.pickHeld, m.notice)
 	}
 }
+
+// Opening the picker starts the settle window and the tick that ends it.
+func TestApplyPickerSettlesWithATick(t *testing.T) {
+	m, _ := choiceModel(t, utf8Env)
+	mustOpenFinding(t, m, "f-001")
+	m.cfg.Screen = nil
+	cmd := m.openPick(pickAccept)
+	if !m.settling || cmd == nil {
+		t.Fatalf("settling %v cmd %v", m.settling, cmd)
+	}
+	if _, ok := cmd().(settledMsg); !ok {
+		t.Fatal("the picker's tick did not end the settle window")
+	}
+}

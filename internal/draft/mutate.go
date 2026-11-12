@@ -809,6 +809,11 @@ func Edit(d *Draft, findingID string, in EditInput, included *bool, dif *diff.Di
 			}
 		}
 		if len(next.Options) > 0 && next.Proposal != "" {
+			if changedOptions == nil {
+				// The edit set a proposal on a choice finding, so the fix that works clears the options.
+				return Finding{}, false, refusal.New(refusal.Input, "a finding has options or a proposal, not both",
+					`send "options": null with the proposal to turn the options into one proposal`)
+			}
 			return Finding{}, false, checkOptions(changedOptions, true)
 		}
 		// The stored location is checked as the range it is; its heading was resolved when it was set.
