@@ -790,3 +790,21 @@ func TestEditRefusesABadOptionShape(t *testing.T) {
 }
 
 func errOf3(_ Finding, _ bool, err error) error { return err }
+
+func TestEditRefusesOptionsOfTheWrongShape(t *testing.T) {
+	for _, tc := range []struct{ name, input, want string }{
+		{"not a list", `{"options": "a"}`, "options"},
+		{"one entry", `{"options": [{"label": "a", "proposal": "p", "recommended": true}]}`, "options needs 2 or 3 entries"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := choiceEditable()
+			r := refusaltest.Want(t, errOf3(Edit(d, "f-001", editInput(t, tc.input), nil, multiHunk(t), ByAgent, localRules, editNow)), refusal.Input)
+			if !strings.Contains(r.Message, tc.want) {
+				t.Fatalf("message %q, want %q", r.Message, tc.want)
+			}
+			if len(d.Findings[0].Options) != 3 {
+				t.Fatalf("a refused edit wrote %+v", d.Findings[0].Options)
+			}
+		})
+	}
+}

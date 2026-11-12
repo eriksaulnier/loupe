@@ -626,3 +626,17 @@ func TestApplyPickerReadsAtEveryTier(t *testing.T) {
 		})
 	}
 }
+
+// A row too narrow for the pick keeps its title and drops the pick, which the finding's header still shows. A location
+// column can squeeze the title cell to listTitleFloor.
+func TestApplyNarrowRowDropsThePickBeforeTheTitle(t *testing.T) {
+	m, _ := choiceModel(t, utf8Env)
+	openPicker(t, m, "a")
+	press(m, "3")
+	f := findingOf(t, m.cfg.Dir, "f-001")
+	wide := ansi.Strip(m.row(f, draft.DispositionAccepted, nil, false, listColumns{id: 5, title: 40}))
+	narrow := ansi.Strip(m.row(f, draft.DispositionAccepted, nil, false, listColumns{id: 5, title: 15}))
+	if !strings.Contains(wide, "accepted · 3") || strings.Contains(narrow, "accepted") || !strings.Contains(narrow, "Which") {
+		t.Errorf("wide %q, narrow %q", wide, narrow)
+	}
+}

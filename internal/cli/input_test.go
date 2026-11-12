@@ -185,3 +185,12 @@ func TestAddRefusesOptionsOnAPullRequestRun(t *testing.T) {
 		t.Fatalf("got %+v", r)
 	}
 }
+
+// An entry that is not an object cannot hold a key, so the strict decode refuses it instead.
+func TestAddRefusesAnOptionThatIsNotAnObjectByShape(t *testing.T) {
+	var one sampleInput
+	r := refusalOf(t, DecodeInput("add", "-", strings.NewReader(`{"title": "t", "options": ["a", {"label": "b", "proposal": "p"}]}`), &one))
+	if r.Code != refusal.Input || r.Details["field"] == "options[0].key" {
+		t.Fatalf("got %+v", r)
+	}
+}
