@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.24.0](https://github.com/eriksaulnier/loupe/compare/v0.23.0...v0.24.0) (2026-11-12)
+
+
+### Features
+
+* let a local-run finding carry options the human picks from ([#137](https://github.com/eriksaulnier/loupe/issues/137)) ([091014d](https://github.com/eriksaulnier/loupe/commit/091014dc7f9ceb0303e0facded20a49a60ed028d))
+
+
+### Bug Fixes
+
+* **github:** retry reads on gateway errors, refuse when they persist ([#138](https://github.com/eriksaulnier/loupe/issues/138)) ([aa7cd57](https://github.com/eriksaulnier/loupe/commit/aa7cd574e38de1257da0d572580b9d774f78a26f))
+
 ## [0.23.0](https://github.com/eriksaulnier/loupe/compare/v0.22.1...v0.23.0) (2026-11-11)
 
 
