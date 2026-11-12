@@ -390,8 +390,10 @@ func TestHumanDecideNamesOnlyApplyCommands(t *testing.T) {
 		"locate each change by its content or its heading",
 		"counts alongside its proposal",
 		"Where `suggestion` and `proposal` conflict, follow `suggestion`.",
-		// FR-010: every finding carries a proposal, and a question's proposal is the recommended answer.
-		"Give every finding a proposal. For a question, the proposal is the answer you recommend, and the body names the other choices.",
+		// FR-010 and spec 057: every finding carries a proposal or options, with exactly one option recommended.
+		"Give every finding a proposal or options.",
+		"You MUST file exactly one option with `\"recommended\": true`.",
+		"`proposal` already holds the picked option's proposal, and `choice` (`{key, label}`) names the option.",
 		"loupe capture --changed", "--files <path>", "loupe capture --no-files --title", "--applier",
 		"loupe add --from <file> --run <ref> --json", "loupe handoff --run <ref> --json", "loupe wait --run <ref> --json",
 		"`\"reason\": \"returned\"`", "`applyWithChanges`", "`excluded`: change nothing",

@@ -47,7 +47,15 @@ Run the review now, if it has not run, against the captured files. Then file wha
 Write the findings to a JSON file, one object or an array, then run `loupe add --from <file> --run <ref> --json`. Each finding has:
 
 - `title` and `body` (required). `title` is the change or the problem in plain text, at most 120 characters: backtick code spans and backslash escapes are the only Markdown it keeps. Prefer a decision ("Return the error from Save instead of logging it") over a topic ("Error handling"). `body` is Markdown that says why it matters, in a few short lines, and MUST NOT exceed 64 KiB.
-- `proposal`: the concrete change you will make if the human accepts, as Markdown under the same rules as `body`. Give every finding a proposal. For a question, the proposal is the answer you recommend, and the body names the other choices. A finding with no proposal shows as a question, and the human cannot accept a change that nobody stated.
+- `proposal`: the concrete change you will make if the human accepts, as Markdown under the same rules as `body`. Give every finding a proposal or options. A finding with no proposal shows as a question, and the human cannot accept a change that nobody stated.
+- `options`, in place of `proposal`, when there are 2 or 3 real choices and the human has to pick one. You MUST file exactly one option with `"recommended": true`. When there is one answer, you MUST use `proposal` and MUST NOT file `options`. Each option has a `label` (at most 120 characters) and a `proposal`, under the same rules as a finding's `proposal`. You MUST NOT send a `key`, since loupe numbers the options. A finding has `options` or a `proposal`, never both. The body states the question and nothing the options already say:
+
+  ```json
+  "options": [
+    {"label": "Drop the cache on every push", "proposal": "Clear the cache in the push handler."},
+    {"label": "Key the cache by head SHA", "proposal": "Add the head SHA to the cache key.", "recommended": true}
+  ]
+  ```
 - Exactly one of `location` or `"general": true`. `location` is `{"path", "line", "startLine"}`, with `path` exactly as `target.local.files` printed it. For a finding about a whole section of a Markdown file, `location` MAY be `{"path", "heading"}` instead, with the heading's text as the file writes it and without its `#` marks. A `--no-files` run takes only general findings. A `location` refusal lists the valid lines or headings in `error.fix`.
 - Optional `label`: `bug`, `risk`, `gap`, `question` or any other word of letters, digits, `_`, `.` or `-`, at most 40 characters.
 - Optional `severity`, how bad the consequence is if the change goes in as it is: `critical` (data loss, a security hole, an outage), `major` (a real defect on a normal path), `minor` (an edge case, or a cost paid later), `trivial` (naming, wording, style). Omit it rather than guess.
@@ -95,7 +103,7 @@ Only the human resolves or dismisses a note. When every note you were asked to a
 
 Act only once `loupe wait` returned `"reason": "returned"`, or `loupe feedback --run <ref> --json` shows `"returned": true`. `groups` sorts every decided finding by what you do with it. Each entry with a `location` carries `path`, the absolute file to edit. A general finding has no `path`. Every entry carries `thread`, the notes the human and you exchanged on it.
 
-- `apply`: make the change in `proposal`, or address `body` when there is no proposal.
+- `apply`: make the change in `proposal`, or address `body` when there is no proposal. For a finding the human decided among options, `proposal` already holds the picked option's proposal, and `choice` (`{key, label}`) names the option. Do not look for `options` in the entry.
 - `applyWithChanges`: the human accepted the finding with a note, carried as `suggestion`. This group means a note and nothing else. Make the change as the note shapes it. Where `suggestion` and `proposal` conflict, follow `suggestion`.
 - `excluded`: change nothing. When `reason` is given, you SHOULD NOT bring the idea back elsewhere.
 - `withdrawn`: you withdrew it; nothing to do.
