@@ -24,17 +24,19 @@ Two documents are contracts with people outside the codebase: [`specs/001-loupe-
 
 Bug fixes and small changes that keep to the existing specs go straight to a pull request.
 
-New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory with three files, written in this order:
+New behavior starts as a spec. Each feature gets a `specs/NNN-topic/` directory, and only one file in it is required: `spec.md`, which says what the feature does and why. The spec is reviewed before the code, and the code is checked against it.
 
-1. `spec.md`: what and why.
-2. `plan.md`: how, checked against the constitution.
-3. `tasks.md`: ordered, test-first steps.
+Write the spec with whatever tool you like. All of these work:
 
-The files follow [spec-kit](https://github.com/github/spec-kit). In Claude Code the `.claude/skills/speckit-*` skills drive the flow. The files are plain Markdown built from `.specify/templates/`, and any contributor MAY write them by hand.
+- [spec-kit](https://github.com/github/spec-kit). The `.claude/skills/speckit-*` skills drive it in Claude Code, from the templates in `.specify/templates/`.
+- EGM. Its design doc goes in as `spec.md`.
+- Plain Markdown by hand.
 
-The create script picks the next `NNN` from the local `specs/`, from `NNN-*` branches on `origin`, and from `specs/` on `origin/main` and those branches. So parallel branches do not share a number.
+A feature MAY add `plan.md` (how, checked against the constitution), `tasks.md` (ordered, test-first steps), or any other file its tool writes. With no `plan.md`, a How section in `spec.md` is the plan that the rules below and the constitution mean.
 
-A plan that departs from the constitution, research or contracts MUST record the departure and its reason in its Complexity Tracking table. A new runtime dependency MUST carry a one-line reason in the plan (Principle VI).
+Take the next free `NNN` across the local `specs/`, the `NNN-*` branch names on `origin`, and `specs/` on every branch of `origin`, `main` included, so parallel branches do not share a number. spec-kit's create script does this for you.
+
+Whatever tool writes it, the plan MUST include a Constitution Check and a Complexity Tracking section (constitution, Governance). Complexity Tracking records each departure from the constitution, research or contracts with its reason. A new runtime dependency MUST carry a one-line reason in the plan (Principle VI).
 
 A change to the fields of a run file, such as `draft.json` or `receipt.json`, or of the findings record MUST follow the [schema versioning rule](docs/versioning.md): bump the version, and keep reading every older one.
 
