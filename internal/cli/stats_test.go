@@ -59,7 +59,7 @@ func seedStats(t *testing.T, home string, seeds ...statsSeed) {
 		d.Findings = s.findings
 		at := s.capturedAt.Add(time.Minute)
 		for _, id := range s.accept {
-			if _, err := draft.Accept(d, id, at); err != nil {
+			if _, err := draft.Accept(d, id, "", at); err != nil {
 				t.Fatal(err)
 			}
 		}

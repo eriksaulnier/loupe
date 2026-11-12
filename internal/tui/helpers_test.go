@@ -112,7 +112,7 @@ func mixedFixture(t *testing.T) string {
 	t.Helper()
 	dir := newFixture(t)
 	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
-		if _, err := draft.Accept(d, "f-001", testNow); err != nil {
+		if _, err := draft.Accept(d, "f-001", "", testNow); err != nil {
 			return err
 		}
 		n, err := draft.SendBack(d, "f-002", "Why?", testNow)
@@ -344,7 +344,7 @@ func readyFixture(t *testing.T, viewer, author string) string {
 	}
 	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
 		for _, f := range d.Findings {
-			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
+			if _, err := draft.Accept(d, f.ID, "", testNow); err != nil {
 				return err
 			}
 		}

@@ -801,7 +801,7 @@ func editModel(t *testing.T, id string, fn func(*draft.Draft) error) (*Model, st
 }
 
 func TestEditKeepsTheDecision(t *testing.T) {
-	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
+	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", "", testNow); return err })
 	version := loadDraft(t, dir).Version
 	for _, k := range []tea.KeyPressMsg{runes("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}} {
 		m.Update(k)
@@ -828,7 +828,7 @@ func TestEditKeepsTheDecision(t *testing.T) {
 }
 
 func TestEditEscAndUnchangedRecordNothing(t *testing.T) {
-	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
+	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", "", testNow); return err })
 	version := loadDraft(t, dir).Version
 	for _, keys := range [][]tea.KeyPressMsg{
 		{runes("e"), {Code: tea.KeyRight}, {Code: tea.KeySpace}, {Code: tea.KeyEsc}},
@@ -902,7 +902,7 @@ func TestEditRowWrapsBetweenParts(t *testing.T) {
 
 // An agent edit between opening the row and saving it refuses the save, as it does a stale accept.
 func TestEditRefusesAStaleDraft(t *testing.T) {
-	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", testNow); return err })
+	m, dir := editModel(t, "f-001", func(d *draft.Draft) error { _, err := draft.Accept(d, "f-001", "", testNow); return err })
 	m.Update(runes("e"))
 	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if _, err := draft.Mutate(dir, "edit", nil, envOf(nil), func(d *draft.Draft) error {

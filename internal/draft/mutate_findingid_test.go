@@ -141,7 +141,7 @@ func TestEditChecksOnlyChangedFieldsForIDs(t *testing.T) {
 	d := stored()
 	d.Findings[0].Included = false
 	delete(d.Decisions, "f-001")
-	if _, err := Reinstate(d, "f-001", Rules{}, editNow); err != nil {
+	if _, err := Reinstate(d, "f-001", "", Rules{}, editNow); err != nil {
 		t.Fatalf("reinstate refused: %v", err)
 	}
 	_, _, err := Edit(stored(), "f-001", editInput(t, `{"impact": "Like f-003."}`), nil, multiHunk(t), ByAgent, Rules{}, editNow)

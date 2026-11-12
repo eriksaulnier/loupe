@@ -45,7 +45,7 @@ func decidedFixture(t *testing.T) string {
 		if _, err := draft.SendBack(d, "f-001", "Why?", testNow); err != nil {
 			return err
 		}
-		if _, err := draft.Accept(d, "f-002", testNow); err != nil {
+		if _, err := draft.Accept(d, "f-002", "", testNow); err != nil {
 			return err
 		}
 		_, err := draft.Exclude(d, "f-003", testNow)

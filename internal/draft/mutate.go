@@ -408,7 +408,7 @@ func findNote(d *Draft, id string) (*Note, error) {
 
 // Accept records the decision at the finding's current rev, so any later edit puts the finding back to pending. It
 // resolves the finding's open notes, since accepting is the human's answer to them, and returns their ids.
-func Accept(d *Draft, findingID string, now time.Time) ([]string, error) {
+func Accept(d *Draft, findingID, choice string, now time.Time) ([]string, error) {
 	f, err := findFinding(d, findingID)
 	if err != nil {
 		return nil, err
@@ -417,8 +417,31 @@ func Accept(d *Draft, findingID string, now time.Time) ([]string, error) {
 		return nil, refusal.New(refusal.Input, "accept is for included findings only",
 			fmt.Sprintf("reinstate %s to accept it, or exclude it instead", f.ID))
 	}
-	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionAccepted, FindingRev: f.Rev, At: now}
+	if err := checkChoice(f, choice); err != nil {
+		return nil, err
+	}
+	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionAccepted, FindingRev: f.Rev, At: now, Choice: choice}
 	return closeOpenNotes(d, f.ID, NoteResolved, now), nil
+}
+
+// checkChoice holds an accept to the finding's options: a finding with options takes exactly one of its keys, and a
+// finding without options takes none.
+func checkChoice(f *Finding, choice string) error {
+	if len(f.Options) == 0 {
+		if choice != "" {
+			return refusal.New(refusal.Input, fmt.Sprintf("%s has no options, so it takes no pick", f.ID), "accept it without a pick")
+		}
+		return nil
+	}
+	if choice == "" {
+		return refusal.New(refusal.Input, fmt.Sprintf("%s has options, so accepting it needs a pick", f.ID), "pick one of its options")
+	}
+	for _, o := range f.Options {
+		if o.Key == choice {
+			return nil
+		}
+	}
+	return refusal.New(refusal.Input, fmt.Sprintf("%s has no option %q", f.ID, choice), "pick one of its options")
 }
 
 // Exclude dismisses the finding's open notes and returns their ids.
@@ -432,14 +455,14 @@ func Exclude(d *Draft, findingID string, now time.Time) ([]string, error) {
 }
 
 // AcceptWithNote accepts the finding with the human's note on how to apply it. A blank note is a plain accept.
-func AcceptWithNote(d *Draft, findingID, note string, now time.Time) ([]string, error) {
+func AcceptWithNote(d *Draft, findingID, choice, note string, now time.Time) ([]string, error) {
 	if strings.TrimSpace(note) == "" {
-		return Accept(d, findingID, now)
+		return Accept(d, findingID, choice, now)
 	}
 	if err := markdown.Check(note, markdown.AcceptNote, "rewrite the note within the Markdown allowlist, or leave it empty to accept without one"); err != nil {
 		return nil, err
 	}
-	closed, err := Accept(d, findingID, now)
+	closed, err := Accept(d, findingID, choice, now)
 	if err != nil {
 		return nil, err
 	}
@@ -514,7 +537,7 @@ func Restore(d *Draft, findingID string) error {
 // the review and accepts it in one move, since the human decided while looking at it. The command line MUST NOT
 // reach it: --by is self-reported there, so an agent could undo its own withdrawal unseen. Like Accept it resolves
 // the finding's open notes and returns their ids, since overriding the withdrawal is the human's answer to them.
-func Reinstate(d *Draft, findingID string, rules Rules, now time.Time) ([]string, error) {
+func Reinstate(d *Draft, findingID, choice string, rules Rules, now time.Time) ([]string, error) {
 	stored, err := findFinding(d, findingID)
 	if err != nil {
 		return nil, err
@@ -528,13 +551,16 @@ func Reinstate(d *Draft, findingID string, rules Rules, now time.Time) ([]string
 		}
 		return nil, refusal.New(refusal.Input, fmt.Sprintf("reinstate is for withdrawn findings only; %s is %s", stored.ID, got), fix)
 	}
+	if err := checkChoice(stored, choice); err != nil {
+		return nil, err
+	}
 	included := true
 	// No publishable field changes, so Edit needs no diff to validate against.
 	f, _, err := Edit(d, findingID, EditInput{}, &included, nil, ByHuman, rules, now)
 	if err != nil {
 		return nil, err
 	}
-	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionAccepted, FindingRev: f.Rev, At: now}
+	d.Decisions[f.ID] = Decision{FindingID: f.ID, Decision: DecisionAccepted, FindingRev: f.Rev, At: now, Choice: choice}
 	return closeOpenNotes(d, f.ID, NoteResolved, now), nil
 }
 

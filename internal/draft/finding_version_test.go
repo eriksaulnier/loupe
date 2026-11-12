@@ -31,7 +31,7 @@ func newRunWithTwoFindings(t *testing.T) string {
 func accept(t *testing.T, dir, id string) {
 	t.Helper()
 	if _, err := Mutate(dir, "review", nil, noEnv, func(d *Draft) error {
-		_, err := Accept(d, id, stampAt)
+		_, err := Accept(d, id, "", stampAt)
 		return err
 	}); err != nil {
 		t.Fatal(err)

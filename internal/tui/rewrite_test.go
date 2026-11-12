@@ -18,7 +18,7 @@ func typeText(m *Model, text string) {
 }
 
 func accepted(id string) func(*draft.Draft) error {
-	return func(d *draft.Draft) error { _, err := draft.Accept(d, id, testNow); return err }
+	return func(d *draft.Draft) error { _, err := draft.Accept(d, id, "", testNow); return err }
 }
 
 func unchanged(*draft.Draft) error { return draft.ErrNoChange }
@@ -417,7 +417,7 @@ func TestRewriteKeepsADecisionTheFindingHad(t *testing.T) {
 		{"accepted", draft.DispositionAccepted, accepted("f-001")},
 		{"excluded", draft.DispositionExcluded, func(d *draft.Draft) error { _, err := draft.Exclude(d, "f-001", testNow); return err }},
 		{"stale", draft.DispositionPending, func(d *draft.Draft) error {
-			if _, err := draft.Accept(d, "f-001", testNow); err != nil {
+			if _, err := draft.Accept(d, "f-001", "", testNow); err != nil {
 				return err
 			}
 			d.Findings[0].Rev++

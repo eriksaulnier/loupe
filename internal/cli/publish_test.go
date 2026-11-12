@@ -281,7 +281,7 @@ func TestPublishReportsAStderrItCannotWriteAfterADecline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := draft.Accept(d, "f-001", sendBackAt); err != nil {
+	if _, err := draft.Accept(d, "f-001", "", sendBackAt); err != nil {
 		t.Fatal(err)
 	}
 	if err := run.WriteJSONAtomic(filepath.Join(dir, "draft.json"), d); err != nil {

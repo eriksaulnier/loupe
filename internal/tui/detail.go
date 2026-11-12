@@ -576,7 +576,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	case "a":
 		var closed []string
 		decide := func(d *draft.Draft) (err error) {
-			closed, err = draft.Accept(d, f.ID, m.cfg.Now())
+			closed, err = draft.Accept(d, f.ID, "", m.cfg.Now())
 			return err
 		}
 		return m.decideAndShow(decide, func() string {
@@ -595,7 +595,7 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
 			var closed []string
 			decide := func(d *draft.Draft) (err error) {
-				closed, err = draft.Reinstate(d, f.ID, m.rules, m.cfg.Now())
+				closed, err = draft.Reinstate(d, f.ID, "", m.rules, m.cfg.Now())
 				return err
 			}
 			return m.decideAndShow(decide, func() string {
@@ -733,7 +733,7 @@ func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
 	id := m.openID
 	var closed []string
 	decide := func(d *draft.Draft) (err error) {
-		closed, err = draft.AcceptWithNote(d, id, text, m.cfg.Now())
+		closed, err = draft.AcceptWithNote(d, id, "", text, m.cfg.Now())
 		return err
 	}
 	notice := func() string {

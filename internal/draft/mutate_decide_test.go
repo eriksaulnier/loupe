@@ -29,7 +29,7 @@ func threeFindings() *Draft {
 
 func TestAcceptStoresDecisionAtCurrentRev(t *testing.T) {
 	d := threeFindings()
-	if _, err := Accept(d, "f-003", decideNow); err != nil {
+	if _, err := Accept(d, "f-003", "", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	want := Decision{FindingID: "f-003", Decision: DecisionAccepted, FindingRev: 2, At: decideNow}
@@ -40,7 +40,7 @@ func TestAcceptStoresDecisionAtCurrentRev(t *testing.T) {
 
 func TestAcceptRefusesWithdrawnFinding(t *testing.T) {
 	d := threeFindings()
-	r := refusaltest.Want(t, errOf(Accept(d, "f-002", decideNow)), refusal.Input)
+	r := refusaltest.Want(t, errOf(Accept(d, "f-002", "", decideNow)), refusal.Input)
 	if r.Message != "accept is for included findings only" {
 		t.Fatalf("message %q", r.Message)
 	}
@@ -72,7 +72,7 @@ func TestExcludeAndRestore(t *testing.T) {
 
 func TestSendBackAddsOpenNoteAndClearsDecision(t *testing.T) {
 	d := threeFindings()
-	if _, err := Accept(d, "f-001", decideNow); err != nil {
+	if _, err := Accept(d, "f-001", "", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	note, err := SendBack(d, "f-001", "Check the nil case.", decideNow)
@@ -135,7 +135,7 @@ func TestAcceptResolvesAndExcludeDismissesOpenNotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	later := decideNow.Add(time.Hour)
-	closed, err := Accept(d, "f-001", later)
+	closed, err := Accept(d, "f-001", "", later)
 	if err != nil || !reflect.DeepEqual(closed, []string{"n-001", "n-003"}) {
 		t.Fatalf("accept closed %v, %v", closed, err)
 	}
@@ -151,7 +151,7 @@ func TestAcceptResolvesAndExcludeDismissesOpenNotes(t *testing.T) {
 	if d.Notes[3].Status != NoteOpen || d.Notes[3].ClosedAt != nil {
 		t.Errorf("note on another finding changed: %+v", d.Notes[3])
 	}
-	if closed, err := Accept(d, "f-001", later); err != nil || len(closed) != 0 {
+	if closed, err := Accept(d, "f-001", "", later); err != nil || len(closed) != 0 {
 		t.Errorf("accept with nothing open closed %v, %v", closed, err)
 	}
 
@@ -172,7 +172,7 @@ func TestAcceptRefusalClosesNoNotes(t *testing.T) {
 	if _, err := SendBack(d, "f-002", "Why?", decideNow); err != nil {
 		t.Fatal(err)
 	}
-	closed, err := Accept(d, "f-002", decideNow)
+	closed, err := Accept(d, "f-002", "", decideNow)
 	_ = refusaltest.Want(t, err, refusal.Input)
 	if closed != nil || d.Notes[0].Status != NoteOpen {
 		t.Fatalf("closed %v notes %+v", closed, d.Notes)
@@ -182,10 +182,10 @@ func TestAcceptRefusalClosesNoNotes(t *testing.T) {
 func TestUnknownIDsRefuseNotFound(t *testing.T) {
 	d := threeFindings()
 	errs := map[string]error{
-		"Accept":      errOf(Accept(d, "f-009", decideNow)),
+		"Accept":      errOf(Accept(d, "f-009", "", decideNow)),
 		"Exclude":     errOf(Exclude(d, "f-009", decideNow)),
 		"Restore":     Restore(d, "f-009"),
-		"Reinstate":   errOf(Reinstate(d, "f-009", Rules{}, decideNow)),
+		"Reinstate":   errOf(Reinstate(d, "f-009", "", Rules{}, decideNow)),
 		"ResolveNote": ResolveNote(d, "n-009", decideNow),
 		"DismissNote": DismissNote(d, "n-009", decideNow),
 	}
@@ -218,11 +218,11 @@ func TestDecisionsThroughMutateWithStaleVersionWriteNothing(t *testing.T) {
 	}
 	stale := 3
 	decisions := map[string]func(*Draft) error{
-		"Accept":      func(d *Draft) error { return errOf(Accept(d, "f-003", decideNow)) },
+		"Accept":      func(d *Draft) error { return errOf(Accept(d, "f-003", "", decideNow)) },
 		"Exclude":     func(d *Draft) error { return errOf(Exclude(d, "f-003", decideNow)) },
 		"SendBack":    func(d *Draft) error { _, err := SendBack(d, "f-003", "again", decideNow); return err },
 		"Restore":     func(d *Draft) error { return Restore(d, "f-001") },
-		"Reinstate":   func(d *Draft) error { return errOf(Reinstate(d, "f-002", Rules{}, decideNow)) },
+		"Reinstate":   func(d *Draft) error { return errOf(Reinstate(d, "f-002", "", Rules{}, decideNow)) },
 		"ResolveNote": func(d *Draft) error { return ResolveNote(d, "n-001", decideNow) },
 		"DismissNote": func(d *Draft) error { return DismissNote(d, "n-001", decideNow) },
 	}
@@ -244,7 +244,7 @@ func TestDecisionsThroughMutateWithStaleVersionWriteNothing(t *testing.T) {
 func TestReinstateIncludesAndAcceptsWithdrawnFinding(t *testing.T) {
 	d := threeFindings()
 	later := decideNow.Add(time.Hour)
-	closed, err := Reinstate(d, "f-002", Rules{}, later)
+	closed, err := Reinstate(d, "f-002", "", Rules{}, later)
 	if err != nil || len(closed) != 0 {
 		t.Fatalf("closed %v, %v", closed, err)
 	}
@@ -273,7 +273,7 @@ func TestReinstateResolvesOpenNotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	later := decideNow.Add(time.Hour)
-	closed, err := Reinstate(d, "f-002", Rules{}, later)
+	closed, err := Reinstate(d, "f-002", "", Rules{}, later)
 	if err != nil || !reflect.DeepEqual(closed, []string{"n-001"}) {
 		t.Fatalf("closed %v, %v", closed, err)
 	}
@@ -294,7 +294,7 @@ func TestReinstateRefusesFindingThatIsNotWithdrawn(t *testing.T) {
 		setUp       func(*Draft)
 	}{
 		{DispositionPending, func(*Draft) {}},
-		{DispositionAccepted, func(d *Draft) { _, _ = Accept(d, "f-001", decideNow) }},
+		{DispositionAccepted, func(d *Draft) { _, _ = Accept(d, "f-001", "", decideNow) }},
 		{DispositionExcluded, func(d *Draft) { _, _ = Exclude(d, "f-001", decideNow) }},
 	} {
 		t.Run(tc.disposition, func(t *testing.T) {
@@ -304,7 +304,7 @@ func TestReinstateRefusesFindingThatIsNotWithdrawn(t *testing.T) {
 			}
 			tc.setUp(d)
 			before := append([]Note{}, d.Notes...)
-			closed, err := Reinstate(d, "f-001", Rules{}, decideNow)
+			closed, err := Reinstate(d, "f-001", "", Rules{}, decideNow)
 			r := refusaltest.Want(t, err, refusal.Input)
 			if r.Message != "reinstate is for withdrawn findings only; f-001 is "+tc.disposition {
 				t.Fatalf("message %q", r.Message)
@@ -326,14 +326,14 @@ func TestReinstateRefusesAnExcludedWithdrawnFindingWithAReachableFix(t *testing.
 	if got := Dispositions(d)["f-002"]; got != DispositionExcluded {
 		t.Fatalf("disposition %q", got)
 	}
-	r := refusaltest.Want(t, errOf(Reinstate(d, "f-002", Rules{}, decideNow)), refusal.Input)
+	r := refusaltest.Want(t, errOf(Reinstate(d, "f-002", "", Rules{}, decideNow)), refusal.Input)
 	if r.Fix != "restore f-002 first, then reinstate it" {
 		t.Fatalf("fix %q", r.Fix)
 	}
 	if err := Restore(d, "f-002"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Reinstate(d, "f-002", Rules{}, decideNow); err != nil {
+	if _, err := Reinstate(d, "f-002", "", Rules{}, decideNow); err != nil {
 		t.Fatalf("the fix does not work: %v", err)
 	}
 	if Dispositions(d)["f-002"] != DispositionAccepted {
@@ -343,7 +343,7 @@ func TestReinstateRefusesAnExcludedWithdrawnFindingWithAReachableFix(t *testing.
 
 func TestAcceptWithNoteStoresTheNote(t *testing.T) {
 	d := threeFindings()
-	if _, err := AcceptWithNote(d, "f-003", "Use the second option instead.", decideNow); err != nil {
+	if _, err := AcceptWithNote(d, "f-003", "", "Use the second option instead.", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	want := Decision{FindingID: "f-003", Decision: DecisionAccepted, FindingRev: 2, At: decideNow, Note: "Use the second option instead."}
@@ -354,7 +354,7 @@ func TestAcceptWithNoteStoresTheNote(t *testing.T) {
 
 func TestAcceptWithAnEmptyNoteIsAPlainAccept(t *testing.T) {
 	d := threeFindings()
-	if _, err := AcceptWithNote(d, "f-001", "  ", decideNow); err != nil {
+	if _, err := AcceptWithNote(d, "f-001", "", "  ", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	if got := d.Decisions["f-001"]; got.Decision != DecisionAccepted || got.Note != "" {
@@ -364,7 +364,7 @@ func TestAcceptWithAnEmptyNoteIsAPlainAccept(t *testing.T) {
 
 func TestAcceptWithNoteChecksTheMarkdown(t *testing.T) {
 	d := threeFindings()
-	r := refusaltest.Want(t, errOf(AcceptWithNote(d, "f-001", "<script>x</script>", decideNow)), refusal.Markdown)
+	r := refusaltest.Want(t, errOf(AcceptWithNote(d, "f-001", "", "<script>x</script>", decideNow)), refusal.Markdown)
 	if len(d.Decisions) != 0 || strings.Contains(r.Fix, "loupe edit") {
 		t.Fatalf("decisions %v, fix %q", d.Decisions, r.Fix)
 	}
@@ -372,15 +372,15 @@ func TestAcceptWithNoteChecksTheMarkdown(t *testing.T) {
 
 func TestAcceptWithNoteRefusesAWithdrawnFinding(t *testing.T) {
 	d := threeFindings()
-	_ = refusaltest.Want(t, errOf(AcceptWithNote(d, "f-002", "fine", decideNow)), refusal.Input)
+	_ = refusaltest.Want(t, errOf(AcceptWithNote(d, "f-002", "", "fine", decideNow)), refusal.Input)
 }
 
 func TestAcceptAndExcludeLeaveTheNoteEmpty(t *testing.T) {
 	d := threeFindings()
-	if _, err := AcceptWithNote(d, "f-001", "a note", decideNow); err != nil {
+	if _, err := AcceptWithNote(d, "f-001", "", "a note", decideNow); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Accept(d, "f-001", decideNow); err != nil {
+	if _, err := Accept(d, "f-001", "", decideNow); err != nil {
 		t.Fatal(err)
 	}
 	if got := d.Decisions["f-001"].Note; got != "" {
@@ -443,4 +443,158 @@ func TestValidateExcludeReason(t *testing.T) {
 
 func TestExcludeWithReasonRefusesAnUnknownFinding(t *testing.T) {
 	_ = refusaltest.Want(t, errOf(ExcludeWithReason(threeFindings(), "f-009", "out of scope", decideNow)), refusal.NotFound)
+}
+
+func choiceFindings() *Draft {
+	d := NewEmpty()
+	d.Findings = []Finding{
+		{ID: "f-001", Rev: 1, Title: "Pick", Body: "b", General: true, Included: true, Options: []Option{
+			{Key: "1", Label: "One", Proposal: "p1"},
+			{Key: "2", Label: "Two", Proposal: "p2", Recommended: true},
+			{Key: "3", Label: "Three", Proposal: "p3"},
+		}},
+		{ID: "f-002", Rev: 1, Title: "Plain", Body: "b", General: true, Included: true},
+		{ID: "f-003", Rev: 1, Title: "Gone", Body: "b", General: true, Included: false, Options: []Option{
+			{Key: "1", Label: "One", Proposal: "p1"},
+			{Key: "2", Label: "Two", Proposal: "p2", Recommended: true},
+		}},
+	}
+	return d
+}
+
+func TestAcceptOnAChoiceFindingStoresThePick(t *testing.T) {
+	for _, key := range []string{"1", "2", "3"} {
+		d := choiceFindings()
+		if _, err := Accept(d, "f-001", key, decideNow); err != nil {
+			t.Fatal(err)
+		}
+		want := Decision{FindingID: "f-001", Decision: DecisionAccepted, FindingRev: 1, At: decideNow, Choice: key}
+		if !reflect.DeepEqual(d.Decisions["f-001"], want) {
+			t.Fatalf("key %s: decision %+v", key, d.Decisions["f-001"])
+		}
+	}
+}
+
+func TestAcceptRefusesAChoiceFindingWithNoPick(t *testing.T) {
+	d := choiceFindings()
+	r := refusaltest.Want(t, errOf(Accept(d, "f-001", "", decideNow)), refusal.Input)
+	if !strings.Contains(r.Message, "f-001") || !strings.Contains(r.Message, "needs a pick") {
+		t.Fatalf("message %q", r.Message)
+	}
+	if len(d.Decisions) != 0 {
+		t.Fatalf("decisions %v", d.Decisions)
+	}
+}
+
+func TestAcceptRefusesAnUnknownPick(t *testing.T) {
+	d := choiceFindings()
+	r := refusaltest.Want(t, errOf(Accept(d, "f-001", "4", decideNow)), refusal.Input)
+	if !strings.Contains(r.Message, "f-001") || !strings.Contains(r.Message, `no option "4"`) {
+		t.Fatalf("message %q", r.Message)
+	}
+	if len(d.Decisions) != 0 {
+		t.Fatalf("decisions %v", d.Decisions)
+	}
+}
+
+func TestAcceptRefusesAPickOnAFindingWithoutOptions(t *testing.T) {
+	d := choiceFindings()
+	r := refusaltest.Want(t, errOf(Accept(d, "f-002", "1", decideNow)), refusal.Input)
+	if !strings.Contains(r.Message, "f-002") || !strings.Contains(r.Message, "has no options") {
+		t.Fatalf("message %q", r.Message)
+	}
+	if len(d.Decisions) != 0 {
+		t.Fatalf("decisions %v", d.Decisions)
+	}
+}
+
+func TestAcceptWithNoteOnAChoiceFindingStoresThePick(t *testing.T) {
+	for _, key := range []string{"1", "2", "3"} {
+		d := choiceFindings()
+		if _, err := AcceptWithNote(d, "f-001", key, "a note", decideNow); err != nil {
+			t.Fatal(err)
+		}
+		want := Decision{FindingID: "f-001", Decision: DecisionAccepted, FindingRev: 1, At: decideNow, Note: "a note", Choice: key}
+		if !reflect.DeepEqual(d.Decisions["f-001"], want) {
+			t.Fatalf("key %s: decision %+v", key, d.Decisions["f-001"])
+		}
+	}
+}
+
+func TestAcceptWithNoteRefusesAChoiceFindingWithNoPick(t *testing.T) {
+	for _, note := range []string{"a note", ""} {
+		d := choiceFindings()
+		r := refusaltest.Want(t, errOf(AcceptWithNote(d, "f-001", "", note, decideNow)), refusal.Input)
+		if !strings.Contains(r.Message, "f-001") || !strings.Contains(r.Message, "needs a pick") {
+			t.Fatalf("message %q", r.Message)
+		}
+		if len(d.Decisions) != 0 {
+			t.Fatalf("decisions %v", d.Decisions)
+		}
+	}
+}
+
+func TestAcceptWithNoteRefusesAnUnknownPick(t *testing.T) {
+	d := choiceFindings()
+	r := refusaltest.Want(t, errOf(AcceptWithNote(d, "f-001", "9", "a note", decideNow)), refusal.Input)
+	if !strings.Contains(r.Message, `no option "9"`) {
+		t.Fatalf("message %q", r.Message)
+	}
+	if len(d.Decisions) != 0 {
+		t.Fatalf("decisions %v", d.Decisions)
+	}
+}
+
+func TestAcceptWithNoteRefusesAPickOnAFindingWithoutOptions(t *testing.T) {
+	d := choiceFindings()
+	r := refusaltest.Want(t, errOf(AcceptWithNote(d, "f-002", "1", "a note", decideNow)), refusal.Input)
+	if !strings.Contains(r.Message, "has no options") {
+		t.Fatalf("message %q", r.Message)
+	}
+	if len(d.Decisions) != 0 {
+		t.Fatalf("decisions %v", d.Decisions)
+	}
+}
+
+func TestReinstateOnAChoiceFindingNeedsAPick(t *testing.T) {
+	d := choiceFindings()
+	r := refusaltest.Want(t, errOf(Reinstate(d, "f-003", "", Rules{}, decideNow)), refusal.Input)
+	if !strings.Contains(r.Message, "f-003") || !strings.Contains(r.Message, "needs a pick") {
+		t.Fatalf("message %q", r.Message)
+	}
+	_ = refusaltest.Want(t, errOf(Reinstate(d, "f-003", "3", Rules{}, decideNow)), refusal.Input)
+	if d.Findings[2].Included || d.Findings[2].Rev != 1 || len(d.Decisions) != 0 {
+		t.Fatalf("a refused reinstate wrote: %+v %v", d.Findings[2], d.Decisions)
+	}
+	if _, err := Reinstate(d, "f-003", "2", Rules{}, decideNow); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Decisions["f-003"]; got.Choice != "2" || got.Decision != DecisionAccepted {
+		t.Fatalf("decision %+v", got)
+	}
+}
+
+func TestExcludeRestoreAndSendBackClearThePick(t *testing.T) {
+	steps := map[string]func(d *Draft) error{
+		"Exclude":            func(d *Draft) error { return errOf(Exclude(d, "f-001", decideNow)) },
+		"ExcludeWithReason":  func(d *Draft) error { return errOf(ExcludeWithReason(d, "f-001", "no", decideNow)) },
+		"SendBack":           func(d *Draft) error { _, err := SendBack(d, "f-001", "why?", decideNow); return err },
+		"Restore":            func(d *Draft) error { return Restore(d, "f-001") },
+		"ExcludeThenRestore": func(d *Draft) error { _ = errOf(Exclude(d, "f-001", decideNow)); return Restore(d, "f-001") },
+	}
+	for name, step := range steps {
+		d := choiceFindings()
+		if _, err := Accept(d, "f-001", "3", decideNow); err != nil {
+			t.Fatal(err)
+		}
+		if name == "Restore" {
+			d.Decisions["f-001"] = Decision{FindingID: "f-001", Decision: DecisionExcluded, FindingRev: 1, At: decideNow, Choice: "3"}
+		}
+		if err := step(d); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := d.Decisions["f-001"].Choice; got != "" {
+			t.Fatalf("%s left the pick %q", name, got)
+		}
+	}
 }

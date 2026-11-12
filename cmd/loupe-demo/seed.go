@@ -253,7 +253,7 @@ func demoTarget(number int, head string, round int, now time.Time) run.Target {
 func midReview(parsed *diff.Diff, now time.Time) func(d *draft.Draft) error {
 	return func(d *draft.Draft) error {
 		for _, id := range []string{"f-001", "f-006"} {
-			if _, err := draft.Accept(d, id, now); err != nil {
+			if _, err := draft.Accept(d, id, "", now); err != nil {
 				return err
 			}
 		}
@@ -278,7 +278,9 @@ func midReview(parsed *diff.Diff, now time.Time) func(d *draft.Draft) error {
 func readyToPublish(now time.Time) func(d *draft.Draft) error {
 	return func(d *draft.Draft) error {
 		for _, f := range d.Findings {
-			decide := draft.Accept
+			decide := func(d *draft.Draft, id string, now time.Time) ([]string, error) {
+				return draft.Accept(d, id, "", now)
+			}
 			if f.ID == "f-005" || f.ID == "f-007" {
 				decide = draft.Exclude
 			}

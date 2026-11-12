@@ -289,7 +289,7 @@ func TestApplySendBackRoundTrip(t *testing.T) {
 	dir := applyFixture(t, "Claude", applyInputs...)
 	outside(t, dir, func(d *draft.Draft) error {
 		for _, f := range d.Findings {
-			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
+			if _, err := draft.Accept(d, f.ID, "", testNow); err != nil {
 				return err
 			}
 		}

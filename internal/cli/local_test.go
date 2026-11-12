@@ -434,7 +434,7 @@ func TestApplyRunShowNamesTheLocalSteps(t *testing.T) {
 		t.Fatalf("the fenced proposal line was wrapped:\n%s", out)
 	}
 	if _, err := draft.Mutate(dir, "test", nil, func(string) string { return "" }, func(d *draft.Draft) error {
-		_, err := draft.Accept(d, "f-001", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
+		_, err := draft.Accept(d, "f-001", "", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
 		return err
 	}); err != nil {
 		t.Fatal(err)

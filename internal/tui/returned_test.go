@@ -21,7 +21,7 @@ func readyApplyModel(t *testing.T, applier string) (*Model, string) {
 	dir := applyFixture(t, applier, applyInputs...)
 	if _, err := draft.Mutate(dir, "review", nil, envOf(nil), func(d *draft.Draft) error {
 		for _, f := range d.Findings {
-			if _, err := draft.Accept(d, f.ID, testNow); err != nil {
+			if _, err := draft.Accept(d, f.ID, "", testNow); err != nil {
 				return err
 			}
 		}

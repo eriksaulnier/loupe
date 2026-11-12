@@ -137,7 +137,7 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 		_, err := Add(d, []FindingInput{{Title: "Three", Body: "Body.", General: true, Label: "question"}}, nil, Rules{}, ByAgent, time.Now())
 		return err
 	})
-	mutate(func(d *Draft) error { _, err := Accept(d, "f-002", time.Now()); return err })
+	mutate(func(d *Draft) error { _, err := Accept(d, "f-002", "", time.Now()); return err })
 	if state(loadStored(t, dir)) != shown {
 		t.Fatal("a new finding or a decision on another finding changed the state")
 	}
@@ -148,7 +148,7 @@ func TestFindingStateCoversWhatADecisionRestsOn(t *testing.T) {
 		name string
 		fn   func(*Draft) error
 	}{
-		{"accept", func(d *Draft) error { _, err := Accept(d, "f-001", time.Now()); return err }},
+		{"accept", func(d *Draft) error { _, err := Accept(d, "f-001", "", time.Now()); return err }},
 		{"send back", func(d *Draft) error { _, err := SendBack(d, "f-001", "Why?", time.Now()); return err }},
 		{"reply", func(d *Draft) error { _, err := AddReply(d, "n-001", "Because.", ByAgent, time.Now()); return err }},
 		{"resolve", func(d *Draft) error { return ResolveNote(d, "n-001", time.Now()) }},
