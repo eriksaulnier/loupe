@@ -38,13 +38,13 @@ A plan that departs from the constitution, research or contracts MUST record the
 
 A change to the fields of a run file, such as `draft.json` or `receipt.json`, or of the findings record MUST follow the [schema versioning rule](docs/versioning.md): bump the version, and keep reading every older one.
 
-A spec that is drafted but not scheduled belongs on the [loupe project board](https://github.com/users/eriksaulnier/projects/6) as a draft item titled `Draft spec: <topic>`, not in `specs/`. A directory there takes the next number, which says the work is starting. A branch holding one that nobody is working on reserves a number for a feature that may never arrive.
+A spec that is drafted but not scheduled belongs in an issue titled `Draft spec: <topic>` with the `spec` label, not in `specs/`. A directory there takes the next number, which says the work is starting. A branch holding one that nobody is working on reserves a number for a feature that may never arrive.
 
 When the work is picked up:
 
-1. Move the card to In Progress.
-2. Run the flow and paste the draft in as the spec's **Input**.
-3. Once the pull request merges, move the card to Done by hand. A draft item is not an issue, so no pull request can close it.
+1. Assign the issue to yourself.
+2. Run the flow and paste the issue body in as the spec's **Input**.
+3. Put `Closes #<issue>` in the pull request body, so the merge closes the issue.
 
 Finished specs stay in the repository. `docs/comment-format.md`, `specs/001-loupe-v1/validation.md`, the README, `AGENTS.md` and two code comments cite them by path, and a spec is reviewed as a diff like anything else.
 
