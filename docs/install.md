@@ -51,7 +51,7 @@ loupe --version
 > [!NOTE]
 > mise hides releases younger than its `minimum_release_age`. Right after a release, the install fails with `no versions found for github:secondshift-labs/loupe matching date filter`. Wait, or run `mise settings add minimum_release_age_excludes "github:secondshift-labs/loupe"`.
 
-To update, run the same `mise use` command again. mise does not install the plugin, so add [the agent plugin](#the-agent-plugin) by hand, and update it with the binary. `loupe update` and `loupe uninstall` refuse a binary that mise installed, and name the mise command instead.
+To update, run the same `mise use` command again. An install made before loupe moved to secondshift-labs keeps the tool name `github:eriksaulnier/loupe`, which a command naming the new owner does not touch. Run `mise unuse -g github:eriksaulnier/loupe` first, then the `mise use` command above. mise does not install the plugin, so add [the agent plugin](#the-agent-plugin) by hand, and update it with the binary. `loupe update` and `loupe uninstall` refuse a binary that mise installed, and name the mise command instead.
 
 ### From a release archive
 
