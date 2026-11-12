@@ -1,0 +1,26 @@
+name: Draft spec
+description: A spec that is drafted but not scheduled. See CONTRIBUTING.md
+title: "Draft spec: "
+labels: [spec]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is wrong or missing today, and who it affects.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What loupe would do. Requirements, commands, flags and output, if you have them.
+    validations:
+      required: true
+  - type: textarea
+    id: questions
+    attributes:
+      label: Open questions
+      description: What the spec still has to decide, and which of the seven principles in `.specify/memory/constitution.md` it touches.
+    validations:
+      required: false

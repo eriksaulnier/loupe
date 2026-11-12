@@ -33,7 +33,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `package.json` | Makes the repository a Pi package whose skills are `plugin/skills`; it holds no JavaScript |
 | `install.sh` | The script behind `curl ... \| sh`, which installs a released binary. `pages.yml` publishes it, and `TestInstallScript*` runs it against a fake `curl` |
 | `action.yml` | The composite action that installs a released loupe in a GitHub Actions job. release-please stamps its `version` default at each release, and `TestInstallAction` pins it to the manifest |
-| `specs/NNN-topic/` | One directory per feature: `spec.md`, then `plan.md` and `tasks.md`. `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
+| `specs/NNN-topic/` | One directory per feature. Only `spec.md` is required; `plan.md`, `tasks.md` and other files are optional and depend on the tool that wrote the spec (`CONTRIBUTING.md`). `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
 | `docs/` | `comment-format.md` (the published review format, a contract), `tui-design.md` (how the review window draws a finding and its header, a contract) and `github-facts.md` (observed GitHub behavior). `tapes/` drives the README's terminal images in `assets/`, and `scripts/review-screenshot.sh` its picture of a published review; neither is read by the binary |
 | `testdata/` | Diff fixtures and goldens |
 | `assets/review/v1/` | The severity pill SVGs every published review hotlinks from `main`. A file here MUST NOT change once on `main`; a redesign adds `v2`. A test pins their hashes |
@@ -43,7 +43,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `codecov.yml` | What Codecov leaves out of the totals: the test helpers and the demo binary |
 | `.github/review-instructions.md` | loupe's half of that workflow's prompt: what the linters already cover, the constitution, the contracts `contracts/cli.md`, `comment-format.md` and `tui-design.md` pin, and how to read the goldens. Read from the default branch, never from the pull request |
 | `.specify/memory/constitution.md` | The seven principles. Read first |
-| `.specify/`, `.claude/skills/speckit-*` | spec-kit's templates, scripts and the skills that drive the spec, plan and tasks flow |
+| `.specify/`, `.claude/skills/speckit-*` | spec-kit's templates, scripts and skills: one optional way to write a spec, not a required flow |
 
 ## Rules
 
