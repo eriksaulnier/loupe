@@ -13,7 +13,7 @@ Optional. It is present only on a local run, and only when `proposal` is absent.
 | Field | Type | Rule |
 | :--- | :--- | :--- |
 | `key` | string | `"1"`, `"2"` or `"3"`, assigned by loupe in input order. Refused in input |
-| `label` | string | Title Markdown rules and the `finding-id` rule. Length 1–120 |
+| `label` | string | Drawn as `title` is, and checked by the `finding-id` rule. Length 1–120 |
 | `proposal` | string | Proposal Markdown rules, at most 64 KiB, and the `finding-id` rule. Not empty |
 | `recommended` | bool | `omitempty`. Exactly one entry is true |
 
