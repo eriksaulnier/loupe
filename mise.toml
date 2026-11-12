@@ -94,7 +94,7 @@ if [ -n "$found" ]; then
 fi
 if [ "$got" != "$want" ]; then
 	echo "error: outside the repository, loupe resolves to ${found:-nothing}, not $dir/loupe" >&2
-	echo "fix: remove that copy (a mise pin: mise unuse --global github:eriksaulnier/loupe), or put $dir first on PATH" >&2
+	echo "fix: remove that copy (a mise pin: mise unuse --global github:secondshift-labs/loupe, or github:eriksaulnier/loupe from before the move), or put $dir first on PATH" >&2
 	exit 1
 fi
 # Removing the marketplace also uninstalls loupe@loupe. It fails only when the marketplace is absent.
