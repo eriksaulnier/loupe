@@ -755,7 +755,7 @@ func wantApprovedAtCapturedHead(t *testing.T, fx *fixture) {
 	}
 }
 
-func TestRunReturnsAGitHubFailureWhileReadingTheMovedHead(t *testing.T) {
+func TestRunRefusesAGitHubFailureWhileReadingTheMovedHead(t *testing.T) {
 	comparePath := "/repos/acme/widgets/compare/acme:widgets:" + headSHA + "...acme:widgets:" + movedSHA
 	for _, path := range []string{"/repos/acme/widgets/pulls/42/commits", comparePath} {
 		t.Run(path, func(t *testing.T) {
@@ -763,7 +763,7 @@ func TestRunReturnsAGitHubFailureWhileReadingTheMovedHead(t *testing.T) {
 			fx.moveHead(movedSHA, 1, github.ComparedFile{Filename: "a.go"})
 			fx.gh.Fail("GET", path, http.StatusInternalServerError)
 			_, err := fx.run()
-			wantHTTPStatus(t, err, http.StatusInternalServerError)
+			wantReadRefusal(t, err, http.StatusInternalServerError)
 			if len(fx.previews) != 0 {
 				t.Error("confirmation shown")
 			}

@@ -156,7 +156,7 @@ func publishNew(ctx context.Context, opts Options, retryID string) (Receipt, boo
 	if !opts.Unattended {
 		viewer, err = client.Viewer(ctx)
 		if err != nil {
-			return Receipt{}, false, err
+			return Receipt{}, false, readRefusal(opts.Target, "the signed-in GitHub account", err)
 		}
 	}
 	root, err := run.DataRoot(opts.Getenv)
@@ -350,7 +350,7 @@ func unknownAttemptRefusal(target run.Target, message string) error {
 func recheckLive(ctx context.Context, opts Options, client github.Client, viewer, shownHead string) error {
 	pr, err := client.PullRequest(ctx, opts.Target.Owner, opts.Target.Repo, opts.Target.Number)
 	if err != nil {
-		return err
+		return readRefusal(opts.Target, "the pull request", err)
 	}
 	if pr.HeadSHA != shownHead {
 		return refusal.New(refusal.HeadMoved,
@@ -359,7 +359,7 @@ func recheckLive(ctx context.Context, opts Options, client github.Client, viewer
 	}
 	now, err := client.Viewer(ctx)
 	if err != nil {
-		return err
+		return readRefusal(opts.Target, "the signed-in GitHub account", err)
 	}
 	if now != viewer {
 		return refusal.New(refusal.Viewer,

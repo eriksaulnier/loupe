@@ -165,9 +165,10 @@ func (e *HTTPError) Definite() bool {
 }
 
 type REST struct {
-	client *api.RESTClient
-	gql    *api.GraphQLClient
-	kind   TokenKind
+	client     *api.RESTClient
+	gql        *api.GraphQLClient
+	kind       TokenKind
+	retryDelay time.Duration
 }
 
 // defaultTimeout bounds each request so a stalled connection cannot hang a command that has no ctx deadline.
@@ -176,15 +177,15 @@ const defaultTimeout = 30 * time.Second
 // NewREST uses gh's stored token for github.com. A nil transport means the default.
 func NewREST(transport http.RoundTripper) (*REST, error) {
 	token, _ := auth.TokenForHost(host)
-	return newREST(transport, token, defaultTimeout)
+	return newREST(transport, token, defaultTimeout, time.Second)
 }
 
 // NewRESTWithToken skips gh's token lookup so tests never read the developer's credentials.
 func NewRESTWithToken(transport http.RoundTripper, token string) (*REST, error) {
-	return newREST(transport, token, 0)
+	return newREST(transport, token, 0, 0)
 }
 
-func newREST(transport http.RoundTripper, token string, timeout time.Duration) (*REST, error) {
+func newREST(transport http.RoundTripper, token string, timeout, retryDelay time.Duration) (*REST, error) {
 	if token == "" {
 		return nil, refusal.New(refusal.Auth, "no GitHub token found for github.com", "gh auth login --hostname github.com")
 	}
@@ -197,7 +198,7 @@ func newREST(transport http.RoundTripper, token string, timeout time.Duration) (
 	if err != nil {
 		return nil, fmt.Errorf("create GitHub GraphQL client: %w", err)
 	}
-	return &REST{client: client, gql: gql, kind: tokenKind(token)}, nil
+	return &REST{client: client, gql: gql, kind: tokenKind(token), retryDelay: retryDelay}, nil
 }
 
 // tokenKind reads only the prefix: ghs_ is an App installation token, everything else acts as a person.
@@ -502,7 +503,7 @@ func deref(n *int) int {
 }
 
 func (c *REST) graphQL(ctx context.Context, query string, vars map[string]any, out any) error {
-	err := c.gql.DoWithContext(ctx, query, vars, out)
+	err := c.retryRead(ctx, func() error { return c.gql.DoWithContext(ctx, query, vars, out) })
 	if err == nil {
 		return nil
 	}
@@ -604,11 +605,20 @@ func (c *REST) do(ctx context.Context, method, path string, body []byte, out any
 }
 
 func (c *REST) request(ctx context.Context, method, path string, body []byte) (*http.Response, error) {
-	var reader io.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
+	send := func() (*http.Response, error) {
+		var reader io.Reader
+		if body != nil {
+			reader = bytes.NewReader(body)
+		}
+		return c.client.RequestWithContext(ctx, method, path, reader)
 	}
-	resp, err := c.client.RequestWithContext(ctx, method, path, reader)
+	var resp *http.Response
+	var err error
+	if method == http.MethodGet {
+		err = c.retryRead(ctx, func() (e error) { resp, e = send(); return e })
+	} else {
+		resp, err = send()
+	}
 	if mapped := httpError(err); mapped != nil {
 		return nil, mapped
 	}
@@ -616,6 +626,30 @@ func (c *REST) request(ctx context.Context, method, path string, body []byte) (*
 		return nil, fmt.Errorf("GitHub %s %s: %w", method, path, err)
 	}
 	return resp, nil
+}
+
+// readAttempts bounds how long a read waits out a GitHub outage: two waits of retryDelay and 2*retryDelay.
+const readAttempts = 3
+
+// retryRead repeats a read that GitHub answered with a gateway error, which a moment later usually succeeds. Only reads
+// come here: a 5xx on a write may have recorded it.
+func (c *REST) retryRead(ctx context.Context, read func() error) error {
+	for attempt := 1; ; attempt++ {
+		err := read()
+		var he *api.HTTPError
+		if attempt == readAttempts || !errors.As(err, &he) || !gatewayError(he.StatusCode) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * c.retryDelay):
+		}
+	}
+}
+
+func gatewayError(status int) bool {
+	return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
 }
 
 // httpError is nil unless err is a response GitHub sent, which it returns as the auth refusal or an HTTPError.

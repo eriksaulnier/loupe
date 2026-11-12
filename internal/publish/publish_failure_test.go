@@ -113,12 +113,12 @@ func (fx *fixture) mkdir(name string) {
 	}
 }
 
-// wantHTTPStatus fails unless err is a GitHub HTTP error with status.
-func wantHTTPStatus(t *testing.T, err error, status int) {
+// wantReadRefusal checks that a failed GitHub read is a github refusal naming the status, not an internal error.
+func wantReadRefusal(t *testing.T, err error, status int) {
 	t.Helper()
-	var httpErr *github.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.Status != status {
-		t.Fatalf("got %v, want an HTTP %d error", err, status)
+	msg := wantRefusal(t, err, refusal.GitHub, "retry loupe publish", prLink)
+	if !strings.Contains(msg, fmt.Sprintf("HTTP %d", status)) || !strings.Contains(msg, "nothing was sent") {
+		t.Errorf("message %q", msg)
 	}
 }
 
@@ -241,26 +241,26 @@ func TestRunRefusesWhenTheRoundsCannotBeNumbered(t *testing.T) {
 	fx.check(0)
 }
 
-func TestRunReturnsAGitHubFailureAtEachLaterRead(t *testing.T) {
+func TestRunRefusesAGitHubFailureAtEachLaterRead(t *testing.T) {
 	t.Run("viewer after the gates", func(t *testing.T) {
 		fx := newRun(t, readyDraft())
 		fx.gh.FailAfter("GET", "/user", 1, http.StatusInternalServerError)
 		_, err := fx.run()
-		wantHTTPStatus(t, err, http.StatusInternalServerError)
+		wantReadRefusal(t, err, http.StatusInternalServerError)
 		fx.check(0)
 	})
 	t.Run("pull request while confirming", func(t *testing.T) {
 		fx := newRun(t, readyDraft())
 		fx.opts.Confirm = fx.confirmWith(true, func() { fx.gh.Fail("GET", "/repos/acme/widgets/pulls/42", http.StatusInternalServerError) })
 		_, err := fx.run()
-		wantHTTPStatus(t, err, http.StatusInternalServerError)
+		wantReadRefusal(t, err, http.StatusInternalServerError)
 		fx.check(0)
 	})
 	t.Run("viewer while confirming", func(t *testing.T) {
 		fx := newRun(t, readyDraft())
 		fx.opts.Confirm = fx.confirmWith(true, func() { fx.gh.Fail("GET", "/user", http.StatusInternalServerError) })
 		_, err := fx.run()
-		wantHTTPStatus(t, err, http.StatusInternalServerError)
+		wantReadRefusal(t, err, http.StatusInternalServerError)
 		fx.check(0)
 	})
 	t.Run("reviews for the previous round", func(t *testing.T) {

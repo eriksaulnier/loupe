@@ -10,9 +10,12 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/cli/go-gh/v2/pkg/api"
 
 	"github.com/eriksaulnier/loupe/internal/refusal"
 )
@@ -546,5 +549,124 @@ func TestPullRequestCommitsRefusesAnUnreadablePage(t *testing.T) {
 	commits, err := c.PullRequestCommits(context.Background(), "o", "r", 7)
 	if err == nil || !strings.HasPrefix(err.Error(), "decode GitHub response from ") || commits != nil {
 		t.Fatalf("got %v, %v; want the decode failure", commits, err)
+	}
+}
+
+// failFirst answers the first n requests with status, then hands every later one to next.
+func failFirst(n, status int, next func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	served := 0
+	return func(w http.ResponseWriter, r *http.Request) {
+		served++
+		if served <= n {
+			writeJSON(w, status, `{"message": "Service Unavailable"}`)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func TestReadsRetryAGatewayError(t *testing.T) {
+	for _, status := range []int{502, 503, 504} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			c, reqs := newTestClient(t, failFirst(2, status, func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, 200, `{"login": "erik"}`)
+			}))
+			login, err := c.Viewer(context.Background())
+			if err != nil || login != "erik" || len(*reqs) != 3 {
+				t.Fatalf("got %q, %v after %d requests", login, err, len(*reqs))
+			}
+		})
+	}
+}
+
+func TestReadsGiveUpAfterThreeAttempts(t *testing.T) {
+	c, reqs := newTestClient(t, failFirst(99, 503, nil))
+	_, err := c.Viewer(context.Background())
+	var he *HTTPError
+	if !errors.As(err, &he) || he.Status != 503 || len(*reqs) != 3 {
+		t.Fatalf("got %#v after %d requests", err, len(*reqs))
+	}
+}
+
+func TestReadsDoNotRetryOtherFailures(t *testing.T) {
+	for _, status := range []int{500, 404, 403, 429} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			c, reqs := newTestClient(t, failFirst(99, status, nil))
+			_, err := c.Viewer(context.Background())
+			var he *HTTPError
+			if !errors.As(err, &he) || he.Status != status || len(*reqs) != 1 {
+				t.Fatalf("got %#v after %d requests", err, len(*reqs))
+			}
+		})
+	}
+}
+
+// A 5xx on a write may have recorded it, so a second attempt could publish twice.
+func TestWritesDoNotRetry(t *testing.T) {
+	c, reqs := newTestClient(t, failFirst(99, 503, nil))
+	if _, err := c.CreateReview(context.Background(), "o", "r", 7, ReviewRequest{Event: "COMMENT"}); err == nil {
+		t.Fatal("create succeeded")
+	}
+	if _, err := c.UpdateReview(context.Background(), "o", "r", 7, 1, "body"); err == nil {
+		t.Fatal("update succeeded")
+	}
+	if len(*reqs) != 2 {
+		t.Fatalf("got %d requests, want 1 each", len(*reqs))
+	}
+}
+
+func TestListingRetriesALaterPage(t *testing.T) {
+	page := 0
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		page++
+		switch page {
+		case 1:
+			w.Header().Set("Link", `<`+"https://api.github.com/repos/o/r/pulls/7/reviews?page=2"+`>; rel="next"`)
+			writeJSON(w, 200, `[{"id": 1}]`)
+		case 2:
+			writeJSON(w, 503, `{"message": "Service Unavailable"}`)
+		default:
+			writeJSON(w, 200, `[{"id": 2}]`)
+		}
+	})
+	reviews, err := c.ListReviews(context.Background(), "o", "r", 7)
+	if err != nil || len(reviews) != 2 || len(*reqs) != 3 {
+		t.Fatalf("got %+v, %v after %d requests", reviews, err, len(*reqs))
+	}
+}
+
+func TestGraphQLRetriesAGatewayError(t *testing.T) {
+	c, reqs := newTestClient(t, failFirst(1, 502, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, `{"data": {"repository": {"pullRequest": {"reviewThreads": {"pageInfo": {"hasNextPage": false}, "nodes": []}}}}}`)
+	}))
+	threads, err := c.ListReviewThreads(context.Background(), "o", "r", 7)
+	if err != nil || threads == nil || len(*reqs) != 2 {
+		t.Fatalf("got %+v, %v after %d requests", threads, err, len(*reqs))
+	}
+}
+
+func TestRetryWaitStopsOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	c := &REST{retryDelay: time.Hour}
+	reads := 0
+	err := c.retryRead(ctx, func() error {
+		reads++
+		cancel()
+		return &api.HTTPError{StatusCode: http.StatusServiceUnavailable}
+	})
+	if !errors.Is(err, context.Canceled) || reads != 1 {
+		t.Fatalf("got %v after %d reads", err, reads)
+	}
+}
+
+func TestNewRESTWaitsBetweenRetries(t *testing.T) {
+	t.Setenv("GH_CONFIG_DIR", t.TempDir())
+	t.Setenv("GH_TOKEN", "test-token")
+	c, err := NewREST(http.DefaultTransport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.retryDelay != time.Second {
+		t.Fatalf("retry delay %v", c.retryDelay)
 	}
 }

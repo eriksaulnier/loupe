@@ -322,10 +322,10 @@ func TestFailAfterFailsALaterPage(t *testing.T) {
 	s.SetPageSize(1)
 	s.AddIssueComment("o", "r", 3, github.IssueComment{User: "u", Body: "a"})
 	s.AddIssueComment("o", "r", 3, github.IssueComment{User: "u", Body: "b"})
-	s.FailAfter(http.MethodGet, "/repos/o/r/issues/3/comments", 1, http.StatusBadGateway)
+	s.FailAfter(http.MethodGet, "/repos/o/r/issues/3/comments", 1, http.StatusInternalServerError)
 	_, err := c.ListIssueComments(ctx, "o", "r", 3)
 	var he *github.HTTPError
-	if !errors.As(err, &he) || he.Status != http.StatusBadGateway || len(s.Requests()) != 2 {
+	if !errors.As(err, &he) || he.Status != http.StatusInternalServerError || len(s.Requests()) != 2 {
 		t.Fatalf("got %v after %d requests", err, len(s.Requests()))
 	}
 }

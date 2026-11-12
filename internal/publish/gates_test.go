@@ -2,7 +2,6 @@ package publish
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 
@@ -276,15 +275,28 @@ func TestGatesReportTheLiveState(t *testing.T) {
 	}
 }
 
-func TestGatesReturnGitHubFailuresAsTheyCame(t *testing.T) {
-	for _, path := range []string{"/repos/acme/widgets/pulls/42", "/user"} {
-		gh, client := newFake(t)
-		gh.Fail("GET", path, 500)
-		in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
-		gated, err := Gates(context.Background(), in)
-		var httpErr *github.HTTPError
-		if gated != (Gated{}) || !errors.As(err, &httpErr) || httpErr.Status != 500 {
-			t.Errorf("%s failing: %+v, %v", path, gated, err)
-		}
+// A GitHub outage is not a defect in loupe, so a failed read refuses as github rather than reaching the CLI as internal.
+func TestGatesRefuseAFailedGitHubRead(t *testing.T) {
+	for _, path := range []string{"/repos/acme/widgets/pulls/42", "/user", "/repos/acme/widgets/pulls/42/commits"} {
+		t.Run(path, func(t *testing.T) {
+			gh, client := newFake(t)
+			if strings.HasSuffix(path, "/commits") {
+				gh.SetHead("acme", "widgets", 42, "3333333333333333333333333333333333333333")
+			}
+			gh.Fail("GET", path, 500)
+			in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
+			gated, err := Gates(context.Background(), in)
+			if gated != (Gated{}) {
+				t.Errorf("gated %+v", gated)
+			}
+			wantReadRefusal(t, err, 500)
+		})
 	}
+}
+
+func TestGatesKeepTheClientsOwnRefusal(t *testing.T) {
+	gh, client := newFake(t)
+	gh.Fail("GET", "/repos/acme/widgets/pulls/42", 401)
+	in := GateInput{IsTerminal: true, GitHub: client, Target: fixtureTarget(), Action: "comment", Draft: readyDraft()}
+	wantRefusal(t, gateErr(context.Background(), in), refusal.Auth, "gh auth login")
 }
