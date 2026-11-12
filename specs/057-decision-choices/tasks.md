@@ -90,15 +90,15 @@ PR runs MUST stay byte-identical. No task runs `-update` on a PR golden.
 
 **Independent test**: read `plugin/skills/human-decide/SKILL.md`.
 
-- [ ] T025 [US4] In `plugin/skills/human-decide/SKILL.md` section 2, replace "For a question, the proposal is the answer you recommend, and the body names the other choices" with the FR-022 rule. When there are 2–3 real choices, the agent MUST file `options` with exactly one `recommended`. For one answer, it uses `proposal`. Show the JSON shape from `contracts/cli-057.md`. In section 6, say that a choice finding's entry already holds the picked option's proposal, and that `choice` names it. Run `go test ./internal/cli/ -run Plugin` if a plugin test reads the skill. Commit as `docs(plugin): file real alternatives as options`.
+- [x] T025 [US4] In `plugin/skills/human-decide/SKILL.md` section 2, replace "For a question, the proposal is the answer you recommend, and the body names the other choices" with the FR-022 rule. When there are 2–3 real choices, the agent MUST file `options` with exactly one `recommended`. For one answer, it uses `proposal`. Show the JSON shape from `contracts/cli-057.md`. In section 6, say that a choice finding's entry already holds the picked option's proposal, and that `choice` names it. Run `go test ./internal/cli/ -run Plugin` if a plugin test reads the skill. Commit as `docs(plugin): file real alternatives as options`.
 
 ## Phase 6: Polish — contracts, docs and demo
 
-- [ ] T026 [P] Apply `contracts/cli-057.md` to `specs/001-loupe-v1/contracts/cli.md`: the Conventions row, and the `loupe add`, `loupe edit`, `loupe show` and `loupe feedback` sections. Each amendment cites `specs/057-decision-choices`.
-- [ ] T027 [P] In `internal/cli/add.go` `addHelp` (`:18`) and `internal/cli/edit.go` `editHelp` (`:16`), describe `options` and its rules, and say that `null` clears them on edit (FR-020). No CLI golden covers add or edit help, so add none.
-- [ ] T028 [P] In `docs/tui-design.md`, describe the option sections under `## Sections` and `## Order`, in place of the proposed change at item 6. Describe the picker under `## Boxes` (FR-021).
-- [ ] T029 [P] In `docs/versioning.md`, extend the draft row to `schema` 7: "7 added `findings.options` and `decisions.choice` (`specs/057-decision-choices`)".
-- [ ] T030 In `cmd/loupe-demo/seed.go` `localFindings` (`:363`), turn the general finding "Who invalidates an entry on a force-push?" (`:387`) into a choice finding. Move the three choices in its body into options, recommend the second, and trim the body to the question. Run `go test ./cmd/loupe-demo/` (FR-023). Commit T026 to T030 as `docs: record decision choices`.
+- [x] T026 [P] Apply `contracts/cli-057.md` to `specs/001-loupe-v1/contracts/cli.md`: the Conventions row, and the `loupe add`, `loupe edit`, `loupe show` and `loupe feedback` sections. Each amendment cites `specs/057-decision-choices`.
+- [x] T027 [P] In `internal/cli/add.go` `addHelp` (`:18`) and `internal/cli/edit.go` `editHelp` (`:16`), describe `options` and its rules, and say that `null` clears them on edit (FR-020). No CLI golden covers add or edit help, so add none.
+- [x] T028 [P] In `docs/tui-design.md`, describe the option sections under `## Sections` and `## Order`, in place of the proposed change at item 6. Describe the picker under `## Boxes` (FR-021).
+- [x] T029 [P] In `docs/versioning.md`, extend the draft row to `schema` 7: "7 added `findings.options` and `decisions.choice` (`specs/057-decision-choices`)".
+- [x] T030 In `cmd/loupe-demo/seed.go` `localFindings` (`:363`), turn the general finding "Who invalidates an entry on a force-push?" (`:387`) into a choice finding. Move the three choices in its body into options, recommend the second, and trim the body to the question. Run `go test ./cmd/loupe-demo/` (FR-023). Commit T026 to T030 as `docs: record decision choices`.
 - [ ] T031 Run `mise run check` and the patch coverage check from `CONTRIBUTING.md`. Show the output.
 - [ ] T032 Run the quickstart's older-binary check (SC-005) with the installed release, outside the repository. Show the refusal.
 - [ ] T033 By eye, through tmux: run the quickstart's review steps against `mise run demo -- review 'acme/widgets:local#1'` at 80×24 and 100×40, and with `NO_COLOR=1`. Capture the option sections, the picker, and the header after a pick.

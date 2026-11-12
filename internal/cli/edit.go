@@ -25,6 +25,9 @@ Input (--from <file>, or --from - for stdin): an object with any subset of the a
     "suggestedFix": null
   }
 
+On a local run, "options" is set or replaced as add takes it, and null clears it. The rules apply to
+the finding after the edit, so adding options to a finding with a proposal needs "proposal": null
+in the same edit. A change to options clears the decision.
 An absent key leaves the field unchanged. null clears location, label, confidence, severity,
 verified, impact, references or suggestedFix, as does an empty references list, and is refused
 for title, body, general and blocking. Setting location clears

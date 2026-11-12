@@ -10,6 +10,8 @@ A section is a bold heading in its tone, over a `┃` bar in the same tone. The 
 
 Every block in a finding below the title and meta is a section, except the location pane. The body is the section `Why`. A blank row separates two sections.
 
+A choice finding (`specs/057-decision-choices`) draws one section per option in the good tone, in place of the proposed change. Its heading is the key, the label, `recommended` on the recommended option and `picked` on the option the human picked, joined by the separator glyph, as in `2 · Use the second · recommended`. The body is the option's proposal.
+
 Without color, the heading is plain text and the bar stays, so the structure survives `NO_COLOR`.
 
 ## Tone says whose words they are
@@ -30,6 +32,8 @@ Without color, the heading is plain text and the bar stays, so the structure sur
 
 A box is for code and for anything the human is editing. That is the location pane, the send-back and edit composers, the local start screen and the publish confirmation. Prose that the human reads but does not edit MUST NOT be boxed. It is a section.
 
+The option picker is a box, since the human chooses in it (`specs/057-decision-choices`). It opens under a choice finding when the human accepts, tweaks or reinstates it. It holds one row per option, drawn by the same row helper as the other pickers, with the recommended option marked and the selection on the current pick or else the recommended option. `enter` picks the selected row and a digit picks that option at once. `esc` closes the picker and records nothing. Keys that pick are dropped for the settle window after the picker opens, so a repeated key cannot choose by accident. `t` opens the picker and then the note composer, and the decision records only when the note is saved.
+
 A pane title MUST be drawn by a `style` helper. A screen MUST NOT style a pane title inline.
 
 ## Order
@@ -41,7 +45,7 @@ A finding's document has one order in both modes:
 3. The notice that the agent changed text the human wrote, when it did. It is one line in the note color with the note glyph, not a section, because it reports an event rather than holding anyone's words.
 4. The location pane.
 5. `Why`.
-6. The proposed change: `Suggested fix`, `<applier> will`, or `A question for <applier>`. A suggested fix that sits beside a proposal or a question follows it as its own `Suggested fix` section.
+6. The proposed change: `Suggested fix`, `<applier> will`, or `A question for <applier>`. A choice finding shows one section per option here instead, in key order. A suggested fix that sits beside a proposal, a question or options follows it as its own `Suggested fix` section.
 7. `Impact`.
 8. `References`.
 9. Notes.

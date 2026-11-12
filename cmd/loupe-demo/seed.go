@@ -387,8 +387,13 @@ var localFindings = []draft.FindingInput{
 	},
 	{
 		Title:   "Who invalidates an entry on a force-push?",
-		Body:    "Nothing in the plan clears an entry when the head moves. The choices are a webhook that deletes the entry, a shorter TTL, or comparing the head SHA on every read.",
+		Body:    "Nothing in the plan clears an entry when the head moves.",
 		General: true,
+		Options: []draft.OptionInput{
+			{Label: "Delete the entry from a webhook", Proposal: "Add a webhook handler that deletes the entry when the head moves."},
+			{Label: "Compare the head SHA on every read", Proposal: "Store the head SHA with each entry and treat a mismatch as a miss.", Recommended: true},
+			{Label: "Shorten the TTL", Proposal: "Cut the TTL to one minute and accept stale reads until it expires."},
+		},
 	},
 }
 
