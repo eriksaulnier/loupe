@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strings"
-
 	"fmt"
 	"slices"
 	"strconv"
@@ -124,11 +122,11 @@ func (m *Model) pickView() []string {
 	inner, _ := style.PaneInner(m.width, 0)
 	var lines []string
 	for i, o := range f.Options {
-		label := render.ForDisplay(render.OneLine(o.Label))
+		mark := ""
 		if o.Recommended {
-			label += " " + m.glyphs.Sep + " recommended"
+			mark = " " + m.glyphs.Sep + " recommended"
 		}
-		lines = append(lines, m.optionRow(i == m.pickSel, o.Key, label, inner)...)
+		lines = append(lines, m.optionRow(i == m.pickSel, o.Key, render.ForDisplay(render.OneLine(o.Label)), mark, inner)...)
 	}
 	verb := "accepts"
 	switch m.pickFor {
@@ -163,18 +161,14 @@ func (m *Model) pickFooter() []string {
 // optionIndent is where an option's label starts: the cursor, a space, the one-digit key and two spaces.
 const optionIndent = 5
 
-// optionRow is one picker row: the cursor, the option's key and its label, which wraps under itself. The publish
-// popup's pickerRow pads its name column for action names, which leaves a one-digit key far from its label.
-func (m *Model) optionRow(selected bool, key, label string, inner int) []string {
+// optionRow is one picker row: the cursor, the option's key, its label and its mark. The label is cut with the ellipsis
+// to leave the mark room, since the option's section above shows the label whole. The publish popup's pickerRow pads
+// its name column for action names, which leaves a one-digit key far from its label.
+func (m *Model) optionRow(selected bool, key, label, mark string, inner int) []string {
 	cursor, keyStyle := " ", m.styles.Text()
 	if selected {
 		cursor, keyStyle = m.styles.Emphasis(m.styles.Cursor).Render(m.styles.PickerCursor()), m.styles.Emphasis(m.styles.Accent)
 	}
-	indent := strings.Repeat(" ", optionIndent)
-	lines := strings.Split(m.styles.Wrap(label, inner, indent), "\n")
-	for i, l := range lines {
-		lines[i] = indent + m.styles.Text().Render(strings.TrimPrefix(l, indent))
-	}
-	lines[0] = cursor + " " + keyStyle.Render(key) + "  " + strings.TrimPrefix(lines[0], indent)
-	return lines
+	label = m.styles.TruncRight(label, inner-optionIndent-style.Width(mark))
+	return []string{cursor + " " + keyStyle.Render(key) + "  " + m.styles.Text().Render(label+mark)}
 }

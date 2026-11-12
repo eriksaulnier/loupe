@@ -761,3 +761,13 @@ func TestApplyChoiceOptionsUseChipsInColor(t *testing.T) {
 		t.Error("the colored key kept the monochrome separator")
 	}
 }
+
+// A picker row is one line: a label too wide for the pane is cut with the ellipsis, since the option section above
+// shows it whole.
+func TestApplyPickerRowTruncatesALongLabel(t *testing.T) {
+	m, _ := choiceModel(t, utf8Env)
+	rows := m.optionRow(true, "2", strings.Repeat("word ", 30), " · recommended", 40)
+	if row := ansi.Strip(rows[0]); len(rows) != 1 || !strings.HasSuffix(row, m.glyphs.Ellipsis+" · recommended") || style.Width(row) > 40 {
+		t.Fatalf("rows %q", rows)
+	}
+}

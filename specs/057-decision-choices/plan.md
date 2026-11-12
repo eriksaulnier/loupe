@@ -48,7 +48,7 @@ FR-013a, a mouse click that picks, is handed to spec 040 (R10).
 | III. Local files, no service | The options and the pick live in `draft.json` |
 | IV. Never touch the user's checkout | No capture change |
 | V. Machine contract first | `options` input, its refusals and `choice` go into `cli.md`. `schema_test.go` pins schema 7. The envelope stays `"loupe": 1`, as for earlier payload keys |
-| VI. Simplicity over ceremony | One new pane, built from `pickerRow` and the editor pane pattern. No new package. Options take JSON input only, with no new flags |
+| VI. Simplicity over ceremony | One new pane, built from the editor pane pattern, with its own one-line rows. No new package. Options take JSON input only, with no new flags |
 | VII. Verified means ran | Each task starts with a failing test. PR goldens run with no `-update`. The quickstart's by-eye pass runs through tmux |
 
 No violation. Complexity Tracking stays empty. The post-design check gives the same result.

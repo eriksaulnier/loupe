@@ -61,7 +61,7 @@ PR runs MUST stay byte-identical. No task runs `-update` on a PR golden.
   - `TestApplyUOnAWithdrawnChoiceFindingOpensThePicker`: esc leaves it withdrawn, and a pick reinstates it with that pick.
   - `TestApplyChoiceHeaderAndRowShowThePick`: `accepted · 3`.
 - [x] T017 [US1] Create `internal/tui/pick.go` with `openPick(kind)`, `updatePick` and `pickView`, as research R7 describes:
-  - Rows come from `pickerRow` (`internal/tui/list.go:222`), with the key as the name and the label as the description, plus a `recommended` tag that reads under NO_COLOR.
+  - Rows come from `pickerRow` (`internal/tui/list.go:222`), with the key as the name and the label as the description, plus a `recommended` tag that reads under NO_COLOR. Implementation replaced `pickerRow` with one-line rows of its own, `optionRow` (research R7).
   - Add `picking`, `pickFor` and `pickSel` to `Model` in `internal/tui/app.go`. Dispatch `updatePick` beside `if m.noting` (`app.go:563`).
   - Draw `pickView` under the finding pane as `detailView` draws `noteView` (`detail.go:1045-1052`). Shrink the body through `editorRows`, and swap the footer hints in `detailFooter`.
   - Enter or a digit calls a single `pick(key)` method, which spec 040 will call for a click (R10).
