@@ -376,7 +376,7 @@ func summaryLine(f Finding, inline bool) string {
 
 // pillBase is hotlinked by every review loupe publishes, so a file under it MUST NOT change once on main; a redesign
 // adds v2.
-const pillBase = "https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/"
+const pillBase = "https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/"
 
 // severityPill uses <picture> rather than a bare <img>, because GitHub wraps a bare <img> in a link to itself, which
 // takes the click on a <summary>. The pill fills the top 14 of the image's 16 pixels, so absmiddle centers it on the

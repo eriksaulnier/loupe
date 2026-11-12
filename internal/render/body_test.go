@@ -517,8 +517,8 @@ func TestReferenceDestinationKeepsTheURL(t *testing.T) {
 	}
 }
 
-const majorPill = `<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg">` +
-	`<img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>`
+const majorPill = `<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major-dark.svg">` +
+	`<img src="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>`
 
 // One row rule for every finding, body and inline alike: dot, bold label, severity pill, title. The location is the
 // meta block's first line, so the row leaves it out.
