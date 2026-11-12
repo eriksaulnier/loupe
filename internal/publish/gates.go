@@ -47,16 +47,16 @@ func Gates(ctx context.Context, in GateInput) (Gated, error) {
 	}
 	pr, err := in.GitHub.PullRequest(ctx, in.Target.Owner, in.Target.Repo, in.Target.Number)
 	if err != nil {
-		return Gated{}, err
+		return Gated{}, readRefusal(in.Target, "the pull request", err)
 	}
 	moved, err := checkHead(ctx, in.GitHub, in.Target, pr, in.Draft, in.Unattended)
 	if err != nil {
-		return Gated{}, err
+		return Gated{}, readRefusal(in.Target, "the commits since capture", err)
 	}
 	if !in.Unattended {
 		viewer, err := in.GitHub.Viewer(ctx)
 		if err != nil {
-			return Gated{}, err
+			return Gated{}, readRefusal(in.Target, "the signed-in GitHub account", err)
 		}
 		if err := ActionRefusal(in.Action, viewer, pr.Author, in.Draft); err != nil {
 			return Gated{}, err
@@ -229,6 +229,16 @@ func compareHeads(ctx context.Context, client github.Client, target run.Target, 
 		return nil, forbidden(httpErr)
 	}
 	return nil, err
+}
+
+// readRefusal reports a failed GitHub read as a github refusal, since an outage is not a defect in loupe. It keeps a
+// refusal that is already one, such as auth or a moved head.
+func readRefusal(target run.Target, what string, err error) error {
+	if _, ok := refusal.As(err); ok {
+		return err
+	}
+	return refusal.New(refusal.GitHub, fmt.Sprintf("could not read %s from GitHub; nothing was sent: %v", what, err),
+		"retry loupe publish; check network access to api.github.com; the pull request is "+target.URL)
 }
 
 // contentsRefusal is the refusal for a comparison loupe needs, where why says what it needs it for.
