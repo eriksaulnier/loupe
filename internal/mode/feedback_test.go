@@ -227,3 +227,64 @@ func TestApplyFeedbackCarriesTheClosingNote(t *testing.T) {
 		}
 	}
 }
+
+func choiceFinding(id string) draft.Finding {
+	f := finding(id, nil)
+	f.Options = []draft.Option{
+		{Key: "1", Label: "Keep both", Proposal: "Keep both stores."},
+		{Key: "2", Label: "Use the second", Proposal: "Use the second store.", Recommended: true},
+		{Key: "3", Label: "Use the first", Proposal: "Use the first store."},
+	}
+	return f
+}
+
+func TestApplyFeedbackCarriesThePickedOption(t *testing.T) {
+	for _, c := range []struct{ key, label, proposal string }{
+		{"1", "Keep both", "Keep both stores."},
+		{"2", "Use the second", "Use the second store."},
+		{"3", "Use the first", "Use the first store."},
+	} {
+		t.Run(c.key, func(t *testing.T) {
+			d := draft.NewEmpty()
+			d.Findings = []draft.Finding{choiceFinding("f-001")}
+			d.Decisions["f-001"] = draft.Decision{FindingID: "f-001", Decision: draft.DecisionAccepted, FindingRev: 1, At: at, Choice: c.key}
+			payload, err := Of(run.Target{Kind: run.KindLocal, Local: &run.LocalTarget{Root: "/src", Capture: "files"}}).Feedback(d, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			entries := payload["groups"].(map[string][]map[string]any)["apply"]
+			if len(entries) != 1 {
+				t.Fatalf("apply %v", entries)
+			}
+			e := entries[0]
+			if e["proposal"] != c.proposal {
+				t.Errorf("proposal %v, want %q", e["proposal"], c.proposal)
+			}
+			if got, want := e["choice"], (map[string]any{"key": c.key, "label": c.label}); !reflect.DeepEqual(got, want) {
+				t.Errorf("choice %v, want %v", got, want)
+			}
+			if _, ok := e["options"]; ok {
+				t.Errorf("entry carries options: %v", e)
+			}
+		})
+	}
+}
+
+func TestApplyFeedbackExcludedChoiceFindingHasNoChoice(t *testing.T) {
+	d := draft.NewEmpty()
+	d.Findings = []draft.Finding{choiceFinding("f-001")}
+	decide(d, "f-001", draft.DecisionExcluded, "No.")
+	payload, err := Of(run.Target{Kind: run.KindLocal, Local: &run.LocalTarget{Root: "/src", Capture: "files"}}).Feedback(d, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := payload["groups"].(map[string][]map[string]any)["excluded"]
+	if len(entries) != 1 {
+		t.Fatalf("excluded %v", entries)
+	}
+	for _, k := range []string{"choice", "options", "proposal"} {
+		if _, ok := entries[0][k]; ok {
+			t.Errorf("excluded entry carries %s: %v", k, entries[0])
+		}
+	}
+}

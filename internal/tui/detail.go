@@ -22,6 +22,7 @@ import (
 
 func (m *Model) openFinding(id string) error {
 	m.view, m.openID, m.noting, m.editing, m.rewriting, m.settling = viewDetail, id, false, false, false, false
+	m.picking = false
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -74,7 +75,12 @@ func (m *Model) refreshDetail() error {
 	if f.Location != nil {
 		block(m.codePane(locationText(f), f.Location.Heading, lines, width))
 	}
-	for _, s := range [][]string{sections.why, sections.change, sections.fix, sections.impact, sections.references} {
+	block(sections.why)
+	block(sections.change)
+	for _, option := range sections.options {
+		block(option)
+	}
+	for _, s := range [][]string{sections.fix, sections.impact, sections.references} {
 		block(s)
 	}
 	for _, note := range sections.notes {
@@ -301,7 +307,9 @@ func (m *Model) partLines(parts []string, gap, width int) []string {
 // finding does not have.
 type detailSections struct {
 	withdrawn, why, change, fix, impact, references []string
-	notes                                           [][]string
+	// options are a choice finding's sections, one per option, in place of change.
+	options [][]string
+	notes   [][]string
 }
 
 // findingSections draws each of f's blocks in its tone. A withdrawn finding's blocks all recede to muted, so the human
@@ -338,12 +346,30 @@ func (m *Model) findingSections(f draft.Finding, width int) (detailSections, err
 	if body != nil {
 		out.why = section(style.ToneAccent, "Why", body)
 	}
-	change, err := m.proposedChange(f, width)
-	if err != nil {
-		return out, err
-	}
-	if change.heading != "" {
-		out.change = section(change.tone, change.heading, change.body)
+	if len(f.Options) > 0 {
+		picked := m.pickedKey(f)
+		for _, o := range f.Options {
+			lines, err := m.markdownLines(o.Proposal)
+			if err != nil {
+				return out, err
+			}
+			heading := o.Key + " " + m.glyphs.Sep + " " + render.ForDisplay(render.OneLine(o.Label))
+			if o.Recommended {
+				heading += " " + m.glyphs.Sep + " recommended"
+			}
+			if o.Key == picked {
+				heading += " " + m.glyphs.Sep + " picked"
+			}
+			out.options = append(out.options, section(style.ToneGood, heading, lines))
+		}
+	} else {
+		change, err := m.proposedChange(f, width)
+		if err != nil {
+			return out, err
+		}
+		if change.heading != "" {
+			out.change = section(change.tone, change.heading, change.body)
+		}
 	}
 	// A fix beside a proposal or a question cannot take the slot, and is still the agent's to show.
 	if f.SuggestedFix != "" && (f.Proposal != "" || m.ui.question(f)) {
@@ -574,6 +600,9 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	switch msg.String() {
 	case "a":
+		if len(f.Options) > 0 {
+			return m.openPick(pickAccept)
+		}
 		var closed []string
 		decide := func(d *draft.Draft) (err error) {
 			closed, err = draft.Accept(d, f.ID, "", m.cfg.Now())
@@ -593,6 +622,9 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 		})
 	case "u":
 		if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
+			if len(f.Options) > 0 {
+				return m.openPick(pickReinstate)
+			}
 			var closed []string
 			decide := func(d *draft.Draft) (err error) {
 				closed, err = draft.Reinstate(d, f.ID, "", m.rules, m.cfg.Now())
@@ -931,6 +963,8 @@ func (m *Model) editorRows() int {
 	switch {
 	case m.noting:
 		return len(m.noteRowsShown()) + style.PaneRows
+	case m.picking:
+		return len(m.pickView())
 	case m.editing:
 		return len(m.editView())
 	case m.rewriting:
@@ -1045,6 +1079,8 @@ func (m *Model) detailView() string {
 	switch {
 	case m.noting:
 		body = append(body, m.noteView()...)
+	case m.picking:
+		body = append(body, m.pickView()...)
 	case m.editing:
 		body = append(body, m.editView()...)
 	case m.rewriting:
@@ -1068,10 +1104,14 @@ func (m *Model) detailTitle(f draft.Finding) (string, style.Tone) {
 	}
 	// The finding's id is the pane's name, a solid tab while the finding has the keys rather than a composer.
 	id := m.styles.Emphasis(edge).Render(render.ForDisplay(f.ID))
-	if !m.noting && !m.editing && !m.rewriting && m.styles.Color {
+	if !m.noting && !m.picking && !m.editing && !m.rewriting && m.styles.Color {
 		id = m.styles.TitleTab(render.ForDisplay(f.ID), tone)
 	}
-	title := mark.Render(glyph) + " " + id + sep + m.styles.Chip(disposition, tone)
+	status := disposition
+	if key := m.pickedKey(f); key != "" {
+		status += " " + m.glyphs.Sep + " " + key
+	}
+	title := mark.Render(glyph) + " " + id + sep + m.styles.Chip(status, tone)
 	if open {
 		title += sep + m.styles.Chip("open note", style.ToneNote)
 	}
@@ -1088,6 +1128,8 @@ func (m *Model) detailFooter() []string {
 	switch {
 	case m.noting:
 		return m.keys(style.KeyGroup{{Key: "enter", Verb: m.noteVerb()}, {Key: "esc", Verb: "cancel"}, {Key: "ctrl+u", Verb: "clear"}})
+	case m.picking:
+		return m.pickFooter()
 	case m.editing:
 		return m.keys(style.KeyGroup{{Key: "enter", Verb: "save"}, {Key: m.arrows(m.glyphs.Left, m.glyphs.Right), Verb: "label"},
 			{Key: "space", Verb: "blocking"}, {Key: "esc", Verb: "cancel"}})

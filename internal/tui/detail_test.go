@@ -676,6 +676,32 @@ func TestTypeaheadDoesNotDecideAnUnseenFinding(t *testing.T) {
 	}
 }
 
+// A repeated a followed by a typed digit must not pick before the picker was drawn.
+func TestTypeaheadDoesNotPickAnUnseenOption(t *testing.T) {
+	// Longer than the test, so only the settledMsg sent below ends the window.
+	settleAfterDecision = time.Hour
+	defer func() { settleAfterDecision = 0 }()
+	dir := applyFixture(t, "Claude", choiceInputs...)
+	tm := startApp(t, dir)
+	waitFor(t, tm, "2 findings to decide")
+	// The list puts the plain proposal first; the choice finding is the second card.
+	key(tm, tea.KeyEnter)
+	waitFor(t, tm, "Remove the flag.")
+	key(tm, tea.KeyRight)
+	waitFor(t, tm, "Two stores could hold the cache.")
+
+	tm.Type("a2")
+	waitFor(t, tm, "Pick for f-001")
+	// settledMsg queues behind the digit on the program's one message channel, so the digit lands inside the window.
+	tm.Send(settledMsg{})
+	key(tm, tea.KeyEscape)
+	tm.Type("q")
+	finalView(t, tm)
+	if d := loadDraft(t, dir); len(d.Decisions) != 0 {
+		t.Fatalf("a typeahead digit picked before the picker was shown: %+v", d.Decisions)
+	}
+}
+
 func TestKeysTypedAsReviewOpensAreDropped(t *testing.T) {
 	// Longer than the test, so only the openedMsg sent below ends the window.
 	settleOnOpen = time.Hour

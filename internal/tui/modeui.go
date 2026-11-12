@@ -350,7 +350,7 @@ func (applyUI) heading(m *Model) style.ReviewHeading {
 
 func (applyUI) runRef(m *Model) string { return localRef(m.target) }
 
-func (applyUI) question(f draft.Finding) bool { return f.Proposal == "" }
+func (applyUI) question(f draft.Finding) bool { return f.Proposal == "" && len(f.Options) == 0 }
 
 func (applyUI) watchesPR() bool { return false }
 

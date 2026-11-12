@@ -45,13 +45,13 @@ PR runs MUST stay byte-identical. No task runs `-update` on a PR golden.
 
 ### Hand-back
 
-- [ ] T013 [P] [US1] In `internal/mode/feedback_test.go`, add `TestApplyFeedbackCarriesThePickedOption`, a table over keys `"1"`, `"2"` and `"3"`. The `apply` entry has the picked option's `proposal` and `choice` `{key, label}`, and no `options` key. Add `TestApplyFeedbackExcludedChoiceFindingHasNoChoice`. Run them and see them fail.
-- [ ] T014 [US1] In `internal/mode/feedback.go` `entry` (`:114-133`), when `f.Options` is set, find the option whose key is `decision.Choice`. Write its proposal as `proposal` and `choice` as `{"key", "label"}`. Pass the decision to `entry` from `Feedback` (`:71-111`). An `excluded` entry writes neither. Run T013 and see it pass.
-- [ ] T015 [P] [US1] In `internal/draft/derive_test.go`, add `TestGateCountsTreatAPickedChoiceAsAccepted` (FR-019). It SHOULD pass with no code change.
+- [x] T013 [P] [US1] In `internal/mode/feedback_test.go`, add `TestApplyFeedbackCarriesThePickedOption`, a table over keys `"1"`, `"2"` and `"3"`. The `apply` entry has the picked option's `proposal` and `choice` `{key, label}`, and no `options` key. Add `TestApplyFeedbackExcludedChoiceFindingHasNoChoice`. Run them and see them fail.
+- [x] T014 [US1] In `internal/mode/feedback.go` `entry` (`:114-133`), when `f.Options` is set, find the option whose key is `decision.Choice`. Write its proposal as `proposal` and `choice` as `{"key", "label"}`. Pass the decision to `entry` from `Feedback` (`:71-111`). An `excluded` entry writes neither. Run T013 and see it pass.
+- [x] T015 [P] [US1] In `internal/draft/derive_test.go`, add `TestGateCountsTreatAPickedChoiceAsAccepted` (FR-019). It SHOULD pass with no code change.
 
 ### Review
 
-- [ ] T016 [P] [US1] In `internal/tui/apply_test.go`, add these tests and see them fail:
+- [x] T016 [P] [US1] In `internal/tui/apply_test.go`, add these tests and see them fail:
   - `TestApplyChoiceFindingShowsEachOption`: three sections titled `1 · <label>`, `2 · <label> · recommended` and `3 · <label>`. No `A question for` section.
   - `TestApplyAOpensThePickerOnTheRecommendedOption`: after `a`, the finding stays pending.
   - `TestApplyPickerEnterAcceptsTheSelectedOption`: `a`, `j`, enter accepts with `"3"` when `"2"` is recommended.
@@ -60,16 +60,16 @@ PR runs MUST stay byte-identical. No task runs `-update` on a PR golden.
   - `TestApplyAOnAnAcceptedChoiceOpensOnTheCurrentPick`.
   - `TestApplyUOnAWithdrawnChoiceFindingOpensThePicker`: esc leaves it withdrawn, and a pick reinstates it with that pick.
   - `TestApplyChoiceHeaderAndRowShowThePick`: `accepted · 3`.
-- [ ] T017 [US1] Create `internal/tui/pick.go` with `openPick(kind)`, `updatePick` and `pickView`, as research R7 describes:
+- [x] T017 [US1] Create `internal/tui/pick.go` with `openPick(kind)`, `updatePick` and `pickView`, as research R7 describes:
   - Rows come from `pickerRow` (`internal/tui/list.go:222`), with the key as the name and the label as the description, plus a `recommended` tag that reads under NO_COLOR.
   - Add `picking`, `pickFor` and `pickSel` to `Model` in `internal/tui/app.go`. Dispatch `updatePick` beside `if m.noting` (`app.go:563`).
   - Draw `pickView` under the finding pane as `detailView` draws `noteView` (`detail.go:1045-1052`). Shrink the body through `editorRows`, and swap the footer hints in `detailFooter`.
   - Enter or a digit calls a single `pick(key)` method, which spec 040 will call for a click (R10).
-- [ ] T018 [US1] In `internal/tui/detail.go`, make the `a` branch (`:576`) and the withdrawn `u` branch (`:594`) open the picker when `len(f.Options) > 0`. In `findingSections` (`:308`), draw one section per option in place of `proposedChange`, titled as in T016, with ` · picked` on the picked option after a decision. In `internal/tui/modeui.go`, make `applyUI.question` (`:369`) return `f.Proposal == "" && len(f.Options) == 0`. Show `accepted · <key>` in `detailTitle` (`detail.go:1057`) and in `row()` (`internal/tui/list.go:605`). Run T016 and see it pass.
-- [ ] T019 [US1] In `internal/tui/detail_test.go`, add `TestTypeaheadDoesNotPickAnUnseenOption`, modeled on `TestTypeaheadDoesNotDecideAnUnseenFinding` (`:653`). With the settle delay raised, `a` followed at once by `2` leaves the finding pending. Then, in `pick.go`, make `openPick` set `m.settling` and start the `settleAfterDecision` tick, as `decideAndMove` does (`detail.go:997`). While `settling` is set, `updatePick` drops digits, enter, `j`, `k`, up and down, and always passes esc. Run it and see it pass.
-- [ ] T020 [US1] Add a stale-pick test to `internal/tui/apply_test.go`, `TestApplyPickOnAnEditedChoiceFindingIsRefusedAsStale`. Open the picker, have `outside` edit the options, then press `1`. Expect the `staleNotice` and no decision. It SHOULD pass through `decide`'s `FindingState` check (`app.go:698-729`). If it fails, route `pick` through `decide`.
-- [ ] T021 [US1] Render the picker and a choice finding at the ASCII, unicode and nerd icon tiers and with NO_COLOR. Use the tier helpers that the existing `apply_test.go` and `modeui_test.go` tests use. Assert that the selected row and `recommended` read in each.
-- [ ] T022 [US1] In `internal/integration/apply_test.go`, add `TestApplyChoiceFindingRoundTrip`, beside `TestApplyLocalCodeReview`. Capture locally, `add` a three-option finding, review with `a` then `3`, return, and check that `feedback --json` holds the third option's proposal and `choice`. Add a choice finding to the fixture behind `testdata/golden/apply/feedback.json`, regenerate that apply golden only, and read the diff. Run `go test ./internal/cli/` with no `-update`, and see the PR goldens unchanged. Commit T013 to T022 as `feat(tui): pick one of a finding's options`.
+- [x] T018 [US1] In `internal/tui/detail.go`, make the `a` branch (`:576`) and the withdrawn `u` branch (`:594`) open the picker when `len(f.Options) > 0`. In `findingSections` (`:308`), draw one section per option in place of `proposedChange`, titled as in T016, with ` · picked` on the picked option after a decision. In `internal/tui/modeui.go`, make `applyUI.question` (`:369`) return `f.Proposal == "" && len(f.Options) == 0`. Show `accepted · <key>` in `detailTitle` (`detail.go:1057`) and in `row()` (`internal/tui/list.go:605`). Run T016 and see it pass.
+- [x] T019 [US1] In `internal/tui/detail_test.go`, add `TestTypeaheadDoesNotPickAnUnseenOption`, modeled on `TestTypeaheadDoesNotDecideAnUnseenFinding` (`:653`). With the settle delay raised, `a` followed at once by `2` leaves the finding pending. Then, in `pick.go`, make `openPick` set `m.settling` and start the `settleAfterDecision` tick, as `decideAndMove` does (`detail.go:997`). While `settling` is set, `updatePick` drops digits, enter, `j`, `k`, up and down, and always passes esc. Run it and see it pass.
+- [x] T020 [US1] Add a stale-pick test to `internal/tui/apply_test.go`, `TestApplyPickOnAnEditedChoiceFindingIsRefusedAsStale`. Open the picker, have `outside` edit the options, then press `1`. Expect the `staleNotice` and no decision. It SHOULD pass through `decide`'s `FindingState` check (`app.go:698-729`). If it fails, route `pick` through `decide`.
+- [x] T021 [US1] Render the picker and a choice finding at the ASCII, unicode and nerd icon tiers and with NO_COLOR. Use the tier helpers that the existing `apply_test.go` and `modeui_test.go` tests use. Assert that the selected row and `recommended` read in each.
+- [x] T022 [US1] In `internal/integration/apply_test.go`, add `TestApplyChoiceFindingRoundTrip`, beside `TestApplyLocalCodeReview`. Capture locally, `add` a three-option finding, review with `a` then `3`, return, and check that `feedback --json` holds the third option's proposal and `choice`. Add a choice finding to the fixture behind `testdata/golden/apply/feedback.json`, regenerate that apply golden only, and read the diff. Run `go test ./internal/cli/` with no `-update`, and see the PR goldens unchanged. Commit T013 to T022 as `feat(tui): pick one of a finding's options`.
 
 ## Phase 4: User Story 3 — accept with a note on a pick (P2)
 

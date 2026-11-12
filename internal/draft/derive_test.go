@@ -518,3 +518,19 @@ func TestFindingStateRefusesAnUnknownFinding(t *testing.T) {
 	_, err := FindingState(NewEmpty(), "f-001")
 	_ = refusaltest.Want(t, err, refusal.NotFound)
 }
+
+// FR-019: the pick is not part of the gate, so a finding accepted with a pick counts as one accepted unchanged.
+func TestGateCountsTreatAPickedChoiceAsAccepted(t *testing.T) {
+	f := finding("f-001", 1, true, ByAgent)
+	f.Options = []Option{{Key: "1", Label: "A", Proposal: "a"}, {Key: "2", Label: "B", Proposal: "b", Recommended: true}}
+	d := NewEmpty()
+	d.Findings = append(d.Findings, f)
+	d.Decisions["f-001"] = Decision{FindingID: "f-001", Decision: DecisionAccepted, FindingRev: 1, Choice: "1"}
+	d = roundTrip(t, d)
+	if got := GateCountsOf(d); got != (GateCounts{}) {
+		t.Fatalf("got %+v, want no counts", got)
+	}
+	if got := GateOf(d, d.Findings[0]).Disposition; got != DispositionAccepted {
+		t.Fatalf("disposition %s", got)
+	}
+}
