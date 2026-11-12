@@ -348,19 +348,34 @@ func (m *Model) findingSections(f draft.Finding, width int) (detailSections, err
 	}
 	if len(f.Options) > 0 {
 		picked := m.pickedKey(f)
-		for _, o := range f.Options {
+		good := tone(style.ToneGood)
+		for i, o := range f.Options {
 			lines, err := m.markdownLines(o.Proposal)
 			if err != nil {
 				return out, err
 			}
-			heading := o.Key + " " + m.glyphs.Sep + " " + render.ForDisplay(render.OneLine(o.Label))
+			var tags []string
 			if o.Recommended {
-				heading += " " + m.glyphs.Sep + " recommended"
+				tags = append(tags, m.styles.Chip("recommended", good))
 			}
 			if o.Key == picked {
-				heading += " " + m.glyphs.Sep + " picked"
+				tags = append(tags, m.styles.Chip("picked", tone(style.ToneAccent)))
 			}
-			out.options = append(out.options, section(style.ToneGood, heading, lines))
+			join := " "
+			if !m.styles.Color {
+				join = " " + m.glyphs.Sep + " "
+			}
+			option := m.styles.Section(good, render.ForDisplay(render.OneLine(o.Label)), strings.Join(tags, join), lines)
+			// The key is a chip, the cue that its digit picks it. Without color it is the bare digit and a separator.
+			key := o.Key + " " + m.glyphs.Sep + " "
+			if m.styles.Color {
+				key = m.styles.Chip(o.Key, good) + " "
+			}
+			option[0] = key + option[0]
+			if i == 0 {
+				option = append([]string{m.styles.Emphasis(m.styles.ToneStyle(good)).Render(m.applierTitle() + " will do one of these")}, option...)
+			}
+			out.options = append(out.options, option)
 		}
 	} else {
 		change, err := m.proposedChange(f, width)
@@ -427,10 +442,7 @@ func (m *Model) proposedChange(f draft.Finding, width int) (proposal, error) {
 		if err != nil {
 			return proposal{}, err
 		}
-		if who == "the agent" {
-			who = "The agent"
-		}
-		return proposal{style.ToneGood, who + " will", body}, nil
+		return proposal{style.ToneGood, m.applierTitle() + " will", body}, nil
 	case m.ui.question(f):
 		return proposal{style.ToneNote, "A question for " + who, []string{m.styles.Text().Render("No change is proposed. Your note tells " + who + " what to do.")}}, nil
 	case f.SuggestedFix != "":
@@ -1170,4 +1182,12 @@ func (m *Model) detailFooter() []string {
 func (m *Model) detailHints() []style.Hint {
 	f, _ := m.openedFinding()
 	return m.ui.detailHints(m, f)
+}
+
+// applierTitle is the applier as the subject that starts a heading.
+func (m *Model) applierTitle() string {
+	if who := m.applier(); who != "the agent" {
+		return who
+	}
+	return "The agent"
 }

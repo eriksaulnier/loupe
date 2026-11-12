@@ -389,7 +389,7 @@ func openPicker(t *testing.T, m *Model, key string) {
 func TestApplyChoiceFindingShowsEachOption(t *testing.T) {
 	m, _ := choiceModel(t, utf8Env)
 	screen := screenText(m)
-	for _, want := range []string{"1 · Keep both", "2 · Use the second · recommended", "3 · Use the first", "Keep both stores.", "Use the first store."} {
+	for _, want := range []string{"Claude will do one of these", "1 · Keep both", "2 · Use the second · recommended", "3 · Use the first", "Keep both stores.", "Use the first store."} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("screen lacks %q:\n%s", want, screen)
 		}
@@ -720,5 +720,19 @@ func TestApplyPickerSettlesWithATick(t *testing.T) {
 	}
 	if _, ok := cmd().(settledMsg); !ok {
 		t.Fatal("the picker's tick did not end the settle window")
+	}
+}
+
+// On a finding with options, a and t open the picker, so the footer says pick, and an accepted one can be picked again.
+func TestApplyChoiceFooterSaysPick(t *testing.T) {
+	m, _ := choiceModel(t, utf8Env)
+	if footer := footerText(m); !strings.Contains(footer, "a pick") || !strings.Contains(footer, "t pick + note") || strings.Contains(footer, "a accept") {
+		t.Errorf("pending footer %q", footer)
+	}
+	openPicker(t, m, "a")
+	press(m, "3")
+	mustOpenFinding(t, m, "f-001")
+	if footer := footerText(m); !strings.Contains(footer, "a pick again") {
+		t.Errorf("accepted footer %q", footer)
 	}
 }

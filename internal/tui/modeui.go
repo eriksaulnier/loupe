@@ -282,11 +282,19 @@ func (applyUI) detailHints(m *Model, f draft.Finding) []style.Hint {
 	decide := func(key, verb string) style.Hint {
 		return style.Hint{Key: key, Verb: verb, Role: style.RoleDecision}
 	}
+	// On a finding with options, a and t open the picker, so they say pick.
+	accept, tweak := "accept", "tweak"
+	if len(f.Options) > 0 {
+		accept, tweak = "pick", "pick + note"
+	}
 	switch draft.Dispositions(m.draft)[f.ID] {
 	case draft.DispositionPending:
-		hints = append(hints, decide("a", "accept"), decide("t", "tweak"), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
+		hints = append(hints, decide("a", accept), decide("t", tweak), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionAccepted:
-		hints = append(hints, decide("t", "tweak"), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
+		if len(f.Options) > 0 {
+			hints = append(hints, decide("a", "pick again"))
+		}
+		hints = append(hints, decide("t", tweak), decide("x", "reject"), decide("c", "reject with reason"), decide("s", "ask"))
 	case draft.DispositionExcluded:
 		hints = append(hints, decide("u", "restore"), decide("c", "reason"))
 	case draft.DispositionWithdrawn:
