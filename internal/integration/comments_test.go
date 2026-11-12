@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/github"
 )
 
 func commentsOf(t *testing.T, env map[string]any) map[string]any {

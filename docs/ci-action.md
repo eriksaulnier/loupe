@@ -18,7 +18,7 @@ No person reads an unattended review before it posts, so loupe holds it to fixed
 The repository is also an action. It installs a release, checks the archive against the release's `checksums.txt` and puts `loupe` on `PATH` for the rest of the job. It runs on Linux and macOS, on amd64 and arm64.
 
 ```yaml
-- uses: eriksaulnier/loupe@<sha> # <tag>
+- uses: secondshift-labs/loupe@<sha> # <tag>
 ```
 
 Pin the commit SHA of a release tag, with the tag in a comment. The action installs the release it shipped in, so Dependabot moves the action and the binary together. To install another release, set `version`, for example `version: v0.9.0`.

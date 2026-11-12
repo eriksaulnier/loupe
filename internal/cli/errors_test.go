@@ -11,8 +11,8 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 func reportDeps(stdout, stderr io.Writer) Deps {

@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/gitx"
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/gitx"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // Place is where a local capture runs: the root that display paths are relative to, and the names a run shows.

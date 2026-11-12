@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
-	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitfail"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitrepo"
 )
 
 func TestGitFunctionsReturnTheGitFailure(t *testing.T) {

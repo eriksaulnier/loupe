@@ -11,8 +11,8 @@ import (
 
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // readyApplyModel is the apply fixture with every finding accepted.

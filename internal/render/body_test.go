@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/severity"
-	"github.com/eriksaulnier/loupe/internal/testutil/golden"
+	"github.com/secondshift-labs/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/testutil/golden"
 )
 
 // checkGolden leaves example.md alone under -update: it comes from docs/comment-format.md, not from the renderer.
@@ -517,8 +517,8 @@ func TestReferenceDestinationKeepsTheURL(t *testing.T) {
 	}
 }
 
-const majorPill = `<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg">` +
-	`<img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>`
+const majorPill = `<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major-dark.svg">` +
+	`<img src="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>`
 
 // One row rule for every finding, body and inline alike: dot, bold label, severity pill, title. The location is the
 // meta block's first line, so the row leaves it out.
@@ -616,6 +616,17 @@ func TestPillsAsWords(t *testing.T) {
 	}
 	comment := "🟡 <b>issue</b> " + severityPill("trivial") + ": U\n\n`" + majorPill + "`"
 	if got, want := CommentPillsAsWords(comment), "🟡 <b>issue</b> TRIVIAL: U\n\n`"+majorPill+"`"; got != want {
+		t.Errorf("comment\n got %q\nwant %q", got, want)
+	}
+}
+
+// A sticky review published before the repository moved carries its earlier rounds verbatim, pills on the old base.
+func TestPillsAsWordsReadsAPillFromBeforeTheMove(t *testing.T) {
+	old := pillAt(oldPillBase, "major")
+	if got, want := PillsAsWords("<summary>⛔ <b>issue</b> "+old+": T</summary>"), "<summary>⛔ <b>issue</b> MAJOR: T</summary>"; got != want {
+		t.Errorf("body\n got %q\nwant %q", got, want)
+	}
+	if got, want := CommentPillsAsWords("🟡 <b>issue</b> "+old+": U"), "🟡 <b>issue</b> MAJOR: U"; got != want {
 		t.Errorf("comment\n got %q\nwant %q", got, want)
 	}
 }

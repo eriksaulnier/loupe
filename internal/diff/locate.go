@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 const nearestPerSide = 3

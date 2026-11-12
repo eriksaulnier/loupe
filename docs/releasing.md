@@ -27,9 +27,9 @@ GITHUB_TOKEN opens the release pull request, so no `ci.yml` run builds it. Inste
 The release SHOULD be tried this way before its pull request is merged. Take the newest snapshot, and pick the archive for your platform:
 
 ```sh
-run=$(gh api 'repos/eriksaulnier/loupe/actions/artifacts?name=loupe-snapshot&per_page=100' --jq '[.artifacts[] | select(.expired | not)] | sort_by(.created_at) | last | .workflow_run.id')
+run=$(gh api 'repos/secondshift-labs/loupe/actions/artifacts?name=loupe-snapshot&per_page=100' --jq '[.artifacts[] | select(.expired | not)] | sort_by(.created_at) | last | .workflow_run.id')
 rm -rf snapshot
-gh run download "$run" -R eriksaulnier/loupe -n loupe-snapshot -D snapshot
+gh run download "$run" -R secondshift-labs/loupe -n loupe-snapshot -D snapshot
 tar -xzf snapshot/loupe_*_darwin_arm64.tar.gz -C snapshot loupe
 ./snapshot/loupe --version
 ```
@@ -52,7 +52,7 @@ release-please is not affected. It finds the last release by the exact version i
 - The base SHOULD be the version the next release is expected to have. If release-please later cuts a lower version, for example `0.21.1` after `0.22.0-rc.1`, nothing breaks, but the candidate then sorts above the release.
 - A pre-release is immutable once published, like a release, and its tag cannot be reused. A failed or wrong candidate is replaced by the next rc number.
 - A failed run SHOULD be recovered by re-running its failed jobs. The `release` job reuses the draft an earlier attempt created when that draft targets the same commit, and refuses a draft on another commit. Delete such a draft by hand before the next dispatch, since `validate` cannot see drafts. Once the draft is published, `release` refuses to run again, so a failure in a later job is re-run there.
-- `install.sh` and `action.yml` name `eriksaulnier/loupe`, so the install jobs of a dispatch on a fork fail unless a fork-only commit points them at the fork.
+- `install.sh` and `action.yml` name `secondshift-labs/loupe`, so the install jobs of a dispatch on a fork fail unless a fork-only commit points them at the fork.
 
 ## macOS signing
 

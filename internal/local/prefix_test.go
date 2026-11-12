@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/gitenv"
-	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
+	"github.com/secondshift-labs/loupe/internal/gitenv"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitrepo"
 )
 
 func gitIn(t *testing.T, dir string, args ...string) string {

@@ -10,7 +10,7 @@
 
 ## Relationship to earlier specifications
 
-This specification amends `docs/comment-format.md`, which is a contract (constitution, Boundaries). It reverses parts of `specs/001-loupe-v1` and `specs/014-severity-badges`, listed in the plan's Complexity Tracking.
+This specification amends `docs/comment-format.md`, which is a contract (constitution, Boundaries). Amended 2026-11-12, when the repository moved from `eriksaulnier/loupe` to `secondshift-labs/loupe`: FR-010 names the new base, and FR-010c keeps the old one readable. It reverses parts of `specs/001-loupe-v1` and `specs/014-severity-badges`, listed in the plan's Complexity Tracking.
 
 - **Spec 001** set five label sections, each heading led by its chip's dot, and rows in the label sections with no dot.
 - **Spec 014** put the severity word on the summary line, joined to the label with ` · ` in one bold prefix, and made every terminal surface follow the body's section order. It also promised that an unrated, nonblocking finding renders byte for byte what it did before.
@@ -144,9 +144,10 @@ A reader expands a finding. They read what goes wrong first, then the reasoning,
 
 - **FR-008**: Every finding's summary line, in the body and inline, MUST be the same row, apart from the inline escaping of FR-016, built in this order: the dot and a space, then the label and the severity pill with one space between them, then `: ` and the title. A row with neither label nor rated severity MUST be the dot, a space and the title.
 - **FR-009**: The dot MUST be `⛔` for a blocking finding and the label group's dot otherwise: `🟡` issue, `🟣` suggestion, `🔵` question, `⚪` every other or empty label.
-- **FR-010**: A rated severity MUST render as `<picture>` holding a `prefers-color-scheme: dark` `<source>` and an `<img>` with `alt` set to the uppercase word, `height="16"` and `align="absmiddle"`, both pointing at `https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/<word>[-dark].svg`. An absent, empty or free-text severity MUST give no pill. Free text MUST stay on the meta line, as today.
+- **FR-010**: A rated severity MUST render as `<picture>` holding a `prefers-color-scheme: dark` `<source>` and an `<img>` with `alt` set to the uppercase word, `height="16"` and `align="absmiddle"`, both pointing at `https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/<word>[-dark].svg`. An absent, empty or free-text severity MUST give no pill. Free text MUST stay on the meta line, as today.
 - **FR-010a**: The files under `assets/review/v1/` MUST NOT change once on `main`. A test MUST pin each file's hash and check that every enum word has a light and a dark file. A redesign MUST add a new version directory.
 - **FR-010b**: Every terminal surface that shows the raw body or an inline comment before publishing MUST show each pill in a generated row as its uppercase word, and MUST leave authored text as written. The payload view MUST keep the exact bytes.
+- **FR-010c**: Reviews published before the repository moved carry pills under `https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/`, which resolve only through GitHub's redirect. A repository MUST NOT be created at `eriksaulnier/loupe`, and `assets/review/v1/` MUST stay at that path on `main`. FR-010b MUST also show a pill on that base as its word, because a sticky review carries its earlier rounds verbatim.
 - **FR-011**: The label MUST be `<b>` around the label, verbatim apart from HTML escaping and line collapsing, for known and unknown labels alike. An empty label MUST give nothing.
 - **FR-012**: The title MUST keep its current rendering rules.
 - **FR-013**: The row MUST NOT carry the location. The meta block's first line carries it.

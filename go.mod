@@ -1,4 +1,4 @@
-module github.com/eriksaulnier/loupe
+module github.com/secondshift-labs/loupe
 
 go 1.27.4
 

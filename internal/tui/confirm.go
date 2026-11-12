@@ -15,11 +15,11 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"golang.org/x/term"
 
-	"github.com/eriksaulnier/loupe/internal/markdown"
-	"github.com/eriksaulnier/loupe/internal/publish"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/render"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/publish"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/render"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 // messageSlot is the prose Compose is asked to place so the confirmation can find where the review's opening goes.

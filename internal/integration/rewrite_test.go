@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/testutil/screen"
+	"github.com/secondshift-labs/loupe/internal/testutil/screen"
 )
 
 // TestRewrittenFindingPublishesAsFiled is FR-016: a finding the human rewrote in review publishes byte for byte as a

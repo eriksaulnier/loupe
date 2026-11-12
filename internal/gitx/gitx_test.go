@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/diff"
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/testutil/gitfail"
-	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
-	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
+	"github.com/secondshift-labs/loupe/internal/diff"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitfail"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitrepo"
+	"github.com/secondshift-labs/loupe/internal/testutil/refusaltest"
 )
 
 func setConfig(t *testing.T, clone string, args ...string) {

@@ -3,8 +3,8 @@ package cli
 import (
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 func TestSummaryFlagRefusals(t *testing.T) {

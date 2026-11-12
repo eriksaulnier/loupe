@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/mode"
-	"github.com/eriksaulnier/loupe/internal/style"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/mode"
+	"github.com/secondshift-labs/loupe/internal/style"
 )
 
 const feedbackHelp = `Read what the human sent back: notes with their replies, dispositions and readiness.

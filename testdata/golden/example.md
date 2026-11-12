@@ -8,7 +8,7 @@ Worth fixing before this merges; the rest reads fine to me.
 ### Must fix
 
 <details>
-<summary>⛔ <b>issue</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>: Retry loop can double-publish a review</summary>
+<summary>⛔ <b>issue</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major-dark.svg"><img src="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>: Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-ce7057dc498c6d64ab8893ac812c640bfd801aa1e0dff85792a9ee9e6a294aebR88)\
 > **Confidence:** high\
@@ -31,7 +31,7 @@ that may already have succeeded, so a 502 produces two reviews.
 ### Worth a look
 
 <details>
-<summary>⚪ <b>perf-nit</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/minor-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/minor.svg" alt="MINOR" height="16" align="absmiddle"></picture>: Redundant sort on every read</summary>
+<summary>⚪ <b>perf-nit</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/minor-dark.svg"><img src="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/minor.svg" alt="MINOR" height="16" align="absmiddle"></picture>: Redundant sort on every read</summary>
 
 > [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-cd72d9c08f06a69424f41d70a7dc4f036dc2fd30f90c0466fa71d58f41b2a65bR10-R14)\
 > **Severity:** minor
@@ -45,5 +45,5 @@ that may already have succeeded, so a 502 produces two reviews.
 reviewed [`d23632e`](https://github.com/o/r/commit/d23632e5b0a1c9f4e7d2b8a6c3f1e0d9b7a5c4e2)
 
 <!-- loupe digest=<sha256> publication=<uuid> -->
-<!-- loupe-findings v=1 sha256=89b329eaa63ab51de4c6f90a19c14b50406f292c4d18a2e166f2dc5095c7c758 hJDBauMwEIZfZZiznDhhF4JfYHdhT0tumx7G0jgWVSV3NEpqQqBP0wfrkxS7KU0u7UkIZub//u//Cb3DBruqrldoUL0Gxgb/scoIIaUBLEVwqbSBq6G0weceCIQPno9osE1unOcHSa5YdkB78jEraM8gbJM4dtD5Jy3CC9j2DJbU9iBccVSWPE/OUdQpy3z9sXDWXdSeFB5oBArC5Ebo6cCQi7XMjp2BnIDgZ72GS3wGPaYLXV7sIhoMyZL6FLE54UDaY4N+yo0UlpdCH+9in9Bg9m5W8OfX7+207yNjs9mcDQZqOUz7OReeyodk733cY6NS+GyuZK5vZLoSHUWFnEQhReADywhTpU+Fr88v39A6oU6XWZPwF6SrHwazkujf9299BT6wdFX0esPeUch8vnsLAAD//w== -->
+<!-- loupe-findings v=1 sha256=b803cb5d27c7d20095921acfb004ff4c349ef02a77dc064f4356406060a0a870 hJDBauMwEIZfZZiznDhhF4JfYHdhT0tumx7G0jgWVSV3NEpqQqBP0wfrkxS7KU0u7UkIZub//u//Cb3DBruqrldoUL0Gxgb/scoIIaUBLEVwqbSBq6G0weceCIQPno9osE1unOcHSa5YdkB78jEraM8gbJM4dtD5Jy3CC9j2DJbU9iBccVSWPE/OUdQpy3z9sXDWXdSeFB5oBArC5Ebo6cCQi7XMjp2BnIDgZ72GS3wGPaYLXV7sIhoMyZL6FLE54UDaY4N+yo0UlpdCH+9in9Bg9m5W8OfX7+207yNjs9mcDQZqOUz7OReeyodk733cY6NS+GyuZK5vZLoSHUWFnEQhReADywhTpU+Fr88v39A6oU6XWZPwF6SrHwazkujf9299BT6wdFX0esPeUch8vnsLAAD//w== -->
 <!-- loupe-meta v=1 round=2 inline=blocking blocking=1 issues=1 suggestions=0 questions=0 other=1 excluded=1 withdrawn=1 reinstated=0 regraded=1 -->

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 const ruleFindingID = "finding-id"

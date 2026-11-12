@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/eriksaulnier/loupe/internal/findingid"
-	"github.com/eriksaulnier/loupe/internal/section"
-	"github.com/eriksaulnier/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/findingid"
+	"github.com/secondshift-labs/loupe/internal/section"
+	"github.com/secondshift-labs/loupe/internal/severity"
 )
 
 const (

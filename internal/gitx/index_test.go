@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/testutil/gitrepo"
+	"github.com/secondshift-labs/loupe/internal/testutil/gitrepo"
 )
 
 func runGit(t *testing.T, dir string, args ...string) string {

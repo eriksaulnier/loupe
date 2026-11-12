@@ -3,8 +3,8 @@
 package mode
 
 import (
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 // Mode is what a run's kind decides.

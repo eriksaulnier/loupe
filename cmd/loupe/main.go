@@ -8,9 +8,9 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/eriksaulnier/loupe/internal/cli"
-	"github.com/eriksaulnier/loupe/internal/github"
-	"github.com/eriksaulnier/loupe/internal/pane"
+	"github.com/secondshift-labs/loupe/internal/cli"
+	"github.com/secondshift-labs/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/pane"
 )
 
 func main() {
