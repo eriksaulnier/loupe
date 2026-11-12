@@ -3,7 +3,7 @@
   <img alt="loupe" src="docs/assets/logo.png" width="360">
 </picture>
 
-[![latest release](https://img.shields.io/github/v/release/eriksaulnier/loupe)](https://github.com/eriksaulnier/loupe/releases/latest) [![ci](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/eriksaulnier/loupe/graph/badge.svg)](https://codecov.io/gh/eriksaulnier/loupe)
+[![latest release](https://img.shields.io/github/v/release/secondshift-labs/loupe)](https://github.com/secondshift-labs/loupe/releases/latest) [![ci](https://github.com/secondshift-labs/loupe/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/secondshift-labs/loupe/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/secondshift-labs/loupe/graph/badge.svg)](https://codecov.io/gh/secondshift-labs/loupe)
 
 loupe collects a review agent's findings into a local draft so you decide each one and publish a single GitHub review. For local work, such as uncommitted changes or a plan, you decide the findings the same way and return the decisions to the agent that applies them.
 

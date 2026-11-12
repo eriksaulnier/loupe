@@ -28,8 +28,8 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `internal/updatecheck` | Decides whether a newer release exists, from a daily lookup that `capture` runs and a cache file that `review` reads |
 | `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, `fakegh`, an in-memory GitHub REST server, and `screen`, which types keys into the review program through a pipe and waits for what it draws. Also `gitfail`, a git on PATH that fails a chosen call, `golden`, the one `-update` flag and golden check, `refusaltest`, `sgrtest` and `herdrstub` |
 | `plugin/` | The agent plugin: the `human-review` workflow skill for pull requests, the `human-decide` workflow skill for local runs, and the Claude Code and Codex manifests. It ships no review skill and no command |
-| `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add eriksaulnier/loupe` find the plugin |
-| `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add eriksaulnier/loupe` |
+| `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add secondshift-labs/loupe` find the plugin |
+| `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add secondshift-labs/loupe` |
 | `package.json` | Makes the repository a Pi package whose skills are `plugin/skills`; it holds no JavaScript |
 | `install.sh` | The script behind `curl ... \| sh`, which installs a released binary. `pages.yml` publishes it, and `TestInstallScript*` runs it against a fake `curl` |
 | `action.yml` | The composite action that installs a released loupe in a GitHub Actions job. release-please stamps its `version` default at each release, and `TestInstallAction` pins it to the manifest |
@@ -49,7 +49,7 @@ loupe collects a review agent's findings into a local draft so a human decides e
 
 - The constitution outranks every other document. Research and contracts outrank your preferences; departing from them requires a line in the plan's Complexity Tracking. Adopt `contracts/cli.md`, do not redesign it.
 - Never push, release, open a pull request, create a GitHub review or run against a live pull request unless the human you are working for asks, naming the pull request.
-- `origin` is `github.com/eriksaulnier/loupe`; `main` is its default branch. Releases are cut from `main` by release-please and goreleaser, and pre-releases of a branch by `prerelease.yml`, which only the owner dispatches. An agent MUST NOT tag, create a release or edit the release manifest by hand.
+- `origin` is `github.com/secondshift-labs/loupe`; `main` is its default branch. Releases are cut from `main` by release-please and goreleaser, and pre-releases of a branch by `prerelease.yml`, which only the owner dispatches. An agent MUST NOT tag, create a release or edit the release manifest by hand.
 
 ## Contracts that tests pin
 

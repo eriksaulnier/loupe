@@ -6,7 +6,7 @@ Only the latest release receives security fixes.
 
 ## Report a vulnerability
 
-Report a vulnerability privately through [GitHub's private vulnerability reporting](https://github.com/eriksaulnier/loupe/security/advisories/new). A vulnerability MUST NOT be reported in a public issue.
+Report a vulnerability privately through [GitHub's private vulnerability reporting](https://github.com/secondshift-labs/loupe/security/advisories/new). A vulnerability MUST NOT be reported in a public issue.
 
 Include the version from `loupe --version`, the steps that reproduce the problem and what an attacker gains.
 
