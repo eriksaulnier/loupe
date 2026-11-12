@@ -106,7 +106,16 @@ jobs:
           set -euo pipefail
           drafts="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft and .name == env.TAG) | .id' | wc -l | tr -d ' ')"
           [ "$drafts" = 1 ] || { echo "::error::want exactly one draft release named $TAG for goreleaser to publish, found $drafts"; exit 1; }
-      - uses: goreleaser/goreleaser-action@v7
+      # A secret that does not exist expands to the empty string, which goreleaser's isEnvSet reads as unset. Without this
+      # step the job would sign nothing, publish, and leave an immutable release that docs/install.md calls signed.
+      - env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+        run: |
+          set -euo pipefail
+          [ -n "$MACOS_SIGN_P12" ] || { echo "::error::MACOS_SIGN_P12 is empty, so this release would ship unsigned"; exit 1; }
+      # Pinned by commit, unlike the other actions here: this step holds the signing and notary keys, which outlive the
+      # run. Dependabot keeps the pin current.
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           distribution: goreleaser
           version: "~> v2"
