@@ -505,3 +505,28 @@ func TestShowJSONCarriesOptionsAndTheChoice(t *testing.T) {
 		t.Fatalf("decisions %v", env["decisions"])
 	}
 }
+
+// Text show draws a choice finding's options, so it does not read as an unanswered question.
+func TestShowTextDrawsOptionsAndThePick(t *testing.T) {
+	f := localFinding("f-001")
+	f.Options = []draft.Option{
+		{Key: "1", Label: "Drop it", Proposal: "Drop the cache."},
+		{Key: "2", Label: "Key it", Proposal: "Key by head SHA.", Recommended: true},
+	}
+	home, dir := localRun(t, "changed", f)
+	if _, err := draft.Mutate(dir, "test", nil, func(string) string { return "" }, func(d *draft.Draft) error {
+		_, err := draft.Accept(d, "f-001", "1", time.Date(2026, 11, 3, 1, 0, 0, 0, time.UTC))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deps, s := testDeps(t, map[string]string{"LOUPE_HOME": home, "NO_COLOR": "1"})
+	if code := Execute(deps, []string{"show", "--run", "local#1"}); code != 0 {
+		t.Fatalf("exit %d stdout %q", code, s.stdout.String())
+	}
+	for _, want := range []string{"1 - Drop it - picked", "Drop the cache.", "2 - Key it - recommended", "Key by head SHA."} {
+		if !strings.Contains(s.stdout.String(), want) {
+			t.Errorf("show lacks %q:\n%s", want, s.stdout.String())
+		}
+	}
+}

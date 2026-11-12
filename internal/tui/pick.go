@@ -64,7 +64,7 @@ func (m *Model) updatePick(msg tea.KeyPressMsg) tea.Cmd {
 	f, _ := m.openedFinding()
 	key := msg.String()
 	if key == "esc" {
-		m.picking = false
+		m.picking, m.pickNote = false, ""
 		return nil
 	}
 	if m.settling || len(f.Options) == 0 {
@@ -96,7 +96,11 @@ func (m *Model) pickOption(key string) tea.Cmd {
 	if m.pickFor == pickAcceptNote {
 		f, _ := m.openedFinding()
 		m.pickHeld = key
-		return m.openNote(noteAccept, heldNote(m.draft, f, draft.DispositionAccepted))
+		text := heldNote(m.draft, f, draft.DispositionAccepted)
+		if m.pickNote != "" {
+			text, m.pickNote = m.pickNote, ""
+		}
+		return m.openNote(noteAccept, text)
 	}
 	if m.pickFor == pickReinstate {
 		return m.decideAndShow(func(d *draft.Draft) (err error) {

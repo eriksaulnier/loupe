@@ -22,7 +22,6 @@ This is the agent-facing and human-facing command contract. `/speckit-plan` Phas
 | `blocking` key, or `--blocking` / `--not-blocking` | Accepted | `input`, fix: drop it |
 | `location.side` key, or `--side` | Accepted | `location`, fix: drop it |
 | `location` on a `--no-files` run | n/a | `location`, fix: `"general": true` |
-
 | `options` key | `input`, message "options apply only to local runs", fix `use "suggestedFix" instead` (`specs/057-decision-choices`) | Accepted in place of `proposal`: 2 or 3 entries of `{label, proposal, recommended?}`, exactly one `recommended` |
 
   A change to `proposal` bumps `rev` and clears the decision. `show --json` on a local run omits `blocking` and `location.side`.

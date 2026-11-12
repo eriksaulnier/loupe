@@ -125,6 +125,8 @@ type Model struct {
 	pickFor pickFor
 	// pickHeld is the option picked before the accept note opened, which accepts with it. Esc clears it.
 	pickHeld string
+	// pickNote is a note typed for a pick that went stale, kept for the note that opens after the new pick.
+	pickNote string
 	pickSel  int
 	// keptNotes holds, per finding, text the human typed into a note and then left without it being recorded, so the
 	// next send-back on that finding starts from it. It lives only as long as the program.

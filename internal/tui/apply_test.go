@@ -646,3 +646,50 @@ func TestApplyNarrowRowDropsThePickBeforeTheTitle(t *testing.T) {
 		t.Errorf("wide %q, narrow %q", wide, narrow)
 	}
 }
+
+// A pick held for the note is a pick of the options as shown. When the agent edits them before enter, the decision is
+// refused as stale and the picker opens again on the new options, keeping the typed note for after the new pick.
+func TestApplyStaleNoteDropsTheHeldPick(t *testing.T) {
+	m, dir := choiceModel(t, utf8Env)
+	openPicker(t, m, "t")
+	press(m, "2")
+	m.Update(runes("Mind the cache."))
+	outside(t, dir, func(d *draft.Draft) error {
+		options := json.RawMessage(`[{"label":"Only","proposal":"One.","recommended":true},{"label":"Other","proposal":"Two."}]`)
+		_, _, err := draft.Edit(d, "f-001", draft.EditInput{Options: options}, nil, nil, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow)
+		return err
+	})
+	m.Update(enterKey)
+	if _, decided := loadDraft(t, dir).Decisions["f-001"]; decided {
+		t.Fatal("a stale note accepted a pick of the old options")
+	}
+	if !m.picking || m.noting || m.pickHeld != "" || !strings.Contains(m.notice, staleNotice) {
+		t.Fatalf("picking %v noting %v held %q notice %q", m.picking, m.noting, m.pickHeld, m.notice)
+	}
+	m.settling = false
+	press(m, "2")
+	if !m.noting || m.note.Value() != "Mind the cache." {
+		t.Fatalf("noting %v note %q", m.noting, m.note.Value())
+	}
+	m.Update(enterKey)
+	if got := loadDraft(t, dir).Decisions["f-001"]; got.Choice != "2" || got.Note != "Mind the cache." {
+		t.Fatalf("decision %+v", got)
+	}
+}
+
+func TestApplyAOnAWithdrawnChoiceFindingSaysUReinstates(t *testing.T) {
+	m, dir := choiceModel(t, utf8Env)
+	outside(t, dir, func(d *draft.Draft) error {
+		withdrawn := false
+		_, _, err := draft.Edit(d, "f-001", draft.EditInput{}, &withdrawn, nil, draft.ByAgent, draft.Rules{AllowProposal: true}, testNow)
+		return err
+	})
+	if _, err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	mustOpenFinding(t, m, "f-001")
+	press(m, "a")
+	if m.picking || !strings.Contains(m.notice, "f-001 is withdrawn; u reinstates it") {
+		t.Fatalf("picking %v notice %q", m.picking, m.notice)
+	}
+}

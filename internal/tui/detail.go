@@ -22,7 +22,7 @@ import (
 
 func (m *Model) openFinding(id string) error {
 	m.view, m.openID, m.noting, m.editing, m.rewriting, m.settling = viewDetail, id, false, false, false, false
-	m.picking, m.pickHeld = false, ""
+	m.picking, m.pickHeld, m.pickNote = false, "", ""
 	m.body.SetYOffset(0)
 	return m.refreshDetail()
 }
@@ -601,6 +601,11 @@ func (m *Model) updateDetail(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "a":
 		if len(f.Options) > 0 {
+			// Said before the picker opens, since the draft would refuse the accept only after the pick.
+			if draft.Dispositions(m.draft)[f.ID] == draft.DispositionWithdrawn {
+				m.say(style.Warn, fmt.Sprintf("%s is withdrawn; u reinstates it", f.ID))
+				return nil
+			}
 			return m.openPick(pickAccept)
 		}
 		var closed []string
@@ -793,7 +798,16 @@ func (m *Model) decideWithNote(kind noteKind, text string) tea.Cmd {
 		return cmd
 	}
 	refused, refusedKind := m.notice, m.noticeKind
-	open := m.openNote(kind, text)
+	var open tea.Cmd
+	if f, _ := m.openedFinding(); key != "" && len(f.Options) > 0 {
+		// The held pick named an option as it was shown, so the human picks again from the options as they are now.
+		m.noting, m.pickHeld, m.pickNote = false, "", text
+		m.note.Blur()
+		open = m.openPick(pickAcceptNote)
+	} else {
+		m.pickHeld = ""
+		open = m.openNote(kind, text)
+	}
 	m.notice, m.noticeKind = refused, refusedKind
 	return tea.Batch(cmd, open)
 }

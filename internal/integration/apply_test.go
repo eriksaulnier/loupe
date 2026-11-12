@@ -238,9 +238,6 @@ func (h *harness) userState(untracked ...string) string {
 	return b.String()
 }
 
-// TestApplyLocalCodeReview is User Story 1: a branch with committed, staged, unstaged and untracked changes is
-// captured without touching the user's state, decided with one key per accept and per reject, and returned from
-// the return step that opens on its own, with a closing note that reaches wait and feedback.
 // A choice finding goes from add to feedback with the human's pick as its proposal and a choice that names it (spec
 // 057).
 func TestApplyChoiceFindingRoundTrip(t *testing.T) {
@@ -279,6 +276,9 @@ func TestApplyChoiceFindingRoundTrip(t *testing.T) {
 	}
 }
 
+// TestApplyLocalCodeReview is User Story 1: a branch with committed, staged, unstaged and untracked changes is
+// captured without touching the user's state, decided with one key per accept and per reject, and returned from
+// the return step that opens on its own, with a closing note that reaches wait and feedback.
 func TestApplyLocalCodeReview(t *testing.T) {
 	t.Parallel()
 	h := newApplyHarness(t)

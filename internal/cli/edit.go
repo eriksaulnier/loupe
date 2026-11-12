@@ -259,7 +259,7 @@ func runEdit(cmd *cobra.Command, deps Deps, findingID string) error {
 
 // editFields is comparable so an empty edit can be detected; each field is raw JSON as in draft.EditInput.
 type editFields struct {
-	title, body, location, general, label, blocking, confidence, severity, verified, impact, references, suggestedFix, proposal, withdrawReason string
+	title, body, location, general, label, blocking, confidence, severity, verified, impact, references, suggestedFix, proposal, options, withdrawReason string
 }
 
 func (e editFields) input() draft.EditInput {
@@ -271,7 +271,7 @@ func (e editFields) input() draft.EditInput {
 	}
 	return draft.EditInput{Title: raw(e.title), Body: raw(e.body), Location: raw(e.location), General: raw(e.general), Label: raw(e.label),
 		Blocking: raw(e.blocking), Confidence: raw(e.confidence), Severity: raw(e.severity), Verified: raw(e.verified), Impact: raw(e.impact),
-		References: raw(e.references), SuggestedFix: raw(e.suggestedFix), Proposal: raw(e.proposal), WithdrawReason: raw(e.withdrawReason)}
+		References: raw(e.references), SuggestedFix: raw(e.suggestedFix), Proposal: raw(e.proposal), Options: raw(e.options), WithdrawReason: raw(e.withdrawReason)}
 }
 
 // namesHeading reports whether the edit sets a heading anchor, the one case that reads the outline.
@@ -298,7 +298,7 @@ func editInput(cmd *cobra.Command, deps Deps, m mode.Mode) (editFields, error) {
 		return editFields{title: string(in.Title), body: string(in.Body), location: string(in.Location), general: string(in.General),
 			label: string(in.Label), blocking: string(in.Blocking), confidence: string(in.Confidence), severity: string(in.Severity),
 			verified: string(in.Verified), impact: string(in.Impact), references: string(in.References), suggestedFix: string(in.SuggestedFix),
-			proposal: string(in.Proposal), withdrawReason: string(in.WithdrawReason)}, nil
+			proposal: string(in.Proposal), options: string(in.Options), withdrawReason: string(in.WithdrawReason)}, nil
 	}
 
 	var out editFields
