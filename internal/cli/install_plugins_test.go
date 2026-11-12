@@ -79,16 +79,31 @@ const fakeCodex = fakeAgentPreamble + `case "$*" in
 esac
 `
 
-const fakePi = fakeAgentPreamble + `case "$1" in
-install) printf '%s' "$2" > "$state.installed" ;;
+// Real pi keys a package by its repository without the ref: an install replaces the same repository at any ref and
+// sits beside another repository, and a remove matches the repository whatever ref was installed.
+const fakePi = fakeAgentPreamble + `others() {
+	[ -f "$state.installed" ] || return 0
+	awk -v id="$1" '{ s = $0; sub(/@.*/, "", s) } s != id' "$state.installed"
+}
+case "$1" in
+install)
+	kept=$(others "${2%@*}")
+	{ [ -n "$kept" ] && printf '%s\n' "$kept"; printf '%s' "$2"; } > "$state.new"
+	mv "$state.new" "$state.installed"
+	;;
 list)
-	if [ -f "$state.installed" ]; then printf 'User packages:\n  %s\n    /p\n' "$(cat "$state.installed")"; else echo 'No packages installed.'; fi
+	if [ -f "$state.installed" ]; then
+		echo 'User packages:'
+		while IFS= read -r p || [ -n "$p" ]; do printf '  %s\n    /p\n' "$p"; done < "$state.installed"
+	else
+		echo 'No packages installed.'
+	fi
 	;;
 remove)
-	# Real pi matches the package, not the source string, so any form of loupe's repository removes it.
-	case "$2" in *github.com/eriksaulnier/loupe | *github.com/eriksaulnier/loupe@*) ;; *) exit 1 ;; esac
 	[ -f "$state.installed" ] || exit 1
-	rm -f "$state.installed"
+	kept=$(others "$2")
+	[ "$kept" = "$(cat "$state.installed")" ] && exit 1
+	if [ -n "$kept" ]; then printf '%s' "$kept" > "$state.installed"; else rm -f "$state.installed"; fi
 	;;
 *) exit 2 ;;
 esac
@@ -176,15 +191,15 @@ func assertCalls(t *testing.T, got []string, want ...string) {
 var (
 	claudeFresh = []string{
 		"claude plugin marketplace list --json",
-		"claude plugin marketplace add eriksaulnier/loupe@v1.2.3",
+		"claude plugin marketplace add secondshift-labs/loupe@v1.2.3",
 		"claude plugin install loupe@loupe",
 	}
 	codexFresh = []string{
 		"codex plugin marketplace list --json",
-		"codex plugin marketplace add eriksaulnier/loupe@v1.2.3",
+		"codex plugin marketplace add secondshift-labs/loupe@v1.2.3",
 		"codex plugin add loupe@loupe",
 	}
-	piFresh = []string{"pi install git:github.com/eriksaulnier/loupe@v1.2.3"}
+	piFresh = []string{"pi list", "pi install git:github.com/secondshift-labs/loupe@v1.2.3"}
 )
 
 func (f *installFixture) latest(t *testing.T) {
@@ -205,9 +220,9 @@ func TestInstallScriptPluginsEveryAgent(t *testing.T) {
 	}
 	assertCalls(t, agents.log(t), slices.Concat(claudeFresh, codexFresh, piFresh)...)
 	for agent, want := range map[string]string{
-		"claude": "eriksaulnier/loupe@v1.2.3",
-		"codex":  "eriksaulnier/loupe@v1.2.3",
-		"pi":     "git:github.com/eriksaulnier/loupe@v1.2.3",
+		"claude": "secondshift-labs/loupe@v1.2.3",
+		"codex":  "secondshift-labs/loupe@v1.2.3",
+		"pi":     "git:github.com/secondshift-labs/loupe@v1.2.3",
 	} {
 		if got := agents.installed(t, agent); got != want {
 			t.Errorf("%s plugin installed from %q, want %q", agent, got, want)
@@ -288,17 +303,18 @@ func TestInstallScriptPluginsSecondRunChangesNothing(t *testing.T) {
 		"claude plugin marketplace list --json",
 		"claude plugin install loupe@loupe",
 		"codex plugin marketplace list --json",
-		"codex plugin marketplace add eriksaulnier/loupe@v1.2.3",
+		"codex plugin marketplace add secondshift-labs/loupe@v1.2.3",
 		"codex plugin add loupe@loupe",
-		"pi install git:github.com/eriksaulnier/loupe@v1.2.3",
+		"pi list",
+		"pi install git:github.com/secondshift-labs/loupe@v1.2.3",
 	)
 }
 
 // A Claude Code marketplace from main, an older tag or another repo is replaced, which leaves one copy at the tag.
 func TestInstallScriptPluginsReplaceClaudeSource(t *testing.T) {
 	for name, seed := range map[string]struct{ src, entry string }{
-		"main":       {"eriksaulnier/loupe", `    "source": "github",` + "\n" + `    "repo": "eriksaulnier/loupe"`},
-		"older tag":  {"eriksaulnier/loupe@v1.0.0", `    "source": "github",` + "\n" + `    "repo": "eriksaulnier/loupe",` + "\n" + `    "ref": "v1.0.0"`},
+		"main":       {"secondshift-labs/loupe", `    "source": "github",` + "\n" + `    "repo": "secondshift-labs/loupe"`},
+		"older tag":  {"secondshift-labs/loupe@v1.0.0", `    "source": "github",` + "\n" + `    "repo": "secondshift-labs/loupe",` + "\n" + `    "ref": "v1.0.0"`},
 		"other repo": {"someone/loupe@v1.2.3", `    "source": "github",` + "\n" + `    "repo": "someone/loupe",` + "\n" + `    "ref": "v1.2.3"`},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -312,10 +328,10 @@ func TestInstallScriptPluginsReplaceClaudeSource(t *testing.T) {
 			assertCalls(t, agents.log(t),
 				"claude plugin marketplace list --json",
 				"claude plugin marketplace remove loupe",
-				"claude plugin marketplace add eriksaulnier/loupe@v1.2.3",
+				"claude plugin marketplace add secondshift-labs/loupe@v1.2.3",
 				"claude plugin install loupe@loupe",
 			)
-			if got := agents.installed(t, "claude"); got != "eriksaulnier/loupe@v1.2.3" {
+			if got := agents.installed(t, "claude"); got != "secondshift-labs/loupe@v1.2.3" {
 				t.Errorf("plugin installed from %q", got)
 			}
 		})
@@ -327,18 +343,18 @@ func TestInstallScriptPluginsReplaceCodexSource(t *testing.T) {
 	f := newInstallFixture(t)
 	f.latest(t)
 	agents, env := f.withAgents(t, "codex")
-	agents.seedCodex(t, "eriksaulnier/loupe@v1.0.0", "git", "https://github.com/eriksaulnier/loupe.git")
+	agents.seedCodex(t, "secondshift-labs/loupe@v1.0.0", "git", "https://github.com/secondshift-labs/loupe.git")
 	if _, stderr, err := f.run(t, env...); err != nil {
 		t.Fatalf("install failed: %v\n%s", err, stderr)
 	}
 	assertCalls(t, agents.log(t),
 		"codex plugin marketplace list --json",
-		"codex plugin marketplace add eriksaulnier/loupe@v1.2.3",
+		"codex plugin marketplace add secondshift-labs/loupe@v1.2.3",
 		"codex plugin marketplace remove loupe",
-		"codex plugin marketplace add eriksaulnier/loupe@v1.2.3",
+		"codex plugin marketplace add secondshift-labs/loupe@v1.2.3",
 		"codex plugin add loupe@loupe",
 	)
-	if got := agents.installed(t, "codex"); got != "eriksaulnier/loupe@v1.2.3" {
+	if got := agents.installed(t, "codex"); got != "secondshift-labs/loupe@v1.2.3" {
 		t.Errorf("plugin installed from %q", got)
 	}
 }
@@ -373,10 +389,10 @@ func TestInstallScriptPluginsFollowPin(t *testing.T) {
 	if _, stderr, err := f.run(t, append(env, "LOUPE_VERSION=1.3.0-rc.1")...); err != nil {
 		t.Fatalf("install failed: %v\n%s", err, stderr)
 	}
-	if got := agents.installed(t, "claude"); got != "eriksaulnier/loupe@v1.3.0-rc.1" {
+	if got := agents.installed(t, "claude"); got != "secondshift-labs/loupe@v1.3.0-rc.1" {
 		t.Errorf("claude plugin installed from %q", got)
 	}
-	if got := agents.installed(t, "pi"); got != "git:github.com/eriksaulnier/loupe@v1.3.0-rc.1" {
+	if got := agents.installed(t, "pi"); got != "git:github.com/secondshift-labs/loupe@v1.3.0-rc.1" {
 		t.Errorf("pi plugin installed from %q", got)
 	}
 }
@@ -386,10 +402,10 @@ func TestInstallScriptPluginsFailureIsContained(t *testing.T) {
 	cases := []struct {
 		name, agent, pattern, message, want string
 	}{
-		{"claude install", "claude", "plugin install*", "claude exploded", "fix: run claude plugin marketplace remove loupe; claude plugin marketplace add eriksaulnier/loupe@v1.2.3 && claude plugin install loupe@loupe"},
-		{"claude list", "claude", "plugin marketplace list*", "unknown option --json", "fix: run claude plugin marketplace remove loupe; claude plugin marketplace add eriksaulnier/loupe@v1.2.3 && claude plugin install loupe@loupe"},
-		{"codex add", "codex", "plugin add*", "codex exploded", "fix: run codex plugin marketplace remove loupe; codex plugin marketplace add eriksaulnier/loupe@v1.2.3 && codex plugin add loupe@loupe"},
-		{"pi install", "pi", "install*", "pi exploded", "fix: run pi install git:github.com/eriksaulnier/loupe@v1.2.3"},
+		{"claude install", "claude", "plugin install*", "claude exploded", "fix: run claude plugin marketplace remove loupe; claude plugin marketplace add secondshift-labs/loupe@v1.2.3 && claude plugin install loupe@loupe"},
+		{"claude list", "claude", "plugin marketplace list*", "unknown option --json", "fix: run claude plugin marketplace remove loupe; claude plugin marketplace add secondshift-labs/loupe@v1.2.3 && claude plugin install loupe@loupe"},
+		{"codex add", "codex", "plugin add*", "codex exploded", "fix: run codex plugin marketplace remove loupe; codex plugin marketplace add secondshift-labs/loupe@v1.2.3 && codex plugin add loupe@loupe"},
+		{"pi install", "pi", "install*", "pi exploded", "fix: run pi install git:github.com/secondshift-labs/loupe@v1.2.3"},
 	}
 	names := map[string]string{"claude": "Claude Code", "codex": "Codex", "pi": "Pi"}
 	for _, c := range cases {
@@ -424,22 +440,82 @@ func TestInstallScriptPluginsCodexUnknownFailureRemovesNothing(t *testing.T) {
 	f := newInstallFixture(t)
 	f.latest(t)
 	agents, env := f.withAgents(t, "codex")
-	agents.seedCodex(t, "eriksaulnier/loupe@v1.0.0", "git", "https://github.com/eriksaulnier/loupe.git")
+	agents.seedCodex(t, "secondshift-labs/loupe@v1.0.0", "git", "https://github.com/secondshift-labs/loupe.git")
 	agents.fail(t, "codex", "plugin marketplace add*", "could not reach github.com")
 	if _, stderr, err := f.run(t, env...); err == nil {
 		t.Fatalf("the script exited 0, want 1. stderr:\n%s", stderr)
 	}
-	assertCalls(t, agents.log(t), "codex plugin marketplace list --json", "codex plugin marketplace add eriksaulnier/loupe@v1.2.3")
-	if got := agents.installed(t, "codex"); got != "eriksaulnier/loupe@v1.0.0" {
+	assertCalls(t, agents.log(t), "codex plugin marketplace list --json", "codex plugin marketplace add secondshift-labs/loupe@v1.2.3")
+	if got := agents.installed(t, "codex"); got != "secondshift-labs/loupe@v1.0.0" {
 		t.Errorf("plugin installed from %q, want the old source kept", got)
 	}
 }
 
 func (f *installFixture) seedEveryAgent(t *testing.T, agents *fakeAgents) {
 	t.Helper()
-	agents.seedClaude(t, "eriksaulnier/loupe@v1.2.3", `    "source": "github",`+"\n"+`    "repo": "eriksaulnier/loupe",`+"\n"+`    "ref": "v1.2.3"`)
-	agents.seedCodex(t, "eriksaulnier/loupe@v1.2.3", "git", "https://github.com/eriksaulnier/loupe.git")
-	agents.write(t, "pi.installed", "git:github.com/eriksaulnier/loupe@v1.2.3")
+	agents.seedClaude(t, "secondshift-labs/loupe@v1.2.3", `    "source": "github",`+"\n"+`    "repo": "secondshift-labs/loupe",`+"\n"+`    "ref": "v1.2.3"`)
+	agents.seedCodex(t, "secondshift-labs/loupe@v1.2.3", "git", "https://github.com/secondshift-labs/loupe.git")
+	agents.write(t, "pi.installed", "git:github.com/secondshift-labs/loupe@v1.2.3")
+}
+
+// seedEveryAgentBeforeTheMove installs each plugin as a release from before the repository moved to secondshift-labs.
+func (f *installFixture) seedEveryAgentBeforeTheMove(t *testing.T, agents *fakeAgents) {
+	t.Helper()
+	agents.seedClaude(t, "eriksaulnier/loupe@v1.0.0", `    "source": "github",`+"\n"+`    "repo": "eriksaulnier/loupe",`+"\n"+`    "ref": "v1.0.0"`)
+	agents.seedCodex(t, "eriksaulnier/loupe@v1.0.0", "git", "https://github.com/eriksaulnier/loupe.git")
+	agents.write(t, "pi.installed", "git:github.com/eriksaulnier/loupe@v1.0.0")
+}
+
+// A plugin from before the move is replaced, not left beside the new one: Pi keys a package by its repository.
+func TestInstallScriptPluginsReplaceThePluginFromBeforeTheMove(t *testing.T) {
+	f := newInstallFixture(t)
+	f.latest(t)
+	agents, env := f.withAgents(t, "claude", "codex", "pi")
+	f.seedEveryAgentBeforeTheMove(t, agents)
+	if _, stderr, err := f.run(t, env...); err != nil {
+		t.Fatalf("install failed: %v\n%s", err, stderr)
+	}
+	assertCalls(t, agents.log(t),
+		"claude plugin marketplace list --json",
+		"claude plugin marketplace remove loupe",
+		"claude plugin marketplace add secondshift-labs/loupe@v1.2.3",
+		"claude plugin install loupe@loupe",
+		"codex plugin marketplace list --json",
+		"codex plugin marketplace add secondshift-labs/loupe@v1.2.3",
+		"codex plugin marketplace remove loupe",
+		"codex plugin marketplace add secondshift-labs/loupe@v1.2.3",
+		"codex plugin add loupe@loupe",
+		"pi list",
+		"pi remove git:github.com/eriksaulnier/loupe",
+		"pi install git:github.com/secondshift-labs/loupe@v1.2.3",
+	)
+	for agent, want := range map[string]string{
+		"claude": "secondshift-labs/loupe@v1.2.3",
+		"codex":  "secondshift-labs/loupe@v1.2.3",
+		"pi":     "git:github.com/secondshift-labs/loupe@v1.2.3",
+	} {
+		if got := agents.installed(t, agent); got != want {
+			t.Errorf("%s holds %q, want %q", agent, got, want)
+		}
+	}
+}
+
+func TestInstallScriptUninstallRemovesThePluginFromBeforeTheMove(t *testing.T) {
+	f := newInstallFixture(t)
+	f.placeExisting(t)
+	agents, env := f.withAgents(t, "claude", "codex", "pi")
+	f.seedEveryAgentBeforeTheMove(t, agents)
+	if _, stderr, err := f.run(t, append(env, "LOUPE_UNINSTALL=1")...); err != nil {
+		t.Fatalf("uninstall failed: %v\n%s", err, stderr)
+	}
+	for _, agent := range []string{"claude", "codex", "pi"} {
+		if got := agents.installed(t, agent); got != "" {
+			t.Errorf("%s still holds the plugin from %q", agent, got)
+		}
+	}
+	if !slices.Contains(agents.log(t), "pi remove git:github.com/eriksaulnier/loupe") {
+		t.Errorf("pi was not asked to remove the old package: %v", agents.log(t))
+	}
 }
 
 // The uninstall mode removes each plugin and then the binary, and downloads nothing.
@@ -459,7 +535,7 @@ func TestInstallScriptUninstall(t *testing.T) {
 		"codex plugin marketplace list --json",
 		"codex plugin marketplace remove loupe",
 		"pi list",
-		"pi remove git:github.com/eriksaulnier/loupe",
+		"pi remove git:github.com/secondshift-labs/loupe",
 	)
 	for _, agent := range []string{"claude", "codex", "pi"} {
 		if got := agents.installed(t, agent); got != "" {
@@ -529,13 +605,13 @@ func TestInstallScriptPluginsReadOnlyLoupesClaudeEntry(t *testing.T) {
 	f := newInstallFixture(t)
 	f.latest(t)
 	agents, env := f.withAgents(t, "claude")
-	agents.write(t, "claude.src", "eriksaulnier/loupe@v1.0.0")
-	agents.write(t, "claude.installed", "eriksaulnier/loupe@v1.0.0")
-	agents.write(t, "claude.json", "[\n  {\n    \"name\": \"loupe\",\n    \"source\": \"github\",\n    \"repo\": \"eriksaulnier/loupe\",\n    \"ref\": \"v1.0.0\"\n  },\n  {\n    \"name\": \"mine\",\n    \"source\": \"directory\",\n    \"path\": \"/work/mine\"\n  }\n]\n")
+	agents.write(t, "claude.src", "secondshift-labs/loupe@v1.0.0")
+	agents.write(t, "claude.installed", "secondshift-labs/loupe@v1.0.0")
+	agents.write(t, "claude.json", "[\n  {\n    \"name\": \"loupe\",\n    \"source\": \"github\",\n    \"repo\": \"secondshift-labs/loupe\",\n    \"ref\": \"v1.0.0\"\n  },\n  {\n    \"name\": \"mine\",\n    \"source\": \"directory\",\n    \"path\": \"/work/mine\"\n  }\n]\n")
 	if _, stderr, err := f.run(t, env...); err != nil {
 		t.Fatalf("install failed: %v\n%s", err, stderr)
 	}
-	if got := agents.installed(t, "claude"); got != "eriksaulnier/loupe@v1.2.3" {
+	if got := agents.installed(t, "claude"); got != "secondshift-labs/loupe@v1.2.3" {
 		t.Errorf("plugin installed from %q, want the tag", got)
 	}
 }

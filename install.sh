@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the loupe binary from a GitHub release:
 #
-#   curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
+#   curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | sh
 #
 # Then it installs or updates the loupe plugin, at the same release, for each of Claude Code, Codex and Pi on PATH.
 #
@@ -14,10 +14,13 @@
 
 set -eu
 
-releases=https://github.com/eriksaulnier/loupe/releases
-issues=https://github.com/eriksaulnier/loupe/issues
-plugin_docs=https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#the-agent-plugin
-removal_docs=https://github.com/eriksaulnier/loupe/blob/main/docs/install.md#removing-the-plugin-by-hand
+repo=github.com/secondshift-labs/loupe
+# Pi keys a package by its repository, so a plugin installed before the move to secondshift-labs is another package.
+old_repo=github.com/eriksaulnier/loupe
+releases=https://$repo/releases
+issues=https://$repo/issues
+plugin_docs=https://$repo/blob/main/docs/install.md#the-agent-plugin
+removal_docs=https://$repo/blob/main/docs/install.md#removing-the-plugin-by-hand
 
 tmp=
 staged=
@@ -184,7 +187,7 @@ sync_claude() {
 	esac
 	case "$entry" in
 	"") add=1 ;;
-	*'"repo":"eriksaulnier/loupe"'*)
+	*'"repo":"secondshift-labs/loupe"'*)
 		case "$entry" in
 		*"\"ref\":\"$tag\""*) add= ;;
 		*) add=remove ;;
@@ -250,9 +253,22 @@ sync_codex() {
 	printf 'Codex: loupe plugin %s. Restart running sessions to load it.\n' "$tag"
 }
 
-# pi install replaces any earlier loupe package, whatever form its source took.
+# pi install replaces an earlier loupe package from the same repository at any ref, but not one from old_repo.
 sync_pi() {
 	manual="pi install git:github.com/$plugin_source"
+	out=$(pi list 2>&1) || {
+		agent_failed "Pi" "$out" "$manual"
+		return 0
+	}
+	case "$out" in
+	*"$old_repo"*)
+		manual="pi remove git:$old_repo; $manual"
+		out=$(pi remove "git:$old_repo" 2>&1) || {
+			agent_failed "Pi" "$out" "$manual"
+			return 0
+		}
+		;;
+	esac
 	out=$(pi install "git:github.com/$plugin_source" 2>&1) || {
 		agent_failed "Pi" "$out" "$manual"
 		return 0
@@ -267,7 +283,7 @@ sync_plugins() {
 		return 0
 	fi
 	tag=v$version
-	plugin_source=eriksaulnier/loupe@$tag
+	plugin_source=secondshift-labs/loupe@$tag
 	found=
 	if command -v claude >/dev/null 2>&1; then
 		found=1
@@ -335,22 +351,28 @@ remove_codex() {
 
 # pi remove matches the package whatever form its source took, and fails when there is none, so the list decides.
 remove_pi() {
-	manual="pi remove git:github.com/eriksaulnier/loupe"
+	manual="pi remove git:$repo"
 	out=$(pi list 2>&1) || {
 		agent_failed "Pi" "$out" "$manual"
 		return 0
 	}
-	case "$out" in
-	*github.com/eriksaulnier/loupe*) ;;
-	*)
+	listed=$out
+	removed=
+	for src in "$repo" "$old_repo"; do
+		case "$listed" in
+		*"$src"*) ;;
+		*) continue ;;
+		esac
+		out=$(pi remove "git:$src" 2>&1) || {
+			agent_failed "Pi" "$out" "pi remove git:$src"
+			return 0
+		}
+		removed=1
+	done
+	if [ -z "$removed" ]; then
 		printf 'Pi: no loupe plugin\n'
 		return 0
-		;;
-	esac
-	out=$(pi remove git:github.com/eriksaulnier/loupe 2>&1) || {
-		agent_failed "Pi" "$out" "$manual"
-		return 0
-	}
+	fi
 	printf 'Pi: removed the loupe plugin\n'
 }
 

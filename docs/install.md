@@ -9,7 +9,7 @@ Builds exist for Linux and macOS, on amd64 and arm64.
 ### With the install script
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
+curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | sh
 ```
 
 The script downloads the latest release for your platform, checks it against the release's `checksums.txt` and puts `loupe` in `~/.local/bin`. It uses no sudo and edits no shell profile. It warns if that directory is not on your `PATH`, or if another `loupe`, such as a mise shim, comes first. A failed install leaves any existing binary in place.
@@ -23,13 +23,13 @@ Then it installs or updates [the agent plugin](#the-agent-plugin) for each of Cl
 | `LOUPE_NO_PLUGINS` | Any non-empty value skips the agent plugins, on install and on `loupe uninstall`, which then leaves them installed. `CI` has the same effect. |
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.19.0 LOUPE_INSTALL_DIR="$HOME/bin" sh
+curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | LOUPE_VERSION=0.19.0 LOUPE_INSTALL_DIR="$HOME/bin" sh
 ```
 
 To read the script first, download it, then run the copy you read:
 
 ```sh
-curl -fsSLo install.sh https://eriksaulnier.github.io/loupe/install.sh
+curl -fsSLo install.sh https://secondshift-labs.github.io/loupe/install.sh
 less install.sh
 sh install.sh
 ```
@@ -93,7 +93,7 @@ A pre-release, such as `0.22.0-rc.1`, is a build of a branch that has not reache
 Install it with the script and a pin. The script pins each agent's plugin to the same tag:
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=0.22.0-rc.1 sh
+curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | LOUPE_VERSION=0.22.0-rc.1 sh
 ```
 
 A pre-release differs from a release in four ways:

@@ -38,7 +38,7 @@ This is what a published review looks like. A CI review uses the same format.
 One command installs the binary into `~/.local/bin`, checked against the release's checksum. It also installs the agent plugin, at the same release, into each of Claude Code, Codex and Pi that it finds.
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
+curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | sh
 ```
 
 `loupe update` updates the binary and the plugins together, and `loupe uninstall` removes both and keeps your review runs. [Install](docs/install.md) covers the options, mise, release archives and GitHub Actions.

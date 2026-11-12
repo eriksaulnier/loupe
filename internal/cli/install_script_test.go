@@ -824,7 +824,7 @@ func TestInstallScriptMatchesReleaseArchives(t *testing.T) {
 // A person copies this command, so the script's own usage line and both documents MUST name the same URL. The scheme
 // is left out because scripts/check-tests.sh refuses a URL literal for any host but loopback and github.com.
 func TestInstallScriptURL(t *testing.T) {
-	const command = "eriksaulnier.github.io/loupe/install.sh | sh"
+	const command = "secondshift-labs.github.io/loupe/install.sh | sh"
 	for _, file := range []string{"install.sh", "README.md", "docs/install.md"} {
 		if !strings.Contains(readRepoFile(t, file), command) {
 			t.Errorf("%s does not carry %q", file, command)
