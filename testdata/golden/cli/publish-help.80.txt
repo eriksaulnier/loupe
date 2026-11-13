@@ -106,14 +106,14 @@ of a review an earlier sticky round posted. author is the login GitHub returned 
 absent when the receipt predates loupe recording it.
 
 Flags
-      --action string   review action: comment, approve or request-changes
-  -h, --help            help for publish
-      --inline string   located findings that also become inline comments: none, blocking or all (default "none")
-      --note string     Markdown shown under this round's footer until a later sticky round collapses it; needs --unattended --sticky
-      --retry-unknown   send again after an unknown outcome that matches no review on the pull request
-      --sticky          edit your sticky review on the pull request in place instead of posting a new one
-      --unattended      publish with no terminal, confirmation or viewer recheck, from a GitHub App installation token
-      --json   print exactly one JSON result object on stdout
+      --action string                review action: comment, approve or request-changes
+  -h, --help[=true|false]            help for publish
+      --inline string                located findings that also become inline comments: none, blocking or all (default "none")
+      --note string                  Markdown shown under this round's footer until a later sticky round collapses it; needs --unattended --sticky
+      --retry-unknown[=true|false]   send again after an unknown outcome that matches no review on the pull request
+      --sticky[=true|false]          edit your sticky review on the pull request in place instead of posting a new one
+      --unattended[=true|false]      publish with no terminal, confirmation or viewer recheck, from a GitHub App installation token
+      --json[=true|false]   print exactly one JSON result object on stdout
 
 Examples
   loupe publish owner/repo#123 --action comment

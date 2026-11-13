@@ -39,11 +39,11 @@ Result (--json)
 
 Flags
       --group-by string     one group per none, repo, week (ISO, UTC) or month (UTC) (default "none")
-  -h, --help                help for stats
+  -h, --help[=true|false]   help for stats
       --since string        count runs from this RFC 3339 date or timestamp on, inclusive
       --state stringArray   count runs in this state: captured, ready or published; repeatable, default published
       --until string        count runs up to this RFC 3339 date or timestamp, inclusive
-      --json   print exactly one JSON result object on stdout
+      --json[=true|false]   print exactly one JSON result object on stdout
 
 Examples
   loupe stats
