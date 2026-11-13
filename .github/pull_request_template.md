@@ -4,7 +4,7 @@
 
 ## Spec
 
-<!-- The specs/NNN-topic/ this implements, or "none" for a fix or small change. -->
+<!-- The specs/NNN-topic/ this implements, or "none" for a fix or small change. When it picks up a draft-spec issue, add "Closes #<issue>". -->
 
 ## Checks that ran
 
