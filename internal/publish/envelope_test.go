@@ -16,6 +16,7 @@ import (
 	"github.com/secondshift-labs/loupe/internal/refusal"
 	"github.com/secondshift-labs/loupe/internal/render"
 	"github.com/secondshift-labs/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/testutil/golden"
 )
 
 // buildInput is the Build call these tests share: round 1, the reviewer, a fresh publication id and no message.
@@ -96,7 +97,7 @@ func TestBuildEmptyMessageRendersWhatAnEmptySummaryRenders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if empty.Body != string(want) {
+	if golden.Normalize(t, empty.Body) != golden.Normalize(t, string(want)) {
 		t.Fatalf("a body with no opening changed:\n%s", empty.Body)
 	}
 	if first, _, _ := strings.Cut(empty.Body, "\n"); !strings.Contains(first, "blocking") {
@@ -420,7 +421,7 @@ func TestBuildUnattendedBodyIsUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if env.Body != string(want) {
+	if golden.Normalize(t, env.Body) != golden.Normalize(t, string(want)) {
 		t.Fatalf("the unattended body changed:\n%s", env.Body)
 	}
 }
@@ -568,7 +569,9 @@ func TestBuildKeepsTheRecordNearTheLimit(t *testing.T) {
 // without it.
 func TestBuildRefusesABodyTooLongForItsRecord(t *testing.T) {
 	d := readyDraft()
-	d.Findings[0].Body = noise(38000)
+	// Past the limit with room to spare: how far noise deflates differs between Go releases, and 38000 characters
+	// fell 39 short of the limit under 1.27.
+	d.Findings[0].Body = noise(40000)
 	plain := buildInput(fixtureTarget(), d, "comment", "none", false)
 	earlier := fmt.Sprintf("<details>\n<summary>Round 1</summary>\n\n%s\n\n</details>", strings.Repeat("x", 20000))
 	sticky := buildInput(fixtureTarget(), d, "comment", "none", true)

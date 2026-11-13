@@ -54,6 +54,25 @@ release-please is not affected. It finds the last release by the exact version i
 - A failed run SHOULD be recovered by re-running its failed jobs. The `release` job reuses the draft an earlier attempt created when that draft targets the same commit, and refuses a draft on another commit. Delete such a draft by hand before the next dispatch, since `validate` cannot see drafts. Once the draft is published, `release` refuses to run again, so a failure in a later job is re-run there.
 - `install.sh` and `action.yml` name `secondshift-labs/loupe`, so the install jobs of a dispatch on a fork fail unless a fork-only commit points them at the fork.
 
+## macOS signing
+
+The `notarize` block in `.goreleaser.yaml` signs each darwin binary with a Developer ID Application certificate and notarizes it, before the binary is archived. It runs on the Linux runner and is enabled only when `MACOS_SIGN_P12` is set and not empty, because goreleaser's `isEnvSet` reads an empty value as unset. Only the `goreleaser` job in `release.yml` receives these five secrets, so snapshots and pre-releases are unsigned. That job fails before goreleaser runs when any of the five is empty, so a release never ships unsigned by accident:
+
+| Secret | What it holds |
+| :--- | :--- |
+| `MACOS_SIGN_P12` | The base64 of a `.p12` holding the certificate, its private key and the full chain up to Apple Root CA |
+| `MACOS_SIGN_PASSWORD` | The `.p12` password |
+| `MACOS_NOTARY_KEY` | The base64 of an App Store Connect API key (`.p8`) |
+| `MACOS_NOTARY_KEY_ID` | That key's id |
+| `MACOS_NOTARY_ISSUER_ID` | The issuer id shown on the App Store Connect keys page |
+
+- The `.p12` MUST include Apple Root CA. Without it the signature's designated requirement names no Apple root, `codesign --verify` rejects the binary and macOS kills it on launch. Export it with `openssl pkcs12 -export -legacy` from OpenSSL 3. The `openssl` that macOS ships is LibreSSL and rejects `-legacy`.
+- The five secrets MUST live in the `release` environment, which only deployments from `main` can use, and MUST NOT be repository secrets. A repository secret is readable by a workflow on any branch, so anyone who can push a branch could print it. The `goreleaser` job names the environment with `environment: release`.
+- The notary key SHOULD be one created for loupe alone, so it can be revoked without touching another project.
+- The `goreleaser` job pins the action by commit and goreleaser by exact version, because it holds keys that outlive the run. Dependabot bumps the action only. Move the goreleaser version deliberately, after a snapshot build on the new one.
+- `prerelease.yml` MUST NOT receive these secrets: its `build` job compiles a branch's code.
+- A release with any of these secrets missing or empty fails in the `goreleaser` job before anything is uploaded, and the draft release stays a draft. goreleaser alone would not catch it: with a valid certificate and empty notary fields it signs, skips notarization and exits 0. Restore the secret and re-run the failed jobs. The certificate expires, so renew it and replace `MACOS_SIGN_P12` before it lapses.
+
 ## Why the release starts as a draft
 
 With immutable releases on, a published release takes no new assets and its tag cannot move. A release that release-please published before goreleaser uploaded would stay without archives for good. The draft keeps the release open until every asset is attached.
