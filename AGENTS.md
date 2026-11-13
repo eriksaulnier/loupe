@@ -28,12 +28,12 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `internal/updatecheck` | Decides whether a newer release exists, from a daily lookup that `capture` runs and a cache file that `review` reads |
 | `internal/testutil` | `gitrepo`, a local stand-in for a GitHub repository, `fakegh`, an in-memory GitHub REST server, and `screen`, which types keys into the review program through a pipe and waits for what it draws. Also `gitfail`, a git on PATH that fails a chosen call, `golden`, the one `-update` flag and golden check, `refusaltest`, `sgrtest` and `herdrstub` |
 | `plugin/` | The agent plugin: the `human-review` workflow skill for pull requests, the `human-decide` workflow skill for local runs, and the Claude Code and Codex manifests. It ships no review skill and no command |
-| `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add eriksaulnier/loupe` find the plugin |
-| `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add eriksaulnier/loupe` |
+| `.claude-plugin/marketplace.json` | The marketplace entry that lets `claude plugin marketplace add secondshift-labs/loupe` find the plugin |
+| `.agents/plugins/marketplace.json` | The same for `codex plugin marketplace add secondshift-labs/loupe` |
 | `package.json` | Makes the repository a Pi package whose skills are `plugin/skills`; it holds no JavaScript |
 | `install.sh` | The script behind `curl ... \| sh`, which installs a released binary. `pages.yml` publishes it, and `TestInstallScript*` runs it against a fake `curl` |
 | `action.yml` | The composite action that installs a released loupe in a GitHub Actions job. release-please stamps its `version` default at each release, and `TestInstallAction` pins it to the manifest |
-| `specs/NNN-topic/` | One directory per feature: `spec.md`, then `plan.md` and `tasks.md`. `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
+| `specs/NNN-topic/` | One directory per feature. Only `spec.md` is required; `plan.md`, `tasks.md` and other files are optional and depend on the tool that wrote the spec (`CONTRIBUTING.md`). `001-loupe-v1` also holds `contracts/cli.md` and `validation.md` |
 | `docs/` | `comment-format.md` (the published review format, a contract), `tui-design.md` (how the review window draws a finding and its header, a contract) and `github-facts.md` (observed GitHub behavior). `tapes/` drives the README's terminal images in `assets/`, and `scripts/review-screenshot.sh` its picture of a published review; neither is read by the binary |
 | `testdata/` | Diff fixtures and goldens |
 | `assets/review/v1/` | The severity pill SVGs every published review hotlinks from `main`. A file here MUST NOT change once on `main`; a redesign adds `v2`. A test pins their hashes |
@@ -43,13 +43,13 @@ loupe collects a review agent's findings into a local draft so a human decides e
 | `codecov.yml` | What Codecov leaves out of the totals: the test helpers and the demo binary |
 | `.github/review-instructions.md` | loupe's half of that workflow's prompt: what the linters already cover, the constitution, the contracts `contracts/cli.md`, `comment-format.md` and `tui-design.md` pin, and how to read the goldens. Read from the default branch, never from the pull request |
 | `.specify/memory/constitution.md` | The seven principles. Read first |
-| `.specify/`, `.claude/skills/speckit-*` | spec-kit's templates, scripts and the skills that drive the spec, plan and tasks flow |
+| `.specify/`, `.claude/skills/speckit-*` | spec-kit's templates, scripts and skills: one optional way to write a spec, not a required flow |
 
 ## Rules
 
 - The constitution outranks every other document. Research and contracts outrank your preferences; departing from them requires a line in the plan's Complexity Tracking. Adopt `contracts/cli.md`, do not redesign it.
 - Never push, release, open a pull request, create a GitHub review or run against a live pull request unless the human you are working for asks, naming the pull request.
-- `origin` is `github.com/eriksaulnier/loupe`; `main` is its default branch. Releases are cut from `main` by release-please and goreleaser, and pre-releases of a branch by `prerelease.yml`, which only the owner dispatches. An agent MUST NOT tag, create a release or edit the release manifest by hand.
+- `origin` is `github.com/secondshift-labs/loupe`; `main` is its default branch. Releases are cut from `main` by release-please and goreleaser, and pre-releases of a branch by `prerelease.yml`, which only the owner dispatches. An agent MUST NOT tag, create a release or edit the release manifest by hand.
 
 ## Contracts that tests pin
 

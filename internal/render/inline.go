@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/eriksaulnier/loupe/internal/findingid"
-	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/findingid"
+	"github.com/secondshift-labs/loupe/internal/github"
 )
 
 func Comments(in Input) []github.ReviewComment {

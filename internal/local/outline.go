@@ -1,9 +1,9 @@
 package local
 
 import (
-	"github.com/eriksaulnier/loupe/internal/diff"
-	"github.com/eriksaulnier/loupe/internal/markdown"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/diff"
+	"github.com/secondshift-labs/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 // Outline reads the headings of each changed Markdown file in d through read, which returns a file's content after

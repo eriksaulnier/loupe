@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/markdown"
 )
 
 // StickyInput is what a sticky body carries beyond its own round.

@@ -3,7 +3,7 @@ package run
 import (
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 func TestParseRef(t *testing.T) {

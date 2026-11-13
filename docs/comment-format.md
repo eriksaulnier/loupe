@@ -58,7 +58,7 @@ Worth fixing before this merges; the rest reads fine to me.
 ### Must fix
 
 <details>
-<summary>⛔ <b>issue</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>: Retry loop can double-publish a review</summary>
+<summary>⛔ <b>issue</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major-dark.svg"><img src="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>: Retry loop can double-publish a review</summary>
 
 > [`internal/publish/publish.go:88`](https://github.com/o/r/pull/7/files#diff-8f3c…R88)\
 > **Confidence:** high\
@@ -81,7 +81,7 @@ that may already have succeeded, so a 502 produces two reviews.
 ### Worth a look
 
 <details>
-<summary>⚪ <b>perf-nit</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/minor-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/minor.svg" alt="MINOR" height="16" align="absmiddle"></picture>: Redundant sort on every read</summary>
+<summary>⚪ <b>perf-nit</b> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/minor-dark.svg"><img src="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/minor.svg" alt="MINOR" height="16" align="absmiddle"></picture>: Redundant sort on every read</summary>
 
 > [`internal/draft/store.go:10–14`](https://github.com/o/r/pull/7/files#diff-5610…R10-R14)\
 > **Severity:** minor
@@ -147,13 +147,13 @@ One row rule serves the body's `<summary>` and an inline comment's first line. T
 The severity word is drawn as a colored pill, an SVG image. This is the one exception to text-only output, and it holds to these rules, each from an observation in github-facts.md:
 
 ```
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major-dark.svg"><img src="https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major-dark.svg"><img src="https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/major.svg" alt="MAJOR" height="16" align="absmiddle"></picture>
 ```
 
 - **It MUST be a `<picture>`, never a bare `<img>`.** GitHub wraps a bare `<img>` in a link to the image, which takes a click on the `<summary>` away from the disclosure. The dark `<source>` switches the pill with the reader's theme.
 - **`alt` MUST be the uppercase word.** A reader whose client does not load the image, such as an email client, reads the same word the pill shows.
 - **`height="16"` and `align="absmiddle"`, with the pill drawn in the top 14 of the image's 16 pixels and its text at 10.** `absmiddle` centers the image, so the 2 transparent pixels below raise the pill by 1, which centers it on the text, and the row stays the height of a text row. With no padding the pill sat 1 to 2 pixels low; with 3 or 4 it sat high. Other alignments sat 2 to 3 pixels off. The image also carries 3 transparent pixels to the right of the pill, so the colon after it does not touch it; a space in the Markdown instead would leave `MAJOR :` wherever the image does not load.
-- **The files live at `assets/review/v1/` in `eriksaulnier/loupe` and are linked through `main`.** Every review published hotlinks them forever, so a file under `v1` MUST NOT change once it is on `main`; a redesign adds `v2`. A test pins each file's hash. Until a version reaches `main`, its pills show as their alt text.
+- **The files live at `assets/review/v1/` in `secondshift-labs/loupe` and are linked through `main`.** Every review published hotlinks them forever, so a file under `v1` MUST NOT change once it is on `main`; a redesign adds `v2`. A test pins each file's hash. Until a version reaches `main`, its pills show as their alt text. Reviews published before the repository moved link through `eriksaulnier/loupe`, which GitHub redirects only while no repository holds that name, so one MUST NOT be created there.
 - **Terminal surfaces show the word, not the HTML.** The publish confirmation opens on the body as it reads, and `v` steps to its raw Markdown (specs/038-review-visual-design). Both views replace each pill with its word, as they replace the findings record with a note (see Markers), in the `<summary>` lines outside fences and on each inline comment's first line only, so authored text keeps its bytes. The payload view shows the exact bytes.
 - **This is a network dependency.** Every reader's client loads the pills through GitHub's camo proxy. When it cannot, the alt word stands in.
 

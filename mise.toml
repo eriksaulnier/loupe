@@ -5,7 +5,7 @@
 actionlint = "1.7.12"
 # actionlint runs its shellcheck pass over run: blocks only where shellcheck exists.
 shellcheck = "0.11.0"
-go = "1.26.11"
+go = "1.27.4"
 golangci-lint = "2"
 goreleaser = "2"
 lefthook = "2"
@@ -35,7 +35,7 @@ run = "go run golang.org/x/vuln/cmd/govulncheck@latest ./..."
 
 # The version is stamped in so a build reports what it came from rather than "dev".
 [tasks.build]
-run = 'CGO_ENABLED=0 go build -ldflags "-X github.com/eriksaulnier/loupe/internal/cli.version=$(git describe --tags --always --dirty)" -o dist/loupe ./cmd/loupe'
+run = 'CGO_ENABLED=0 go build -ldflags "-X github.com/secondshift-labs/loupe/internal/cli.version=$(git describe --tags --always --dirty)" -o dist/loupe ./cmd/loupe'
 
 # Built rather than go run, which would turn loupe's exit codes 1 and 2 into 1.
 [tasks.build-demo]
@@ -94,7 +94,7 @@ if [ -n "$found" ]; then
 fi
 if [ "$got" != "$want" ]; then
 	echo "error: outside the repository, loupe resolves to ${found:-nothing}, not $dir/loupe" >&2
-	echo "fix: remove that copy (a mise pin: mise unuse --global github:eriksaulnier/loupe), or put $dir first on PATH" >&2
+	echo "fix: remove that copy (a mise pin: mise unuse --global github:secondshift-labs/loupe, or github:eriksaulnier/loupe from before the move), or put $dir first on PATH" >&2
 	exit 1
 fi
 # Removing the marketplace also uninstalls loupe@loupe. It fails only when the marketplace is absent.

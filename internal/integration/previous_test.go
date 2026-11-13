@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/github"
 )
 
 // reviewLists counts the requests that listed the pull request's reviews.

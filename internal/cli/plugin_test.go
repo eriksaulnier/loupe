@@ -323,7 +323,7 @@ func TestReleasePleaseBumpsEveryPluginVersion(t *testing.T) {
 	for _, f := range config.Packages["."].ExtraFiles {
 		generic = generic || (f.Type == "generic" && f.Path == "docs/install.md")
 	}
-	pin := "<!-- x-release-please-start-version -->\n```sh\npi install git:github.com/eriksaulnier/loupe@v" + releaseVersion(t) + "\n```\n<!-- x-release-please-end -->"
+	pin := "<!-- x-release-please-start-version -->\n```sh\npi install git:github.com/secondshift-labs/loupe@v" + releaseVersion(t) + "\n```\n<!-- x-release-please-end -->"
 	if !generic || !strings.Contains(readRepoFile(t, "docs/install.md"), pin) {
 		t.Errorf("docs/install.md MUST be a generic release-please extra-file and carry %q", pin)
 	}

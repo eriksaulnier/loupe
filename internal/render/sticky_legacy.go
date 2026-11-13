@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/markdown"
 )
 
 // This file is the reader of sticky bodies written before spec 033 anchored each round. It is frozen: a body with no

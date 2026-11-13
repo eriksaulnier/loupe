@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/markdown"
 )
 
 func stickyInput(round int, sha string, findings ...Finding) Input {

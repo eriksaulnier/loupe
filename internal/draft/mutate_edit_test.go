@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
-	"github.com/eriksaulnier/loupe/internal/testutil/refusaltest"
+	"github.com/secondshift-labs/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/testutil/refusaltest"
 )
 
 var editNow = time.Date(2026, 9, 13, 14, 0, 0, 0, time.UTC)

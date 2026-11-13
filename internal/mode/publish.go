@@ -1,6 +1,6 @@
 package mode
 
-import "github.com/eriksaulnier/loupe/internal/draft"
+import "github.com/secondshift-labs/loupe/internal/draft"
 
 type publish struct{}
 

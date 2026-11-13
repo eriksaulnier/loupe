@@ -12,10 +12,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/eriksaulnier/loupe/internal/findingid"
-	"github.com/eriksaulnier/loupe/internal/markdown"
-	"github.com/eriksaulnier/loupe/internal/section"
-	"github.com/eriksaulnier/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/findingid"
+	"github.com/secondshift-labs/loupe/internal/markdown"
+	"github.com/secondshift-labs/loupe/internal/section"
+	"github.com/secondshift-labs/loupe/internal/severity"
 )
 
 type Input struct {
@@ -376,14 +376,22 @@ func summaryLine(f Finding, inline bool) string {
 
 // pillBase is hotlinked by every review loupe publishes, so a file under it MUST NOT change once on main; a redesign
 // adds v2.
-const pillBase = "https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/"
+const pillBase = "https://raw.githubusercontent.com/secondshift-labs/loupe/main/assets/review/v1/"
 
-// severityPill uses <picture> rather than a bare <img>, because GitHub wraps a bare <img> in a link to itself, which
-// takes the click on a <summary>. The pill fills the top 14 of the image's 16 pixels, so absmiddle centers it on the
-// text without growing the row, and transparent pixels to its right keep the colon off it (docs/github-facts.md).
+// oldPillBase is what reviews published before the repository moved to secondshift-labs carry, and a sticky review
+// keeps its earlier rounds verbatim.
+const oldPillBase = "https://raw.githubusercontent.com/eriksaulnier/loupe/main/assets/review/v1/"
+
 func severityPill(word string) string {
-	return `<picture><source media="(prefers-color-scheme: dark)" srcset="` + pillBase + word + `-dark.svg">` +
-		`<img src="` + pillBase + word + `.svg" alt="` + strings.ToUpper(word) + `" height="16" align="absmiddle"></picture>`
+	return pillAt(pillBase, word)
+}
+
+// pillAt uses <picture> rather than a bare <img>, because GitHub wraps a bare <img> in a link to itself, which takes
+// the click on a <summary>. The pill fills the top 14 of the image's 16 pixels, so absmiddle centers it on the text
+// without growing the row, and transparent pixels to its right keep the colon off it (docs/github-facts.md).
+func pillAt(base, word string) string {
+	return `<picture><source media="(prefers-color-scheme: dark)" srcset="` + base + word + `-dark.svg">` +
+		`<img src="` + base + word + `.svg" alt="` + strings.ToUpper(word) + `" height="16" align="absmiddle"></picture>`
 }
 
 // PillsAsWords shows each severity pill in a body's rows as its word, for a terminal that shows the body as raw
@@ -404,9 +412,9 @@ func CommentPillsAsWords(comment string) string {
 }
 
 func pillWords() *strings.Replacer {
-	pairs := make([]string, 0, 2*len(severity.Order))
+	pairs := make([]string, 0, 4*len(severity.Order))
 	for _, word := range severity.Order {
-		pairs = append(pairs, severityPill(word), strings.ToUpper(word))
+		pairs = append(pairs, pillAt(pillBase, word), strings.ToUpper(word), pillAt(oldPillBase, word), strings.ToUpper(word))
 	}
 	return strings.NewReplacer(pairs...)
 }

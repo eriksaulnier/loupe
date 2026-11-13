@@ -10,7 +10,7 @@ builds:
       - CGO_ENABLED=0
     # The tag is the version loupe --version prints; a build without it says "dev".
     ldflags:
-      - -s -w -X github.com/eriksaulnier/loupe/internal/cli.version={{.Version}}
+      - -s -w -X github.com/secondshift-labs/loupe/internal/cli.version={{.Version}}
     goos:
       - linux
       - darwin
@@ -33,6 +33,22 @@ checksum:
   extra_files:
     - glob: ./install.sh
 
+# Signs and notarizes the darwin binaries before they are archived, so checksums.txt covers the signed bytes. Off when
+# the secrets are absent, which is every build but release.yml's goreleaser job: snapshots and pre-releases stay unsigned
+# because prerelease.yml builds a branch's code and MUST NOT hold the certificate.
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      sign:
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+        key: "{{.Env.MACOS_NOTARY_KEY}}"
+        wait: true
+        timeout: 20m
+
 # release-please owns the changelog and creates the release as a draft. goreleaser attaches the archives to it, then
 # publishes it. An immutable release takes no new assets once published, so the order is load-bearing.
 changelog:
@@ -50,5 +66,5 @@ release:
   extra_files:
     - glob: ./install.sh
   github:
-    owner: eriksaulnier
+    owner: secondshift-labs
     name: loupe

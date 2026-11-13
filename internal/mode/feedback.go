@@ -3,8 +3,8 @@ package mode
 import (
 	"path/filepath"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
-	"github.com/eriksaulnier/loupe/internal/run"
+	"github.com/secondshift-labs/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/run"
 )
 
 // Wait reasons: what ended a run for the agent.

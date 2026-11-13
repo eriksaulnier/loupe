@@ -3,8 +3,8 @@ package tui
 import (
 	"strings"
 
-	"github.com/eriksaulnier/loupe/internal/publish"
-	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/secondshift-labs/loupe/internal/publish"
+	"github.com/secondshift-labs/loupe/internal/render"
 )
 
 // previewChips and previewRest are the review the confirmation fixtures show: a chips row, the opening slot beneath

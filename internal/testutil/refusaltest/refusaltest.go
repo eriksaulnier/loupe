@@ -4,7 +4,7 @@ package refusaltest
 import (
 	"testing"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // Want fails the test now unless err is a refusal with code, and returns the refusal so the test can check its

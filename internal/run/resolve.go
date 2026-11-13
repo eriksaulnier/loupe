@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/eriksaulnier/loupe/internal/refusal"
+	"github.com/secondshift-labs/loupe/internal/refusal"
 )
 
 // Rounds ignores non-numeric entries such as the temp directories CreateRun leaves while it works.

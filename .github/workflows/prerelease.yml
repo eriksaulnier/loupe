@@ -184,7 +184,7 @@ jobs:
           if [ -z "$found" ]; then
             printf -v notes '%s\n\n%s' \
               "A pre-release of \`$REF\` at $SHA, cut by the prerelease workflow. It is not a supported release, and the next release supersedes it." \
-              "Install the binary with \`curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | LOUPE_VERSION=$VERSION sh\`. [Install a pre-release]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/docs/install.md#pre-releases) covers the plugin and what differs from a release."
+              "Install the binary with \`curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | LOUPE_VERSION=$VERSION sh\`. [Install a pre-release]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/docs/install.md#pre-releases) covers the plugin and what differs from a release."
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --prerelease --target "$SHA" --title "$TAG" --notes "$notes"
           elif [ "$(wc -l <<<"$found")" -eq 1 ] && [ "$found" = "${found%% *} true $SHA" ]; then
             echo "Reusing the draft $TAG at $SHA"
@@ -223,7 +223,7 @@ jobs:
           [ "$latest" != "$TAG" ] || { echo "::error::$TAG is marked latest, so install.sh with no pin would install it"; exit 1; }
           echo "Published $TAG as a pre-release. Latest is still $latest."
 
-  # At the pre-release's commit, which is the action that uses: eriksaulnier/loupe@<tag> runs.
+  # At the pre-release's commit, which is the action that uses: secondshift-labs/loupe@<tag> runs.
   install-action:
     needs: [validate, verify]
     strategy:

@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/eriksaulnier/loupe/internal/draft"
+	"github.com/secondshift-labs/loupe/internal/draft"
 )
 
 const openBudget = 100 * time.Millisecond

@@ -3,7 +3,7 @@
   <img alt="loupe" src="docs/assets/logo.png" width="360">
 </picture>
 
-[![latest release](https://img.shields.io/github/v/release/eriksaulnier/loupe)](https://github.com/eriksaulnier/loupe/releases/latest) [![ci](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/eriksaulnier/loupe/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/eriksaulnier/loupe/graph/badge.svg)](https://codecov.io/gh/eriksaulnier/loupe)
+[![latest release](https://img.shields.io/github/v/release/secondshift-labs/loupe)](https://github.com/secondshift-labs/loupe/releases/latest) [![ci](https://github.com/secondshift-labs/loupe/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/secondshift-labs/loupe/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/secondshift-labs/loupe/graph/badge.svg)](https://codecov.io/gh/secondshift-labs/loupe)
 
 loupe collects a review agent's findings into a local draft so you decide each one and publish a single GitHub review. For local work, such as uncommitted changes or a plan, you decide the findings the same way and return the decisions to the agent that applies them.
 
@@ -38,12 +38,12 @@ This is what a published review looks like. A CI review uses the same format.
 One command installs the binary into `~/.local/bin`, checked against the release's checksum. It also installs the agent plugin, at the same release, into each of Claude Code, Codex and Pi that it finds.
 
 ```sh
-curl -fsSL https://eriksaulnier.github.io/loupe/install.sh | sh
+curl -fsSL https://secondshift-labs.github.io/loupe/install.sh | sh
 ```
 
 `loupe update` updates the binary and the plugins together, and `loupe uninstall` removes both and keeps your review runs. [Install](docs/install.md) covers the options, mise, release archives and GitHub Actions.
 
-loupe runs on Linux and macOS, on amd64 and arm64, and needs `git`. It reaches GitHub with the token in `GH_TOKEN` or `GITHUB_TOKEN`, or else the one `gh auth login` stored, so a signed-in `gh` needs no setup.
+loupe runs on Linux and macOS, on amd64 and arm64, and needs `git`. It reaches GitHub with the token in `GH_TOKEN` or `GITHUB_TOKEN`, or else the one `gh auth login` stored, so a signed-in `gh` needs no setup. macOS release builds are signed with a Developer ID and notarized by Apple.
 
 To try the interface without a pull request, run `mise run demo` in a clone. It opens `loupe review` on seeded runs against an in-memory GitHub, so nothing leaves the machine.
 

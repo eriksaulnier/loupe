@@ -6,7 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/eriksaulnier/loupe/internal/render"
+	"github.com/secondshift-labs/loupe/internal/render"
 )
 
 // The review body's Markdown, as the published format writes it, read line by line for the readable preview.

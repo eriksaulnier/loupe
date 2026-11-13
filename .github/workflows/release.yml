@@ -91,6 +91,9 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
+    # The signing secrets belong to this environment, which only deployments from main can use. As repository secrets, a
+    # workflow on any branch could read them.
+    environment: release
     steps:
       - uses: actions/checkout@v7
         with:
@@ -106,13 +109,36 @@ jobs:
           set -euo pipefail
           drafts="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft and .name == env.TAG) | .id' | wc -l | tr -d ' ')"
           [ "$drafts" = 1 ] || { echo "::error::want exactly one draft release named $TAG for goreleaser to publish, found $drafts"; exit 1; }
-      - uses: goreleaser/goreleaser-action@v7
+      # A secret that does not exist expands to the empty string, which goreleaser's isEnvSet reads as unset. Without this
+      # step the job would sign nothing, publish, and leave an immutable release that docs/install.md calls signed. All
+      # five are checked because, with a valid certificate and empty notary fields, goreleaser signs, logs "will not try to
+      # notarize" and exits 0.
+      - env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+        run: |
+          set -euo pipefail
+          for name in MACOS_SIGN_P12 MACOS_SIGN_PASSWORD MACOS_NOTARY_ISSUER_ID MACOS_NOTARY_KEY_ID MACOS_NOTARY_KEY; do
+            [ -n "${!name}" ] || { echo "::error::$name is empty, so this release would not ship signed and notarized"; exit 1; }
+          done
+      # The action is pinned by commit, unlike the other actions here, and goreleaser by exact version: this step holds the
+      # signing and notary keys, which outlive the run. Dependabot bumps the action. Nothing bumps the goreleaser version,
+      # so move it deliberately and rerun a snapshot build first.
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: v2.19.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
 
   # After goreleaser, not beside it: the release stays a draft, whose download URLs 404, until goreleaser has
   # uploaded the archives this release's action default names and published it.

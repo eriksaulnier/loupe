@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eriksaulnier/loupe/internal/github"
+	"github.com/secondshift-labs/loupe/internal/github"
 )
 
 const oneFinding = `{"title": "Changed line", "body": "Evidence.", "location": {"path": "src/app.go", "line": 3}, "label": "issue"}`

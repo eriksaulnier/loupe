@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/eriksaulnier/loupe/internal/severity"
+	"github.com/secondshift-labs/loupe/internal/severity"
 )
 
 // The interactive review theme: the titled panes, the lavender accent, and the primitives every review screen is
