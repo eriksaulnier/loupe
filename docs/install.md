@@ -59,7 +59,7 @@ Each [release](https://github.com/secondshift-labs/loupe/releases) attaches one 
 
 <!-- x-release-please-start-version -->
 ```sh
-version=0.24.1
+version=0.24.2
 os=darwin arch=arm64
 archive="loupe_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/secondshift-labs/loupe/releases/download/v$version"
@@ -117,14 +117,14 @@ The install script and `loupe update` set the plugin up for you. The commands be
 ### Claude Code
 
 ```sh
-claude plugin marketplace add secondshift-labs/loupe@v0.24.1
+claude plugin marketplace add secondshift-labs/loupe@v0.24.2
 claude plugin install loupe@loupe
 ```
 
 ### Codex
 
 ```sh
-codex plugin marketplace add secondshift-labs/loupe@v0.24.1
+codex plugin marketplace add secondshift-labs/loupe@v0.24.2
 codex plugin add loupe@loupe
 ```
 <!-- x-release-please-end -->
@@ -138,7 +138,7 @@ Pi has no sandbox. `pi install` at a new tag replaces the earlier one.
 
 <!-- x-release-please-start-version -->
 ```sh
-pi install git:github.com/secondshift-labs/loupe@v0.24.1
+pi install git:github.com/secondshift-labs/loupe@v0.24.2
 ```
 <!-- x-release-please-end -->
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.2](https://github.com/secondshift-labs/loupe/compare/v0.24.1...v0.24.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** bump the go-modules group with 3 updates ([#140](https://github.com/secondshift-labs/loupe/issues/140)) ([4fbbce3](https://github.com/secondshift-labs/loupe/commit/4fbbce3c8e2583829b66573e18b4b6c094f1a602))
+
 ## [0.24.1](https://github.com/secondshift-labs/loupe/compare/v0.24.0...v0.24.1) (2026-11-12)
 
 
