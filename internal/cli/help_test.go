@@ -114,7 +114,15 @@ func TestSubcommandHelpKeepsTheGlobalJSONFlag(t *testing.T) {
 	if exit := Execute(deps, []string{"list", "--help"}); exit != 0 {
 		t.Fatalf("exit %d: %s", exit, s.stderr.String())
 	}
-	if !strings.Contains(s.stdout.String(), "--json   print exactly one JSON result object on stdout") {
+	// Matches the line by its flag and description, not by spelling or column: pflag decides whether a bool flag prints
+	// as --json or --json[=true|false], and the column follows the longest flag.
+	found := false
+	for _, line := range strings.Split(s.stdout.String(), "\n") {
+		if strings.Contains(line, "--json") && strings.Contains(line, "print exactly one JSON result object on stdout") {
+			found = true
+		}
+	}
+	if !found {
 		t.Fatalf("list --help lost the --json line:\n%s", s.stdout.String())
 	}
 }

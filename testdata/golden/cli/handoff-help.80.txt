@@ -52,9 +52,9 @@ host is herdr, tmux, orca, iterm2 or ghostty. direction is right or down. focuse
 the pane opened without taking focus.
 
 Flags
-  -h, --help         help for handoff
-      --run string   run reference, owner/repo#123 or owner/repo#123@2
-      --json   print exactly one JSON result object on stdout
+  -h, --help[=true|false]   help for handoff
+      --run string          run reference, owner/repo#123 or owner/repo#123@2
+      --json[=true|false]   print exactly one JSON result object on stdout
 
 Examples
   loupe handoff --run owner/repo#123 --json
